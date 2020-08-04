@@ -62,6 +62,8 @@ So here we propose a new challenge mechanism, the challenge process is managed b
 * After time T, if the challenge request still exists, we assume the challenge is correct.
 * A validator or the original challenger can use the challenge request cell as proof to revert a layer2 block.
 
+![Cancel a challenge request](./cancel_a_challenge_request.jpg)
+
 Compare to the 'traditional' challenge process, we require a more strict online time for validators. If a validator takes more than T time offline(or the validator can't cancel an invalid challenge request within T times due to software bug or network issue), he may lose the coins due to a malicious challenge request. Even we allow other validators to cancel a challenge request; it is still a dangerous behavior.
 
 In the case that the validator became malicious, our challenge mechanism requires T time to revert the block, which the traditional challenge can revert the block in almost one block time. If the challenge sends another invalid block after the revert block, we need extra T times to invalid it; this means if the aggregator costs `N * COINS_TO_BE_AGGREGATOR`, we need to wait for `N * T` times to revert the block to a correct state in the worst case.
