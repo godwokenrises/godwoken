@@ -78,7 +78,10 @@ To restrict the layer2 contract behavior, we need to create a sandbox for it:
 Aggregator:
 
 1. To prevent layer2 contract access inconsistent data in different environments, we must disable the syscall feature. The aggregator must scan the contract binary and reject any layer2 contract, which contains the `ecall` opcode (`ecall` is the only way to invoke syscalls).
-2. After disabling the syscall, the layer2 contract can only access the verification context, which we passed to it, the verification context must be sorted in canonical order. (for example, the accounts list must sort by ID).
+2. After disabling the syscall, the layer2 contract can only access the verification context, which we passed to it, the verification context must be sorted in canonical order. (for example, the accounts list must sorted by ID).
+
+Notice: The aggregator needs to run a layer2 contract at least once to generate the verification context. We use the same interface but different implementation for generator and verifier. In the generator context, the contract access data via syscalls; in the verifier context, the contract access data via reading from verification context.  This means a layer2 contract may behave differently in the generator and verifier; we must verify the transactions again after packing them into a block, and remove the transaction failed in the verification.
+
 
 On-chain sandbox:
 
