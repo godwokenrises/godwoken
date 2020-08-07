@@ -20,9 +20,7 @@ Usually, an aggregator is also a validator.
 
 (TODO)
 
-## Contracts
-
-### State validator
+## State validator
 
 Godwoken contract supports several actions to update the global state:
 
@@ -46,7 +44,7 @@ Godwoken contract supports several actions to update the global state:
 `withdraw`, move assets from withdrawing queue to layer1, a withdrawable assets in the queue must wait for at least `WITHDRAW_WAIT` blockssince enqueued. 
 
 
-### Challenge
+## Challenge
 
 Usually, to prove a state is invalid, the challenger needs to collect enough information and post this information to the on-chain dispute contract, then the disputed contract executes the layer2 contract in a VM; if the VM exit with exceptions or exit with a different state we know that the original state is invalid.
 
@@ -62,11 +60,38 @@ So here we propose a new challenge mechanism, the challenge process is managed b
 * After time T, if the challenge request still exists, we assume the challenge is correct.
 * A validator or the original challenger can use the challenge request cell as proof to revert a layer2 block.
 
-![Cancel a challenge request](./cancel_a_challenge_request.jpg)
-
 Compare to the 'traditional' challenge process, we require a more strict online time for validators. If a validator takes more than T time offline(or the validator can't cancel an invalid challenge request within T times due to software bug or network issue), he may lose the coins due to a malicious challenge request. Even we allow other validators to cancel a challenge request; it is still a dangerous behavior.
 
 In the case that the validator became malicious, our challenge mechanism requires T time to revert the block, which the traditional challenge can revert the block in almost one block time. If the challenge sends another invalid block after the revert block, we need extra T times to invalid it; this means if the aggregator costs `N * COINS_TO_BE_AGGREGATOR`, we need to wait for `N * T` times to revert the block to a correct state in the worst case.
+
+
+### Sandbox to run layer2 contracts
+
+As we mentioned in the previous section, our layer2 contracts are just layer1 contracts in the special form. A layer2 contract needs to be run in the two environments: the aggregator context and the on-chain context.
+
+This leads to a potential consensus split risk. Since any user can create layer2 contracts, a dishonor user may create a contract that behaves differently in the two contexts, or just takes some random behaviors such as returns failure if the last bit of `tx_hash` if 0, otherwise return success. This kind of contract is dangerous; when the aggregator submits a transaction which invokes the contract, it returns a result, and then when a challenge request is created, the contract returns another result, the aggregator can't cancel the challenge and will lose the money!
+
+To keep the contract behavior consistency, We must restrict the contract to only access the consistent environment (verification context, VM registers, and VM memories); any difference in the environment may lead to different contract behaviors under the two contexts.
+
+To restrict the layer2 contract behavior, we need to create a sandbox for it:
+
+Aggregator:
+
+1. To prevent layer2 contract access inconsistent data in different environments, we must disable the syscall feature. The aggregator must scan the contract binary and reject any layer2 contract, which contains the `ecall` opcode (`ecall` is the only way to invoke syscalls).
+2. After disabling the syscall, the layer2 contract can only access the verification context, which we passed to it, the verification context must be sorted in canonical order. (for example, the accounts list must sort by ID).
+
+On-chain sandbox:
+
+However, we still need to pass the verification context to the layer2 contract. The idea is to use a sandbox contract to setup environment for the layer2 contracts, the sandbox contract must be dedicated designed and must guarantee the verification context, VM registers, and VM memories are identical in the aggregator context and the on-chain context.
+
+1. call `load_witness` syscall, load the verification context into the stack.
+2. Do the pre merkle verification
+3. Load and invoke the layer2 contract.
+4. Do the post merkle verification
+
+Using the static check to disable the syscalls, and the sandbox contract to keep a canonical environment, we can ensure the layer2 contract behavior is consistent in the aggregator context and the on-chain context.
+
+![Cancel a challenge request](./cancel_a_challenge_request.jpg)
 
 [sparse merkle tree]: https://github.com/jjyr/sparse-merkle-tree "sparse merkle tree"
 
