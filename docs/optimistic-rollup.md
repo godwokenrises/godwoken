@@ -69,7 +69,7 @@ In the case that the validator became malicious, our challenge mechanism require
 
 As we mentioned in the previous section, our layer2 contracts are just layer1 contracts in the special form. A layer2 contract needs to be run in the two environments: the aggregator context and the on-chain context.
 
-This leads to a potential consensus split risk. Since any user can create layer2 contracts, a dishonor user may create a contract that behaves differently in the two contexts, or just takes some random behaviors such as returns failure if the last bit of `tx_hash` if 0, otherwise return success. This kind of contract is dangerous; when the aggregator submits a transaction which invokes the contract, it returns a result, and then when a challenge request is created, the contract returns another result, the aggregator can't cancel the challenge and will lose the money!
+This leads to a potential consensus split risk. Since any user can create layer2 contracts, a malicious user may create a contract that behaves differently in the two contexts, or just takes some random behaviors such as returns failure if the last bit of `tx_hash` if 0, otherwise return success. This kind of contract is dangerous; when the aggregator submits a transaction which invokes the contract, it returns a result, and then when a challenge request is created, the contract returns another result, the aggregator can't cancel the challenge and will lose the money!
 
 To keep the contract behavior consistency, We must restrict the contract to only access the consistent environment (verification context, VM registers, and VM memories); any difference in the environment may lead to different contract behaviors under the two contexts.
 
