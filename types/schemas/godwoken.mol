@@ -1,0 +1,54 @@
+import blockchain;
+
+array Byte20 [byte; 20];
+array Byte65 [byte; 65];
+
+struct MerkleStateContext {
+    merkle_root: Byte32,
+    count: Uint64,
+}
+
+struct GlobalState {
+    state: byte,
+    account: MerkleStateContext,
+    block: MerkleStateContext,
+}
+
+table Account {
+    id: Uint32,
+    pubkey_hash: Byte20,
+    nonce: Uint32,
+    script: ScriptOpt,
+}
+
+struct L2Block {
+    number: Uint64,
+    prev_account_root: Byte32,
+    post_account_root: Byte32,
+    account_count: Uint32,
+    tx_root: Byte32,
+    tx_count: Uint32,
+    aggregator_id: Uint32,
+    signature: Byte65,
+}
+
+union Payment {
+    Uint32,
+    UDT,
+}
+
+struct UDT {
+    type_hash: Byte32,
+    value: Uint32,
+}
+
+table L2Transaction {
+    from_id: Uint32,
+    to_id: Uint32,
+    nonce: Uint32,
+    signature: Byte65,
+    value: Payment,
+    fee: Payment,
+    args: Bytes,
+}
+
