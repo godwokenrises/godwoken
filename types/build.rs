@@ -26,10 +26,15 @@ fn generate_molecule(files: &[&str]) {
         println!("cargo:rerun-if-changed={}/{}.mol", SCHEMAS_DIR, f);
         let output = Command::new("sh")
             .arg("-c")
-            .arg(format!("{molc} --language rust --schema-file {schema_dir}/{file}.mol | rustfmt > {output_dir}/{file}.rs", molc=MOLECULE, file=f, schema_dir=SCHEMAS_DIR, output_dir=OUTPUT_DIR))
+            .arg(format!("{molc} --language rust --schema-file {schema_dir}/{file}.mol > {output_dir}/{file}.rs", molc=MOLECULE, file=f, schema_dir=SCHEMAS_DIR, output_dir=OUTPUT_DIR))
             .output()
             .expect("failed to execute process");
-        assert!(output.status.success(), "process success");
+        assert!(output.status.success(), "run moleculec");
+        let output = Command::new("rustfmt")
+            .arg(format!("{output_dir}/{file}.rs", file=f, output_dir=OUTPUT_DIR))
+            .output()
+            .expect("failed to execute process");
+        assert!(output.status.success(), "run rustfmt");
     }
 }
 

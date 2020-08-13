@@ -3,15 +3,28 @@ import blockchain;
 array Byte20 [byte; 20];
 array Byte65 [byte; 65];
 
-struct MerkleStateContext {
+struct MerkleState {
     merkle_root: Byte32,
     count: Uint64,
 }
 
-struct GlobalState {
-    state: byte,
-    account: MerkleStateContext,
-    block: MerkleStateContext,
+table GlobalState {
+    account: MerkleState,
+    block: MerkleState,
+    status: Status,
+}
+
+union Status {
+    Running,
+    Reverting,
+}
+
+// normal status
+table Running {}
+// layer2 chain is reverting
+struct Reverting {
+    next_block_number: Uint64,
+    challenger_id: Uint32,
 }
 
 table Account {
@@ -19,17 +32,6 @@ table Account {
     pubkey_hash: Byte20,
     nonce: Uint32,
     script: ScriptOpt,
-}
-
-struct L2Block {
-    number: Uint64,
-    prev_account_root: Byte32,
-    post_account_root: Byte32,
-    account_count: Uint32,
-    tx_root: Byte32,
-    tx_count: Uint32,
-    aggregator_id: Uint32,
-    signature: Byte65,
 }
 
 union Payment {
@@ -42,7 +44,7 @@ struct UDT {
     value: Uint32,
 }
 
-table L2Transaction {
+table RawL2Transaction {
     from_id: Uint32,
     to_id: Uint32,
     nonce: Uint32,
@@ -52,3 +54,54 @@ table L2Transaction {
     args: Bytes,
 }
 
+table L2Transaction {
+    raw: RawL2Transaction,
+    signature: Byte65,
+}
+
+table RawL2Block {
+    number: Uint64,
+    aggregator_id: Uint32,
+    prev_account: MerkleState,
+    post_account: MerkleState,
+    states: States,
+    valid: byte,
+}
+
+table L2Block {
+    raw: RawL2Block,
+    signature: Byte65,
+}
+
+vector States <State>;
+
+// --- define states ---
+
+union State {
+    SubmitTransactions,
+    Join,
+    Leave,
+    RevertChain,
+}
+
+table SubmitTransactions {
+    tx_root: Byte32,
+    tx_count: Uint32,
+    account_root_list: Byte32Vec,
+}
+
+// TODO
+table Join {
+}
+
+table Leave {
+}
+
+// Revert the chain, send reward to reverter
+struct RevertChain {
+    reverter_id: Uint32,
+    invalid_block_number: Uint64,
+    post_account: MerkleState,
+}
+
+// --- end of define states ---
