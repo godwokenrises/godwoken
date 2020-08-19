@@ -31,18 +31,41 @@ Godwoken contract supports several actions to update the global state:
 * prepare_withdraw
 * withdraw
 
-`create_account`, deposit layer1 assets to layer2, and create a new account. The `index` of the new account must be `last_account.index + 1`; the `nonce` must be `0`; `script` can be set to `None` or a contract.
+## Join & Leave
 
-`deposit`, deposit layer1 assets layer2 and update the `account_root`.
+### Join rollup (Deposit)
 
-`submit block`, only accounts with required balance can invoke this action. The caller needs to commit `block`, `transactions`, and merkle proof; `transactions` doesn't do verification on-chain; when invalid state is committed, other users can send a challenge request to penalize the commiter and revert the state.
+To join a rollup, users need to create deposition request cells on-chain.
 
-`revert block`, the challenge logic is handling by challenge contract, here we only care about the result of the challenge request. Anyone has an account can send a `revert block` request with a challenge result cell. If the challenge result is valid, the invalid block will be replaced with a revert block: `Block { (untouched fields: number, previous_account_root), tx_root: 0x00..00, ag_sig: 0x00..00, ag_index: challenger_account_index, account_root: new_account_root, invalid_block: Some(0x...block_hash) }`, in the `new_account_root` state, a part of the invalid block's aggregator's CKB is sent to challenger's account as the reward.
+``` sh
+Cell {
+  lock: Script {
+    code_hash: <deposition_lock>
+    hash_type: <...>
+    args: <rollup_code_hash|pubkey_hash>
+  }
+  capacity: <capacity>
+  data: <empty or valid UDT data>
+  type_: <none or an valid UDT type>
+}
+```
 
-`prepare_withdraw`, move assets to a withdrawing queue.
+Users put their CKB or UDTs into deposition request cells, then wait for aggregators to collect them.
 
-`withdraw`, move assets from withdrawing queue to layer1, a withdrawable assets in the queue must wait for at least `WITHDRAW_WAIT` blockssince enqueued. 
+The lock script `deposition_lock` allows two unlock conditions:
 
+1. The user unlocks this cell with a recoverable secp256k1 signature; the lock script compares the recovered `pubkey_hash` with the one in the args and returns success if they are the same.
+2. An off-chain aggregator unlocks this cell in the same transaction that updates the Rollup's global state; the lock script checks there is an input cell matches `rollup_code_hash`.
+
+After the aggregator unlocks the cells, the states of cells will be accumulated into the global state, and cells will be transferred to the `state validator` contract.
+
+### Leave rollup (Withdraw)
+
+To withdraw assets back to layer1, users firstly send a withdrawal request to the aggregator, the aggregator moves assets into a withdrawal queue and burns the assets from layer2, then users need to wait for a security timeout S, after S timeout, the aggregator regenerates assets on layer1.
+
+Suppose the aggregator refuses to move assets into a withdrawal queue or refuses to withdraw assets to layer1 (censorship). A user should call force-withdraw on the `state validator` contract to complete the withdrawal.
+
+> The S timeout parameter defines our security upper bound; after the S timeout, if we can't prevent a malicious user from withdrawing assets to layer1, the rollup system should be considered as corrupt.
 
 ## Challenge
 
