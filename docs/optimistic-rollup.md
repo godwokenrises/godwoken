@@ -35,7 +35,7 @@ Godwoken contract supports several actions to update the global state:
 
 ### Join rollup (Deposit)
 
-To join a rollup, users need to create deposition request cells on-chain.
+To join a layer2 Rollup, users need to create deposition request cells on-chain.
 
 ``` sh
 Cell {
@@ -50,30 +50,30 @@ Cell {
 }
 ```
 
-Users put their CKB or UDTs into deposition request cells, then wait for aggregators to collect them.
+Users put CKB or UDTs into deposition request cells, then wait for aggregators to collect them.
 
 The lock script `deposition_lock` allows two unlock conditions:
 
-1. The user unlocks this cell with a recoverable secp256k1 signature; the lock script compares the recovered `pubkey_hash` with the one in the args and returns success if they are the same.
-2. An off-chain aggregator unlocks this cell in the same transaction that updates the Rollup's global state; the lock script checks there is an input cell matches `rollup_code_hash`.
+1. The owner unlocks this cell with a recoverable secp256k1 signature; the lock script compares the recovered `pubkey_hash` with the args and returns success if `pubkey_hash` is matched.
+2. An off-chain aggregator unlocks this cell in the same transaction that updates the Rollup's global state; the lock script checks there exist an input cell matches `rollup_code_hash` and return success.
 
-After the aggregator unlocks the cells, the states of cells will be accumulated into the global state, and cells will be transferred to the `state validator` contract.
+After the aggregator collects the cells, the states of cells will be accumulated into the global state, and ownership of cells will be transferred to the `state validator` contract.
 
 ### Leave rollup (Withdraw)
 
-To withdraw assets back to layer1, users firstly send a withdrawal request to the aggregator, the aggregator moves assets into a withdrawal queue and burns the assets from layer2, then users need to wait for a security timeout S, after S timeout, the aggregator regenerates assets on layer1.
+To withdraw assets back to layer1, users firstly send a withdrawal request to the aggregator, the aggregator moves assets into a withdrawal queue and burns the assets from layer2, then users need to wait for a timeout, finally, the aggregator releases assets on layer1.
 
 Suppose the aggregator refuses to move assets into a withdrawal queue or refuses to withdraw assets to layer1 (censorship). A user should call force-withdraw on the `state validator` contract to complete the withdrawal.
 
-> The S timeout parameter defines our security upper bound; after the S timeout, if we can't prevent a malicious user from withdrawing assets to layer1, the rollup system should be considered as corrupt.
+> The timeout parameter C defines an upper bound of the challenge period; after the C timeout, if we still can't prevent a malicious user from withdrawing assets to layer1, the rollup system should be considered as corrupt.
 
 ## Layer2 assets representation
 
-Since our rollup based on the account model, we want to use a natural way to represent assets in layer2 account: all layer1 assets represented as states in layer2 accounts.
+Since our Rollup is based on the account model, we want to use a natural way to represent assets in layer2 account: all layer1 assets represented as states in layer2 accounts.
 
 For example, the layer1 CKB is represented as a key-value record in the layer2 CKB token account (`account_id -> amount`). It is the same for other UDT assets; they are stored in different layer2 UDT accounts.
 
-We also maintain a layer1 to layer2 contract map to keep consensus between layers, we use [sparse merkle tree] to represent the map, and put the merkle root into the global state. For easy to understand, we can consider the map is fixed, which means we can only accept a limited UDT; however, it is trivial to design a mechanism that allows dynamically update the mapping relations.
+We also maintain a layer1 to layer2 contract map to keep consensus of assets between layers, we use [sparse merkle tree] to represent the contract map, and put the merkle root into the global state. For easy to understand, we can consider the map is fixed, which means we can only accept limited UDTs; however, it is trivial to design a mechanism to dynamically updating the map.
 
 ## Challenge
 
