@@ -67,6 +67,14 @@ Suppose the aggregator refuses to move assets into a withdrawal queue or refuses
 
 > The S timeout parameter defines our security upper bound; after the S timeout, if we can't prevent a malicious user from withdrawing assets to layer1, the rollup system should be considered as corrupt.
 
+## Layer2 assets representation
+
+Since our rollup based on the account model, we want to use a natural way to represent assets in layer2 account: all layer1 assets represented as states in layer2 accounts.
+
+For example, the layer1 CKB is represented as a key-value record in the layer2 CKB token account (`account_id -> amount`). It is the same for other UDT assets; they are stored in different layer2 UDT accounts.
+
+We also maintain a layer1 to layer2 contract map to keep consensus between layers, we use [sparse merkle tree] to represent the map, and put the merkle root into the global state. For easy to understand, we can consider the map is fixed, which means we can only accept a limited UDT; however, it is trivial to design a mechanism that allows dynamically update the mapping relations.
+
 ## Challenge
 
 Usually, to prove a state is invalid, the challenger needs to collect enough information and post this information to the on-chain dispute contract, then the disputed contract executes the layer2 contract in a VM; if the VM exit with exceptions or exit with a different state we know that the original state is invalid.
