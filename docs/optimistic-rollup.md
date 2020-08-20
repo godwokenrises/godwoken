@@ -18,7 +18,18 @@ Usually, an aggregator is also a validator.
 
 ## Layer2 structures
 
-(TODO)
+### Account
+
+In Godwoken, every account is a contract.
+
+For users who want to create an `EOA` (external owned account), the user creates a contract account; the verification is executed by the contract, such as verify secp256k1 signature, verify nonce. We pre-define a standard contract for these users; of course, they can use a non-standard contract depend on scenarios.
+
+An account is constructed by two fields `(id: u32, code_hash: Byte32)`:
+
+- id, the unique id of the account
+- code_hash, blake2b hash of the contract code.
+
+States of accounts are all accumulated in the global merkle tree, so we don't have a per account `state_root`.
 
 ## State validator
 
