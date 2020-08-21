@@ -1,5 +1,9 @@
 import blockchain;
 
+option Byte32Opt (Byte32);
+array Pubkey [byte; 20];
+array Signature [byte; 65];
+
 struct MerkleState {
     merkle_root: Byte32,
     count: Uint64,
@@ -24,20 +28,23 @@ struct Reverting {
     challenger_id: Uint32,
 }
 
-struct Account {
+table Account {
     id: Uint32,
-    code_hash: Byte32,
+    pubkey: Pubkey,
+    nonce: Uint32,
+    code_hash: Byte32Opt,
 }
 
 table RawL2Transaction {
     from_id: Uint32,
     to_id: Uint32,
+    nonce: Uint32,
     args: Bytes,
 }
 
 table L2Transaction {
     raw: RawL2Transaction,
-    signature: Bytes,
+    signature: Signature,
 }
 
 table RawL2Block {
@@ -51,7 +58,7 @@ table RawL2Block {
 
 table L2Block {
     raw: RawL2Block,
-    signature: Bytes,
+    signature: Signature,
 }
 
 vector States <State>;

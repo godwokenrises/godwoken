@@ -20,16 +20,16 @@ Usually, an aggregator is also a validator.
 
 ### Account
 
-In Godwoken, every account is a contract.
-
-For users who want to create an `EOA` (external owned account), the user creates a contract account; the verification is executed by the contract, such as verify secp256k1 signature, verify nonce. We pre-define a standard contract for these users; of course, they can use a non-standard contract depend on scenarios.
-
-An account is constructed by two fields `(id: u32, code_hash: Byte32)`:
+An account is constructed by fields `(id: u32, nonce: u32, pubkey: Pubkey, code_hash: Byte32Opt)`:
 
 - id, the unique id of the account
-- code_hash, blake2b hash of the contract code.
+- nonce, an increment nonce
+- pubkey, account's pubkey
+- code_hash, blake2b hash of the contract code, for an EOA(external owned account) the code_hash is none
 
 States of accounts are all accumulated in the global merkle tree, so we don't have a per account `state_root`.
+
+> Currently, the account's pubkey is a secp256k1 pubkey hash; we are planning to migrate it to BLS in the later phase.
 
 ## State validator
 

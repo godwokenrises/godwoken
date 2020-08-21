@@ -31,7 +31,11 @@ fn generate_molecule(files: &[&str]) {
             .expect("failed to execute process");
         assert!(output.status.success(), "run moleculec");
         let output = Command::new("rustfmt")
-            .arg(format!("{output_dir}/{file}.rs", file=f, output_dir=OUTPUT_DIR))
+            .arg(format!(
+                "{output_dir}/{file}.rs",
+                file = f,
+                output_dir = OUTPUT_DIR
+            ))
             .output()
             .expect("failed to execute process");
         assert!(output.status.success(), "run rustfmt");
