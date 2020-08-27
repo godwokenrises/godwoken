@@ -125,16 +125,24 @@ Aggregator:
 Notice: The aggregator needs to run a layer2 contract at least once to generate the verification context. We use the same interface but different implementation for generator and verifier. In the generator context, the contract access data via syscalls; in the verifier context, the contract access data via reading from verification context.  This means a layer2 contract may behave differently in the generator and verifier; we must verify the transactions again after packing them into a block, and remove the transaction failed in the verification.
 
 
-On-chain sandbox:
+On-chain sandbox
 
-However, we still need to pass the verification context to the layer2 contract. The idea is to use a sandbox contract to setup environment for the layer2 contracts, the sandbox contract must be dedicated designed and must guarantee the verification context, VM registers, and VM memories are identical in the aggregator context and the on-chain context.
+However, we still need to pass the verification context to the layer2 contract. The idea is to use a sandbox contract to setup environment for the layer2 contracts, the sandbox contract must be dedicated designed and must guarantee the verification context, VM registers, and VM memories are identical in the aggregator context and the on-chain context. So that inside the sandbox, a contract can't tell the difference.
+
+The callee (inside sandbox):
 
 1. call `load_witness` syscall, load the verification context into the stack.
-2. Do the pre merkle verification
-3. Load and invoke the layer2 contract.
-4. Do the post merkle verification
+2. Load the layer2 contract.
+3. Verify `program input = F(program output)`, the `F` is the contract program.
 
-Using the static check to disable the syscalls, and the sandbox contract to keep a canonical environment, we can ensure the layer2 contract behavior is consistent in the aggregator context and the on-chain context.
+The caller (outside sandbox):
+
+1. Verify program input satisfies pre merkle state.
+2. Verify program output satisfies post merkle state.
+
+Notice, the caller and callee typically in different VMs, we can use multi-inputs in CKB transaction, and each input's type script represents a caller or a callee.
+
+Using the static check to disable the syscalls, and the sandbox to keep a canonical environment, we can ensure the layer2 contract behavior is consistent in the aggregator context and the on-chain context.
 
 ![Cancel a challenge request](./cancel_a_challenge_request.jpg)
 
