@@ -1,0 +1,336 @@
+/* Validator
+ *
+ * Validator provides on-chain layer2 syscall implementation for contracts.
+ * The `code_hash` of the layer2 contract is required in the args.
+ * A cell that matches the `code_hash` should be put into the transactions's
+ * `cell_deps` field, Validator dynamic linking with the code; setup the layer2
+ * verification context; then call the contract.
+ *
+ * Args: <code_hash> layer2 contract's code hash
+ *
+ *  1. load contract
+ *  2. load verification context from witness
+ *  3. run contract (injection verification context and syscalls)
+ *  4. compare actual outputs with expected outputs
+ */
+
+#define MAX_PAIRS 1024
+#define SCRIPT_SIZE 128
+#define WITNESS_SIZE (300 * 1024)
+#define CODE_SIZE (512 * 1024)
+
+#define GW_ERROR_NOT_FOUND 42
+#define GW_ERROR_INVALID_DATA 43
+#define GW_ERROR_INSUFFICIENT_CAPACITY 44
+#define GW_ERROR_MISMATCH_CHANGE_SET 45
+#define GW_ERROR_INVALID_CONTEXT 46
+#define GW_ERROR_DYNAMIC_LINKING 47
+
+#include "blockchain.h"
+#include "ckb_dlfcn.h"
+#include "ckb_syscalls.h"
+#include "common.h"
+#include "godwoken.h"
+#include "stdlib.h"
+#include "string.h"
+
+typedef struct {
+  uint8_t key[GW_KEY_BYTES];
+  uint8_t value[GW_VALUE_BYTES];
+  uint8_t order;
+} gw_pair_t;
+
+typedef struct {
+  gw_pair_t *pairs;
+  uint32_t len;
+  uint32_t capacity;
+} gw_state_t;
+
+void gw_state_init(gw_state_t *state, gw_pair_t *buffer, uint32_t capacity) {
+  state->pairs = buffer;
+  state->len = 0;
+  state->capacity = capacity;
+}
+
+int gw_state_insert(gw_state_t *state, const uint8_t key[GW_KEY_BYTES],
+                    const uint8_t value[GW_VALUE_BYTES]) {
+  if (state->len < state->capacity) {
+    /* shortcut, append at end */
+    memcpy(state->pairs[state->len].key, key, GW_KEY_BYTES);
+    memcpy(state->pairs[state->len].value, value, GW_KEY_BYTES);
+    state->len++;
+    return 0;
+  }
+
+  /* Find a matched key and overwritten it */
+  int32_t i = state->len - 1;
+  for (; i >= 0; i--) {
+    if (memcmp(key, state->pairs[i].key, GW_KEY_BYTES) == 0) {
+      break;
+    }
+  }
+
+  if (i < 0) {
+    return GW_ERROR_INSUFFICIENT_CAPACITY;
+  }
+
+  memcpy(state->pairs[i].value, value, GW_VALUE_BYTES);
+  return 0;
+}
+
+int gw_state_fetch(gw_state_t *state, const uint8_t key[GW_KEY_BYTES],
+                   uint8_t value[GW_VALUE_BYTES]) {
+  int32_t i = state->len - 1;
+  for (; i >= 0; i--) {
+    if (memcmp(key, state->pairs[i].key, GW_KEY_BYTES) == 0) {
+      memcpy(value, state->pairs[i].value, GW_VALUE_BYTES);
+      return 0;
+    }
+  }
+  return GW_ERROR_NOT_FOUND;
+}
+
+int _gw_pair_cmp(const void *a, const void *b) {
+  const gw_pair_t *pa = (const gw_pair_t *)a;
+  const gw_pair_t *pb = (const gw_pair_t *)b;
+
+  for (uint32_t i = GW_KEY_BYTES - 1; i >= 0; i--) {
+    int cmp_result = pa->key[i] - pb->key[i];
+    if (cmp_result != 0) {
+      return cmp_result;
+    }
+  }
+  return pa->order - pb->order;
+}
+
+void gw_state_normalize(gw_state_t *state) {
+  for (uint32_t i = 0; i < state->len; i++) {
+    state->pairs[i].order = i;
+  }
+  qsort(state->pairs, state->len, sizeof(gw_pair_t), _gw_pair_cmp);
+  /* Remove duplicate ones */
+  int32_t sorted = 0, next = 0;
+  while (next < state->len) {
+    int32_t item_index = next++;
+    while (next < state->len &&
+           memcmp(state->pairs[item_index].key, state->pairs[next].key,
+                  GW_KEY_BYTES) == 0) {
+      next++;
+    }
+    if (item_index != sorted) {
+      memcpy(state->pairs[sorted].key, state->pairs[item_index].key,
+             GW_KEY_BYTES);
+      memcpy(state->pairs[sorted].value, state->pairs[item_index].value,
+             GW_VALUE_BYTES);
+    }
+    sorted++;
+  }
+  state->len = sorted;
+}
+
+/* return 0 if state is equal, otherwise return non-zero value */
+int gw_cmp_state(gw_state_t *state_a, gw_state_t *state_b) {
+  if (state_a->len != state_b->len) {
+    return -1;
+  }
+
+  for (uint32_t i = 0; i < state_a->len; i++) {
+    gw_pair_t *a = &(state_a->pairs[i]);
+    gw_pair_t *b = &(state_b->pairs[i]);
+
+    if (memcmp(a->key, b->key, GW_KEY_BYTES) != 0) {
+      return -1;
+    }
+
+    if (memcmp(a->value, b->value, GW_VALUE_BYTES) != 0) {
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
+/* load state from inputs_seg */
+int gw_state_load_from_state_set(gw_state_t *state, mol_seg_t *inputs_seg) {
+  uint32_t len = MolReader_KVPairVec_length(inputs_seg);
+  for (uint32_t i = 0; i < len; i++) {
+    mol_seg_res_t kv_pair_res = MolReader_KVPairVec_get(inputs_seg, i);
+    if (kv_pair_res.errno != MOL_OK) {
+      return GW_ERROR_INVALID_DATA;
+    }
+    mol_seg_t k_seg = MolReader_KVPair_get_k(&kv_pair_res.seg);
+    mol_seg_t v_seg = MolReader_KVPair_get_v(&kv_pair_res.seg);
+    int ret = gw_state_insert(state, k_seg.ptr, v_seg.ptr);
+    if (ret != 0) {
+      return ret;
+    }
+  }
+  return 0;
+}
+
+/* syscalls */
+
+typedef struct {
+  gw_state_t *read_state;
+  gw_state_t *write_state;
+} gw_read_write_state_t;
+
+int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
+             uint8_t value[GW_VALUE_BYTES]) {
+  if (ctx == NULL) {
+    return GW_ERROR_INVALID_CONTEXT;
+  }
+  /* try read from write_state
+   * if not found then read from read_state */
+  gw_read_write_state_t *state = (gw_read_write_state_t *)ctx;
+  int ret = gw_state_fetch(state->write_state, key, value);
+  if (ret == GW_ERROR_NOT_FOUND) {
+    ret = gw_state_fetch(state->read_state, key, value);
+  }
+  return ret;
+}
+
+int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
+              const uint8_t value[GW_VALUE_BYTES]) {
+  if (ctx == NULL) {
+    return GW_ERROR_INVALID_CONTEXT;
+  }
+  return gw_state_insert(((gw_read_write_state_t *)ctx)->write_state, key,
+                         value);
+}
+
+int main() {
+  size_t len;
+  int ret;
+  /* dynamic load contract */
+  uint8_t script[SCRIPT_SIZE];
+  len = SCRIPT_SIZE;
+  ret = ckb_load_script(script, &len, 0);
+  if (ret != CKB_SUCCESS) {
+    return ret;
+  }
+  if (len > SCRIPT_SIZE) {
+    return GW_ERROR_INVALID_DATA;
+  }
+  mol_seg_t script_seg;
+  script_seg.ptr = script;
+  script_seg.size = len;
+  if (MolReader_Script_verify(&script_seg, false) != MOL_OK) {
+    return GW_ERROR_INVALID_DATA;
+  }
+
+  mol_seg_t args_seg = MolReader_Script_get_args(&script_seg);
+  mol_seg_t code_hash_seg = MolReader_Bytes_raw_bytes(&args_seg);
+
+  if (code_hash_seg.size != 32) {
+    return GW_ERROR_INVALID_DATA;
+  }
+
+  uint8_t code_buffer[CODE_SIZE] __attribute__((aligned(RISCV_PGSIZE)));
+
+  void *handle = NULL;
+  uint64_t consumed_size = 0;
+  ret = ckb_dlopen(code_hash_seg.ptr, code_buffer, CODE_SIZE, &handle,
+                   &consumed_size);
+  if (ret != CKB_SUCCESS) {
+    return ret;
+  }
+  if (consumed_size > CODE_SIZE) {
+    return GW_ERROR_INVALID_DATA;
+  }
+
+  /* get contract function pointer */
+  contract_handle_fn contract_handle_func;
+  *(void **)(&contract_handle_func) = ckb_dlsym(handle, CONTRACT_HANDLE_FUNC);
+  if (contract_handle_func == NULL) {
+    return GW_ERROR_DYNAMIC_LINKING;
+  }
+
+  /* load verification context */
+  uint8_t witness[WITNESS_SIZE];
+  len = WITNESS_SIZE;
+  size_t cell_source = 0;
+  ret = ckb_load_actual_type_witness(witness, &len, 0, &cell_source);
+  if (ret != CKB_SUCCESS) {
+    return ret;
+  }
+  mol_seg_t witness_seg;
+  witness_seg.ptr = (uint8_t *)witness;
+  witness_seg.size = len;
+  if (MolReader_WitnessArgs_verify(&witness_seg, false) != MOL_OK) {
+    return GW_ERROR_INVALID_DATA;
+  }
+  mol_seg_t content_seg;
+  if (cell_source == CKB_SOURCE_GROUP_OUTPUT) {
+    content_seg = MolReader_WitnessArgs_get_output_type(&witness_seg);
+  } else {
+    content_seg = MolReader_WitnessArgs_get_input_type(&witness_seg);
+  }
+  if (MolReader_BytesOpt_is_none(&content_seg)) {
+    return GW_ERROR_INVALID_DATA;
+  }
+  mol_seg_t verification_context_seg =
+      MolReader_Bytes_raw_bytes(&verification_context_seg);
+  if (MolReader_VerificationContext_verify(&witness_seg, false) != MOL_OK) {
+    return GW_ERROR_INVALID_DATA;
+  }
+  mol_seg_t call_context_seg =
+      MolReader_VerificationContext_get_call_context(&verification_context_seg);
+  mol_seg_t block_info_seg =
+      MolReader_VerificationContext_get_call_context(&verification_context_seg);
+
+  /* prepare context */
+  mol_seg_t inputs_seg =
+      MolReader_VerificationContext_get_inputs(&verification_context_seg);
+
+  gw_pair_t read_pairs[MAX_PAIRS];
+  gw_state_t read_state;
+  gw_state_init(&read_state, read_pairs, MAX_PAIRS);
+  ret = gw_state_load_from_state_set(&read_state, &inputs_seg);
+  if (ret != 0) {
+    return ret;
+  }
+
+  gw_pair_t write_pairs[MAX_PAIRS];
+  gw_state_t write_state;
+  gw_state_init(&write_state, write_pairs, MAX_PAIRS);
+
+  gw_read_write_state_t state;
+  state.read_state = &read_state;
+  state.write_state = &write_state;
+
+  gw_context_t context;
+  context.call_context = call_context_seg.ptr;
+  context.call_context_len = call_context_seg.size;
+  context.block_info = block_info_seg.ptr;
+  context.block_info_len = block_info_seg.size;
+  context.sys_context = (void *)&state;
+  context.sys_load = sys_load;
+  context.sys_store = sys_store;
+
+  /* run contract */
+  ret = contract_handle_func(&context);
+
+  if (ret != 0) {
+    return ret;
+  }
+
+  /* verify outputs */
+  gw_state_normalize(state.write_state);
+
+  mol_seg_t changes_seg =
+      MolReader_VerificationContext_get_changes(&verification_context_seg);
+  gw_state_t change_state;
+  /* reuse read_pairs as buffer */
+  gw_state_init(&change_state, read_pairs, MAX_PAIRS);
+  ret = gw_state_load_from_state_set(&change_state, &changes_seg);
+  if (ret != 0) {
+    return ret;
+  }
+
+  if (gw_cmp_state(state.write_state, &change_state) != 0) {
+    return GW_ERROR_MISMATCH_CHANGE_SET;
+  }
+
+  return 0;
+}

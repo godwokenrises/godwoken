@@ -1,8 +1,12 @@
 import blockchain;
 
 option Byte32Opt (Byte32);
-array Pubkey [byte; 20];
+
+array Byte20 [byte; 20];
 array Signature [byte; 65];
+
+// 4 bytes id + 1 byte + 32 bytes key
+array StateKey [byte; 37];
 
 struct MerkleState {
     merkle_root: Byte32,
@@ -28,11 +32,11 @@ struct Reverting {
     challenger_id: Uint32,
 }
 
-table Account {
+struct Account {
     id: Uint32,
-    pubkey: Pubkey,
     nonce: Uint32,
-    code_hash: Byte32Opt,
+    pubkey_hash: Byte20,
+    code_hash: Byte32,
 }
 
 table RawL2Transaction {
@@ -50,6 +54,7 @@ table L2Transaction {
 table RawL2Block {
     number: Uint64,
     aggregator_id: Uint32,
+    timestamp: Uint64,
     prev_account: MerkleState,
     post_account: MerkleState,
     states: States,
@@ -93,3 +98,30 @@ struct RevertChain {
 }
 
 // --- end of define states ---
+
+// --- contract execution ---
+
+table KVPair { k: StateKey, v: Byte32, }
+vector KVPairVec <KVPair>;
+
+table CallContext {
+    from_id: Uint32,
+    to_id: Uint32,
+    args: Bytes,
+}
+
+struct BlockInfo {
+    aggregator_id: Uint32,
+    number: Uint32,
+    timestamp: Uint64,
+
+}
+
+table VerificationContext {
+    inputs: KVPairVec,
+    changes: KVPairVec,
+    block_info: BlockInfo,
+    call_context: CallContext,
+}
+
+// --- end of contract execution ---
