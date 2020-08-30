@@ -14,9 +14,14 @@ BUILDER_DOCKER := nervos/ckb-riscv-gnu-toolchain@sha256:aae8a3f79705f67d505d1f1d
 all-via-docker: generate-protocol
 	docker run --rm -v `pwd`:/code -w /code ${BUILDER_DOCKER} bash -c "make all"
 
-all: build/validator
+all: build/validator build/generator
 
 build/validator: validator.c common.h
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
+	$(OBJCOPY) --only-keep-debug $@ $@.debug
+	$(OBJCOPY) --strip-debug --strip-all $@
+
+build/generator: generator.c common.h
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@

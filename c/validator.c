@@ -1,4 +1,4 @@
-/* Validator
+/* Layer2 contract validator
  *
  * Validator provides on-chain layer2 syscall implementation for contracts.
  * The `code_hash` of the layer2 contract is required in the args.
@@ -14,23 +14,8 @@
  *  4. compare actual outputs with expected outputs
  */
 
-#define MAX_PAIRS 1024
-#define SCRIPT_SIZE 128
-#define WITNESS_SIZE (300 * 1024)
-#define CODE_SIZE (512 * 1024)
-
-#define GW_ERROR_NOT_FOUND 42
-#define GW_ERROR_INVALID_DATA 43
-#define GW_ERROR_INSUFFICIENT_CAPACITY 44
-#define GW_ERROR_MISMATCH_CHANGE_SET 45
-#define GW_ERROR_INVALID_CONTEXT 46
-#define GW_ERROR_DYNAMIC_LINKING 47
-
-#include "blockchain.h"
-#include "ckb_dlfcn.h"
 #include "ckb_syscalls.h"
 #include "common.h"
-#include "godwoken.h"
 #include "stdlib.h"
 #include "string.h"
 
@@ -202,41 +187,13 @@ int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
 int main() {
   size_t len;
   int ret;
-  /* dynamic load contract */
-  uint8_t script[SCRIPT_SIZE];
-  len = SCRIPT_SIZE;
-  ret = ckb_load_script(script, &len, 0);
-  if (ret != CKB_SUCCESS) {
-    return ret;
-  }
-  if (len > SCRIPT_SIZE) {
-    return GW_ERROR_INVALID_DATA;
-  }
-  mol_seg_t script_seg;
-  script_seg.ptr = script;
-  script_seg.size = len;
-  if (MolReader_Script_verify(&script_seg, false) != MOL_OK) {
-    return GW_ERROR_INVALID_DATA;
-  }
 
-  mol_seg_t args_seg = MolReader_Script_get_args(&script_seg);
-  mol_seg_t code_hash_seg = MolReader_Bytes_raw_bytes(&args_seg);
-
-  if (code_hash_seg.size != 32) {
-    return GW_ERROR_INVALID_DATA;
-  }
-
+  /* load layer2 contract */
   uint8_t code_buffer[CODE_SIZE] __attribute__((aligned(RISCV_PGSIZE)));
-
   void *handle = NULL;
-  uint64_t consumed_size = 0;
-  ret = ckb_dlopen(code_hash_seg.ptr, code_buffer, CODE_SIZE, &handle,
-                   &consumed_size);
-  if (ret != CKB_SUCCESS) {
+  ret = load_layer2_contract_from_args(code_buffer, CODE_SIZE, handle);
+  if (ret != 0) {
     return ret;
-  }
-  if (consumed_size > CODE_SIZE) {
-    return GW_ERROR_INVALID_DATA;
   }
 
   /* get contract function pointer */
