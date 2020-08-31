@@ -27,17 +27,3 @@ impl<'r> Unpack<[u8; 65]> for packed::SignatureReader<'r> {
     }
 }
 impl_conversion_for_entity_unpack!([u8; 65], Signature);
-
-impl Pack<packed::StateKey> for [u8; 37] {
-    fn pack(&self) -> packed::StateKey {
-        packed::StateKey::from_slice(&self[..]).expect("impossible: fail to pack [u8; 37]")
-    }
-}
-
-impl<'r> Unpack<[u8; 37]> for packed::StateKeyReader<'r> {
-    fn unpack(&self) -> [u8; 37] {
-        let ptr = self.as_slice().as_ptr() as *const [u8; 37];
-        unsafe { *ptr }
-    }
-}
-impl_conversion_for_entity_unpack!([u8; 37], StateKey);

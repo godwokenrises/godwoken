@@ -5,9 +5,6 @@ option Byte32Opt (Byte32);
 array Byte20 [byte; 20];
 array Signature [byte; 65];
 
-// 4 bytes id + 1 byte + 32 bytes key
-array StateKey [byte; 37];
-
 struct MerkleState {
     merkle_root: Byte32,
     count: Uint64,
@@ -101,7 +98,7 @@ struct RevertChain {
 
 // --- contract execution ---
 
-table KVPair { k: StateKey, v: Byte32, }
+table KVPair { k: Byte32, v: Byte32, }
 vector KVPairVec <KVPair>;
 
 table CallContext {

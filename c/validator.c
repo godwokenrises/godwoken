@@ -165,12 +165,23 @@ int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
   if (ctx == NULL) {
     return GW_ERROR_INVALID_CONTEXT;
   }
+
+  gw_context_t *gw_ctx = (gw_context_t *)ctx;
+  /* get account id */
+  uint32_t account_id;
+  int ret = gw_get_account_id(gw_ctx, &account_id);
+  if (ret != 0) {
+    return ret;
+  }
+  /* raw key */
+  uint8_t raw_key[GW_KEY_BYTES];
+  gw_build_raw_key(account_id, key, raw_key);
   /* try read from write_state
    * if not found then read from read_state */
-  gw_read_write_state_t *state = (gw_read_write_state_t *)ctx;
-  int ret = gw_state_fetch(state->write_state, key, value);
+  gw_read_write_state_t *state = (gw_read_write_state_t *)gw_ctx->sys_context;
+  ret = gw_state_fetch(state->write_state, raw_key, value);
   if (ret == GW_ERROR_NOT_FOUND) {
-    ret = gw_state_fetch(state->read_state, key, value);
+    ret = gw_state_fetch(state->read_state, raw_key, value);
   }
   return ret;
 }
@@ -180,8 +191,18 @@ int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
   if (ctx == NULL) {
     return GW_ERROR_INVALID_CONTEXT;
   }
-  return gw_state_insert(((gw_read_write_state_t *)ctx)->write_state, key,
-                         value);
+  gw_context_t *gw_ctx = (gw_context_t *)ctx;
+  /* get account id */
+  uint32_t account_id;
+  int ret = gw_get_account_id(gw_ctx, &account_id);
+  if (ret != 0) {
+    return ret;
+  }
+  /* raw key */
+  uint8_t raw_key[GW_KEY_BYTES];
+  gw_build_raw_key(account_id, key, raw_key);
+  gw_read_write_state_t *state = (gw_read_write_state_t *)gw_ctx->sys_context;
+  return gw_state_insert(state->write_state, raw_key, value);
 }
 
 int main() {
