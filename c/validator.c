@@ -218,7 +218,7 @@ int main() {
   }
 
   /* get contract function pointer */
-  contract_handle_fn contract_handle_func;
+  gw_contract_handle_fn contract_handle_func;
   *(void **)(&contract_handle_func) = ckb_dlsym(handle, CONTRACT_HANDLE_FUNC);
   if (contract_handle_func == NULL) {
     return GW_ERROR_DYNAMIC_LINKING;
