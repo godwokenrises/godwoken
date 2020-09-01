@@ -217,13 +217,6 @@ int main() {
     return ret;
   }
 
-  /* get contract function pointer */
-  gw_contract_handle_fn contract_handle_func;
-  *(void **)(&contract_handle_func) = ckb_dlsym(handle, CONTRACT_HANDLE_FUNC);
-  if (contract_handle_func == NULL) {
-    return GW_ERROR_DYNAMIC_LINKING;
-  }
-
   /* load verification context */
   uint8_t witness[WITNESS_SIZE];
   len = WITNESS_SIZE;
@@ -286,8 +279,30 @@ int main() {
   context.sys_load = sys_load;
   context.sys_store = sys_store;
 
+  /* get contract function pointer */
+  uint8_t call_type;
+  ret = gw_get_call_type(&context, &call_type);
+  if (ret != 0) {
+    return ret;
+  }
+
+  char *func_name;
+  if (call_type == 0) {
+    func_name = CONTRACT_CONSTRUCTOR_FUNC;
+  } else if (call_type == 1) {
+    func_name = CONTRACT_HANDLE_FUNC;
+  } else {
+    return GW_ERROR_INVALID_DATA;
+  }
+
+  gw_contract_fn contract_func;
+  *(void **)(&contract_func) = ckb_dlsym(handle, func_name);
+  if (contract_func == NULL) {
+    return GW_ERROR_DYNAMIC_LINKING;
+  }
+
   /* run contract */
-  ret = contract_handle_func(&context);
+  ret = contract_func(&context);
 
   if (ret != 0) {
     return ret;

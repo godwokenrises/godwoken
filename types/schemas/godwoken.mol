@@ -104,6 +104,8 @@ vector KVPairVec <KVPair>;
 table CallContext {
     from_id: Uint32,
     to_id: Uint32,
+    // 0: construct, 1: handle_message
+    call_type: byte,
     args: Bytes,
 }
 
@@ -111,7 +113,6 @@ struct BlockInfo {
     aggregator_id: Uint32,
     number: Uint32,
     timestamp: Uint64,
-
 }
 
 table VerificationContext {

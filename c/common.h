@@ -1,6 +1,6 @@
 /* Layer2 contract interface */
-#define CONTRACT_CONSTRUCTOR_FUNC "construct"
-#define CONTRACT_HANDLE_FUNC "handle_message"
+#define CONTRACT_CONSTRUCTOR_FUNC "gw_construct"
+#define CONTRACT_HANDLE_FUNC "gw_handle_message"
 
 /* Common parameters */
 #define MAX_PAIRS 1024
@@ -45,6 +45,19 @@ void gw_build_raw_key(uint32_t id, const uint8_t key[GW_KEY_BYTES],
   blake2b_update(&blake2b_ctx, (uint8_t *)&type, 1);
   blake2b_update(&blake2b_ctx, key, GW_KEY_BYTES);
   blake2b_final(&blake2b_ctx, raw_key, GW_KEY_BYTES);
+}
+
+int gw_get_call_type(gw_context_t *ctx, uint8_t *call_type) {
+  mol_seg_t call_context_seg;
+  call_context_seg.ptr = ctx->call_context;
+  call_context_seg.size = ctx->call_context_len;
+  mol_seg_t call_type_seg =
+      MolReader_CallContext_get_call_type(&call_context_seg);
+  if (call_type_seg.size != 1) {
+    return GW_ERROR_INVALID_DATA;
+  }
+  *call_type = *(uint8_t *)(call_type_seg.ptr);
+  return 0;
 }
 
 int gw_get_account_id(gw_context_t *ctx, uint32_t *id) {

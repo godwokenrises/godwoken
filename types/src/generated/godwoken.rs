@@ -6280,6 +6280,7 @@ impl ::core::fmt::Display for CallContext {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "from_id", self.from_id())?;
         write!(f, ", {}: {}", "to_id", self.to_id())?;
+        write!(f, ", {}: {}", "call_type", self.call_type())?;
         write!(f, ", {}: {}", "args", self.args())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -6291,13 +6292,14 @@ impl ::core::fmt::Display for CallContext {
 impl ::core::default::Default for CallContext {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            28, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            33, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 29, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0,
         ];
         CallContext::new_unchecked(v.into())
     }
 }
 impl CallContext {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -6326,11 +6328,17 @@ impl CallContext {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Uint32::new_unchecked(self.0.slice(start..end))
     }
-    pub fn args(&self) -> Bytes {
+    pub fn call_type(&self) -> Byte {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Byte::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn args(&self) -> Bytes {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
+            let end = molecule::unpack_number(&slice[20..]) as usize;
             Bytes::new_unchecked(self.0.slice(start..end))
         } else {
             Bytes::new_unchecked(self.0.slice(start..))
@@ -6365,6 +6373,7 @@ impl molecule::prelude::Entity for CallContext {
         Self::new_builder()
             .from_id(self.from_id())
             .to_id(self.to_id())
+            .call_type(self.call_type())
             .args(self.args())
     }
 }
@@ -6389,6 +6398,7 @@ impl<'r> ::core::fmt::Display for CallContextReader<'r> {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "from_id", self.from_id())?;
         write!(f, ", {}: {}", "to_id", self.to_id())?;
+        write!(f, ", {}: {}", "call_type", self.call_type())?;
         write!(f, ", {}: {}", "args", self.args())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -6398,7 +6408,7 @@ impl<'r> ::core::fmt::Display for CallContextReader<'r> {
     }
 }
 impl<'r> CallContextReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -6427,11 +6437,17 @@ impl<'r> CallContextReader<'r> {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Uint32Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn args(&self) -> BytesReader<'r> {
+    pub fn call_type(&self) -> ByteReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        ByteReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn args(&self) -> BytesReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
+            let end = molecule::unpack_number(&slice[20..]) as usize;
             BytesReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             BytesReader::new_unchecked(&self.as_slice()[start..])
@@ -6491,7 +6507,8 @@ impl<'r> molecule::prelude::Reader<'r> for CallContextReader<'r> {
         }
         Uint32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         Uint32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        BytesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        ByteReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        BytesReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         Ok(())
     }
 }
@@ -6499,16 +6516,21 @@ impl<'r> molecule::prelude::Reader<'r> for CallContextReader<'r> {
 pub struct CallContextBuilder {
     pub(crate) from_id: Uint32,
     pub(crate) to_id: Uint32,
+    pub(crate) call_type: Byte,
     pub(crate) args: Bytes,
 }
 impl CallContextBuilder {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn from_id(mut self, v: Uint32) -> Self {
         self.from_id = v;
         self
     }
     pub fn to_id(mut self, v: Uint32) -> Self {
         self.to_id = v;
+        self
+    }
+    pub fn call_type(mut self, v: Byte) -> Self {
+        self.call_type = v;
         self
     }
     pub fn args(mut self, v: Bytes) -> Self {
@@ -6523,6 +6545,7 @@ impl molecule::prelude::Builder for CallContextBuilder {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.from_id.as_slice().len()
             + self.to_id.as_slice().len()
+            + self.call_type.as_slice().len()
             + self.args.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
@@ -6533,6 +6556,8 @@ impl molecule::prelude::Builder for CallContextBuilder {
         offsets.push(total_size);
         total_size += self.to_id.as_slice().len();
         offsets.push(total_size);
+        total_size += self.call_type.as_slice().len();
+        offsets.push(total_size);
         total_size += self.args.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
@@ -6540,6 +6565,7 @@ impl molecule::prelude::Builder for CallContextBuilder {
         }
         writer.write_all(self.from_id.as_slice())?;
         writer.write_all(self.to_id.as_slice())?;
+        writer.write_all(self.call_type.as_slice())?;
         writer.write_all(self.args.as_slice())?;
         Ok(())
     }
@@ -6761,9 +6787,9 @@ impl ::core::fmt::Display for VerificationContext {
 impl ::core::default::Default for VerificationContext {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            72, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 44, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 28, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0,
-            0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            77, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 44, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0,
+            0, 28, 0, 0, 0, 29, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         VerificationContext::new_unchecked(v.into())
     }

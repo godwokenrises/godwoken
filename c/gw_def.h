@@ -21,4 +21,4 @@ typedef struct {
 } gw_context_t;
 
 /* layer2 contract interfaces */
-typedef int (*gw_contract_handle_fn)(gw_context_t *);
+typedef int (*gw_contract_fn)(gw_context_t *);
