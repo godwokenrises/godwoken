@@ -116,10 +116,11 @@ struct BlockInfo {
 }
 
 table VerificationContext {
-    inputs: KVPairVec,
-    changes: KVPairVec,
     block_info: BlockInfo,
     call_context: CallContext,
+    inputs: KVPairVec,
+    changes: KVPairVec,
+    return_data: Bytes,
 }
 
 // --- end of contract execution ---

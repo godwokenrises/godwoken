@@ -158,6 +158,8 @@ int gw_state_load_from_state_set(gw_state_t *state, mol_seg_t *inputs_seg) {
 typedef struct {
   gw_state_t *read_state;
   gw_state_t *write_state;
+  uint8_t return_data[MAX_RETURN_DATA_SIZE];
+  uint32_t return_data_len;
 } gw_read_write_state_t;
 
 int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
@@ -167,6 +169,10 @@ int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
   }
 
   gw_context_t *gw_ctx = (gw_context_t *)ctx;
+  gw_read_write_state_t *state = (gw_read_write_state_t *)gw_ctx->sys_context;
+  if (state == NULL) {
+    return GW_ERROR_INVALID_CONTEXT;
+  }
   /* get account id */
   uint32_t account_id;
   int ret = gw_get_account_id(gw_ctx, &account_id);
@@ -178,7 +184,6 @@ int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
   gw_build_raw_key(account_id, key, raw_key);
   /* try read from write_state
    * if not found then read from read_state */
-  gw_read_write_state_t *state = (gw_read_write_state_t *)gw_ctx->sys_context;
   ret = gw_state_fetch(state->write_state, raw_key, value);
   if (ret == GW_ERROR_NOT_FOUND) {
     ret = gw_state_fetch(state->read_state, raw_key, value);
@@ -192,6 +197,10 @@ int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
     return GW_ERROR_INVALID_CONTEXT;
   }
   gw_context_t *gw_ctx = (gw_context_t *)ctx;
+  gw_read_write_state_t *state = (gw_read_write_state_t *)gw_ctx->sys_context;
+  if (state == NULL) {
+    return GW_ERROR_INVALID_CONTEXT;
+  }
   /* get account id */
   uint32_t account_id;
   int ret = gw_get_account_id(gw_ctx, &account_id);
@@ -201,8 +210,24 @@ int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
   /* raw key */
   uint8_t raw_key[GW_KEY_BYTES];
   gw_build_raw_key(account_id, key, raw_key);
-  gw_read_write_state_t *state = (gw_read_write_state_t *)gw_ctx->sys_context;
   return gw_state_insert(state->write_state, raw_key, value);
+}
+
+int sys_set_return_data(void *ctx, uint8_t *data, uint32_t len) {
+  if (ctx == NULL) {
+    return GW_ERROR_INVALID_CONTEXT;
+  }
+  gw_context_t *gw_ctx = (gw_context_t *)ctx;
+  gw_read_write_state_t *state = (gw_read_write_state_t *)gw_ctx->sys_context;
+  if (ctx == NULL) {
+    return GW_ERROR_INVALID_CONTEXT;
+  }
+  if (len > MAX_RETURN_DATA_SIZE) {
+    return GW_ERROR_INSUFFICIENT_CAPACITY;
+  }
+  state->return_data_len = len;
+  memcpy(state->return_data, data, len);
+  return 0;
 }
 
 int main() {
@@ -275,9 +300,11 @@ int main() {
   context.call_context_len = call_context_seg.size;
   context.block_info = block_info_seg.ptr;
   context.block_info_len = block_info_seg.size;
+  context.blake2b_hash = blake2b_hash;
   context.sys_context = (void *)&state;
   context.sys_load = sys_load;
   context.sys_store = sys_store;
+  context.sys_set_return_data = sys_set_return_data;
 
   /* get contract function pointer */
   uint8_t call_type;
@@ -323,6 +350,18 @@ int main() {
 
   if (gw_cmp_state(state.write_state, &change_state) != 0) {
     return GW_ERROR_MISMATCH_CHANGE_SET;
+  }
+
+  /* verify return_data */
+  mol_seg_t return_data_bytes_seg =
+      MolReader_VerificationContext_get_return_data(&verification_context_seg);
+  mol_seg_t return_data_seg = MolReader_Bytes_raw_bytes(&return_data_bytes_seg);
+  if (return_data_seg.size != state.return_data_len) {
+    return GW_ERROR_MISMATCH_RETURN_DATA;
+  }
+  if (memcmp(return_data_seg.ptr, state.return_data, state.return_data_len) !=
+      0) {
+    return GW_ERROR_MISMATCH_RETURN_DATA;
   }
 
   return 0;

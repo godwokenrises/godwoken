@@ -7,14 +7,16 @@
 #define SCRIPT_SIZE 128
 #define WITNESS_SIZE (300 * 1024)
 #define CODE_SIZE (512 * 1024)
+#define MAX_RETURN_DATA_SIZE 1024
 
 /* Errors */
 #define GW_ERROR_NOT_FOUND 42
 #define GW_ERROR_INVALID_DATA 43
 #define GW_ERROR_INSUFFICIENT_CAPACITY 44
-#define GW_ERROR_MISMATCH_CHANGE_SET 45
-#define GW_ERROR_INVALID_CONTEXT 46
-#define GW_ERROR_DYNAMIC_LINKING 47
+#define GW_ERROR_INVALID_CONTEXT 45
+#define GW_ERROR_DYNAMIC_LINKING 46
+#define GW_ERROR_MISMATCH_CHANGE_SET 47
+#define GW_ERROR_MISMATCH_RETURN_DATA 48
 
 /* Key type */
 #define GW_ACCOUNT_KV 0
@@ -30,6 +32,17 @@
 #include "stddef.h"
 
 /* common functions */
+
+/* Implement of gw_blake2b_hash_fn
+ * Note: this function is used in layer2 contract
+ */
+void blake2b_hash(uint8_t output_hash[GW_KEY_BYTES], uint8_t *input_data,
+                  uint32_t len) {
+  blake2b_state blake2b_ctx;
+  blake2b_init(&blake2b_ctx, GW_KEY_BYTES);
+  blake2b_update(&blake2b_ctx, input_data, len);
+  blake2b_final(&blake2b_ctx, output_hash, GW_KEY_BYTES);
+}
 
 /* Generate raw key
  * raw_key: blake2b(id | type | key)

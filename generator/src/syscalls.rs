@@ -12,11 +12,15 @@ use sparse_merkle_tree::{traits::Store, H256};
 use std::cmp;
 use std::collections::{HashMap, HashSet};
 
+/* Constants */
+const MAX_SET_RETURN_DATA_SIZE: u64 = 1024;
+
 /* Syscall numbers */
 const SYS_STORE: u64 = 3051;
 const SYS_LOAD: u64 = 3052;
 const SYS_LOAD_CALLCONTEXT: u64 = 3061;
 const SYS_LOAD_BLOCKINFO: u64 = 3062;
+const SYS_SET_RETURN_DATA: u64 = 3071;
 
 /* Key type */
 const GW_ACCOUNT_KV: u8 = 0;
@@ -43,6 +47,7 @@ fn build_raw_key(id: u32, key: &[u8]) -> [u8; 32] {
 pub struct RunResult {
     pub read_values: HashMap<H256, H256>,
     pub write_values: HashMap<H256, H256>,
+    pub return_data: Vec<u8>,
 }
 
 pub(crate) struct L2Syscalls<'a, S: Store<H256>> {
@@ -61,6 +66,21 @@ fn load_data_h256<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<H
             .to_u8();
     }
     Ok(H256::from(data))
+}
+
+fn load_bytes<Mac: SupportMachine>(
+    machine: &mut Mac,
+    addr: u64,
+    len: usize,
+) -> Result<Vec<u8>, VMError> {
+    let mut data = Vec::with_capacity(len);
+    for i in 0..len {
+        data[i] = machine
+            .memory_mut()
+            .load8(&Mac::REG::from_u64(addr).overflowing_add(&Mac::REG::from_u64(i as u64)))?
+            .to_u8();
+    }
+    Ok(data)
 }
 
 pub fn store_data<Mac: SupportMachine>(machine: &mut Mac, data: &[u8]) -> Result<u64, VMError> {
@@ -120,6 +140,16 @@ impl<'a, S: Store<H256>, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S
                     .memory_mut()
                     .store_bytes(value_addr, value.as_slice())?;
                 machine.set_register(A0, Mac::REG::from_u64(0));
+                Ok(true)
+            }
+            SYS_SET_RETURN_DATA => {
+                let data_addr = machine.registers()[A0].to_u64();
+                let len = machine.registers()[A1].to_u64();
+                if len > MAX_SET_RETURN_DATA_SIZE {
+                    return Err(VMError::Unexpected);
+                }
+                let data = load_bytes(machine, data_addr, len as usize)?;
+                self.result.return_data = data;
                 Ok(true)
             }
             SYS_LOAD_BLOCKINFO => {

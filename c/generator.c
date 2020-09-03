@@ -17,6 +17,7 @@
 #define GW_SYS_LOAD 3052
 #define GW_SYS_LOAD_CALLCONTEXT 3061
 #define GW_SYS_LOAD_BLOCKINFO 3062
+#define GW_SYS_SET_RETURN_DATA 3071
 
 #define CALL_CONTEXT_LEN 128
 #define BLOCK_INFO_LEN 128
@@ -28,6 +29,10 @@ int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
 int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
               const uint8_t value[GW_VALUE_BYTES]) {
   return syscall(GW_SYS_STORE, key, value, 0, 0, 0, 0);
+}
+
+int sys_set_return_data(void *ctx, uint8_t *data, uint32_t len) {
+  return syscall(GW_SYS_SET_RETURN_DATA, data, len, 0, 0, 0, 0);
 }
 
 int _sys_load_call_context(void *addr, uint64_t *len) {
@@ -57,9 +62,11 @@ int main() {
 
   /* prepare context */
   gw_context_t context;
+  context.blake2b_hash = blake2b_hash;
   context.sys_context = NULL;
   context.sys_load = sys_load;
   context.sys_store = sys_store;
+  context.sys_set_return_data = sys_set_return_data;
 
   uint8_t call_context[CALL_CONTEXT_LEN];
   uint64_t len = CALL_CONTEXT_LEN;
