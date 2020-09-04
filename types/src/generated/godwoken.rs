@@ -6603,22 +6603,22 @@ impl ::core::fmt::Display for BlockInfo {
 }
 impl ::core::default::Default for BlockInfo {
     fn default() -> Self {
-        let v: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let v: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         BlockInfo::new_unchecked(v.into())
     }
 }
 impl BlockInfo {
-    pub const TOTAL_SIZE: usize = 16;
-    pub const FIELD_SIZES: [usize; 3] = [4, 4, 8];
+    pub const TOTAL_SIZE: usize = 20;
+    pub const FIELD_SIZES: [usize; 3] = [4, 8, 8];
     pub const FIELD_COUNT: usize = 3;
     pub fn aggregator_id(&self) -> Uint32 {
         Uint32::new_unchecked(self.0.slice(0..4))
     }
-    pub fn number(&self) -> Uint32 {
-        Uint32::new_unchecked(self.0.slice(4..8))
+    pub fn number(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(4..12))
     }
     pub fn timestamp(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(8..16))
+        Uint64::new_unchecked(self.0.slice(12..20))
     }
     pub fn as_reader<'r>(&'r self) -> BlockInfoReader<'r> {
         BlockInfoReader::new_unchecked(self.as_slice())
@@ -6678,17 +6678,17 @@ impl<'r> ::core::fmt::Display for BlockInfoReader<'r> {
     }
 }
 impl<'r> BlockInfoReader<'r> {
-    pub const TOTAL_SIZE: usize = 16;
-    pub const FIELD_SIZES: [usize; 3] = [4, 4, 8];
+    pub const TOTAL_SIZE: usize = 20;
+    pub const FIELD_SIZES: [usize; 3] = [4, 8, 8];
     pub const FIELD_COUNT: usize = 3;
     pub fn aggregator_id(&self) -> Uint32Reader<'r> {
         Uint32Reader::new_unchecked(&self.as_slice()[0..4])
     }
-    pub fn number(&self) -> Uint32Reader<'r> {
-        Uint32Reader::new_unchecked(&self.as_slice()[4..8])
+    pub fn number(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[4..12])
     }
     pub fn timestamp(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[8..16])
+        Uint64Reader::new_unchecked(&self.as_slice()[12..20])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for BlockInfoReader<'r> {
@@ -6715,18 +6715,18 @@ impl<'r> molecule::prelude::Reader<'r> for BlockInfoReader<'r> {
 #[derive(Debug, Default)]
 pub struct BlockInfoBuilder {
     pub(crate) aggregator_id: Uint32,
-    pub(crate) number: Uint32,
+    pub(crate) number: Uint64,
     pub(crate) timestamp: Uint64,
 }
 impl BlockInfoBuilder {
-    pub const TOTAL_SIZE: usize = 16;
-    pub const FIELD_SIZES: [usize; 3] = [4, 4, 8];
+    pub const TOTAL_SIZE: usize = 20;
+    pub const FIELD_SIZES: [usize; 3] = [4, 8, 8];
     pub const FIELD_COUNT: usize = 3;
     pub fn aggregator_id(mut self, v: Uint32) -> Self {
         self.aggregator_id = v;
         self
     }
-    pub fn number(mut self, v: Uint32) -> Self {
+    pub fn number(mut self, v: Uint64) -> Self {
         self.number = v;
         self
     }
@@ -6788,10 +6788,10 @@ impl ::core::fmt::Display for VerificationContext {
 impl ::core::default::Default for VerificationContext {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            85, 0, 0, 0, 24, 0, 0, 0, 40, 0, 0, 0, 73, 0, 0, 0, 77, 0, 0, 0, 81, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0,
-            0, 29, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0,
-            0,
+            89, 0, 0, 0, 24, 0, 0, 0, 44, 0, 0, 0, 77, 0, 0, 0, 81, 0, 0, 0, 85, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0,
+            0, 28, 0, 0, 0, 29, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0,
+            0, 0, 0, 0, 0, 0,
         ];
         VerificationContext::new_unchecked(v.into())
     }

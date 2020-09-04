@@ -111,7 +111,7 @@ table CallContext {
 
 struct BlockInfo {
     aggregator_id: Uint32,
-    number: Uint32,
+    number: Uint64,
     timestamp: Uint64,
 }
 
