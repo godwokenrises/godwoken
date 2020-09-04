@@ -1,8 +1,10 @@
 use crate::blake2b::new_blake2b;
+use crate::bytes::Bytes;
 use crate::smt::SMT;
 use ckb_vm::{
-    registers::{A0, A1, A2, A7},
-    Error as VMError, Memory, Register, SupportMachine, Syscalls,
+    memory::{Memory, FLAG_EXECUTABLE, FLAG_FREEZED},
+    registers::{A0, A1, A2, A3, A7},
+    Error as VMError, Register, SupportMachine, Syscalls,
 };
 use godwoken_types::{
     packed::{BlockInfo, CallContext},
@@ -18,15 +20,26 @@ const MAX_SET_RETURN_DATA_SIZE: u64 = 1024;
 /* Syscall numbers */
 const SYS_STORE: u64 = 3051;
 const SYS_LOAD: u64 = 3052;
-const SYS_LOAD_CALLCONTEXT: u64 = 3061;
-const SYS_LOAD_BLOCKINFO: u64 = 3062;
-const SYS_SET_RETURN_DATA: u64 = 3071;
+const SYS_SET_RETURN_DATA: u64 = 3061;
+/* internal syscall numbers */
+const SYS_LOAD_CALLCONTEXT: u64 = 4051;
+const SYS_LOAD_BLOCKINFO: u64 = 4052;
+const SYS_LOAD_PROGRAM_AS_DATA: u64 = 4061;
+const SYS_LOAD_PROGRAM_AS_CODE: u64 = 4062;
+/* CKB compatible syscalls */
+const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
 /* Key type */
 const GW_ACCOUNT_KV: u8 = 0;
 const GW_ACCOUNT_NONCE: u8 = 1;
 const GW_ACCOUNT_PUBKEY_HASH: u8 = 2;
 const GW_ACCOUNT_CODE_HASH: u8 = 3;
+
+/* Syscall errors */
+const SUCCESS: u8 = 0;
+const INDEX_OUT_OF_BOUND: u8 = 1;
+const ITEM_MISSING: u8 = 2;
+const SLICE_OUT_OF_BOUND: u8 = 3;
 
 /* Generate raw key
  * raw_key: blake2b(id | type | key)
@@ -50,10 +63,11 @@ pub struct RunResult {
     pub return_data: Vec<u8>,
 }
 
-pub(crate) struct L2Syscalls<'a, S: Store<H256>> {
+pub(crate) struct L2Syscalls<'a, S> {
     pub(crate) tree: &'a SMT<S>,
     pub(crate) block_info: &'a BlockInfo,
     pub(crate) call_context: &'a CallContext,
+    pub(crate) program: &'a Bytes,
     pub(crate) result: &'a mut RunResult,
 }
 
@@ -74,6 +88,7 @@ fn load_bytes<Mac: SupportMachine>(
     len: usize,
 ) -> Result<Vec<u8>, VMError> {
     let mut data = Vec::with_capacity(len);
+    data.resize(len, 0);
     for i in 0..len {
         data[i] = machine
             .memory_mut()
@@ -118,7 +133,7 @@ impl<'a, S: Store<H256>, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S
                 let value_addr = machine.registers()[A1].to_u64();
                 let value = load_data_h256(machine, value_addr)?;
                 self.result.write_values.insert(key, value);
-                machine.set_register(A0, Mac::REG::from_u64(0));
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
             SYS_LOAD => {
@@ -139,7 +154,7 @@ impl<'a, S: Store<H256>, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S
                 machine
                     .memory_mut()
                     .store_bytes(value_addr, value.as_slice())?;
-                machine.set_register(A0, Mac::REG::from_u64(0));
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
             SYS_SET_RETURN_DATA => {
@@ -150,19 +165,94 @@ impl<'a, S: Store<H256>, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S
                 }
                 let data = load_bytes(machine, data_addr, len as usize)?;
                 self.result.return_data = data;
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
             SYS_LOAD_BLOCKINFO => {
                 let data = self.block_info.as_slice();
                 store_data(machine, data)?;
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
             SYS_LOAD_CALLCONTEXT => {
                 let data = self.call_context.as_slice();
                 store_data(machine, data)?;
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_LOAD_PROGRAM_AS_DATA => {
+                self.load_data(machine)?;
+                Ok(true)
+            }
+            SYS_LOAD_PROGRAM_AS_CODE => {
+                self.load_data_as_code(machine)?;
+                Ok(true)
+            }
+            DEBUG_PRINT_SYSCALL_NUMBER => {
+                self.output_debug(machine)?;
                 Ok(true)
             }
             _ => Ok(false),
         }
+    }
+}
+
+impl<'a, S> L2Syscalls<'a, S> {
+    fn load_data_as_code<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
+        let addr = machine.registers()[A0].to_u64();
+        let memory_size = machine.registers()[A1].to_u64();
+        let content_offset = machine.registers()[A2].to_u64();
+        let content_size = machine.registers()[A3].to_u64();
+
+        let content_end = content_offset
+            .checked_add(content_size)
+            .ok_or(VMError::OutOfBound)?;
+        if content_offset >= self.program.len() as u64
+            || content_end > self.program.len() as u64
+            || content_size > memory_size
+        {
+            machine.set_register(A0, Mac::REG::from_u8(SLICE_OUT_OF_BOUND));
+            return Ok(());
+        }
+        let data = self
+            .program
+            .slice((content_offset as usize)..(content_end as usize));
+        machine.memory_mut().init_pages(
+            addr,
+            memory_size,
+            FLAG_EXECUTABLE | FLAG_FREEZED,
+            Some(data),
+            0,
+        )?;
+
+        machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+        Ok(())
+    }
+
+    fn load_data<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
+        store_data(machine, &self.program)?;
+        machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+        Ok(())
+    }
+
+    fn output_debug<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
+        let mut addr = machine.registers()[A0].to_u64();
+        let mut buffer = Vec::new();
+
+        loop {
+            let byte = machine
+                .memory_mut()
+                .load8(&Mac::REG::from_u64(addr))?
+                .to_u8();
+            if byte == 0 {
+                break;
+            }
+            buffer.push(byte);
+            addr += 1;
+        }
+
+        let s = String::from_utf8(buffer).map_err(|_| VMError::ParseError)?;
+        println!("[contract debug]: {}", s);
+        Ok(())
     }
 }
