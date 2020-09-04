@@ -12,7 +12,7 @@ use lazy_static::lazy_static;
 use thiserror::Error;
 
 use crate::bytes::Bytes;
-use smt::{Store, H256, SMT};
+use smt::{SMTResult, Store, H256, SMT};
 
 use syscalls::{L2Syscalls, RunResult};
 
@@ -71,4 +71,17 @@ pub fn execute<S: Store<H256>>(ctx: &Context, tree: &SMT<S>, program: &Bytes) ->
         }
     }
     Ok(run_result)
+}
+
+pub trait State {
+    fn update_state(&mut self, run_result: &RunResult) -> SMTResult<()>;
+}
+
+impl<S: Store<H256>> State for SMT<S> {
+    fn update_state(&mut self, run_result: &RunResult) -> SMTResult<()> {
+        for (k, v) in &run_result.write_values {
+            self.update(*k, *v)?;
+        }
+        Ok(())
+    }
 }

@@ -7,7 +7,9 @@ use sparse_merkle_tree::{
 };
 use std::collections::{HashMap, HashSet};
 // re-exports
-pub use sparse_merkle_tree::{default_store::DefaultStore, traits::Store, H256};
+pub use sparse_merkle_tree::{
+    default_store::DefaultStore, error::Result as SMTResult, traits::Store, H256,
+};
 
 pub type SMT<S> = SparseMerkleTree<CkbBlake2bHasher, H256, S>;
 
