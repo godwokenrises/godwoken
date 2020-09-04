@@ -1,3 +1,8 @@
+#ifndef GW_DEF_H_
+#define GW_DEF_H_
+
+#include "stddef.h"
+
 #define GW_KEY_BYTES 32
 #define GW_VALUE_BYTES 32
 
@@ -30,3 +35,5 @@ typedef struct {
 
 /* layer2 contract interfaces */
 typedef int (*gw_contract_fn)(gw_context_t *);
+
+#endif /* GW_DEF_H_ */

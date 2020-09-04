@@ -1,3 +1,6 @@
+#ifndef GW_COMMON_H_
+#define GW_COMMON_H_
+
 /* Layer2 contract interface */
 #define CONTRACT_CONSTRUCTOR_FUNC "gw_construct"
 #define CONTRACT_HANDLE_FUNC "gw_handle_message"
@@ -26,7 +29,6 @@
 
 #include "blake2b.h"
 #include "blockchain.h"
-#include "ckb_dlfcn.h"
 #include "godwoken.h"
 #include "gw_def.h"
 #include "stddef.h"
@@ -85,43 +87,4 @@ int gw_get_account_id(gw_context_t *ctx, uint32_t *id) {
   return 0;
 }
 
-int load_layer2_contract_from_args(uint8_t *code_buffer, uint32_t buffer_size,
-                                   void *handle) {
-  size_t len;
-  int ret;
-  /* dynamic load contract */
-  uint8_t script[SCRIPT_SIZE];
-  len = SCRIPT_SIZE;
-  ret = ckb_load_script(script, &len, 0);
-  if (ret != CKB_SUCCESS) {
-    return ret;
-  }
-  if (len > SCRIPT_SIZE) {
-    return GW_ERROR_INVALID_DATA;
-  }
-  mol_seg_t script_seg;
-  script_seg.ptr = script;
-  script_seg.size = len;
-  if (MolReader_Script_verify(&script_seg, false) != MOL_OK) {
-    return GW_ERROR_INVALID_DATA;
-  }
-
-  mol_seg_t args_seg = MolReader_Script_get_args(&script_seg);
-  mol_seg_t code_hash_seg = MolReader_Bytes_raw_bytes(&args_seg);
-
-  if (code_hash_seg.size != 32) {
-    return GW_ERROR_INVALID_DATA;
-  }
-
-  uint64_t consumed_size = 0;
-  ret = ckb_dlopen(code_hash_seg.ptr, code_buffer, buffer_size, &handle,
-                   &consumed_size);
-  if (ret != CKB_SUCCESS) {
-    return ret;
-  }
-  if (consumed_size > buffer_size) {
-    return GW_ERROR_INVALID_DATA;
-  }
-
-  return 0;
-}
+#endif /* GW_COMMON_H_ */

@@ -11,13 +11,17 @@
 
 #include "ckb_syscalls.h"
 #include "common.h"
+#include "gw_dlfcn.h"
 
 /* syscalls */
 #define GW_SYS_STORE 3051
 #define GW_SYS_LOAD 3052
-#define GW_SYS_LOAD_CALLCONTEXT 3061
-#define GW_SYS_LOAD_BLOCKINFO 3062
-#define GW_SYS_SET_RETURN_DATA 3071
+#define GW_SYS_SET_RETURN_DATA 3061
+/* internal syscall only for generator */
+#define GW_SYS_LOAD_CALLCONTEXT 4051
+#define GW_SYS_LOAD_BLOCKINFO 4052
+#define GW_SYS_LOAD_PROGRAM_AS_DATA 4061
+#define GW_SYS_LOAD_PROGRAM_AS_CODE 4062
 
 #define CALL_CONTEXT_LEN 128
 #define BLOCK_INFO_LEN 128
@@ -49,12 +53,42 @@ int _sys_load_block_info(void *addr, uint64_t *len) {
   return ret;
 }
 
+int _sys_load_program_as_data(void *addr, uint64_t *len, size_t offset) {
+  volatile uint64_t inner_len = *len;
+  int ret =
+      syscall(GW_SYS_LOAD_PROGRAM_AS_DATA, addr, &inner_len, offset, 0, 0, 0);
+  *len = inner_len;
+  return ret;
+}
+
+int _sys_load_program_as_code(void *addr, uint64_t memory_size,
+                              uint64_t content_offset, uint64_t content_size) {
+  return syscall(GW_SYS_LOAD_PROGRAM_AS_CODE, addr, memory_size, content_offset,
+                 content_size, 0, 0);
+}
+
+int load_layer2_contract(uint8_t *code_buffer, uint32_t buffer_size,
+                         void **handle) {
+  int ret;
+  /* dynamic load contract */
+  uint64_t consumed_size = 0;
+  ret = ckb_dlopen(code_buffer, buffer_size, handle, &consumed_size);
+  if (ret != CKB_SUCCESS) {
+    return ret;
+  }
+  if (consumed_size > buffer_size) {
+    return GW_ERROR_INVALID_DATA;
+  }
+
+  return 0;
+}
+
 int main() {
   int ret;
   /* load layer2 contract */
   uint8_t code_buffer[CODE_SIZE] __attribute__((aligned(RISCV_PGSIZE)));
   void *handle = NULL;
-  ret = load_layer2_contract_from_args(code_buffer, CODE_SIZE, handle);
+  ret = load_layer2_contract(code_buffer, CODE_SIZE, &handle);
 
   if (ret != 0) {
     return ret;
