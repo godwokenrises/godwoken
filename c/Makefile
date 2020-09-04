@@ -11,18 +11,22 @@ PROTOCOL_SCHEMA_DIR := ../types/schemas
 # docker pull nervos/ckb-riscv-gnu-toolchain:gnu-bionic-20191012
 BUILDER_DOCKER := nervos/ckb-riscv-gnu-toolchain@sha256:aae8a3f79705f67d505d1f1d5ddc694a4fd537ed1c7e9622420a470d59ba2ec3
 
+BINS := build/validator build/generator build/examples/sum.so
+
 all-via-docker: generate-protocol
 	docker run --rm -v `pwd`:/code -w /code ${BUILDER_DOCKER} bash -c "make all"
 
 debug-all-via-docker: generate-protocol
 	docker run --rm -v `pwd`:/code -w /code ${BUILDER_DOCKER} bash -c "make debug-all"
 
-all: build/validator build/generator examples
+all: $(BINS)
+
+clean:
+	rm $(BINS)
 
 debug-all: CFLAGS += -DCKB_C_STDLIB_PRINTF 
 debug-all: all
 
-examples: build/examples/sum.so
 
 build/validator: validator.c common.h
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
