@@ -17,124 +17,9 @@
 #include "ckb_dlfcn.h"
 #include "ckb_syscalls.h"
 #include "common.h"
+#include "gw_smt.h"
 #include "stdlib.h"
 #include "string.h"
-
-typedef struct {
-  uint8_t key[GW_KEY_BYTES];
-  uint8_t value[GW_VALUE_BYTES];
-  uint8_t order;
-} gw_pair_t;
-
-typedef struct {
-  gw_pair_t *pairs;
-  uint32_t len;
-  uint32_t capacity;
-} gw_state_t;
-
-void gw_state_init(gw_state_t *state, gw_pair_t *buffer, uint32_t capacity) {
-  state->pairs = buffer;
-  state->len = 0;
-  state->capacity = capacity;
-}
-
-int gw_state_insert(gw_state_t *state, const uint8_t key[GW_KEY_BYTES],
-                    const uint8_t value[GW_VALUE_BYTES]) {
-  if (state->len < state->capacity) {
-    /* shortcut, append at end */
-    memcpy(state->pairs[state->len].key, key, GW_KEY_BYTES);
-    memcpy(state->pairs[state->len].value, value, GW_KEY_BYTES);
-    state->len++;
-    return 0;
-  }
-
-  /* Find a matched key and overwritten it */
-  int32_t i = state->len - 1;
-  for (; i >= 0; i--) {
-    if (memcmp(key, state->pairs[i].key, GW_KEY_BYTES) == 0) {
-      break;
-    }
-  }
-
-  if (i < 0) {
-    return GW_ERROR_INSUFFICIENT_CAPACITY;
-  }
-
-  memcpy(state->pairs[i].value, value, GW_VALUE_BYTES);
-  return 0;
-}
-
-int gw_state_fetch(gw_state_t *state, const uint8_t key[GW_KEY_BYTES],
-                   uint8_t value[GW_VALUE_BYTES]) {
-  int32_t i = state->len - 1;
-  for (; i >= 0; i--) {
-    if (memcmp(key, state->pairs[i].key, GW_KEY_BYTES) == 0) {
-      memcpy(value, state->pairs[i].value, GW_VALUE_BYTES);
-      return 0;
-    }
-  }
-  return GW_ERROR_NOT_FOUND;
-}
-
-int _gw_pair_cmp(const void *a, const void *b) {
-  const gw_pair_t *pa = (const gw_pair_t *)a;
-  const gw_pair_t *pb = (const gw_pair_t *)b;
-
-  for (uint32_t i = GW_KEY_BYTES - 1; i >= 0; i--) {
-    int cmp_result = pa->key[i] - pb->key[i];
-    if (cmp_result != 0) {
-      return cmp_result;
-    }
-  }
-  return pa->order - pb->order;
-}
-
-void gw_state_normalize(gw_state_t *state) {
-  for (uint32_t i = 0; i < state->len; i++) {
-    state->pairs[i].order = i;
-  }
-  qsort(state->pairs, state->len, sizeof(gw_pair_t), _gw_pair_cmp);
-  /* Remove duplicate ones */
-  int32_t sorted = 0, next = 0;
-  while (next < state->len) {
-    int32_t item_index = next++;
-    while (next < state->len &&
-           memcmp(state->pairs[item_index].key, state->pairs[next].key,
-                  GW_KEY_BYTES) == 0) {
-      next++;
-    }
-    if (item_index != sorted) {
-      memcpy(state->pairs[sorted].key, state->pairs[item_index].key,
-             GW_KEY_BYTES);
-      memcpy(state->pairs[sorted].value, state->pairs[item_index].value,
-             GW_VALUE_BYTES);
-    }
-    sorted++;
-  }
-  state->len = sorted;
-}
-
-/* return 0 if state is equal, otherwise return non-zero value */
-int gw_cmp_state(gw_state_t *state_a, gw_state_t *state_b) {
-  if (state_a->len != state_b->len) {
-    return -1;
-  }
-
-  for (uint32_t i = 0; i < state_a->len; i++) {
-    gw_pair_t *a = &(state_a->pairs[i]);
-    gw_pair_t *b = &(state_b->pairs[i]);
-
-    if (memcmp(a->key, b->key, GW_KEY_BYTES) != 0) {
-      return -1;
-    }
-
-    if (memcmp(a->value, b->value, GW_VALUE_BYTES) != 0) {
-      return -1;
-    }
-  }
-
-  return 0;
-}
 
 /* load state from inputs_seg */
 int gw_state_load_from_state_set(gw_state_t *state, mol_seg_t *inputs_seg) {
@@ -328,7 +213,10 @@ int main() {
   mol_seg_t block_info_seg =
       MolReader_VerificationContext_get_call_context(&verification_context_seg);
 
-  /* prepare context */
+  /* merkle verify pre_account_state */
+  mol_seg_t prev_account_state_seg =
+      MolReader_VerificationContext_get_prev_account_state(
+          &verification_context_seg);
   mol_seg_t inputs_seg =
       MolReader_VerificationContext_get_inputs(&verification_context_seg);
 
@@ -340,6 +228,18 @@ int main() {
     return ret;
   }
 
+  mol_seg_t proof_bytes_seg =
+      MolReader_VerificationContext_get_proof(&verification_context_seg);
+  mol_seg_t proof_seg = MolReader_Bytes_raw_bytes(&proof_bytes_seg);
+
+  ret = gw_smt_verify(prev_account_state_seg.ptr, &read_state, proof_seg.ptr,
+                      proof_seg.size);
+
+  if (ret != 0) {
+    return ret;
+  }
+
+  /* prepare context */
   gw_pair_t write_pairs[MAX_PAIRS];
   gw_state_t write_state;
   gw_state_init(&write_state, write_pairs, MAX_PAIRS);
@@ -388,32 +288,30 @@ int main() {
     return ret;
   }
 
-  /* verify outputs */
+  /* merkle verify post account state */
   gw_state_normalize(state.write_state);
+  mol_seg_t post_account_state_seg =
+      MolReader_VerificationContext_get_post_account_state(
+          &verification_context_seg);
+  ret = gw_smt_verify(post_account_state_seg.ptr, state.write_state,
+                      proof_seg.ptr, proof_seg.size);
 
-  mol_seg_t changes_seg =
-      MolReader_VerificationContext_get_changes(&verification_context_seg);
-  gw_state_t change_state;
-  /* reuse read_pairs as buffer */
-  gw_state_init(&change_state, read_pairs, MAX_PAIRS);
-  ret = gw_state_load_from_state_set(&change_state, &changes_seg);
   if (ret != 0) {
     return ret;
   }
 
-  if (gw_cmp_state(state.write_state, &change_state) != 0) {
-    return GW_ERROR_MISMATCH_CHANGE_SET;
-  }
-
   /* verify return_data */
-  mol_seg_t return_data_bytes_seg =
-      MolReader_VerificationContext_get_return_data(&verification_context_seg);
-  mol_seg_t return_data_seg = MolReader_Bytes_raw_bytes(&return_data_bytes_seg);
-  if (return_data_seg.size != state.return_data_len) {
-    return GW_ERROR_MISMATCH_RETURN_DATA;
-  }
-  if (memcmp(return_data_seg.ptr, state.return_data, state.return_data_len) !=
-      0) {
+  uint8_t return_data_hash_buffer[32];
+  blake2b_state blake2b_ctx;
+  blake2b_init(&blake2b_ctx, 32);
+  blake2b_update(&blake2b_ctx, state.return_data, state.return_data_len);
+  blake2b_final(&blake2b_ctx, return_data_hash_buffer, 32);
+
+  mol_seg_t return_data_hash_seg =
+      MolReader_VerificationContext_get_return_data_hash(
+          &verification_context_seg);
+  if (memcmp(return_data_hash_seg.ptr, return_data_hash_buffer,
+             return_data_hash_seg.size) != 0) {
     return GW_ERROR_MISMATCH_RETURN_DATA;
   }
 

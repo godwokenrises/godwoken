@@ -6776,8 +6776,20 @@ impl ::core::fmt::Display for VerificationContext {
         write!(f, "{}: {}", "block_info", self.block_info())?;
         write!(f, ", {}: {}", "call_context", self.call_context())?;
         write!(f, ", {}: {}", "inputs", self.inputs())?;
-        write!(f, ", {}: {}", "changes", self.changes())?;
-        write!(f, ", {}: {}", "return_data", self.return_data())?;
+        write!(
+            f,
+            ", {}: {}",
+            "prev_account_state",
+            self.prev_account_state()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "post_account_state",
+            self.post_account_state()
+        )?;
+        write!(f, ", {}: {}", "return_data_hash", self.return_data_hash())?;
+        write!(f, ", {}: {}", "proof", self.proof())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -6788,16 +6800,19 @@ impl ::core::fmt::Display for VerificationContext {
 impl ::core::default::Default for VerificationContext {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            89, 0, 0, 0, 24, 0, 0, 0, 44, 0, 0, 0, 77, 0, 0, 0, 81, 0, 0, 0, 85, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0,
-            0, 28, 0, 0, 0, 29, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0,
-            0, 0, 0, 0, 0, 0,
+            189, 0, 0, 0, 32, 0, 0, 0, 52, 0, 0, 0, 85, 0, 0, 0, 89, 0, 0, 0, 121, 0, 0, 0, 153, 0,
+            0, 0, 185, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33, 0,
+            0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 29, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         VerificationContext::new_unchecked(v.into())
     }
 }
 impl VerificationContext {
-    pub const FIELD_COUNT: usize = 5;
+    pub const FIELD_COUNT: usize = 7;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -6832,17 +6847,29 @@ impl VerificationContext {
         let end = molecule::unpack_number(&slice[16..]) as usize;
         KVPairVec::new_unchecked(self.0.slice(start..end))
     }
-    pub fn changes(&self) -> KVPairVec {
+    pub fn prev_account_state(&self) -> Byte32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         let end = molecule::unpack_number(&slice[20..]) as usize;
-        KVPairVec::new_unchecked(self.0.slice(start..end))
+        Byte32::new_unchecked(self.0.slice(start..end))
     }
-    pub fn return_data(&self) -> Bytes {
+    pub fn post_account_state(&self) -> Byte32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[20..]) as usize;
+        let end = molecule::unpack_number(&slice[24..]) as usize;
+        Byte32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn return_data_hash(&self) -> Byte32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        Byte32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn proof(&self) -> Bytes {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[24..]) as usize;
+            let end = molecule::unpack_number(&slice[32..]) as usize;
             Bytes::new_unchecked(self.0.slice(start..end))
         } else {
             Bytes::new_unchecked(self.0.slice(start..))
@@ -6878,8 +6905,10 @@ impl molecule::prelude::Entity for VerificationContext {
             .block_info(self.block_info())
             .call_context(self.call_context())
             .inputs(self.inputs())
-            .changes(self.changes())
-            .return_data(self.return_data())
+            .prev_account_state(self.prev_account_state())
+            .post_account_state(self.post_account_state())
+            .return_data_hash(self.return_data_hash())
+            .proof(self.proof())
     }
 }
 #[derive(Clone, Copy)]
@@ -6904,8 +6933,20 @@ impl<'r> ::core::fmt::Display for VerificationContextReader<'r> {
         write!(f, "{}: {}", "block_info", self.block_info())?;
         write!(f, ", {}: {}", "call_context", self.call_context())?;
         write!(f, ", {}: {}", "inputs", self.inputs())?;
-        write!(f, ", {}: {}", "changes", self.changes())?;
-        write!(f, ", {}: {}", "return_data", self.return_data())?;
+        write!(
+            f,
+            ", {}: {}",
+            "prev_account_state",
+            self.prev_account_state()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "post_account_state",
+            self.post_account_state()
+        )?;
+        write!(f, ", {}: {}", "return_data_hash", self.return_data_hash())?;
+        write!(f, ", {}: {}", "proof", self.proof())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -6914,7 +6955,7 @@ impl<'r> ::core::fmt::Display for VerificationContextReader<'r> {
     }
 }
 impl<'r> VerificationContextReader<'r> {
-    pub const FIELD_COUNT: usize = 5;
+    pub const FIELD_COUNT: usize = 7;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -6949,17 +6990,29 @@ impl<'r> VerificationContextReader<'r> {
         let end = molecule::unpack_number(&slice[16..]) as usize;
         KVPairVecReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn changes(&self) -> KVPairVecReader<'r> {
+    pub fn prev_account_state(&self) -> Byte32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         let end = molecule::unpack_number(&slice[20..]) as usize;
-        KVPairVecReader::new_unchecked(&self.as_slice()[start..end])
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn return_data(&self) -> BytesReader<'r> {
+    pub fn post_account_state(&self) -> Byte32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[20..]) as usize;
+        let end = molecule::unpack_number(&slice[24..]) as usize;
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn return_data_hash(&self) -> Byte32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn proof(&self) -> BytesReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[24..]) as usize;
+            let end = molecule::unpack_number(&slice[32..]) as usize;
             BytesReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             BytesReader::new_unchecked(&self.as_slice()[start..])
@@ -7020,8 +7073,10 @@ impl<'r> molecule::prelude::Reader<'r> for VerificationContextReader<'r> {
         BlockInfoReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         CallContextReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         KVPairVecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        KVPairVecReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
-        BytesReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
+        BytesReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
         Ok(())
     }
 }
@@ -7030,11 +7085,13 @@ pub struct VerificationContextBuilder {
     pub(crate) block_info: BlockInfo,
     pub(crate) call_context: CallContext,
     pub(crate) inputs: KVPairVec,
-    pub(crate) changes: KVPairVec,
-    pub(crate) return_data: Bytes,
+    pub(crate) prev_account_state: Byte32,
+    pub(crate) post_account_state: Byte32,
+    pub(crate) return_data_hash: Byte32,
+    pub(crate) proof: Bytes,
 }
 impl VerificationContextBuilder {
-    pub const FIELD_COUNT: usize = 5;
+    pub const FIELD_COUNT: usize = 7;
     pub fn block_info(mut self, v: BlockInfo) -> Self {
         self.block_info = v;
         self
@@ -7047,12 +7104,20 @@ impl VerificationContextBuilder {
         self.inputs = v;
         self
     }
-    pub fn changes(mut self, v: KVPairVec) -> Self {
-        self.changes = v;
+    pub fn prev_account_state(mut self, v: Byte32) -> Self {
+        self.prev_account_state = v;
         self
     }
-    pub fn return_data(mut self, v: Bytes) -> Self {
-        self.return_data = v;
+    pub fn post_account_state(mut self, v: Byte32) -> Self {
+        self.post_account_state = v;
+        self
+    }
+    pub fn return_data_hash(mut self, v: Byte32) -> Self {
+        self.return_data_hash = v;
+        self
+    }
+    pub fn proof(mut self, v: Bytes) -> Self {
+        self.proof = v;
         self
     }
 }
@@ -7064,8 +7129,10 @@ impl molecule::prelude::Builder for VerificationContextBuilder {
             + self.block_info.as_slice().len()
             + self.call_context.as_slice().len()
             + self.inputs.as_slice().len()
-            + self.changes.as_slice().len()
-            + self.return_data.as_slice().len()
+            + self.prev_account_state.as_slice().len()
+            + self.post_account_state.as_slice().len()
+            + self.return_data_hash.as_slice().len()
+            + self.proof.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -7077,9 +7144,13 @@ impl molecule::prelude::Builder for VerificationContextBuilder {
         offsets.push(total_size);
         total_size += self.inputs.as_slice().len();
         offsets.push(total_size);
-        total_size += self.changes.as_slice().len();
+        total_size += self.prev_account_state.as_slice().len();
         offsets.push(total_size);
-        total_size += self.return_data.as_slice().len();
+        total_size += self.post_account_state.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.return_data_hash.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.proof.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -7087,8 +7158,10 @@ impl molecule::prelude::Builder for VerificationContextBuilder {
         writer.write_all(self.block_info.as_slice())?;
         writer.write_all(self.call_context.as_slice())?;
         writer.write_all(self.inputs.as_slice())?;
-        writer.write_all(self.changes.as_slice())?;
-        writer.write_all(self.return_data.as_slice())?;
+        writer.write_all(self.prev_account_state.as_slice())?;
+        writer.write_all(self.post_account_state.as_slice())?;
+        writer.write_all(self.return_data_hash.as_slice())?;
+        writer.write_all(self.proof.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

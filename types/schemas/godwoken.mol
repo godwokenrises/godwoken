@@ -119,8 +119,10 @@ table VerificationContext {
     block_info: BlockInfo,
     call_context: CallContext,
     inputs: KVPairVec,
-    changes: KVPairVec,
-    return_data: Bytes,
+    prev_account_state: Byte32,
+    post_account_state: Byte32,
+    return_data_hash: Byte32,
+    proof: Bytes,
 }
 
 // --- end of contract execution ---
