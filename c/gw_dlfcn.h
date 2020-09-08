@@ -90,13 +90,15 @@ typedef struct {
   uint8_t *base_addr;
 } CkbDlfcnContext;
 
-int _sys_load_program_as_data(void *addr, uint64_t *len, size_t offset);
+int _sys_load_program_as_data(void *addr, uint64_t *len, size_t offset,
+                              uint64_t id);
 
 int _sys_load_program_as_code(void *addr, uint64_t memory_size,
-                              uint64_t content_offset, uint64_t content_size);
+                              uint64_t content_offset, uint64_t content_size,
+                              uint64_t id);
 
-int ckb_dlopen(uint8_t *aligned_addr, size_t aligned_size, void **handle,
-               size_t *consumed_size) {
+int ckb_dlopen(uint32_t id, uint8_t *aligned_addr, size_t aligned_size,
+               void **handle, size_t *consumed_size) {
   if (sizeof(CkbDlfcnContext) > RISCV_PGSIZE || aligned_size < RISCV_PGSIZE) {
     return ERROR_CONTEXT_FAILURE;
   }
@@ -110,7 +112,7 @@ int ckb_dlopen(uint8_t *aligned_addr, size_t aligned_size, void **handle,
   /* Basic ELF header parsing */
   Elf64_Ehdr header;
   uint64_t len = sizeof(header);
-  int ret = _sys_load_program_as_data((void *)&header, &len, 0);
+  int ret = _sys_load_program_as_data((void *)&header, &len, 0, id);
   if (ret != CKB_SUCCESS) {
     return ret;
   }
@@ -125,8 +127,8 @@ int ckb_dlopen(uint8_t *aligned_addr, size_t aligned_size, void **handle,
   /* Parse program headers and load relevant parts */
   Elf64_Phdr program_headers[16];
   len = sizeof(Elf64_Phdr) * header.e_phnum;
-  ret =
-      _sys_load_program_as_data((void *)program_headers, &len, header.e_phoff);
+  ret = _sys_load_program_as_data((void *)program_headers, &len, header.e_phoff,
+                                  id);
   if (ret != CKB_SUCCESS) {
     return ret;
   }
@@ -149,7 +151,7 @@ int ckb_dlopen(uint8_t *aligned_addr, size_t aligned_size, void **handle,
           return ERROR_MEMORY_NOT_ENOUGH;
         }
         ret = _sys_load_program_as_code(aligned_addr + vaddr, memsz,
-                                        ph->p_offset, ph->p_filesz);
+                                        ph->p_offset, ph->p_filesz, id);
         if (ret != CKB_SUCCESS) {
           return ret;
         }
@@ -165,7 +167,7 @@ int ckb_dlopen(uint8_t *aligned_addr, size_t aligned_size, void **handle,
           return ERROR_MEMORY_NOT_ENOUGH;
         }
         ret = _sys_load_program_as_data(aligned_addr + ph->p_vaddr, &filesz,
-                                        ph->p_offset);
+                                        ph->p_offset, id);
         if (ret != CKB_SUCCESS) {
           return ret;
         }
@@ -182,8 +184,8 @@ int ckb_dlopen(uint8_t *aligned_addr, size_t aligned_size, void **handle,
    */
   Elf64_Shdr section_headers[32];
   len = sizeof(Elf64_Shdr) * header.e_shnum;
-  ret =
-      _sys_load_program_as_data((void *)section_headers, &len, header.e_shoff);
+  ret = _sys_load_program_as_data((void *)section_headers, &len, header.e_shoff,
+                                  id);
   if (ret != CKB_SUCCESS) {
     return ret;
   }
@@ -201,7 +203,7 @@ int ckb_dlopen(uint8_t *aligned_addr, size_t aligned_size, void **handle,
   }
   uint64_t shrtab_len = shshrtab->sh_size;
   ret = _sys_load_program_as_data((void *)shrtab, &shrtab_len,
-                                  shshrtab->sh_offset);
+                                  shshrtab->sh_offset, id);
   if (ret != CKB_SUCCESS) {
     return ret;
   }
@@ -221,7 +223,7 @@ int ckb_dlopen(uint8_t *aligned_addr, size_t aligned_size, void **handle,
         size_t load_size = MIN(relocation_size, 64);
         uint64_t load_length = load_size * sizeof(Elf64_Rela);
         ret = _sys_load_program_as_data((void *)relocations, &load_length,
-                                        current_offset);
+                                        current_offset, id);
         if (ret != CKB_SUCCESS) {
           return ret;
         }

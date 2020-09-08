@@ -28,14 +28,42 @@
 
 int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
              uint8_t value[GW_VALUE_BYTES]) {
-  return syscall(GW_SYS_LOAD, key, value, 0, 0, 0, 0);
+  gw_context_t *gw_ctx = (gw_context_t *)ctx;
+  if (gw_ctx == NULL) {
+    return GW_ERROR_INVALID_CONTEXT;
+  }
+  uint8_t raw_key[GW_KEY_BYTES];
+  gw_build_raw_key(gw_ctx->call_context.to_id, key, raw_key);
+  return syscall(GW_SYS_LOAD, raw_key, value, 0, 0, 0, 0);
 }
 int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
               const uint8_t value[GW_VALUE_BYTES]) {
-  return syscall(GW_SYS_STORE, key, value, 0, 0, 0, 0);
+  gw_context_t *gw_ctx = (gw_context_t *)ctx;
+  if (gw_ctx == NULL) {
+    return GW_ERROR_INVALID_CONTEXT;
+  }
+  uint8_t raw_key[GW_KEY_BYTES];
+  gw_build_raw_key(gw_ctx->call_context.to_id, key, raw_key);
+  return syscall(GW_SYS_STORE, raw_key, value, 0, 0, 0, 0);
 }
 
+/* set call return data */
 int sys_set_return_data(void *ctx, uint8_t *data, uint32_t len) {
+  gw_context_t *gw_ctx = (gw_context_t *)ctx;
+  if (gw_ctx == NULL || gw_ctx->sys_context == NULL) {
+    return GW_ERROR_INVALID_CONTEXT;
+  }
+  if (len > GW_MAX_RETURN_DATA_SIZE) {
+    return GW_ERROR_INVALID_DATA;
+  }
+  gw_call_receipt_t *receipt = (gw_call_receipt_t *)gw_ctx->sys_context;
+  receipt->return_data_len = len;
+  memcpy(receipt->return_data, data, len);
+  return 0;
+}
+
+/* set program return data */
+int _set_program_return_data(uint8_t *data, uint32_t len) {
   return syscall(GW_SYS_SET_RETURN_DATA, data, len, 0, 0, 0, 0);
 }
 
@@ -53,31 +81,86 @@ int _sys_load_block_info(void *addr, uint64_t *len) {
   return ret;
 }
 
-int _sys_load_program_as_data(void *addr, uint64_t *len, size_t offset) {
+int _sys_load_program_as_data(void *addr, uint64_t *len, size_t offset,
+                              uint64_t id) {
   volatile uint64_t inner_len = *len;
   int ret =
-      syscall(GW_SYS_LOAD_PROGRAM_AS_DATA, addr, &inner_len, offset, 0, 0, 0);
+      syscall(GW_SYS_LOAD_PROGRAM_AS_DATA, addr, &inner_len, offset, id, 0, 0);
   *len = inner_len;
   return ret;
 }
 
 int _sys_load_program_as_code(void *addr, uint64_t memory_size,
-                              uint64_t content_offset, uint64_t content_size) {
+                              uint64_t content_offset, uint64_t content_size,
+                              uint64_t id) {
   return syscall(GW_SYS_LOAD_PROGRAM_AS_CODE, addr, memory_size, content_offset,
-                 content_size, 0, 0);
+                 content_size, id, 0);
 }
 
-int load_layer2_contract(uint8_t *code_buffer, uint32_t buffer_size,
-                         void **handle) {
-  int ret;
-  /* dynamic load contract */
+int invoke_contract_func(gw_context_t *ctx, void *handle) {
+  if (ctx == NULL) {
+    return GW_ERROR_INVALID_CONTEXT;
+  }
+  uint8_t call_type = ctx->call_context.call_type;
+  char *func_name;
+  int ret = gw_get_func_name_by_call_type(&func_name, call_type);
+  if (ret != 0) {
+    return ret;
+  }
+
+  gw_contract_fn contract_func;
+  *(void **)(&contract_func) = ckb_dlsym(handle, func_name);
+  if (contract_func == NULL) {
+    return GW_ERROR_DYNAMIC_LINKING;
+  }
+
+  /* run contract */
+  ret = contract_func(ctx);
+
+  if (ret != 0) {
+    return ret;
+  }
+  return 0;
+}
+
+int sys_call(void *ctx, uint32_t to_id, uint8_t *args, uint32_t args_len,
+             gw_call_receipt_t *receipt) {
+  if (ctx == NULL) {
+    return GW_ERROR_INVALID_CONTEXT;
+  }
+  gw_context_t *gw_ctx = (gw_context_t *)ctx;
+  /* load code_hash */
+  void *handle = NULL;
   uint64_t consumed_size = 0;
-  ret = ckb_dlopen(code_buffer, buffer_size, handle, &consumed_size);
-  if (ret != CKB_SUCCESS) {
+
+  uint64_t buffer_size =
+      gw_ctx->code_buffer_len - gw_ctx->code_buffer_used_size;
+  int ret =
+      ckb_dlopen(to_id, gw_ctx->code_buffer + gw_ctx->code_buffer_used_size,
+                 buffer_size, &handle, &consumed_size);
+  if (ret != 0) {
     return ret;
   }
   if (consumed_size > buffer_size) {
     return GW_ERROR_INVALID_DATA;
+  }
+  gw_ctx->code_buffer_used_size += consumed_size;
+  /* prepare context */
+  uint32_t from_id = gw_ctx->call_context.to_id;
+  gw_context_t sub_gw_ctx;
+  ret = gw_create_sub_context(gw_ctx, &sub_gw_ctx, from_id, to_id, args,
+                              args_len);
+  if (ret != 0) {
+    return ret;
+  }
+  receipt->return_data_len = 0;
+  sub_gw_ctx.sys_context = receipt;
+
+  /* Run contract */
+  ret = invoke_contract_func(&sub_gw_ctx, handle);
+
+  if (ret != 0) {
+    return ret;
   }
 
   return 0;
@@ -85,22 +168,17 @@ int load_layer2_contract(uint8_t *code_buffer, uint32_t buffer_size,
 
 int main() {
   int ret;
-  /* load layer2 contract */
   uint8_t code_buffer[CODE_SIZE] __attribute__((aligned(RISCV_PGSIZE)));
-  void *handle = NULL;
-  ret = load_layer2_contract(code_buffer, CODE_SIZE, &handle);
-
-  if (ret != 0) {
-    return ret;
-  }
 
   /* prepare context */
+  gw_call_receipt_t receipt;
   gw_context_t context;
   context.blake2b_hash = blake2b_hash;
-  context.sys_context = NULL;
+  context.sys_context = &receipt;
   context.sys_load = sys_load;
   context.sys_store = sys_store;
   context.sys_set_return_data = sys_set_return_data;
+  context.sys_call = sys_call;
 
   uint8_t call_context[CALL_CONTEXT_LEN];
   uint64_t len = CALL_CONTEXT_LEN;
@@ -111,8 +189,14 @@ int main() {
   if (len > CALL_CONTEXT_LEN) {
     return GW_ERROR_INVALID_DATA;
   }
-  context.call_context = call_context;
-  context.call_context_len = len;
+
+  mol_seg_t call_context_seg;
+  call_context_seg.ptr = call_context;
+  call_context_seg.size = len;
+  ret = gw_parse_call_context(&context.call_context, &call_context_seg);
+  if (ret != 0) {
+    return ret;
+  }
 
   uint8_t block_info[BLOCK_INFO_LEN];
   len = BLOCK_INFO_LEN;
@@ -123,35 +207,41 @@ int main() {
   if (len > BLOCK_INFO_LEN) {
     return GW_ERROR_INVALID_DATA;
   }
-  context.block_info = block_info;
-  context.block_info_len = len;
 
-  /* get account_id */
-  uint8_t call_type;
-  ret = gw_get_call_type(&context, &call_type);
+  mol_seg_t block_info_seg;
+  block_info_seg.ptr = block_info;
+  block_info_seg.size = len;
+  ret = gw_parse_block_info(&context.block_info, &block_info_seg);
   if (ret != 0) {
     return ret;
   }
 
-  /* get contract function pointer */
-  char *func_name;
-  if (call_type == 0) {
-    func_name = CONTRACT_CONSTRUCTOR_FUNC;
-  } else if (call_type == 1) {
-    func_name = CONTRACT_HANDLE_FUNC;
-  } else {
-    return GW_ERROR_INVALID_DATA;
+  /* load layer2 contract */
+  uint32_t id = context.call_context.to_id;
+
+  void *handle = NULL;
+  uint64_t consumed_size = 0;
+  ret = ckb_dlopen(id, code_buffer, CODE_SIZE, &handle, &consumed_size);
+  if (ret != 0) {
+    return ret;
   }
 
-  gw_contract_fn contract_func;
-  *(void **)(&contract_func) = ckb_dlsym(handle, func_name);
-  if (contract_func == NULL) {
+  if (consumed_size > CODE_SIZE) {
     return GW_ERROR_DYNAMIC_LINKING;
   }
 
-  /* run contract */
-  ret = contract_func(&context);
+  context.code_buffer = code_buffer;
+  context.code_buffer_len = CODE_SIZE;
+  context.code_buffer_used_size = consumed_size;
 
+  /* run contract */
+  ret = invoke_contract_func(&context, handle);
+  if (ret != 0) {
+    return ret;
+  }
+
+  /* Return data from receipt */
+  ret = _set_program_return_data(receipt.return_data, receipt.return_data_len);
   if (ret != 0) {
     return ret;
   }

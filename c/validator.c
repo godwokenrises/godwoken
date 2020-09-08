@@ -44,8 +44,7 @@ int gw_state_load_from_state_set(gw_state_t *state, mol_seg_t *inputs_seg) {
 typedef struct {
   gw_state_t *read_state;
   gw_state_t *write_state;
-  uint8_t return_data[MAX_RETURN_DATA_SIZE];
-  uint32_t return_data_len;
+  gw_call_receipt_t *receipt;
 } gw_read_write_state_t;
 
 int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
@@ -60,17 +59,13 @@ int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
     return GW_ERROR_INVALID_CONTEXT;
   }
   /* get account id */
-  uint32_t account_id;
-  int ret = gw_get_account_id(gw_ctx, &account_id);
-  if (ret != 0) {
-    return ret;
-  }
+  uint32_t account_id = gw_ctx->call_context.to_id;
   /* raw key */
   uint8_t raw_key[GW_KEY_BYTES];
   gw_build_raw_key(account_id, key, raw_key);
   /* try read from write_state
    * if not found then read from read_state */
-  ret = gw_state_fetch(state->write_state, raw_key, value);
+  int ret = gw_state_fetch(state->write_state, raw_key, value);
   if (ret == GW_ERROR_NOT_FOUND) {
     ret = gw_state_fetch(state->read_state, raw_key, value);
   }
@@ -88,11 +83,7 @@ int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
     return GW_ERROR_INVALID_CONTEXT;
   }
   /* get account id */
-  uint32_t account_id;
-  int ret = gw_get_account_id(gw_ctx, &account_id);
-  if (ret != 0) {
-    return ret;
-  }
+  uint32_t account_id = gw_ctx->call_context.to_id;
   /* raw key */
   uint8_t raw_key[GW_KEY_BYTES];
   gw_build_raw_key(account_id, key, raw_key);
@@ -108,11 +99,11 @@ int sys_set_return_data(void *ctx, uint8_t *data, uint32_t len) {
   if (ctx == NULL) {
     return GW_ERROR_INVALID_CONTEXT;
   }
-  if (len > MAX_RETURN_DATA_SIZE) {
+  if (len > GW_MAX_RETURN_DATA_SIZE) {
     return GW_ERROR_INSUFFICIENT_CAPACITY;
   }
-  state->return_data_len = len;
-  memcpy(state->return_data, data, len);
+  state->receipt->return_data_len = len;
+  memcpy(state->receipt->return_data, data, len);
   return 0;
 }
 
@@ -244,35 +235,34 @@ int main() {
   gw_state_t write_state;
   gw_state_init(&write_state, write_pairs, MAX_PAIRS);
 
+  gw_call_receipt_t receipt;
   gw_read_write_state_t state;
   state.read_state = &read_state;
   state.write_state = &write_state;
+  state.receipt = &receipt;
 
   gw_context_t context;
-  context.call_context = call_context_seg.ptr;
-  context.call_context_len = call_context_seg.size;
-  context.block_info = block_info_seg.ptr;
-  context.block_info_len = block_info_seg.size;
   context.blake2b_hash = blake2b_hash;
   context.sys_context = (void *)&state;
   context.sys_load = sys_load;
   context.sys_store = sys_store;
   context.sys_set_return_data = sys_set_return_data;
-
-  /* get contract function pointer */
-  uint8_t call_type;
-  ret = gw_get_call_type(&context, &call_type);
+  ret = gw_parse_call_context(&context.call_context, &call_context_seg);
+  if (ret != 0) {
+    return ret;
+  }
+  ret = gw_parse_block_info(&context.block_info, &block_info_seg);
   if (ret != 0) {
     return ret;
   }
 
+  /* get contract function pointer */
+  uint8_t call_type = context.call_context.call_type;
+
   char *func_name;
-  if (call_type == 0) {
-    func_name = CONTRACT_CONSTRUCTOR_FUNC;
-  } else if (call_type == 1) {
-    func_name = CONTRACT_HANDLE_FUNC;
-  } else {
-    return GW_ERROR_INVALID_DATA;
+  ret = gw_get_func_name_by_call_type(&func_name, call_type);
+  if (ret != 0) {
+    return ret;
   }
 
   gw_contract_fn contract_func;
@@ -304,7 +294,8 @@ int main() {
   uint8_t return_data_hash_buffer[32];
   blake2b_state blake2b_ctx;
   blake2b_init(&blake2b_ctx, 32);
-  blake2b_update(&blake2b_ctx, state.return_data, state.return_data_len);
+  blake2b_update(&blake2b_ctx, state.receipt->return_data,
+                 state.receipt->return_data_len);
   blake2b_final(&blake2b_ctx, return_data_hash_buffer, 32);
 
   mol_seg_t return_data_hash_seg =

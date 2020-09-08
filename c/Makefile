@@ -11,7 +11,7 @@ PROTOCOL_SCHEMA_DIR := ../types/schemas
 # docker pull nervos/ckb-riscv-gnu-toolchain:gnu-bionic-20191012
 BUILDER_DOCKER := nervos/ckb-riscv-gnu-toolchain@sha256:aae8a3f79705f67d505d1f1d5ddc694a4fd537ed1c7e9622420a470d59ba2ec3
 
-BINS := build/validator build/generator build/examples/sum.so
+BINS := build/validator build/generator build/examples/sum.so build/examples/proxy.so
 
 all-via-docker: generate-protocol
 	docker run --rm -v `pwd`:/code -w /code ${BUILDER_DOCKER} bash -c "make all"
@@ -43,6 +43,11 @@ build/examples/sum.so: examples/sum.c gw_def.h
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
  
+build/examples/proxy.so: examples/proxy.c gw_def.h
+	$(CC) $(CFLAGS) $(LDFLAGS) -shared -o $@ $<
+	$(OBJCOPY) --only-keep-debug $@ $@.debug
+	$(OBJCOPY) --strip-debug --strip-all $@
+
 generate-protocol: check-moleculec-version build/blockchain.h build/godwoken.h
 
 fmt:

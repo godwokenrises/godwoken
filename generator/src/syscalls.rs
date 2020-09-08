@@ -1,9 +1,9 @@
-use crate::blake2b::new_blake2b;
 use crate::bytes::Bytes;
 use crate::smt::SMT;
+use crate::State;
 use ckb_vm::{
     memory::{Memory, FLAG_EXECUTABLE, FLAG_FREEZED},
-    registers::{A0, A1, A2, A3, A7},
+    registers::{A0, A1, A2, A3, A4, A7},
     Error as VMError, Register, SupportMachine, Syscalls,
 };
 use godwoken_types::{
@@ -29,32 +29,11 @@ const SYS_LOAD_PROGRAM_AS_CODE: u64 = 4062;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
-/* Key type */
-const GW_ACCOUNT_KV: u8 = 0;
-const GW_ACCOUNT_NONCE: u8 = 1;
-const GW_ACCOUNT_PUBKEY_HASH: u8 = 2;
-const GW_ACCOUNT_CODE_HASH: u8 = 3;
-
 /* Syscall errors */
 const SUCCESS: u8 = 0;
 const INDEX_OUT_OF_BOUND: u8 = 1;
 const ITEM_MISSING: u8 = 2;
 const SLICE_OUT_OF_BOUND: u8 = 3;
-
-/* Generate raw key
- * raw_key: blake2b(id | type | key)
- *
- * We use raw key in the underlying KV store
- */
-fn build_raw_key(id: u32, key: &[u8]) -> [u8; 32] {
-    let mut raw_key = [0u8; 32];
-    let mut hasher = new_blake2b();
-    hasher.update(&id.to_le_bytes());
-    hasher.update(&[GW_ACCOUNT_KV]);
-    hasher.update(key);
-    hasher.finalize(&mut raw_key);
-    raw_key
-}
 
 #[derive(Debug, PartialEq, Clone, Eq, Default)]
 pub struct RunResult {
@@ -67,7 +46,7 @@ pub(crate) struct L2Syscalls<'a, S> {
     pub(crate) tree: &'a SMT<S>,
     pub(crate) block_info: &'a BlockInfo,
     pub(crate) call_context: &'a CallContext,
-    pub(crate) program: &'a Bytes,
+    pub(crate) contracts_by_code_hash: &'a HashMap<[u8; 32], Bytes>,
     pub(crate) result: &'a mut RunResult,
 }
 
@@ -126,10 +105,7 @@ impl<'a, S: Store<H256>, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S
         match code {
             SYS_STORE => {
                 let key_addr = machine.registers()[A0].to_u64();
-                let key = {
-                    let key = load_data_h256(machine, key_addr)?;
-                    build_raw_key(self.call_context.to_id().unpack(), key.as_slice()).into()
-                };
+                let key = load_data_h256(machine, key_addr)?;
                 let value_addr = machine.registers()[A1].to_u64();
                 let value = load_data_h256(machine, value_addr)?;
                 self.result.write_values.insert(key, value);
@@ -138,10 +114,7 @@ impl<'a, S: Store<H256>, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S
             }
             SYS_LOAD => {
                 let key_addr = machine.registers()[A0].to_u64();
-                let key = {
-                    let key = load_data_h256(machine, key_addr)?;
-                    build_raw_key(self.call_context.to_id().unpack(), key.as_slice()).into()
-                };
+                let key = load_data_h256(machine, key_addr)?;
                 let value_addr = machine.registers()[A1].to_u64();
                 let value = match self.result.write_values.get(&key) {
                     Some(value) => *value,
@@ -181,11 +154,11 @@ impl<'a, S: Store<H256>, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S
                 Ok(true)
             }
             SYS_LOAD_PROGRAM_AS_DATA => {
-                self.load_data(machine)?;
+                self.load_program_as_data(machine)?;
                 Ok(true)
             }
             SYS_LOAD_PROGRAM_AS_CODE => {
-                self.load_data_as_code(machine)?;
+                self.load_program_as_code(machine)?;
                 Ok(true)
             }
             DEBUG_PRINT_SYSCALL_NUMBER => {
@@ -197,26 +170,34 @@ impl<'a, S: Store<H256>, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S
     }
 }
 
-impl<'a, S> L2Syscalls<'a, S> {
-    fn load_data_as_code<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
+impl<'a, S: Store<H256>> L2Syscalls<'a, S> {
+    fn load_program_as_code<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
         let addr = machine.registers()[A0].to_u64();
         let memory_size = machine.registers()[A1].to_u64();
         let content_offset = machine.registers()[A2].to_u64();
         let content_size = machine.registers()[A3].to_u64();
+        let id: u32 = machine.registers()[A4].to_u64() as u32;
+
+        let code_hash = self.tree.get_code_hash(id).map_err(|err| {
+            eprintln!("syscall error: get code hash : {:?}", err);
+            VMError::Unexpected
+        })?;
+        let program = self.contracts_by_code_hash.get(&code_hash).ok_or_else(|| {
+            eprintln!("syscall error: can't find code_hash : {:?}", code_hash);
+            VMError::Unexpected
+        })?;
 
         let content_end = content_offset
             .checked_add(content_size)
             .ok_or(VMError::OutOfBound)?;
-        if content_offset >= self.program.len() as u64
-            || content_end > self.program.len() as u64
+        if content_offset >= program.len() as u64
+            || content_end > program.len() as u64
             || content_size > memory_size
         {
             machine.set_register(A0, Mac::REG::from_u8(SLICE_OUT_OF_BOUND));
             return Ok(());
         }
-        let data = self
-            .program
-            .slice((content_offset as usize)..(content_end as usize));
+        let data = program.slice((content_offset as usize)..(content_end as usize));
         machine.memory_mut().init_pages(
             addr,
             memory_size,
@@ -229,8 +210,18 @@ impl<'a, S> L2Syscalls<'a, S> {
         Ok(())
     }
 
-    fn load_data<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
-        store_data(machine, &self.program)?;
+    fn load_program_as_data<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
+        let id: u32 = machine.registers()[A3].to_u64() as u32;
+
+        let code_hash = self.tree.get_code_hash(id).map_err(|err| {
+            eprintln!("syscall error: get code hash : {:?}", err);
+            VMError::Unexpected
+        })?;
+        let program = self.contracts_by_code_hash.get(&code_hash).ok_or_else(|| {
+            eprintln!("syscall error: can't find code_hash : {:?}", code_hash);
+            VMError::Unexpected
+        })?;
+        store_data(machine, program)?;
         machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
         Ok(())
     }

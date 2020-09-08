@@ -10,6 +10,8 @@
 
 #include "gw_def.h"
 #include "godwoken.h"
+#include "stdio.h"
+#include "ckb_syscalls.h"
 
 #define ERROR_INVALID_DATA 10
 
@@ -53,16 +55,10 @@ uint64_t saturating_add(uint64_t a, uint64_t b)
 }
 
 int extract_args(gw_context_t * ctx, uint64_t * v) {
-    mol_seg_t call_context_seg;
-    call_context_seg.ptr = ctx->call_context;
-    call_context_seg.size = ctx->call_context_len;
-    mol_seg_t args_seg = MolReader_CallContext_get_args(&call_context_seg);
-    mol_seg_t raw_bytes_seg =
-      MolReader_Bytes_raw_bytes(&args_seg);
-    if(sizeof(uint64_t) != raw_bytes_seg.size) {
+    if(sizeof(uint64_t) != ctx->call_context.args_len) {
         return ERROR_INVALID_DATA;
     }
-    *v = *(uint64_t *)raw_bytes_seg.ptr;
+    *v = *(uint64_t *)ctx->call_context.args;
     return 0;
 }
 
