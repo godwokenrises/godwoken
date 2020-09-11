@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "tests",
+]
+exclude = [
+    "contracts",
+]

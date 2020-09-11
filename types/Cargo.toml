@@ -6,6 +6,10 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["std"]
+std = ["molecule/std"]
+
 [dependencies]
-molecule = "0.6"
+molecule = { version = "0.6", default-features = false }
 cfg-if = "0.1"

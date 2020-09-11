@@ -126,3 +126,11 @@ table VerificationContext {
 }
 
 // --- end of contract execution ---
+
+// --- deposition lock ---
+struct DepositionLockArgs {
+    rollup_type_id: Byte32,
+    pubkey_hash: Byte20,
+    account_id: Uint32,
+}
+// --- end of deposition lock ---

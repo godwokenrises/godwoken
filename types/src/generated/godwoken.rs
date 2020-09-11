@@ -7171,3 +7171,184 @@ impl molecule::prelude::Builder for VerificationContextBuilder {
         VerificationContext::new_unchecked(inner.into())
     }
 }
+#[derive(Clone)]
+pub struct DepositionLockArgs(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for DepositionLockArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for DepositionLockArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for DepositionLockArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "rollup_type_id", self.rollup_type_id())?;
+        write!(f, ", {}: {}", "pubkey_hash", self.pubkey_hash())?;
+        write!(f, ", {}: {}", "account_id", self.account_id())?;
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for DepositionLockArgs {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        DepositionLockArgs::new_unchecked(v.into())
+    }
+}
+impl DepositionLockArgs {
+    pub const TOTAL_SIZE: usize = 56;
+    pub const FIELD_SIZES: [usize; 3] = [32, 20, 4];
+    pub const FIELD_COUNT: usize = 3;
+    pub fn rollup_type_id(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(0..32))
+    }
+    pub fn pubkey_hash(&self) -> Byte20 {
+        Byte20::new_unchecked(self.0.slice(32..52))
+    }
+    pub fn account_id(&self) -> Uint32 {
+        Uint32::new_unchecked(self.0.slice(52..56))
+    }
+    pub fn as_reader<'r>(&'r self) -> DepositionLockArgsReader<'r> {
+        DepositionLockArgsReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for DepositionLockArgs {
+    type Builder = DepositionLockArgsBuilder;
+    const NAME: &'static str = "DepositionLockArgs";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        DepositionLockArgs(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        DepositionLockArgsReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        DepositionLockArgsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .rollup_type_id(self.rollup_type_id())
+            .pubkey_hash(self.pubkey_hash())
+            .account_id(self.account_id())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct DepositionLockArgsReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for DepositionLockArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for DepositionLockArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for DepositionLockArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "rollup_type_id", self.rollup_type_id())?;
+        write!(f, ", {}: {}", "pubkey_hash", self.pubkey_hash())?;
+        write!(f, ", {}: {}", "account_id", self.account_id())?;
+        write!(f, " }}")
+    }
+}
+impl<'r> DepositionLockArgsReader<'r> {
+    pub const TOTAL_SIZE: usize = 56;
+    pub const FIELD_SIZES: [usize; 3] = [32, 20, 4];
+    pub const FIELD_COUNT: usize = 3;
+    pub fn rollup_type_id(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
+    }
+    pub fn pubkey_hash(&self) -> Byte20Reader<'r> {
+        Byte20Reader::new_unchecked(&self.as_slice()[32..52])
+    }
+    pub fn account_id(&self) -> Uint32Reader<'r> {
+        Uint32Reader::new_unchecked(&self.as_slice()[52..56])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for DepositionLockArgsReader<'r> {
+    type Entity = DepositionLockArgs;
+    const NAME: &'static str = "DepositionLockArgsReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        DepositionLockArgsReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct DepositionLockArgsBuilder {
+    pub(crate) rollup_type_id: Byte32,
+    pub(crate) pubkey_hash: Byte20,
+    pub(crate) account_id: Uint32,
+}
+impl DepositionLockArgsBuilder {
+    pub const TOTAL_SIZE: usize = 56;
+    pub const FIELD_SIZES: [usize; 3] = [32, 20, 4];
+    pub const FIELD_COUNT: usize = 3;
+    pub fn rollup_type_id(mut self, v: Byte32) -> Self {
+        self.rollup_type_id = v;
+        self
+    }
+    pub fn pubkey_hash(mut self, v: Byte20) -> Self {
+        self.pubkey_hash = v;
+        self
+    }
+    pub fn account_id(mut self, v: Uint32) -> Self {
+        self.account_id = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for DepositionLockArgsBuilder {
+    type Entity = DepositionLockArgs;
+    const NAME: &'static str = "DepositionLockArgsBuilder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(self.rollup_type_id.as_slice())?;
+        writer.write_all(self.pubkey_hash.as_slice())?;
+        writer.write_all(self.account_id.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        DepositionLockArgs::new_unchecked(inner.into())
+    }
+}

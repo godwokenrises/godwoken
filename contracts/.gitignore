@@ -1,0 +1,6 @@
+build/*
+target/*
+contracts/**/target/*
+.cache/.cargo/*
+!.gitkeep
+.tmp/
