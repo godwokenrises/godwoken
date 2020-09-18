@@ -7,7 +7,9 @@ pub enum Error {
     ItemMissing,
     LengthNotEnough,
     Encoding,
-    // Add customized errors here...
+    MerkleVerify, // merkle verification error
+    InvalidMerkleProof,
+    InvalidPrevGlobalState,
 }
 
 impl From<SysError> for Error {

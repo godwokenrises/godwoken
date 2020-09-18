@@ -54,29 +54,25 @@ table RawL2Block {
     timestamp: Uint64,
     prev_account: MerkleState,
     post_account: MerkleState,
-    states: States,
+    leave: LeaveOpt,
+    join: JoinOpt,
+    revert_chain: RevertChainOpt,
+    submit_transactions: SubmitTransactionsOpt,
     valid: byte,
 }
 
 table L2Block {
     raw: RawL2Block,
     signature: Signature,
+    inputs: KVPairVec,
+    proof: Bytes,
 }
 
-vector States <State>;
-
-// --- define states ---
-
-union State {
-    SubmitTransactions,
-    Join,
-    Leave,
-    RevertChain,
-}
-
+// --- define actions ---
 table SubmitTransactions {
     tx_root: Byte32,
     tx_count: Uint32,
+    // account_root before each transaction
     account_root_list: Byte32Vec,
 }
 
@@ -94,7 +90,12 @@ struct RevertChain {
     post_account: MerkleState,
 }
 
-// --- end of define states ---
+option JoinOpt (Join);
+option LeaveOpt (Leave);
+option RevertChainOpt (RevertChain);
+option SubmitTransactionsOpt (SubmitTransactions);
+
+// --- end of define actions ---
 
 // --- contract execution ---
 
@@ -134,3 +135,21 @@ struct DepositionLockArgs {
     account_id: Uint32,
 }
 // --- end of deposition lock ---
+
+// --- layer2 SUDT ---
+union SUDTArgs {
+    SUDTQuery,
+    SUDTTransfer,
+}
+
+struct SUDTQuery {
+    token_id: Byte32,
+    account_id: Uint32,
+}
+
+struct SUDTTransfer {
+    token_id: Byte32,
+    to: Uint32,
+    value: Uint128,
+}
+// --- end of layer2 SUDT ---
