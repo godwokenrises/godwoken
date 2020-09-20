@@ -11,3 +11,4 @@ blake2b-rs = "0.1.5"
 [dependencies]
 ckb-std = "0.6.3"
 godwoken-types = { path = "../../types", default-features = false }
+ckb-lib-secp256k1 = { git = "https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git", rev = "c6fcd3c" }

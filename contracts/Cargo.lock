@@ -37,6 +37,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ckb-lib-secp256k1"
+version = "0.1.0"
+source = "git+https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git?rev=c6fcd3c#c6fcd3cf192891472c9ee708091de7db1907ea78"
+dependencies = [
+ "blake2b-rs",
+ "ckb-std",
+]
+
+[[package]]
 name = "ckb-standalone-types"
 version = "0.0.1-pre.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -62,6 +71,7 @@ name = "deposition-lock"
 version = "0.1.0"
 dependencies = [
  "blake2b-rs",
+ "ckb-lib-secp256k1",
  "ckb-std",
  "godwoken-types",
 ]

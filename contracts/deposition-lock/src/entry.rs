@@ -31,8 +31,9 @@ use godwoken_types::{
     prelude::*,
 };
 
+use ckb_lib_secp256k1::LibSecp256k1;
+
 use crate::error::Error;
-use crate::secp256k1::Secp256k1Lib;
 
 // User can unlock the cell after the timeout
 const USER_UNLOCK_TIMEOUT_BLOCKS: u64 = 10;
@@ -82,11 +83,13 @@ pub fn main() -> Result<(), Error> {
         }
         // 2. verify user's signature
         let mut context = CKBDLContext::<[u8; 128 * 1024]>::new();
-        let lib = Secp256k1Lib::load(&mut context);
-        if !lib.validate_blake2b_sighash_all(&lock_args[..]).map_err(|err_code| {
+        let lib = LibSecp256k1::load(&mut context);
+        let mut pubkey_hash = [0u8; 20];
+        lib.validate_blake2b_sighash_all(&mut pubkey_hash).map_err(|err_code| {
             debug!("secp256k1 error {}", err_code);
             Error::Secp256k1
-        })? {
+        })?;
+        if &lock_args[..] != &pubkey_hash[..] {
             return Err(Error::WrongSignature);
         }
     } else {

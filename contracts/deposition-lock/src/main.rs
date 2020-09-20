@@ -13,8 +13,6 @@
 // define modules
 mod entry;
 mod error;
-mod code_hashes;
-mod secp256k1;
 
 use ckb_std::{
     default_alloc,
