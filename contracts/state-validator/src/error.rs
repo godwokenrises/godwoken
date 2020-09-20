@@ -10,6 +10,7 @@ pub enum Error {
     MerkleVerify, // merkle verification error
     InvalidMerkleProof,
     InvalidPrevGlobalState,
+    InvalidSUDT, // invalid SUDT
 }
 
 impl From<SysError> for Error {

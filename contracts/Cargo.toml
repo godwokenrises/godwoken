@@ -1,7 +1,12 @@
 [workspace]
 members = [
-    "tests",
+    "deposition-lock",
+    "state-validator",
 ]
-exclude = [
-    "contracts",
-]
+
+[profile.release]
+overflow-checks = true
+opt-level = 's'
+lto = true
+codegen-units = 1
+panic = 'abort'

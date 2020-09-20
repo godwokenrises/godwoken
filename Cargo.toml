@@ -1,5 +1,5 @@
 [workspace]
 members = [
   "types",
-  "generator"
+  "generator",
 ]

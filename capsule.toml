@@ -8,5 +8,5 @@ template_type = "Rust"
 name = "deposition-lock"
 template_type = "Rust"
 
-[mapping_dirs]
-"../types" = "/code/types"
+# [mapping_dirs]
+# "../types" = "/code/types"

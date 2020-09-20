@@ -14,6 +14,7 @@ use ckb_std::{
 };
 
 use crate::error::Error;
+use crate::actions;
 
 pub struct Context {
     number: u64,
@@ -77,13 +78,6 @@ fn verify_l2block(l2block: &L2Block, prev_global_state: &GlobalState) -> Result<
     Ok(context)
 }
 
-fn handle_join(context: &mut Context, raw_block: &RawBlock) -> Result<(), Error> {
-    // 1. find all inputs which use the deposition-lock
-    // 2. find or create accounts accoding to requests
-    // 3. deposit balance to account (how? call contract, or directly alter the balance)
-    unimplemented!()
-}
-
 pub fn main() -> Result<(), Error> {
     // basic verification
     let prev_global_state = parse_global_state(Source::GroupInput)?;
@@ -92,7 +86,7 @@ pub fn main() -> Result<(), Error> {
     let raw_block = l2block.raw();
 
     // handle state transitions
-    handle_join(&mut context, &raw_block)?;
+    actions::join::handle_join(&mut context, &raw_block)?;
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
     debug!("script args is {:?}", args);

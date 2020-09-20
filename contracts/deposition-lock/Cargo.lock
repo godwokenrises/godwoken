@@ -17,9 +17,9 @@ checksum = "efba9eaa9fdf9fddf408904e3dc3dc414411053ef48c06edd3aac53d2d919e0e"
 
 [[package]]
 name = "cc"
-version = "1.0.59"
+version = "1.0.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66120af515773fb005778dc07c261bd201ec8ce50bd6e7144c927753fe013381"
+checksum = "ef611cc68ff783f18535d77ddd080185275713d852c4f5cbb6122c462a7a825c"
 
 [[package]]
 name = "cfg-if"
@@ -48,9 +48,8 @@ dependencies = [
 
 [[package]]
 name = "ckb-std"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cdad87cb46866f75bd3c4ef26844a84cc2513365f256ed0dd4d1ee58cfb6cd4"
+version = "0.6.2"
+source = "git+https://github.com/nervosnetwork/ckb-std.git#a2feb118c7973c9a19f305b055e3af8c3a9604c9"
 dependencies = [
  "cc",
  "ckb-allocator",

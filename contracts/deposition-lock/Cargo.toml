@@ -9,12 +9,5 @@ edition = "2018"
 blake2b-rs = "0.1.5"
 
 [dependencies]
-ckb-std = "0.6.1"
-godwoken-types = { path = "/code/types", default-features = false }
-
-[profile.release]
-overflow-checks = true
-opt-level = 's'
-lto = true
-codegen-units = 1
-panic = 'abort'
+ckb-std = "0.6.3"
+godwoken-types = { path = "../../types", default-features = false }
