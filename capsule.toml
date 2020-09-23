@@ -1,4 +1,5 @@
 deployment = "deployment.toml"
+workspace_dir = "contracts"
 
 [[contracts]]
 name = "state-validator"
@@ -7,6 +8,3 @@ template_type = "Rust"
 [[contracts]]
 name = "deposition-lock"
 template_type = "Rust"
-
-# [mapping_dirs]
-# "../types" = "/code/types"

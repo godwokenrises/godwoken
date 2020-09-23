@@ -5,14 +5,19 @@ option Byte32Opt (Byte32);
 array Byte20 [byte; 20];
 array Signature [byte; 65];
 
-struct MerkleState {
+struct BlockMerkleState {
     merkle_root: Byte32,
     count: Uint64,
 }
 
+struct AccountMerkleState {
+    merkle_root: Byte32,
+    count: Uint32,
+}
+
 table GlobalState {
-    account: MerkleState,
-    block: MerkleState,
+    account: AccountMerkleState,
+    block: BlockMerkleState,
     status: Status,
 }
 
@@ -52,8 +57,8 @@ table RawL2Block {
     number: Uint64,
     aggregator_id: Uint32,
     timestamp: Uint64,
-    prev_account: MerkleState,
-    post_account: MerkleState,
+    prev_account: AccountMerkleState,
+    post_account: AccountMerkleState,
     leave: LeaveOpt,
     join: JoinOpt,
     revert_chain: RevertChainOpt,
@@ -87,7 +92,7 @@ table Leave {
 struct RevertChain {
     reverter_id: Uint32,
     invalid_block_number: Uint64,
-    post_account: MerkleState,
+    post_account: AccountMerkleState,
 }
 
 option JoinOpt (Join);

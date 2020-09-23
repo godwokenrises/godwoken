@@ -7,3 +7,7 @@ edition = "2018"
 
 [dependencies]
 ckb-std = "0.6.3"
+godwoken-types = { path = "../../types", default-features = false }
+blake2b-ref = { version = "0.1", default-features = false }
+sparse-merkle-tree = { version = "0.3", default-features = false }
+ckb-lib-secp256k1 = { git = "https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git", branch = "master" }

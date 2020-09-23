@@ -27,3 +27,5 @@ impl<'r> Unpack<[u8; 65]> for packed::SignatureReader<'r> {
     }
 }
 impl_conversion_for_entity_unpack!([u8; 65], Signature);
+
+impl_conversion_for_packed_iterator_pack!(KVPair, KVPairVec);

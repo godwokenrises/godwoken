@@ -7,10 +7,16 @@ pub enum Error {
     ItemMissing,
     LengthNotEnough,
     Encoding,
+    WrongSignature,
     MerkleVerify, // merkle verification error
     InvalidMerkleProof,
     InvalidPrevGlobalState,
     InvalidSUDT, // invalid SUDT
+    Secp256k1, // secp256k1 error
+    KVMissing, // missing KV pair
+    UnexpectedRollupLock,
+    DepositionValue, // incorrect deposition value
+    AmountOverflow,
 }
 
 impl From<SysError> for Error {

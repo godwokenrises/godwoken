@@ -1585,8 +1585,8 @@ impl molecule::prelude::Builder for SignatureBuilder {
     }
 }
 #[derive(Clone)]
-pub struct MerkleState(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for MerkleState {
+pub struct BlockMerkleState(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for BlockMerkleState {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -1595,12 +1595,12 @@ impl ::core::fmt::LowerHex for MerkleState {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for MerkleState {
+impl ::core::fmt::Debug for BlockMerkleState {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for MerkleState {
+impl ::core::fmt::Display for BlockMerkleState {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "merkle_root", self.merkle_root())?;
@@ -1608,16 +1608,16 @@ impl ::core::fmt::Display for MerkleState {
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for MerkleState {
+impl ::core::default::Default for BlockMerkleState {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
-        MerkleState::new_unchecked(v.into())
+        BlockMerkleState::new_unchecked(v.into())
     }
 }
-impl MerkleState {
+impl BlockMerkleState {
     pub const TOTAL_SIZE: usize = 40;
     pub const FIELD_SIZES: [usize; 2] = [32, 8];
     pub const FIELD_COUNT: usize = 2;
@@ -1627,15 +1627,15 @@ impl MerkleState {
     pub fn count(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(32..40))
     }
-    pub fn as_reader<'r>(&'r self) -> MerkleStateReader<'r> {
-        MerkleStateReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> BlockMerkleStateReader<'r> {
+        BlockMerkleStateReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for MerkleState {
-    type Builder = MerkleStateBuilder;
-    const NAME: &'static str = "MerkleState";
+impl molecule::prelude::Entity for BlockMerkleState {
+    type Builder = BlockMerkleStateBuilder;
+    const NAME: &'static str = "BlockMerkleState";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        MerkleState(data)
+        BlockMerkleState(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -1644,10 +1644,10 @@ impl molecule::prelude::Entity for MerkleState {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        MerkleStateReader::from_slice(slice).map(|reader| reader.to_entity())
+        BlockMerkleStateReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        MerkleStateReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        BlockMerkleStateReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -1659,8 +1659,8 @@ impl molecule::prelude::Entity for MerkleState {
     }
 }
 #[derive(Clone, Copy)]
-pub struct MerkleStateReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for MerkleStateReader<'r> {
+pub struct BlockMerkleStateReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for BlockMerkleStateReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -1669,12 +1669,12 @@ impl<'r> ::core::fmt::LowerHex for MerkleStateReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for MerkleStateReader<'r> {
+impl<'r> ::core::fmt::Debug for BlockMerkleStateReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for MerkleStateReader<'r> {
+impl<'r> ::core::fmt::Display for BlockMerkleStateReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "merkle_root", self.merkle_root())?;
@@ -1682,7 +1682,7 @@ impl<'r> ::core::fmt::Display for MerkleStateReader<'r> {
         write!(f, " }}")
     }
 }
-impl<'r> MerkleStateReader<'r> {
+impl<'r> BlockMerkleStateReader<'r> {
     pub const TOTAL_SIZE: usize = 40;
     pub const FIELD_SIZES: [usize; 2] = [32, 8];
     pub const FIELD_COUNT: usize = 2;
@@ -1693,14 +1693,14 @@ impl<'r> MerkleStateReader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[32..40])
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for MerkleStateReader<'r> {
-    type Entity = MerkleState;
-    const NAME: &'static str = "MerkleStateReader";
+impl<'r> molecule::prelude::Reader<'r> for BlockMerkleStateReader<'r> {
+    type Entity = BlockMerkleState;
+    const NAME: &'static str = "BlockMerkleStateReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        MerkleStateReader(slice)
+        BlockMerkleStateReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -1715,11 +1715,11 @@ impl<'r> molecule::prelude::Reader<'r> for MerkleStateReader<'r> {
     }
 }
 #[derive(Debug, Default)]
-pub struct MerkleStateBuilder {
+pub struct BlockMerkleStateBuilder {
     pub(crate) merkle_root: Byte32,
     pub(crate) count: Uint64,
 }
-impl MerkleStateBuilder {
+impl BlockMerkleStateBuilder {
     pub const TOTAL_SIZE: usize = 40;
     pub const FIELD_SIZES: [usize; 2] = [32, 8];
     pub const FIELD_COUNT: usize = 2;
@@ -1732,9 +1732,9 @@ impl MerkleStateBuilder {
         self
     }
 }
-impl molecule::prelude::Builder for MerkleStateBuilder {
-    type Entity = MerkleState;
-    const NAME: &'static str = "MerkleStateBuilder";
+impl molecule::prelude::Builder for BlockMerkleStateBuilder {
+    type Entity = BlockMerkleState;
+    const NAME: &'static str = "BlockMerkleStateBuilder";
     fn expected_length(&self) -> usize {
         Self::TOTAL_SIZE
     }
@@ -1747,7 +1747,173 @@ impl molecule::prelude::Builder for MerkleStateBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        MerkleState::new_unchecked(inner.into())
+        BlockMerkleState::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct AccountMerkleState(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for AccountMerkleState {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for AccountMerkleState {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for AccountMerkleState {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "merkle_root", self.merkle_root())?;
+        write!(f, ", {}: {}", "count", self.count())?;
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for AccountMerkleState {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
+        ];
+        AccountMerkleState::new_unchecked(v.into())
+    }
+}
+impl AccountMerkleState {
+    pub const TOTAL_SIZE: usize = 36;
+    pub const FIELD_SIZES: [usize; 2] = [32, 4];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn merkle_root(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(0..32))
+    }
+    pub fn count(&self) -> Uint32 {
+        Uint32::new_unchecked(self.0.slice(32..36))
+    }
+    pub fn as_reader<'r>(&'r self) -> AccountMerkleStateReader<'r> {
+        AccountMerkleStateReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for AccountMerkleState {
+    type Builder = AccountMerkleStateBuilder;
+    const NAME: &'static str = "AccountMerkleState";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        AccountMerkleState(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        AccountMerkleStateReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        AccountMerkleStateReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .merkle_root(self.merkle_root())
+            .count(self.count())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct AccountMerkleStateReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for AccountMerkleStateReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for AccountMerkleStateReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for AccountMerkleStateReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "merkle_root", self.merkle_root())?;
+        write!(f, ", {}: {}", "count", self.count())?;
+        write!(f, " }}")
+    }
+}
+impl<'r> AccountMerkleStateReader<'r> {
+    pub const TOTAL_SIZE: usize = 36;
+    pub const FIELD_SIZES: [usize; 2] = [32, 4];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn merkle_root(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
+    }
+    pub fn count(&self) -> Uint32Reader<'r> {
+        Uint32Reader::new_unchecked(&self.as_slice()[32..36])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for AccountMerkleStateReader<'r> {
+    type Entity = AccountMerkleState;
+    const NAME: &'static str = "AccountMerkleStateReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        AccountMerkleStateReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct AccountMerkleStateBuilder {
+    pub(crate) merkle_root: Byte32,
+    pub(crate) count: Uint32,
+}
+impl AccountMerkleStateBuilder {
+    pub const TOTAL_SIZE: usize = 36;
+    pub const FIELD_SIZES: [usize; 2] = [32, 4];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn merkle_root(mut self, v: Byte32) -> Self {
+        self.merkle_root = v;
+        self
+    }
+    pub fn count(mut self, v: Uint32) -> Self {
+        self.count = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for AccountMerkleStateBuilder {
+    type Entity = AccountMerkleState;
+    const NAME: &'static str = "AccountMerkleStateBuilder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(self.merkle_root.as_slice())?;
+        writer.write_all(self.count.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        AccountMerkleState::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -1782,10 +1948,10 @@ impl ::core::fmt::Display for GlobalState {
 impl ::core::default::Default for GlobalState {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            104, 0, 0, 0, 16, 0, 0, 0, 56, 0, 0, 0, 96, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            100, 0, 0, 0, 16, 0, 0, 0, 52, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0,
         ];
         GlobalState::new_unchecked(v.into())
     }
@@ -1808,17 +1974,17 @@ impl GlobalState {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn account(&self) -> MerkleState {
+    pub fn account(&self) -> AccountMerkleState {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        MerkleState::new_unchecked(self.0.slice(start..end))
+        AccountMerkleState::new_unchecked(self.0.slice(start..end))
     }
-    pub fn block(&self) -> MerkleState {
+    pub fn block(&self) -> BlockMerkleState {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
-        MerkleState::new_unchecked(self.0.slice(start..end))
+        BlockMerkleState::new_unchecked(self.0.slice(start..end))
     }
     pub fn status(&self) -> Status {
         let slice = self.as_slice();
@@ -1909,17 +2075,17 @@ impl<'r> GlobalStateReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn account(&self) -> MerkleStateReader<'r> {
+    pub fn account(&self) -> AccountMerkleStateReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        MerkleStateReader::new_unchecked(&self.as_slice()[start..end])
+        AccountMerkleStateReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn block(&self) -> MerkleStateReader<'r> {
+    pub fn block(&self) -> BlockMerkleStateReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
-        MerkleStateReader::new_unchecked(&self.as_slice()[start..end])
+        BlockMerkleStateReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn status(&self) -> StatusReader<'r> {
         let slice = self.as_slice();
@@ -1983,25 +2149,25 @@ impl<'r> molecule::prelude::Reader<'r> for GlobalStateReader<'r> {
         if offsets.windows(2).any(|i| i[0] > i[1]) {
             return ve!(Self, OffsetsNotMatch);
         }
-        MerkleStateReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        MerkleStateReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        AccountMerkleStateReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        BlockMerkleStateReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         StatusReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct GlobalStateBuilder {
-    pub(crate) account: MerkleState,
-    pub(crate) block: MerkleState,
+    pub(crate) account: AccountMerkleState,
+    pub(crate) block: BlockMerkleState,
     pub(crate) status: Status,
 }
 impl GlobalStateBuilder {
     pub const FIELD_COUNT: usize = 3;
-    pub fn account(mut self, v: MerkleState) -> Self {
+    pub fn account(mut self, v: AccountMerkleState) -> Self {
         self.account = v;
         self
     }
-    pub fn block(mut self, v: MerkleState) -> Self {
+    pub fn block(mut self, v: BlockMerkleState) -> Self {
         self.block = v;
         self
     }
@@ -3504,12 +3670,11 @@ impl ::core::fmt::Display for RawL2Block {
 impl ::core::default::Default for RawL2Block {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            145, 0, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 64, 0, 0, 0, 104, 0, 0, 0, 144, 0,
-            0, 0, 144, 0, 0, 0, 144, 0, 0, 0, 144, 0, 0, 0, 144, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            137, 0, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 64, 0, 0, 0, 100, 0, 0, 0, 136, 0,
+            0, 0, 136, 0, 0, 0, 136, 0, 0, 0, 136, 0, 0, 0, 136, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RawL2Block::new_unchecked(v.into())
     }
@@ -3550,17 +3715,17 @@ impl RawL2Block {
         let end = molecule::unpack_number(&slice[16..]) as usize;
         Uint64::new_unchecked(self.0.slice(start..end))
     }
-    pub fn prev_account(&self) -> MerkleState {
+    pub fn prev_account(&self) -> AccountMerkleState {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         let end = molecule::unpack_number(&slice[20..]) as usize;
-        MerkleState::new_unchecked(self.0.slice(start..end))
+        AccountMerkleState::new_unchecked(self.0.slice(start..end))
     }
-    pub fn post_account(&self) -> MerkleState {
+    pub fn post_account(&self) -> AccountMerkleState {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[20..]) as usize;
         let end = molecule::unpack_number(&slice[24..]) as usize;
-        MerkleState::new_unchecked(self.0.slice(start..end))
+        AccountMerkleState::new_unchecked(self.0.slice(start..end))
     }
     pub fn leave(&self) -> LeaveOpt {
         let slice = self.as_slice();
@@ -3712,17 +3877,17 @@ impl<'r> RawL2BlockReader<'r> {
         let end = molecule::unpack_number(&slice[16..]) as usize;
         Uint64Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn prev_account(&self) -> MerkleStateReader<'r> {
+    pub fn prev_account(&self) -> AccountMerkleStateReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         let end = molecule::unpack_number(&slice[20..]) as usize;
-        MerkleStateReader::new_unchecked(&self.as_slice()[start..end])
+        AccountMerkleStateReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn post_account(&self) -> MerkleStateReader<'r> {
+    pub fn post_account(&self) -> AccountMerkleStateReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[20..]) as usize;
         let end = molecule::unpack_number(&slice[24..]) as usize;
-        MerkleStateReader::new_unchecked(&self.as_slice()[start..end])
+        AccountMerkleStateReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn leave(&self) -> LeaveOptReader<'r> {
         let slice = self.as_slice();
@@ -3813,8 +3978,8 @@ impl<'r> molecule::prelude::Reader<'r> for RawL2BlockReader<'r> {
         Uint64Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         Uint32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Uint64Reader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        MerkleStateReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
-        MerkleStateReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
+        AccountMerkleStateReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        AccountMerkleStateReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
         LeaveOptReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
         JoinOptReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
         RevertChainOptReader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
@@ -3828,8 +3993,8 @@ pub struct RawL2BlockBuilder {
     pub(crate) number: Uint64,
     pub(crate) aggregator_id: Uint32,
     pub(crate) timestamp: Uint64,
-    pub(crate) prev_account: MerkleState,
-    pub(crate) post_account: MerkleState,
+    pub(crate) prev_account: AccountMerkleState,
+    pub(crate) post_account: AccountMerkleState,
     pub(crate) leave: LeaveOpt,
     pub(crate) join: JoinOpt,
     pub(crate) revert_chain: RevertChainOpt,
@@ -3850,11 +4015,11 @@ impl RawL2BlockBuilder {
         self.timestamp = v;
         self
     }
-    pub fn prev_account(mut self, v: MerkleState) -> Self {
+    pub fn prev_account(mut self, v: AccountMerkleState) -> Self {
         self.prev_account = v;
         self
     }
-    pub fn post_account(mut self, v: MerkleState) -> Self {
+    pub fn post_account(mut self, v: AccountMerkleState) -> Self {
         self.post_account = v;
         self
     }
@@ -3974,15 +4139,15 @@ impl ::core::fmt::Display for L2Block {
 impl ::core::default::Default for L2Block {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            238, 0, 0, 0, 20, 0, 0, 0, 165, 0, 0, 0, 230, 0, 0, 0, 234, 0, 0, 0, 145, 0, 0, 0, 44,
-            0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 64, 0, 0, 0, 104, 0, 0, 0, 144, 0, 0, 0, 144, 0, 0,
-            0, 144, 0, 0, 0, 144, 0, 0, 0, 144, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            230, 0, 0, 0, 20, 0, 0, 0, 157, 0, 0, 0, 222, 0, 0, 0, 226, 0, 0, 0, 137, 0, 0, 0, 44,
+            0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 64, 0, 0, 0, 100, 0, 0, 0, 136, 0, 0, 0, 136, 0, 0,
+            0, 136, 0, 0, 0, 136, 0, 0, 0, 136, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
+            0, 0, 0, 0, 0, 0, 0,
         ];
         L2Block::new_unchecked(v.into())
     }
@@ -4943,14 +5108,14 @@ impl ::core::default::Default for RevertChain {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RevertChain::new_unchecked(v.into())
     }
 }
 impl RevertChain {
-    pub const TOTAL_SIZE: usize = 52;
-    pub const FIELD_SIZES: [usize; 3] = [4, 8, 40];
+    pub const TOTAL_SIZE: usize = 48;
+    pub const FIELD_SIZES: [usize; 3] = [4, 8, 36];
     pub const FIELD_COUNT: usize = 3;
     pub fn reverter_id(&self) -> Uint32 {
         Uint32::new_unchecked(self.0.slice(0..4))
@@ -4958,8 +5123,8 @@ impl RevertChain {
     pub fn invalid_block_number(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(4..12))
     }
-    pub fn post_account(&self) -> MerkleState {
-        MerkleState::new_unchecked(self.0.slice(12..52))
+    pub fn post_account(&self) -> AccountMerkleState {
+        AccountMerkleState::new_unchecked(self.0.slice(12..48))
     }
     pub fn as_reader<'r>(&'r self) -> RevertChainReader<'r> {
         RevertChainReader::new_unchecked(self.as_slice())
@@ -5024,8 +5189,8 @@ impl<'r> ::core::fmt::Display for RevertChainReader<'r> {
     }
 }
 impl<'r> RevertChainReader<'r> {
-    pub const TOTAL_SIZE: usize = 52;
-    pub const FIELD_SIZES: [usize; 3] = [4, 8, 40];
+    pub const TOTAL_SIZE: usize = 48;
+    pub const FIELD_SIZES: [usize; 3] = [4, 8, 36];
     pub const FIELD_COUNT: usize = 3;
     pub fn reverter_id(&self) -> Uint32Reader<'r> {
         Uint32Reader::new_unchecked(&self.as_slice()[0..4])
@@ -5033,8 +5198,8 @@ impl<'r> RevertChainReader<'r> {
     pub fn invalid_block_number(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[4..12])
     }
-    pub fn post_account(&self) -> MerkleStateReader<'r> {
-        MerkleStateReader::new_unchecked(&self.as_slice()[12..52])
+    pub fn post_account(&self) -> AccountMerkleStateReader<'r> {
+        AccountMerkleStateReader::new_unchecked(&self.as_slice()[12..48])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for RevertChainReader<'r> {
@@ -5062,11 +5227,11 @@ impl<'r> molecule::prelude::Reader<'r> for RevertChainReader<'r> {
 pub struct RevertChainBuilder {
     pub(crate) reverter_id: Uint32,
     pub(crate) invalid_block_number: Uint64,
-    pub(crate) post_account: MerkleState,
+    pub(crate) post_account: AccountMerkleState,
 }
 impl RevertChainBuilder {
-    pub const TOTAL_SIZE: usize = 52;
-    pub const FIELD_SIZES: [usize; 3] = [4, 8, 40];
+    pub const TOTAL_SIZE: usize = 48;
+    pub const FIELD_SIZES: [usize; 3] = [4, 8, 36];
     pub const FIELD_COUNT: usize = 3;
     pub fn reverter_id(mut self, v: Uint32) -> Self {
         self.reverter_id = v;
@@ -5076,7 +5241,7 @@ impl RevertChainBuilder {
         self.invalid_block_number = v;
         self
     }
-    pub fn post_account(mut self, v: MerkleState) -> Self {
+    pub fn post_account(mut self, v: AccountMerkleState) -> Self {
         self.post_account = v;
         self
     }
