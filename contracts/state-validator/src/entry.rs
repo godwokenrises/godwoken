@@ -1,4 +1,5 @@
 // Import from `core` instead of from `std` since we are in no-std mode
+use core::mem::size_of_val;
 use core::result::Result;
 
 // Import heap related library from `alloc`
@@ -12,7 +13,7 @@ use ckb_std::{
     ckb_types::{bytes::Bytes, prelude::*},
     debug,
     dynamic_loading::CKBDLContext,
-    high_level::{load_cell_data, load_script, load_script_hash, load_tx_hash, load_witness_args},
+    high_level::{load_cell_data, load_script_hash, load_witness_args},
 };
 
 use godwoken_types::{
@@ -21,10 +22,11 @@ use godwoken_types::{
 };
 
 use ckb_lib_secp256k1::LibSecp256k1;
-use sparse_merkle_tree::{CompiledMerkleProof};
+use sparse_merkle_tree::{CompiledMerkleProof, H256};
 
 use crate::actions;
 use crate::blake2b::{new_blake2b, Blake2bHasher};
+use crate::consensus::verify_aggregator;
 use crate::context::Context;
 use crate::error::Error;
 
@@ -51,10 +53,6 @@ fn parse_global_state(source: Source) -> Result<GlobalState, Error> {
     }
 }
 
-fn verify_aggregator(aggregator_id: u32) -> Result<(), Error> {
-    unimplemented!()
-}
-
 fn verify_block_signature(
     context: &Context,
     lib_secp256k1: &LibSecp256k1,
@@ -63,21 +61,13 @@ fn verify_block_signature(
     let pubkey_hash = context
         .get_pubkey_hash(context.aggregator_id)
         .ok_or_else(|| Error::KVMissing)?;
-    let raw_block = l2block.raw();
-    let message = {
-        let mut message = [0u8; 32];
-        let mut hasher = new_blake2b();
-        hasher.update(raw_block.as_slice());
-        hasher.finalize(&mut message);
-        message
-    };
+    let message = &context.block_hash;
     let signature: [u8; 65] = l2block.signature().unpack();
-    let mut actual_pubkey_hash = [0u8; 20];
     let prefilled_data = lib_secp256k1
         .load_prefilled_data()
         .map_err(|err| Error::Secp256k1)?;
     let pubkey = lib_secp256k1
-        .recover_pubkey(&prefilled_data, &signature, &message)
+        .recover_pubkey(&prefilled_data, &signature, message)
         .map_err(|err| Error::Secp256k1)?;
     let actual_pubkey_hash = {
         let mut pubkey_hash = [0u8; 32];
@@ -92,46 +82,109 @@ fn verify_block_signature(
     Ok(())
 }
 
-fn verify_l2block(l2block: &L2Block, prev_global_state: &GlobalState) -> Result<Context, Error> {
-    // check merkle proof
+fn verify_l2block(
+    l2block: &L2Block,
+    prev_global_state: &GlobalState,
+    post_global_state: &GlobalState,
+) -> Result<Context, Error> {
     let raw_block = l2block.raw();
-    let prev_account_root: [u8; 32] = raw_block.prev_account().merkle_root().unpack();
-    if prev_global_state.account().merkle_root().unpack() != prev_account_root {
-        return Err(Error::InvalidPrevGlobalState);
+    if raw_block.valid() == 0u8.into() {
+        return Err(Error::SubmitInvalidBlock);
     }
+
+    // Check pre block merkle proof
     let number: u64 = raw_block.number().unpack();
     if number != prev_global_state.block().count().unpack() {
-        return Err(Error::InvalidPrevGlobalState);
+        return Err(Error::PrevGlobalState);
     }
-    // check merkle proof
-    let proof: Bytes = l2block.proof().unpack();
-    let merkle_proof = CompiledMerkleProof(proof.to_vec());
-    let kv_pairs: BTreeMap<_, _> = l2block.inputs().into_iter()
+
+    let block_index = {
+        let mut buf = [0u8; 32];
+        buf[..size_of_val(&number)].copy_from_slice(&number.to_le_bytes());
+        buf
+    };
+    let block_proof: Bytes = l2block.block_proof().unpack();
+    let block_merkle_proof = CompiledMerkleProof(block_proof.to_vec());
+    let prev_block_root: [u8; 32] = prev_global_state.block().merkle_root().unpack();
+    if !block_merkle_proof
+        .verify::<Blake2bHasher>(
+            &prev_block_root.into(),
+            vec![(block_index.into(), H256::zero())],
+        )
+        .map_err(|_| Error::MerkleProof)?
+    {
+        return Err(Error::MerkleProof);
+    }
+
+    // Check post block merkle proof
+    if number + 1 != post_global_state.block().count().unpack() {
+        return Err(Error::PrevGlobalState);
+    }
+
+    let post_block_root: [u8; 32] = post_global_state.block().merkle_root().unpack();
+    let block_hash = {
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(raw_block.as_slice());
+        hasher.finalize(&mut buf);
+        buf
+    };
+    if !block_merkle_proof
+        .verify::<Blake2bHasher>(
+            &post_block_root.into(),
+            vec![(block_index.into(), block_hash.into())],
+        )
+        .map_err(|_| Error::MerkleProof)?
+    {
+        return Err(Error::MerkleProof);
+    }
+
+    // Check pre account merkle proof
+    let kv_state_proof: Bytes = l2block.kv_state_proof().unpack();
+    let kv_merkle_proof = CompiledMerkleProof(kv_state_proof.to_vec());
+    let kv_pairs: BTreeMap<_, _> = l2block
+        .kv_state()
+        .into_iter()
         .map(|kv| {
             let k: [u8; 32] = kv.k().unpack();
             let v: [u8; 32] = kv.v().unpack();
             (k.into(), v.into())
         })
         .collect();
-    if !merkle_proof
-        .verify::<Blake2bHasher>(&prev_account_root.into(), kv_pairs.iter().map(|(k, v)| (*k, *v)).collect())
-        .map_err(|_| Error::MerkleVerify)?
+    let prev_account_root: [u8; 32] = prev_global_state.account().merkle_root().unpack();
+    if !kv_merkle_proof
+        .verify::<Blake2bHasher>(
+            &prev_account_root.into(),
+            kv_pairs.iter().map(|(k, v)| (*k, *v)).collect(),
+        )
+        .map_err(|_| Error::MerkleProof)?
     {
-        return Err(Error::InvalidMerkleProof);
+        return Err(Error::MerkleProof);
     }
-    let aggregator_id: u32 = raw_block.aggregator_id().unpack();
-    // verify aggregator
-    verify_aggregator(aggregator_id)?;
 
-    let account_count: u32 = raw_block.prev_account().count().unpack();
+    // Check post account state
+    // Note: Because of the optimistic mechanism, we do not need to verify post account merkle root
+    if raw_block.post_account().as_slice() != post_global_state.account().as_slice() {
+        return Err(Error::PostGlobalState);
+    }
+
+    // Generate context
+    let account_count: u32 = prev_global_state.account().count().unpack();
     let rollup_type_id = load_script_hash()?;
+    let aggregator_id: u32 = raw_block.aggregator_id().unpack();
     let context = Context {
         number,
         aggregator_id,
         kv_pairs,
+        kv_merkle_proof,
         account_count,
         rollup_type_id,
+        block_hash,
     };
+
+    // Verify aggregator
+    verify_aggregator(&context)?;
+
     Ok(context)
 }
 
@@ -141,22 +194,15 @@ pub fn main() -> Result<(), Error> {
     let lib_secp256k1 = LibSecp256k1::load(&mut context);
     // basic verification
     let prev_global_state = parse_global_state(Source::GroupInput)?;
+    let post_global_state = parse_global_state(Source::GroupOutput)?;
     let l2block = parse_l2block()?;
-    let mut context = verify_l2block(&l2block, &prev_global_state)?;
-    let raw_block = l2block.raw();
+    let mut context = verify_l2block(&l2block, &prev_global_state, &post_global_state)?;
     // check signature
     verify_block_signature(&context, &lib_secp256k1, &l2block)?;
 
     // handle state transitions
-    actions::join::handle_join(&mut context, &raw_block)?;
-    let script = load_script()?;
-    let args: Bytes = script.args().unpack();
-    debug!("script args is {:?}", args);
-
-    let tx_hash = load_tx_hash()?;
-    debug!("tx hash is {:?}", tx_hash);
-
-    let _buf: Vec<_> = vec![0u8; 32];
+    actions::join::handle(&mut context, &l2block)?;
+    actions::submit_transactions::handle(&mut context, &l2block)?;
 
     Ok(())
 }

@@ -21,7 +21,7 @@ use crate::context::Context;
 use crate::error::Error;
 
 use godwoken_types::{
-    packed::{DepositionLockArgs, DepositionLockArgsReader, RawL2Block},
+    packed::{DepositionLockArgs, DepositionLockArgsReader, L2Block},
     prelude::Unpack as GodwokenTypesUnpack,
 };
 
@@ -46,9 +46,9 @@ fn fetch_token_id(index: usize, source: Source) -> Result<[u8; 32], Error> {
             if type_.hash_type() == ScriptHashType::Data.into()
                 && type_.code_hash().unpack() == SUDT_CODE_HASH
             {
-                return load_cell_type_hash(index, source)?.ok_or(Error::InvalidSUDT);
+                return load_cell_type_hash(index, source)?.ok_or(Error::SUDT);
             }
-            Err(Error::InvalidSUDT)
+            Err(Error::SUDT)
         }
         None => Ok(CKB_TOKEN_ID),
     }
@@ -162,7 +162,8 @@ fn check_outputs_rollup_lock(deposition_requests: &[DepositionRequest]) -> Resul
     Ok(())
 }
 
-pub fn handle_join(context: &mut Context, raw_block: &RawL2Block) -> Result<(), Error> {
+/// Handle join
+pub fn handle(context: &mut Context, _block: &L2Block) -> Result<(), Error> {
     // 1. find all inputs which use the deposition-lock
     // 2. find or create accounts accoding to requests
     // 3. deposit balance to account (how? call contract, or directly alter the balance)

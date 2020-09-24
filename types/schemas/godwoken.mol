@@ -53,14 +53,14 @@ table L2Transaction {
     signature: Signature,
 }
 
+vector L2TransactionVec <L2Transaction>;
+
 table RawL2Block {
     number: Uint64,
     aggregator_id: Uint32,
     timestamp: Uint64,
-    prev_account: AccountMerkleState,
     post_account: AccountMerkleState,
     leave: LeaveOpt,
-    join: JoinOpt,
     revert_chain: RevertChainOpt,
     submit_transactions: SubmitTransactionsOpt,
     valid: byte,
@@ -69,22 +69,21 @@ table RawL2Block {
 table L2Block {
     raw: RawL2Block,
     signature: Signature,
-    inputs: KVPairVec,
-    proof: Bytes,
+    kv_state: KVPairVec,
+    kv_state_proof: Bytes,
+    transactions: L2TransactionVec,
+    block_proof: Bytes,
 }
 
 // --- define actions ---
 table SubmitTransactions {
     tx_root: Byte32,
     tx_count: Uint32,
-    // account_root before each transaction
-    account_root_list: Byte32Vec,
+    // hash(account_root | account_count) before each transaction
+    compacted_pre_root_list: Byte32Vec,
 }
 
 // TODO
-table Join {
-}
-
 table Leave {
 }
 
@@ -95,7 +94,6 @@ struct RevertChain {
     post_account: AccountMerkleState,
 }
 
-option JoinOpt (Join);
 option LeaveOpt (Leave);
 option RevertChainOpt (RevertChain);
 option SubmitTransactionsOpt (SubmitTransactions);

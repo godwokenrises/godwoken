@@ -17,6 +17,9 @@ mod context;
 mod entry;
 mod error;
 mod key;
+mod smt;
+mod util;
+mod consensus;
 
 use ckb_std::default_alloc;
 
