@@ -4,14 +4,13 @@ use core::result::Result;
 
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use alloc::{collections::BTreeMap, vec, vec::Vec};
+use alloc::{collections::BTreeMap, vec};
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::*},
-    debug,
     dynamic_loading::CKBDLContext,
     high_level::{load_cell_data, load_script_hash, load_witness_args},
 };
@@ -65,10 +64,10 @@ fn verify_block_signature(
     let signature: [u8; 65] = l2block.signature().unpack();
     let prefilled_data = lib_secp256k1
         .load_prefilled_data()
-        .map_err(|err| Error::Secp256k1)?;
+        .map_err(|_err| Error::Secp256k1)?;
     let pubkey = lib_secp256k1
         .recover_pubkey(&prefilled_data, &signature, message)
-        .map_err(|err| Error::Secp256k1)?;
+        .map_err(|_err| Error::Secp256k1)?;
     let actual_pubkey_hash = {
         let mut pubkey_hash = [0u8; 32];
         let mut hasher = new_blake2b();

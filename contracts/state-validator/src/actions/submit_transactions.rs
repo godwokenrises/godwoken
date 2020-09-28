@@ -37,7 +37,7 @@ pub fn handle(context: &mut Context, block: &L2Block) -> Result<(), Error> {
             buf
         })
         .collect();
-    let merkle_root: [u8; 32] = calculate_merkle_root(leaves);
+    let merkle_root: [u8; 32] = calculate_merkle_root(leaves)?;
     if tx_root != merkle_root {
         return Err(Error::InvalidTxs);
     }

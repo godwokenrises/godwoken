@@ -1,4 +1,5 @@
 use ckb_std::error::SysError;
+use sparse_merkle_tree::error::Error as SMTError;
 
 /// Error
 #[repr(i8)]
@@ -32,6 +33,12 @@ impl From<SysError> for Error {
             Encoding => Self::Encoding,
             Unknown(err_code) => panic!("unexpected sys error {}", err_code),
         }
+    }
+}
+
+impl From<SMTError> for Error {
+    fn from(_err: SMTError) -> Self {
+        Error::MerkleProof
     }
 }
 

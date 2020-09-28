@@ -3,7 +3,7 @@
 
 use crate::blake2b::new_blake2b;
 use crate::error::Error;
-use crate::key::{build_account_key, build_raw_key, GW_ACCOUNT_NONCE, GW_ACCOUNT_PUBKEY_HASH};
+use crate::key::{build_account_key, build_raw_key, GW_ACCOUNT_PUBKEY_HASH};
 use crate::smt::Blake2bHasher;
 use alloc::collections::BTreeMap;
 use sparse_merkle_tree::{CompiledMerkleProof, H256};
@@ -76,7 +76,7 @@ impl Context {
         let root = self
             .kv_merkle_proof
             .compute_root::<Blake2bHasher>(self.kv_pairs.iter().map(|(k, v)| (*k, *v)).collect())
-            .map_err(|err| Error::MerkleProof)?;
+            .map_err(|_err| Error::MerkleProof)?;
         Ok(root.into())
     }
 
@@ -89,14 +89,14 @@ impl Context {
         })
     }
 
-    pub fn get_nonce(&self, id: u32) -> Option<u32> {
-        let raw_key = build_account_key(id, GW_ACCOUNT_NONCE);
-        self.kv_pairs.get(&raw_key.into()).map(|value| {
-            let mut buf = [0u8; 4];
-            buf.copy_from_slice(value.as_slice());
-            u32::from_le_bytes(buf)
-        })
-    }
+    // pub fn get_nonce(&self, id: u32) -> Option<u32> {
+    //     let raw_key = build_account_key(id, GW_ACCOUNT_NONCE);
+    //     self.kv_pairs.get(&raw_key.into()).map(|value| {
+    //         let mut buf = [0u8; 4];
+    //         buf.copy_from_slice(value.as_slice());
+    //         u32::from_le_bytes(buf)
+    //     })
+    // }
 }
 
 fn generate_sudt_key(token_id: &[u8; 32], id: u32) -> [u8; 32] {

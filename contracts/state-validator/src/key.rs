@@ -5,9 +5,9 @@ use core::mem::size_of;
 
 /* key type */
 const GW_ACCOUNT_KV: u8 = 0;
-pub const GW_ACCOUNT_NONCE: u8 = 1;
+// pub const GW_ACCOUNT_NONCE: u8 = 1;
 pub const GW_ACCOUNT_PUBKEY_HASH: u8 = 2;
-pub const GW_ACCOUNT_CODE_HASH: u8 = 3;
+// pub const GW_ACCOUNT_CODE_HASH: u8 = 3;
 
 /* Generate raw key
  * raw_key: blake2b(id | type | key)

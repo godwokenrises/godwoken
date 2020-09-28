@@ -45,7 +45,7 @@ dependencies = [
 [[package]]
 name = "ckb-lib-secp256k1"
 version = "0.1.0"
-source = "git+https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git#7f91b87902ebb9469887fa6b0eed827e6665a343"
+source = "git+https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git?rev=c6fcd3c#c6fcd3cf192891472c9ee708091de7db1907ea78"
 dependencies = [
  "blake2b-rs",
  "ckb-std",
@@ -54,7 +54,7 @@ dependencies = [
 [[package]]
 name = "ckb-lib-secp256k1"
 version = "0.1.0"
-source = "git+https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git?rev=c6fcd3c#c6fcd3cf192891472c9ee708091de7db1907ea78"
+source = "git+https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git#7f91b87902ebb9469887fa6b0eed827e6665a343"
 dependencies = [
  "blake2b-rs",
  "ckb-std",

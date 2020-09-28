@@ -1,4 +1,5 @@
 deployment = "deployment.toml"
+[rust]
 workspace_dir = "contracts"
 
 [[contracts]]

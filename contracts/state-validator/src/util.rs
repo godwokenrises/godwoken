@@ -1,21 +1,21 @@
 use crate::blake2b::new_blake2b;
-use crate::smt::SMT;
+use crate::{smt::SMT, error::Error as SMTError};
 use alloc::vec::Vec;
 use core::mem::size_of_val;
 
 /// Compute txs root from leaves
-pub fn calculate_merkle_root(leaves: Vec<[u8; 32]>) -> [u8; 32] {
+pub fn calculate_merkle_root(leaves: Vec<[u8; 32]>) -> Result<[u8; 32], SMTError> {
     if leaves.is_empty() {
-        return [0u8; 32];
+        return Ok([0u8; 32]);
     }
     let mut tree = SMT::default();
     for (i, leaf) in leaves.into_iter().enumerate() {
         let mut key = [0u8; 32];
         let index = i as u32;
         key[0..size_of_val(&index)].copy_from_slice(&index.to_le_bytes());
-        tree.update(key.into(), leaf.into());
+        tree.update(key.into(), leaf.into())?;
     }
-    (*tree.root()).into()
+    Ok((*tree.root()).into())
 }
 
 pub fn calculate_compacted_account_root(account_root: &[u8], count: u32) -> [u8; 32] {

@@ -3,17 +3,16 @@ use core::result::Result;
 
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use alloc::{collections::BTreeMap, vec, vec::Vec};
+use alloc::{collections::BTreeMap, vec::Vec};
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, core::ScriptHashType, prelude::*},
-    debug,
     high_level::{
         load_cell_capacity, load_cell_data, load_cell_lock, load_cell_type, load_cell_type_hash,
-        load_script, load_tx_hash, load_witness_args, QueryIter,
+        QueryIter,
     },
 };
 

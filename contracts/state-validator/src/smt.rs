@@ -1,5 +1,4 @@
 use crate::blake2b::{new_blake2b, Blake2b};
-use alloc::vec::Vec;
 use sparse_merkle_tree::{
     default_store::DefaultStore, traits::Hasher, tree::SparseMerkleTree, H256,
 };
