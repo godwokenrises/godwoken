@@ -1,7 +1,7 @@
 use super::{new_block_info, new_context, SUDT_PROGRAM_CODE_HASH};
 use crate::blake2b::new_blake2b;
 use crate::smt::{DefaultStore, H256, SMT};
-use crate::{execute, Error, State};
+use crate::{context::execute, Error, State};
 use godwoken_types::{
     core::CallType,
     packed::{CallContext, SUDTArgs, SUDTQuery, SUDTTransfer},

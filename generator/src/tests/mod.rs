@@ -1,5 +1,5 @@
 use crate::blake2b::new_blake2b;
-use crate::Context;
+use crate::context::Context;
 use godwoken_types::{
     bytes::Bytes,
     packed::{BlockInfo, CallContext},

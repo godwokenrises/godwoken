@@ -1,6 +1,6 @@
 use crate::bytes::Bytes;
 use crate::smt::SMT;
-use crate::State;
+use crate::state::State;
 use ckb_vm::{
     memory::{Memory, FLAG_EXECUTABLE, FLAG_FREEZED},
     registers::{A0, A1, A2, A3, A4, A7},
@@ -12,7 +12,7 @@ use godwoken_types::{
 };
 use sparse_merkle_tree::{traits::Store, H256};
 use std::cmp;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /* Constants */
 const MAX_SET_RETURN_DATA_SIZE: u64 = 1024;
