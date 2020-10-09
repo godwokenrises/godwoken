@@ -2,7 +2,7 @@ use crate::bytes::Bytes;
 use crate::error::Error;
 use crate::smt::{Store, H256, SMT};
 use crate::syscalls::{L2Syscalls, RunResult};
-use godwoken_types::packed::{BlockInfo, CallContext};
+use gw_types::packed::{BlockInfo, CallContext};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 

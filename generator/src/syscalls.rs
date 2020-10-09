@@ -6,7 +6,7 @@ use ckb_vm::{
     registers::{A0, A1, A2, A3, A4, A7},
     Error as VMError, Register, SupportMachine, Syscalls,
 };
-use godwoken_types::{
+use gw_types::{
     packed::{BlockInfo, CallContext},
     prelude::*,
 };

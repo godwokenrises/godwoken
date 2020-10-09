@@ -19,7 +19,7 @@ use ckb_std::{
 use crate::context::Context;
 use crate::error::Error;
 
-use godwoken_types::{
+use gw_types::{
     packed::{DepositionLockArgs, DepositionLockArgsReader, L2Block},
     prelude::Unpack as GodwokenTypesUnpack,
 };

@@ -88,11 +88,11 @@ dependencies = [
  "blake2b-rs",
  "ckb-lib-secp256k1 0.1.0 (git+https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git?rev=c6fcd3c)",
  "ckb-std",
- "godwoken-types",
+ "gw-types",
 ]
 
 [[package]]
-name = "godwoken-types"
+name = "gw-types"
 version = "0.1.0"
 dependencies = [
  "cfg-if",
@@ -124,6 +124,6 @@ dependencies = [
  "blake2b-ref",
  "ckb-lib-secp256k1 0.1.0 (git+https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git)",
  "ckb-std",
- "godwoken-types",
+ "gw-types",
  "sparse-merkle-tree",
 ]

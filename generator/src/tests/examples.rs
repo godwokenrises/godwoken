@@ -1,7 +1,7 @@
 use super::{new_block_info, new_context, PROXY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH};
 use crate::smt::{DefaultStore, H256, SMT};
 use crate::{context::execute, Error, State};
-use godwoken_types::{bytes::Bytes, core::CallType, packed::CallContext, prelude::*};
+use gw_types::{bytes::Bytes, core::CallType, packed::CallContext, prelude::*};
 
 #[test]
 fn test_example_sum() {

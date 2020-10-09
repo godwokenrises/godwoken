@@ -1,5 +1,5 @@
 [package]
-name = "godwoken-generator"
+name = "gw-generator"
 version = "0.1.0"
 authors = ["jjy <jjyruby@gmail.com>"]
 edition = "2018"
@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-godwoken-types = { path = "../types" }
+gw-types = { path = "../types" }
 anyhow = "1.0"
 sparse-merkle-tree = "0.3"
 blake2b-rs = "0.2"

@@ -26,7 +26,7 @@ use ckb_std::{
     since::{Since, LockValue},
 };
 
-use godwoken_types::{
+use gw_types::{
     packed::{DepositionLockArgs, DepositionLockArgsReader},
     prelude::*,
 };

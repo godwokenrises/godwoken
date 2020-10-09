@@ -1,5 +1,5 @@
 use ckb_vm::Error as VMError;
-pub use godwoken_types::bytes;
+pub use gw_types::bytes;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Clone, Eq)]

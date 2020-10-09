@@ -12,5 +12,5 @@ mod tests;
 
 // re-exports
 pub use error::Error;
-pub(crate) use godwoken_types::bytes;
+pub(crate) use gw_types::bytes;
 pub use state::State;

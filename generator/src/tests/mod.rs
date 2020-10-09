@@ -1,6 +1,6 @@
 use crate::blake2b::new_blake2b;
 use crate::context::Context;
-use godwoken_types::{
+use gw_types::{
     bytes::Bytes,
     packed::{BlockInfo, CallContext},
     prelude::*,

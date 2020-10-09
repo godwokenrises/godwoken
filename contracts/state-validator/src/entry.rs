@@ -15,7 +15,7 @@ use ckb_std::{
     high_level::{load_cell_data, load_script_hash, load_witness_args},
 };
 
-use godwoken_types::{
+use gw_types::{
     packed::{GlobalState, GlobalStateReader, L2Block, L2BlockReader},
     prelude::{Reader as GodwokenTypesReader, Unpack as GodwokenTypesUnpack},
 };

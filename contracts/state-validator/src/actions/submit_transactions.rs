@@ -2,7 +2,7 @@ use crate::blake2b::new_blake2b;
 use crate::context::Context;
 use crate::error::Error;
 use crate::util::{calculate_compacted_account_root, calculate_merkle_root};
-use godwoken_types::{packed::L2Block, prelude::*};
+use gw_types::{packed::L2Block, prelude::*};
 
 /// Handle SubmitTransactions
 pub fn handle(context: &mut Context, block: &L2Block) -> Result<(), Error> {
