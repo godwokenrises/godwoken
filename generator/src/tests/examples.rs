@@ -1,6 +1,6 @@
-use super::{new_block_info, new_context, PROXY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH};
+use super::{new_block_info, new_generator, PROXY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH};
 use crate::smt::{DefaultStore, H256, SMT};
-use crate::{context::execute, Error, State};
+use crate::{Error, Generator, State};
 use gw_types::{bytes::Bytes, core::CallType, packed::CallContext, prelude::*};
 
 #[test]
@@ -22,8 +22,10 @@ fn test_example_sum() {
             .call_type(CallType::Construct.into())
             .args(Bytes::from(init_value.to_le_bytes().to_vec()).pack())
             .build();
-        let ctx = new_context(block_info, call_context);
-        let run_result = execute(&ctx, &tree).expect("construct");
+        let generator = new_generator();
+        let run_result = generator
+            .execute(&tree, &block_info, &call_context)
+            .expect("construct");
         let return_value = {
             let mut buf = [0u8; 8];
             buf.copy_from_slice(&run_result.return_data);
@@ -31,7 +33,7 @@ fn test_example_sum() {
         };
         assert_eq!(return_value, init_value);
 
-        tree.update_state(&run_result).expect("update state");
+        tree.apply(&run_result).expect("update state");
         println!("result {:?}", run_result);
     }
 
@@ -46,8 +48,10 @@ fn test_example_sum() {
                 .call_type(CallType::HandleMessage.into())
                 .args(Bytes::from(add_value.to_le_bytes().to_vec()).pack())
                 .build();
-            let ctx = new_context(block_info, call_context);
-            let run_result = execute(&ctx, &tree).expect("construct");
+            let generator = new_generator();
+            let run_result = generator
+                .execute(&tree, &block_info, &call_context)
+                .expect("construct");
             let return_value = {
                 let mut buf = [0u8; 8];
                 buf.copy_from_slice(&run_result.return_data);
@@ -55,7 +59,7 @@ fn test_example_sum() {
             };
             sum_value += add_value;
             assert_eq!(return_value, sum_value);
-            tree.update_state(&run_result).expect("update state");
+            tree.apply(&run_result).expect("update state");
             println!("result {:?}", run_result);
         }
     }
@@ -87,8 +91,10 @@ fn test_example_proxy_sum() {
             .call_type(CallType::Construct.into())
             .args(Bytes::from(init_value.to_le_bytes().to_vec()).pack())
             .build();
-        let ctx = new_context(block_info, call_context);
-        let run_result = execute(&ctx, &tree).expect("construct");
+        let generator = new_generator();
+        let run_result = generator
+            .execute(&tree, &block_info, &call_context)
+            .expect("construct");
         let return_value = {
             let mut buf = [0u8; 8];
             buf.copy_from_slice(&run_result.return_data);
@@ -96,7 +102,7 @@ fn test_example_proxy_sum() {
         };
         assert_eq!(return_value, init_value);
 
-        tree.update_state(&run_result).expect("update state");
+        tree.apply(&run_result).expect("update state");
         println!("result {:?}", run_result);
 
         // run proxy contract constructor
@@ -106,11 +112,13 @@ fn test_example_proxy_sum() {
             .to_id(proxy_contract_id.pack())
             .call_type(CallType::Construct.into())
             .build();
-        let ctx = new_context(block_info, call_context);
-        let run_result = execute(&ctx, &tree).expect("construct");
+        let generator = new_generator();
+        let run_result = generator
+            .execute(&tree, &block_info, &call_context)
+            .expect("construct");
         assert!(run_result.return_data.is_empty());
 
-        tree.update_state(&run_result).expect("update state");
+        tree.apply(&run_result).expect("update state");
         println!("result {:?}", run_result);
     }
 
@@ -127,8 +135,10 @@ fn test_example_proxy_sum() {
                 .call_type(CallType::HandleMessage.into())
                 .args(Bytes::from(args).pack())
                 .build();
-            let ctx = new_context(block_info, call_context);
-            let run_result = execute(&ctx, &tree).expect("construct");
+            let generator = new_generator();
+            let run_result = generator
+                .execute(&tree, &block_info, &call_context)
+                .expect("construct");
             let return_value = {
                 let mut buf = [0u8; 8];
                 buf.copy_from_slice(&run_result.return_data);
@@ -136,7 +146,7 @@ fn test_example_proxy_sum() {
             };
             sum_value += add_value;
             assert_eq!(return_value, sum_value);
-            tree.update_state(&run_result).expect("update state");
+            tree.apply(&run_result).expect("update state");
             println!("result {:?}", run_result);
         }
 
@@ -148,8 +158,10 @@ fn test_example_proxy_sum() {
             .call_type(CallType::HandleMessage.into())
             .args(Bytes::from(0u64.to_le_bytes().to_vec()).pack())
             .build();
-        let ctx = new_context(block_info, call_context);
-        let run_result = execute(&ctx, &tree).expect("handle");
+        let generator = new_generator();
+        let run_result = generator
+            .execute(&tree, &block_info, &call_context)
+            .expect("handle");
         let return_value = {
             let mut buf = [0u8; 8];
             buf.copy_from_slice(&run_result.return_data);
@@ -183,8 +195,10 @@ fn test_example_proxy_recursive() {
             .call_type(CallType::HandleMessage.into())
             .args(Bytes::from(args).pack())
             .build();
-        let ctx = new_context(block_info, call_context);
-        let err = execute(&ctx, &tree).expect_err("handle");
+        let generator = new_generator();
+        let err = generator
+            .execute(&tree, &block_info, &call_context)
+            .expect_err("handle");
         let err_code = match err {
             Error::InvalidExitCode(code) => code,
             err => panic!("unexpected {:?}", err),

@@ -1,10 +1,6 @@
 use crate::blake2b::new_blake2b;
-use crate::context::Context;
-use gw_types::{
-    bytes::Bytes,
-    packed::{BlockInfo, CallContext},
-    prelude::*,
-};
+use crate::Generator;
+use gw_types::{bytes::Bytes, packed::BlockInfo, prelude::*};
 use lazy_static::lazy_static;
 use std::{collections::HashMap, fs, io::Read, path::PathBuf};
 
@@ -76,10 +72,10 @@ pub fn new_block_info(aggregator_id: u32, number: u64, timestamp: u64) -> BlockI
         .build()
 }
 
-pub fn new_context(block_info: BlockInfo, call_context: CallContext) -> Context {
+pub fn new_generator() -> Generator {
     let mut contracts_by_code_hash = HashMap::default();
     contracts_by_code_hash.insert(SUM_PROGRAM_CODE_HASH.clone(), SUM_PROGRAM.clone());
     contracts_by_code_hash.insert(PROXY_PROGRAM_CODE_HASH.clone(), PROXY_PROGRAM.clone());
     contracts_by_code_hash.insert(SUDT_PROGRAM_CODE_HASH.clone(), SUDT_PROGRAM.clone());
-    Context::new(block_info, call_context, contracts_by_code_hash)
+    Generator::new(contracts_by_code_hash)
 }

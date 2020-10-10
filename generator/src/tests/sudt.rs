@@ -1,7 +1,7 @@
-use super::{new_block_info, new_context, SUDT_PROGRAM_CODE_HASH};
+use super::{new_block_info, new_generator, SUDT_PROGRAM_CODE_HASH};
 use crate::blake2b::new_blake2b;
 use crate::smt::{DefaultStore, H256, SMT};
-use crate::{context::execute, Error, State};
+use crate::{Error, State};
 use gw_types::{
     core::CallType,
     packed::{CallContext, SUDTArgs, SUDTQuery, SUDTTransfer},
@@ -33,9 +33,9 @@ fn run_contract(
         .call_type(CallType::HandleMessage.into())
         .args(args.as_bytes().pack())
         .build();
-    let ctx = new_context(block_info, call_context);
-    let run_result = execute(&ctx, &tree)?;
-    tree.update_state(&run_result).expect("update state");
+    let generator = new_generator();
+    let run_result = generator.execute(&tree, &block_info, &call_context)?;
+    tree.apply(&run_result).expect("update state");
     Ok(run_result.return_data)
 }
 
@@ -64,9 +64,11 @@ fn test_sudt() {
             .to_id(contract_id.pack())
             .call_type(CallType::Construct.into())
             .build();
-        let ctx = new_context(block_info, call_context);
-        let run_result = execute(&ctx, &tree).expect("construct");
-        tree.update_state(&run_result).expect("update state");
+        let generator = new_generator();
+        let run_result = generator
+            .execute(&tree, &block_info, &call_context)
+            .expect("construct");
+        tree.apply(&run_result).expect("update state");
     }
 
     // init balance for a
@@ -188,9 +190,11 @@ fn test_sudt_insufficient_balance() {
             .to_id(contract_id.pack())
             .call_type(CallType::Construct.into())
             .build();
-        let ctx = new_context(block_info, call_context);
-        let run_result = execute(&ctx, &tree).expect("construct");
-        tree.update_state(&run_result).expect("update state");
+        let generator = new_generator();
+        let run_result = generator
+            .execute(&tree, &block_info, &call_context)
+            .expect("construct");
+        tree.apply(&run_result).expect("update state");
     }
 
     // init balance for a

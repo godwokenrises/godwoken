@@ -32,7 +32,7 @@ fn build_account_key(id: u32, type_: u8) -> [u8; 32] {
 }
 
 pub trait State {
-    fn update_state(&mut self, run_result: &RunResult) -> SMTResult<()>;
+    fn apply(&mut self, run_result: &RunResult) -> SMTResult<()>;
     fn get_value(&self, id: u32, key: &[u8]) -> SMTResult<[u8; 32]>;
     fn update_value(&mut self, id: u32, key: &[u8], value: [u8; 32]) -> SMTResult<()>;
     fn create_account(
@@ -47,7 +47,7 @@ pub trait State {
 }
 
 impl<S: Store<H256>> State for SMT<S> {
-    fn update_state(&mut self, run_result: &RunResult) -> SMTResult<()> {
+    fn apply(&mut self, run_result: &RunResult) -> SMTResult<()> {
         for (k, v) in &run_result.write_values {
             self.update(*k, *v)?;
         }
