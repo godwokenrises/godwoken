@@ -1,4 +1,5 @@
 use crate::blake2b::new_blake2b;
+use crate::syscalls::hashmap_code_store::HashMapCodeStore;
 use crate::Generator;
 use gw_types::{bytes::Bytes, packed::BlockInfo, prelude::*};
 use lazy_static::lazy_static;
@@ -72,10 +73,11 @@ pub fn new_block_info(aggregator_id: u32, number: u64, timestamp: u64) -> BlockI
         .build()
 }
 
-pub fn new_generator() -> Generator {
-    let mut contracts_by_code_hash = HashMap::default();
-    contracts_by_code_hash.insert(SUM_PROGRAM_CODE_HASH.clone(), SUM_PROGRAM.clone());
-    contracts_by_code_hash.insert(PROXY_PROGRAM_CODE_HASH.clone(), PROXY_PROGRAM.clone());
-    contracts_by_code_hash.insert(SUDT_PROGRAM_CODE_HASH.clone(), SUDT_PROGRAM.clone());
-    Generator::new(contracts_by_code_hash)
+pub fn new_generator() -> Generator<HashMapCodeStore> {
+    let mut code_map = HashMap::default();
+    code_map.insert(SUM_PROGRAM_CODE_HASH.clone(), SUM_PROGRAM.clone());
+    code_map.insert(PROXY_PROGRAM_CODE_HASH.clone(), PROXY_PROGRAM.clone());
+    code_map.insert(SUDT_PROGRAM_CODE_HASH.clone(), SUDT_PROGRAM.clone());
+    let code_store = HashMapCodeStore::new(code_map);
+    Generator::new(code_store)
 }

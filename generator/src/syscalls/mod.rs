@@ -1,3 +1,5 @@
+pub mod hashmap_code_store;
+
 use crate::bytes::Bytes;
 use crate::smt::SMT;
 use crate::state::State;
@@ -31,8 +33,6 @@ const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
 /* Syscall errors */
 const SUCCESS: u8 = 0;
-const INDEX_OUT_OF_BOUND: u8 = 1;
-const ITEM_MISSING: u8 = 2;
 const SLICE_OUT_OF_BOUND: u8 = 3;
 
 #[derive(Debug, PartialEq, Clone, Eq, Default)]
@@ -42,11 +42,15 @@ pub struct RunResult {
     pub return_data: Vec<u8>,
 }
 
+pub trait GetContractCode {
+    fn get_contract_code(&self, code_hash: &[u8; 32]) -> Option<Bytes>;
+}
+
 pub(crate) struct L2Syscalls<'a, S> {
     pub(crate) tree: &'a SMT<S>,
     pub(crate) block_info: &'a BlockInfo,
     pub(crate) call_context: &'a CallContext,
-    pub(crate) contracts_by_code_hash: &'a HashMap<[u8; 32], Bytes>,
+    pub(crate) code_store: &'a dyn GetContractCode,
     pub(crate) result: &'a mut RunResult,
 }
 
@@ -182,10 +186,13 @@ impl<'a, S: Store<H256>> L2Syscalls<'a, S> {
             eprintln!("syscall error: get code hash : {:?}", err);
             VMError::Unexpected
         })?;
-        let program = self.contracts_by_code_hash.get(&code_hash).ok_or_else(|| {
-            eprintln!("syscall error: can't find code_hash : {:?}", code_hash);
-            VMError::Unexpected
-        })?;
+        let program = self
+            .code_store
+            .get_contract_code(&code_hash)
+            .ok_or_else(|| {
+                eprintln!("syscall error: can't find code_hash : {:?}", code_hash);
+                VMError::Unexpected
+            })?;
 
         let content_end = content_offset
             .checked_add(content_size)
@@ -217,11 +224,14 @@ impl<'a, S: Store<H256>> L2Syscalls<'a, S> {
             eprintln!("syscall error: get code hash : {:?}", err);
             VMError::Unexpected
         })?;
-        let program = self.contracts_by_code_hash.get(&code_hash).ok_or_else(|| {
-            eprintln!("syscall error: can't find code_hash : {:?}", code_hash);
-            VMError::Unexpected
-        })?;
-        store_data(machine, program)?;
+        let program = self
+            .code_store
+            .get_contract_code(&code_hash)
+            .ok_or_else(|| {
+                eprintln!("syscall error: can't find code_hash : {:?}", code_hash);
+                VMError::Unexpected
+            })?;
+        store_data(machine, &program)?;
         machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
         Ok(())
     }

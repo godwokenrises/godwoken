@@ -6,7 +6,7 @@ mod error;
 mod generator;
 pub mod smt;
 mod state;
-mod syscalls;
+pub mod syscalls;
 #[cfg(test)]
 mod tests;
 

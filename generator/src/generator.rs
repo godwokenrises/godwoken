@@ -1,7 +1,7 @@
 use crate::bytes::Bytes;
 use crate::error::Error;
 use crate::smt::{Store, H256, SMT};
-use crate::syscalls::{L2Syscalls, RunResult};
+use crate::syscalls::{GetContractCode, L2Syscalls, RunResult};
 use crate::State;
 use gw_types::{
     core::CallType,
@@ -9,7 +9,6 @@ use gw_types::{
     prelude::*,
 };
 use lazy_static::lazy_static;
-use std::collections::HashMap;
 
 use ckb_vm::{
     machine::asm::{AsmCoreMachine, AsmMachine},
@@ -21,18 +20,18 @@ lazy_static! {
     static ref GENERATOR: Bytes = include_bytes!("../../c/build/generator").to_vec().into();
 }
 
-pub struct Generator {
+pub struct Generator<CS> {
     generator: Bytes,
     validator: Bytes,
-    contracts_by_code_hash: HashMap<[u8; 32], Bytes>,
+    code_store: CS,
 }
 
-impl Generator {
-    pub fn new(contracts_by_code_hash: HashMap<[u8; 32], Bytes>) -> Self {
+impl<CS: GetContractCode> Generator<CS> {
+    pub fn new(code_store: CS) -> Self {
         Generator {
             generator: GENERATOR.clone(),
             validator: VALIDATOR.clone(),
-            contracts_by_code_hash,
+            code_store,
         }
     }
 
@@ -86,7 +85,7 @@ impl Generator {
                     block_info: block_info,
                     call_context: call_context,
                     result: &mut run_result,
-                    contracts_by_code_hash: &self.contracts_by_code_hash,
+                    code_store: &self.code_store,
                 }));
             let mut machine = AsmMachine::new(machine_builder.build(), None);
             let program_name = Bytes::from_static(b"generator");
