@@ -1,5 +1,6 @@
 use crate::context::Context;
 use crate::error::Error;
+use gw_common::state::State;
 
 const CKB_TOKEN_ID: [u8; 32] = [0u8; 32];
 const REQUIRED_BALANCE: u128 = 50000_00000000u128;

@@ -12,14 +12,11 @@
 
 // define modules
 mod actions;
-mod blake2b;
+mod consensus;
 mod context;
 mod entry;
 mod error;
-mod key;
-mod smt;
 mod util;
-mod consensus;
 
 use ckb_std::default_alloc;
 

@@ -1,5 +1,5 @@
 use ckb_std::error::SysError;
-use sparse_merkle_tree::error::Error as SMTError;
+use gw_common::{sparse_merkle_tree::error::Error as SMTError, state::Error as StateError};
 
 /// Error
 #[repr(i8)]
@@ -13,7 +13,7 @@ pub enum Error {
     MerkleProof, // merkle verification error
     PrevGlobalState,
     PostGlobalState,
-    SUDT, // invalid SUDT
+    SUDT,      // invalid SUDT
     Secp256k1, // secp256k1 error
     KVMissing, // missing KV pair
     UnexpectedRollupLock,
@@ -42,3 +42,12 @@ impl From<SMTError> for Error {
     }
 }
 
+impl From<StateError> for Error {
+    fn from(err: StateError) -> Self {
+        match err {
+            StateError::AmountOverflow => Error::AmountOverflow,
+            StateError::MerkleProof => Error::MerkleProof,
+            StateError::SMT(e) => Error::MerkleProof,
+        }
+    }
+}

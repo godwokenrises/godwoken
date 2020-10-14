@@ -21,10 +21,13 @@ use gw_types::{
 };
 
 use ckb_lib_secp256k1::LibSecp256k1;
-use sparse_merkle_tree::{CompiledMerkleProof, H256};
+use gw_common::{
+    blake2b::{new_blake2b, Blake2bHasher},
+    sparse_merkle_tree::{CompiledMerkleProof, H256},
+    state::State,
+};
 
 use crate::actions;
-use crate::blake2b::{new_blake2b, Blake2bHasher};
 use crate::consensus::verify_aggregator;
 use crate::context::Context;
 use crate::error::Error;
@@ -58,8 +61,7 @@ fn verify_block_signature(
     l2block: &L2Block,
 ) -> Result<(), Error> {
     let pubkey_hash = context
-        .get_pubkey_hash(context.aggregator_id)
-        .ok_or_else(|| Error::KVMissing)?;
+        .get_pubkey_hash(context.aggregator_id)?;
     let message = &context.block_hash;
     let signature: [u8; 65] = l2block.signature().unpack();
     let prefilled_data = lib_secp256k1

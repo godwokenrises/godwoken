@@ -1,7 +1,7 @@
-use crate::blake2b::new_blake2b;
 use crate::context::Context;
 use crate::error::Error;
 use crate::util::{calculate_compacted_account_root, calculate_merkle_root};
+use gw_common::{blake2b::new_blake2b, state::State};
 use gw_types::{packed::L2Block, prelude::*};
 
 /// Handle SubmitTransactions
@@ -21,7 +21,7 @@ pub fn handle(context: &mut Context, block: &L2Block) -> Result<(), Error> {
     }
 
     let first_compacted_root =
-        calculate_compacted_account_root(&context.calculate_account_root()?, context.account_count);
+        calculate_compacted_account_root(&context.calculate_root()?, context.account_count);
     if compacted_pre_root_list.get(0).map(|root| root.unpack()) != Some(first_compacted_root) {
         return Err(Error::InvalidTxs);
     }

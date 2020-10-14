@@ -19,18 +19,14 @@ use ckb_std::{
 use crate::context::Context;
 use crate::error::Error;
 
+use gw_common::{
+    state::{State, ZERO},
+    CKB_TOKEN_ID, DEPOSITION_CODE_HASH, ROLLUP_LOCK_CODE_HASH, SUDT_CODE_HASH,
+};
 use gw_types::{
     packed::{DepositionLockArgs, DepositionLockArgsReader, L2Block},
     prelude::Unpack as GodwokenTypesUnpack,
 };
-
-// code hashes
-// TODO fill real code hash
-const DEPOSITION_CODE_HASH: [u8; 32] = [0u8; 32];
-const SUDT_CODE_HASH: [u8; 32] = [0u8; 32];
-const ROLLUP_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
-
-const CKB_TOKEN_ID: [u8; 32] = [0u8; 32];
 
 struct DepositionRequest {
     pubkey_hash: [u8; 20],
@@ -173,8 +169,10 @@ pub fn handle(context: &mut Context, _block: &L2Block) -> Result<(), Error> {
     // mint token
     for request in deposition_requests {
         if request.account_id == 0 {
-            let id = context.create_account(request.pubkey_hash)?;
+            let id = context.account_count;
+            context.create_account(id, ZERO, request.pubkey_hash)?;
             context.mint_sudt(&request.token_id, id, request.value)?;
+            context.account_count += 1;
         } else {
             context.mint_sudt(&request.token_id, request.account_id, request.value)?;
         }

@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "types",
+  "common",
   "generator",
   "aggregator",
 ]

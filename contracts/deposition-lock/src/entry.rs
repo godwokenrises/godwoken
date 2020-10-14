@@ -21,9 +21,11 @@ use ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::Unpack as CKBTypeUnpack},
     debug,
-    high_level::{load_cell_type_hash, load_script, load_witness_args, load_input_since, QueryIter},
     dynamic_loading::CKBDLContext,
-    since::{Since, LockValue},
+    high_level::{
+        load_cell_type_hash, load_input_since, load_script, load_witness_args, QueryIter,
+    },
+    since::{LockValue, Since},
 };
 
 use gw_types::{
@@ -65,7 +67,9 @@ pub fn main() -> Result<(), Error> {
     let witness_args = load_witness_args(0, Source::GroupInput)?;
     let lock_args: Bytes = witness_args
         .lock()
-        .to_opt().map(|lock| lock.unpack()).unwrap_or_else(|| Bytes::default());
+        .to_opt()
+        .map(|lock| lock.unpack())
+        .unwrap_or_else(|| Bytes::default());
     if lock_args.len() > 0 {
         // unlock by user
         // 1. check since is satisfied the timeout blocks
@@ -85,10 +89,11 @@ pub fn main() -> Result<(), Error> {
         let mut context = CKBDLContext::<[u8; 128 * 1024]>::new();
         let lib = LibSecp256k1::load(&mut context);
         let mut pubkey_hash = [0u8; 20];
-        lib.validate_blake2b_sighash_all(&mut pubkey_hash).map_err(|err_code| {
-            debug!("secp256k1 error {}", err_code);
-            Error::Secp256k1
-        })?;
+        lib.validate_blake2b_sighash_all(&mut pubkey_hash)
+            .map_err(|err_code| {
+                debug!("secp256k1 error {}", err_code);
+                Error::Secp256k1
+            })?;
         if &lock_args[..] != &pubkey_hash[..] {
             return Err(Error::WrongSignature);
         }
