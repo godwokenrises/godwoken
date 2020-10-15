@@ -1,6 +1,6 @@
-use crate::blake2b::new_blake2b;
 use crate::syscalls::hashmap_code_store::HashMapCodeStore;
 use crate::Generator;
+use gw_common::blake2b::new_blake2b;
 use gw_types::{bytes::Bytes, packed::BlockInfo, prelude::*};
 use lazy_static::lazy_static;
 use std::{collections::HashMap, fs, io::Read, path::PathBuf};

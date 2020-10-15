@@ -1,36 +1,11 @@
-use crate::blake2b::{new_blake2b, Blake2b};
 use sparse_merkle_tree::{
     error::Error as SMTError,
-    traits::Hasher,
+    traits::Store,
     tree::{BranchNode, LeafNode},
-    SparseMerkleTree,
+    H256,
 };
 use std::collections::{HashMap, HashSet};
-// re-exports
-pub use sparse_merkle_tree::{
-    default_store::DefaultStore, error::Result as SMTResult, traits::Store, H256,
-};
 
-pub type SMT<S> = SparseMerkleTree<CkbBlake2bHasher, H256, S>;
-
-pub struct CkbBlake2bHasher(Blake2b);
-
-impl Default for CkbBlake2bHasher {
-    fn default() -> Self {
-        CkbBlake2bHasher(new_blake2b())
-    }
-}
-
-impl Hasher for CkbBlake2bHasher {
-    fn write_h256(&mut self, h: &H256) {
-        self.0.update(h.as_slice());
-    }
-    fn finish(self) -> H256 {
-        let mut hash = [0u8; 32];
-        self.0.finalize(&mut hash);
-        hash.into()
-    }
-}
 pub(crate) struct WrappedStore<'a, S: Store<H256>> {
     store: &'a S,
     branches_map: HashMap<H256, BranchNode>,

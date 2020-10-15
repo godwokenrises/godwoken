@@ -82,9 +82,9 @@ checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 
 [[package]]
 name = "blake2b-ref"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9f6b7b71e3097ed6ee470bab30e1025dd1327eee94ab1e3040b5b5c3f992117"
+checksum = "3c56ea40392c4cf5b8ea0e4f7aa080c3676f60df8dd12350c94750d33aa5fa74"
 
 [[package]]
 name = "blake2b-rs"
@@ -534,6 +534,7 @@ dependencies = [
  "anyhow",
  "blake2b-rs 0.2.0",
  "ckb-vm",
+ "gw-common",
  "gw-types",
  "lazy_static",
  "sparse-merkle-tree",

@@ -1,7 +1,9 @@
 use super::{new_block_info, new_generator, SUDT_PROGRAM_CODE_HASH};
-use crate::blake2b::new_blake2b;
-use crate::smt::{DefaultStore, H256, SMT};
-use crate::{Error, State};
+use crate::state_ext::StateExt;
+use crate::Error;
+use gw_common::blake2b::new_blake2b;
+use gw_common::smt::{default_store::DefaultStore, H256, SMT};
+use gw_common::state::State;
 use gw_types::{
     core::CallType,
     packed::{CallContext, SUDTArgs, SUDTQuery, SUDTTransfer},
@@ -35,7 +37,7 @@ fn run_contract(
         .build();
     let generator = new_generator();
     let run_result = generator.execute(&tree, &block_info, &call_context)?;
-    tree.apply(&run_result).expect("update state");
+    tree.apply_run_result(&run_result).expect("update state");
     Ok(run_result.return_data)
 }
 
@@ -68,7 +70,7 @@ fn test_sudt() {
         let run_result = generator
             .execute(&tree, &block_info, &call_context)
             .expect("construct");
-        tree.apply(&run_result).expect("update state");
+        tree.apply_run_result(&run_result).expect("update state");
     }
 
     // init balance for a
@@ -194,7 +196,7 @@ fn test_sudt_insufficient_balance() {
         let run_result = generator
             .execute(&tree, &block_info, &call_context)
             .expect("construct");
-        tree.apply(&run_result).expect("update state");
+        tree.apply_run_result(&run_result).expect("update state");
     }
 
     // init balance for a

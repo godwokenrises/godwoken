@@ -1,6 +1,9 @@
 use super::{new_block_info, new_generator, PROXY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH};
-use crate::smt::{DefaultStore, H256, SMT};
-use crate::{Error, Generator, State};
+use crate::{state_ext::StateExt, Error};
+use gw_common::{
+    smt::{default_store::DefaultStore, H256, SMT},
+    state::State,
+};
 use gw_types::{bytes::Bytes, core::CallType, packed::CallContext, prelude::*};
 
 #[test]
@@ -33,7 +36,7 @@ fn test_example_sum() {
         };
         assert_eq!(return_value, init_value);
 
-        tree.apply(&run_result).expect("update state");
+        tree.apply_run_result(&run_result).expect("update state");
         println!("result {:?}", run_result);
     }
 
@@ -59,7 +62,7 @@ fn test_example_sum() {
             };
             sum_value += add_value;
             assert_eq!(return_value, sum_value);
-            tree.apply(&run_result).expect("update state");
+            tree.apply_run_result(&run_result).expect("update state");
             println!("result {:?}", run_result);
         }
     }
@@ -102,7 +105,7 @@ fn test_example_proxy_sum() {
         };
         assert_eq!(return_value, init_value);
 
-        tree.apply(&run_result).expect("update state");
+        tree.apply_run_result(&run_result).expect("update state");
         println!("result {:?}", run_result);
 
         // run proxy contract constructor
@@ -118,7 +121,7 @@ fn test_example_proxy_sum() {
             .expect("construct");
         assert!(run_result.return_data.is_empty());
 
-        tree.apply(&run_result).expect("update state");
+        tree.apply_run_result(&run_result).expect("update state");
         println!("result {:?}", run_result);
     }
 
@@ -146,7 +149,7 @@ fn test_example_proxy_sum() {
             };
             sum_value += add_value;
             assert_eq!(return_value, sum_value);
-            tree.apply(&run_result).expect("update state");
+            tree.apply_run_result(&run_result).expect("update state");
             println!("result {:?}", run_result);
         }
 

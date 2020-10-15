@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 gw-types = { path = "../types" }
+gw-common = { path = "../common" }
 anyhow = "1.0"
 sparse-merkle-tree = "0.3"
 blake2b-rs = "0.2"

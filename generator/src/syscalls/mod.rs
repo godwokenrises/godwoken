@@ -1,13 +1,12 @@
 pub mod hashmap_code_store;
 
 use crate::bytes::Bytes;
-use crate::smt::SMT;
-use crate::state::State;
 use ckb_vm::{
     memory::{Memory, FLAG_EXECUTABLE, FLAG_FREEZED},
     registers::{A0, A1, A2, A3, A4, A7},
     Error as VMError, Register, SupportMachine, Syscalls,
 };
+use gw_common::{smt::SMT, state::State};
 use gw_types::{
     packed::{BlockInfo, CallContext},
     prelude::*,

@@ -42,6 +42,7 @@ fn generate_sudt_key(token_id: &[u8; 32], id: u32) -> [u8; 32] {
     buf
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Error {
     SMT(SMTError),
     AmountOverflow,

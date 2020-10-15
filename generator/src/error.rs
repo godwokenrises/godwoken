@@ -1,4 +1,5 @@
 use ckb_vm::Error as VMError;
+use gw_common::state::Error as StateError;
 use sparse_merkle_tree::error::Error as SMTError;
 use thiserror::Error;
 
@@ -10,6 +11,8 @@ pub enum Error {
     VM(VMError),
     #[error("SMT error {0}")]
     SMT(SMTError),
+    #[error("State error {0:?}")]
+    State(StateError),
     #[error("invalid nonce expected {expected}, actual {actual}")]
     Nonce { expected: u32, actual: u32 },
 }
@@ -23,5 +26,11 @@ impl From<VMError> for Error {
 impl From<SMTError> for Error {
     fn from(err: SMTError) -> Self {
         Error::SMT(err)
+    }
+}
+
+impl From<StateError> for Error {
+    fn from(err: StateError) -> Self {
+        Error::State(err)
     }
 }

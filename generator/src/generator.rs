@@ -1,8 +1,11 @@
 use crate::bytes::Bytes;
 use crate::error::Error;
-use crate::smt::{Store, H256, SMT};
+use crate::state_ext::StateExt;
 use crate::syscalls::{GetContractCode, L2Syscalls, RunResult};
-use crate::State;
+use gw_common::{
+    smt::{Store, H256, SMT},
+    state::State,
+};
 use gw_types::{
     core::CallType,
     packed::{BlockInfo, CallContext, L2Block, RawL2Block, RawL2Transaction},
@@ -20,6 +23,18 @@ lazy_static! {
     static ref GENERATOR: Bytes = include_bytes!("../../c/build/generator").to_vec().into();
 }
 
+pub struct DepositionRequest {
+    pub pubkey_hash: [u8; 20],
+    pub account_id: u32,
+    pub token_id: [u8; 32],
+    pub value: u128,
+}
+
+pub struct StateTransitionArgs {
+    pub l2block: L2Block,
+    pub deposition_requests: Vec<DepositionRequest>,
+}
+
 pub struct Generator<CS> {
     generator: Bytes,
     validator: Bytes,
@@ -35,37 +50,45 @@ impl<CS: GetContractCode> Generator<CS> {
         }
     }
 
-    /// Apply l2block state transition
+    /// Apply l2 state transition
     ///
     /// Notice:
     /// This function do not verify the block and transactions signature.
     /// The caller is supposed to do the verification.
-    pub fn apply_block_state<S: Store<H256>>(
+    pub fn apply_state_transition<S: Store<H256>>(
         &self,
         tree: &mut SMT<S>,
-        block: &L2Block,
+        args: StateTransitionArgs,
     ) -> Result<(), Error> {
-        let raw_block = block.raw();
-        if raw_block.submit_transactions().to_opt().is_none() {
+        let raw_block = args.l2block.raw();
+
+        // skip invalid blocks
+        if raw_block.valid() == 0u8.into() {
             return Ok(());
         }
-        let block_info = get_block_info(&raw_block);
-        for tx in block.transactions() {
-            let raw_tx = tx.raw();
-            // check nonce
-            let expected_nonce = tree.get_nonce(raw_tx.from_id().unpack())? + 1;
-            let actual_nonce: u32 = raw_tx.nonce().unpack();
-            if actual_nonce != expected_nonce {
-                return Err(Error::Nonce {
-                    expected: expected_nonce,
-                    actual: actual_nonce,
-                });
+        // handle deposition
+
+        // handle transactions
+        if raw_block.submit_transactions().to_opt().is_some() {
+            let block_info = get_block_info(&raw_block);
+            for tx in args.l2block.transactions() {
+                let raw_tx = tx.raw();
+                // check nonce
+                let expected_nonce = tree.get_nonce(raw_tx.from_id().unpack())? + 1;
+                let actual_nonce: u32 = raw_tx.nonce().unpack();
+                if actual_nonce != expected_nonce {
+                    return Err(Error::Nonce {
+                        expected: expected_nonce,
+                        actual: actual_nonce,
+                    });
+                }
+                // build call context
+                let call_context = get_call_context(&raw_tx);
+                let run_result = self.execute(tree, &block_info, &call_context)?;
+                tree.apply_run_result(&run_result)?;
             }
-            // build call context
-            let call_context = get_call_context(&raw_tx);
-            let run_result = self.execute(tree, &block_info, &call_context)?;
-            tree.apply(&run_result)?;
         }
+
         Ok(())
     }
 
