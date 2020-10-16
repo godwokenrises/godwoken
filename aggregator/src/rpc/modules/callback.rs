@@ -1,6 +1,6 @@
-use gw_generator::{
+use gw_common::{
     smt::{Store, H256, SMT},
-    Error, State,
+    state::State,
 };
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;

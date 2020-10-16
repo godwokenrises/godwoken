@@ -17,10 +17,8 @@ use ckb_types::prelude::*;
 use collector::lumos::Lumos;
 use collector::Collector;
 use config::Config;
-use gw_generator::{
-    smt::{DefaultStore, H256, SMT},
-    syscalls::hashmap_code_store::HashMapCodeStore,
-};
+use gw_generator::dummy_state::DummyState;
+use gw_generator::syscalls::hashmap_code_store::HashMapCodeStore;
 
 fn build_config() -> Config {
     unimplemented!()
@@ -32,7 +30,7 @@ fn build_collector(_config: &Config) -> impl Collector {
 
 fn main() {
     let config = build_config();
-    let state = SMT::new(H256::zero(), DefaultStore::default());
+    let state = DummyState::default();
     let tip = config.rollup.l2_genesis.clone();
     let collector = build_collector(&config);
     let genesis = collector.get_header_by_number(0).unwrap().unwrap();

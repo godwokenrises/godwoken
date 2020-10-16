@@ -11,6 +11,9 @@ impl Collector for Lumos {
     fn query_transactions(&self, param: QueryParam) -> Result<Vec<TransactionInfo>, Error> {
         unimplemented!()
     }
+    fn get_transaction(&self, tx_hash: &[u8; 32]) -> Result<TransactionInfo, Error> {
+        unimplemented!()
+    }
     fn get_header(&self, block_hash: &[u8; 32]) -> Result<Option<Header>, Error> {
         unimplemented!()
     }
