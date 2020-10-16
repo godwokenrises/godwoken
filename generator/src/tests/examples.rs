@@ -1,5 +1,5 @@
 use super::{new_block_info, new_generator, PROXY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH};
-use crate::{state_ext::StateExt, Error};
+use crate::{dummy_state::DummyState, state_ext::StateExt, Error};
 use gw_common::{
     smt::{default_store::DefaultStore, H256, SMT},
     state::State,
@@ -8,12 +8,12 @@ use gw_types::{bytes::Bytes, core::CallType, packed::CallContext, prelude::*};
 
 #[test]
 fn test_example_sum() {
-    let mut tree: SMT<DefaultStore<H256>> = SMT::default();
+    let mut tree = DummyState::default();
     let from_id: u32 = 2;
-    let contract_id: u32 = 3;
     let init_value: u64 = 42;
 
-    tree.create_account(contract_id, SUM_PROGRAM_CODE_HASH.clone(), [0u8; 20])
+    let contract_id = tree
+        .create_account(SUM_PROGRAM_CODE_HASH.clone(), [0u8; 20])
         .expect("create account");
 
     // run constructor
@@ -70,20 +70,16 @@ fn test_example_sum() {
 
 #[test]
 fn test_example_proxy_sum() {
-    let mut tree: SMT<DefaultStore<H256>> = SMT::default();
+    let mut tree = DummyState::default();
     let from_id: u32 = 2;
-    let contract_id: u32 = 3;
     let init_value: u64 = 42;
-    let proxy_contract_id: u32 = 4;
 
-    tree.create_account(contract_id, SUM_PROGRAM_CODE_HASH.clone(), [0u8; 20])
+    let contract_id = tree
+        .create_account(SUM_PROGRAM_CODE_HASH.clone(), [0u8; 20])
         .expect("create account");
-    tree.create_account(
-        proxy_contract_id,
-        PROXY_PROGRAM_CODE_HASH.clone(),
-        [0u8; 20],
-    )
-    .expect("create account");
+    let proxy_contract_id = tree
+        .create_account(PROXY_PROGRAM_CODE_HASH.clone(), [0u8; 20])
+        .expect("create account");
 
     {
         // run sum contract constructor
@@ -176,15 +172,11 @@ fn test_example_proxy_sum() {
 
 #[test]
 fn test_example_proxy_recursive() {
-    let mut tree: SMT<DefaultStore<H256>> = SMT::default();
+    let mut tree = DummyState::default();
     let from_id: u32 = 2;
-    let proxy_contract_id: u32 = 4;
-    tree.create_account(
-        proxy_contract_id,
-        PROXY_PROGRAM_CODE_HASH.clone(),
-        [0u8; 20],
-    )
-    .expect("create account");
+    let proxy_contract_id = tree
+        .create_account(PROXY_PROGRAM_CODE_HASH.clone(), [0u8; 20])
+        .expect("create account");
 
     // invoke proxy contract
     {

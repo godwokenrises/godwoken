@@ -31,6 +31,15 @@ impl State for Context {
         Ok(())
     }
 
+    fn get_account_count(&self) -> Result<u32, StateError> {
+        Ok(self.account_count)
+    }
+
+    fn set_account_count(&mut self, count: u32) -> Result<(), StateError> {
+        self.account_count = count;
+        Ok(())
+    }
+
     fn calculate_root(&self) -> Result<[u8; 32], StateError> {
         let root = self
             .kv_merkle_proof

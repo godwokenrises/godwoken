@@ -60,6 +60,8 @@ pub trait State {
     fn get_raw(&self, key: &[u8; 32]) -> Result<[u8; 32], Error>;
     fn update_raw(&mut self, key: [u8; 32], value: [u8; 32]) -> Result<(), Error>;
     fn calculate_root(&self) -> Result<[u8; 32], Error>;
+    fn get_account_count(&self) -> Result<u32, Error>;
+    fn set_account_count(&mut self, count: u32) -> Result<(), Error>;
 
     // implementations
     fn get_value(&self, id: u32, key: &[u8]) -> Result<[u8; 32], Error> {
@@ -72,12 +74,8 @@ pub trait State {
         Ok(())
     }
     /// Create a new account
-    fn create_account(
-        &mut self,
-        id: u32,
-        code_hash: [u8; 32],
-        pubkey_hash: [u8; 20],
-    ) -> Result<(), Error> {
+    fn create_account(&mut self, code_hash: [u8; 32], pubkey_hash: [u8; 20]) -> Result<u32, Error> {
+        let id = self.get_account_count()?;
         self.update_raw(build_account_key(id, GW_ACCOUNT_NONCE).into(), ZERO)?;
         self.update_raw(
             build_account_key(id, GW_ACCOUNT_CODE_HASH).into(),
@@ -89,7 +87,8 @@ pub trait State {
             build_account_key(id, GW_ACCOUNT_PUBKEY_HASH).into(),
             pubkey_hash_value.into(),
         )?;
-        Ok(())
+        self.set_account_count(id + 1)?;
+        Ok(id)
     }
     fn get_code_hash(&self, id: u32) -> Result<[u8; 32], Error> {
         let value = self.get_raw(&build_account_key(id, GW_ACCOUNT_CODE_HASH).into())?;

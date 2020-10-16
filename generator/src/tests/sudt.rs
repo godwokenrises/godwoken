@@ -1,4 +1,5 @@
 use super::{new_block_info, new_generator, SUDT_PROGRAM_CODE_HASH};
+use crate::dummy_state::DummyState;
 use crate::state_ext::StateExt;
 use crate::Error;
 use gw_common::blake2b::new_blake2b;
@@ -22,8 +23,8 @@ fn build_sudt_key(token_id: &[u8], account_id: u32) -> [u8; 32] {
     buf
 }
 
-fn run_contract(
-    tree: &mut SMT<DefaultStore<H256>>,
+fn run_contract<S: State>(
+    tree: &mut S,
     from_id: u32,
     to_id: u32,
     args: SUDTArgs,
@@ -36,14 +37,14 @@ fn run_contract(
         .args(args.as_bytes().pack())
         .build();
     let generator = new_generator();
-    let run_result = generator.execute(&tree, &block_info, &call_context)?;
+    let run_result = generator.execute(tree, &block_info, &call_context)?;
     tree.apply_run_result(&run_result).expect("update state");
     Ok(run_result.return_data)
 }
 
 #[test]
 fn test_sudt() {
-    let mut tree: SMT<DefaultStore<H256>> = SMT::default();
+    let mut tree = DummyState::default();
     let contract_id: u32 = 1;
     let a_id: u32 = 2;
     let b_id: u32 = 3;
@@ -51,11 +52,14 @@ fn test_sudt() {
     let token_id = [0u8; 32];
 
     // init accounts
-    tree.create_account(contract_id, SUDT_PROGRAM_CODE_HASH.clone(), [0u8; 20])
+    let contract_id = tree
+        .create_account(SUDT_PROGRAM_CODE_HASH.clone(), [0u8; 20])
         .expect("create account");
-    tree.create_account(a_id, [0u8; 32], [0u8; 20])
+    let a_id = tree
+        .create_account([0u8; 32], [0u8; 20])
         .expect("create account");
-    tree.create_account(b_id, [0u8; 32], [0u8; 20])
+    let b_id = tree
+        .create_account([0u8; 32], [0u8; 20])
         .expect("create account");
 
     // run constructor (do nothing)
@@ -169,19 +173,19 @@ fn test_sudt() {
 
 #[test]
 fn test_sudt_insufficient_balance() {
-    let mut tree: SMT<DefaultStore<H256>> = SMT::default();
-    let contract_id: u32 = 1;
-    let a_id: u32 = 2;
-    let b_id: u32 = 3;
+    let mut tree = DummyState::default();
     let init_a_balance: u128 = 10000;
     let token_id = [0u8; 32];
 
     // init accounts
-    tree.create_account(contract_id, SUDT_PROGRAM_CODE_HASH.clone(), [0u8; 20])
+    let contract_id = tree
+        .create_account(SUDT_PROGRAM_CODE_HASH.clone(), [0u8; 20])
         .expect("create account");
-    tree.create_account(a_id, [0u8; 32], [0u8; 20])
+    let a_id = tree
+        .create_account([0u8; 32], [0u8; 20])
         .expect("create account");
-    tree.create_account(b_id, [0u8; 32], [0u8; 20])
+    let b_id = tree
+        .create_account([0u8; 32], [0u8; 20])
         .expect("create account");
 
     // run constructor (do nothing)

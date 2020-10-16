@@ -6,12 +6,11 @@ use ckb_vm::{
     registers::{A0, A1, A2, A3, A4, A7},
     Error as VMError, Register, SupportMachine, Syscalls,
 };
-use gw_common::{smt::SMT, state::State};
+use gw_common::{state::State, H256};
 use gw_types::{
     packed::{BlockInfo, CallContext},
     prelude::*,
 };
-use sparse_merkle_tree::{traits::Store, H256};
 use std::cmp;
 use std::collections::HashMap;
 
@@ -46,7 +45,7 @@ pub trait GetContractCode {
 }
 
 pub(crate) struct L2Syscalls<'a, S> {
-    pub(crate) tree: &'a SMT<S>,
+    pub(crate) state: &'a S,
     pub(crate) block_info: &'a BlockInfo,
     pub(crate) call_context: &'a CallContext,
     pub(crate) code_store: &'a dyn GetContractCode,
@@ -98,7 +97,7 @@ pub fn store_data<Mac: SupportMachine>(machine: &mut Mac, data: &[u8]) -> Result
     Ok(real_size)
 }
 
-impl<'a, S: Store<H256>, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
+impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
     fn initialize(&mut self, _machine: &mut Mac) -> Result<(), VMError> {
         Ok(())
     }
@@ -122,14 +121,13 @@ impl<'a, S: Store<H256>, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S
                 let value = match self.result.write_values.get(&key) {
                     Some(value) => *value,
                     None => {
-                        let tree_value = self.tree.get(&key).map_err(|_| VMError::Unexpected)?;
+                        let tree_value =
+                            self.state.get_raw(&key).map_err(|_| VMError::Unexpected)?;
                         self.result.read_values.insert(key, tree_value);
                         tree_value
                     }
                 };
-                machine
-                    .memory_mut()
-                    .store_bytes(value_addr, value.as_slice())?;
+                machine.memory_mut().store_bytes(value_addr, &value)?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -173,7 +171,7 @@ impl<'a, S: Store<H256>, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S
     }
 }
 
-impl<'a, S: Store<H256>> L2Syscalls<'a, S> {
+impl<'a, S: State> L2Syscalls<'a, S> {
     fn load_program_as_code<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
         let addr = machine.registers()[A0].to_u64();
         let memory_size = machine.registers()[A1].to_u64();
@@ -181,7 +179,7 @@ impl<'a, S: Store<H256>> L2Syscalls<'a, S> {
         let content_size = machine.registers()[A3].to_u64();
         let id: u32 = machine.registers()[A4].to_u64() as u32;
 
-        let code_hash = self.tree.get_code_hash(id).map_err(|err| {
+        let code_hash = self.state.get_code_hash(id).map_err(|err| {
             eprintln!("syscall error: get code hash : {:?}", err);
             VMError::Unexpected
         })?;
@@ -219,7 +217,7 @@ impl<'a, S: Store<H256>> L2Syscalls<'a, S> {
     fn load_program_as_data<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
         let id: u32 = machine.registers()[A3].to_u64() as u32;
 
-        let code_hash = self.tree.get_code_hash(id).map_err(|err| {
+        let code_hash = self.state.get_code_hash(id).map_err(|err| {
             eprintln!("syscall error: get code hash : {:?}", err);
             VMError::Unexpected
         })?;

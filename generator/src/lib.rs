@@ -1,6 +1,7 @@
 //! Generator handle layer2 transactions and blocks,
 //! and generate new status that can be committed to layer1
 
+pub mod dummy_state;
 mod error;
 pub mod generator;
 pub mod state_ext;

@@ -169,10 +169,8 @@ pub fn handle(context: &mut Context, _block: &L2Block) -> Result<(), Error> {
     // mint token
     for request in deposition_requests {
         if request.account_id == 0 {
-            let id = context.account_count;
-            context.create_account(id, ZERO, request.pubkey_hash)?;
+            let id = context.create_account(ZERO, request.pubkey_hash)?;
             context.mint_sudt(&request.token_id, id, request.value)?;
-            context.account_count += 1;
         } else {
             context.mint_sudt(&request.token_id, request.account_id, request.value)?;
         }

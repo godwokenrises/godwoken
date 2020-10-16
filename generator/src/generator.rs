@@ -4,7 +4,7 @@ use crate::state_ext::StateExt;
 use crate::syscalls::{GetContractCode, L2Syscalls, RunResult};
 use gw_common::{
     smt::{Store, H256, SMT},
-    state::State,
+    state::{State, ZERO},
 };
 use gw_types::{
     core::CallType,
@@ -55,9 +55,9 @@ impl<CS: GetContractCode> Generator<CS> {
     /// Notice:
     /// This function do not verify the block and transactions signature.
     /// The caller is supposed to do the verification.
-    pub fn apply_state_transition<S: Store<H256>>(
+    pub fn apply_state_transition<S: State>(
         &self,
-        tree: &mut SMT<S>,
+        state: &mut S,
         args: StateTransitionArgs,
     ) -> Result<(), Error> {
         let raw_block = args.l2block.raw();
@@ -66,7 +66,16 @@ impl<CS: GetContractCode> Generator<CS> {
         if raw_block.valid() == 0u8.into() {
             return Ok(());
         }
+
         // handle deposition
+        for request in args.deposition_requests {
+            if request.account_id == 0 {
+                let id = state.create_account(ZERO, request.pubkey_hash)?;
+                state.mint_sudt(&request.token_id, id, request.value)?;
+            } else {
+                state.mint_sudt(&request.token_id, request.account_id, request.value)?;
+            }
+        }
 
         // handle transactions
         if raw_block.submit_transactions().to_opt().is_some() {
@@ -74,7 +83,7 @@ impl<CS: GetContractCode> Generator<CS> {
             for tx in args.l2block.transactions() {
                 let raw_tx = tx.raw();
                 // check nonce
-                let expected_nonce = tree.get_nonce(raw_tx.from_id().unpack())? + 1;
+                let expected_nonce = state.get_nonce(raw_tx.from_id().unpack())? + 1;
                 let actual_nonce: u32 = raw_tx.nonce().unpack();
                 if actual_nonce != expected_nonce {
                     return Err(Error::Nonce {
@@ -84,8 +93,8 @@ impl<CS: GetContractCode> Generator<CS> {
                 }
                 // build call context
                 let call_context = get_call_context(&raw_tx);
-                let run_result = self.execute(tree, &block_info, &call_context)?;
-                tree.apply_run_result(&run_result)?;
+                let run_result = self.execute(state, &block_info, &call_context)?;
+                state.apply_run_result(&run_result)?;
             }
         }
 
@@ -93,9 +102,9 @@ impl<CS: GetContractCode> Generator<CS> {
     }
 
     /// execute a layer2 tx
-    pub fn execute<S: Store<H256>>(
+    pub fn execute<S: State>(
         &self,
-        tree: &SMT<S>,
+        state: &S,
         block_info: &BlockInfo,
         call_context: &CallContext,
     ) -> Result<RunResult, Error> {
@@ -104,7 +113,7 @@ impl<CS: GetContractCode> Generator<CS> {
             let core_machine = Box::<AsmCoreMachine>::default();
             let machine_builder =
                 DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls {
-                    tree,
+                    state,
                     block_info: block_info,
                     call_context: call_context,
                     result: &mut run_result,
