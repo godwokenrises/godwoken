@@ -5,6 +5,7 @@ extern crate alloc;
 
 mod conversion;
 pub mod core;
+mod extension;
 mod generated;
 pub mod prelude;
 

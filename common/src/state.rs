@@ -15,7 +15,7 @@ pub const ZERO: [u8; 32] = [0u8; 32];
  *
  * We use raw key in the underlying KV store
  */
-fn build_raw_key(id: u32, key: &[u8]) -> [u8; 32] {
+pub fn build_raw_key(id: u32, key: &[u8]) -> [u8; 32] {
     let mut raw_key = ZERO;
     let mut hasher = new_blake2b();
     hasher.update(&id.to_le_bytes());
@@ -25,20 +25,26 @@ fn build_raw_key(id: u32, key: &[u8]) -> [u8; 32] {
     raw_key
 }
 
-fn build_account_key(id: u32, type_: u8) -> [u8; 32] {
+pub fn build_account_key(id: u32, type_: u8) -> [u8; 32] {
     let mut key = ZERO;
     key[..size_of::<u32>()].copy_from_slice(&id.to_le_bytes());
     key[size_of::<u32>()] = type_;
     key
 }
 
-fn generate_sudt_key(token_id: &[u8; 32], id: u32) -> [u8; 32] {
+pub fn generate_sudt_key(token_id: &[u8; 32], id: u32) -> [u8; 32] {
     // build application key
     let mut buf = ZERO;
     let mut hasher = new_blake2b();
     hasher.update(token_id);
     hasher.update(&id.to_le_bytes());
     hasher.finalize(&mut buf);
+    buf
+}
+
+pub fn serialize_nonce(nonce: u32) -> [u8; 32] {
+    let mut buf = [0u8; 32];
+    buf[..4].copy_from_slice(&nonce.to_le_bytes());
     buf
 }
 
