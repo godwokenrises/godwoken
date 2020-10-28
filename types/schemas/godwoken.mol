@@ -78,7 +78,7 @@ table L2Block {
 
 // --- define actions ---
 table SubmitTransactions {
-    tx_root: Byte32,
+    tx_witness_root: Byte32,
     tx_count: Uint32,
     // hash(account_root | account_count) before each transaction
     compacted_post_root_list: Byte32Vec,

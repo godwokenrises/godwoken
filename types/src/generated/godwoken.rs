@@ -4811,7 +4811,7 @@ impl ::core::fmt::Debug for SubmitTransactions {
 impl ::core::fmt::Display for SubmitTransactions {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "tx_root", self.tx_root())?;
+        write!(f, "{}: {}", "tx_witness_root", self.tx_witness_root())?;
         write!(f, ", {}: {}", "tx_count", self.tx_count())?;
         write!(
             f,
@@ -4853,7 +4853,7 @@ impl SubmitTransactions {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn tx_root(&self) -> Byte32 {
+    pub fn tx_witness_root(&self) -> Byte32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
@@ -4902,7 +4902,7 @@ impl molecule::prelude::Entity for SubmitTransactions {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .tx_root(self.tx_root())
+            .tx_witness_root(self.tx_witness_root())
             .tx_count(self.tx_count())
             .compacted_post_root_list(self.compacted_post_root_list())
     }
@@ -4926,7 +4926,7 @@ impl<'r> ::core::fmt::Debug for SubmitTransactionsReader<'r> {
 impl<'r> ::core::fmt::Display for SubmitTransactionsReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "tx_root", self.tx_root())?;
+        write!(f, "{}: {}", "tx_witness_root", self.tx_witness_root())?;
         write!(f, ", {}: {}", "tx_count", self.tx_count())?;
         write!(
             f,
@@ -4959,7 +4959,7 @@ impl<'r> SubmitTransactionsReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn tx_root(&self) -> Byte32Reader<'r> {
+    pub fn tx_witness_root(&self) -> Byte32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
@@ -5041,14 +5041,14 @@ impl<'r> molecule::prelude::Reader<'r> for SubmitTransactionsReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct SubmitTransactionsBuilder {
-    pub(crate) tx_root: Byte32,
+    pub(crate) tx_witness_root: Byte32,
     pub(crate) tx_count: Uint32,
     pub(crate) compacted_post_root_list: Byte32Vec,
 }
 impl SubmitTransactionsBuilder {
     pub const FIELD_COUNT: usize = 3;
-    pub fn tx_root(mut self, v: Byte32) -> Self {
-        self.tx_root = v;
+    pub fn tx_witness_root(mut self, v: Byte32) -> Self {
+        self.tx_witness_root = v;
         self
     }
     pub fn tx_count(mut self, v: Uint32) -> Self {
@@ -5065,7 +5065,7 @@ impl molecule::prelude::Builder for SubmitTransactionsBuilder {
     const NAME: &'static str = "SubmitTransactionsBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.tx_root.as_slice().len()
+            + self.tx_witness_root.as_slice().len()
             + self.tx_count.as_slice().len()
             + self.compacted_post_root_list.as_slice().len()
     }
@@ -5073,7 +5073,7 @@ impl molecule::prelude::Builder for SubmitTransactionsBuilder {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
-        total_size += self.tx_root.as_slice().len();
+        total_size += self.tx_witness_root.as_slice().len();
         offsets.push(total_size);
         total_size += self.tx_count.as_slice().len();
         offsets.push(total_size);
@@ -5082,7 +5082,7 @@ impl molecule::prelude::Builder for SubmitTransactionsBuilder {
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.tx_root.as_slice())?;
+        writer.write_all(self.tx_witness_root.as_slice())?;
         writer.write_all(self.tx_count.as_slice())?;
         writer.write_all(self.compacted_post_root_list.as_slice())?;
         Ok(())

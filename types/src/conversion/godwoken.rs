@@ -26,6 +26,7 @@ impl<'r> Unpack<[u8; 65]> for packed::SignatureReader<'r> {
         unsafe { *ptr }
     }
 }
-impl_conversion_for_entity_unpack!([u8; 65], Signature);
 
+impl_conversion_for_entity_unpack!([u8; 65], Signature);
 impl_conversion_for_packed_iterator_pack!(KVPair, KVPairVec);
+impl_conversion_for_packed_optional_pack!(SubmitTransactions, SubmitTransactionsOpt);

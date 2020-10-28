@@ -68,14 +68,7 @@ impl<CS: GetContractCode> Generator<CS> {
         }
 
         // handle deposition
-        for request in args.deposition_requests {
-            if request.account_id == 0 {
-                let id = state.create_account(ZERO, request.pubkey_hash)?;
-                state.mint_sudt(&request.token_id, id, request.value)?;
-            } else {
-                state.mint_sudt(&request.token_id, request.account_id, request.value)?;
-            }
-        }
+        state.apply_deposition_requests(&args.deposition_requests)?;
 
         // handle transactions
         if raw_block.submit_transactions().to_opt().is_some() {

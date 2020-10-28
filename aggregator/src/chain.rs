@@ -7,26 +7,21 @@ use std::time::SystemTime;
 use anyhow::{anyhow, Result};
 use ckb_types::{
     bytes::Bytes,
-    core::ScriptHashType,
-    packed::{CellOutput, RawTransaction, Script, Transaction, WitnessArgs, WitnessArgsReader},
-    prelude::*,
+    packed::{RawTransaction, Script, Transaction, WitnessArgs, WitnessArgsReader},
+    prelude::Unpack,
 };
-use gw_common::{
-    smt::{Store, H256, SMT},
-    state::State,
-    CKB_TOKEN_ID, DEPOSITION_CODE_HASH, SUDT_CODE_HASH,
-};
+use gw_common::{merkle_utils::calculate_merkle_root, state::State};
 use gw_generator::{
     generator::{DepositionRequest, StateTransitionArgs},
     syscalls::GetContractCode,
     Generator,
 };
 use gw_types::{
-    packed::{
-        DepositionLockArgs, DepositionLockArgsReader, L2Block, L2BlockReader, RawL2Block, Uint32,
-        Uint64,
+    packed::{AccountMerkleState, L2Block, L2BlockReader, RawL2Block, SubmitTransactions},
+    prelude::{
+        Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Reader as GWReader,
+        Unpack as GWUnpack,
     },
-    prelude::{Pack as GWPack, Unpack as GWUnpack},
 };
 
 pub struct Signer {
@@ -137,21 +132,47 @@ impl<S: State, C: Collector, CS: GetContractCode> Chain<S, C, CS> {
     ) -> Result<RawL2Block> {
         // take txs from tx pool
         // produce block
-        let pkg = self.tx_pool.package_txs()?;
+        let pkg = self.tx_pool.package_txs(&deposition_requests)?;
         let parent_number: u64 = self.tip.number().unpack();
         let number = parent_number + 1;
         let aggregator_id: u32 = signer.account_id;
         let timestamp: u64 = unixtime()?;
-        let submit_txs = unreachable!();
-        let post_account = unreachable!();
-        let prev_account = unreachable!();
+        let submit_txs = {
+            let tx_witness_root = calculate_merkle_root(
+                pkg.tx_recipts
+                    .iter()
+                    .map(|tx_recipt| &tx_recipt.tx_witness_hash)
+                    .cloned()
+                    .collect(),
+            )?;
+            let tx_count = pkg.tx_recipts.len() as u32;
+            let compacted_post_root_list: Vec<_> = pkg
+                .tx_recipts
+                .iter()
+                .map(|tx_recipt| &tx_recipt.compacted_post_account_root)
+                .cloned()
+                .collect();
+            SubmitTransactions::new_builder()
+                .tx_witness_root(tx_witness_root.pack())
+                .tx_count(tx_count.pack())
+                .compacted_post_root_list(compacted_post_root_list.pack())
+                .build()
+        };
+        let prev_account = AccountMerkleState::new_builder()
+            .merkle_root(pkg.prev_account_state.root.pack())
+            .count(pkg.prev_account_state.count.pack())
+            .build();
+        let post_account = AccountMerkleState::new_builder()
+            .merkle_root(pkg.post_account_state.root.pack())
+            .count(pkg.post_account_state.count.pack())
+            .build();
         let raw_block = RawL2Block::new_builder()
-            .number(GWPack::<Uint64>::pack(&number))
-            .aggregator_id(GWPack::<Uint32>::pack(&aggregator_id))
-            .timestamp(GWPack::<Uint64>::pack(&timestamp))
+            .number(number.pack())
+            .aggregator_id(aggregator_id.pack())
+            .timestamp(timestamp.pack())
             .post_account(post_account)
             .prev_account(prev_account)
-            .submit_transactions(submit_txs)
+            .submit_transactions(Some(submit_txs).pack())
             .valid(1.into())
             .build();
         Ok(raw_block)

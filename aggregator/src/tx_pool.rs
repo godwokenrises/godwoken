@@ -3,7 +3,7 @@ use anyhow::{anyhow, Result};
 use gw_common::{
     blake2b::new_blake2b, merkle_utils::calculate_compacted_account_root, state::State,
 };
-use gw_generator::{state_ext::StateExt, Generator, GetContractCode};
+use gw_generator::{generator::DepositionRequest, state_ext::StateExt, Generator, GetContractCode};
 use gw_types::{
     packed::{BlockInfo, L2Block, L2Transaction},
     prelude::*,
@@ -12,16 +12,18 @@ use gw_types::{
 const MAX_PACKAGED_TXS: usize = 6000;
 
 pub struct TxRecipt {
-    tx: L2Transaction,
+    pub tx: L2Transaction,
+    pub tx_witness_hash: [u8; 32],
     // hash(account_root|account_count)
-    compacted_post_account_root: [u8; 32],
+    pub compacted_post_account_root: [u8; 32],
 }
 
 pub struct TxPool<S, CS> {
     state: S,
     generator: Generator<CS>,
     queue: Vec<TxRecipt>,
-    tip_block_info: BlockInfo,
+    next_block_info: BlockInfo,
+    next_prev_account_state: MerkleState,
 }
 
 impl<S: State, CS: GetContractCode> TxPool<S, CS> {
@@ -33,20 +35,29 @@ impl<S: State, CS: GetContractCode> TxPool<S, CS> {
         let call_context = tx.raw().to_call_context();
         let run_result =
             self.generator
-                .execute(&self.state, &self.tip_block_info, &call_context)?;
-        let account_root = self
-            .state
-            .calculate_root()
-            .map_err(|err| anyhow!("calculate account root error: {:?}", err))?;
-        let account_count = self
-            .state
-            .get_account_count()
-            .map_err(|err| anyhow!("get account count error: {:?}", err))?;
-        let compacted_post_account_root =
-            calculate_compacted_account_root(&account_root, account_count);
+                .execute(&self.state, &self.next_block_info, &call_context)?;
         // 3. push tx to pool
+        let tx_witness_hash = {
+            let mut witness_hash = [0u8; 32];
+            let mut hasher = new_blake2b();
+            hasher.update(tx.as_slice());
+            hasher.finalize(&mut witness_hash);
+            witness_hash
+        };
+        let compacted_post_account_root = {
+            let account_root = self
+                .state
+                .calculate_root()
+                .map_err(|err| anyhow!("calculate account root error: {:?}", err))?;
+            let account_count = self
+                .state
+                .get_account_count()
+                .map_err(|err| anyhow!("get account count error: {:?}", err))?;
+            calculate_compacted_account_root(&account_root, account_count)
+        };
         self.queue.push(TxRecipt {
             tx,
+            tx_witness_hash,
             compacted_post_account_root,
         });
 
@@ -91,19 +102,72 @@ impl<S: State, CS: GetContractCode> TxPool<S, CS> {
 
     /// Package txpool transactions
     /// this method return a tx package, and remove these txs from the pool
-    pub fn package_txs(&mut self) -> Result<TxPackage> {
-        let txs = self.queue.drain(..MAX_PACKAGED_TXS).collect();
-        Ok(txs)
+    pub fn package_txs(&mut self, deposition_requests: &[DepositionRequest]) -> Result<TxPackage> {
+        let tx_recipts = self.queue.drain(..).collect();
+        // handle deposition requests and calculate post state
+        self.state
+            .apply_deposition_requests(&deposition_requests)
+            .map_err(|err| anyhow!("apply deposition requests: {:?}", err))?;
+        let post_account_state = self.get_account_state()?;
+        let pkg = TxPackage {
+            tx_recipts,
+            prev_account_state: self.next_prev_account_state.clone(),
+            post_account_state,
+        };
+        Ok(pkg)
     }
 
-    /// Update tip block
-    /// this method reset tip and tx_pool states
-    pub fn update_tip(&mut self, tip: &L2Block, state: S) -> Result<TxPackage> {
-        // TODO catch abandoned txs and recompute them.
-        unimplemented!()
+    fn get_account_state(&self) -> Result<MerkleState> {
+        let root = self
+            .state
+            .calculate_root()
+            .map_err(|err| anyhow!("calculate root: {:?}", err))?;
+        let count = self
+            .state
+            .get_account_count()
+            .map_err(|err| anyhow!("get account count: {:?}", err))?;
+        Ok(MerkleState { root, count })
     }
+
+    fn gen_next_block_info(&self, tip: &L2Block) -> Result<BlockInfo> {
+        unreachable!()
+    }
+
+    /// Update tip and state
+    /// this method reset tip and tx_pool states
+    pub fn update_tip(&mut self, tip: &L2Block, state: S) -> Result<()> {
+        // TODO catch abandoned txs and recompute them.
+        self.state = state;
+        self.update_tip_without_status(tip)?;
+        Ok(())
+    }
+
+    /// Update tip
+    /// this method reset tip and generate a new checkpoint for current state
+    ///
+    /// Notice this fucntion may cause inconsistency between tip and status
+    pub fn update_tip_without_status(&mut self, tip: &L2Block) -> Result<()> {
+        // TODO catch abandoned txs and recompute them.
+        self.queue.clear();
+        self.next_block_info = self.gen_next_block_info(tip)?;
+        self.next_prev_account_state = self.get_account_state()?;
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MerkleState {
+    pub root: [u8; 32],
+    pub count: u32,
 }
 
 /// TxPackage
 /// a layer2 block can be generated from a package
-pub type TxPackage = Vec<TxRecipt>;
+pub struct TxPackage {
+    /// tx recipts
+    pub tx_recipts: Vec<TxRecipt>,
+    /// state of last block
+    pub prev_account_state: MerkleState,
+    /// state after handling deposition requests
+    pub post_account_state: MerkleState,
+}
