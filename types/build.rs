@@ -3,7 +3,7 @@ mod build {
     use std::process::Command;
 
     const MOLECULE: &'static str = "moleculec";
-    const REQUIRED_MOLECULE_VERSION: &'static str = "0.6.0";
+    const REQUIRED_MOLECULE_VERSION: &'static str = "0.6.1";
     const SCHEMAS_DIR: &'static str = "schemas";
     const OUTPUT_DIR: &'static str = "src/generated";
 

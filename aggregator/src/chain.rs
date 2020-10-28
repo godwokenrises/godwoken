@@ -1,5 +1,9 @@
 use crate::collector::Collector;
+use crate::deposition::fetch_deposition_requests;
 use crate::jsonrpc_types::collector::QueryParam;
+use crate::tx_pool::TxPool;
+use std::time::SystemTime;
+
 use anyhow::{anyhow, Result};
 use ckb_types::{
     bytes::Bytes,
@@ -18,9 +22,16 @@ use gw_generator::{
     Generator,
 };
 use gw_types::{
-    packed::{DepositionLockArgs, DepositionLockArgsReader, L2Block, L2BlockReader, RawL2Block},
-    prelude::Unpack as GWUnpack,
+    packed::{
+        DepositionLockArgs, DepositionLockArgsReader, L2Block, L2BlockReader, RawL2Block, Uint32,
+        Uint64,
+    },
+    prelude::{Pack as GWPack, Unpack as GWUnpack},
 };
+
+pub struct Signer {
+    account_id: u32,
+}
 
 pub struct HeaderInfo {
     pub number: u64,
@@ -34,6 +45,8 @@ pub struct Chain<S, C, CS> {
     last_synced: HeaderInfo,
     tip: RawL2Block,
     generator: Generator<CS>,
+    tx_pool: TxPool<S, CS>,
+    signer: Option<Signer>,
 }
 
 impl<S: State, C: Collector, CS: GetContractCode> Chain<S, C, CS> {
@@ -44,6 +57,8 @@ impl<S: State, C: Collector, CS: GetContractCode> Chain<S, C, CS> {
         rollup_type_script: Script,
         collector: C,
         code_store: CS,
+        tx_pool: TxPool<S, CS>,
+        signer: Option<Signer>,
     ) -> Self {
         let generator = Generator::new(code_store);
         Chain {
@@ -53,6 +68,8 @@ impl<S: State, C: Collector, CS: GetContractCode> Chain<S, C, CS> {
             last_synced,
             tip,
             generator,
+            tx_pool,
+            signer,
         }
     }
 
@@ -104,8 +121,40 @@ impl<S: State, C: Collector, CS: GetContractCode> Chain<S, C, CS> {
                 block_hash: header.calc_header_hash().unpack(),
             };
             self.tip = l2block.raw();
+            self.tx_pool.update_tip(&l2block, unreachable!());
         }
         Ok(())
+    }
+
+    /// Produce a new block
+    ///
+    /// This function should be called in the turn that the current aggregator to produce the next block,
+    /// otherwise the produced block may invalided by the state-validator contract.
+    fn produce_block(
+        &mut self,
+        signer: &Signer,
+        deposition_requests: Vec<DepositionRequest>,
+    ) -> Result<RawL2Block> {
+        // take txs from tx pool
+        // produce block
+        let pkg = self.tx_pool.package_txs()?;
+        let parent_number: u64 = self.tip.number().unpack();
+        let number = parent_number + 1;
+        let aggregator_id: u32 = signer.account_id;
+        let timestamp: u64 = unixtime()?;
+        let submit_txs = unreachable!();
+        let post_account = unreachable!();
+        let prev_account = unreachable!();
+        let raw_block = RawL2Block::new_builder()
+            .number(GWPack::<Uint64>::pack(&number))
+            .aggregator_id(GWPack::<Uint32>::pack(&aggregator_id))
+            .timestamp(GWPack::<Uint64>::pack(&timestamp))
+            .post_account(post_account)
+            .prev_account(prev_account)
+            .submit_transactions(submit_txs)
+            .valid(1.into())
+            .build();
+        Ok(raw_block)
     }
 
     fn process_block(
@@ -114,7 +163,7 @@ impl<S: State, C: Collector, CS: GetContractCode> Chain<S, C, CS> {
         tx: &RawTransaction,
         rollup_id: &[u8; 32],
     ) -> Result<()> {
-        let deposition_requests = collect_deposition_requests(&self.collector, tx, rollup_id)?;
+        let deposition_requests = fetch_deposition_requests(&self.collector, tx, rollup_id)?;
         let args = StateTransitionArgs {
             l2block,
             deposition_requests,
@@ -123,6 +172,13 @@ impl<S: State, C: Collector, CS: GetContractCode> Chain<S, C, CS> {
             .apply_state_transition(&mut self.state, args)?;
         Ok(())
     }
+}
+
+fn unixtime() -> Result<u64> {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .map_err(Into::into)
 }
 
 fn parse_l2block(tx: &Transaction, rollup_id: &[u8; 32]) -> Result<L2Block> {
@@ -162,80 +218,4 @@ fn parse_l2block(tx: &Transaction, rollup_id: &[u8; 32]) -> Result<L2Block> {
         Ok(_) => Ok(L2Block::new_unchecked(output_type)),
         Err(_) => Err(anyhow!("invalid l2block")),
     }
-}
-
-fn collect_deposition_requests<C: Collector>(
-    collector: &C,
-    tx: &RawTransaction,
-    rollup_id: &[u8; 32],
-) -> Result<Vec<DepositionRequest>> {
-    let mut deposition_requests = Vec::with_capacity(tx.inputs().len());
-    // find deposition requests
-    for (i, cell_input) in tx.inputs().into_iter().enumerate() {
-        let previous_tx =
-            collector.get_transaction(&cell_input.previous_output().tx_hash().unpack())?;
-        let cell = previous_tx.transaction.raw().outputs().get(i).expect("get");
-        let cell_data: Bytes = previous_tx
-            .transaction
-            .raw()
-            .outputs_data()
-            .get(i)
-            .map(|data| data.unpack())
-            .unwrap_or_default();
-        let lock = cell.lock();
-        let lock_code_hash: [u8; 32] = lock.code_hash().unpack();
-        // not a deposition request lock
-        if !(lock.hash_type() == ScriptHashType::Data.into()
-            && lock_code_hash == DEPOSITION_CODE_HASH)
-        {
-            continue;
-        }
-        let args: Bytes = lock.args().unpack();
-        let deposition_args = match DepositionLockArgsReader::verify(&args, false) {
-            Ok(_) => DepositionLockArgs::new_unchecked(args),
-            Err(_) => {
-                return Err(anyhow!("invalid deposition request"))?;
-            }
-        };
-
-        // ignore deposition request that do not belong to Rollup
-        if &deposition_args.rollup_type_id().unpack() != rollup_id {
-            continue;
-        }
-
-        // get token_id
-        let token_id = fetch_token_id(cell.type_().to_opt())?;
-        let value = fetch_sudt_value(&token_id, &cell, &cell_data);
-        let deposition_request = DepositionRequest {
-            token_id,
-            value,
-            pubkey_hash: deposition_args.pubkey_hash().unpack(),
-            account_id: deposition_args.account_id().unpack(),
-        };
-        deposition_requests.push(deposition_request);
-    }
-    Ok(deposition_requests)
-}
-
-fn fetch_token_id(type_: Option<Script>) -> Result<[u8; 32]> {
-    match type_ {
-        Some(type_) => {
-            let code_hash: [u8; 32] = type_.code_hash().unpack();
-            if type_.hash_type() == ScriptHashType::Data.into() && code_hash == SUDT_CODE_HASH {
-                return Ok(type_.calc_script_hash().unpack());
-            }
-            return Err(anyhow!("invalid SUDT token"));
-        }
-        None => Ok(CKB_TOKEN_ID),
-    }
-}
-
-fn fetch_sudt_value(token_id: &[u8; 32], output: &CellOutput, data: &[u8]) -> u128 {
-    if token_id == &CKB_TOKEN_ID {
-        let capacity: u64 = output.capacity().unpack();
-        return capacity.into();
-    }
-    let mut buf = [0u8; 16];
-    buf.copy_from_slice(&data[..16]);
-    u128::from_le_bytes(buf)
 }

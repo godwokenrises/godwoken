@@ -9,8 +9,11 @@
 mod chain;
 mod collector;
 mod config;
+mod crypto;
+mod deposition;
 mod jsonrpc_types;
 mod rpc;
+mod tx_pool;
 
 use chain::{Chain, HeaderInfo};
 use ckb_types::prelude::*;
@@ -40,6 +43,8 @@ fn main() {
     };
     let code_store = HashMapCodeStore::new(Default::default());
     let rollup_type_script = config.rollup.rollup_type_script.clone();
+    let tx_pool = unreachable!();
+    let signer = unreachable!();
     let mut chain = Chain::new(
         state,
         tip,
@@ -47,6 +52,8 @@ fn main() {
         rollup_type_script,
         collector,
         code_store,
+        tx_pool,
+        signer,
     );
     println!("sync chain!");
     chain.sync().expect("sync");

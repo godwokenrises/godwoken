@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod blake2b;
+pub mod merkle_utils;
 pub mod smt;
 pub mod state;
 
@@ -18,3 +19,12 @@ pub const DEPOSITION_CODE_HASH: H256 = [0u8; 32];
 pub const SUDT_CODE_HASH: H256 = [0u8; 32];
 pub const ROLLUP_LOCK_CODE_HASH: H256 = [0u8; 32];
 pub const CKB_TOKEN_ID: H256 = [0u8; 32];
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "std")] {
+        use std::vec;
+    } else {
+        extern crate alloc;
+        use alloc::vec;
+    }
+}

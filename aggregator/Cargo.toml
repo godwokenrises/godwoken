@@ -19,3 +19,6 @@ jsonrpc-http-server = "~14.1"
 jsonrpc-server-utils = "~14.1"
 anyhow = "1.0"
 thiserror = "1.0"
+secp256k1 = { version = "0.17", features = ["recovery"] }
+lazy_static = "1.4"
+

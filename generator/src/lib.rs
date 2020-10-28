@@ -14,3 +14,4 @@ mod wrapped_store;
 pub use error::Error;
 pub use generator::Generator;
 pub(crate) use gw_types::bytes;
+pub use syscalls::{GetContractCode, RunResult};

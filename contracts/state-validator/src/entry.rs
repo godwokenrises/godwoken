@@ -163,6 +163,11 @@ fn verify_l2block(
         return Err(Error::MerkleProof);
     }
 
+    // Check prev account state
+    if raw_block.prev_account().as_slice() != prev_global_state.account().as_slice() {
+        return Err(Error::PrevGlobalState);
+    }
+
     // Check post account state
     // Note: Because of the optimistic mechanism, we do not need to verify post account merkle root
     if raw_block.post_account().as_slice() != post_global_state.account().as_slice() {
@@ -202,8 +207,8 @@ pub fn main() -> Result<(), Error> {
     verify_block_signature(&context, &lib_secp256k1, &l2block)?;
 
     // handle state transitions
-    actions::join::handle(&mut context, &l2block)?;
     actions::submit_transactions::handle(&mut context, &l2block)?;
+    actions::join::handle(&mut context, &l2block)?;
 
     Ok(())
 }

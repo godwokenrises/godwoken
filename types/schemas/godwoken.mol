@@ -59,6 +59,7 @@ table RawL2Block {
     number: Uint64,
     aggregator_id: Uint32,
     timestamp: Uint64,
+    prev_account: AccountMerkleState,
     post_account: AccountMerkleState,
     leave: LeaveOpt,
     revert_chain: RevertChainOpt,
@@ -80,7 +81,7 @@ table SubmitTransactions {
     tx_root: Byte32,
     tx_count: Uint32,
     // hash(account_root | account_count) before each transaction
-    compacted_pre_root_list: Byte32Vec,
+    compacted_post_root_list: Byte32Vec,
 }
 
 // TODO
