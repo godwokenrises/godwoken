@@ -8,7 +8,6 @@ pub mod state_ext;
 pub mod syscalls;
 #[cfg(test)]
 mod tests;
-mod wrapped_store;
 
 // re-exports
 pub use error::Error;

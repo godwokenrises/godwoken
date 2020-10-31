@@ -13,6 +13,7 @@ mod crypto;
 mod deposition;
 mod jsonrpc_types;
 mod rpc;
+mod state_impl;
 mod tx_pool;
 
 use chain::{Chain, HeaderInfo};
@@ -20,7 +21,6 @@ use ckb_types::prelude::*;
 use collector::lumos::Lumos;
 use collector::Collector;
 use config::Config;
-use gw_generator::dummy_state::DummyState;
 use gw_generator::syscalls::hashmap_code_store::HashMapCodeStore;
 
 fn build_config() -> Config {
@@ -33,7 +33,6 @@ fn build_collector(_config: &Config) -> impl Collector {
 
 fn main() {
     let config = build_config();
-    let state = DummyState::default();
     let tip = config.rollup.l2_genesis.clone();
     let collector = build_collector(&config);
     let genesis = collector.get_header_by_number(0).unwrap().unwrap();
@@ -43,6 +42,7 @@ fn main() {
     };
     let code_store = HashMapCodeStore::new(Default::default());
     let rollup_type_script = config.rollup.rollup_type_script.clone();
+    let state = unreachable!();
     let tx_pool = unreachable!();
     let signer = unreachable!();
     let mut chain = Chain::new(

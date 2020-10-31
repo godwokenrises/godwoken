@@ -1,16 +1,15 @@
 use crate::collector::Collector;
 use crate::deposition::fetch_deposition_requests;
 use crate::jsonrpc_types::collector::QueryParam;
+use crate::state_impl::{OverlayState, StateImpl, WrapStore};
 use crate::tx_pool::TxPool;
-use std::time::SystemTime;
-
 use anyhow::{anyhow, Result};
 use ckb_types::{
     bytes::Bytes,
     packed::{RawTransaction, Script, Transaction, WitnessArgs, WitnessArgsReader},
     prelude::Unpack,
 };
-use gw_common::{merkle_utils::calculate_merkle_root, state::State};
+use gw_common::{merkle_utils::calculate_merkle_root, sparse_merkle_tree};
 use gw_generator::{
     generator::{DepositionRequest, StateTransitionArgs},
     syscalls::GetContractCode,
@@ -23,6 +22,7 @@ use gw_types::{
         Unpack as GWUnpack,
     },
 };
+use std::time::SystemTime;
 
 pub struct Signer {
     account_id: u32,
@@ -33,26 +33,29 @@ pub struct HeaderInfo {
     pub block_hash: [u8; 32],
 }
 
-pub struct Chain<S, C, CS> {
-    state: S,
+/// State storage implementation
+type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
+
+pub struct Chain<C, CS> {
+    state: StateImpl<StateStore>,
     collector: C,
     rollup_type_script: Script,
     last_synced: HeaderInfo,
     tip: RawL2Block,
     generator: Generator<CS>,
-    tx_pool: TxPool<S, CS>,
+    tx_pool: TxPool<OverlayState<WrapStore<StateStore>>, CS>,
     signer: Option<Signer>,
 }
 
-impl<S: State, C: Collector, CS: GetContractCode> Chain<S, C, CS> {
+impl<C: Collector, CS: GetContractCode> Chain<C, CS> {
     pub fn new(
-        state: S,
+        state: StateImpl<StateStore>,
         tip: RawL2Block,
         last_synced: HeaderInfo,
         rollup_type_script: Script,
         collector: C,
         code_store: CS,
-        tx_pool: TxPool<S, CS>,
+        tx_pool: TxPool<OverlayState<WrapStore<StateStore>>, CS>,
         signer: Option<Signer>,
     ) -> Self {
         let generator = Generator::new(code_store);
@@ -116,7 +119,8 @@ impl<S: State, C: Collector, CS: GetContractCode> Chain<S, C, CS> {
                 block_hash: header.calc_header_hash().unpack(),
             };
             self.tip = l2block.raw();
-            self.tx_pool.update_tip(&l2block, unreachable!());
+            let overlay_state = self.state.new_overlay()?;
+            self.tx_pool.update_tip(&l2block, overlay_state)?;
         }
         Ok(())
     }
@@ -144,7 +148,8 @@ impl<S: State, C: Collector, CS: GetContractCode> Chain<S, C, CS> {
                     .map(|tx_recipt| &tx_recipt.tx_witness_hash)
                     .cloned()
                     .collect(),
-            )?;
+            )
+            .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
             let tx_count = pkg.tx_recipts.len() as u32;
             let compacted_post_root_list: Vec<_> = pkg
                 .tx_recipts

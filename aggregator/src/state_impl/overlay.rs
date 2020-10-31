@@ -1,22 +1,67 @@
-use sparse_merkle_tree::{
-    error::Error as SMTError,
-    traits::Store,
-    tree::{BranchNode, LeafNode},
-    H256,
+//! Provide overlay store feature
+//! Overlay store can be abandoned or commited.
+
+use anyhow::Result;
+use gw_common::{
+    smt::SMT,
+    sparse_merkle_tree::{
+        error::Error as SMTError,
+        traits::Store,
+        tree::{BranchNode, LeafNode},
+        H256,
+    },
+    state::{Error, State},
 };
 use std::collections::{HashMap, HashSet};
 
-pub(crate) struct WrappedStore<'a, S: Store<H256>> {
-    store: &'a S,
+pub struct OverlayState<S> {
+    tree: SMT<OverlayStore<S>>,
+    account_count: u32,
+}
+
+impl<S: Store<H256>> OverlayState<S> {
+    pub fn new(root: H256, store: S, account_count: u32) -> Self {
+        let tree = SMT::new(root, OverlayStore::new(store));
+        OverlayState {
+            tree,
+            account_count,
+        }
+    }
+}
+
+impl<S: Store<H256>> State for OverlayState<S> {
+    fn get_raw(&self, key: &[u8; 32]) -> Result<[u8; 32], Error> {
+        let v = self.tree.get(&(*key).into())?;
+        Ok(v.into())
+    }
+    fn update_raw(&mut self, key: [u8; 32], value: [u8; 32]) -> Result<(), Error> {
+        self.tree.update(key.into(), value.into())?;
+        Ok(())
+    }
+    fn calculate_root(&self) -> Result<[u8; 32], Error> {
+        let root = (*self.tree.root()).into();
+        Ok(root)
+    }
+    fn get_account_count(&self) -> Result<u32, Error> {
+        Ok(self.account_count)
+    }
+    fn set_account_count(&mut self, count: u32) -> Result<(), Error> {
+        self.account_count = count;
+        Ok(())
+    }
+}
+
+pub struct OverlayStore<S> {
+    store: S,
     branches_map: HashMap<H256, BranchNode>,
     leaves_map: HashMap<H256, LeafNode<H256>>,
     deleted_branches: HashSet<H256>,
     deleted_leaves: HashSet<H256>,
 }
 
-impl<'a, S: Store<H256>> WrappedStore<'a, S> {
-    pub fn new(store: &'a S) -> Self {
-        WrappedStore {
+impl<S: Store<H256>> OverlayStore<S> {
+    pub fn new(store: S) -> Self {
+        OverlayStore {
             store,
             branches_map: HashMap::default(),
             leaves_map: HashMap::default(),
@@ -26,7 +71,7 @@ impl<'a, S: Store<H256>> WrappedStore<'a, S> {
     }
 }
 
-impl<'a, S: Store<H256>> Store<H256> for WrappedStore<'a, S> {
+impl<S: Store<H256>> Store<H256> for OverlayStore<S> {
     fn get_branch(&self, node: &H256) -> Result<Option<BranchNode>, SMTError> {
         if self.deleted_branches.contains(&node) {
             return Ok(None);

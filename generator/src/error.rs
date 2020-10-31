@@ -1,6 +1,6 @@
 use ckb_vm::Error as VMError;
-use gw_common::state::Error as StateError;
-use sparse_merkle_tree::error::Error as SMTError;
+use gw_common::{sparse_merkle_tree::error::Error as SMTError, state::Error as StateError};
+
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Clone, Eq)]
