@@ -26,6 +26,26 @@ pub struct TxPool<S, CS> {
     next_prev_account_state: MerkleState,
 }
 
+impl<S: State, CS> TxPool<S, CS> {
+    pub fn create(
+        state: S,
+        generator: Generator<CS>,
+        tip: &L2Block,
+        nb_ctx: NextBlockContext,
+    ) -> Result<Self> {
+        let queue = Vec::with_capacity(MAX_PACKAGED_TXS);
+        let next_prev_account_state = get_account_state(&state)?;
+        let next_block_info = gen_next_block_info(tip, nb_ctx)?;
+        Ok(TxPool {
+            state,
+            generator,
+            queue,
+            next_block_info,
+            next_prev_account_state,
+        })
+    }
+}
+
 impl<S: State, CS: GetContractCode> TxPool<S, CS> {
     /// Push a layer2 tx into pool
     pub fn push(&mut self, tx: L2Transaction) -> Result<()> {
@@ -108,7 +128,7 @@ impl<S: State, CS: GetContractCode> TxPool<S, CS> {
         self.state
             .apply_deposition_requests(&deposition_requests)
             .map_err(|err| anyhow!("apply deposition requests: {:?}", err))?;
-        let post_account_state = self.get_account_state()?;
+        let post_account_state = get_account_state(&self.state)?;
         let pkg = TxPackage {
             tx_recipts,
             prev_account_state: self.next_prev_account_state.clone(),
@@ -117,28 +137,12 @@ impl<S: State, CS: GetContractCode> TxPool<S, CS> {
         Ok(pkg)
     }
 
-    fn get_account_state(&self) -> Result<MerkleState> {
-        let root = self
-            .state
-            .calculate_root()
-            .map_err(|err| anyhow!("calculate root: {:?}", err))?;
-        let count = self
-            .state
-            .get_account_count()
-            .map_err(|err| anyhow!("get account count: {:?}", err))?;
-        Ok(MerkleState { root, count })
-    }
-
-    fn gen_next_block_info(&self, tip: &L2Block) -> Result<BlockInfo> {
-        unreachable!()
-    }
-
     /// Update tip and state
     /// this method reset tip and tx_pool states
-    pub fn update_tip(&mut self, tip: &L2Block, state: S) -> Result<()> {
+    pub fn update_tip(&mut self, tip: &L2Block, state: S, nb_ctx: NextBlockContext) -> Result<()> {
         // TODO catch abandoned txs and recompute them.
         self.state = state;
-        self.update_tip_without_status(tip)?;
+        self.update_tip_without_status(tip, nb_ctx)?;
         Ok(())
     }
 
@@ -146,13 +150,46 @@ impl<S: State, CS: GetContractCode> TxPool<S, CS> {
     /// this method reset tip and generate a new checkpoint for current state
     ///
     /// Notice this fucntion may cause inconsistency between tip and status
-    pub fn update_tip_without_status(&mut self, tip: &L2Block) -> Result<()> {
+    pub fn update_tip_without_status(
+        &mut self,
+        tip: &L2Block,
+        nb_ctx: NextBlockContext,
+    ) -> Result<()> {
         // TODO catch abandoned txs and recompute them.
         self.queue.clear();
-        self.next_block_info = self.gen_next_block_info(tip)?;
-        self.next_prev_account_state = self.get_account_state()?;
+        self.next_block_info = gen_next_block_info(tip, nb_ctx)?;
+        self.next_prev_account_state = get_account_state(&self.state)?;
         Ok(())
     }
+}
+
+fn get_account_state<S: State>(state: &S) -> Result<MerkleState> {
+    let root = state
+        .calculate_root()
+        .map_err(|err| anyhow!("calculate root: {:?}", err))?;
+    let count = state
+        .get_account_count()
+        .map_err(|err| anyhow!("get account count: {:?}", err))?;
+    Ok(MerkleState { root, count })
+}
+
+fn gen_next_block_info(tip: &L2Block, nb_ctx: NextBlockContext) -> Result<BlockInfo> {
+    let parent_number: u64 = tip.raw().number().unpack();
+    // TODO validate timestamp
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs();
+    let block_info = BlockInfo::new_builder()
+        .aggregator_id(nb_ctx.aggregator_id.pack())
+        .number((parent_number + 1).pack())
+        .timestamp(timestamp.pack())
+        .build();
+    Ok(block_info)
+}
+
+#[derive(Clone, Debug)]
+pub struct NextBlockContext {
+    pub aggregator_id: u32,
 }
 
 #[derive(Clone, Debug)]

@@ -1,12 +1,13 @@
 use crate::collector::Collector;
+use crate::config::{ChainConfig, Signer};
 use crate::deposition::fetch_deposition_requests;
 use crate::jsonrpc_types::collector::QueryParam;
 use crate::state_impl::{OverlayState, StateImpl, WrapStore};
-use crate::tx_pool::TxPool;
+use crate::tx_pool::{NextBlockContext, TxPool};
 use anyhow::{anyhow, Result};
 use ckb_types::{
     bytes::Bytes,
-    packed::{RawTransaction, Script, Transaction, WitnessArgs, WitnessArgsReader},
+    packed::{RawTransaction, Transaction, WitnessArgs, WitnessArgsReader},
     prelude::Unpack,
 };
 use gw_common::{merkle_utils::calculate_merkle_root, sparse_merkle_tree};
@@ -24,10 +25,6 @@ use gw_types::{
 };
 use std::time::SystemTime;
 
-pub struct Signer {
-    account_id: u32,
-}
-
 pub struct HeaderInfo {
     pub number: u64,
     pub block_hash: [u8; 32],
@@ -36,38 +33,34 @@ pub struct HeaderInfo {
 /// State storage implementation
 type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
 
-pub struct Chain<C, CS> {
+pub struct Chain<C, CodeStore> {
+    config: ChainConfig,
     state: StateImpl<StateStore>,
     collector: C,
-    rollup_type_script: Script,
     last_synced: HeaderInfo,
     tip: RawL2Block,
-    generator: Generator<CS>,
-    tx_pool: TxPool<OverlayState<WrapStore<StateStore>>, CS>,
-    signer: Option<Signer>,
+    generator: Generator<CodeStore>,
+    tx_pool: TxPool<OverlayState<WrapStore<StateStore>>, CodeStore>,
 }
 
-impl<C: Collector, CS: GetContractCode> Chain<C, CS> {
+impl<C: Collector, CodeStore: GetContractCode> Chain<C, CodeStore> {
     pub fn new(
+        config: ChainConfig,
         state: StateImpl<StateStore>,
         tip: RawL2Block,
         last_synced: HeaderInfo,
-        rollup_type_script: Script,
         collector: C,
-        code_store: CS,
-        tx_pool: TxPool<OverlayState<WrapStore<StateStore>>, CS>,
-        signer: Option<Signer>,
+        generator: Generator<CodeStore>,
+        tx_pool: TxPool<OverlayState<WrapStore<StateStore>>, CodeStore>,
     ) -> Self {
-        let generator = Generator::new(code_store);
         Chain {
+            config,
             state,
             collector,
-            rollup_type_script,
             last_synced,
             tip,
             generator,
             tx_pool,
-            signer,
         }
     }
 
@@ -83,7 +76,7 @@ impl<C: Collector, CS: GetContractCode> Chain<C, CS> {
         }
         // query state update tx from collector
         let param = QueryParam {
-            type_: Some(self.rollup_type_script.clone().into()),
+            type_: Some(self.config.rollup_type_script.clone().into()),
             from_block: Some(self.last_synced.number.into()),
             ..Default::default()
         };
@@ -101,7 +94,7 @@ impl<C: Collector, CS: GetContractCode> Chain<C, CS> {
             );
 
             // parse layer2 block
-            let rollup_id = self.rollup_type_script.calc_script_hash().unpack();
+            let rollup_id = self.config.rollup_type_script.calc_script_hash().unpack();
             let l2block = parse_l2block(&tx_info.transaction, &rollup_id)?;
 
             let tip_number: u64 = self.tip.number().unpack();
@@ -120,7 +113,15 @@ impl<C: Collector, CS: GetContractCode> Chain<C, CS> {
             };
             self.tip = l2block.raw();
             let overlay_state = self.state.new_overlay()?;
-            self.tx_pool.update_tip(&l2block, overlay_state)?;
+            // TODO get aggregator_id by apply consensus algorithm
+            let aggregator_id = self
+                .config
+                .signer
+                .as_ref()
+                .expect("only support single aggregator")
+                .account_id;
+            let nb_ctx = NextBlockContext { aggregator_id };
+            self.tx_pool.update_tip(&l2block, overlay_state, nb_ctx)?;
         }
         Ok(())
     }
@@ -129,11 +130,15 @@ impl<C: Collector, CS: GetContractCode> Chain<C, CS> {
     ///
     /// This function should be called in the turn that the current aggregator to produce the next block,
     /// otherwise the produced block may invalided by the state-validator contract.
-    fn produce_block(
+    pub fn produce_block(
         &mut self,
-        signer: &Signer,
         deposition_requests: Vec<DepositionRequest>,
     ) -> Result<RawL2Block> {
+        let signer = self
+            .config
+            .signer
+            .as_ref()
+            .ok_or(anyhow!("signer is not configured!"))?;
         // take txs from tx pool
         // produce block
         let pkg = self.tx_pool.package_txs(&deposition_requests)?;

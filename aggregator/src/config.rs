@@ -1,15 +1,20 @@
 use ckb_types::packed::Script;
-use gw_types::packed::RawL2Block;
+use gw_types::packed::L2Block;
 
 pub struct Config {
-    pub rollup: Rollup,
+    pub chain: ChainConfig,
     pub rpc: RPC,
     pub lumos: Lumos,
 }
 
-pub struct Rollup {
+pub struct Signer {
+    pub account_id: u32,
+}
+
+pub struct ChainConfig {
+    pub signer: Option<Signer>,
     pub rollup_type_script: Script,
-    pub l2_genesis: RawL2Block,
+    pub l2_genesis: L2Block,
 }
 
 pub struct RPC {
