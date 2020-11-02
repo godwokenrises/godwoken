@@ -1,3 +1,4 @@
+use crate::consensus::traits::NextBlockContext;
 use crate::crypto::{verify_signature, Signature};
 use anyhow::{anyhow, Result};
 use gw_common::{
@@ -18,18 +19,18 @@ pub struct TxRecipt {
     pub compacted_post_account_root: [u8; 32],
 }
 
-pub struct TxPool<S, CS> {
+pub struct TxPool<S, CodeStore> {
     state: S,
-    generator: Generator<CS>,
+    generator: Generator<CodeStore>,
     queue: Vec<TxRecipt>,
     next_block_info: BlockInfo,
     next_prev_account_state: MerkleState,
 }
 
-impl<S: State, CS> TxPool<S, CS> {
+impl<S: State, CodeStore> TxPool<S, CodeStore> {
     pub fn create(
         state: S,
-        generator: Generator<CS>,
+        generator: Generator<CodeStore>,
         tip: &L2Block,
         nb_ctx: NextBlockContext,
     ) -> Result<Self> {
@@ -185,11 +186,6 @@ fn gen_next_block_info(tip: &L2Block, nb_ctx: NextBlockContext) -> Result<BlockI
         .timestamp(timestamp.pack())
         .build();
     Ok(block_info)
-}
-
-#[derive(Clone, Debug)]
-pub struct NextBlockContext {
-    pub aggregator_id: u32,
 }
 
 #[derive(Clone, Debug)]

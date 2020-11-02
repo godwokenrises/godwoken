@@ -9,6 +9,7 @@
 mod chain;
 mod collector;
 mod config;
+mod consensus;
 mod crypto;
 mod deposition;
 mod jsonrpc_types;
@@ -16,16 +17,17 @@ mod rpc;
 mod state_impl;
 mod tx_pool;
 
-use crate::state_impl::SyncCodeStore;
 use anyhow::Result;
 use chain::{Chain, HeaderInfo};
 use ckb_types::prelude::*;
 use collector::lumos::Lumos;
 use collector::Collector;
 use config::Config;
+use consensus::{single_aggregator::SingleAggregator, traits::Consensus};
 use gw_generator::Generator;
 use state_impl::StateImpl;
-use tx_pool::{NextBlockContext, TxPool};
+use state_impl::SyncCodeStore;
+use tx_pool::TxPool;
 
 fn build_config() -> Config {
     unimplemented!()
@@ -37,6 +39,7 @@ fn build_collector(_config: &Config) -> impl Collector {
 
 fn run() -> Result<()> {
     let config = build_config();
+    let consensus = SingleAggregator::new(config.consensus.aggregator_id);
     let tip = config.chain.l2_genesis.clone();
     let collector = build_collector(&config);
     let genesis = collector.get_header_by_number(0).unwrap().unwrap();
@@ -48,15 +51,7 @@ fn run() -> Result<()> {
     let state = StateImpl::default();
     let tx_pool = {
         let generator = Generator::new(code_store.clone());
-        let nb_ctx = NextBlockContext {
-            // TODO get next block context from consensus
-            aggregator_id: config
-                .chain
-                .signer
-                .as_ref()
-                .expect("must have a signer")
-                .account_id,
-        };
+        let nb_ctx = consensus.next_block_context(&tip);
         TxPool::create(state.new_overlay()?, generator, &tip, nb_ctx)?
     };
     let mut chain = {
@@ -64,6 +59,7 @@ fn run() -> Result<()> {
         Chain::new(
             config.chain,
             state,
+            consensus,
             tip.raw(),
             last_synced,
             collector,

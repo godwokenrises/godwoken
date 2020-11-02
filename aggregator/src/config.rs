@@ -3,12 +3,17 @@ use gw_types::packed::L2Block;
 
 pub struct Config {
     pub chain: ChainConfig,
+    pub consensus: ConsensusConfig,
     pub rpc: RPC,
     pub lumos: Lumos,
 }
 
 pub struct Signer {
     pub account_id: u32,
+}
+
+pub struct ConsensusConfig {
+    pub aggregator_id: u32,
 }
 
 pub struct ChainConfig {

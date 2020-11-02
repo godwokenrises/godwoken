@@ -1,9 +1,10 @@
 use crate::collector::Collector;
-use crate::config::{ChainConfig, Signer};
+use crate::config::ChainConfig;
+use crate::consensus::traits::Consensus;
 use crate::deposition::fetch_deposition_requests;
 use crate::jsonrpc_types::collector::QueryParam;
 use crate::state_impl::{OverlayState, StateImpl, WrapStore};
-use crate::tx_pool::{NextBlockContext, TxPool};
+use crate::tx_pool::TxPool;
 use anyhow::{anyhow, Result};
 use ckb_types::{
     bytes::Bytes,
@@ -33,23 +34,27 @@ pub struct HeaderInfo {
 /// State storage implementation
 type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
 
-pub struct Chain<C, CodeStore> {
+pub struct Chain<Collector, CodeStore, Consensus> {
     config: ChainConfig,
     state: StateImpl<StateStore>,
-    collector: C,
+    collector: Collector,
     last_synced: HeaderInfo,
     tip: RawL2Block,
     generator: Generator<CodeStore>,
     tx_pool: TxPool<OverlayState<WrapStore<StateStore>>, CodeStore>,
+    consensus: Consensus,
 }
 
-impl<C: Collector, CodeStore: GetContractCode> Chain<C, CodeStore> {
+impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
+    Chain<Collec, CodeStore, Consen>
+{
     pub fn new(
         config: ChainConfig,
         state: StateImpl<StateStore>,
+        consensus: Consen,
         tip: RawL2Block,
         last_synced: HeaderInfo,
-        collector: C,
+        collector: Collec,
         generator: Generator<CodeStore>,
         tx_pool: TxPool<OverlayState<WrapStore<StateStore>>, CodeStore>,
     ) -> Self {
@@ -61,6 +66,7 @@ impl<C: Collector, CodeStore: GetContractCode> Chain<C, CodeStore> {
             tip,
             generator,
             tx_pool,
+            consensus,
         }
     }
 
@@ -113,14 +119,7 @@ impl<C: Collector, CodeStore: GetContractCode> Chain<C, CodeStore> {
             };
             self.tip = l2block.raw();
             let overlay_state = self.state.new_overlay()?;
-            // TODO get aggregator_id by apply consensus algorithm
-            let aggregator_id = self
-                .config
-                .signer
-                .as_ref()
-                .expect("only support single aggregator")
-                .account_id;
-            let nb_ctx = NextBlockContext { aggregator_id };
+            let nb_ctx = self.consensus.next_block_context(&l2block);
             self.tx_pool.update_tip(&l2block, overlay_state, nb_ctx)?;
         }
         Ok(())
