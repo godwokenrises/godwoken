@@ -8,7 +8,7 @@ use crate::tx_pool::TxPool;
 use anyhow::{anyhow, Result};
 use ckb_types::{
     bytes::Bytes,
-    packed::{RawTransaction, Transaction, WitnessArgs, WitnessArgsReader},
+    packed::{RawTransaction, Script, Transaction, WitnessArgs, WitnessArgsReader},
     prelude::Unpack,
 };
 use gw_common::{merkle_utils::calculate_merkle_root, sparse_merkle_tree};
@@ -39,6 +39,7 @@ pub type TxPoolImpl<CodeStore> = TxPool<OverlayState<WrapStore<StateStore>>, Cod
 
 pub struct Chain<Collector, CodeStore, Consensus> {
     config: ChainConfig,
+    rollup_type_script_hash: [u8; 32],
     state: StateImpl<StateStore>,
     collector: Collector,
     last_synced: HeaderInfo,
@@ -61,6 +62,8 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
         generator: Generator<CodeStore>,
         tx_pool: Arc<Mutex<TxPoolImpl<CodeStore>>>,
     ) -> Self {
+        let rollup_type_script: Script = config.rollup_type_script.clone().into();
+        let rollup_type_script_hash = rollup_type_script.calc_script_hash().unpack();
         Chain {
             config,
             state,
@@ -70,6 +73,7 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
             generator,
             tx_pool,
             consensus,
+            rollup_type_script_hash,
         }
     }
 
@@ -85,7 +89,7 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
         }
         // query state update tx from collector
         let param = QueryParam {
-            type_: Some(self.config.rollup_type_script.clone().into()),
+            type_: Some(self.config.rollup_type_script.clone()),
             from_block: Some(self.last_synced.number.into()),
             ..Default::default()
         };
@@ -103,8 +107,7 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
             );
 
             // parse layer2 block
-            let rollup_id = self.config.rollup_type_script.calc_script_hash().unpack();
-            let l2block = parse_l2block(&tx_info.transaction, &rollup_id)?;
+            let l2block = parse_l2block(&tx_info.transaction, &self.rollup_type_script_hash)?;
 
             let tip_number: u64 = self.tip.raw().number().unpack();
             assert!(
@@ -113,7 +116,7 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
             );
 
             // process l2block
-            self.process_block(l2block.clone(), &tx_info.transaction.raw(), &rollup_id)?;
+            self.process_block(l2block.clone(), &tx_info.transaction.raw())?;
 
             // update chain
             self.last_synced = HeaderInfo {
@@ -193,13 +196,9 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
         Ok(raw_block)
     }
 
-    fn process_block(
-        &mut self,
-        l2block: L2Block,
-        tx: &RawTransaction,
-        rollup_id: &[u8; 32],
-    ) -> Result<()> {
-        let deposition_requests = fetch_deposition_requests(&self.collector, tx, rollup_id)?;
+    fn process_block(&mut self, l2block: L2Block, tx: &RawTransaction) -> Result<()> {
+        let deposition_requests =
+            fetch_deposition_requests(&self.collector, tx, &self.rollup_type_script_hash)?;
         let args = StateTransitionArgs {
             l2block,
             deposition_requests,

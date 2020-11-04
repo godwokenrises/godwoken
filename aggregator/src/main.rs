@@ -41,6 +41,7 @@ use parking_lot::Mutex;
 use rpc::Server;
 use state_impl::StateImpl;
 use state_impl::SyncCodeStore;
+use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
 use tx_pool::TxPool;
@@ -122,8 +123,10 @@ fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
     Ok(genesis)
 }
 
-fn build_config() -> Config {
-    unimplemented!()
+fn parse_config(path: &str) -> Result<Config> {
+    let content = fs::read(path)?;
+    let config: Config = toml::from_slice(&content)?;
+    Ok(config)
 }
 
 fn build_collector(_config: &Config) -> impl Collector {
@@ -131,7 +134,8 @@ fn build_collector(_config: &Config) -> impl Collector {
 }
 
 fn run() -> Result<()> {
-    let config = build_config();
+    let config_path = std::env::args().skip(1).next().expect("config file path");
+    let config = parse_config(&config_path)?;
     let consensus = SingleAggregator::new(config.consensus.aggregator_id);
     let tip = build_genesis(&config.genesis)?;
     let collector = build_collector(&config);
@@ -168,7 +172,7 @@ fn run() -> Result<()> {
     let _server = Server::new()
         .enable_callback(sync_tx)
         .enable_tx_pool(Arc::clone(&tx_pool))
-        .start("127.0.0.1:8080")?;
+        .start(&config.rpc.listen)?;
 
     // TODO support multiple aggregators and validator mode
     // We assume we are the only aggregator for now.

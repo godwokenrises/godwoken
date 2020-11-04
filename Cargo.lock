@@ -36,6 +36,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "thiserror",
+ "toml",
 ]
 
 [[package]]
