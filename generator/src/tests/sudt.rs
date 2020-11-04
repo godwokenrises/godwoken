@@ -3,7 +3,6 @@ use crate::dummy_state::DummyState;
 use crate::state_ext::StateExt;
 use crate::Error;
 use gw_common::blake2b::new_blake2b;
-use gw_common::smt::{default_store::DefaultStore, H256, SMT};
 use gw_common::state::State;
 use gw_types::{
     core::CallType,
@@ -45,9 +44,6 @@ fn run_contract<S: State>(
 #[test]
 fn test_sudt() {
     let mut tree = DummyState::default();
-    let contract_id: u32 = 1;
-    let a_id: u32 = 2;
-    let b_id: u32 = 3;
     let init_a_balance: u128 = 10000;
     let token_id = [0u8; 32];
 

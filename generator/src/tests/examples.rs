@@ -1,9 +1,6 @@
 use super::{new_block_info, new_generator, PROXY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH};
 use crate::{dummy_state::DummyState, state_ext::StateExt, Error};
-use gw_common::{
-    smt::{default_store::DefaultStore, H256, SMT},
-    state::State,
-};
+use gw_common::state::State;
 use gw_types::{bytes::Bytes, core::CallType, packed::CallContext, prelude::*};
 
 #[test]

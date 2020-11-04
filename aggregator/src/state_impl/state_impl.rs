@@ -3,7 +3,6 @@ use super::wrap_store::WrapStore;
 use anyhow::{anyhow, Result};
 use gw_common::{
     smt::{Store, H256, SMT},
-    sparse_merkle_tree::default_store::DefaultStore,
     state::{Error, State},
 };
 use parking_lot::Mutex;

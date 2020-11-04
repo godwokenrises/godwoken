@@ -1,10 +1,6 @@
-use gw_common::{
-    smt::{Store, H256, SMT},
-    state::State,
-};
+use crossbeam_channel::Sender;
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
-use std::sync::{Arc, Mutex};
 
 #[rpc(server)]
 pub trait CallbackRPC {
@@ -12,12 +8,22 @@ pub trait CallbackRPC {
     fn callback(&self) -> Result<()>;
 }
 
-pub struct CallbackRPCImpl<S> {
-    state: Arc<Mutex<SMT<S>>>,
+pub struct CallbackRPCImpl {
+    sync_tx: Sender<()>,
 }
 
-impl<S: Store<H256> + Send + 'static> CallbackRPC for CallbackRPCImpl<S> {
+impl CallbackRPCImpl {
+    pub fn new(sync_tx: Sender<()>) -> Self {
+        CallbackRPCImpl { sync_tx }
+    }
+}
+
+impl CallbackRPC for CallbackRPCImpl {
     fn callback(&self) -> Result<()> {
+        // The previous notification is not handled yet, so we can ignore this
+        if let Err(err) = self.sync_tx.try_send(()) {
+            print!("ignore sync notify due to error: {:?}", err);
+        }
         Ok(())
     }
 }

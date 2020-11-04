@@ -12,7 +12,7 @@ impl SingleAggregator {
 }
 
 impl Consensus for SingleAggregator {
-    fn next_block_context(&self, tip: &L2Block) -> NextBlockContext {
+    fn next_block_context(&self, _tip: &L2Block) -> NextBlockContext {
         NextBlockContext {
             aggregator_id: self.aggregator_id,
         }

@@ -24,9 +24,14 @@ use collector::lumos::Lumos;
 use collector::Collector;
 use config::Config;
 use consensus::{single_aggregator::SingleAggregator, traits::Consensus};
+use crossbeam_channel::{bounded, RecvTimeoutError};
 use gw_generator::Generator;
+use parking_lot::Mutex;
+use rpc::Server;
 use state_impl::StateImpl;
 use state_impl::SyncCodeStore;
+use std::sync::Arc;
+use std::time::Duration;
 use tx_pool::TxPool;
 
 fn build_config() -> Config {
@@ -52,7 +57,8 @@ fn run() -> Result<()> {
     let tx_pool = {
         let generator = Generator::new(code_store.clone());
         let nb_ctx = consensus.next_block_context(&tip);
-        TxPool::create(state.new_overlay()?, generator, &tip, nb_ctx)?
+        let tx_pool = TxPool::create(state.new_overlay()?, generator, &tip, nb_ctx)?;
+        Arc::new(Mutex::new(tx_pool))
     };
     let mut chain = {
         let generator = Generator::new(code_store);
@@ -60,18 +66,42 @@ fn run() -> Result<()> {
             config.chain,
             state,
             consensus,
-            tip.raw(),
+            tip,
             last_synced,
             collector,
             generator,
-            tx_pool,
+            Arc::clone(&tx_pool),
         )
     };
-    println!("sync chain!");
+    println!("initial sync chain!");
     chain.sync()?;
-    let deposition_requests = Vec::new();
-    chain.produce_block(deposition_requests)?;
-    Ok(())
+    println!("start rpc server!");
+    let (sync_tx, sync_rx) = bounded(1);
+    let _server = Server::new()
+        .enable_callback(sync_tx)
+        .enable_tx_pool(Arc::clone(&tx_pool))
+        .start("127.0.0.1:8080")?;
+
+    // TODO support multiple aggregators and validator mode
+    // We assume we are the only aggregator for now.
+    loop {
+        match sync_rx.recv_timeout(Duration::from_secs(10)) {
+            Ok(()) => {
+                // receive syncing notification
+                println!("sync chain!");
+                chain.sync()?;
+            }
+            Err(RecvTimeoutError::Timeout) => {
+                // execute timeout event
+            }
+            Err(err) => panic!(err),
+        }
+
+        // TODO check tx pool to determine wether to produce a block or continue to collect more txs
+
+        let deposition_requests = Vec::new();
+        chain.produce_block(deposition_requests)?;
+    }
 }
 
 fn main() {

@@ -2,13 +2,9 @@ use crate::bytes::Bytes;
 use crate::error::Error;
 use crate::state_ext::StateExt;
 use crate::syscalls::{GetContractCode, L2Syscalls, RunResult};
-use gw_common::{
-    smt::{Store, H256, SMT},
-    state::{build_account_key, serialize_nonce, State, GW_ACCOUNT_NONCE, ZERO},
-};
+use gw_common::state::{build_account_key, serialize_nonce, State, GW_ACCOUNT_NONCE};
 use gw_types::{
-    core::CallType,
-    packed::{BlockInfo, CallContext, L2Block, RawL2Block, RawL2Transaction},
+    packed::{BlockInfo, CallContext, L2Block, RawL2Block},
     prelude::*,
 };
 use lazy_static::lazy_static;

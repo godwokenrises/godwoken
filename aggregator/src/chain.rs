@@ -24,6 +24,8 @@ use gw_types::{
         Unpack as GWUnpack,
     },
 };
+use parking_lot::Mutex;
+use std::sync::Arc;
 use std::time::SystemTime;
 
 pub struct HeaderInfo {
@@ -31,17 +33,18 @@ pub struct HeaderInfo {
     pub block_hash: [u8; 32],
 }
 
-/// State storage implementation
-type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
+/// concrete type aliases
+pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
+pub type TxPoolImpl<CodeStore> = TxPool<OverlayState<WrapStore<StateStore>>, CodeStore>;
 
 pub struct Chain<Collector, CodeStore, Consensus> {
     config: ChainConfig,
     state: StateImpl<StateStore>,
     collector: Collector,
     last_synced: HeaderInfo,
-    tip: RawL2Block,
+    tip: L2Block,
     generator: Generator<CodeStore>,
-    tx_pool: TxPool<OverlayState<WrapStore<StateStore>>, CodeStore>,
+    tx_pool: Arc<Mutex<TxPoolImpl<CodeStore>>>,
     consensus: Consensus,
 }
 
@@ -52,11 +55,11 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
         config: ChainConfig,
         state: StateImpl<StateStore>,
         consensus: Consen,
-        tip: RawL2Block,
+        tip: L2Block,
         last_synced: HeaderInfo,
         collector: Collec,
         generator: Generator<CodeStore>,
-        tx_pool: TxPool<OverlayState<WrapStore<StateStore>>, CodeStore>,
+        tx_pool: Arc<Mutex<TxPoolImpl<CodeStore>>>,
     ) -> Self {
         Chain {
             config,
@@ -103,7 +106,7 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
             let rollup_id = self.config.rollup_type_script.calc_script_hash().unpack();
             let l2block = parse_l2block(&tx_info.transaction, &rollup_id)?;
 
-            let tip_number: u64 = self.tip.number().unpack();
+            let tip_number: u64 = self.tip.raw().number().unpack();
             assert!(
                 l2block.raw().number().unpack() == tip_number + 1,
                 "new l2block number must be the successor of the tip"
@@ -117,11 +120,14 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
                 number: header.raw().number().unpack(),
                 block_hash: header.calc_header_hash().unpack(),
             };
-            self.tip = l2block.raw();
-            let overlay_state = self.state.new_overlay()?;
-            let nb_ctx = self.consensus.next_block_context(&l2block);
-            self.tx_pool.update_tip(&l2block, overlay_state, nb_ctx)?;
+            self.tip = l2block;
         }
+        // update tx pool state
+        let overlay_state = self.state.new_overlay()?;
+        let nb_ctx = self.consensus.next_block_context(&self.tip);
+        self.tx_pool
+            .lock()
+            .update_tip(&self.tip, overlay_state, nb_ctx)?;
         Ok(())
     }
 
@@ -140,8 +146,8 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
             .ok_or(anyhow!("signer is not configured!"))?;
         // take txs from tx pool
         // produce block
-        let pkg = self.tx_pool.package_txs(&deposition_requests)?;
-        let parent_number: u64 = self.tip.number().unpack();
+        let pkg = self.tx_pool.lock().package_txs(&deposition_requests)?;
+        let parent_number: u64 = self.tip.raw().number().unpack();
         let number = parent_number + 1;
         let aggregator_id: u32 = signer.account_id;
         let timestamp: u64 = unixtime()?;
