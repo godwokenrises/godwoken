@@ -25,6 +25,7 @@ use gw_common::{
     blake2b::{new_blake2b, Blake2bHasher},
     sparse_merkle_tree::{CompiledMerkleProof, H256},
     state::State,
+    merkle_utils::serialize_block_key,
 };
 
 use crate::actions;
@@ -99,11 +100,7 @@ fn verify_l2block(
         return Err(Error::PrevGlobalState);
     }
 
-    let block_index = {
-        let mut buf = [0u8; 32];
-        buf[..size_of_val(&number)].copy_from_slice(&number.to_le_bytes());
-        buf
-    };
+    let block_index = serialize_block_key(number);
     let block_proof: Bytes = l2block.block_proof().unpack();
     let block_merkle_proof = CompiledMerkleProof(block_proof.to_vec());
     let prev_block_root: [u8; 32] = prev_global_state.block().merkle_root().unpack();

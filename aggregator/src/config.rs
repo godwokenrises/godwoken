@@ -6,6 +6,7 @@ pub struct Config {
     pub consensus: ConsensusConfig,
     pub rpc: RPC,
     pub lumos: Lumos,
+    pub genesis: GenesisConfig,
 }
 
 pub struct Signer {
@@ -16,10 +17,15 @@ pub struct ConsensusConfig {
     pub aggregator_id: u32,
 }
 
+pub struct GenesisConfig {
+    pub initial_aggregator_pubkey: [u8; 20],
+    pub initial_deposition: u64,
+    pub timestamp: u64,
+}
+
 pub struct ChainConfig {
     pub signer: Option<Signer>,
     pub rollup_type_script: Script,
-    pub l2_genesis: L2Block,
 }
 
 pub struct RPC {
