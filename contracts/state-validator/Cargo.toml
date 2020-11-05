@@ -7,6 +7,6 @@ edition = "2018"
 
 [dependencies]
 ckb-std = "0.6.3"
-gw-types = { path = "../../types", default-features = false }
-gw-common = { path = "../../common" }
+gw-types = { path = "../../crates/types", default-features = false }
+gw-common = { path = "../../crates/common" }
 ckb-lib-secp256k1 = { git = "https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git", branch = "master" }

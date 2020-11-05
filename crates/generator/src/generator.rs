@@ -15,8 +15,8 @@ use ckb_vm::{
 };
 
 lazy_static! {
-    static ref VALIDATOR: Bytes = include_bytes!("../../c/build/validator").to_vec().into();
-    static ref GENERATOR: Bytes = include_bytes!("../../c/build/generator").to_vec().into();
+    static ref VALIDATOR: Bytes = include_bytes!("../../../c/build/validator").to_vec().into();
+    static ref GENERATOR: Bytes = include_bytes!("../../../c/build/generator").to_vec().into();
 }
 
 pub struct DepositionRequest {

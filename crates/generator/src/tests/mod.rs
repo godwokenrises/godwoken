@@ -8,8 +8,8 @@ use std::{collections::HashMap, fs, io::Read, path::PathBuf};
 mod examples;
 mod sudt;
 
-const BINS_DIR: &'static str = "../c/build";
-const EXAMPLES_DIR: &'static str = "../c/build/examples";
+const BINS_DIR: &'static str = "../../c/build";
+const EXAMPLES_DIR: &'static str = "../../c/build/examples";
 const SUM_BIN_NAME: &'static str = "sum.so";
 const PROXY_BIN_NAME: &'static str = "proxy.so";
 const SUDT_BIN_NAME: &'static str = "sudt.so";

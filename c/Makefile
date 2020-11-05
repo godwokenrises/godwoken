@@ -5,7 +5,7 @@ OBJCOPY := $(TARGET)-objcopy
 CFLAGS := -fPIC -O3 -nostdinc -nostdlib -nostartfiles -fvisibility=hidden -I deps/ckb-c-stdlib -I deps/ckb-c-stdlib/libc -I deps -I deps/molecule -I . -I build -Wall -Werror -Wno-nonnull -Wno-nonnull-compare -Wno-unused-function -g
 LDFLAGS := -Wl,-static -fdata-sections -ffunction-sections -Wl,--gc-sections
 MOLC := moleculec
-MOLC_VERSION := 0.6.0
+MOLC_VERSION := 0.6.1
 PROTOCOL_SCHEMA_DIR := ../types/schemas
 
 # docker pull nervos/ckb-riscv-gnu-toolchain:gnu-bionic-20191012
