@@ -6,4 +6,5 @@ members = [
   "crates/generator",
   "crates/types",
   "crates/jsonrpc-types",
+  "crates/setup-tool",
 ]

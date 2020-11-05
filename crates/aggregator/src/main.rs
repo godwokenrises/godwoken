@@ -61,9 +61,12 @@ fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
     assert_eq!(reserved_account_id, 0, "reserved account id must be zero");
 
     // create initial aggregator
-    let initial_aggregator_id = state
-        .create_account(ZERO, config.initial_aggregator_pubkey.clone())
-        .map_err(|err| anyhow!("create initial aggregator error: {:?}", err))?;
+    let initial_aggregator_id = {
+        let pubkey_hash = config.initial_aggregator_pubkey_hash.clone().into();
+        state
+            .create_account(ZERO, pubkey_hash)
+            .map_err(|err| anyhow!("create initial aggregator error: {:?}", err))?
+    };
     state
         .mint_sudt(
             &CKB_TOKEN_ID,

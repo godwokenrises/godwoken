@@ -1,3 +1,4 @@
+use ckb_types::H160;
 use gw_jsonrpc_types::ckb_jsonrpc_types::Script;
 use serde::{Deserialize, Serialize};
 
@@ -22,7 +23,7 @@ pub struct ConsensusConfig {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GenesisConfig {
-    pub initial_aggregator_pubkey: [u8; 20],
+    pub initial_aggregator_pubkey_hash: H160,
     pub initial_deposition: u64,
     pub timestamp: u64,
 }
