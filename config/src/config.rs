@@ -1,4 +1,4 @@
-use ckb_jsonrpc_types::Script;
+use gw_jsonrpc_types::ckb_jsonrpc_types::Script;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

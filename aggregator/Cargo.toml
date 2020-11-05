@@ -8,11 +8,11 @@ edition = "2018"
 
 [dependencies]
 gw-types = { path = "../types" }
+gw-config = { path = "../config" }
 gw-common = { path = "../common" }
 gw-generator = { path = "../generator" }
+gw-jsonrpc-types = { path = "../jsonrpc-types" }
 ckb-types = "0.37.0-pre"
-ckb-jsonrpc-types = "0.37.0-pre"
-serde = { version = "1.0", features = ["derive"] }
 jsonrpc-core = "~14.1"
 jsonrpc-derive = "14.0" # quote requirement conflict
 jsonrpc-http-server = "~14.1"
@@ -22,6 +22,5 @@ thiserror = "1.0"
 secp256k1 = { version = "0.17", features = ["recovery"] }
 lazy_static = "1.4"
 parking_lot = "0.11"
-faster-hex = "0.4"
 crossbeam-channel = "0.5"
 toml = "0.5"

@@ -8,11 +8,9 @@
 
 mod chain;
 mod collector;
-mod config;
 mod consensus;
 mod crypto;
 mod deposition;
-mod jsonrpc_types;
 mod rpc;
 mod state_impl;
 mod tx_pool;
@@ -22,7 +20,6 @@ use chain::{Chain, HeaderInfo};
 use ckb_types::prelude::Unpack;
 use collector::lumos::Lumos;
 use collector::Collector;
-use config::{Config, GenesisConfig};
 use consensus::{single_aggregator::SingleAggregator, traits::Consensus};
 use crossbeam_channel::{bounded, RecvTimeoutError};
 use gw_common::{
@@ -32,6 +29,7 @@ use gw_common::{
     state::{State, ZERO},
     CKB_TOKEN_ID,
 };
+use gw_config::{Config, GenesisConfig};
 use gw_generator::Generator;
 use gw_types::{
     packed::{AccountMerkleState, L2Block, RawL2Block},

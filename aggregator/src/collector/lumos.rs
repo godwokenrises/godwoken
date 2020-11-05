@@ -1,7 +1,7 @@
 //! Lumos client
 
 use crate::collector::{Collector, Error, Header, TransactionInfo};
-use crate::jsonrpc_types::collector::QueryParam;
+use gw_jsonrpc_types::collector::QueryParam;
 pub struct Lumos;
 
 impl Collector for Lumos {

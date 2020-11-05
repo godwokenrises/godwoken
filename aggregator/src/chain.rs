@@ -1,8 +1,6 @@
 use crate::collector::Collector;
-use crate::config::ChainConfig;
 use crate::consensus::traits::Consensus;
 use crate::deposition::fetch_deposition_requests;
-use crate::jsonrpc_types::collector::QueryParam;
 use crate::state_impl::{OverlayState, StateImpl, WrapStore};
 use crate::tx_pool::TxPool;
 use anyhow::{anyhow, Result};
@@ -12,11 +10,13 @@ use ckb_types::{
     prelude::Unpack,
 };
 use gw_common::{merkle_utils::calculate_merkle_root, sparse_merkle_tree};
+use gw_config::ChainConfig;
 use gw_generator::{
     generator::{DepositionRequest, StateTransitionArgs},
     syscalls::GetContractCode,
     Generator,
 };
+use gw_jsonrpc_types::collector::QueryParam;
 use gw_types::{
     packed::{AccountMerkleState, L2Block, L2BlockReader, RawL2Block, SubmitTransactions},
     prelude::{

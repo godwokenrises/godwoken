@@ -1,7 +1,9 @@
 [workspace]
 members = [
-  "types",
+  "aggregator",
+  "config",
   "common",
   "generator",
-  "aggregator",
+  "types",
+  "jsonrpc-types",
 ]

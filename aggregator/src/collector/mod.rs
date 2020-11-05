@@ -3,9 +3,9 @@
 pub mod error;
 pub mod lumos;
 
-use crate::jsonrpc_types::collector::QueryParam;
 use ckb_types::packed::{Header, Transaction};
 use error::Error;
+use gw_jsonrpc_types::collector::QueryParam;
 
 pub struct TransactionInfo {
     pub transaction: Transaction,

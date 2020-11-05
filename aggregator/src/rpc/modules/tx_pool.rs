@@ -1,6 +1,6 @@
 use crate::chain::TxPoolImpl;
-use crate::jsonrpc_types::layer2::L2Transaction;
 use gw_generator::GetContractCode;
+use gw_jsonrpc_types::layer2::L2Transaction;
 use jsonrpc_core::{Error, Result};
 use jsonrpc_derive::rpc;
 use parking_lot::Mutex;

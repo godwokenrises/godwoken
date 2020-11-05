@@ -1,4 +1,4 @@
-use crate::jsonrpc_types::fixed_bytes::Byte65;
+use crate::fixed_bytes::Byte65;
 use ckb_jsonrpc_types::{JsonBytes, Uint32};
 use ckb_types::{bytes::Bytes, H256};
 use gw_types::{packed, prelude::*};
