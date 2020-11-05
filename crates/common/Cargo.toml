@@ -10,3 +10,7 @@ edition = "2018"
 blake2b-ref = { version = "0.2", default-features = false }
 sparse-merkle-tree = { version = "0.3", default-features = false }
 cfg-if = "0.1"
+
+[features]
+default = ["std"]
+std = ["sparse-merkle-tree/std"]
