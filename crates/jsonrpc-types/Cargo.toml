@@ -10,5 +10,5 @@ edition = "2018"
 serde = { version = "1.0", features = ["derive"] }
 faster-hex = "0.4"
 gw-types = { path = "../types" }
-ckb-types = "0.37.0-pre"
-ckb-jsonrpc-types = "0.37.0-pre"
+ckb-types = "0.37.0"
+ckb-jsonrpc-types = "0.37.0"

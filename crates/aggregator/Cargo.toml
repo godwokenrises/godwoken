@@ -12,7 +12,7 @@ gw-config = { path = "../config" }
 gw-common = { path = "../common" }
 gw-generator = { path = "../generator" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
-ckb-types = "0.37.0-pre"
+ckb-types = "0.37.0"
 jsonrpc-core = "~14.1"
 jsonrpc-derive = "14.0" # quote requirement conflict
 jsonrpc-http-server = "~14.1"
