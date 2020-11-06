@@ -10,7 +10,7 @@ use ckb_types::{
     prelude::Unpack,
 };
 use gw_common::{merkle_utils::calculate_merkle_root, sparse_merkle_tree};
-use gw_config::ChainConfig;
+use gw_config::{AggregatorConfig, ChainConfig};
 use gw_generator::{
     generator::{DepositionRequest, StateTransitionArgs},
     syscalls::GetContractCode,
@@ -39,6 +39,7 @@ pub type TxPoolImpl<CodeStore> = TxPool<OverlayState<WrapStore<StateStore>>, Cod
 
 pub struct Chain<Collector, CodeStore, Consensus> {
     config: ChainConfig,
+    aggregator: Option<AggregatorConfig>,
     rollup_type_script_hash: [u8; 32],
     state: StateImpl<StateStore>,
     collector: Collector,
@@ -54,6 +55,7 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
 {
     pub fn new(
         config: ChainConfig,
+        aggregator: Option<AggregatorConfig>,
         state: StateImpl<StateStore>,
         consensus: Consen,
         tip: L2Block,
@@ -66,6 +68,7 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
         let rollup_type_script_hash = rollup_type_script.calc_script_hash().unpack();
         Chain {
             config,
+            aggregator,
             state,
             collector,
             last_synced,
@@ -142,17 +145,16 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
         &mut self,
         deposition_requests: Vec<DepositionRequest>,
     ) -> Result<RawL2Block> {
-        let signer = self
-            .config
-            .signer
+        let aggregator_id = self
+            .aggregator
             .as_ref()
-            .ok_or(anyhow!("signer is not configured!"))?;
+            .ok_or(anyhow!("aggregator is not configured!"))?
+            .account_id;
         // take txs from tx pool
         // produce block
         let pkg = self.tx_pool.lock().package_txs(&deposition_requests)?;
         let parent_number: u64 = self.tip.raw().number().unpack();
         let number = parent_number + 1;
-        let aggregator_id: u32 = signer.account_id;
         let timestamp: u64 = unixtime()?;
         let submit_txs = {
             let tx_witness_root = calculate_merkle_root(

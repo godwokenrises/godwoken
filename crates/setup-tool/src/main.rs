@@ -141,8 +141,9 @@ fn run() -> Result<()> {
     // the zero account_id is reserved, so our initial account id is 1
     let initial_account_id = 1;
 
-    let signer = Signer {
+    let aggregator = AggregatorConfig {
         account_id: initial_account_id,
+        signer: SignerConfig {},
     };
 
     let consensus = ConsensusConfig {
@@ -157,10 +158,7 @@ fn run() -> Result<()> {
 
     let rollup_type_script = build_rollup_script(rollup_contract_path)?;
 
-    let chain = ChainConfig {
-        signer: Some(signer),
-        rollup_type_script,
-    };
+    let chain = ChainConfig { rollup_type_script };
 
     let rpc = RPC {
         listen: rpc_listen_address.to_string(),
@@ -177,6 +175,7 @@ fn run() -> Result<()> {
         rpc,
         lumos,
         genesis,
+        aggregator: Some(aggregator),
     };
     let output = toml::to_string_pretty(&config)?;
     println!("{}", output);

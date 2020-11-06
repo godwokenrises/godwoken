@@ -157,6 +157,7 @@ fn run() -> Result<()> {
         let generator = Generator::new(code_store);
         Chain::new(
             config.chain,
+            config.aggregator,
             state,
             consensus,
             tip,

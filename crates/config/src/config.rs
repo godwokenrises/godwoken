@@ -9,12 +9,17 @@ pub struct Config {
     pub rpc: RPC,
     pub lumos: Lumos,
     pub genesis: GenesisConfig,
+    pub aggregator: Option<AggregatorConfig>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Signer {
+pub struct AggregatorConfig {
     pub account_id: u32,
+    pub signer: SignerConfig,
 }
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SignerConfig {}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ConsensusConfig {
@@ -30,7 +35,6 @@ pub struct GenesisConfig {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ChainConfig {
-    pub signer: Option<Signer>,
     pub rollup_type_script: Script,
 }
 
