@@ -9,8 +9,8 @@ use ckb_types::{
     packed::{RawTransaction, Script, Transaction, WitnessArgs, WitnessArgsReader},
     prelude::Unpack,
 };
-use gw_common::{merkle_utils::calculate_merkle_root, sparse_merkle_tree};
-use gw_config::{AggregatorConfig, ChainConfig};
+use gw_common::{merkle_utils::calculate_merkle_root, sparse_merkle_tree, state::State, H256};
+use gw_config::ChainConfig;
 use gw_generator::{
     generator::{DepositionRequest, StateTransitionArgs},
     syscalls::GetContractCode,
@@ -20,8 +20,8 @@ use gw_jsonrpc_types::collector::QueryParam;
 use gw_types::{
     packed::{AccountMerkleState, L2Block, L2BlockReader, RawL2Block, SubmitTransactions},
     prelude::{
-        Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Reader as GWReader,
-        Unpack as GWUnpack,
+        Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
+        Reader as GWReader, Unpack as GWUnpack,
     },
 };
 use parking_lot::Mutex;
@@ -35,11 +35,10 @@ pub struct HeaderInfo {
 
 /// concrete type aliases
 pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
-pub type TxPoolImpl<CodeStore> = TxPool<OverlayState<WrapStore<StateStore>>, CodeStore>;
+pub type TxPoolImpl<CodeStore> = TxPool<WrapStore<StateStore>, CodeStore>;
 
 pub struct Chain<Collector, CodeStore, Consensus> {
     config: ChainConfig,
-    aggregator: Option<AggregatorConfig>,
     rollup_type_script_hash: [u8; 32],
     state: StateImpl<StateStore>,
     collector: Collector,
@@ -55,7 +54,6 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
 {
     pub fn new(
         config: ChainConfig,
-        aggregator: Option<AggregatorConfig>,
         state: StateImpl<StateStore>,
         consensus: Consen,
         tip: L2Block,
@@ -68,7 +66,6 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
         let rollup_type_script_hash = rollup_type_script.calc_script_hash().unpack();
         Chain {
             config,
-            aggregator,
             state,
             collector,
             last_synced,
@@ -137,19 +134,15 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
         Ok(())
     }
 
-    /// Produce a new block
+    /// Produce an unsigned new block
     ///
     /// This function should be called in the turn that the current aggregator to produce the next block,
     /// otherwise the produced block may invalided by the state-validator contract.
     pub fn produce_block(
         &mut self,
+        aggregator_id: u32,
         deposition_requests: Vec<DepositionRequest>,
-    ) -> Result<RawL2Block> {
-        let aggregator_id = self
-            .aggregator
-            .as_ref()
-            .ok_or(anyhow!("aggregator is not configured!"))?
-            .account_id;
+    ) -> Result<L2Block> {
         // take txs from tx pool
         // produce block
         let pkg = self.tx_pool.lock().package_txs(&deposition_requests)?;
@@ -195,18 +188,47 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
             .submit_transactions(Some(submit_txs).pack())
             .valid(1.into())
             .build();
-        Ok(raw_block)
+        // generate block fields from current state
+        let kv_state: Vec<(H256, H256)> = pkg
+            .touched_keys
+            .iter()
+            .map(|k| {
+                self.state
+                    .get_raw(k)
+                    .map(|v| (*k, v))
+                    .map_err(|err| anyhow!("can't fetch value error: {:?}", err))
+            })
+            .collect::<Result<_>>()?;
+        let packed_kv_state = kv_state.pack();
+        let proof = self
+            .state
+            .merkle_proof(kv_state)
+            .map_err(|err| anyhow!("merkle proof error: {:?}", err))?;
+        let txs: Vec<_> = pkg.tx_recipts.into_iter().map(|tx| tx.tx).collect();
+        let block_proof = self
+            .state
+            .block_merkle_proof(number)
+            .map_err(|err| anyhow!("merkle proof error: {:?}", err))?;
+        let block = L2Block::new_builder()
+            .raw(raw_block)
+            .kv_state(packed_kv_state)
+            .kv_state_proof(proof.pack())
+            .transactions(txs.pack())
+            .block_proof(block_proof.pack())
+            .build();
+        Ok(block)
     }
 
     fn process_block(&mut self, l2block: L2Block, tx: &RawTransaction) -> Result<()> {
         let deposition_requests =
             fetch_deposition_requests(&self.collector, tx, &self.rollup_type_script_hash)?;
         let args = StateTransitionArgs {
-            l2block,
+            l2block: l2block.clone(),
             deposition_requests,
         };
         self.generator
             .apply_state_transition(&mut self.state, args)?;
+        self.state.push_block(l2block)?;
         Ok(())
     }
 }

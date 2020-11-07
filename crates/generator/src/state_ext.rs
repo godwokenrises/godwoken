@@ -23,12 +23,12 @@ impl<S: State> StateExt for S {
         deposition_requests: &[DepositionRequest],
     ) -> Result<(), Error> {
         for request in deposition_requests {
-            if request.account_id == 0 {
-                let id = self.create_account(ZERO, request.pubkey_hash)?;
-                self.mint_sudt(&request.token_id, id, request.value)?;
+            let id = if request.account_id == 0 {
+                self.create_account(ZERO, request.pubkey_hash)?
             } else {
-                self.mint_sudt(&request.token_id, request.account_id, request.value)?;
-            }
+                request.account_id
+            };
+            self.mint_sudt(&request.token_id, id, request.value)?;
         }
 
         Ok(())

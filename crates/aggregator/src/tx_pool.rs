@@ -1,14 +1,20 @@
 use crate::consensus::traits::NextBlockContext;
 use crate::crypto::{verify_signature, Signature};
+use crate::state_impl::OverlayState;
 use anyhow::{anyhow, Result};
 use gw_common::{
-    blake2b::new_blake2b, merkle_utils::calculate_compacted_account_root, state::State,
+    blake2b::new_blake2b,
+    merkle_utils::calculate_compacted_account_root,
+    smt::{Store, H256 as SMTH256, SMT},
+    state::State,
+    H256,
 };
 use gw_generator::{generator::DepositionRequest, state_ext::StateExt, Generator, GetContractCode};
 use gw_types::{
     packed::{BlockInfo, L2Block, L2Transaction},
     prelude::*,
 };
+use std::collections::HashSet;
 
 const MAX_PACKAGED_TXS: usize = 6000;
 
@@ -20,16 +26,16 @@ pub struct TxRecipt {
 }
 
 pub struct TxPool<S, CodeStore> {
-    state: S,
+    state: OverlayState<S>,
     generator: Generator<CodeStore>,
     queue: Vec<TxRecipt>,
     next_block_info: BlockInfo,
     next_prev_account_state: MerkleState,
 }
 
-impl<S: State, CodeStore> TxPool<S, CodeStore> {
+impl<S: Store<SMTH256>, CodeStore> TxPool<S, CodeStore> {
     pub fn create(
-        state: S,
+        state: OverlayState<S>,
         generator: Generator<CodeStore>,
         tip: &L2Block,
         nb_ctx: NextBlockContext,
@@ -47,7 +53,7 @@ impl<S: State, CodeStore> TxPool<S, CodeStore> {
     }
 }
 
-impl<S: State, CS: GetContractCode> TxPool<S, CS> {
+impl<S: Store<SMTH256>, CS: GetContractCode> TxPool<S, CS> {
     /// Push a layer2 tx into pool
     pub fn push(&mut self, tx: L2Transaction) -> Result<()> {
         // 1. verify tx signature
@@ -125,12 +131,22 @@ impl<S: State, CS: GetContractCode> TxPool<S, CS> {
     /// this method return a tx package, and remove these txs from the pool
     pub fn package_txs(&mut self, deposition_requests: &[DepositionRequest]) -> Result<TxPackage> {
         let tx_recipts = self.queue.drain(..).collect();
+        // in the current implementation, we only need the deposition / withdraw touched keys
+        self.state.overlay_store_mut().clear_touched_keys();
         // handle deposition requests and calculate post state
         self.state
             .apply_deposition_requests(&deposition_requests)
             .map_err(|err| anyhow!("apply deposition requests: {:?}", err))?;
         let post_account_state = get_account_state(&self.state)?;
+        let touched_keys = self
+            .state
+            .overlay_store_mut()
+            .touched_keys()
+            .into_iter()
+            .map(|k| (*k).into())
+            .collect();
         let pkg = TxPackage {
+            touched_keys,
             tx_recipts,
             prev_account_state: self.next_prev_account_state.clone(),
             post_account_state,
@@ -140,7 +156,12 @@ impl<S: State, CS: GetContractCode> TxPool<S, CS> {
 
     /// Update tip and state
     /// this method reset tip and tx_pool states
-    pub fn update_tip(&mut self, tip: &L2Block, state: S, nb_ctx: NextBlockContext) -> Result<()> {
+    pub fn update_tip(
+        &mut self,
+        tip: &L2Block,
+        state: OverlayState<S>,
+        nb_ctx: NextBlockContext,
+    ) -> Result<()> {
         // TODO catch abandoned txs and recompute them.
         self.state = state;
         self.update_tip_without_status(tip, nb_ctx)?;
@@ -199,6 +220,8 @@ pub struct MerkleState {
 pub struct TxPackage {
     /// tx recipts
     pub tx_recipts: Vec<TxRecipt>,
+    /// txs touched keys, both reads and writes
+    pub touched_keys: HashSet<H256>,
     /// state of last block
     pub prev_account_state: MerkleState,
     /// state after handling deposition requests

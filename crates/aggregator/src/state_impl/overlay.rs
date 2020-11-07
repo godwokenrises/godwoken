@@ -27,6 +27,14 @@ impl<S: Store<H256>> OverlayState<S> {
             account_count,
         }
     }
+
+    pub fn overlay_store(&self) -> &OverlayStore<S> {
+        self.tree.store()
+    }
+
+    pub fn overlay_store_mut(&mut self) -> &mut OverlayStore<S> {
+        self.tree.store_mut()
+    }
 }
 
 impl<S: Store<H256>> State for OverlayState<S> {
@@ -49,6 +57,20 @@ impl<S: Store<H256>> State for OverlayState<S> {
         self.account_count = count;
         Ok(())
     }
+    fn merkle_proof(&self, leaves: Vec<([u8; 32], [u8; 32])>) -> Result<Vec<u8>, Error> {
+        let keys = leaves.iter().map(|(k, v)| (*k).into()).collect();
+        let proof = self
+            .tree
+            .merkle_proof(keys)?
+            .compile(
+                leaves
+                    .into_iter()
+                    .map(|(k, v)| (k.into(), v.into()))
+                    .collect(),
+            )?
+            .0;
+        Ok(proof)
+    }
 }
 
 pub struct OverlayStore<S> {
@@ -57,6 +79,7 @@ pub struct OverlayStore<S> {
     leaves_map: HashMap<H256, LeafNode<H256>>,
     deleted_branches: HashSet<H256>,
     deleted_leaves: HashSet<H256>,
+    touched_keys: HashSet<H256>,
 }
 
 impl<S: Store<H256>> OverlayStore<S> {
@@ -67,7 +90,16 @@ impl<S: Store<H256>> OverlayStore<S> {
             leaves_map: HashMap::default(),
             deleted_branches: HashSet::default(),
             deleted_leaves: HashSet::default(),
+            touched_keys: HashSet::default(),
         }
+    }
+
+    pub fn touched_keys(&self) -> &HashSet<H256> {
+        &self.touched_keys
+    }
+
+    pub fn clear_touched_keys(&mut self) {
+        self.touched_keys.clear()
     }
 }
 
@@ -98,6 +130,7 @@ impl<S: Store<H256>> Store<H256> for OverlayStore<S> {
     fn insert_leaf(&mut self, leaf_hash: H256, leaf: LeafNode<H256>) -> Result<(), SMTError> {
         self.deleted_leaves.remove(&leaf_hash);
         self.leaves_map.insert(leaf_hash, leaf);
+        self.touched_keys.insert(leaf_hash);
         Ok(())
     }
     fn remove_branch(&mut self, node: &H256) -> Result<(), SMTError> {
@@ -108,6 +141,7 @@ impl<S: Store<H256>> Store<H256> for OverlayStore<S> {
     fn remove_leaf(&mut self, leaf_hash: &H256) -> Result<(), SMTError> {
         self.deleted_leaves.insert(*leaf_hash);
         self.leaves_map.remove(leaf_hash);
+        self.touched_keys.insert(*leaf_hash);
         Ok(())
     }
 }

@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod blake2b;
+pub mod builtins;
 pub mod merkle_utils;
 pub mod smt;
 pub mod state;

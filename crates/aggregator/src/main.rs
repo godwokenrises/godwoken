@@ -60,6 +60,8 @@ fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
         .map_err(|err| anyhow!("create reserved account error: {:?}", err))?;
     assert_eq!(reserved_account_id, 0, "reserved account id must be zero");
 
+    // TODO setup the simple UDT contract
+
     // create initial aggregator
     let initial_aggregator_id = {
         let pubkey_hash = config.initial_aggregator_pubkey_hash.clone().into();
@@ -157,7 +159,6 @@ fn run() -> Result<()> {
         let generator = Generator::new(code_store);
         Chain::new(
             config.chain,
-            config.aggregator,
             state,
             consensus,
             tip,
@@ -167,6 +168,11 @@ fn run() -> Result<()> {
             Arc::clone(&tx_pool),
         )
     };
+    let aggregator_id = config
+        .aggregator
+        .as_ref()
+        .ok_or(anyhow!("aggregator is not configured!"))?
+        .account_id;
     println!("initial sync chain!");
     chain.sync()?;
     println!("start rpc server!");
@@ -194,7 +200,9 @@ fn run() -> Result<()> {
         // TODO check tx pool to determine wether to produce a block or continue to collect more txs
 
         let deposition_requests = Vec::new();
-        chain.produce_block(deposition_requests)?;
+        let block = chain.produce_block(aggregator_id, deposition_requests)?;
+        // signer.sign(block)
+        // client.commit_block(block);
     }
 }
 

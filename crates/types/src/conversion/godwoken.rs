@@ -28,5 +28,23 @@ impl<'r> Unpack<[u8; 65]> for packed::SignatureReader<'r> {
 }
 
 impl_conversion_for_entity_unpack!([u8; 65], Signature);
+
+impl Pack<packed::KVPair> for ([u8; 32], [u8; 32]) {
+    fn pack(&self) -> packed::KVPair {
+        packed::KVPair::new_builder()
+            .k(self.0.pack())
+            .v(self.1.pack())
+            .build()
+    }
+}
+
+impl<'r> Unpack<([u8; 32], [u8; 32])> for packed::KVPairReader<'r> {
+    fn unpack(&self) -> ([u8; 32], [u8; 32]) {
+        (self.k().unpack(), self.v().unpack())
+    }
+}
+
+impl_conversion_for_vector!(([u8; 32], [u8; 32]), KVPairVec, KVPairVecReader);
 impl_conversion_for_packed_iterator_pack!(KVPair, KVPairVec);
+impl_conversion_for_packed_iterator_pack!(L2Transaction, L2TransactionVec);
 impl_conversion_for_packed_optional_pack!(SubmitTransactions, SubmitTransactionsOpt);
