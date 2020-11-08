@@ -1,5 +1,5 @@
 [package]
-name = "aggregator"
+name = "gw-chain"
 version = "0.1.0"
 authors = ["jjy <jjyruby@gmail.com>"]
 edition = "2018"

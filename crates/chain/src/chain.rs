@@ -25,6 +25,13 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+/// Produce block param
+pub struct ProduceBlockParam {
+    /// aggregator of this block
+    pub aggregator_id: u32,
+    /// deposition requests
+    pub deposition_requests: Vec<DepositionRequest>,
+}
 /// sync params
 pub struct SyncParam {
     /// sync infos, must be sorted
@@ -148,11 +155,11 @@ impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
     ///
     /// This function should be called in the turn that the current aggregator to produce the next block,
     /// otherwise the produced block may invalided by the state-validator contract.
-    pub fn produce_block(
-        &mut self,
-        aggregator_id: u32,
-        deposition_requests: Vec<DepositionRequest>,
-    ) -> Result<L2Block> {
+    pub fn produce_block(&mut self, param: ProduceBlockParam) -> Result<L2Block> {
+        let ProduceBlockParam {
+            aggregator_id,
+            deposition_requests,
+        } = param;
         // take txs from tx pool
         // produce block
         let pkg = self.tx_pool.lock().package_txs(&deposition_requests)?;

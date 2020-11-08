@@ -14,7 +14,7 @@ mod state_impl;
 mod tx_pool;
 
 use anyhow::{anyhow, Result};
-use chain::{Chain, HeaderInfo};
+use chain::{Chain, HeaderInfo, ProduceBlockParam};
 use consensus::{single_aggregator::SingleAggregator, traits::Consensus};
 use crossbeam_channel::{bounded, RecvTimeoutError};
 use gw_common::{
@@ -191,7 +191,10 @@ fn run() -> Result<()> {
         // TODO check tx pool to determine wether to produce a block or continue to collect more txs
 
         let deposition_requests = Vec::new();
-        let block = chain.produce_block(aggregator_id, deposition_requests)?;
+        let block = chain.produce_block(ProduceBlockParam {
+            aggregator_id,
+            deposition_requests,
+        })?;
         // signer.sign(block)
         // client.commit_block(block);
     }

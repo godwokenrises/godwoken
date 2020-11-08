@@ -16,29 +16,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee2a4ec343196209d6594e19543ae87a39f96d5534d7174822a3ad825dd6ed7e"
 
 [[package]]
-name = "aggregator"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ckb-types",
- "crossbeam-channel 0.5.0",
- "gw-common",
- "gw-config",
- "gw-generator",
- "gw-jsonrpc-types",
- "gw-types",
- "jsonrpc-core",
- "jsonrpc-derive",
- "jsonrpc-http-server",
- "jsonrpc-server-utils",
- "lazy_static",
- "parking_lot 0.11.0",
- "secp256k1",
- "thiserror",
- "toml",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "0.7.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -608,6 +585,29 @@ dependencies = [
  "log",
  "plain",
  "scroll",
+]
+
+[[package]]
+name = "gw-chain"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ckb-types",
+ "crossbeam-channel 0.5.0",
+ "gw-common",
+ "gw-config",
+ "gw-generator",
+ "gw-jsonrpc-types",
+ "gw-types",
+ "jsonrpc-core",
+ "jsonrpc-derive",
+ "jsonrpc-http-server",
+ "jsonrpc-server-utils",
+ "lazy_static",
+ "parking_lot 0.11.0",
+ "secp256k1",
+ "thiserror",
+ "toml",
 ]
 
 [[package]]
