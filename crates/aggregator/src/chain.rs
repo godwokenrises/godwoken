@@ -1,7 +1,5 @@
-use crate::collector::Collector;
 use crate::consensus::traits::Consensus;
-use crate::deposition::fetch_deposition_requests;
-use crate::state_impl::{OverlayState, StateImpl, WrapStore};
+use crate::state_impl::{StateImpl, WrapStore};
 use crate::tx_pool::TxPool;
 use anyhow::{anyhow, Result};
 use ckb_types::{
@@ -16,7 +14,6 @@ use gw_generator::{
     syscalls::GetContractCode,
     Generator,
 };
-use gw_jsonrpc_types::collector::QueryParam;
 use gw_types::{
     packed::{AccountMerkleState, L2Block, L2BlockReader, RawL2Block, SubmitTransactions},
     prelude::{
@@ -28,6 +25,27 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+/// sync params
+pub struct SyncParam {
+    /// sync infos, must be sorted
+    pub sync_infos: Vec<SyncInfo>,
+    /// has fork happened before this sync?
+    pub forked: bool,
+}
+
+pub struct SyncInfo {
+    /// transaction info
+    pub transaction_info: TransactionInfo,
+    /// transactions' header info
+    pub header_info: HeaderInfo,
+    /// deposition requests
+    pub deposition_requests: Vec<DepositionRequest>,
+}
+
+pub struct TransactionInfo {
+    pub transaction: Transaction,
+    pub block_hash: [u8; 32],
+}
 pub struct HeaderInfo {
     pub number: u64,
     pub block_hash: [u8; 32],
@@ -37,11 +55,10 @@ pub struct HeaderInfo {
 pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
 pub type TxPoolImpl<CodeStore> = TxPool<WrapStore<StateStore>, CodeStore>;
 
-pub struct Chain<Collector, CodeStore, Consensus> {
+pub struct Chain<CodeStore, Consensus> {
     config: ChainConfig,
     rollup_type_script_hash: [u8; 32],
     state: StateImpl<StateStore>,
-    collector: Collector,
     last_synced: HeaderInfo,
     tip: L2Block,
     generator: Generator<CodeStore>,
@@ -49,16 +66,13 @@ pub struct Chain<Collector, CodeStore, Consensus> {
     consensus: Consensus,
 }
 
-impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
-    Chain<Collec, CodeStore, Consen>
-{
+impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
     pub fn new(
         config: ChainConfig,
         state: StateImpl<StateStore>,
         consensus: Consen,
         tip: L2Block,
         last_synced: HeaderInfo,
-        collector: Collec,
         generator: Generator<CodeStore>,
         tx_pool: Arc<Mutex<TxPoolImpl<CodeStore>>>,
     ) -> Self {
@@ -67,7 +81,6 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
         Chain {
             config,
             state,
-            collector,
             last_synced,
             tip,
             generator,
@@ -77,37 +90,33 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
         }
     }
 
+    pub fn last_synced(&self) -> &HeaderInfo {
+        &self.last_synced
+    }
+
     /// Sync chain from layer1
-    pub fn sync(&mut self) -> Result<()> {
+    pub fn sync(&mut self, param: SyncParam) -> Result<()> {
         // TODO handle rollback
-        if self
-            .collector
-            .get_header(&self.last_synced.block_hash)?
-            .is_none()
-        {
+        if param.forked {
             panic!("layer1 chain has forked!")
         }
-        // query state update tx from collector
-        let param = QueryParam {
-            type_: Some(self.config.rollup_type_script.clone()),
-            from_block: Some(self.last_synced.number.into()),
-            ..Default::default()
-        };
-        let txs = self.collector.query_transactions(param)?;
         // apply tx to state
-        for tx_info in txs {
-            let header = self
-                .collector
-                .get_header(&tx_info.block_hash)?
-                .expect("should not panic unless the chain is forking");
-            let block_number: u64 = header.raw().number().unpack();
+        for sync_info in param.sync_infos {
+            debug_assert_eq!(
+                sync_info.transaction_info.block_hash,
+                sync_info.header_info.block_hash
+            );
+            let block_number: u64 = sync_info.header_info.number;
             assert!(
                 block_number > self.last_synced.number,
                 "must greater than last synced number"
             );
 
             // parse layer2 block
-            let l2block = parse_l2block(&tx_info.transaction, &self.rollup_type_script_hash)?;
+            let l2block = parse_l2block(
+                &sync_info.transaction_info.transaction,
+                &self.rollup_type_script_hash,
+            )?;
 
             let tip_number: u64 = self.tip.raw().number().unpack();
             assert!(
@@ -116,13 +125,14 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
             );
 
             // process l2block
-            self.process_block(l2block.clone(), &tx_info.transaction.raw())?;
+            self.process_block(
+                l2block.clone(),
+                &sync_info.transaction_info.transaction.raw(),
+                sync_info.deposition_requests,
+            )?;
 
             // update chain
-            self.last_synced = HeaderInfo {
-                number: header.raw().number().unpack(),
-                block_hash: header.calc_header_hash().unpack(),
-            };
+            self.last_synced = sync_info.header_info;
             self.tip = l2block;
         }
         // update tx pool state
@@ -219,9 +229,12 @@ impl<Collec: Collector, CodeStore: GetContractCode, Consen: Consensus>
         Ok(block)
     }
 
-    fn process_block(&mut self, l2block: L2Block, tx: &RawTransaction) -> Result<()> {
-        let deposition_requests =
-            fetch_deposition_requests(&self.collector, tx, &self.rollup_type_script_hash)?;
+    fn process_block(
+        &mut self,
+        l2block: L2Block,
+        tx: &RawTransaction,
+        deposition_requests: Vec<DepositionRequest>,
+    ) -> Result<()> {
         let args = StateTransitionArgs {
             l2block: l2block.clone(),
             deposition_requests,

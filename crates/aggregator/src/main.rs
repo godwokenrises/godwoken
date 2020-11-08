@@ -7,19 +7,14 @@
 //! * Become validator and submit new blocks to layer1
 
 mod chain;
-mod collector;
 mod consensus;
 mod crypto;
-mod deposition;
 mod rpc;
 mod state_impl;
 mod tx_pool;
 
 use anyhow::{anyhow, Result};
 use chain::{Chain, HeaderInfo};
-use ckb_types::prelude::Unpack;
-use collector::lumos::Lumos;
-use collector::Collector;
 use consensus::{single_aggregator::SingleAggregator, traits::Consensus};
 use crossbeam_channel::{bounded, RecvTimeoutError};
 use gw_common::{
@@ -132,20 +127,15 @@ fn parse_config(path: &str) -> Result<Config> {
     Ok(config)
 }
 
-fn build_collector(_config: &Config) -> impl Collector {
-    Lumos
-}
-
 fn run() -> Result<()> {
     let config_path = std::env::args().skip(1).next().expect("config file path");
     let config = parse_config(&config_path)?;
     let consensus = SingleAggregator::new(config.consensus.aggregator_id);
     let tip = build_genesis(&config.genesis)?;
-    let collector = build_collector(&config);
-    let genesis = collector.get_header_by_number(0).unwrap().unwrap();
+    let genesis = unreachable!();
     let last_synced = HeaderInfo {
         number: 0,
-        block_hash: genesis.calc_header_hash().unpack(),
+        block_hash: unimplemented!(),
     };
     let code_store = SyncCodeStore::new(Default::default());
     let state = StateImpl::default();
@@ -163,7 +153,6 @@ fn run() -> Result<()> {
             consensus,
             tip,
             last_synced,
-            collector,
             generator,
             Arc::clone(&tx_pool),
         )
@@ -174,7 +163,8 @@ fn run() -> Result<()> {
         .ok_or(anyhow!("aggregator is not configured!"))?
         .account_id;
     println!("initial sync chain!");
-    chain.sync()?;
+    let sync_param = unimplemented!();
+    chain.sync(sync_param)?;
     println!("start rpc server!");
     let (sync_tx, sync_rx) = bounded(1);
     let _server = Server::new()
@@ -189,7 +179,8 @@ fn run() -> Result<()> {
             Ok(()) => {
                 // receive syncing notification
                 println!("sync chain!");
-                chain.sync()?;
+                let sync_param = unimplemented!();
+                chain.sync(sync_param)?;
             }
             Err(RecvTimeoutError::Timeout) => {
                 // execute timeout event
