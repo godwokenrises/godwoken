@@ -31,6 +31,40 @@ States of accounts are all accumulated in the global merkle tree, so we don't ha
 
 > Currently, the account's pubkey is a secp256k1 pubkey hash; we are planning to migrate it to BLS in the later phase.
 
+## Layer2 assets representation
+
+To participant in the nervos network economy, we should be able to transfer assets between layer1 and layer2.
+
+A basic idea is to write an equivalent contract on layer2 to receive layer1 assets.
+
+So we designed a Simple UDT equivalent contract on layer2.
+
+Due to the fact this contract is used to receive layer1 assets, the contract is designed to supports all kinds of SUDT.
+
+We use the `type_script_hash` of SUDT cells as token_id to distinguish different tokens, which described in the RFC:
+https://github.com/nervosnetwork/rfcs/blob/master/rfcs/0025-simple-udt/0025-simple-udt.md#sudt-cell
+
+We provide basic APIs to support query balance and transfer token:
+
+* query(token_id, to) -> value
+* transfer(token_id, to, value)
+
+A layer2 user is supposed to use these two API to query and transfer token. For simplicity, we also treat the CKB as a SUDT token which token_id is all zero: `0x0000...0000`.
+
+### Mint & Burn
+
+When a new user deposits assets to join to layer2, the layer2 SUDT contract mint new tokens to the user's account.
+When a user withdraws assets and leaves layer2, the SUDT contract burn equivalent tokens from the user's account.
+
+Aggregators operate Mint & Burn by directly modify the state tree, and the state-validator contract ensure the state is valid.
+
+## Builtin accounts
+
+There are several builtin accounts in the Godwoken:
+
+* `RESERVED_ACCOUNT: 0` - the zero id account is reserved for special use, for example, tansfer to 0 to burn tokens or send a transaction to 0 to create new contracts.
+* `SUDT_ACCOUNT: 1` - the simple UDT contract.
+
 ## State validator
 
 Godwoken contract supports several actions to update the global state:
@@ -107,42 +141,21 @@ Compare to the 'traditional' challenge process, we require a more strict online 
 In the case that the validator became malicious, our challenge mechanism requires T time to revert the block, which the traditional challenge can revert the block in almost one block time. If the challenge sends another invalid block after the revert block, we need extra T times to invalid it; this means if the aggregator costs `N * COINS_TO_BE_AGGREGATOR`, we need to wait for `N * T` times to revert the block to a correct state in the worst case.
 
 
-### Sandbox to run layer2 contracts
+### layer2 contracts
 
-As we mentioned in the previous section, our layer2 contracts are just layer1 contracts in the special form. A layer2 contract needs to be run in the two environments: the aggregator context and the on-chain context.
+As we mentioned in the previous section, our layer2 contracts are just layer1 contracts which implement the layer2 contract interface. A layer2 contract needs to be run in the two environments: the aggregator context and the on-chain context.
 
-This leads to a potential consensus split risk. Since any user can create layer2 contracts, a malicious user may create a contract that behaves differently in the two contexts, or just takes some random behaviors such as returns failure if the last bit of `tx_hash` is 0, otherwise return success. This kind of contract is dangerous; when the aggregator submits a transaction which invokes the contract, it returns a result, and then when a challenge request is created, the contract returns another result, the aggregator can't cancel the challenge and will lose the money!
+This leads to a potential consensus split risk. Since any user can create layer2 contracts, a malicious user may create a contract that behaves differently in the two contexts, or just takes some random behaviors such as returns failure if the last bit of `tx_hash` is 0, otherwise return success. This kind of contract is dangerous; when an aggregator execute the contract offchain it returns the result A, and then when a challenge request is created, the on-chain validator executes the contract and returns another result B, this kind of inconsistency causes the aggregator failed to cancel the challenge and lose the money!
 
-To keep the contract behavior consistency, We must restrict the contract to only access the consistent environment (verification context, VM registers, and VM memories); any difference in the environment may lead to different contract behaviors under the two contexts.
+To keep the contract behavior consistency, We must restrict the contract to only access the consistent environment (includes verification context, VM registers, and VM memories); any difference in the environment may lead to different contract behaviors under the two contexts.
 
-To restrict the layer2 contract behavior, we need to create a sandbox for it:
+We have several options to restrict the layer2 contract:
 
-Aggregator:
+* Only allows contracts which in the trust list. (A semi-trusted solution)
+* Run contract in a VM. (EVM, or WASM VM or JS VM)
+* Create a sandbox environment for layer2 contract. (Using static check to restrict the contract)
 
-1. To prevent layer2 contract access inconsistent data in different environments, we must disable the syscall feature. The aggregator must scan the contract binary and reject any layer2 contract, which contains the `ecall` opcode (`ecall` is the only way to invoke syscalls).
-2. After disabling the syscall, the layer2 contract can only access the verification context, which we passed to it, the verification context must be sorted in canonical order. (for example, the accounts list must sorted by ID).
-
-Notice: The aggregator needs to run a layer2 contract at least once to generate the verification context. We use the same interface but different implementation for generator and verifier. In the generator context, the contract access data via syscalls; in the verifier context, the contract access data via reading from verification context.  This means a layer2 contract may behave differently in the generator and verifier; we must verify the transactions again after packing them into a block, and remove the transaction failed in the verification.
-
-
-On-chain sandbox
-
-However, we still need to pass the verification context to the layer2 contract. The idea is to use a sandbox contract to setup environment for the layer2 contracts, the sandbox contract must be dedicated designed and must guarantee the verification context, VM registers, and VM memories are identical in the aggregator context and the on-chain context. So that inside the sandbox, a contract can't tell the difference.
-
-The callee (inside sandbox):
-
-1. call `load_witness` syscall, load the verification context into the stack.
-2. Load the layer2 contract.
-3. Verify `program input = F(program output)`, the `F` is the contract program.
-
-The caller (outside sandbox):
-
-1. Verify program input satisfies pre merkle state.
-2. Verify program output satisfies post merkle state.
-
-Notice, the caller and callee typically in different VMs, we can use multi-inputs in CKB transaction, and each input's type script represents a caller or a callee.
-
-Using the static check to disable the syscalls, and the sandbox to keep a canonical environment, we can ensure the layer2 contract behavior is consistent in the aggregator context and the on-chain context.
+We will implement the trust list solution in the first version and support VM and Sandbox in the future.
 
 ![Cancel a challenge request](./cancel_a_challenge_request.jpg)
 
