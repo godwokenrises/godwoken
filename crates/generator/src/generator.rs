@@ -22,6 +22,14 @@ use ckb_vm::{
     DefaultMachineBuilder,
 };
 
+<<<<<<< HEAD
+=======
+lazy_static! {
+    static ref VALIDATOR: Bytes = include_bytes!("../contract/validator").to_vec().into();
+    static ref GENERATOR: Bytes = include_bytes!("../contract/generator").to_vec().into();
+}
+
+>>>>>>> feat: move contract binary to generate crate
 #[derive(Debug)]
 pub struct DepositionRequest {
     pub script: Script,
