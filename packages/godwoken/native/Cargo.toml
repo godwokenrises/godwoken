@@ -1,0 +1,18 @@
+[package]
+name = "godwoken"
+version = "0.1.0"
+authors = ["hupeng <bitrocks.hu@gmail.com>"]
+license = "MIT"
+build = "build.rs"
+edition = "2018"
+exclude = ["artifacts.json", "index.node"]
+
+[lib]
+name = "godwoken"
+crate-type = ["cdylib"]
+
+[build-dependencies]
+neon-build = "0.5.0"
+
+[dependencies]
+neon = "0.5.0"
