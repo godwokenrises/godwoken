@@ -1,0 +1,33 @@
+{
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "cpu": [
+    "x64"
+  ],
+  "os": [
+    "win32",
+    "darwin",
+    "linux"
+  ],
+  "devDependencies": {
+    "@ava/typescript": "^1.1.1",
+    "@strictsoftware/typedoc-plugin-monorepo": "^0.3.1",
+    "@typescript-eslint/eslint-plugin": "^3.5.0",
+    "@typescript-eslint/parser": "^3.5.0",
+    "ava": "^3.8.2",
+    "sinon": "^9.2.0",
+    "eslint": "^7.1.0",
+    "prettier": "^2.0.5",
+    "ts-node": "^8.10.2",
+    "typedoc": "^0.17.7",
+    "typescript": "^3.9.5"
+  },
+  "scripts": {
+    "docs": "typedoc ."
+  }
+}
