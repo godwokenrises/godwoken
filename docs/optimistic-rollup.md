@@ -28,13 +28,15 @@ Typically, an aggregator is also a validator.
 
 ### Account
 
-The following fields construct an account `(id: u32, nonce: u32, code_hash: Byte32, args: Bytes)`:
+The following fields construct an account `(id: u32, nonce: u32, code: Script)`:
 
 - id, the unique id of the account
 - nonce, an increment nonce
-- code_hash, blake2b hash of the contract code, for an EOA(external owned account) the code_hash reference to a unlock contract
-- args, initial args for the contract, used to distinguish different contracts
-- *address, a unique virtual field calculated by blake2b(code_hash | args); the creation will fail if the address is a collision with an existing one.
+- code, compatible with CKB Script structure
+  - code_hash, blake2b hash of the contract code, for an EOA(external owned account) the code_hash reference to a unlock contract
+  - args, initial args for the contract, used to distinguish different contracts
+  - script_hash_type, always equals to data
+- *address, a unique virtual field calculated by blake2b(code); the creation will fail if the address is a collision with an existing one.
 
 States of accounts are all accumulated in the global merkle tree, so we don't have a per account `state_root`.
 
@@ -48,7 +50,7 @@ The basic idea is to write an equivalent contract on layer2 to receive layer1 as
 
 So we design a Simple UDT equivalent contract on layer2. When a new deposition of SUDT happened on layer1, Godwoken creates a new equivalent layer2 SUDT contract to receives these tokens.
 
-Since the Godwoken keep account address(`hash(code_hash | args)`) unique, the layer2 SUDT is naturally unique for each type of token. 
+Since the Godwoken keep account address(`hash(code)`) unique, the layer2 SUDT is naturally unique for each type of token. 
 
 Any user and wallet must query the layer2 SUDT account_id before sent tokens.
 
@@ -131,16 +133,16 @@ The deposition cells are transferred under custodian lock after submitted to lay
 
 Users need two steps to withdraw assets back to layer1:
 
-1. Burn X tokens from the SUDT contract
-2. After the `WITHDRAW_TIMEOUT` blocks, the user can withdraw X tokens back to layer1.
+1. Prepare withdrawal: send a tx to burn X tokens from the SUDT contract
+2. Withdrawal: after the `WITHDRAW_TIMEOUT` blocks, the user can withdraw X tokens back to layer1.
 
 The `WITHDRAW_TIMEOUT` is a u64 number representing the number of blocks that users must be waiting for.
 
 Let's see the details of the withdrawal process.
 
-Users firstly send a layer2 transaction `(from: user's id, to: SUDT id, nonce, args: amount to withdraw)` to the aggregator to move layer2 token into a withdraw queue, the SUDT contract record the withdraw request as：(block_number, amount).
+Users firstly send a layer2 transaction `(from: user's id, to: SUDT id, nonce, args: amount to withdraw)` to the aggregator to move layer2 token into a withdraw queue, the SUDT contract record the withdrawal as：`(block_number, amount)`.
 
-After `WITHDRAW_TIMEOUT` blocks after the withdrawal request transaction has been submitted. The aggregator removes the withdrawal request from the SUDT and moves the layer1 custodian asset to the user's lock.
+After `WITHDRAW_TIMEOUT` blocks after the prepare withdrawal transaction has been submitted. User send a withdraw request to aggregator via RPC `(acp_lock_hash, sudt_id, amount, account_id)`, the aggregator removes the withdrawal request from the SUDT contract and moves the layer1 custodian asset to the user's [anyone-can-pay](https://github.com/nervosnetwork/rfcs/blob/master/rfcs/0026-anyone-can-pay/0026-anyone-can-pay.md) cell.
 
 > The timeout parameter WITHDRAW_TIMEOUT defines an upper bound of the challenge period; after the timeout, if we still can't prevent a malicious user from withdrawing assets to layer1, the rollup state is corrupt.
 
@@ -174,7 +176,7 @@ After reverting all blocks until `tip`, the validator appends a new block to sen
 
 > Note: In some situations, there may be two bad blocks A & B have been committed to the chain. The B is a later block, but someone challenges it first. Our protocol can handle this situation. After the reverting of B, anyone can send a challenge to A and start the reverting again. The reverting process has still followed the rule. The blocks after B are marked as invalid at this time, but we still replay deposition and withdraw for these blocks. In the process, we also revert the reward for challenging B, so a reasonable user should always challenge the first invalid block to get a reward; otherwise, the user gets nothing.
 
-So what happened if our assumption is failure? Let's look at the reverting process; if our assumption is broken, which means there is a step1 withdrawal request is sent after the bad block B, and the step2 withdraw request is processed before the reverting, so in the reverting process: we will found a step2 withdraw is not exists in the `exit_queue`, when this happened, we can't continue the reverting process, so we can set a timeout to let the Rollup enter `halting` process.
+So what happened if our assumption is failure? Let's look at the reverting process; if our assumption is broken, which means there is a step1 withdrawal request is sent after the bad block B, and the step2 withdraw request is processed before the reverting, so in the reverting process: we will found a step2 withdraw is not exists in the `withdrawal_queue`, when this happened, we can't continue the reverting process, so we can set a timeout to let the Rollup enter `halting` process.
 
 In the `halting` status, which means we lose a part of the deposited assets, we rely on the off-chain mechanism to recover the money. In the first version, we use a multi-signature to perform the recovery process.
 
