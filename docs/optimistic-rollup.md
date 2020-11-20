@@ -8,14 +8,19 @@ Godwoken composited by the following parts:
 
 type scripts:
 
-* State validator - a type script maintains the global state of all accounts and all layer2 blocks.
+* State validator - a type script validates the global state of all accounts and all layer2 blocks in Rollup.
 * Challenge validator - a type script that handles challenge requests.
 
 lock scripts:
 
-* Always success lock - a lock script that always returns success; this script is the lock of state validator cell
-* Custodian lock - lock of rollup custodian assets; this script only be unlocked in a transaction that contains the state validator cell
-* Deposition lock - the lock used for deposition; which can be unlocked in a transaction that contains the state validator cell or be withdrawn by the sender with a signature
+* Always success lock - a lock script that always returns success; this script is the lock of Rollup cell
+* Custodian lock - lock of rollup custodian assets; this script only be unlocked in a transaction that contains the Rollup cell
+* Deposition lock - the lock used for deposition; which can be unlocked in a transaction that contains the Rollup cell or be withdrawn by the sender with a signature
+
+### Terms
+
+* Rollup cell - rollup on-chain state, contains global state: `block_root` and `account_root`, use `state validator` as its type, aggregators submit new on-chain state by consuming this cell and produce a new cell with the same type_hash.
+* Rollup_type_hash - rollup cell's type_hash, which is a unique value for each rollup.
 
 ### Off-chain
 
@@ -92,7 +97,7 @@ We define the following status:
 
 Most time, our contract status is `running`. When a challenging success, the challenger needs to rever the chain and change Rollup's status to `reverting`. Then, after reverting the chain, change the Rollup's status to `running` again. But in failed situations, no one successfully challenges a bad block during the challenge period. The reverting of the chain will fail because the attacker already withdraws stolen assets to the layer1. In this situation, the Rollup's status will become `halting` and stop accepting most operations. We will design a recovery mechanism for failure.
 
-Godwoken contract supports several operations to update the global state:
+Godwoken contract supports several operations to update the Rollup cell:
 
 * Create account
 * Deposit
@@ -154,7 +159,7 @@ To simplify the design, the Godwoken uses a standalone contract to challenge; th
 
 We take a look at the process of reverting. Firstly, we define a security assumption: after an attacker submits a bad block to the Rollup, during the `WITHDRAW_TIMEOUT` blocks, there always a validator can successfully challenge the invalid block and start the reverting process. We would talk about what happens if our security assumption failed later.
 
-We assume a bad block B is on the Rollup, and we already get a challenging proof cell. A validator can then send a revert request: `(B.number, challenge proof cell)` to the state validator contract. The state validator verifies the challenge proof cell and set the rollup status to `reverting`, create an extra revert cursor `last_valid_number = B.number - 1` in the state validator cell, and update the global state `global_state.account = last_valid_block.post_account`.
+We assume a bad block B is on the Rollup, and we already get a challenging proof cell. A validator can then send a revert request: `(B.number, challenge proof cell)` to the state validator contract. The state validator verifies the challenge proof cell and set the rollup status to `reverting`, create an extra revert cursor `last_valid_number = B.number - 1` in the Rollup cell, and update the global state `global_state.account = last_valid_block.post_account`.
 
 In the `reverting` status, the Rollup can't do anything other than continue to revert the rollup chain; to continue the reverting process, we need to resubmit layer2 blocks from the `last_valid_number + 1` to the `tip`, which is the last block of the Rollup. We do this because a block may process a deposition request after the bad block B, so if we simply revert all account state the depositor won't get the money, we must replay the deposition request to mint tokens for the depositor.
 
