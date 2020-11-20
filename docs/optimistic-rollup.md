@@ -17,17 +17,17 @@ lock scripts:
 * Custodian lock - lock of rollup custodian assets; this script only be unlocked in a transaction that contains the Rollup cell
 * Deposition lock - the lock used for deposition; which can be unlocked in a transaction that contains the Rollup cell or be withdrawn by the sender with a signature
 
-### Terms
-
-* Rollup cell - rollup on-chain state, contains global state: `block_root` and `account_root`, use `state validator` as its type, aggregators submit new on-chain state by consuming this cell and produce a new cell with the same type_hash.
-* Rollup_type_hash - rollup cell's type_hash, which is a unique value for each rollup.
-
 ### Off-chain
 
 * Aggregator - an off-chain program that regularly collects layer2 transactions and submits layer2 blocks to the State validator.
 * Validator - an off-chain program that continuously watches the two contracts. The validator sends a challenge request to contracts when an invalid state is submitted.
 
 Typically, an aggregator is also a validator.
+
+### Terms
+
+* Rollup cell - rollup on-chain state, contains global state: `block_root` and `account_root`, use `state validator` as its type, aggregators submit new on-chain state by consuming this cell and produce a new cell with the same type_hash.
+* Rollup_type_hash - rollup cell's type_hash, which is a unique value for each rollup.
 
 ## Layer2 structures
 
