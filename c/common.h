@@ -2,8 +2,8 @@
 #define GW_COMMON_H_
 
 /* Layer2 contract interface */
-#define CONTRACT_CONSTRUCT_FUNC "gw_construct"
-#define CONTRACT_HANDLE_MESSAGE_FUNC "gw_handle_message"
+#define GW_CONSTRUCT_FUNC "gw_construct"
+#define GW_HANDLE_MESSAGE_FUNC "gw_handle_message"
 
 /* Common parameters */
 #define MAX_PAIRS 1024
@@ -68,17 +68,6 @@ void gw_build_code_hash_key(uint32_t id, uint8_t key[GW_KEY_BYTES]) {
   memset(key, 0, GW_KEY_BYTES);
   memcpy(key, (uint8_t *)&id, sizeof(uint32_t));
   key[sizeof(uint32_t)] = GW_ACCOUNT_CODE_HASH;
-}
-
-int gw_get_func_name_by_call_type(char **func_name, const uint8_t call_type) {
-  if (call_type == GW_CALL_TYPE_CONSTRUCT) {
-    *func_name = CONTRACT_CONSTRUCT_FUNC;
-  } else if (call_type == GW_CALL_TYPE_HANDLE_MESSAGE) {
-    *func_name = CONTRACT_HANDLE_MESSAGE_FUNC;
-  } else {
-    return GW_ERROR_INVALID_DATA;
-  }
-  return 0;
 }
 
 /* Create a sub context from current context */

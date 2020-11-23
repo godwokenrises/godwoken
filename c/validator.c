@@ -45,6 +45,8 @@ typedef struct {
   gw_state_t *read_state;
   gw_state_t *write_state;
   gw_call_receipt_t *receipt;
+  mol_seg_t call_context_seg;
+  mol_seg_t block_info_seg;
 } gw_read_write_state_t;
 
 int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
@@ -90,7 +92,7 @@ int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
   return gw_state_insert(state->write_state, raw_key, value);
 }
 
-int sys_set_return_data(void *ctx, uint8_t *data, uint32_t len) {
+int sys_set_program_return_data(void *ctx, uint8_t *data, uint32_t len) {
   if (ctx == NULL) {
     return GW_ERROR_INVALID_CONTEXT;
   }
@@ -240,13 +242,14 @@ int main() {
   state.read_state = &read_state;
   state.write_state = &write_state;
   state.receipt = &receipt;
+  state.call_context_seg = call_context_seg;
+  state.block_info_seg = block_info_seg;
 
   gw_context_t context;
-  context.blake2b_hash = blake2b_hash;
   context.sys_context = (void *)&state;
   context.sys_load = sys_load;
   context.sys_store = sys_store;
-  context.sys_set_return_data = sys_set_return_data;
+  context.sys_set_program_return_data = sys_set_program_return_data;
   ret = gw_parse_call_context(&context.call_context, &call_context_seg);
   if (ret != 0) {
     return ret;
@@ -258,15 +261,11 @@ int main() {
 
   /* get contract function pointer */
   uint8_t call_type = context.call_context.call_type;
-
-  char *func_name;
-  ret = gw_get_func_name_by_call_type(&func_name, call_type);
-  if (ret != 0) {
-    return ret;
+  if (call_type != GW_CALL_TYPE_HANDLE_MESSAGE) {
+    return GW_ERROR_INVALID_CONTEXT;
   }
-
   gw_contract_fn contract_func;
-  *(void **)(&contract_func) = ckb_dlsym(handle, func_name);
+  *(void **)(&contract_func) = ckb_dlsym(handle, GW_HANDLE_MESSAGE_FUNC);
   if (contract_func == NULL) {
     return GW_ERROR_DYNAMIC_LINKING;
   }

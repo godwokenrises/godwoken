@@ -48,7 +48,7 @@ int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
 }
 
 /* set call return data */
-int sys_set_return_data(void *ctx, uint8_t *data, uint32_t len) {
+int sys_set_program_return_data(void *ctx, uint8_t *data, uint32_t len) {
   gw_context_t *gw_ctx = (gw_context_t *)ctx;
   if (gw_ctx == NULL || gw_ctx->sys_context == NULL) {
     return GW_ERROR_INVALID_CONTEXT;
@@ -102,20 +102,18 @@ int invoke_contract_func(gw_context_t *ctx, void *handle) {
     return GW_ERROR_INVALID_CONTEXT;
   }
   uint8_t call_type = ctx->call_context.call_type;
-  char *func_name;
-  int ret = gw_get_func_name_by_call_type(&func_name, call_type);
-  if (ret != 0) {
-    return ret;
+  if (call_type != GW_CALL_TYPE_HANDLE_MESSAGE) {
+    return GW_ERROR_INVALID_CONTEXT;
   }
 
   gw_contract_fn contract_func;
-  *(void **)(&contract_func) = ckb_dlsym(handle, func_name);
+  *(void **)(&contract_func) = ckb_dlsym(handle, GW_HANDLE_MESSAGE_FUNC);
   if (contract_func == NULL) {
     return GW_ERROR_DYNAMIC_LINKING;
   }
 
   /* run contract */
-  ret = contract_func(ctx);
+  int ret = contract_func(ctx);
 
   if (ret != 0) {
     return ret;
@@ -173,11 +171,10 @@ int main() {
   /* prepare context */
   gw_call_receipt_t receipt;
   gw_context_t context;
-  context.blake2b_hash = blake2b_hash;
   context.sys_context = &receipt;
   context.sys_load = sys_load;
   context.sys_store = sys_store;
-  context.sys_set_return_data = sys_set_return_data;
+  context.sys_set_program_return_data = sys_set_program_return_data;
   context.sys_call = sys_call;
 
   uint8_t call_context[CALL_CONTEXT_LEN];
