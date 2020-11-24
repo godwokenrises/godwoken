@@ -1,8 +1,6 @@
 use crate::state_impl::StateImpl;
 use anyhow::{anyhow, Result};
 use gw_common::{
-    blake2b::new_blake2b,
-    merkle_utils::serialize_block_key,
     smt::{default_store::DefaultStore, H256, SMT},
     state::{State, ZERO},
     CKB_TOKEN_ID,
@@ -69,15 +67,9 @@ pub fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
         .build();
 
     // generate block proof
-    let genesis_hash = {
-        let mut buf = [0u8; 32];
-        let mut hasher = new_blake2b();
-        hasher.update(raw_genesis.as_slice());
-        hasher.finalize(&mut buf);
-        buf
-    };
+    let genesis_hash = raw_genesis.hash();
     let block_proof = {
-        let block_key = serialize_block_key(0);
+        let block_key = RawL2Block::compute_smt_key(0);
         let mut smt: SMT<DefaultStore<H256>> = Default::default();
         smt.update(block_key.into(), genesis_hash.into())
             .map_err(|err| anyhow!("update smt error: {:?}", err))?;

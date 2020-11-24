@@ -7,7 +7,9 @@ use ckb_types::{
     packed::{RawTransaction, Script, Transaction, WitnessArgs, WitnessArgsReader},
     prelude::Unpack,
 };
-use gw_common::{merkle_utils::calculate_merkle_root, sparse_merkle_tree, state::State, H256};
+use gw_common::{
+    merkle_utils::calculate_merkle_root, smt::Blake2bHasher, sparse_merkle_tree, state::State, H256,
+};
 use gw_config::ChainConfig;
 use gw_generator::{
     generator::{DepositionRequest, StateTransitionArgs},
@@ -16,7 +18,8 @@ use gw_generator::{
 };
 use gw_types::{
     packed::{
-        AccountMerkleState, GlobalState, L2Block, L2BlockReader, RawL2Block, SubmitTransactions,
+        AccountMerkleState, BlockMerkleState, GlobalState, L2Block, L2BlockReader, RawL2Block,
+        SubmitTransactions,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -226,7 +229,7 @@ impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
             .number(number.pack())
             .aggregator_id(aggregator_id.pack())
             .timestamp(timestamp.pack())
-            .post_account(post_account)
+            .post_account(post_account.clone())
             .prev_account(prev_account)
             .submit_transactions(Some(submit_txs).pack())
             .valid(1.into())
@@ -257,9 +260,22 @@ impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
             .kv_state(packed_kv_state)
             .kv_state_proof(proof.pack())
             .transactions(txs.pack())
-            .block_proof(block_proof.pack())
+            .block_proof(block_proof.0.pack())
             .build();
-        let global_state = unimplemented!();
+        let post_block = {
+            let post_block_root: [u8; 32] = block_proof
+                .compute_root::<Blake2bHasher>(vec![(block.smt_key().into(), block.hash().into())])?
+                .into();
+            let block_count = number + 1;
+            BlockMerkleState::new_builder()
+                .merkle_root(post_block_root.pack())
+                .count(block_count.pack())
+                .build()
+        };
+        let global_state = GlobalState::new_builder()
+            .account(post_account)
+            .block(post_block)
+            .build();
         Ok(L2BlockWithState {
             block,
             global_state,

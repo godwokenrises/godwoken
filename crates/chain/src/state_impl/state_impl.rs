@@ -2,13 +2,11 @@ use super::overlay::OverlayState;
 use super::wrap_store::WrapStore;
 use anyhow::{anyhow, Result};
 use gw_common::{
-    blake2b::new_blake2b,
-    merkle_utils::serialize_block_key,
-    smt::{Store, H256, SMT},
+    smt::{CompiledMerkleProof, Store, H256, SMT},
     state::{Error, State},
 };
 use gw_types::{
-    packed::{L2Block, L2Transaction},
+    packed::{L2Block, L2Transaction, RawL2Block},
     prelude::*,
 };
 use parking_lot::Mutex;
@@ -47,29 +45,38 @@ impl<S: Store<H256>> StateImpl<S> {
         Ok(OverlayState::new(*root, store, account_count))
     }
 
+    pub fn merkle_proof(&self, leaves: Vec<([u8; 32], [u8; 32])>) -> Result<Vec<u8>, Error> {
+        let keys = leaves.iter().map(|(k, v)| (*k).into()).collect();
+        let proof = self
+            .tree
+            .merkle_proof(keys)?
+            .compile(
+                leaves
+                    .into_iter()
+                    .map(|(k, v)| (k.into(), v.into()))
+                    .collect(),
+            )?
+            .0;
+        Ok(proof)
+    }
+
     pub fn push_block(&mut self, block: L2Block) -> Result<()> {
         let raw = block.raw();
-        let block_hash = {
-            let mut buf = [0u8; 32];
-            let mut hasher = new_blake2b();
-            hasher.update(raw.as_slice());
-            hasher.finalize(&mut buf);
-            buf
-        };
+        let block_hash = raw.hash();
         let block_number = raw.number().unpack();
-        let key = serialize_block_key(block_number);
+        let key = raw.smt_key();
         self.block_tree.update(key.into(), block_hash.into())?;
         Ok(())
     }
 
-    pub fn block_merkle_proof(&self, number: u64) -> Result<Vec<u8>, Error> {
-        let key = serialize_block_key(number);
+    pub fn block_merkle_proof(&self, number: u64) -> Result<CompiledMerkleProof, Error> {
+        let key = RawL2Block::compute_smt_key(number);
         let value = self.block_tree.get(&key.into())?;
         let proof = self
             .block_tree
             .merkle_proof(vec![key.into()])?
             .compile(vec![(key.into(), value.into())])?;
-        Ok(proof.0)
+        Ok(proof)
     }
 
     pub fn get_block(&self, number: u64) -> Result<L2Block, Error> {
@@ -121,19 +128,5 @@ impl<S: Store<H256>> State for StateImpl<S> {
     fn calculate_root(&self) -> Result<[u8; 32], Error> {
         let root = (*self.tree.root()).into();
         Ok(root)
-    }
-    fn merkle_proof(&self, leaves: Vec<([u8; 32], [u8; 32])>) -> Result<Vec<u8>, Error> {
-        let keys = leaves.iter().map(|(k, v)| (*k).into()).collect();
-        let proof = self
-            .tree
-            .merkle_proof(keys)?
-            .compile(
-                leaves
-                    .into_iter()
-                    .map(|(k, v)| (k.into(), v.into()))
-                    .collect(),
-            )?
-            .0;
-        Ok(proof)
     }
 }

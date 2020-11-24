@@ -13,3 +13,4 @@ std = ["molecule/std"]
 [dependencies]
 molecule = { version = "0.6", default-features = false }
 cfg-if = "0.1"
+gw-hash = { path = "../hash", default-features = false }

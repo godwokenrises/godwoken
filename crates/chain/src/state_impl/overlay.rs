@@ -57,20 +57,6 @@ impl<S: Store<H256>> State for OverlayState<S> {
         self.account_count = count;
         Ok(())
     }
-    fn merkle_proof(&self, leaves: Vec<([u8; 32], [u8; 32])>) -> Result<Vec<u8>, Error> {
-        let keys = leaves.iter().map(|(k, v)| (*k).into()).collect();
-        let proof = self
-            .tree
-            .merkle_proof(keys)?
-            .compile(
-                leaves
-                    .into_iter()
-                    .map(|(k, v)| (k.into(), v.into()))
-                    .collect(),
-            )?
-            .0;
-        Ok(proof)
-    }
 }
 
 pub struct OverlayStore<S> {

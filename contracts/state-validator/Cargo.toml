@@ -6,7 +6,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ckb-std = "0.6.3"
+ckb-std = "0.7.2"
 gw-types = { path = "../../crates/types", default-features = false }
-gw-common = { path = "../../crates/common" }
-ckb-lib-secp256k1 = { git = "https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git", branch = "master" }
+gw-common = { path = "../../crates/common", default-features = false }
+ckb-lib-secp256k1 = "0.1"

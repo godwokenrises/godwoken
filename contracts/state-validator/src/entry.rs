@@ -16,16 +16,16 @@ use ckb_std::{
 };
 
 use gw_types::{
-    packed::{GlobalState, GlobalStateReader, L2Block, L2BlockReader},
+    packed::{GlobalState, GlobalStateReader, L2Block, RawL2Block, L2BlockReader},
     prelude::{Reader as GodwokenTypesReader, Unpack as GodwokenTypesUnpack},
 };
 
 use ckb_lib_secp256k1::LibSecp256k1;
 use gw_common::{
-    blake2b::{new_blake2b, Blake2bHasher},
+    blake2b::new_blake2b,
+    smt::Blake2bHasher,
     sparse_merkle_tree::{CompiledMerkleProof, H256},
     state::State,
-    merkle_utils::serialize_block_key,
 };
 
 use crate::actions;
@@ -100,14 +100,14 @@ fn verify_l2block(
         return Err(Error::PrevGlobalState);
     }
 
-    let block_index = serialize_block_key(number);
+    let block_smt_key = RawL2Block::compute_smt_key(number);
     let block_proof: Bytes = l2block.block_proof().unpack();
     let block_merkle_proof = CompiledMerkleProof(block_proof.to_vec());
     let prev_block_root: [u8; 32] = prev_global_state.block().merkle_root().unpack();
     if !block_merkle_proof
         .verify::<Blake2bHasher>(
             &prev_block_root.into(),
-            vec![(block_index.into(), H256::zero())],
+            vec![(block_smt_key.into(), H256::zero())],
         )
         .map_err(|_| Error::MerkleProof)?
     {
@@ -120,17 +120,11 @@ fn verify_l2block(
     }
 
     let post_block_root: [u8; 32] = post_global_state.block().merkle_root().unpack();
-    let block_hash = {
-        let mut buf = [0u8; 32];
-        let mut hasher = new_blake2b();
-        hasher.update(raw_block.as_slice());
-        hasher.finalize(&mut buf);
-        buf
-    };
+    let block_hash = raw_block.hash();
     if !block_merkle_proof
         .verify::<Blake2bHasher>(
             &post_block_root.into(),
-            vec![(block_index.into(), block_hash.into())],
+            vec![(block_smt_key.into(), block_hash.into())],
         )
         .map_err(|_| Error::MerkleProof)?
     {
@@ -193,7 +187,7 @@ fn verify_l2block(
 
 pub fn main() -> Result<(), Error> {
     // Initialize CKBDLContext
-    let mut context = CKBDLContext::<[u8; 128 * 1024]>::new();
+    let mut context = unsafe{ CKBDLContext::<[u8; 128 * 1024]>::new() };
     let lib_secp256k1 = LibSecp256k1::load(&mut context);
     // basic verification
     let prev_global_state = parse_global_state(Source::GroupInput)?;

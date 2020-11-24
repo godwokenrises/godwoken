@@ -1,6 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod blake2b;
 pub mod builtins;
 pub mod merkle_utils;
 pub mod smt;
@@ -12,6 +11,7 @@ pub type H256 = [u8; 32];
 
 // re-exports
 
+pub use gw_hash::blake2b;
 pub use sparse_merkle_tree;
 
 /// Common constants

@@ -614,8 +614,8 @@ dependencies = [
 name = "gw-common"
 version = "0.1.0"
 dependencies = [
- "blake2b-ref",
  "cfg-if 0.1.10",
+ "gw-hash",
  "sparse-merkle-tree",
 ]
 
@@ -639,6 +639,13 @@ dependencies = [
  "gw-types",
  "lazy_static",
  "thiserror",
+]
+
+[[package]]
+name = "gw-hash"
+version = "0.1.0"
+dependencies = [
+ "blake2b-ref",
 ]
 
 [[package]]
@@ -670,6 +677,7 @@ name = "gw-types"
 version = "0.1.0"
 dependencies = [
  "cfg-if 0.1.10",
+ "gw-hash",
  "molecule",
 ]
 

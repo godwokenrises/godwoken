@@ -23,11 +23,7 @@ pub fn handle(context: &mut Context, block: &L2Block) -> Result<(), Error> {
         .transactions()
         .into_iter()
         .map(|tx| {
-            let mut buf = [0u8; 32];
-            let mut hasher = new_blake2b();
-            hasher.update(tx.as_slice());
-            hasher.finalize(&mut buf);
-            buf
+            tx.hash()
         })
         .collect();
     let merkle_root: [u8; 32] = calculate_merkle_root(leaves)?;

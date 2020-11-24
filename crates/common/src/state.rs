@@ -1,6 +1,7 @@
 use crate::blake2b::new_blake2b;
 use crate::builtins::SUDT_ACCOUNT_ID;
 use crate::smt::Error as SMTError;
+use crate::vec::Vec;
 use crate::H256;
 use core::mem::size_of;
 
@@ -70,7 +71,6 @@ pub trait State {
     fn get_account_count(&self) -> Result<u32, Error>;
     fn set_account_count(&mut self, count: u32) -> Result<(), Error>;
     fn calculate_root(&self) -> Result<H256, Error>;
-    fn merkle_proof(&self, leaves: Vec<(H256, H256)>) -> Result<Vec<u8>, Error>;
 
     // implementations
     fn get_value(&self, id: u32, key: &[u8]) -> Result<H256, Error> {

@@ -33,20 +33,6 @@ impl State for DummyState {
         let root = (*self.tree.root()).into();
         Ok(root)
     }
-    fn merkle_proof(&self, leaves: Vec<([u8; 32], [u8; 32])>) -> Result<Vec<u8>, Error> {
-        let keys = leaves.iter().map(|(k, v)| (*k).into()).collect();
-        let proof = self
-            .tree
-            .merkle_proof(keys)?
-            .compile(
-                leaves
-                    .into_iter()
-                    .map(|(k, v)| (k.into(), v.into()))
-                    .collect(),
-            )?
-            .0;
-        Ok(proof)
-    }
     fn get_account_count(&self) -> Result<u32, Error> {
         Ok(self.account_count)
     }

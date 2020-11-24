@@ -9,6 +9,6 @@ edition = "2018"
 blake2b-rs = "0.1.5"
 
 [dependencies]
-ckb-std = "0.6.3"
+ckb-std = "0.7.2"
 gw-types = { path = "../../crates/types", default-features = false }
-ckb-lib-secp256k1 = { git = "https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git", rev = "c6fcd3c" }
+ckb-lib-secp256k1 = "0.1"

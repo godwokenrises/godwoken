@@ -6,13 +6,6 @@ use crate::{
 };
 use core::mem::size_of_val;
 
-// Serialize block key
-pub fn serialize_block_key(block_number: u64) -> [u8; 32] {
-    let mut buf = [0u8; 32];
-    buf[..size_of_val(&block_number)].copy_from_slice(&block_number.to_le_bytes());
-    buf
-}
-
 // Calculate compacted account root
 pub fn calculate_compacted_account_root(root: &[u8], count: u32) -> [u8; 32] {
     let mut buf = [0u8; 32];

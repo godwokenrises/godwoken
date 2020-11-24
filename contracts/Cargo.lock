@@ -2,9 +2,9 @@
 # It is not intended for manual editing.
 [[package]]
 name = "blake2b-ref"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c56ea40392c4cf5b8ea0e4f7aa080c3676f60df8dd12350c94750d33aa5fa74"
+checksum = "95916998c798756098a4eb1b3f2cd510659705a9817bf203d61abd30fbec3e7b"
 
 [[package]]
 name = "blake2b-rs"
@@ -17,15 +17,15 @@ dependencies = [
 
 [[package]]
 name = "buddy-alloc"
-version = "0.3.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efba9eaa9fdf9fddf408904e3dc3dc414411053ef48c06edd3aac53d2d919e0e"
+checksum = "8ff9f338986406db85e2b5deb40a9255b796ca03a194c7457403d215173f3fd5"
 
 [[package]]
 name = "cc"
-version = "1.0.60"
+version = "1.0.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef611cc68ff783f18535d77ddd080185275713d852c4f5cbb6122c462a7a825c"
+checksum = "95752358c8f7552394baf48cd82695b345628ad3f170d607de3ca03b8dacca15"
 
 [[package]]
 name = "cfg-if"
@@ -34,27 +34,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 
 [[package]]
-name = "ckb-allocator"
-version = "0.1.1"
+name = "ckb-lib-secp256k1"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "572ce0405d93e105d547f6d362c70c4b744e5e0984f9b9877c81afd070c8e2cc"
-dependencies = [
- "buddy-alloc",
-]
-
-[[package]]
-name = "ckb-lib-secp256k1"
-version = "0.1.0"
-source = "git+https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git?rev=c6fcd3c#c6fcd3cf192891472c9ee708091de7db1907ea78"
-dependencies = [
- "blake2b-rs",
- "ckb-std",
-]
-
-[[package]]
-name = "ckb-lib-secp256k1"
-version = "0.1.0"
-source = "git+https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git#7f91b87902ebb9469887fa6b0eed827e6665a343"
+checksum = "469bec903024855bb72cfedb9972d446dc5bdfd952f9bac85c4b8725f002b022"
 dependencies = [
  "blake2b-rs",
  "ckb-std",
@@ -72,12 +55,12 @@ dependencies = [
 
 [[package]]
 name = "ckb-std"
-version = "0.6.3"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f40fb1a5a0049abb71ff043629517089ef256b8e63c403b9359f73b7040ac9c6"
+checksum = "35e14bf64c694f078d6d33bad7e2b9a87d129d8b4e4c9a6cfc4364e2c6eddbd9"
 dependencies = [
+ "buddy-alloc",
  "cc",
- "ckb-allocator",
  "ckb-standalone-types",
 ]
 
@@ -86,7 +69,7 @@ name = "deposition-lock"
 version = "0.1.0"
 dependencies = [
  "blake2b-rs",
- "ckb-lib-secp256k1 0.1.0 (git+https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git?rev=c6fcd3c)",
+ "ckb-lib-secp256k1",
  "ckb-std",
  "gw-types",
 ]
@@ -95,9 +78,16 @@ dependencies = [
 name = "gw-common"
 version = "0.1.0"
 dependencies = [
- "blake2b-ref",
  "cfg-if",
+ "gw-hash",
  "sparse-merkle-tree",
+]
+
+[[package]]
+name = "gw-hash"
+version = "0.1.0"
+dependencies = [
+ "blake2b-ref",
 ]
 
 [[package]]
@@ -105,6 +95,7 @@ name = "gw-types"
 version = "0.1.0"
 dependencies = [
  "cfg-if",
+ "gw-hash",
  "molecule",
 ]
 
@@ -119,9 +110,9 @@ dependencies = [
 
 [[package]]
 name = "sparse-merkle-tree"
-version = "0.3.0"
+version = "0.3.1-pre"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a16b2e41caaf184a59b8125ac45595d2a8d330e0208c52ee45d9a0a729968d06"
+checksum = "319827f79e565c18099ef900023e7bcc3ebf8ca9ae8d5bf9b28df87f5ef19a34"
 dependencies = [
  "cfg-if",
 ]
@@ -130,7 +121,7 @@ dependencies = [
 name = "state-validator"
 version = "0.1.0"
 dependencies = [
- "ckb-lib-secp256k1 0.1.0 (git+https://github.com/jjyr/ckb-dynamic-loading-secp256k1.git)",
+ "ckb-lib-secp256k1",
  "ckb-std",
  "gw-common",
  "gw-types",

@@ -7,9 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-blake2b-ref = { version = "0.2", default-features = false }
-sparse-merkle-tree = { version = "0.3.1-pre", default-features = false }
 cfg-if = "0.1"
+sparse-merkle-tree = { version = "0.3.1-pre", default-features = false }
+gw-hash = { path = "../hash" }
 
 [features]
 default = ["std"]

@@ -1,4 +1,4 @@
-use crate::{packed, prelude::*};
+use crate::{packed, prelude::*, vec::Vec};
 
 impl Pack<packed::Byte20> for [u8; 20] {
     fn pack(&self) -> packed::Byte20 {

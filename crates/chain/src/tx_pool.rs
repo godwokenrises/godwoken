@@ -3,7 +3,6 @@ use crate::crypto::{verify_signature, Signature};
 use crate::state_impl::OverlayState;
 use anyhow::{anyhow, Result};
 use gw_common::{
-    blake2b::new_blake2b,
     merkle_utils::calculate_compacted_account_root,
     smt::{Store, H256 as SMTH256, SMT},
     state::State,
@@ -64,13 +63,7 @@ impl<S: Store<SMTH256>, CS: GetContractCode> TxPool<S, CS> {
             self.generator
                 .execute(&self.state, &self.next_block_info, &call_context)?;
         // 3. push tx to pool
-        let tx_witness_hash = {
-            let mut witness_hash = [0u8; 32];
-            let mut hasher = new_blake2b();
-            hasher.update(tx.as_slice());
-            hasher.finalize(&mut witness_hash);
-            witness_hash
-        };
+        let tx_witness_hash = tx.witness_hash();
         let compacted_post_account_root = {
             let account_root = self
                 .state
@@ -115,15 +108,9 @@ impl<S: Store<SMTH256>, CS: GetContractCode> TxPool<S, CS> {
             .state
             .get_pubkey_hash(sender_id)
             .expect("get pubkey hash");
-        let raw_tx_hash = {
-            let mut buf = [0u8; 32];
-            let mut hasher = new_blake2b();
-            hasher.update(tx.raw().as_slice());
-            hasher.finalize(&mut buf);
-            buf
-        };
+        let tx_hash = tx.hash();
         let sig = Signature(tx.signature().unpack());
-        verify_signature(&sig, &raw_tx_hash, &pubkey_hash)?;
+        verify_signature(&sig, &tx_hash, &pubkey_hash)?;
         Ok(())
     }
 

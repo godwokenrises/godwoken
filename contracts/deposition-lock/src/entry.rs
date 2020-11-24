@@ -86,7 +86,7 @@ pub fn main() -> Result<(), Error> {
             }
         }
         // 2. verify user's signature
-        let mut context = CKBDLContext::<[u8; 128 * 1024]>::new();
+        let mut context = unsafe{ CKBDLContext::<[u8; 128 * 1024]>::new() };
         let lib = LibSecp256k1::load(&mut context);
         let mut pubkey_hash = [0u8; 20];
         lib.validate_blake2b_sighash_all(&mut pubkey_hash)
