@@ -37,6 +37,19 @@ typedef int (*gw_call_fn)(void *ctx, uint32_t account_id, uint8_t *args,
                           uint32_t args_len, gw_call_receipt_t *receipt);
 
 /**
+ * Create a new account
+ *
+ * @param ctx    The godwoken context
+ * @param script Contract's script
+ * @param len    Length of script structure
+ * @param receipt Receipt of this constructor call
+ * @return       The status code, 0 is success
+ */
+typedef int (*gw_create_fn)(void *ctx, uint8_t *script,
+                          uint32_t len, gw_call_receipt_t *receipt);
+
+
+/**
  * Load value by key from current contract account
  *
  * @param ctx    The godwoken context
@@ -153,6 +166,7 @@ typedef struct {
   gw_store_fn sys_store;
   gw_set_program_return_data_fn sys_set_program_return_data;
   gw_call_fn sys_call;
+  gw_create_fn sys_create;
   gw_get_account_id_by_address_fn sys_get_account_id_by_address;
   gw_get_address_by_account_id_fn sys_get_address_by_account_id;
   gw_get_account_nonce_fn sys_get_account_nonce;
