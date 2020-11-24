@@ -7,7 +7,10 @@ use gw_common::{
     smt::{Store, H256, SMT},
     state::{Error, State},
 };
-use gw_types::{packed::L2Block, prelude::*};
+use gw_types::{
+    packed::{L2Block, L2Transaction},
+    prelude::*,
+};
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -67,6 +70,16 @@ impl<S: Store<H256>> StateImpl<S> {
             .merkle_proof(vec![key.into()])?
             .compile(vec![(key.into(), value.into())])?;
         Ok(proof.0)
+    }
+
+    pub fn get_block(&self, number: u64) -> Result<L2Block, Error> {
+        unimplemented!()
+    }
+    pub fn get_block_hash(&self, number: u64) -> Result<H256, Error> {
+        unimplemented!()
+    }
+    pub fn get_transaction(&self, tx_hash: &H256) -> Result<L2Transaction, Error> {
+        unimplemented!()
     }
 }
 

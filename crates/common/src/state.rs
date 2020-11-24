@@ -116,8 +116,16 @@ pub trait State {
         Ok(pubkey_hash)
     }
 
-    fn get_sudt_balance(&self, token_id: &H256, id: u32) -> Result<u128, Error> {
-        let key = generate_sudt_key(token_id, id);
+    fn get_address_by_account_id(&self, id: u32) -> Result<Option<[u8; 32]>, Error> {
+        unimplemented!()
+    }
+
+    fn get_account_id_by_address(&self, address: &[u8; 32]) -> Result<Option<u32>, Error> {
+        unimplemented!()
+    }
+
+    fn get_sudt_balance(&self, sudt_type_hash: &H256, id: u32) -> Result<u128, Error> {
+        let key = generate_sudt_key(sudt_type_hash, id);
         // get balance
         let balance = {
             let v = self.get_value(SUDT_ACCOUNT_ID, &key)?;

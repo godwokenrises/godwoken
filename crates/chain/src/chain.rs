@@ -15,7 +15,9 @@ use gw_generator::{
     Generator,
 };
 use gw_types::{
-    packed::{AccountMerkleState, L2Block, L2BlockReader, RawL2Block, SubmitTransactions},
+    packed::{
+        AccountMerkleState, GlobalState, L2Block, L2BlockReader, RawL2Block, SubmitTransactions,
+    },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
         Reader as GWReader, Unpack as GWUnpack,
@@ -31,16 +33,26 @@ pub struct ProduceBlockParam {
     pub aggregator_id: u32,
     /// deposition requests
     pub deposition_requests: Vec<DepositionRequest>,
+    /// user step2 withdrawal requests, collected from RPC
+    pub withdrawal_requests: Vec<WithdrawalRequest>,
+}
+
+pub struct WithdrawalRequest {
+    // layer1 ACP cell to receive the withdraw
+    lock_hash: H256,
+    sudt_type_hash: H256,
+    amount: u128,
+    account_id: u32,
 }
 /// sync params
 pub struct SyncParam {
-    /// sync infos, must be sorted
-    pub sync_infos: Vec<SyncInfo>,
-    /// has fork happened before this sync?
-    pub forked: bool,
+    // contains transitions from tip to fork point
+    pub reverts: Vec<SyncTransition>,
+    /// contains transitions from fork point to new tips
+    pub updates: Vec<SyncTransition>,
 }
 
-pub struct SyncInfo {
+pub struct SyncTransition {
     /// transaction info
     pub transaction_info: TransactionInfo,
     /// transactions' header info
@@ -56,6 +68,11 @@ pub struct TransactionInfo {
 pub struct HeaderInfo {
     pub number: u64,
     pub block_hash: [u8; 32],
+}
+
+pub struct L2BlockWithState {
+    block: L2Block,
+    global_state: GlobalState,
 }
 
 /// concrete type aliases
@@ -97,6 +114,14 @@ impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
         }
     }
 
+    pub fn tip(&self) -> &L2Block {
+        &self.tip
+    }
+
+    pub fn state(&self) -> &StateImpl<StateStore> {
+        &self.state
+    }
+
     pub fn last_synced(&self) -> &HeaderInfo {
         &self.last_synced
     }
@@ -104,16 +129,16 @@ impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
     /// Sync chain from layer1
     pub fn sync(&mut self, param: SyncParam) -> Result<()> {
         // TODO handle rollback
-        if param.forked {
+        if !param.reverts.is_empty() {
             panic!("layer1 chain has forked!")
         }
         // apply tx to state
-        for sync_info in param.sync_infos {
+        for sync in param.updates {
             debug_assert_eq!(
-                sync_info.transaction_info.block_hash,
-                sync_info.header_info.block_hash
+                sync.transaction_info.block_hash,
+                sync.header_info.block_hash
             );
-            let block_number: u64 = sync_info.header_info.number;
+            let block_number: u64 = sync.header_info.number;
             assert!(
                 block_number > self.last_synced.number,
                 "must greater than last synced number"
@@ -121,7 +146,7 @@ impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
 
             // parse layer2 block
             let l2block = parse_l2block(
-                &sync_info.transaction_info.transaction,
+                &sync.transaction_info.transaction,
                 &self.rollup_type_script_hash,
             )?;
 
@@ -134,12 +159,12 @@ impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
             // process l2block
             self.process_block(
                 l2block.clone(),
-                &sync_info.transaction_info.transaction.raw(),
-                sync_info.deposition_requests,
+                &sync.transaction_info.transaction.raw(),
+                sync.deposition_requests,
             )?;
 
             // update chain
-            self.last_synced = sync_info.header_info;
+            self.last_synced = sync.header_info;
             self.tip = l2block;
         }
         // update tx pool state
@@ -155,10 +180,11 @@ impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
     ///
     /// This function should be called in the turn that the current aggregator to produce the next block,
     /// otherwise the produced block may invalided by the state-validator contract.
-    pub fn produce_block(&mut self, param: ProduceBlockParam) -> Result<L2Block> {
+    pub fn produce_block(&mut self, param: ProduceBlockParam) -> Result<L2BlockWithState> {
         let ProduceBlockParam {
             aggregator_id,
             deposition_requests,
+            withdrawal_requests,
         } = param;
         // take txs from tx pool
         // produce block
@@ -233,7 +259,11 @@ impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
             .transactions(txs.pack())
             .block_proof(block_proof.pack())
             .build();
-        Ok(block)
+        let global_state = unimplemented!();
+        Ok(L2BlockWithState {
+            block,
+            global_state,
+        })
     }
 
     fn process_block(

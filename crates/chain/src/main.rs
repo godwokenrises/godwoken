@@ -100,9 +100,11 @@ fn run() -> Result<()> {
         // TODO check tx pool to determine wether to produce a block or continue to collect more txs
 
         let deposition_requests = Vec::new();
+        let withdrawal_requests = Vec::new();
         let block = chain.produce_block(ProduceBlockParam {
             aggregator_id,
             deposition_requests,
+            withdrawal_requests,
         })?;
         // signer.sign(block)
         // client.commit_block(block);
