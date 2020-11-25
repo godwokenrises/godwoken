@@ -1,0 +1,64 @@
+{
+  "name": "@ckb-godwoken/tools",
+  "version": "0.1.0",
+  "description": "Godwoken JS tools",
+  "author": "hupeng <bitrocks.hu@gmail.com>",
+  "homepage": "https://github.com/nervosnetwork/godwoken#readme",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "cpu": [
+    "x64"
+  ],
+  "os": [
+    "win32",
+    "darwin",
+    "linux"
+  ],
+  "directories": {
+    "lib": "lib",
+    "test": "tests"
+  },
+  "files": [
+    "lib"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "http://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "@ckb-lumos/base": "^0.13.3",
+    "@ckb-lumos/config-manager": "^0.13.3",
+    "@ckb-lumos/helpers": "^0.13.3",
+    "ckb-js-toolkit": "^0.9.2",
+    "immutable": "^4.0.0-rc.12"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nervosnetwork/godwoken.git"
+  },
+  "scripts": {
+    "fmt": "prettier --write \"{src,tests,examples}/**/*.ts\" package.json",
+    "lint": "eslint -c ../../.eslintrc.js \"{src,tests,examples}/**/*.ts\"",
+    "test": "ava **/*.test.ts",
+    "build": "tsc",
+    "clean": "rm -rf lib",
+    "prepublishOnly": "yarn run clean && yarn run build",
+    "release": "npm publish"
+  },
+  "bugs": {
+    "url": "https://github.com/nervosnetwork/godwoken/issues"
+  },
+  "ava": {
+    "extensions": [
+      "ts"
+    ],
+    "require": [
+      "ts-node/register"
+    ]
+  }
+}
+

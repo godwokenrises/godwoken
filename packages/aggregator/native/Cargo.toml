@@ -1,14 +1,14 @@
 [package]
-name = "lumos-godwoken"
+name = "gw-aggregator"
 version = "0.1.0"
-authors = ["Xuejie Xiao <xxuejie@gmail.com>"]
+authors = ["hupeng <bitrocks.hu@gmail.com>"]
 license = "MIT"
 build = "build.rs"
 edition = "2018"
 exclude = ["artifacts.json", "index.node"]
 
 [lib]
-name = "lumos_godwoken"
+name = "gw_aggregator"
 crate-type = ["cdylib"]
 
 [build-dependencies]

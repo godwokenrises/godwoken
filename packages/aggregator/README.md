@@ -1,3 +1,3 @@
-# godwoken
+# Aggregator
 
 Godwoken JS Binding.

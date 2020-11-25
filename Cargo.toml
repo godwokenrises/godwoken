@@ -8,4 +8,5 @@ members = [
   "crates/types",
   "crates/jsonrpc-types",
   "crates/setup-tool",
+  "packages/aggregator/native",
 ]
