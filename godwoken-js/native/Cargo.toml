@@ -1,0 +1,29 @@
+[package]
+name = "lumos-godwoken"
+version = "0.1.0"
+authors = ["Xuejie Xiao <xxuejie@gmail.com>"]
+license = "MIT"
+build = "build.rs"
+edition = "2018"
+exclude = ["artifacts.json", "index.node"]
+
+[lib]
+name = "lumos_godwoken"
+crate-type = ["cdylib"]
+
+[build-dependencies]
+neon-build = "0.5.0"
+
+[dependencies]
+gw-chain = { git = "https://github.com/bitrocks/godwoken", branch = "develop" }
+gw-common = { git = "https://github.com/bitrocks/godwoken", branch = "develop" }
+gw-generator = { git = "https://github.com/bitrocks/godwoken", branch = "develop" }
+gw-types = { git = "https://github.com/bitrocks/godwoken", branch = "develop" }
+gw-config = { git = "https://github.com/bitrocks/godwoken", branch = "develop" }
+gw-jsonrpc-types = { git = "https://github.com/bitrocks/godwoken", branch = "develop" }
+ckb-types = "0.37.0"
+anyhow = "1.0"
+serde_json = "1.0"
+parking_lot = "0.11"
+toml = "0.5"
+neon = "0.5.0"

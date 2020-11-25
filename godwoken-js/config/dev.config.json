@@ -1,0 +1,28 @@
+{
+    "chain": {
+        "rollup_type_script": {
+            "code_hash": "0x82d76d1b75fe2fd9a27dfbaa65a039221a380d76c926f378d3f81cf3e7e13f2e",
+            "hash_type": "type",
+            "args": "0x"
+        }
+    },
+    "consensus": {
+        "aggregator_id": 1
+    }, 
+    "genesis": {
+        "initial_aggregator_pubkey_hash": "0x19c5d58c535273452ac60f9d37831601adcf12b8",
+        "initial_deposition": 1000,
+        "timestamp": 12345
+    },
+    "aggregator": {
+        "account_id": 1, 
+        "signer": {}
+    },
+    "rpc": {
+        "listen": "127.0.0.1:8114" 
+    }, 
+    "lumos": {
+        "callback": "127.0.0.1:3030",
+        "endpoint": "127.0.0.1:3031"
+    }
+}
