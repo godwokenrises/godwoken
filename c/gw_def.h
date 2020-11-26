@@ -79,24 +79,24 @@ typedef int (*gw_store_fn)(void *ctx, const uint8_t key[GW_KEY_BYTES], const uin
 typedef int (*gw_set_program_return_data_fn)(void *ctx, uint8_t *data, uint32_t len);
 
 /**
- * Get account id by account address
+ * Get account id by account script_hash
  *
  * @param ctx        The godwoken context
- * @param address    The account address
+ * @param script_hashThe account script_hash
  * @param account_id The pointer of the account id to save the result
  * @return           The status code, 0 is success
  */
-typedef int (*gw_get_account_id_by_address_fn)(void *ctx, uint8_t address[32], uint32_t * account_id);
+typedef int (*gw_get_account_id_by_script_hash_fn)(void *ctx, uint8_t script_hash[32], uint32_t * account_id);
 
 /**
- * Get account address by account id
+ * Get account script_hash by account id
  *
  * @param ctx        The godwoken context
  * @param account_id The account id
- * @param address    The pointer of the account address to save the result
+ * @param script_hashThe pointer of the account script hash to save the result
  * @return           The status code, 0 is success
  */
-typedef int (*gw_get_address_by_account_id_fn)(void *ctx, uint32_t account_id, uint8_t address[32]);
+typedef int (*gw_get_script_hash_by_account_id_fn)(void *ctx, uint32_t account_id, uint8_t script_hash[32]);
 
 /**
  * Get account's nonce
@@ -167,8 +167,8 @@ typedef struct {
   gw_set_program_return_data_fn sys_set_program_return_data;
   gw_call_fn sys_call;
   gw_create_fn sys_create;
-  gw_get_account_id_by_address_fn sys_get_account_id_by_address;
-  gw_get_address_by_account_id_fn sys_get_address_by_account_id;
+  gw_get_account_id_by_script_hash_fn sys_get_account_id_by_script_hash;
+  gw_get_script_hash_by_account_id_fn sys_get_script_hash_by_account_id;
   gw_get_account_nonce_fn sys_get_account_nonce;
   gw_get_account_script_fn sys_get_account_script;
   gw_get_block_hash_fn sys_get_block_hash;
