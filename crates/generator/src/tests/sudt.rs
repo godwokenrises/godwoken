@@ -1,12 +1,13 @@
-use super::{new_block_info, new_generator, SUDT_PROGRAM_CODE_HASH};
+use super::{build_dummy_state, new_block_info, SUDT_PROGRAM_CODE_HASH};
 use crate::dummy_state::DummyState;
-use crate::state_ext::StateExt;
+use crate::traits::{CodeStore, StateExt};
 use crate::Error;
+use crate::Generator;
 use gw_common::blake2b::new_blake2b;
 use gw_common::state::State;
 use gw_types::{
     core::CallType,
-    packed::{CallContext, SUDTArgs, SUDTQuery, SUDTTransfer},
+    packed::{CallContext, SUDTArgs, SUDTQuery, SUDTTransfer, Script},
     prelude::*,
 };
 use std::mem::size_of_val;
@@ -22,7 +23,7 @@ fn build_sudt_key(token_id: &[u8], account_id: u32) -> [u8; 32] {
     buf
 }
 
-fn run_contract<S: State>(
+fn run_contract<S: State + CodeStore>(
     tree: &mut S,
     from_id: u32,
     to_id: u32,
@@ -35,7 +36,7 @@ fn run_contract<S: State>(
         .call_type(CallType::HandleMessage.into())
         .args(args.as_bytes().pack())
         .build();
-    let generator = new_generator();
+    let generator = Generator::default();
     let run_result = generator.execute(tree, &block_info, &call_context)?;
     tree.apply_run_result(&run_result).expect("update state");
     Ok(run_result.return_data)
@@ -43,19 +44,34 @@ fn run_contract<S: State>(
 
 #[test]
 fn test_sudt() {
-    let mut tree = DummyState::default();
+    let mut tree = build_dummy_state();
     let init_a_balance: u128 = 10000;
     let token_id = [0u8; 32];
 
     // init accounts
     let contract_id = tree
-        .create_account(SUDT_PROGRAM_CODE_HASH.clone(), [0u8; 20])
+        .create_account_from_script(
+            Script::new_builder()
+                .code_hash(SUDT_PROGRAM_CODE_HASH.pack())
+                .args([0u8; 20].to_vec().pack())
+                .build(),
+        )
         .expect("create account");
     let a_id = tree
-        .create_account([0u8; 32], [0u8; 20])
+        .create_account_from_script(
+            Script::new_builder()
+                .code_hash([0u8; 32].pack())
+                .args([0u8; 20].to_vec().pack())
+                .build(),
+        )
         .expect("create account");
     let b_id = tree
-        .create_account([0u8; 32], [0u8; 20])
+        .create_account_from_script(
+            Script::new_builder()
+                .code_hash([0u8; 32].pack())
+                .args([0u8; 20].to_vec().pack())
+                .build(),
+        )
         .expect("create account");
 
     // run constructor (do nothing)
@@ -66,7 +82,7 @@ fn test_sudt() {
             .to_id(contract_id.pack())
             .call_type(CallType::Construct.into())
             .build();
-        let generator = new_generator();
+        let generator = Generator::default();
         let run_result = generator
             .execute(&tree, &block_info, &call_context)
             .expect("construct");
@@ -78,7 +94,7 @@ fn test_sudt() {
     value[..size_of_val(&init_a_balance)].copy_from_slice(&init_a_balance.to_le_bytes());
     let a_state_key = build_sudt_key(&token_id, a_id);
     println!("a_state_key = {:?}", a_state_key);
-    tree.update_value(contract_id, &a_state_key, value)
+    tree.update_value(contract_id, &a_state_key, value.into())
         .expect("update init balance");
 
     // check balance of A, B
@@ -169,19 +185,34 @@ fn test_sudt() {
 
 #[test]
 fn test_sudt_insufficient_balance() {
-    let mut tree = DummyState::default();
+    let mut tree = build_dummy_state();
     let init_a_balance: u128 = 10000;
     let token_id = [0u8; 32];
 
     // init accounts
     let contract_id = tree
-        .create_account(SUDT_PROGRAM_CODE_HASH.clone(), [0u8; 20])
+        .create_account_from_script(
+            Script::new_builder()
+                .code_hash(SUDT_PROGRAM_CODE_HASH.pack())
+                .args([0u8; 20].to_vec().pack())
+                .build(),
+        )
         .expect("create account");
     let a_id = tree
-        .create_account([0u8; 32], [0u8; 20])
+        .create_account_from_script(
+            Script::new_builder()
+                .code_hash([0u8; 32].pack())
+                .args([0u8; 20].to_vec().pack())
+                .build(),
+        )
         .expect("create account");
     let b_id = tree
-        .create_account([0u8; 32], [0u8; 20])
+        .create_account_from_script(
+            Script::new_builder()
+                .code_hash([0u8; 32].pack())
+                .args([0u8; 20].to_vec().pack())
+                .build(),
+        )
         .expect("create account");
 
     // run constructor (do nothing)
@@ -192,7 +223,7 @@ fn test_sudt_insufficient_balance() {
             .to_id(contract_id.pack())
             .call_type(CallType::Construct.into())
             .build();
-        let generator = new_generator();
+        let generator = Generator::default();
         let run_result = generator
             .execute(&tree, &block_info, &call_context)
             .expect("construct");
@@ -203,7 +234,7 @@ fn test_sudt_insufficient_balance() {
     let mut value = [0u8; 32];
     value[..size_of_val(&init_a_balance)].copy_from_slice(&init_a_balance.to_le_bytes());
     let a_state_key = build_sudt_key(&token_id, a_id);
-    tree.update_value(contract_id, &a_state_key, value)
+    tree.update_value(contract_id, &a_state_key, value.into())
         .expect("update init balance");
 
     // transfer from A to B

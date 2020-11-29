@@ -1,6 +1,4 @@
-pub mod hashmap_code_store;
-
-use crate::bytes::Bytes;
+use crate::traits::CodeStore;
 use ckb_vm::{
     memory::{Memory, FLAG_EXECUTABLE, FLAG_FREEZED},
     registers::{A0, A1, A2, A3, A4, A7},
@@ -40,15 +38,11 @@ pub struct RunResult {
     pub return_data: Vec<u8>,
 }
 
-pub trait GetContractCode {
-    fn get_contract_code(&self, code_hash: &[u8; 32]) -> Option<Bytes>;
-}
-
 pub(crate) struct L2Syscalls<'a, S> {
     pub(crate) state: &'a S,
     pub(crate) block_info: &'a BlockInfo,
     pub(crate) call_context: &'a CallContext,
-    pub(crate) code_store: &'a dyn GetContractCode,
+    pub(crate) code_store: &'a dyn CodeStore,
     pub(crate) result: &'a mut RunResult,
 }
 
@@ -127,7 +121,9 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                         tree_value
                     }
                 };
-                machine.memory_mut().store_bytes(value_addr, &value)?;
+                machine
+                    .memory_mut()
+                    .store_bytes(value_addr, &value.as_slice())?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -179,15 +175,15 @@ impl<'a, S: State> L2Syscalls<'a, S> {
         let content_size = machine.registers()[A3].to_u64();
         let id: u32 = machine.registers()[A4].to_u64() as u32;
 
-        let code_hash = self.state.get_code_hash(id).map_err(|err| {
-            eprintln!("syscall error: get code hash : {:?}", err);
+        let script_hash = self.state.get_script_hash(id).map_err(|err| {
+            eprintln!("syscall error: get script hash : {:?}", err);
             VMError::Unexpected
         })?;
         let program = self
             .code_store
-            .get_contract_code(&code_hash)
+            .get_code_by_script_hash(&script_hash.into())
             .ok_or_else(|| {
-                eprintln!("syscall error: can't find code_hash : {:?}", code_hash);
+                eprintln!("syscall error: can't find code : {:?}", script_hash);
                 VMError::Unexpected
             })?;
 
@@ -217,15 +213,18 @@ impl<'a, S: State> L2Syscalls<'a, S> {
     fn load_program_as_data<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
         let id: u32 = machine.registers()[A3].to_u64() as u32;
 
-        let code_hash = self.state.get_code_hash(id).map_err(|err| {
-            eprintln!("syscall error: get code hash : {:?}", err);
+        let script_hash = self.state.get_script_hash(id).map_err(|err| {
+            eprintln!("syscall error: get script hash : {:?}", err);
             VMError::Unexpected
         })?;
         let program = self
             .code_store
-            .get_contract_code(&code_hash)
+            .get_code_by_script_hash(&script_hash.into())
             .ok_or_else(|| {
-                eprintln!("syscall error: can't find code_hash : {:?}", code_hash);
+                eprintln!(
+                    "syscall error: can't find script script_hash: {:?}",
+                    script_hash
+                );
                 VMError::Unexpected
             })?;
         store_data(machine, &program)?;

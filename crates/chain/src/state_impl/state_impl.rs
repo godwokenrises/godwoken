@@ -1,15 +1,18 @@
-use super::overlay::OverlayState;
+use super::overlay::{OverlayState, OverlayStore};
 use super::wrap_store::WrapStore;
 use anyhow::{anyhow, Result};
 use gw_common::{
     smt::{CompiledMerkleProof, Store, H256, SMT},
     state::{Error, State},
 };
+use gw_generator::traits::CodeStore;
 use gw_types::{
-    packed::{L2Block, L2Transaction, RawL2Block},
+    bytes::Bytes,
+    packed::{L2Block, L2Transaction, RawL2Block, Script},
     prelude::*,
 };
 use parking_lot::Mutex;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub struct StateImpl<S> {
@@ -19,6 +22,9 @@ pub struct StateImpl<S> {
     // But the column must be difference, otherwise the keys may be collision with each other
     block_tree: SMT<WrapStore<S>>,
     block_count: u64,
+    // code store
+    scripts: HashMap<H256, Script>,
+    codes: HashMap<H256, Bytes>,
 }
 
 impl<S: Store<H256>> StateImpl<S> {
@@ -27,12 +33,16 @@ impl<S: Store<H256>> StateImpl<S> {
         account_count: u32,
         block_tree: SMT<WrapStore<S>>,
         block_count: u64,
+        scripts: HashMap<H256, Script>,
+        codes: HashMap<H256, Bytes>,
     ) -> Self {
         StateImpl {
             tree: account_tree,
             account_count,
             block_tree,
             block_count,
+            scripts,
+            codes,
         }
     }
 
@@ -41,11 +51,17 @@ impl<S: Store<H256>> StateImpl<S> {
         let account_count = self
             .get_account_count()
             .map_err(|err| anyhow!("get amount count error: {:?}", err))?;
-        let store = self.tree.store().clone();
-        Ok(OverlayState::new(*root, store, account_count))
+        let store = OverlayStore::new(self.tree.store().clone());
+        Ok(OverlayState::new(
+            *root,
+            store,
+            account_count,
+            self.scripts.clone(),
+            self.codes.clone(),
+        ))
     }
 
-    pub fn merkle_proof(&self, leaves: Vec<([u8; 32], [u8; 32])>) -> Result<Vec<u8>, Error> {
+    pub fn merkle_proof(&self, leaves: Vec<(H256, H256)>) -> Result<Vec<u8>, Error> {
         let keys = leaves.iter().map(|(k, v)| (*k).into()).collect();
         let proof = self
             .tree
@@ -79,12 +95,14 @@ impl<S: Store<H256>> StateImpl<S> {
         Ok(proof)
     }
 
-    pub fn get_block(&self, number: u64) -> Result<L2Block, Error> {
+    fn get_account_script(&self, id: u32) -> Result<Script, Error> {
         unimplemented!()
     }
-    pub fn get_block_hash(&self, number: u64) -> Result<H256, Error> {
+
+    pub fn get_block(&self, block_hash: &H256) -> Result<L2Block, Error> {
         unimplemented!()
     }
+
     pub fn get_transaction(&self, tx_hash: &H256) -> Result<L2Transaction, Error> {
         unimplemented!()
     }
@@ -105,16 +123,18 @@ impl<S: Store<H256> + Default> Default for StateImpl<S> {
             account_count: 0,
             block_tree,
             block_count: 0,
+            scripts: Default::default(),
+            codes: Default::default(),
         }
     }
 }
 
 impl<S: Store<H256>> State for StateImpl<S> {
-    fn get_raw(&self, key: &[u8; 32]) -> Result<[u8; 32], Error> {
+    fn get_raw(&self, key: &H256) -> Result<H256, Error> {
         let v = self.tree.get(&(*key).into())?;
         Ok(v.into())
     }
-    fn update_raw(&mut self, key: [u8; 32], value: [u8; 32]) -> Result<(), Error> {
+    fn update_raw(&mut self, key: H256, value: H256) -> Result<(), Error> {
         self.tree.update(key.into(), value.into())?;
         Ok(())
     }
@@ -125,8 +145,23 @@ impl<S: Store<H256>> State for StateImpl<S> {
         self.account_count = count;
         Ok(())
     }
-    fn calculate_root(&self) -> Result<[u8; 32], Error> {
+    fn calculate_root(&self) -> Result<H256, Error> {
         let root = (*self.tree.root()).into();
         Ok(root)
+    }
+}
+
+impl<S: Store<H256>> CodeStore for StateImpl<S> {
+    fn insert_script(&mut self, script_hash: H256, script: Script) {
+        self.scripts.insert(script_hash.into(), script);
+    }
+    fn insert_code(&mut self, code_hash: H256, code: Bytes) {
+        self.codes.insert(code_hash.into(), code);
+    }
+    fn get_script(&self, script_hash: &H256) -> Option<Script> {
+        self.scripts.get(&script_hash).cloned()
+    }
+    fn get_code(&self, code_hash: &H256) -> Option<Bytes> {
+        self.codes.get(&code_hash).cloned()
     }
 }

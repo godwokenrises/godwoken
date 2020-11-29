@@ -4,13 +4,13 @@
 pub mod dummy_state;
 mod error;
 pub mod generator;
-pub mod state_ext;
 pub mod syscalls;
 #[cfg(test)]
 mod tests;
+pub mod traits;
 
 // re-exports
 pub use error::Error;
 pub use generator::Generator;
 pub(crate) use gw_types::bytes;
-pub use syscalls::{GetContractCode, RunResult};
+pub use syscalls::RunResult;

@@ -1,16 +1,30 @@
-use super::{new_block_info, new_generator, PROXY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH};
-use crate::{dummy_state::DummyState, state_ext::StateExt, Error};
+use super::{build_dummy_state, new_block_info, PROXY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH};
+use crate::{
+    dummy_state::DummyState,
+    traits::{CodeStore, StateExt},
+    Error, Generator,
+};
 use gw_common::state::State;
-use gw_types::{bytes::Bytes, core::CallType, packed::CallContext, prelude::*};
+use gw_types::{
+    bytes::Bytes,
+    core::CallType,
+    packed::{CallContext, Script},
+    prelude::*,
+};
 
 #[test]
 fn test_example_sum() {
-    let mut tree = DummyState::default();
+    let mut tree = build_dummy_state();
     let from_id: u32 = 2;
     let init_value: u64 = 42;
 
     let contract_id = tree
-        .create_account(SUM_PROGRAM_CODE_HASH.clone(), [0u8; 20])
+        .create_account_from_script(
+            Script::new_builder()
+                .code_hash(SUM_PROGRAM_CODE_HASH.pack())
+                .args([0u8; 20].to_vec().pack())
+                .build(),
+        )
         .expect("create account");
 
     // run constructor
@@ -22,7 +36,7 @@ fn test_example_sum() {
             .call_type(CallType::Construct.into())
             .args(Bytes::from(init_value.to_le_bytes().to_vec()).pack())
             .build();
-        let generator = new_generator();
+        let generator = Generator::default();
         let run_result = generator
             .execute(&tree, &block_info, &call_context)
             .expect("construct");
@@ -48,7 +62,7 @@ fn test_example_sum() {
                 .call_type(CallType::HandleMessage.into())
                 .args(Bytes::from(add_value.to_le_bytes().to_vec()).pack())
                 .build();
-            let generator = new_generator();
+            let generator = Generator::default();
             let run_result = generator
                 .execute(&tree, &block_info, &call_context)
                 .expect("construct");
@@ -67,15 +81,25 @@ fn test_example_sum() {
 
 #[test]
 fn test_example_proxy_sum() {
-    let mut tree = DummyState::default();
+    let mut tree = build_dummy_state();
     let from_id: u32 = 2;
     let init_value: u64 = 42;
 
     let contract_id = tree
-        .create_account(SUM_PROGRAM_CODE_HASH.clone(), [0u8; 20])
+        .create_account_from_script(
+            Script::new_builder()
+                .code_hash(SUM_PROGRAM_CODE_HASH.pack())
+                .args([0u8; 20].to_vec().pack())
+                .build(),
+        )
         .expect("create account");
     let proxy_contract_id = tree
-        .create_account(PROXY_PROGRAM_CODE_HASH.clone(), [0u8; 20])
+        .create_account_from_script(
+            Script::new_builder()
+                .code_hash(PROXY_PROGRAM_CODE_HASH.pack())
+                .args([0u8; 20].to_vec().pack())
+                .build(),
+        )
         .expect("create account");
 
     {
@@ -87,7 +111,7 @@ fn test_example_proxy_sum() {
             .call_type(CallType::Construct.into())
             .args(Bytes::from(init_value.to_le_bytes().to_vec()).pack())
             .build();
-        let generator = new_generator();
+        let generator = Generator::default();
         let run_result = generator
             .execute(&tree, &block_info, &call_context)
             .expect("construct");
@@ -108,7 +132,7 @@ fn test_example_proxy_sum() {
             .to_id(proxy_contract_id.pack())
             .call_type(CallType::Construct.into())
             .build();
-        let generator = new_generator();
+        let generator = Generator::default();
         let run_result = generator
             .execute(&tree, &block_info, &call_context)
             .expect("construct");
@@ -131,7 +155,7 @@ fn test_example_proxy_sum() {
                 .call_type(CallType::HandleMessage.into())
                 .args(Bytes::from(args).pack())
                 .build();
-            let generator = new_generator();
+            let generator = Generator::default();
             let run_result = generator
                 .execute(&tree, &block_info, &call_context)
                 .expect("construct");
@@ -154,7 +178,7 @@ fn test_example_proxy_sum() {
             .call_type(CallType::HandleMessage.into())
             .args(Bytes::from(0u64.to_le_bytes().to_vec()).pack())
             .build();
-        let generator = new_generator();
+        let generator = Generator::default();
         let run_result = generator
             .execute(&tree, &block_info, &call_context)
             .expect("handle");
@@ -169,10 +193,15 @@ fn test_example_proxy_sum() {
 
 #[test]
 fn test_example_proxy_recursive() {
-    let mut tree = DummyState::default();
+    let mut tree = build_dummy_state();
     let from_id: u32 = 2;
     let proxy_contract_id = tree
-        .create_account(PROXY_PROGRAM_CODE_HASH.clone(), [0u8; 20])
+        .create_account_from_script(
+            Script::new_builder()
+                .code_hash(PROXY_PROGRAM_CODE_HASH.pack())
+                .args([0u8; 20].to_vec().pack())
+                .build(),
+        )
         .expect("create account");
 
     // invoke proxy contract
@@ -187,7 +216,7 @@ fn test_example_proxy_recursive() {
             .call_type(CallType::HandleMessage.into())
             .args(Bytes::from(args).pack())
             .build();
-        let generator = new_generator();
+        let generator = Generator::default();
         let err = generator
             .execute(&tree, &block_info, &call_context)
             .expect_err("handle");

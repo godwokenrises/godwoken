@@ -1,10 +1,14 @@
 use crate::bytes::Bytes;
 use crate::error::Error;
-use crate::state_ext::StateExt;
-use crate::syscalls::{GetContractCode, L2Syscalls, RunResult};
-use gw_common::state::{build_account_key, serialize_nonce, State, GW_ACCOUNT_NONCE};
+use crate::syscalls::{L2Syscalls, RunResult};
+use crate::traits::{CodeStore, StateExt};
+use gw_common::{
+    h256_ext::H256Ext,
+    state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
+    H256,
+};
 use gw_types::{
-    packed::{BlockInfo, CallContext, L2Block, RawL2Block},
+    packed::{BlockInfo, CallContext, L2Block, RawL2Block, Script},
     prelude::*,
 };
 use lazy_static::lazy_static;
@@ -20,9 +24,8 @@ lazy_static! {
 }
 
 pub struct DepositionRequest {
-    pub pubkey_hash: [u8; 20],
-    pub account_id: u32,
-    pub token_id: [u8; 32],
+    pub script: Script,
+    pub sudt_script: Script,
     pub value: u128,
 }
 
@@ -31,19 +34,23 @@ pub struct StateTransitionArgs {
     pub deposition_requests: Vec<DepositionRequest>,
 }
 
-pub struct Generator<CS> {
+pub struct Generator {
     generator: Bytes,
     validator: Bytes,
-    code_store: CS,
 }
 
-impl<CS: GetContractCode> Generator<CS> {
-    pub fn new(code_store: CS) -> Self {
+impl Default for Generator {
+    fn default() -> Self {
         Generator {
             generator: GENERATOR.clone(),
             validator: VALIDATOR.clone(),
-            code_store,
         }
+    }
+}
+
+impl Generator {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Apply l2 state transition
@@ -51,7 +58,7 @@ impl<CS: GetContractCode> Generator<CS> {
     /// Notice:
     /// This function do not verify the block and transactions signature.
     /// The caller is supposed to do the verification.
-    pub fn apply_state_transition<S: State>(
+    pub fn apply_state_transition<S: State + CodeStore>(
         &self,
         state: &mut S,
         args: StateTransitionArgs,
@@ -92,7 +99,7 @@ impl<CS: GetContractCode> Generator<CS> {
     }
 
     /// execute a layer2 tx
-    pub fn execute<S: State>(
+    pub fn execute<S: State + CodeStore>(
         &self,
         state: &S,
         block_info: &BlockInfo,
@@ -107,7 +114,7 @@ impl<CS: GetContractCode> Generator<CS> {
                     block_info: block_info,
                     call_context: call_context,
                     result: &mut run_result,
-                    code_store: &self.code_store,
+                    code_store: state,
                 }));
             let mut machine = AsmMachine::new(machine_builder.build(), None);
             let program_name = Bytes::from_static(b"generator");
@@ -120,16 +127,16 @@ impl<CS: GetContractCode> Generator<CS> {
         // set nonce
         let sender_id: u32 = call_context.from_id().unpack();
         let nonce = state.get_nonce(sender_id)?;
-        let nonce_raw_key = build_account_key(sender_id, GW_ACCOUNT_NONCE);
+        let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE);
         if run_result.read_values.get(&nonce_raw_key).is_none() {
             run_result
                 .read_values
-                .insert(nonce_raw_key, serialize_nonce(nonce));
+                .insert(nonce_raw_key, H256::from_u32(nonce));
         }
         // increase nonce
         run_result
             .write_values
-            .insert(nonce_raw_key, serialize_nonce(nonce + 1));
+            .insert(nonce_raw_key, H256::from_u32(nonce + 1));
         Ok(run_result)
     }
 }

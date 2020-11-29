@@ -33,7 +33,7 @@ int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
     return GW_ERROR_INVALID_CONTEXT;
   }
   uint8_t raw_key[GW_KEY_BYTES];
-  gw_build_raw_key(gw_ctx->call_context.to_id, key, raw_key);
+  gw_build_account_key(gw_ctx->call_context.to_id, key, raw_key);
   return syscall(GW_SYS_LOAD, raw_key, value, 0, 0, 0, 0);
 }
 int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
@@ -43,7 +43,7 @@ int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
     return GW_ERROR_INVALID_CONTEXT;
   }
   uint8_t raw_key[GW_KEY_BYTES];
-  gw_build_raw_key(gw_ctx->call_context.to_id, key, raw_key);
+  gw_build_account_key(gw_ctx->call_context.to_id, key, raw_key);
   return syscall(GW_SYS_STORE, raw_key, value, 0, 0, 0, 0);
 }
 

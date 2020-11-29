@@ -4,11 +4,15 @@ use crate::state_impl::OverlayState;
 use anyhow::{anyhow, Result};
 use gw_common::{
     merkle_utils::calculate_compacted_account_root,
-    smt::{Store, H256 as SMTH256, SMT},
+    smt::{Store, H256 as SMTH256},
     state::State,
     H256,
 };
-use gw_generator::{generator::DepositionRequest, state_ext::StateExt, Generator, GetContractCode};
+use gw_generator::{
+    generator::DepositionRequest,
+    traits::{CodeStore, StateExt},
+    Generator,
+};
 use gw_types::{
     packed::{BlockInfo, L2Block, L2Transaction},
     prelude::*,
@@ -24,18 +28,18 @@ pub struct TxRecipt {
     pub compacted_post_account_root: [u8; 32],
 }
 
-pub struct TxPool<S, CodeStore> {
+pub struct TxPool<S> {
     state: OverlayState<S>,
-    generator: Generator<CodeStore>,
+    generator: Generator,
     queue: Vec<TxRecipt>,
     next_block_info: BlockInfo,
     next_prev_account_state: MerkleState,
 }
 
-impl<S: Store<SMTH256>, CodeStore> TxPool<S, CodeStore> {
+impl<S: Store<SMTH256>> TxPool<S> {
     pub fn create(
         state: OverlayState<S>,
-        generator: Generator<CodeStore>,
+        generator: Generator,
         tip: &L2Block,
         nb_ctx: NextBlockContext,
     ) -> Result<Self> {
@@ -52,7 +56,7 @@ impl<S: Store<SMTH256>, CodeStore> TxPool<S, CodeStore> {
     }
 }
 
-impl<S: Store<SMTH256>, CS: GetContractCode> TxPool<S, CS> {
+impl<S: Store<SMTH256>> TxPool<S> {
     /// Push a layer2 tx into pool
     pub fn push(&mut self, tx: L2Transaction) -> Result<()> {
         // 1. verify tx signature
@@ -73,7 +77,7 @@ impl<S: Store<SMTH256>, CS: GetContractCode> TxPool<S, CS> {
                 .state
                 .get_account_count()
                 .map_err(|err| anyhow!("get account count error: {:?}", err))?;
-            calculate_compacted_account_root(&account_root, account_count)
+            calculate_compacted_account_root(&account_root.as_slice(), account_count)
         };
         self.queue.push(TxRecipt {
             tx,
@@ -104,10 +108,19 @@ impl<S: Store<SMTH256>, CS: GetContractCode> TxPool<S, CS> {
         }
 
         // verify signature
-        let pubkey_hash = self
+        let script_hash = self
             .state
-            .get_pubkey_hash(sender_id)
-            .expect("get pubkey hash");
+            .get_script_hash(sender_id)
+            .expect("get script hash");
+        let script = self.state.get_script(&script_hash).expect("get script");
+        let pubkey_hash = {
+            let mut buf = [0u8; 20];
+            let args: Vec<u8> = script.args().unpack();
+            // pubkey hash length is 20
+            assert_eq!(args.len(), 20);
+            buf.copy_from_slice(args.as_slice());
+            buf.into()
+        };
         let tx_hash = tx.hash();
         let sig = Signature(tx.signature().unpack());
         verify_signature(&sig, &tx_hash, &pubkey_hash)?;
@@ -198,7 +211,7 @@ fn gen_next_block_info(tip: &L2Block, nb_ctx: NextBlockContext) -> Result<BlockI
 
 #[derive(Clone, Debug)]
 pub struct MerkleState {
-    pub root: [u8; 32],
+    pub root: H256,
     pub count: u32,
 }
 

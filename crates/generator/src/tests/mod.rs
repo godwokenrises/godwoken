@@ -1,9 +1,9 @@
-use crate::syscalls::hashmap_code_store::HashMapCodeStore;
-use crate::Generator;
+use crate::dummy_state::DummyState;
+use crate::traits::CodeStore;
 use gw_common::blake2b::new_blake2b;
 use gw_types::{bytes::Bytes, packed::BlockInfo, prelude::*};
 use lazy_static::lazy_static;
-use std::{collections::HashMap, fs, io::Read, path::PathBuf};
+use std::{fs, io::Read, path::PathBuf};
 
 mod examples;
 mod sudt;
@@ -73,11 +73,13 @@ pub fn new_block_info(aggregator_id: u32, number: u64, timestamp: u64) -> BlockI
         .build()
 }
 
-pub fn new_generator() -> Generator<HashMapCodeStore> {
-    let mut code_map = HashMap::default();
-    code_map.insert(SUM_PROGRAM_CODE_HASH.clone(), SUM_PROGRAM.clone());
-    code_map.insert(PROXY_PROGRAM_CODE_HASH.clone(), PROXY_PROGRAM.clone());
-    code_map.insert(SUDT_PROGRAM_CODE_HASH.clone(), SUDT_PROGRAM.clone());
-    let code_store = HashMapCodeStore::new(code_map);
-    Generator::new(code_store)
+pub fn build_dummy_state() -> DummyState {
+    let mut tree = DummyState::default();
+    tree.insert_code(SUM_PROGRAM_CODE_HASH.clone().into(), SUM_PROGRAM.clone());
+    tree.insert_code(
+        PROXY_PROGRAM_CODE_HASH.clone().into(),
+        PROXY_PROGRAM.clone(),
+    );
+    tree.insert_code(SUDT_PROGRAM_CODE_HASH.clone().into(), SUDT_PROGRAM.clone());
+    tree
 }

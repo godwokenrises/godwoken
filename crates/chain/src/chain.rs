@@ -13,7 +13,7 @@ use gw_common::{
 use gw_config::ChainConfig;
 use gw_generator::{
     generator::{DepositionRequest, StateTransitionArgs},
-    syscalls::GetContractCode,
+    traits::CodeStore,
     Generator,
 };
 use gw_types::{
@@ -78,30 +78,54 @@ pub struct L2BlockWithState {
     global_state: GlobalState,
 }
 
+/// sync method returned events
+pub enum SyncEvent {
+    // nothing happend
+    Nothing,
+    // found a invalid block
+    BadBlock(ChallengeArgs),
+    // found a invalid challenge
+    BadChallenge(CancelChallengeArgs),
+}
+
+/// a molecule structure
+pub struct CancelChallengeArgs {
+    // l2block: L2Block,
+// block_merkle_proof: Vec<u8>,
+// kv_pairs
+// merkle_proof
+}
+
+pub struct ChallengeArgs {
+    block_hash: H256, // challenge block
+    block_height: u64,
+    tx_index: u32, // challenge tx
+}
+
 /// concrete type aliases
 pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
-pub type TxPoolImpl<CodeStore> = TxPool<WrapStore<StateStore>, CodeStore>;
+pub type TxPoolImpl = TxPool<WrapStore<StateStore>>;
 
-pub struct Chain<CodeStore, Consensus> {
+pub struct Chain<Consensus> {
     config: ChainConfig,
     rollup_type_script_hash: [u8; 32],
     state: StateImpl<StateStore>,
     last_synced: HeaderInfo,
     tip: L2Block,
-    generator: Generator<CodeStore>,
-    tx_pool: Arc<Mutex<TxPoolImpl<CodeStore>>>,
+    generator: Generator,
+    tx_pool: Arc<Mutex<TxPoolImpl>>,
     consensus: Consensus,
 }
 
-impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
+impl<C: Consensus> Chain<C> {
     pub fn new(
         config: ChainConfig,
         state: StateImpl<StateStore>,
-        consensus: Consen,
+        consensus: C,
         tip: L2Block,
         last_synced: HeaderInfo,
-        generator: Generator<CodeStore>,
-        tx_pool: Arc<Mutex<TxPoolImpl<CodeStore>>>,
+        generator: Generator,
+        tx_pool: Arc<Mutex<TxPoolImpl>>,
     ) -> Self {
         let rollup_type_script: Script = config.rollup_type_script.clone().into();
         let rollup_type_script_hash = rollup_type_script.calc_script_hash().unpack();
@@ -130,7 +154,7 @@ impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
     }
 
     /// Sync chain from layer1
-    pub fn sync(&mut self, param: SyncParam) -> Result<()> {
+    pub fn sync(&mut self, param: SyncParam) -> Result<SyncEvent> {
         // TODO handle rollback
         if !param.reverts.is_empty() {
             panic!("layer1 chain has forked!")
@@ -176,7 +200,7 @@ impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
         self.tx_pool
             .lock()
             .update_tip(&self.tip, overlay_state, nb_ctx)?;
-        Ok(())
+        Ok(SyncEvent::Nothing)
     }
 
     /// Produce an unsigned new block
@@ -217,12 +241,14 @@ impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
                 .compacted_post_root_list(compacted_post_root_list.pack())
                 .build()
         };
+        let prev_root: [u8; 32] = pkg.prev_account_state.root.into();
         let prev_account = AccountMerkleState::new_builder()
-            .merkle_root(pkg.prev_account_state.root.pack())
+            .merkle_root(prev_root.pack())
             .count(pkg.prev_account_state.count.pack())
             .build();
+        let post_root: [u8; 32] = pkg.post_account_state.root.into();
         let post_account = AccountMerkleState::new_builder()
-            .merkle_root(pkg.post_account_state.root.pack())
+            .merkle_root(post_root.pack())
             .count(pkg.post_account_state.count.pack())
             .build();
         let raw_block = RawL2Block::new_builder()
@@ -245,7 +271,15 @@ impl<CodeStore: GetContractCode, Consen: Consensus> Chain<CodeStore, Consen> {
                     .map_err(|err| anyhow!("can't fetch value error: {:?}", err))
             })
             .collect::<Result<_>>()?;
-        let packed_kv_state = kv_state.pack();
+        let packed_kv_state = kv_state
+            .iter()
+            .map(|(k, v)| {
+                let k: [u8; 32] = (*k).into();
+                let v: [u8; 32] = (*v).into();
+                (k, v)
+            })
+            .collect::<Vec<_>>()
+            .pack();
         let proof = self
             .state
             .merkle_proof(kv_state)

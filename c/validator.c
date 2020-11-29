@@ -64,7 +64,7 @@ int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
   uint32_t account_id = gw_ctx->call_context.to_id;
   /* raw key */
   uint8_t raw_key[GW_KEY_BYTES];
-  gw_build_raw_key(account_id, key, raw_key);
+  gw_build_account_key(account_id, key, raw_key);
   /* try read from write_state
    * if not found then read from read_state */
   int ret = gw_state_fetch(state->write_state, raw_key, value);
@@ -88,7 +88,7 @@ int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
   uint32_t account_id = gw_ctx->call_context.to_id;
   /* raw key */
   uint8_t raw_key[GW_KEY_BYTES];
-  gw_build_raw_key(account_id, key, raw_key);
+  gw_build_account_key(account_id, key, raw_key);
   return gw_state_insert(state->write_state, raw_key, value);
 }
 

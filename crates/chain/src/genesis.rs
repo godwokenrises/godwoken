@@ -1,13 +1,15 @@
 use crate::state_impl::StateImpl;
 use anyhow::{anyhow, Result};
 use gw_common::{
+    builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     smt::{default_store::DefaultStore, H256, SMT},
-    state::{State, ZERO},
-    CKB_TOKEN_ID,
+    state::State,
+    CKB_TOKEN_ID, SUDT_CODE_HASH,
 };
 use gw_config::GenesisConfig;
+use gw_generator::traits::StateExt;
 use gw_types::{
-    packed::{AccountMerkleState, L2Block, RawL2Block},
+    packed::{AccountMerkleState, L2Block, RawL2Block, Script},
     prelude::*,
 };
 
@@ -17,28 +19,53 @@ pub fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
     let root = state
         .calculate_root()
         .map_err(|err| anyhow!("calculate root error: {:?}", err))?;
-    assert_eq!(root, ZERO, "initial root must be ZERO");
+    assert!(root.is_zero(), "initial root must be ZERO");
 
     // create a reserved account
     // this account is reserved for special use
     // for example: send a tx to reserved account to create a new contract account
-    let reserved_account_id = state
-        .create_account(ZERO, [0u8; 20])
+    let reserved_id = state
+        .create_account_from_script(
+            Script::new_builder()
+                .code_hash([0u8; 32].pack())
+                .args([0u8; 20].to_vec().pack())
+                .build(),
+        )
         .map_err(|err| anyhow!("create reserved account error: {:?}", err))?;
-    assert_eq!(reserved_account_id, 0, "reserved account id must be zero");
+    assert_eq!(
+        reserved_id, RESERVED_ACCOUNT_ID,
+        "reserved account id must be zero"
+    );
 
-    // TODO setup the simple UDT contract
+    // setup CKB simple UDT contract
+    let ckb_sudt_id = state
+        .create_account_from_script(
+            Script::new_builder()
+                .code_hash(SUDT_CODE_HASH.pack())
+                .args(CKB_TOKEN_ID.to_vec().pack())
+                .build(),
+        )
+        .map_err(|err| anyhow!("create reserved account error: {:?}", err))?;
+    assert_eq!(
+        ckb_sudt_id, CKB_SUDT_ACCOUNT_ID,
+        "ckb simple UDT account id"
+    );
 
     // create initial aggregator
     let initial_aggregator_id = {
-        let pubkey_hash = config.initial_aggregator_pubkey_hash.clone().into();
+        let pubkey_hash: [u8; 20] = config.initial_aggregator_pubkey_hash.clone().into();
         state
-            .create_account(ZERO, pubkey_hash)
+            .create_account_from_script(
+                Script::new_builder()
+                    .code_hash([0u8; 32].pack())
+                    .args(pubkey_hash.to_vec().pack())
+                    .build(),
+            )
             .map_err(|err| anyhow!("create initial aggregator error: {:?}", err))?
     };
     state
         .mint_sudt(
-            &CKB_TOKEN_ID,
+            ckb_sudt_id,
             initial_aggregator_id,
             config.initial_deposition.into(),
         )
@@ -52,6 +79,7 @@ pub fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
         let count = state
             .get_account_count()
             .map_err(|err| anyhow!("get account count error: {:?}", err))?;
+        let root: [u8; 32] = root.into();
         AccountMerkleState::new_builder()
             .merkle_root(root.pack())
             .count(count.pack())

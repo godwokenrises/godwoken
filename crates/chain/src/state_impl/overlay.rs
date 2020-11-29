@@ -12,19 +12,31 @@ use gw_common::{
     },
     state::{Error, State},
 };
+use gw_generator::traits::CodeStore;
+use gw_types::{bytes::Bytes, packed::Script};
 use std::collections::{HashMap, HashSet};
 
 pub struct OverlayState<S> {
     tree: SMT<OverlayStore<S>>,
+    scripts: HashMap<H256, Script>,
+    codes: HashMap<H256, Bytes>,
     account_count: u32,
 }
 
 impl<S: Store<H256>> OverlayState<S> {
-    pub fn new(root: H256, store: S, account_count: u32) -> Self {
-        let tree = SMT::new(root, OverlayStore::new(store));
+    pub fn new(
+        root: H256,
+        store: OverlayStore<S>,
+        account_count: u32,
+        scripts: HashMap<H256, Script>,
+        codes: HashMap<H256, Bytes>,
+    ) -> Self {
+        let tree = SMT::new(root, store);
         OverlayState {
             tree,
             account_count,
+            scripts,
+            codes,
         }
     }
 
@@ -38,15 +50,15 @@ impl<S: Store<H256>> OverlayState<S> {
 }
 
 impl<S: Store<H256>> State for OverlayState<S> {
-    fn get_raw(&self, key: &[u8; 32]) -> Result<[u8; 32], Error> {
+    fn get_raw(&self, key: &H256) -> Result<H256, Error> {
         let v = self.tree.get(&(*key).into())?;
         Ok(v.into())
     }
-    fn update_raw(&mut self, key: [u8; 32], value: [u8; 32]) -> Result<(), Error> {
+    fn update_raw(&mut self, key: H256, value: H256) -> Result<(), Error> {
         self.tree.update(key.into(), value.into())?;
         Ok(())
     }
-    fn calculate_root(&self) -> Result<[u8; 32], Error> {
+    fn calculate_root(&self) -> Result<H256, Error> {
         let root = (*self.tree.root()).into();
         Ok(root)
     }
@@ -56,6 +68,21 @@ impl<S: Store<H256>> State for OverlayState<S> {
     fn set_account_count(&mut self, count: u32) -> Result<(), Error> {
         self.account_count = count;
         Ok(())
+    }
+}
+
+impl<S: Store<H256>> CodeStore for OverlayState<S> {
+    fn insert_script(&mut self, script_hash: H256, script: Script) {
+        self.scripts.insert(script_hash.into(), script);
+    }
+    fn insert_code(&mut self, code_hash: H256, code: Bytes) {
+        self.codes.insert(code_hash.into(), code);
+    }
+    fn get_script(&self, script_hash: &H256) -> Option<Script> {
+        self.scripts.get(&script_hash).cloned()
+    }
+    fn get_code(&self, code_hash: &H256) -> Option<Bytes> {
+        self.codes.get(&code_hash).cloned()
     }
 }
 

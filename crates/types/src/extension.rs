@@ -1,6 +1,6 @@
 use crate::core::CallType;
 /// extension methods
-use crate::packed::{CallContext, L2Block, L2Transaction, RawL2Block, RawL2Transaction};
+use crate::packed::{CallContext, L2Block, L2Transaction, RawL2Block, RawL2Transaction, Script};
 use crate::prelude::*;
 use core::mem::size_of_val;
 use gw_hash::blake2b::new_blake2b;
@@ -62,6 +62,16 @@ impl L2Transaction {
     }
 
     pub fn witness_hash(&self) -> [u8; 32] {
+        let mut hasher = new_blake2b();
+        hasher.update(self.as_slice());
+        let mut hash = [0u8; 32];
+        hasher.finalize(&mut hash);
+        hash
+    }
+}
+
+impl Script {
+    pub fn hash(&self) -> [u8; 32] {
         let mut hasher = new_blake2b();
         hasher.update(self.as_slice());
         let mut hash = [0u8; 32];
