@@ -598,6 +598,7 @@ dependencies = [
  "gw-config",
  "gw-generator",
  "gw-jsonrpc-types",
+ "gw-store",
  "gw-types",
  "jsonrpc-core",
  "jsonrpc-derive",
@@ -670,6 +671,18 @@ dependencies = [
  "gw-config",
  "gw-jsonrpc-types",
  "toml",
+]
+
+[[package]]
+name = "gw-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ckb-types",
+ "gw-common",
+ "gw-generator",
+ "gw-types",
+ "parking_lot 0.11.0",
 ]
 
 [[package]]

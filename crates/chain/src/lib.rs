@@ -10,5 +10,4 @@ pub mod chain;
 pub mod consensus;
 mod crypto;
 pub mod genesis;
-pub mod state_impl;
 pub mod tx_pool;

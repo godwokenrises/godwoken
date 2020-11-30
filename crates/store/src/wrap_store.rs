@@ -2,7 +2,7 @@
 
 use gw_common::sparse_merkle_tree::{
     error::Error,
-    traits::Store,
+    traits::Store as SMTStore,
     tree::{BranchNode, LeafNode},
     H256,
 };
@@ -25,7 +25,7 @@ impl<S> Clone for WrapStore<S> {
     }
 }
 
-impl<S: Store<H256>> Store<H256> for WrapStore<S> {
+impl<S: SMTStore<H256>> SMTStore<H256> for WrapStore<S> {
     fn get_branch(&self, node: &H256) -> Result<Option<BranchNode>, Error> {
         self.inner.lock().get_branch(node)
     }

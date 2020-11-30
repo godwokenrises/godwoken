@@ -6,7 +6,7 @@ use gw_common::{
     smt::SMT,
     sparse_merkle_tree::{
         error::Error as SMTError,
-        traits::Store,
+        traits::Store as SMTStore,
         tree::{BranchNode, LeafNode},
         H256,
     },
@@ -16,23 +16,23 @@ use gw_generator::traits::CodeStore;
 use gw_types::{bytes::Bytes, packed::Script};
 use std::collections::{HashMap, HashSet};
 
-pub struct OverlayState<S> {
-    tree: SMT<OverlayStore<S>>,
+pub struct OverlayStore<S> {
+    tree: SMT<OverlaySMTStore<S>>,
     scripts: HashMap<H256, Script>,
     codes: HashMap<H256, Bytes>,
     account_count: u32,
 }
 
-impl<S: Store<H256>> OverlayState<S> {
+impl<S: SMTStore<H256>> OverlayStore<S> {
     pub fn new(
         root: H256,
-        store: OverlayStore<S>,
+        store: OverlaySMTStore<S>,
         account_count: u32,
         scripts: HashMap<H256, Script>,
         codes: HashMap<H256, Bytes>,
     ) -> Self {
         let tree = SMT::new(root, store);
-        OverlayState {
+        OverlayStore {
             tree,
             account_count,
             scripts,
@@ -40,16 +40,16 @@ impl<S: Store<H256>> OverlayState<S> {
         }
     }
 
-    pub fn overlay_store(&self) -> &OverlayStore<S> {
+    pub fn overlay_store(&self) -> &OverlaySMTStore<S> {
         self.tree.store()
     }
 
-    pub fn overlay_store_mut(&mut self) -> &mut OverlayStore<S> {
+    pub fn overlay_store_mut(&mut self) -> &mut OverlaySMTStore<S> {
         self.tree.store_mut()
     }
 }
 
-impl<S: Store<H256>> State for OverlayState<S> {
+impl<S: SMTStore<H256>> State for OverlayStore<S> {
     fn get_raw(&self, key: &H256) -> Result<H256, Error> {
         let v = self.tree.get(&(*key).into())?;
         Ok(v.into())
@@ -71,7 +71,7 @@ impl<S: Store<H256>> State for OverlayState<S> {
     }
 }
 
-impl<S: Store<H256>> CodeStore for OverlayState<S> {
+impl<S: SMTStore<H256>> CodeStore for OverlayStore<S> {
     fn insert_script(&mut self, script_hash: H256, script: Script) {
         self.scripts.insert(script_hash.into(), script);
     }
@@ -86,7 +86,7 @@ impl<S: Store<H256>> CodeStore for OverlayState<S> {
     }
 }
 
-pub struct OverlayStore<S> {
+pub struct OverlaySMTStore<S> {
     store: S,
     branches_map: HashMap<H256, BranchNode>,
     leaves_map: HashMap<H256, LeafNode<H256>>,
@@ -95,9 +95,9 @@ pub struct OverlayStore<S> {
     touched_keys: HashSet<H256>,
 }
 
-impl<S: Store<H256>> OverlayStore<S> {
+impl<S: SMTStore<H256>> OverlaySMTStore<S> {
     pub fn new(store: S) -> Self {
-        OverlayStore {
+        OverlaySMTStore {
             store,
             branches_map: HashMap::default(),
             leaves_map: HashMap::default(),
@@ -116,7 +116,7 @@ impl<S: Store<H256>> OverlayStore<S> {
     }
 }
 
-impl<S: Store<H256>> Store<H256> for OverlayStore<S> {
+impl<S: SMTStore<H256>> SMTStore<H256> for OverlaySMTStore<S> {
     fn get_branch(&self, node: &H256) -> Result<Option<BranchNode>, SMTError> {
         if self.deleted_branches.contains(&node) {
             return Ok(None);

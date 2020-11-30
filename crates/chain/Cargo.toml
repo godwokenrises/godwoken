@@ -11,6 +11,7 @@ gw-types = { path = "../types" }
 gw-config = { path = "../config" }
 gw-common = { path = "../common" }
 gw-generator = { path = "../generator" }
+gw-store = { path = "../store" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 ckb-types = "0.37.0"
 jsonrpc-core = "~14.1"

@@ -1,4 +1,3 @@
-use crate::state_impl::StateImpl;
 use anyhow::{anyhow, Result};
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
@@ -8,6 +7,7 @@ use gw_common::{
 };
 use gw_config::GenesisConfig;
 use gw_generator::traits::StateExt;
+use gw_store::Store;
 use gw_types::{
     packed::{AccountMerkleState, L2Block, RawL2Block, Script},
     prelude::*,
@@ -15,7 +15,7 @@ use gw_types::{
 
 pub fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
     // build initialized states
-    let mut state: StateImpl<DefaultStore<H256>> = Default::default();
+    let mut state: Store<DefaultStore<H256>> = Default::default();
     let root = state
         .calculate_root()
         .map_err(|err| anyhow!("calculate root error: {:?}", err))?;

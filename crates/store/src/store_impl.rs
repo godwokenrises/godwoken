@@ -1,21 +1,21 @@
-use super::overlay::{OverlayState, OverlayStore};
+use super::overlay::{OverlaySMTStore, OverlayStore};
 use super::wrap_store::WrapStore;
 use anyhow::{anyhow, Result};
 use gw_common::{
-    smt::{CompiledMerkleProof, Store, H256, SMT},
+    smt::{Store as SMTStore, H256, SMT},
     state::{Error, State},
 };
 use gw_generator::traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
-    packed::{L2Block, L2Transaction, RawL2Block, Script},
+    packed::{L2Block, L2Transaction, Script},
     prelude::*,
 };
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-pub struct StateImpl<S> {
+pub struct Store<S> {
     tree: SMT<WrapStore<S>>,
     account_count: u32,
     // Note: The block tree can use same storage with the account tree
@@ -25,9 +25,11 @@ pub struct StateImpl<S> {
     // code store
     scripts: HashMap<H256, Script>,
     codes: HashMap<H256, Bytes>,
+    blocks: HashMap<H256, L2Block>,
+    transactions: HashMap<H256, L2Transaction>,
 }
 
-impl<S: Store<H256>> StateImpl<S> {
+impl<S: SMTStore<H256>> Store<S> {
     pub fn new(
         account_tree: SMT<WrapStore<S>>,
         account_count: u32,
@@ -35,24 +37,28 @@ impl<S: Store<H256>> StateImpl<S> {
         block_count: u64,
         scripts: HashMap<H256, Script>,
         codes: HashMap<H256, Bytes>,
+        blocks: HashMap<H256, L2Block>,
+        transactions: HashMap<H256, L2Transaction>,
     ) -> Self {
-        StateImpl {
+        Store {
             tree: account_tree,
             account_count,
             block_tree,
             block_count,
             scripts,
             codes,
+            blocks,
+            transactions,
         }
     }
 
-    pub fn new_overlay(&self) -> Result<OverlayState<WrapStore<S>>> {
+    pub fn new_overlay(&self) -> Result<OverlayStore<WrapStore<S>>> {
         let root = self.tree.root();
         let account_count = self
             .get_account_count()
             .map_err(|err| anyhow!("get amount count error: {:?}", err))?;
-        let store = OverlayStore::new(self.tree.store().clone());
-        Ok(OverlayState::new(
+        let store = OverlaySMTStore::new(self.tree.store().clone());
+        Ok(OverlayStore::new(
             *root,
             store,
             account_count,
@@ -61,50 +67,40 @@ impl<S: Store<H256>> StateImpl<S> {
         ))
     }
 
-    pub fn merkle_proof(&self, leaves: Vec<(H256, H256)>) -> Result<Vec<u8>, Error> {
-        let keys = leaves.iter().map(|(k, v)| (*k).into()).collect();
-        let proof = self
-            .tree
-            .merkle_proof(keys)?
-            .compile(
-                leaves
-                    .into_iter()
-                    .map(|(k, v)| (k.into(), v.into()))
-                    .collect(),
-            )?
-            .0;
-        Ok(proof)
+    pub fn account_smt(&self) -> &SMT<WrapStore<S>> {
+        &self.tree
     }
 
-    pub fn push_block(&mut self, block: L2Block) -> Result<()> {
-        let raw = block.raw();
-        let block_hash = raw.hash();
-        let block_number = raw.number().unpack();
-        let key = raw.smt_key();
-        self.block_tree.update(key.into(), block_hash.into())?;
+    pub fn block_smt(&self) -> &SMT<WrapStore<S>> {
+        &self.block_tree
+    }
+
+    pub fn insert_block(&mut self, block: L2Block) -> Result<()> {
+        self.blocks.insert(block.hash().into(), block.clone());
+        for tx in block.transactions() {
+            self.transactions.insert(tx.hash().into(), tx);
+        }
         Ok(())
     }
 
-    pub fn block_merkle_proof(&self, number: u64) -> Result<CompiledMerkleProof, Error> {
-        let key = RawL2Block::compute_smt_key(number);
-        let value = self.block_tree.get(&key.into())?;
-        let proof = self
-            .block_tree
-            .merkle_proof(vec![key.into()])?
-            .compile(vec![(key.into(), value.into())])?;
-        Ok(proof)
+    /// Attach block to the rollup main chain
+    pub fn attach_block(&mut self, block: L2Block) -> Result<()> {
+        let raw = block.raw();
+        self.block_tree
+            .update(raw.smt_key().into(), raw.hash().into())?;
+        Ok(())
     }
 
-    pub fn get_block(&self, block_hash: &H256) -> Result<L2Block, Error> {
-        unimplemented!()
+    pub fn get_block(&self, block_hash: &H256) -> Result<Option<L2Block>, Error> {
+        Ok(self.blocks.get(block_hash).cloned())
     }
 
-    pub fn get_transaction(&self, tx_hash: &H256) -> Result<L2Transaction, Error> {
-        unimplemented!()
+    pub fn get_transaction(&self, tx_hash: &H256) -> Result<Option<L2Transaction>, Error> {
+        Ok(self.transactions.get(tx_hash).cloned())
     }
 }
 
-impl<S: Store<H256> + Default> Default for StateImpl<S> {
+impl<S: SMTStore<H256> + Default> Default for Store<S> {
     fn default() -> Self {
         let tree = SMT::new(
             H256::zero(),
@@ -114,18 +110,20 @@ impl<S: Store<H256> + Default> Default for StateImpl<S> {
             H256::zero(),
             WrapStore::new(Arc::new(Mutex::new(S::default()))),
         );
-        StateImpl {
+        Store {
             tree,
             account_count: 0,
             block_tree,
             block_count: 0,
             scripts: Default::default(),
             codes: Default::default(),
+            blocks: Default::default(),
+            transactions: Default::default(),
         }
     }
 }
 
-impl<S: Store<H256>> State for StateImpl<S> {
+impl<S: SMTStore<H256>> State for Store<S> {
     fn get_raw(&self, key: &H256) -> Result<H256, Error> {
         let v = self.tree.get(&(*key).into())?;
         Ok(v.into())
@@ -147,7 +145,7 @@ impl<S: Store<H256>> State for StateImpl<S> {
     }
 }
 
-impl<S: Store<H256>> CodeStore for StateImpl<S> {
+impl<S: SMTStore<H256>> CodeStore for Store<S> {
     fn insert_script(&mut self, script_hash: H256, script: Script) {
         self.scripts.insert(script_hash.into(), script);
     }

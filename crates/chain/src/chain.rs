@@ -1,5 +1,4 @@
 use crate::consensus::traits::Consensus;
-use crate::state_impl::{StateImpl, WrapStore};
 use crate::tx_pool::TxPool;
 use anyhow::{anyhow, Result};
 use ckb_types::{
@@ -8,7 +7,8 @@ use ckb_types::{
     prelude::Unpack,
 };
 use gw_common::{
-    merkle_utils::calculate_merkle_root, smt::Blake2bHasher, sparse_merkle_tree, state::State, H256,
+    h256_ext::H256Ext, merkle_utils::calculate_merkle_root, smt::Blake2bHasher, sparse_merkle_tree,
+    state::State, H256,
 };
 use gw_config::ChainConfig;
 use gw_generator::{
@@ -16,6 +16,7 @@ use gw_generator::{
     traits::CodeStore,
     Generator,
 };
+use gw_store::{Store, WrapStore};
 use gw_types::{
     packed::{
         AccountMerkleState, BlockMerkleState, CancelChallenge, GlobalState, L2Block, L2BlockReader,
@@ -95,7 +96,7 @@ pub type TxPoolImpl = TxPool<WrapStore<StateStore>>;
 pub struct Chain<Consensus> {
     config: ChainConfig,
     rollup_type_script_hash: [u8; 32],
-    state: StateImpl<StateStore>,
+    state: Store<StateStore>,
     last_synced: HeaderInfo,
     tip: L2Block,
     generator: Generator,
@@ -106,7 +107,7 @@ pub struct Chain<Consensus> {
 impl<C: Consensus> Chain<C> {
     pub fn new(
         config: ChainConfig,
-        state: StateImpl<StateStore>,
+        state: Store<StateStore>,
         consensus: C,
         tip: L2Block,
         last_synced: HeaderInfo,
@@ -131,7 +132,7 @@ impl<C: Consensus> Chain<C> {
         &self.tip
     }
 
-    pub fn state(&self) -> &StateImpl<StateStore> {
+    pub fn state(&self) -> &Store<StateStore> {
         &self.state
     }
 
@@ -141,7 +142,7 @@ impl<C: Consensus> Chain<C> {
 
     /// Sync chain from layer1
     pub fn sync(&mut self, param: SyncParam) -> Result<SyncEvent> {
-        // TODO handle rollback
+        // TODO handle layer1 reorg
         if !param.reverts.is_empty() {
             panic!("layer1 chain has forked!")
         }
@@ -267,13 +268,18 @@ impl<C: Consensus> Chain<C> {
             .pack();
         let proof = self
             .state
-            .merkle_proof(kv_state)
-            .map_err(|err| anyhow!("merkle proof error: {:?}", err))?;
+            .account_smt()
+            .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
+            .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
+            .compile(kv_state)?
+            .0;
         let txs: Vec<_> = pkg.tx_recipts.into_iter().map(|tx| tx.tx).collect();
         let block_proof = self
             .state
-            .block_merkle_proof(number)
-            .map_err(|err| anyhow!("merkle proof error: {:?}", err))?;
+            .block_smt()
+            .merkle_proof(vec![H256::from_u64(number)])
+            .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
+            .compile(vec![(H256::from_u64(number), H256::zero())])?;
         let block = L2Block::new_builder()
             .raw(raw_block)
             .kv_state(packed_kv_state)
@@ -313,7 +319,8 @@ impl<C: Consensus> Chain<C> {
         };
         self.generator
             .apply_state_transition(&mut self.state, args)?;
-        self.state.push_block(l2block)?;
+        self.state.insert_block(l2block.clone())?;
+        self.state.attach_block(l2block)?;
         Ok(())
     }
 }

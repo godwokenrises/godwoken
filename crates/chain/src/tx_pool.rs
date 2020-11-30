@@ -1,6 +1,5 @@
 use crate::consensus::traits::NextBlockContext;
 use crate::crypto::{verify_signature, Signature};
-use crate::state_impl::OverlayState;
 use anyhow::{anyhow, Result};
 use gw_common::{
     merkle_utils::calculate_compacted_account_root,
@@ -13,6 +12,7 @@ use gw_generator::{
     traits::{CodeStore, StateExt},
     Generator,
 };
+use gw_store::OverlayStore;
 use gw_types::{
     packed::{BlockInfo, L2Block, L2Transaction},
     prelude::*,
@@ -31,7 +31,7 @@ pub struct TxRecipt {
 
 /// TODO remove txs from pool if a new block already contains txs
 pub struct TxPool<S> {
-    state: OverlayState<S>,
+    state: OverlayStore<S>,
     generator: Generator,
     queue: Vec<TxRecipt>,
     next_block_info: BlockInfo,
@@ -40,7 +40,7 @@ pub struct TxPool<S> {
 
 impl<S: Store<SMTH256>> TxPool<S> {
     pub fn create(
-        state: OverlayState<S>,
+        state: OverlayStore<S>,
         generator: Generator,
         tip: &L2Block,
         nb_ctx: NextBlockContext,
@@ -161,7 +161,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
     pub fn update_tip(
         &mut self,
         tip: &L2Block,
-        state: OverlayState<S>,
+        state: OverlayStore<S>,
         nb_ctx: NextBlockContext,
     ) -> Result<()> {
         // TODO catch abandoned txs and recompute them.
