@@ -37,8 +37,7 @@ struct Reverting {
 struct Account {
     id: Uint32,
     nonce: Uint32,
-    pubkey_hash: Byte20,
-    code_hash: Byte32,
+    script_hash: Byte32,
 }
 
 table RawL2Transaction {
@@ -64,7 +63,6 @@ table RawL2Block {
     leave: LeaveOpt,
     revert_chain: RevertChainOpt,
     submit_transactions: SubmitTransactionsOpt,
-    valid: byte,
 }
 
 table L2Block {
@@ -147,13 +145,29 @@ union SUDTArgs {
 }
 
 struct SUDTQuery {
-    token_id: Byte32,
     account_id: Uint32,
 }
 
 struct SUDTTransfer {
-    token_id: Byte32,
     to: Uint32,
     value: Uint128,
+    fee: Uint128,
 }
 // --- end of layer2 SUDT ---
+
+// --- challenge ---
+// start a challenge
+struct StartChallenge {
+    block_hash: Byte32, // hash of challenged block
+    block_number: Uint64, // number of challenged block
+    tx_index: Uint32, // challenge tx
+}
+
+// cancel a challenge by execute the transaction
+table CancelChallenge {
+    l2block: L2Block,
+    block_proof: Bytes,
+    kv_state: KVPairVec,
+    kv_state_proof: Bytes,
+}
+// --- end of challenge ---

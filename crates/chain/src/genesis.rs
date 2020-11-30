@@ -91,7 +91,6 @@ pub fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
         .aggregator_id(0u32.pack())
         .timestamp(config.timestamp.pack())
         .post_account(post_account)
-        .valid(1.into())
         .build();
 
     // generate block proof

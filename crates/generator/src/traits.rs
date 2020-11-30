@@ -3,7 +3,7 @@ use crate::generator::DepositionRequest;
 use crate::syscalls::RunResult;
 use gw_common::{
     state::{Error, State},
-    ACCOUNT_LOCK_CODE_HASH, H256, SUDT_CODE_HASH,
+    H256,
 };
 use gw_types::{packed::Script, prelude::*};
 
@@ -45,9 +45,6 @@ impl<S: State + CodeStore> StateExt for S {
         deposition_requests: &[DepositionRequest],
     ) -> Result<(), Error> {
         for request in deposition_requests {
-            // TODO check trustlist
-            assert_eq!(request.script.code_hash().unpack(), ACCOUNT_LOCK_CODE_HASH);
-            assert_eq!(request.sudt_script.code_hash().unpack(), SUDT_CODE_HASH);
             // find or create user account
             let account_script_hash = request.script.hash();
             let id = match self.get_account_id_by_script_hash(&account_script_hash.into())? {

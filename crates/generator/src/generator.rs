@@ -65,11 +65,6 @@ impl Generator {
     ) -> Result<(), Error> {
         let raw_block = args.l2block.raw();
 
-        // skip invalid blocks
-        if raw_block.valid() == 0u8.into() {
-            return Ok(());
-        }
-
         // handle deposition
         state.apply_deposition_requests(&args.deposition_requests)?;
 

@@ -95,10 +95,6 @@ impl<S: Store<H256>> StateImpl<S> {
         Ok(proof)
     }
 
-    fn get_account_script(&self, id: u32) -> Result<Script, Error> {
-        unimplemented!()
-    }
-
     pub fn get_block(&self, block_hash: &H256) -> Result<L2Block, Error> {
         unimplemented!()
     }

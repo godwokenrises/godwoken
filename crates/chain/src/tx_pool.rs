@@ -19,6 +19,7 @@ use gw_types::{
 };
 use std::collections::HashSet;
 
+/// MAX packaged txs in a l2block
 const MAX_PACKAGED_TXS: usize = 6000;
 
 pub struct TxRecipt {
@@ -28,6 +29,7 @@ pub struct TxRecipt {
     pub compacted_post_account_root: [u8; 32],
 }
 
+/// TODO remove txs from pool if a new block already contains txs
 pub struct TxPool<S> {
     state: OverlayState<S>,
     generator: Generator,

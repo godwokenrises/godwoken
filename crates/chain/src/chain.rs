@@ -18,8 +18,8 @@ use gw_generator::{
 };
 use gw_types::{
     packed::{
-        AccountMerkleState, BlockMerkleState, GlobalState, L2Block, L2BlockReader, RawL2Block,
-        SubmitTransactions,
+        AccountMerkleState, BlockMerkleState, CancelChallenge, GlobalState, L2Block, L2BlockReader,
+        RawL2Block, StartChallenge, SubmitTransactions,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -42,10 +42,10 @@ pub struct ProduceBlockParam {
 
 pub struct WithdrawalRequest {
     // layer1 ACP cell to receive the withdraw
-    lock_hash: H256,
-    sudt_type_hash: H256,
-    amount: u128,
-    account_id: u32,
+    pub lock_hash: H256,
+    pub sudt_type_hash: H256,
+    pub amount: u128,
+    pub account_script_hash: H256,
 }
 /// sync params
 pub struct SyncParam {
@@ -74,8 +74,8 @@ pub struct HeaderInfo {
 }
 
 pub struct L2BlockWithState {
-    block: L2Block,
-    global_state: GlobalState,
+    pub block: L2Block,
+    pub global_state: GlobalState,
 }
 
 /// sync method returned events
@@ -83,23 +83,9 @@ pub enum SyncEvent {
     // nothing happend
     Nothing,
     // found a invalid block
-    BadBlock(ChallengeArgs),
+    BadBlock(StartChallenge),
     // found a invalid challenge
-    BadChallenge(CancelChallengeArgs),
-}
-
-/// a molecule structure
-pub struct CancelChallengeArgs {
-    // l2block: L2Block,
-// block_merkle_proof: Vec<u8>,
-// kv_pairs
-// merkle_proof
-}
-
-pub struct ChallengeArgs {
-    block_hash: H256, // challenge block
-    block_height: u64,
-    tx_index: u32, // challenge tx
+    BadChallenge(CancelChallenge),
 }
 
 /// concrete type aliases
@@ -258,7 +244,6 @@ impl<C: Consensus> Chain<C> {
             .post_account(post_account.clone())
             .prev_account(prev_account)
             .submit_transactions(Some(submit_txs).pack())
-            .valid(1.into())
             .build();
         // generate block fields from current state
         let kv_state: Vec<(H256, H256)> = pkg
