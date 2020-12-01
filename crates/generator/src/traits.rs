@@ -1,6 +1,6 @@
-use crate::bytes::Bytes;
 use crate::generator::DepositionRequest;
 use crate::syscalls::RunResult;
+use crate::{bytes::Bytes, generator::WithdrawalRequest};
 use gw_common::{
     state::{Error, State},
     H256,
@@ -24,6 +24,11 @@ pub trait StateExt {
     fn apply_deposition_requests(
         &mut self,
         deposition_requests: &[DepositionRequest],
+    ) -> Result<(), Error>;
+
+    fn apply_withdrawal_requests(
+        &mut self,
+        withdrawal_requests: &[WithdrawalRequest],
     ) -> Result<(), Error>;
 }
 
@@ -63,7 +68,25 @@ impl<S: State + CodeStore> StateExt for S {
                     self.create_account(sudt_script_hash.into())?
                 }
             };
-            self.mint_sudt(sudt_id, id, request.value)?;
+            self.mint_sudt(sudt_id, id, request.amount)?;
+        }
+
+        Ok(())
+    }
+
+    fn apply_withdrawal_requests(
+        &mut self,
+        withdrawal_requests: &[WithdrawalRequest],
+    ) -> Result<(), Error> {
+        for request in withdrawal_requests {
+            // find user account
+            let id = self
+                .get_account_id_by_script_hash(&request.account_script_hash)?
+                .ok_or(Error::MissingKey)?; // find Simple UDT account
+            let sudt_id = self
+                .get_account_id_by_script_hash(&request.sudt_script_hash)?
+                .ok_or(Error::MissingKey)?;
+            self.burn_sudt(sudt_id, id, request.amount)?;
         }
 
         Ok(())

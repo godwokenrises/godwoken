@@ -45,6 +45,7 @@ pub enum Error {
     SMT(SMTError),
     AmountOverflow,
     MerkleProof,
+    MissingKey,
 }
 
 impl From<SMTError> for Error {
@@ -118,6 +119,7 @@ pub trait State {
         Ok(balance.to_u128())
     }
 
+    /// Mint SUDT token on layer2
     fn mint_sudt(&mut self, sudt_id: u32, id: u32, amount: u128) -> Result<(), Error> {
         let raw_key = build_account_key(sudt_id, &H256::from_u32(id).as_slice());
         // calculate balance
@@ -125,5 +127,11 @@ pub trait State {
         balance = balance.checked_add(amount).ok_or(Error::AmountOverflow)?;
         self.update_raw(raw_key, H256::from_u128(balance))?;
         Ok(())
+    }
+
+    /// Burn SUDT token from layer2
+    /// User need to call prepare_withdraw on the SUDT contract first
+    fn burn_sudt(&mut self, sudt_id: u32, id: u32, amount: u128) -> Result<(), Error> {
+        unimplemented!()
     }
 }

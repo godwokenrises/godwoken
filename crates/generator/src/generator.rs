@@ -26,12 +26,21 @@ lazy_static! {
 pub struct DepositionRequest {
     pub script: Script,
     pub sudt_script: Script,
-    pub value: u128,
+    pub amount: u128,
+}
+
+pub struct WithdrawalRequest {
+    // layer1 ACP cell to receive the withdraw
+    pub lock_hash: H256,
+    pub sudt_script_hash: H256,
+    pub amount: u128,
+    pub account_script_hash: H256,
 }
 
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
     pub deposition_requests: Vec<DepositionRequest>,
+    pub withdrawal_requests: Vec<WithdrawalRequest>,
 }
 
 pub struct Generator {
@@ -65,7 +74,9 @@ impl Generator {
     ) -> Result<(), Error> {
         let raw_block = args.l2block.raw();
 
-        // handle deposition
+        // apply withdrawal to state
+        state.apply_withdrawal_requests(&args.withdrawal_requests)?;
+        // apply deposition to state
         state.apply_deposition_requests(&args.deposition_requests)?;
 
         // handle transactions

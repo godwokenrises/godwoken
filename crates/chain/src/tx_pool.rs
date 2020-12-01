@@ -8,7 +8,7 @@ use gw_common::{
     H256,
 };
 use gw_generator::{
-    generator::DepositionRequest,
+    generator::{DepositionRequest, WithdrawalRequest},
     traits::{CodeStore, StateExt},
     Generator,
 };
@@ -131,11 +131,19 @@ impl<S: Store<SMTH256>> TxPool<S> {
 
     /// Package txpool transactions
     /// this method return a tx package, and remove these txs from the pool
-    pub fn package_txs(&mut self, deposition_requests: &[DepositionRequest]) -> Result<TxPackage> {
+    pub fn package_txs(
+        &mut self,
+        deposition_requests: &[DepositionRequest],
+        withdrawal_request: &[WithdrawalRequest],
+    ) -> Result<TxPackage> {
         let tx_recipts = self.queue.drain(..).collect();
-        // in the current implementation, we only need the deposition / withdraw touched keys
+        // reset overlay, we need to record deposition / withdrawal touched keys to generate proof for state
         self.state.overlay_store_mut().clear_touched_keys();
-        // handle deposition requests and calculate post state
+        // apply withdrawal request to the state
+        self.state
+            .apply_withdrawal_requests(&withdrawal_request)
+            .map_err(|err| anyhow!("apply withdrawal requests: {:?}", err))?;
+        // apply deposition request to the state
         self.state
             .apply_deposition_requests(&deposition_requests)
             .map_err(|err| anyhow!("apply deposition requests: {:?}", err))?;

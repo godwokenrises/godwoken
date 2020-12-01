@@ -12,7 +12,7 @@ use gw_common::{
 };
 use gw_config::ChainConfig;
 use gw_generator::{
-    generator::{DepositionRequest, StateTransitionArgs},
+    generator::{DepositionRequest, StateTransitionArgs, WithdrawalRequest},
     traits::CodeStore,
     Generator,
 };
@@ -41,13 +41,6 @@ pub struct ProduceBlockParam {
     pub withdrawal_requests: Vec<WithdrawalRequest>,
 }
 
-pub struct WithdrawalRequest {
-    // layer1 ACP cell to receive the withdraw
-    pub lock_hash: H256,
-    pub sudt_type_hash: H256,
-    pub amount: u128,
-    pub account_script_hash: H256,
-}
 /// sync params
 pub struct SyncParam {
     // contains transitions from tip to fork point
@@ -63,6 +56,8 @@ pub struct SyncTransition {
     pub header_info: HeaderInfo,
     /// deposition requests
     pub deposition_requests: Vec<DepositionRequest>,
+    /// withdrawal requests
+    pub withdrawal_requests: Vec<WithdrawalRequest>,
 }
 
 pub struct TransactionInfo {
@@ -148,21 +143,22 @@ impl<C: Consensus> Chain<C> {
         }
         // apply tx to state
         for sync in param.updates {
-            debug_assert_eq!(
-                sync.transaction_info.block_hash,
-                sync.header_info.block_hash
-            );
-            let block_number: u64 = sync.header_info.number;
+            let SyncTransition {
+                transaction_info,
+                header_info,
+                deposition_requests,
+                withdrawal_requests,
+            } = sync;
+            debug_assert_eq!(transaction_info.block_hash, header_info.block_hash);
+            let block_number: u64 = header_info.number;
             assert!(
                 block_number > self.last_synced.number,
                 "must greater than last synced number"
             );
 
             // parse layer2 block
-            let l2block = parse_l2block(
-                &sync.transaction_info.transaction,
-                &self.rollup_type_script_hash,
-            )?;
+            let l2block =
+                parse_l2block(&transaction_info.transaction, &self.rollup_type_script_hash)?;
 
             let tip_number: u64 = self.tip.raw().number().unpack();
             assert!(
@@ -171,14 +167,10 @@ impl<C: Consensus> Chain<C> {
             );
 
             // process l2block
-            self.process_block(
-                l2block.clone(),
-                &sync.transaction_info.transaction.raw(),
-                sync.deposition_requests,
-            )?;
+            self.process_block(l2block.clone(), deposition_requests, withdrawal_requests)?;
 
             // update chain
-            self.last_synced = sync.header_info;
+            self.last_synced = header_info;
             self.tip = l2block;
         }
         // update tx pool state
@@ -202,7 +194,10 @@ impl<C: Consensus> Chain<C> {
         } = param;
         // take txs from tx pool
         // produce block
-        let pkg = self.tx_pool.lock().package_txs(&deposition_requests)?;
+        let pkg = self
+            .tx_pool
+            .lock()
+            .package_txs(&deposition_requests, &withdrawal_requests)?;
         let parent_number: u64 = self.tip.raw().number().unpack();
         let number = parent_number + 1;
         let timestamp: u64 = unixtime()?;
@@ -310,12 +305,13 @@ impl<C: Consensus> Chain<C> {
     fn process_block(
         &mut self,
         l2block: L2Block,
-        tx: &RawTransaction,
         deposition_requests: Vec<DepositionRequest>,
+        withdrawal_requests: Vec<WithdrawalRequest>,
     ) -> Result<()> {
         let args = StateTransitionArgs {
             l2block: l2block.clone(),
             deposition_requests,
+            withdrawal_requests,
         };
         self.generator
             .apply_state_transition(&mut self.state, args)?;
