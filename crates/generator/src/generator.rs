@@ -1,5 +1,5 @@
 use crate::bytes::Bytes;
-use crate::error::Error;
+use crate::error::{Error, TransactionError, TransactionErrorWithContext};
 use crate::syscalls::{L2Syscalls, RunResult};
 use crate::traits::{CodeStore, StateExt};
 use gw_common::{
@@ -8,7 +8,7 @@ use gw_common::{
     H256,
 };
 use gw_types::{
-    packed::{BlockInfo, CallContext, L2Block, RawL2Block, Script},
+    packed::{BlockInfo, CallContext, L2Block, RawL2Block, Script, StartChallenge},
     prelude::*,
 };
 use lazy_static::lazy_static;
@@ -82,21 +82,37 @@ impl Generator {
         // handle transactions
         if raw_block.submit_transactions().to_opt().is_some() {
             let block_info = get_block_info(&raw_block);
-            for tx in args.l2block.transactions() {
+            let block_hash = raw_block.hash();
+            for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
                 let raw_tx = tx.raw();
+                // build challenge context
+                let challenge_context = StartChallenge::new_builder()
+                    .block_hash(block_hash.pack())
+                    .block_number(block_info.number())
+                    .tx_index((tx_index as u32).pack())
+                    .build();
                 // check nonce
                 let expected_nonce = state.get_nonce(raw_tx.from_id().unpack())?;
                 let actual_nonce: u32 = raw_tx.nonce().unpack();
                 if actual_nonce != expected_nonce {
-                    return Err(Error::Nonce {
-                        expected: expected_nonce,
-                        actual: actual_nonce,
-                    });
+                    return Err(TransactionErrorWithContext::new(
+                        challenge_context,
+                        TransactionError::Nonce {
+                            expected: expected_nonce,
+                            actual: actual_nonce,
+                        },
+                    )
+                    .into());
                 }
                 // build call context
                 // NOTICE users only allowed to send HandleMessage CallType txs
                 let call_context = raw_tx.to_call_context();
-                let run_result = self.execute(state, &block_info, &call_context)?;
+                let run_result = match self.execute(state, &block_info, &call_context) {
+                    Ok(run_result) => run_result,
+                    Err(err) => {
+                        return Err(TransactionErrorWithContext::new(challenge_context, err).into());
+                    }
+                };
                 state.apply_run_result(&run_result)?;
             }
         }
@@ -110,7 +126,7 @@ impl Generator {
         state: &S,
         block_info: &BlockInfo,
         call_context: &CallContext,
-    ) -> Result<RunResult, Error> {
+    ) -> Result<RunResult, TransactionError> {
         let mut run_result = RunResult::default();
         {
             let core_machine = Box::<AsmCoreMachine>::default();
@@ -127,7 +143,7 @@ impl Generator {
             machine.load_program(&self.generator, &[program_name])?;
             let code = machine.run()?;
             if code != 0 {
-                return Err(Error::InvalidExitCode(code).into());
+                return Err(TransactionError::InvalidExitCode(code).into());
             }
         }
         // set nonce

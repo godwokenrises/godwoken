@@ -3,7 +3,7 @@ use crate::tx_pool::TxPool;
 use anyhow::{anyhow, Result};
 use ckb_types::{
     bytes::Bytes,
-    packed::{RawTransaction, Script, Transaction, WitnessArgs, WitnessArgsReader},
+    packed::{Script, Transaction, WitnessArgs, WitnessArgsReader},
     prelude::Unpack,
 };
 use gw_common::{
@@ -13,8 +13,7 @@ use gw_common::{
 use gw_config::ChainConfig;
 use gw_generator::{
     generator::{DepositionRequest, StateTransitionArgs, WithdrawalRequest},
-    traits::CodeStore,
-    Generator,
+    Error as GeneratorError, Generator,
 };
 use gw_store::{Store, WrapStore};
 use gw_types::{
@@ -30,6 +29,13 @@ use gw_types::{
 use parking_lot::Mutex;
 use std::sync::Arc;
 use std::time::SystemTime;
+
+/// Rollup status
+#[derive(Debug, Eq, PartialEq)]
+pub enum Status {
+    Running,
+    Halting,
+}
 
 /// Produce block param
 pub struct ProduceBlockParam {
@@ -76,12 +82,14 @@ pub struct L2BlockWithState {
 
 /// sync method returned events
 pub enum SyncEvent {
-    // nothing happend
-    Nothing,
+    // success
+    Success,
     // found a invalid block
     BadBlock(StartChallenge),
     // found a invalid challenge
     BadChallenge(CancelChallenge),
+    // the rollup is in a challenge
+    WaitChallenge,
 }
 
 /// concrete type aliases
@@ -89,9 +97,8 @@ pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_mer
 pub type TxPoolImpl = TxPool<WrapStore<StateStore>>;
 
 pub struct Chain<Consensus> {
-    config: ChainConfig,
     rollup_type_script_hash: [u8; 32],
-    state: Store<StateStore>,
+    store: Store<StateStore>,
     last_synced: HeaderInfo,
     tip: L2Block,
     generator: Generator,
@@ -102,7 +109,7 @@ pub struct Chain<Consensus> {
 impl<C: Consensus> Chain<C> {
     pub fn new(
         config: ChainConfig,
-        state: Store<StateStore>,
+        store: Store<StateStore>,
         consensus: C,
         tip: L2Block,
         last_synced: HeaderInfo,
@@ -112,8 +119,7 @@ impl<C: Consensus> Chain<C> {
         let rollup_type_script: Script = config.rollup_type_script.clone().into();
         let rollup_type_script_hash = rollup_type_script.calc_script_hash().unpack();
         Chain {
-            config,
-            state,
+            store,
             last_synced,
             tip,
             generator,
@@ -127,12 +133,17 @@ impl<C: Consensus> Chain<C> {
         &self.tip
     }
 
-    pub fn state(&self) -> &Store<StateStore> {
-        &self.state
+    pub fn store(&self) -> &Store<StateStore> {
+        &self.store
     }
 
     pub fn last_synced(&self) -> &HeaderInfo {
         &self.last_synced
+    }
+
+    /// return rollup status
+    pub fn status(&self) -> Status {
+        unimplemented!()
     }
 
     /// Sync chain from layer1
@@ -140,6 +151,10 @@ impl<C: Consensus> Chain<C> {
         // TODO handle layer1 reorg
         if !param.reverts.is_empty() {
             panic!("layer1 chain has forked!")
+        }
+        // check status
+        if self.status() == Status::Halting {
+            // TODO validate challenge request, return BadChallenge if challenge is invalid, otherwise return WaitChallenge
         }
         // apply tx to state
         for sync in param.updates {
@@ -167,19 +182,36 @@ impl<C: Consensus> Chain<C> {
             );
 
             // process l2block
-            self.process_block(l2block.clone(), deposition_requests, withdrawal_requests)?;
+            let args = StateTransitionArgs {
+                l2block: l2block.clone(),
+                deposition_requests,
+                withdrawal_requests,
+            };
+            // process transactions
+            if let Err(err) = self.generator.apply_state_transition(&mut self.store, args) {
+                // handle tx error
+                match err {
+                    GeneratorError::Transaction(err) => {
+                        // TODO run offchain validator before send challenge, to make sure the block is bad
+                        return Ok(SyncEvent::BadBlock(err.challenge_context));
+                    }
+                    err => return Err(err.into()),
+                }
+            }
+            self.store.insert_block(l2block.clone())?;
+            self.store.attach_block(l2block.clone())?;
 
             // update chain
             self.last_synced = header_info;
             self.tip = l2block;
         }
         // update tx pool state
-        let overlay_state = self.state.new_overlay()?;
+        let overlay_state = self.store.new_overlay()?;
         let nb_ctx = self.consensus.next_block_context(&self.tip);
         self.tx_pool
             .lock()
             .update_tip(&self.tip, overlay_state, nb_ctx)?;
-        Ok(SyncEvent::Nothing)
+        Ok(SyncEvent::Success)
     }
 
     /// Produce an unsigned new block
@@ -246,7 +278,7 @@ impl<C: Consensus> Chain<C> {
             .touched_keys
             .iter()
             .map(|k| {
-                self.state
+                self.store
                     .get_raw(k)
                     .map(|v| (*k, v))
                     .map_err(|err| anyhow!("can't fetch value error: {:?}", err))
@@ -262,7 +294,7 @@ impl<C: Consensus> Chain<C> {
             .collect::<Vec<_>>()
             .pack();
         let proof = self
-            .state
+            .store
             .account_smt()
             .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
@@ -270,7 +302,7 @@ impl<C: Consensus> Chain<C> {
             .0;
         let txs: Vec<_> = pkg.tx_recipts.into_iter().map(|tx| tx.tx).collect();
         let block_proof = self
-            .state
+            .store
             .block_smt()
             .merkle_proof(vec![H256::from_u64(number)])
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
@@ -300,24 +332,6 @@ impl<C: Consensus> Chain<C> {
             block,
             global_state,
         })
-    }
-
-    fn process_block(
-        &mut self,
-        l2block: L2Block,
-        deposition_requests: Vec<DepositionRequest>,
-        withdrawal_requests: Vec<WithdrawalRequest>,
-    ) -> Result<()> {
-        let args = StateTransitionArgs {
-            l2block: l2block.clone(),
-            deposition_requests,
-            withdrawal_requests,
-        };
-        self.generator
-            .apply_state_transition(&mut self.state, args)?;
-        self.state.insert_block(l2block.clone())?;
-        self.state.attach_block(l2block)?;
-        Ok(())
     }
 }
 
