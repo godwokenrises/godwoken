@@ -10,6 +10,7 @@
 
 #include "gw_def.h"
 #include "godwoken.h"
+#include "common.h"
 #include "stdio.h"
 #include "ckb_syscalls.h"
 
@@ -27,7 +28,7 @@ __attribute__((visibility("default"))) int gw_construct(gw_context_t * ctx) {
     int ret = extract_args(ctx, &init_value);
     if(ret != 0) { return ret; }
     /* return current counter value as data */
-    ctx->sys_set_return_data(ctx, (uint8_t *)&init_value, sizeof(uint64_t));
+    ctx->sys_set_program_return_data(ctx, (uint8_t *)&init_value, sizeof(uint64_t));
     return write_counter(ctx, init_value);
 }
 
@@ -41,7 +42,7 @@ __attribute__((visibility("default"))) int gw_handle_message(gw_context_t * ctx)
     if(ret != 0) { return ret; }
     counter_value = saturating_add(counter_value, add_value);
     /* return current counter value as data */
-    ctx->sys_set_return_data(ctx, (uint8_t *)&counter_value, sizeof(uint64_t));
+    ctx->sys_set_program_return_data(ctx, (uint8_t *)&counter_value, sizeof(uint64_t));
     return write_counter(ctx, counter_value);
 }
 
@@ -64,7 +65,7 @@ int extract_args(gw_context_t * ctx, uint64_t * v) {
 
 int read_counter(gw_context_t * ctx, uint64_t * counter) {
     uint8_t key[GW_KEY_BYTES];
-    ctx->blake2b_hash(key, (uint8_t *)"counter", 7);
+    blake2b_hash(key, (uint8_t *)"counter", 7);
     uint8_t value[GW_VALUE_BYTES];
     int ret = ctx->sys_load(ctx, key, value);
     if( ret != 0 ) { return ret; }
@@ -74,7 +75,7 @@ int read_counter(gw_context_t * ctx, uint64_t * counter) {
 
 int write_counter(gw_context_t * ctx, uint64_t counter) {
     uint8_t key[GW_KEY_BYTES];
-    ctx->blake2b_hash(key, (uint8_t *)"counter", 7);
+    blake2b_hash(key, (uint8_t *)"counter", 7);
     uint8_t value[GW_VALUE_BYTES];
     *(uint64_t *)value = counter;
     return ctx->sys_store(ctx, key, value);
