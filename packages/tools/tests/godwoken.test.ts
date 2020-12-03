@@ -1,23 +1,29 @@
 import test from "ava";
+import { TransactionSkeletonType, TransactionSkeleton } from "@ckb-lumos/helpers";
+import { deposit } from "../src/transaction_builder";
+import { alice, bob } from "./account_info";
 import { CellProvider } from "./cell_provider";
-
+import { CONFIG } from "./config";
+import { bobUnspentCells } from "./cells"
 test("godwoken deposit only CKB to Godwoken network", async (t) => {
-    const cellProvider = new CellProvider(bobSecpInputs);
+    const cellProvider = new CellProvider(bobUnspentCells);
     let txSkeleton: TransactionSkeletonType = TransactionSkeleton({
       cellProvider,
     });
 
-    txSkeleton = await godwoken.deposit(
+    const cancelTimeout = BigInt(10);
+    const capacity = BigInt(10);
+    txSkeleton = await deposit(
         txSkeleton,
         [bob.testnetAddress],
-        aliace.testnetAddress,
+        alice.testnetAddress,
         bob.secpLockHash,
         cancelTimeout,
-        10n,
+        capacity,
         undefined,
         bob.testnetAddress,
-        undefined,
-        { config: AGGRON4 }
+        //undefined,
+        { config: CONFIG }
     );
 
   const sumOfInputCapacity = txSkeleton

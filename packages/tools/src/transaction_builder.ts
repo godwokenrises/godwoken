@@ -9,7 +9,7 @@ import {
   CellProvider,
   values,
 } from "@ckb-lumos/base";
-import { FromInfo, parseFromInfo } from "./from_info";
+import { FromInfo, parseFromInfo } from "@ckb-lumos/common-scripts";
 import {
   parseAddress,
   minimalCellCapacity,
@@ -18,14 +18,10 @@ import {
   generateAddress,
 } from "@ckb-lumos/helpers";
 import { Set, List } from "immutable";
-import common from "./common";
-import { addCellDep } from "../helper";
+import common from "@ckb-lumos/common-scripts/lib/common";
+import { addCellDep } from "@ckb-lumos/common-scripts/lib/helper";
 const { toBigUInt128LE, readBigUInt128LE, computeScriptHash } = utils;
-import { getConfig, Config } from "@ckb-lumos/config-manager";
-import { CellCollector as LocktimeCellCollector } from "./locktime_pool";
-import anyoneCanPay, {
-  CellCollector as AnyoneCanPayCellCollector,
-} from "./anyone_can_pay";
+import { getConfig } from "@ckb-lumos/config-manager";
 
 
 interface SUDT {
@@ -365,7 +361,7 @@ export async function submitL2Block(
     const ROLLUP_DEPOSITION_LOCK = config.SCRIPTS.ROLLUP_DEPOSITION_LOCK!;
     const ROLLUP_TYPE = config.SCRIPTS.ROLLUP_TYPE!;
     // always success lock
-    const ROLLUP_LOCK = config.SCRIPTS.ROLLUP_LOCK!;
+    const ROLLUP_ALLWAYS_SUCCESS_LOCK = config.SCRIPTS.ROLLUP_ALLWAYS_SUCCESS_LOCK!;
     
     // update txSkeleton's cell_dep: add rollup type script dep
     txSkeleton = addCellDep(txSkeleton, { 
@@ -378,15 +374,15 @@ export async function submitL2Block(
     // update txSkeleton's cell_dep: add rollup lock script dep
     txSkeleton = addCellDep(txSkeleton, { 
         out_point: {
-            tx_hash: ROLLUP_LOCK.TX_HASH,
-            index: ROLLUP_LOCK.INDEX,
+            tx_hash: ROLLUP_ALLWAYS_SUCCESS_LOCK.TX_HASH,
+            index: ROLLUP_ALLWAYS_SUCCESS_LOCK.INDEX,
         }, 
-        dep_type: ROLLUP_LOCK.DEP_TYPE,
+        dep_type: ROLLUP_ALLWAYS_SUCCESS_LOCK.DEP_TYPE,
     });
     // build updated rollup cell
     const rollupLockScript: Script = {
-        code_hash: ROLLUP_LOCK.CODE_HASH,
-        hash_type: ROLLUP_LOCK.HASH_TYPE,
+        code_hash: ROLLUP_ALLWAYS_SUCCESS_LOCK.CODE_HASH,
+        hash_type: ROLLUP_ALLWAYS_SUCCESS_LOCK.HASH_TYPE,
         args: "0x",
     }; 
     const rollupTypeScript: Script = {
