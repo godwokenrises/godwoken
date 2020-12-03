@@ -15,12 +15,13 @@ crate-type = ["cdylib"]
 neon-build = "0.5.0"
 
 [dependencies]
-gw-chain = { git = "https://github.com/bitrocks/godwoken", branch = "develop" }
-gw-common = { git = "https://github.com/bitrocks/godwoken", branch = "develop" }
-gw-generator = { git = "https://github.com/bitrocks/godwoken", branch = "develop" }
-gw-types = { git = "https://github.com/bitrocks/godwoken", branch = "develop" }
-gw-config = { git = "https://github.com/bitrocks/godwoken", branch = "develop" }
-gw-jsonrpc-types = { git = "https://github.com/bitrocks/godwoken", branch = "develop" }
+gw-chain = { path = "../../../crates/chain" }
+gw-common = { path = "../../../crates/common" }
+gw-generator = { path = "../../../crates/generator" }
+gw-types = { path = "../../../crates/types" }
+gw-config = { path = "../../../crates/config" }
+gw-store = { path = "../../../crates/store" }
+gw-jsonrpc-types= { path = "../../../crates/jsonrpc-types" }
 ckb-types = "0.37.0"
 anyhow = "1.0"
 serde_json = "1.0"

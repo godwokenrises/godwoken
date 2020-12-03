@@ -7,15 +7,7 @@
 //! * Submit new blocks to layer1(as an aggregator)
 
 pub mod chain;
-<<<<<<< HEAD
 mod crypto;
 pub mod genesis;
 pub mod next_block_context;
-=======
-pub mod consensus;
-pub mod crypto;
-pub mod genesis;
-pub mod rpc;
-pub mod state_impl;
->>>>>>> feat: re-export state_impl,tx_pool,rpc,crypto
 pub mod tx_pool;

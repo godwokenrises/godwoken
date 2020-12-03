@@ -14,4 +14,4 @@ pub mod traits;
 pub use error::Error;
 pub use generator::Generator;
 pub use syscalls::RunResult;
-pub use syscalls::{hashmap_code_store::HashMapCodeStore, GetContractCode, RunResult};
+//pub use syscalls::{hashmap_code_store::HashMapCodeStore, GetContractCode, RunResult};

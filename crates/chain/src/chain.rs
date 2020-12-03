@@ -451,7 +451,7 @@ impl Chain {
         })
     }
 
-    pub fn tx_pool(&self) -> &Arc<Mutex<TxPoolImpl<CodeStore>>> {
+    pub fn tx_pool(&self) -> &Arc<Mutex<TxPoolImpl>> {
         &self.tx_pool
     }
 

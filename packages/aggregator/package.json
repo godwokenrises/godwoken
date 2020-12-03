@@ -28,7 +28,8 @@
     "@ckb-lumos/indexer": "^0.13.2",
     "node-pre-gyp": "^0.14.0",
     "immutable": "^4.0.0-rc.12",
-    "neon-cli": "^0.5.0"
+    "neon-cli": "^0.5.0",
+    "jayson": "^3.3.4"
   },
   "files": [
     "index.d.ts",

@@ -22,6 +22,14 @@ use ckb_vm::{
     DefaultMachineBuilder,
 };
 
+<<<<<<< HEAD
+=======
+lazy_static! {
+    static ref VALIDATOR: Bytes = include_bytes!("../../../c/build/validator").to_vec().into();
+    static ref GENERATOR: Bytes = include_bytes!("../../../c/build/generator").to_vec().into();
+}
+
+>>>>>>> feat: update native sync and js sync
 #[derive(Debug)]
 pub struct DepositionRequest {
     pub script: Script,

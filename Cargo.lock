@@ -663,12 +663,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ckb-types",
- "gw-chain 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "gw-common 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "gw-config 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "gw-generator 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "gw-jsonrpc-types 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "gw-types 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
+ "gw-chain",
+ "gw-common",
+ "gw-config",
+ "gw-generator",
+ "gw-jsonrpc-types",
+ "gw-store",
+ "gw-types",
  "neon",
  "neon-build",
  "parking_lot 0.11.0",
@@ -679,40 +680,16 @@ dependencies = [
 [[package]]
 name = "gw-chain"
 version = "0.1.0"
-source = "git+https://github.com/bitrocks/godwoken?branch=develop#fb91b63c8eeda1079a778a5adfa57f5b4babcfa4"
 dependencies = [
  "anyhow",
  "ckb-types",
  "crossbeam-channel 0.5.0",
- "gw-common 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "gw-config 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "gw-generator 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "gw-jsonrpc-types 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "gw-types 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "jsonrpc-core",
- "jsonrpc-derive",
- "jsonrpc-http-server",
- "jsonrpc-server-utils",
- "lazy_static",
- "parking_lot 0.11.0",
- "secp256k1",
- "thiserror",
- "toml",
-]
-
-[[package]]
-name = "gw-chain"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ckb-types",
- "crossbeam-channel 0.5.0",
- "gw-common 0.1.0",
- "gw-config 0.1.0",
- "gw-generator 0.1.0",
- "gw-jsonrpc-types 0.1.0",
+ "gw-common",
+ "gw-config",
+ "gw-generator",
+ "gw-jsonrpc-types",
  "gw-store",
- "gw-types 0.1.0",
+ "gw-types",
  "jsonrpc-core",
  "jsonrpc-derive",
  "jsonrpc-http-server",
@@ -727,14 +704,14 @@ dependencies = [
 [[package]]
 name = "gw-common"
 version = "0.1.0"
-source = "git+https://github.com/bitrocks/godwoken?branch=develop#fb91b63c8eeda1079a778a5adfa57f5b4babcfa4"
 dependencies = [
  "cfg-if 0.1.10",
- "gw-hash 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
+ "gw-hash",
  "sparse-merkle-tree",
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "gw-common"
 version = "0.1.0"
 dependencies = [
@@ -745,36 +722,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "gw-config"
-version = "0.1.0"
-source = "git+https://github.com/bitrocks/godwoken?branch=develop#fb91b63c8eeda1079a778a5adfa57f5b4babcfa4"
-dependencies = [
- "ckb-types",
- "gw-jsonrpc-types 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "serde",
-]
-
-[[package]]
+=======
+>>>>>>> feat: update native sync and js sync
 name = "gw-config"
 version = "0.1.0"
 dependencies = [
  "ckb-types",
- "gw-jsonrpc-types 0.1.0",
+ "gw-jsonrpc-types",
  "serde",
-]
-
-[[package]]
-name = "gw-generator"
-version = "0.1.0"
-source = "git+https://github.com/bitrocks/godwoken?branch=develop#fb91b63c8eeda1079a778a5adfa57f5b4babcfa4"
-dependencies = [
- "anyhow",
- "blake2b-rs 0.2.0",
- "ckb-vm",
- "gw-common 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "gw-types 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "lazy_static",
- "thiserror",
 ]
 
 [[package]]
@@ -784,19 +739,10 @@ dependencies = [
  "anyhow",
  "blake2b-rs 0.2.0",
  "ckb-vm",
- "gw-common 0.1.0",
- "gw-types 0.1.0",
- "hex",
+ "gw-common",
+ "gw-types",
  "lazy_static",
  "thiserror",
-]
-
-[[package]]
-name = "gw-hash"
-version = "0.1.0"
-source = "git+https://github.com/bitrocks/godwoken?branch=develop#fb91b63c8eeda1079a778a5adfa57f5b4babcfa4"
-dependencies = [
- "blake2b-ref",
 ]
 
 [[package]]
@@ -809,23 +755,11 @@ dependencies = [
 [[package]]
 name = "gw-jsonrpc-types"
 version = "0.1.0"
-source = "git+https://github.com/bitrocks/godwoken?branch=develop#fb91b63c8eeda1079a778a5adfa57f5b4babcfa4"
 dependencies = [
  "ckb-jsonrpc-types",
  "ckb-types",
  "faster-hex",
- "gw-types 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "serde",
-]
-
-[[package]]
-name = "gw-jsonrpc-types"
-version = "0.1.0"
-dependencies = [
- "ckb-jsonrpc-types",
- "ckb-types",
- "faster-hex",
- "gw-types 0.1.0",
+ "gw-types",
  "serde",
 ]
 
@@ -836,9 +770,9 @@ dependencies = [
  "anyhow",
  "clap",
  "faster-hex",
- "gw-common 0.1.0",
- "gw-config 0.1.0",
- "gw-jsonrpc-types 0.1.0",
+ "gw-common",
+ "gw-config",
+ "gw-jsonrpc-types",
  "toml",
 ]
 
@@ -848,28 +782,18 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ckb-types",
- "gw-common 0.1.0",
- "gw-generator 0.1.0",
- "gw-types 0.1.0",
+ "gw-common",
+ "gw-generator",
+ "gw-types",
  "parking_lot 0.11.0",
 ]
 
 [[package]]
 name = "gw-types"
 version = "0.1.0"
-source = "git+https://github.com/bitrocks/godwoken?branch=develop#fb91b63c8eeda1079a778a5adfa57f5b4babcfa4"
 dependencies = [
  "cfg-if 0.1.10",
- "gw-hash 0.1.0 (git+https://github.com/bitrocks/godwoken?branch=develop)",
- "molecule",
-]
-
-[[package]]
-name = "gw-types"
-version = "0.1.0"
-dependencies = [
- "cfg-if 0.1.10",
- "gw-hash 0.1.0",
+ "gw-hash",
  "molecule",
 ]
 
