@@ -31,7 +31,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 /// Rollup status
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum Status {
     Running,
     Halting,
@@ -50,20 +50,36 @@ pub struct ProduceBlockParam {
 /// sync params
 pub struct SyncParam {
     // contains transitions from tip to fork point
-    pub reverts: Vec<SyncTransition>,
+    pub reverts: Vec<L1Action>,
     /// contains transitions from fork point to new tips
-    pub updates: Vec<SyncTransition>,
+    pub updates: Vec<L1Action>,
 }
 
-pub struct SyncTransition {
+#[derive(Debug)]
+pub enum L1ActionContext {
+    SubmitTxs {
+        /// deposition requests
+        deposition_requests: Vec<DepositionRequest>,
+        /// withdrawal requests
+        withdrawal_requests: Vec<WithdrawalRequest>,
+    },
+    Challenge {
+        context: StartChallenge,
+    },
+    CancelChallenge {
+        context: CancelChallenge,
+    },
+    Revert {
+        context: StartChallenge,
+    },
+}
+
+pub struct L1Action {
     /// transaction info
     pub transaction_info: TransactionInfo,
     /// transactions' header info
     pub header_info: HeaderInfo,
-    /// deposition requests
-    pub deposition_requests: Vec<DepositionRequest>,
-    /// withdrawal requests
-    pub withdrawal_requests: Vec<WithdrawalRequest>,
+    pub context: L1ActionContext,
 }
 
 pub struct TransactionInfo {
@@ -96,11 +112,49 @@ pub enum SyncEvent {
 pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
 pub type TxPoolImpl = TxPool<WrapStore<StateStore>>;
 
+pub struct LocaLState {
+    tip: L2Block,
+    last_synced: HeaderInfo,
+    current_bad_block: Option<StartChallenge>,
+    status: Status,
+}
+
+impl LocaLState {
+    fn new(tip: L2Block, last_synced: HeaderInfo, status: Status) -> Self {
+        LocaLState {
+            tip,
+            last_synced,
+            status,
+            current_bad_block: None,
+        }
+    }
+
+    /// return rollup status
+    pub fn status(&self) -> Status {
+        self.status
+    }
+
+    pub fn set_status(&mut self, status: Status) {
+        self.status = status;
+    }
+
+    pub fn tip(&self) -> &L2Block {
+        &self.tip
+    }
+
+    pub fn last_synced(&self) -> &HeaderInfo {
+        &self.last_synced
+    }
+
+    fn set_current_bad_block(&mut self, context: Option<StartChallenge>) {
+        self.current_bad_block = context;
+    }
+}
+
 pub struct Chain<Consensus> {
     rollup_type_script_hash: [u8; 32],
     store: Store<StateStore>,
-    last_synced: HeaderInfo,
-    tip: L2Block,
+    local_state: LocaLState,
     generator: Generator,
     tx_pool: Arc<Mutex<TxPoolImpl>>,
     consensus: Consensus,
@@ -118,10 +172,10 @@ impl<C: Consensus> Chain<C> {
     ) -> Self {
         let rollup_type_script: Script = config.rollup_type_script.clone().into();
         let rollup_type_script_hash = rollup_type_script.calc_script_hash().unpack();
+        let local_state = LocaLState::new(tip, last_synced, Status::Running);
         Chain {
             store,
-            last_synced,
-            tip,
+            local_state,
             generator,
             tx_pool,
             consensus,
@@ -129,21 +183,13 @@ impl<C: Consensus> Chain<C> {
         }
     }
 
-    pub fn tip(&self) -> &L2Block {
-        &self.tip
+    /// return local state
+    pub fn local_state(&self) -> &LocaLState {
+        &self.local_state
     }
 
     pub fn store(&self) -> &Store<StateStore> {
         &self.store
-    }
-
-    pub fn last_synced(&self) -> &HeaderInfo {
-        &self.last_synced
-    }
-
-    /// return rollup status
-    pub fn status(&self) -> Status {
-        unimplemented!()
     }
 
     /// Sync chain from layer1
@@ -152,66 +198,138 @@ impl<C: Consensus> Chain<C> {
         if !param.reverts.is_empty() {
             panic!("layer1 chain has forked!")
         }
-        // check status
-        if self.status() == Status::Halting {
-            // TODO validate challenge request, return BadChallenge if challenge is invalid, otherwise return WaitChallenge
-        }
         // apply tx to state
-        for sync in param.updates {
-            let SyncTransition {
+        for action in param.updates {
+            let L1Action {
                 transaction_info,
                 header_info,
-                deposition_requests,
-                withdrawal_requests,
-            } = sync;
+                context,
+            } = action;
             debug_assert_eq!(transaction_info.block_hash, header_info.block_hash);
             let block_number: u64 = header_info.number;
             assert!(
-                block_number > self.last_synced.number,
+                block_number > self.local_state.last_synced.number,
                 "must greater than last synced number"
             );
 
-            // parse layer2 block
-            let l2block =
-                parse_l2block(&transaction_info.transaction, &self.rollup_type_script_hash)?;
-
-            let tip_number: u64 = self.tip.raw().number().unpack();
-            assert!(
-                l2block.raw().number().unpack() == tip_number + 1,
-                "new l2block number must be the successor of the tip"
-            );
-
-            // process l2block
-            let args = StateTransitionArgs {
-                l2block: l2block.clone(),
-                deposition_requests,
-                withdrawal_requests,
-            };
-            // process transactions
-            if let Err(err) = self.generator.apply_state_transition(&mut self.store, args) {
-                // handle tx error
-                match err {
-                    GeneratorError::Transaction(err) => {
-                        // TODO run offchain validator before send challenge, to make sure the block is bad
-                        return Ok(SyncEvent::BadBlock(err.challenge_context));
+            match (self.local_state.status(), context) {
+                (
+                    Status::Running,
+                    L1ActionContext::SubmitTxs {
+                        deposition_requests,
+                        withdrawal_requests,
+                    },
+                ) => {
+                    // Submit transactions
+                    // parse layer2 block
+                    let l2block = parse_l2block(
+                        &transaction_info.transaction,
+                        &self.rollup_type_script_hash,
+                    )?;
+                    if let Some(start_challenge) = self.process_block(
+                        l2block,
+                        header_info,
+                        deposition_requests,
+                        withdrawal_requests,
+                    )? {
+                        // stop syncing and return event
+                        self.local_state
+                            .set_current_bad_block(Some(start_challenge.clone()));
+                        return Ok(SyncEvent::BadBlock(start_challenge));
                     }
-                    err => return Err(err.into()),
+                }
+                (Status::Running, L1ActionContext::Challenge { context }) => {
+                    // Challenge
+                    self.local_state.set_status(Status::Halting);
+                    if let Some(current_bad_block) = self.local_state.current_bad_block.as_ref() {
+                        if current_bad_block.as_slice() == context.as_slice() {
+                            // bad block is in challenge, just wait.
+                            return Ok(SyncEvent::WaitChallenge);
+                        }
+                        let current_bad_block_number: u64 =
+                            current_bad_block.block_number().unpack();
+                        let challenge_block_number: u64 = context.block_number().unpack();
+                        if challenge_block_number >= current_bad_block_number {
+                            // Because of the block is later than a bad block we found we can't determine wether the block is bad.
+                            // So we just wait for the end and send a new challenge.
+                            return Ok(SyncEvent::WaitChallenge);
+                        }
+
+                        return Ok(SyncEvent::WaitChallenge);
+                    }
+                    // now, either we haven't found a bad block or the challenge is challenge a validate block
+                    // in both cases the challenge is bad
+                    let cancel_challenge = unimplemented!();
+                    return Ok(SyncEvent::BadChallenge(cancel_challenge));
+                }
+                (Status::Halting, L1ActionContext::CancelChallenge { context: _ }) => {
+                    self.local_state.set_status(Status::Running);
+                }
+                (Status::Halting, L1ActionContext::Revert { context }) => {
+                    self.local_state.set_status(Status::Running);
+                    assert_eq!(
+                        self.local_state
+                            .current_bad_block
+                            .as_ref()
+                            .map(|b| b.as_slice()),
+                        Some(context.as_slice()),
+                        "revert from the bad block"
+                    );
+                }
+                (status, context) => {
+                    panic!(
+                        "unsupported syncing state: status {:?} context {:?}",
+                        status, context
+                    );
                 }
             }
-            self.store.insert_block(l2block.clone())?;
-            self.store.attach_block(l2block.clone())?;
-
-            // update chain
-            self.last_synced = header_info;
-            self.tip = l2block;
         }
         // update tx pool state
         let overlay_state = self.store.new_overlay()?;
-        let nb_ctx = self.consensus.next_block_context(&self.tip);
+        let nb_ctx = self.consensus.next_block_context(&self.local_state.tip);
         self.tx_pool
             .lock()
-            .update_tip(&self.tip, overlay_state, nb_ctx)?;
+            .update_tip(&self.local_state.tip, overlay_state, nb_ctx)?;
         Ok(SyncEvent::Success)
+    }
+
+    fn process_block(
+        &mut self,
+        l2block: L2Block,
+        header_info: HeaderInfo,
+        deposition_requests: Vec<DepositionRequest>,
+        withdrawal_requests: Vec<WithdrawalRequest>,
+    ) -> Result<Option<StartChallenge>> {
+        let tip_number: u64 = self.local_state.tip.raw().number().unpack();
+        assert!(
+            l2block.raw().number().unpack() == tip_number + 1,
+            "new l2block number must be the successor of the tip"
+        );
+
+        // process l2block
+        let args = StateTransitionArgs {
+            l2block: l2block.clone(),
+            deposition_requests,
+            withdrawal_requests,
+        };
+        // process transactions
+        if let Err(err) = self.generator.apply_state_transition(&mut self.store, args) {
+            // handle tx error
+            match err {
+                GeneratorError::Transaction(err) => {
+                    // TODO run offchain validator before send challenge, to make sure the block is bad
+                    return Ok(Some(err.challenge_context));
+                }
+                err => return Err(err.into()),
+            }
+        }
+        self.store.insert_block(l2block.clone())?;
+        self.store.attach_block(l2block.clone())?;
+
+        // update chain
+        self.local_state.last_synced = header_info;
+        self.local_state.tip = l2block;
+        Ok(None)
     }
 
     /// Produce an unsigned new block
@@ -230,7 +348,7 @@ impl<C: Consensus> Chain<C> {
             .tx_pool
             .lock()
             .package_txs(&deposition_requests, &withdrawal_requests)?;
-        let parent_number: u64 = self.tip.raw().number().unpack();
+        let parent_number: u64 = self.local_state.tip.raw().number().unpack();
         let number = parent_number + 1;
         let timestamp: u64 = unixtime()?;
         let submit_txs = {

@@ -23,12 +23,14 @@ lazy_static! {
     static ref GENERATOR: Bytes = include_bytes!("../../../c/build/generator").to_vec().into();
 }
 
+#[derive(Debug)]
 pub struct DepositionRequest {
     pub script: Script,
     pub sudt_script: Script,
     pub amount: u128,
 }
 
+#[derive(Debug)]
 pub struct WithdrawalRequest {
     // layer1 ACP cell to receive the withdraw
     pub lock_hash: H256,
