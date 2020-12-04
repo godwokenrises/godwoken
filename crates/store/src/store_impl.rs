@@ -2,8 +2,9 @@ use super::overlay::{OverlaySMTStore, OverlayStore};
 use super::wrap_store::WrapStore;
 use anyhow::{anyhow, Result};
 use gw_common::{
+    error::Error,
     smt::{Store as SMTStore, H256, SMT},
-    state::{Error, State},
+    state::State,
 };
 use gw_generator::traits::CodeStore;
 use gw_types::{

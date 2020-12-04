@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod builtins;
+pub mod error;
 pub mod h256_ext;
 pub mod merkle_utils;
 pub mod smt;
@@ -19,6 +20,7 @@ pub const SUDT_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const ACCOUNT_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const ROLLUP_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const CKB_TOKEN_ID: [u8; 32] = [0u8; 32];
+pub const FINALITY_BLOCKS: u64 = 42;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "std")] {

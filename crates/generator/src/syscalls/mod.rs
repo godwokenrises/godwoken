@@ -168,7 +168,9 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 let script_hash_addr = machine.registers()[A0].to_u64();
                 let account_id_addr = machine.registers()[A1].to_u64();
                 let script_hash = load_data_h256(machine, script_hash_addr)?;
-                let account_id = self.state.get_account_id_by_script_hash(&script_hash)
+                let account_id = self
+                    .state
+                    .get_account_id_by_script_hash(&script_hash)
                     .map_err(|err| {
                         eprintln!("syscall error: get account id by script hash : {:?}", err);
                         VMError::Unexpected
@@ -177,7 +179,8 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                         eprintln!("returned zero account id");
                         VMError::Unexpected
                     })?;
-                machine.memory_mut()
+                machine
+                    .memory_mut()
                     .store_bytes(account_id_addr, &account_id.to_le_bytes()[..])?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
@@ -185,12 +188,10 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
             SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID => {
                 let account_id = machine.registers()[A0].to_u32();
                 let script_hash_addr = machine.registers()[A1].to_u64();
-                let script_hash = self.state
-                    .get_script_hash(account_id)
-                    .map_err(|err| {
-                        eprintln!("syscall error: get script hash by account id: {:?}", err);
-                        VMError::Unexpected
-                    })?;
+                let script_hash = self.state.get_script_hash(account_id).map_err(|err| {
+                    eprintln!("syscall error: get script hash by account id: {:?}", err);
+                    VMError::Unexpected
+                })?;
                 machine
                     .memory_mut()
                     .store_bytes(script_hash_addr, script_hash.as_slice())?;
@@ -202,15 +203,16 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 let len_addr = machine.registers()[A1].to_u64();
                 let offset = machine.registers()[A2].to_u32() as usize;
                 let script_addr = machine.registers()[A3].to_u64();
-                let script_hash = self.state
-                    .get_script_hash(account_id)
-                    .map_err(|err| {
-                        eprintln!("syscall error: get script hash by account id: {:?}", err);
-                        VMError::Unexpected
-                    })?;
+                let script_hash = self.state.get_script_hash(account_id).map_err(|err| {
+                    eprintln!("syscall error: get script hash by account id: {:?}", err);
+                    VMError::Unexpected
+                })?;
                 let len = load_data_u32(machine, len_addr)? as usize;
                 let script = self.code_store.get_script(&script_hash).ok_or_else(|| {
-                    eprintln!("syscall error: script not found by script hash: {:?}", script_hash);
+                    eprintln!(
+                        "syscall error: script not found by script hash: {:?}",
+                        script_hash
+                    );
                     VMError::Unexpected
                 })?;
                 let data = script.as_slice();
@@ -224,9 +226,10 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 if new_len > 0 {
                     machine
                         .memory_mut()
-                        .store_bytes(script_addr, &data[offset..offset+new_len])?;
+                        .store_bytes(script_addr, &data[offset..offset + new_len])?;
                 }
-                machine.memory_mut()
+                machine
+                    .memory_mut()
                     .store_bytes(len_addr, &(new_len as u32).to_le_bytes())?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)

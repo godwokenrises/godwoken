@@ -618,6 +618,7 @@ dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
  "sparse-merkle-tree",
+ "thiserror",
 ]
 
 [[package]]

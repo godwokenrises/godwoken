@@ -140,17 +140,26 @@ struct DepositionLockArgs {
 
 // --- layer2 SUDT ---
 union SUDTArgs {
+    SUDTScriptHash,
     SUDTQuery,
     SUDTTransfer,
+    SUDTPrepareWithdrawal,
 }
 
+table SUDTScriptHash {}
 struct SUDTQuery {
     account_id: Uint32,
 }
 
 struct SUDTTransfer {
     to: Uint32,
-    value: Uint128,
+    amount: Uint128,
+    fee: Uint128,
+}
+
+struct SUDTPrepareWithdrawal {
+    withdrawal_lock_hash: Byte32,
+    amount: Uint128,
     fee: Uint128,
 }
 // --- end of layer2 SUDT ---

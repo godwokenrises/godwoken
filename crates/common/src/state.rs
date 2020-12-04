@@ -1,6 +1,6 @@
 use crate::blake2b::new_blake2b;
+use crate::error::Error;
 use crate::h256_ext::{H256Ext, H256};
-use crate::smt::Error as SMTError;
 use core::mem::size_of;
 
 /* Account fields flags */
@@ -8,6 +8,11 @@ pub const GW_ACCOUNT_KV: u8 = 0;
 pub const GW_ACCOUNT_NONCE: u8 = 1;
 pub const GW_ACCOUNT_SCRIPT_HASH: u8 = 2;
 pub const GW_ACCOUNT_SCRIPT_HASH_TO_ID: u8 = 3;
+
+/* SUDT fields */
+const WITHDRAWAL_LOCK_HASH: u8 = 1;
+const WITHDRAWAL_AMOUNT: u8 = 2;
+const WITHDRAWAL_BLOCK_NUMBER: u8 = 3;
 
 /* Generate a SMT key
  * raw_key: blake2b(id | type | key)
@@ -31,6 +36,13 @@ pub fn build_account_field_key(id: u32, type_: u8) -> H256 {
     key.into()
 }
 
+fn build_sudt_field_key(id: u32, type_: u8) -> H256 {
+    let mut key: [u8; 32] = H256::zero().into();
+    key[..size_of::<u32>()].copy_from_slice(&id.to_le_bytes());
+    key[size_of::<u32>()] = type_;
+    key.into()
+}
+
 pub fn build_script_hash_to_account_id_key(script_hash: &[u8]) -> H256 {
     let mut key: [u8; 32] = H256::zero().into();
     let mut hasher = new_blake2b();
@@ -40,18 +52,10 @@ pub fn build_script_hash_to_account_id_key(script_hash: &[u8]) -> H256 {
     key.into()
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Error {
-    SMT(SMTError),
-    AmountOverflow,
-    MerkleProof,
-    MissingKey,
-}
-
-impl From<SMTError> for Error {
-    fn from(err: SMTError) -> Self {
-        Error::SMT(err)
-    }
+pub struct PrepareWithdrawalRecord {
+    pub withdrawal_lock_hash: H256,
+    pub amount: u128,
+    pub block_number: u64,
 }
 
 pub trait State {
@@ -63,12 +67,12 @@ pub trait State {
     fn calculate_root(&self) -> Result<H256, Error>;
 
     // implementations
-    fn get_value(&self, id: u32, key: &[u8]) -> Result<H256, Error> {
-        let raw_key = build_account_key(id, key);
+    fn get_value(&self, id: u32, key: &H256) -> Result<H256, Error> {
+        let raw_key = build_account_key(id, key.as_slice());
         self.get_raw(&raw_key)
     }
-    fn update_value(&mut self, id: u32, key: &[u8], value: H256) -> Result<(), Error> {
-        let raw_key = build_account_key(id, key);
+    fn update_value(&mut self, id: u32, key: &H256, value: H256) -> Result<(), Error> {
+        let raw_key = build_account_key(id, key.as_slice());
         self.update_raw(raw_key, value)?;
         Ok(())
     }
@@ -115,7 +119,7 @@ pub trait State {
 
     fn get_sudt_balance(&self, sudt_id: u32, id: u32) -> Result<u128, Error> {
         // get balance
-        let balance = { self.get_value(sudt_id, &H256::from_u32(id).as_slice())? };
+        let balance = self.get_value(sudt_id, &H256::from_u32(id))?;
         Ok(balance.to_u128())
     }
 
@@ -129,9 +133,44 @@ pub trait State {
         Ok(())
     }
 
-    /// Burn SUDT token from layer2
-    /// User need to call prepare_withdraw on the SUDT contract first
-    fn burn_sudt(&mut self, sudt_id: u32, id: u32, amount: u128) -> Result<(), Error> {
-        unimplemented!()
+    /// Get SUDT prepare withdrawal record
+    fn get_prepare_withdrawal(
+        &mut self,
+        sudt_id: u32,
+        id: u32,
+    ) -> Result<PrepareWithdrawalRecord, Error> {
+        let withdrawal_lock_hash =
+            self.get_value(sudt_id, &build_sudt_field_key(id, WITHDRAWAL_LOCK_HASH))?;
+        let block_number = self
+            .get_value(sudt_id, &build_sudt_field_key(id, WITHDRAWAL_BLOCK_NUMBER))?
+            .to_u64();
+        let amount = self
+            .get_value(sudt_id, &build_sudt_field_key(id, WITHDRAWAL_AMOUNT))?
+            .to_u128();
+        Ok(PrepareWithdrawalRecord {
+            withdrawal_lock_hash,
+            block_number,
+            amount,
+        })
+    }
+
+    /// Remove a SUDT prepare withdrawal record
+    fn remove_prepare_withdrawal(&mut self, sudt_id: u32, id: u32) -> Result<(), Error> {
+        self.update_value(
+            sudt_id,
+            &build_sudt_field_key(id, WITHDRAWAL_LOCK_HASH),
+            H256::zero(),
+        )?;
+        self.update_value(
+            sudt_id,
+            &build_sudt_field_key(id, WITHDRAWAL_BLOCK_NUMBER),
+            H256::zero(),
+        )?;
+        self.update_value(
+            sudt_id,
+            &build_sudt_field_key(id, WITHDRAWAL_AMOUNT),
+            H256::zero(),
+        )?;
+        Ok(())
     }
 }

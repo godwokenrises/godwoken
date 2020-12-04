@@ -77,7 +77,7 @@ impl Generator {
         let raw_block = args.l2block.raw();
 
         // apply withdrawal to state
-        state.apply_withdrawal_requests(&args.withdrawal_requests)?;
+        state.apply_withdrawal_requests(&args.withdrawal_requests, raw_block.number().unpack())?;
         // apply deposition to state
         state.apply_deposition_requests(&args.deposition_requests)?;
 

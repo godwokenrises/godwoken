@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use gw_common::{
+    error::Error,
     smt::SMT,
     sparse_merkle_tree::{
         error::Error as SMTError,
@@ -10,7 +11,7 @@ use gw_common::{
         tree::{BranchNode, LeafNode},
         H256,
     },
-    state::{Error, State},
+    state::State,
 };
 use gw_generator::traits::CodeStore;
 use gw_types::{bytes::Bytes, packed::Script};

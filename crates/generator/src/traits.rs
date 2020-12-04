@@ -1,10 +1,8 @@
+use crate::error::{Error, ValidateError};
 use crate::generator::DepositionRequest;
 use crate::syscalls::RunResult;
 use crate::{bytes::Bytes, generator::WithdrawalRequest};
-use gw_common::{
-    state::{Error, State},
-    H256,
-};
+use gw_common::{error::Error as StateError, state::State, FINALITY_BLOCKS, H256};
 use gw_types::{packed::Script, prelude::*};
 
 pub trait CodeStore {
@@ -29,6 +27,7 @@ pub trait StateExt {
     fn apply_withdrawal_requests(
         &mut self,
         withdrawal_requests: &[WithdrawalRequest],
+        block_number: u64,
     ) -> Result<(), Error>;
 }
 
@@ -36,7 +35,8 @@ impl<S: State + CodeStore> StateExt for S {
     fn create_account_from_script(&mut self, script: Script) -> Result<u32, Error> {
         let script_hash = script.hash();
         self.insert_script(script_hash.into(), script);
-        self.create_account(script_hash.into())
+        let id = self.create_account(script_hash.into())?;
+        Ok(id)
     }
     fn apply_run_result(&mut self, run_result: &RunResult) -> Result<(), Error> {
         for (k, v) in &run_result.write_values {
@@ -77,16 +77,29 @@ impl<S: State + CodeStore> StateExt for S {
     fn apply_withdrawal_requests(
         &mut self,
         withdrawal_requests: &[WithdrawalRequest],
+        block_number: u64,
     ) -> Result<(), Error> {
+        let largest_prepare_number = block_number
+            .checked_sub(FINALITY_BLOCKS)
+            .ok_or(ValidateError::InvalidWithdrawal)?;
         for request in withdrawal_requests {
             // find user account
             let id = self
                 .get_account_id_by_script_hash(&request.account_script_hash)?
-                .ok_or(Error::MissingKey)?; // find Simple UDT account
+                .ok_or(StateError::MissingKey)?; // find Simple UDT account
             let sudt_id = self
                 .get_account_id_by_script_hash(&request.sudt_script_hash)?
-                .ok_or(Error::MissingKey)?;
-            self.burn_sudt(sudt_id, id, request.amount)?;
+                .ok_or(StateError::MissingKey)?;
+            let record = self.get_prepare_withdrawal(sudt_id, id)?;
+            // check validity of withdrawal
+            if record.amount != request.amount
+                || record.withdrawal_lock_hash != request.lock_hash
+                || record.block_number > largest_prepare_number
+            {
+                return Err(ValidateError::InvalidWithdrawal.into());
+            }
+            // remove prepare withdrawal record
+            self.remove_prepare_withdrawal(sudt_id, id)?;
         }
 
         Ok(())

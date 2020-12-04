@@ -1,5 +1,5 @@
 use ckb_vm::Error as VMError;
-use gw_common::{sparse_merkle_tree::error::Error as SMTError, state::Error as StateError};
+use gw_common::{error::Error as StateError, sparse_merkle_tree::error::Error as SMTError};
 use gw_types::{packed::StartChallenge, prelude::*};
 
 use thiserror::Error;
@@ -11,11 +11,25 @@ pub enum Error {
     Transaction(TransactionErrorWithContext),
     #[error("State error {0:?}")]
     State(StateError),
+    #[error("Validate error {0:?}")]
+    Validate(ValidateError),
 }
 
 impl From<StateError> for Error {
     fn from(err: StateError) -> Self {
         Error::State(err)
+    }
+}
+
+#[derive(Error, Debug, PartialEq, Clone, Eq)]
+pub enum ValidateError {
+    #[error("Invalid withdrawal request")]
+    InvalidWithdrawal,
+}
+
+impl From<ValidateError> for Error {
+    fn from(err: ValidateError) -> Self {
+        Error::Validate(err)
     }
 }
 

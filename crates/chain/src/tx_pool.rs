@@ -71,14 +71,8 @@ impl<S: Store<SMTH256>> TxPool<S> {
         // 3. push tx to pool
         let tx_witness_hash = tx.witness_hash();
         let compacted_post_account_root = {
-            let account_root = self
-                .state
-                .calculate_root()
-                .map_err(|err| anyhow!("calculate account root error: {:?}", err))?;
-            let account_count = self
-                .state
-                .get_account_count()
-                .map_err(|err| anyhow!("get account count error: {:?}", err))?;
+            let account_root = self.state.calculate_root()?;
+            let account_count = self.state.get_account_count()?;
             calculate_compacted_account_root(&account_root.as_slice(), account_count)
         };
         self.queue.push(TxRecipt {
@@ -88,9 +82,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
         });
 
         // update state
-        self.state
-            .apply_run_result(&run_result)
-            .map_err(|err| anyhow!("apply state error: {:?}", err))?;
+        self.state.apply_run_result(&run_result)?;
         Ok(())
     }
 
@@ -134,19 +126,18 @@ impl<S: Store<SMTH256>> TxPool<S> {
     pub fn package_txs(
         &mut self,
         deposition_requests: &[DepositionRequest],
-        withdrawal_request: &[WithdrawalRequest],
+        withdrawal_requests: &[WithdrawalRequest],
     ) -> Result<TxPackage> {
         let tx_recipts = self.queue.drain(..).collect();
         // reset overlay, we need to record deposition / withdrawal touched keys to generate proof for state
         self.state.overlay_store_mut().clear_touched_keys();
         // apply withdrawal request to the state
-        self.state
-            .apply_withdrawal_requests(&withdrawal_request)
-            .map_err(|err| anyhow!("apply withdrawal requests: {:?}", err))?;
+        self.state.apply_withdrawal_requests(
+            &withdrawal_requests,
+            self.next_block_info.number().unpack(),
+        )?;
         // apply deposition request to the state
-        self.state
-            .apply_deposition_requests(&deposition_requests)
-            .map_err(|err| anyhow!("apply deposition requests: {:?}", err))?;
+        self.state.apply_deposition_requests(&deposition_requests)?;
         let post_account_state = get_account_state(&self.state)?;
         let touched_keys = self
             .state
@@ -196,12 +187,8 @@ impl<S: Store<SMTH256>> TxPool<S> {
 }
 
 fn get_account_state<S: State>(state: &S) -> Result<MerkleState> {
-    let root = state
-        .calculate_root()
-        .map_err(|err| anyhow!("calculate root: {:?}", err))?;
-    let count = state
-        .get_account_count()
-        .map_err(|err| anyhow!("get account count: {:?}", err))?;
+    let root = state.calculate_root()?;
+    let count = state.get_account_count()?;
     Ok(MerkleState { root, count })
 }
 
