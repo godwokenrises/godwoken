@@ -33,6 +33,6 @@ __attribute__((visibility("default"))) int gw_handle_message(gw_context_t * ctx)
     gw_call_receipt_t receipt;
     int ret = ctx->sys_call(ctx, id, args, args_len, &receipt);
     if(ret != 0) { return ret; }
-    ctx->sys_set_return_data(ctx, receipt.return_data, receipt.return_data_len);
+    ctx->sys_set_program_return_data(ctx, receipt.return_data, receipt.return_data_len);
     return 0;
 }

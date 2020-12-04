@@ -22,6 +22,9 @@ const SYS_SET_RETURN_DATA: u64 = 3061;
 /* internal syscall numbers */
 const SYS_LOAD_CALLCONTEXT: u64 = 4051;
 const SYS_LOAD_BLOCKINFO: u64 = 4052;
+const SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID: u64 = 4053;
+const SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH: u64 = 4054;
+const SYS_LOAD_ACCOUNT_SCRIPT: u64 = 4055;
 const SYS_LOAD_PROGRAM_AS_DATA: u64 = 4061;
 const SYS_LOAD_PROGRAM_AS_CODE: u64 = 4062;
 /* CKB compatible syscalls */
@@ -44,6 +47,17 @@ pub(crate) struct L2Syscalls<'a, S> {
     pub(crate) call_context: &'a CallContext,
     pub(crate) code_store: &'a dyn CodeStore,
     pub(crate) result: &'a mut RunResult,
+}
+
+fn load_data_u32<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<u32, VMError> {
+    let mut data = [0u8; 4];
+    for (i, c) in data.iter_mut().enumerate() {
+        *c = machine
+            .memory_mut()
+            .load8(&Mac::REG::from_u64(addr).overflowing_add(&Mac::REG::from_u64(i as u64)))?
+            .to_u8();
+    }
+    Ok(u32::from_le_bytes(data))
 }
 
 fn load_data_h256<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<H256, VMError> {
@@ -147,6 +161,73 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
             SYS_LOAD_CALLCONTEXT => {
                 let data = self.call_context.as_slice();
                 store_data(machine, data)?;
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH => {
+                let script_hash_addr = machine.registers()[A0].to_u64();
+                let account_id_addr = machine.registers()[A1].to_u64();
+                let script_hash = load_data_h256(machine, script_hash_addr)?;
+                let account_id = self.state.get_account_id_by_script_hash(&script_hash)
+                    .map_err(|err| {
+                        eprintln!("syscall error: get account id by script hash : {:?}", err);
+                        VMError::Unexpected
+                    })?
+                    .ok_or_else(|| {
+                        eprintln!("returned zero account id");
+                        VMError::Unexpected
+                    })?;
+                machine.memory_mut()
+                    .store_bytes(account_id_addr, &account_id.to_le_bytes()[..])?;
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID => {
+                let account_id = machine.registers()[A0].to_u32();
+                let script_hash_addr = machine.registers()[A1].to_u64();
+                let script_hash = self.state
+                    .get_script_hash(account_id)
+                    .map_err(|err| {
+                        eprintln!("syscall error: get script hash by account id: {:?}", err);
+                        VMError::Unexpected
+                    })?;
+                machine
+                    .memory_mut()
+                    .store_bytes(script_hash_addr, script_hash.as_slice())?;
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_LOAD_ACCOUNT_SCRIPT => {
+                let account_id = machine.registers()[A0].to_u32();
+                let len_addr = machine.registers()[A1].to_u64();
+                let offset = machine.registers()[A2].to_u32() as usize;
+                let script_addr = machine.registers()[A3].to_u64();
+                let script_hash = self.state
+                    .get_script_hash(account_id)
+                    .map_err(|err| {
+                        eprintln!("syscall error: get script hash by account id: {:?}", err);
+                        VMError::Unexpected
+                    })?;
+                let len = load_data_u32(machine, len_addr)? as usize;
+                let script = self.code_store.get_script(&script_hash).ok_or_else(|| {
+                    eprintln!("syscall error: script not found by script hash: {:?}", script_hash);
+                    VMError::Unexpected
+                })?;
+                let data = script.as_slice();
+                let new_len = if offset >= data.len() {
+                    0
+                } else if (offset + len) > data.len() {
+                    data.len() - offset
+                } else {
+                    len
+                };
+                if new_len > 0 {
+                    machine
+                        .memory_mut()
+                        .store_bytes(script_addr, &data[offset..offset+new_len])?;
+                }
+                machine.memory_mut()
+                    .store_bytes(len_addr, &(new_len as u32).to_le_bytes())?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }

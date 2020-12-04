@@ -30,6 +30,7 @@
 
 #include "ckb_syscalls.h"
 #include "godwoken.h"
+#include "common.h"
 #include "gw_def.h"
 #include "stdio.h"
 
@@ -75,13 +76,13 @@ __attribute__((visibility("default"))) int gw_handle_message(
     if (ret != 0) {
       return ret;
     }
-    ret = ctx->sys_set_return_data(ctx, (uint8_t *)&value, sizeof(uint128_t));
+    ret = ctx->sys_set_program_return_data(ctx, (uint8_t *)&value, sizeof(uint128_t));
     if (ret != 0) {
       return ret;
     }
   } else if (msg.item_id == MSG_TRANSFER) {
     /* Transfer */
-    mol_seg_t token_id_seg = MolReader_SUDTTransfer_get_token_id(&msg.seg);
+    mol_seg_t token_id_seg = MolReader_SUDTTransfer_get_to(&msg.seg);
     mol_seg_t to_seg = MolReader_SUDTTransfer_get_to(&msg.seg);
     mol_seg_t value_seg = MolReader_SUDTTransfer_get_value(&msg.seg);
     int ret = transfer(ctx, token_id_seg.ptr, *(uint32_t *)to_seg.ptr,
@@ -100,7 +101,7 @@ void generate_key(gw_context_t *ctx, const uint8_t token_id[32],
   uint8_t buf[36];
   memcpy(buf, token_id, 32);
   memcpy(buf + 32, (uint8_t *)&account_id, sizeof(uint32_t));
-  ctx->blake2b_hash(key, buf, 36);
+  blake2b_hash(key, buf, 36);
   return;
 }
 
