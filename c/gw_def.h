@@ -26,28 +26,29 @@ typedef struct {
 /**
  * Load value by key from current contract account
  *
- * @param ctx    The godwoken context
- * @param account_id
- * @param args
- * @param args_len
- * @param receipt Receipt of this function call
- * @return       The status code, 0 is success
+ * @param ctx        The godwoken context
+ * @param account_id The account id to call
+ * @param args       The arguments data for the call
+ * @param args_len   The length of the arguments data
+ * @param receipt    Receipt of this function call
+ * @return           The status code, 0 is success
  */
-typedef int (*gw_call_fn)(void *ctx, uint32_t account_id, uint8_t *args,
-                          uint32_t args_len, gw_call_receipt_t *receipt);
+typedef int (*gw_call_fn)(void *ctx,
+                          uint32_t account_id,
+                          uint8_t *args,
+                          uint32_t args_len,
+                          gw_call_receipt_t *receipt);
 
 /**
  * Create a new account
  *
- * @param ctx    The godwoken context
- * @param script Contract's script
- * @param len    Length of script structure
- * @param receipt Receipt of this constructor call
- * @return       The status code, 0 is success
+ * @param ctx        The godwoken context
+ * @param script     Contract's script (MUST be valid molecule format CKB Script)
+ * @param script_len Length of script structure
+ * @param receipt    Receipt of this function call
+ * @return           The status code, 0 is success
  */
-typedef int (*gw_create_fn)(void *ctx, uint8_t *script,
-                          uint32_t len, gw_call_receipt_t *receipt);
-
+typedef int (*gw_create_fn)(void *ctx, uint8_t *script, uint32_t script_len, gw_call_receipt_t *receipt);
 
 /**
  * Load value by key from current contract account

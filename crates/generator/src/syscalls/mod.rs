@@ -1,12 +1,24 @@
-use crate::traits::CodeStore;
+use crate::traits::{CodeStore, StateExt};
 use ckb_vm::{
     memory::{Memory, FLAG_EXECUTABLE, FLAG_FREEZED},
     registers::{A0, A1, A2, A3, A4, A7},
     Error as VMError, Register, SupportMachine, Syscalls,
 };
-use gw_common::{state::State, H256};
+use gw_common::{
+    state::{
+        State,
+        GW_ACCOUNT_NONCE,
+        GW_ACCOUNT_SCRIPT_HASH,
+        build_account_key,
+        build_account_field_key,
+        build_script_hash_to_account_id_key,
+    },
+    H256,
+    h256_ext::H256Ext,
+};
 use gw_types::{
-    packed::{BlockInfo, CallContext},
+    bytes::Bytes,
+    packed::{BlockInfo, CallContext, Script},
     prelude::*,
 };
 use std::cmp;
@@ -19,6 +31,7 @@ const MAX_SET_RETURN_DATA_SIZE: u64 = 1024;
 const SYS_STORE: u64 = 3051;
 const SYS_LOAD: u64 = 3052;
 const SYS_SET_RETURN_DATA: u64 = 3061;
+const SYS_CREATE: u64 = 3071;
 /* internal syscall numbers */
 const SYS_LOAD_CALLCONTEXT: u64 = 4051;
 const SYS_LOAD_BLOCKINFO: u64 = 4052;
@@ -39,6 +52,8 @@ pub struct RunResult {
     pub read_values: HashMap<H256, H256>,
     pub write_values: HashMap<H256, H256>,
     pub return_data: Vec<u8>,
+    pub account_count: Option<u32>,
+    pub new_scripts: HashMap<H256, Vec<u8>>,
 }
 
 pub(crate) struct L2Syscalls<'a, S> {
@@ -126,15 +141,7 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 let key_addr = machine.registers()[A0].to_u64();
                 let key = load_data_h256(machine, key_addr)?;
                 let value_addr = machine.registers()[A1].to_u64();
-                let value = match self.result.write_values.get(&key) {
-                    Some(value) => *value,
-                    None => {
-                        let tree_value =
-                            self.state.get_raw(&key).map_err(|_| VMError::Unexpected)?;
-                        self.result.read_values.insert(key, tree_value);
-                        tree_value
-                    }
-                };
+                let value = self.get_raw(&key)?;
                 machine
                     .memory_mut()
                     .store_bytes(value_addr, &value.as_slice())?;
@@ -149,6 +156,37 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 }
                 let data = load_bytes(machine, data_addr, len as usize)?;
                 self.result.return_data = data;
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_CREATE => {
+                let script_addr = machine.registers()[A0].to_u64();
+                let script_len = machine.registers()[A1].to_u32();
+
+                let script_data = load_bytes(machine, script_addr, script_len as usize)?;
+                let script = Script::from_slice(&script_data[..]).map_err(|err| {
+                    eprintln!("syscall error: invalid script to create : {:?}", err);
+                    VMError::Unexpected
+                })?;
+                let script_hash = script.hash();
+
+                // Same logic from State::create_account()
+                let id = self.get_account_count()?;
+                self.result.write_values.insert(
+                    build_account_field_key(id, GW_ACCOUNT_NONCE).into(),
+                    H256::zero(),
+                );
+                self.result.write_values.insert(
+                    build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH).into(),
+                    script_hash.into(),
+                );
+                // script hash to id
+                self.result.write_values.insert(
+                    build_script_hash_to_account_id_key(&script_hash[..]).into(),
+                    H256::from_u32(id),
+                );
+                self.result.new_scripts.insert(script_hash.into(), script.as_slice().to_vec());
+                self.set_account_count(id+1);
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -169,10 +207,8 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 let account_id_addr = machine.registers()[A1].to_u64();
                 let script_hash = load_data_h256(machine, script_hash_addr)?;
                 let account_id = self
-                    .state
                     .get_account_id_by_script_hash(&script_hash)
                     .map_err(|err| {
-                        eprintln!("syscall error: get account id by script hash : {:?}", err);
                         VMError::Unexpected
                     })?
                     .ok_or_else(|| {
@@ -188,10 +224,11 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
             SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID => {
                 let account_id = machine.registers()[A0].to_u32();
                 let script_hash_addr = machine.registers()[A1].to_u64();
-                let script_hash = self.state.get_script_hash(account_id).map_err(|err| {
-                    eprintln!("syscall error: get script hash by account id: {:?}", err);
-                    VMError::Unexpected
-                })?;
+                let script_hash = self
+                    .get_script_hash(account_id).map_err(|err| {
+                        eprintln!("syscall error: get script hash by account id: {:?}", err);
+                        VMError::Unexpected
+                    })?;
                 machine
                     .memory_mut()
                     .store_bytes(script_hash_addr, script_hash.as_slice())?;
@@ -203,12 +240,12 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 let len_addr = machine.registers()[A1].to_u64();
                 let offset = machine.registers()[A2].to_u32() as usize;
                 let script_addr = machine.registers()[A3].to_u64();
-                let script_hash = self.state.get_script_hash(account_id).map_err(|err| {
+                let script_hash = self.get_script_hash(account_id).map_err(|err| {
                     eprintln!("syscall error: get script hash by account id: {:?}", err);
                     VMError::Unexpected
                 })?;
                 let len = load_data_u32(machine, len_addr)? as usize;
-                let script = self.code_store.get_script(&script_hash).ok_or_else(|| {
+                let script = self.get_script(&script_hash).ok_or_else(|| {
                     eprintln!(
                         "syscall error: script not found by script hash: {:?}",
                         script_hash
@@ -252,19 +289,79 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
 }
 
 impl<'a, S: State> L2Syscalls<'a, S> {
-    fn load_program_as_code<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
+    fn get_raw(&mut self, key: &H256) -> Result<H256, VMError> {
+        let value = match self.result.write_values.get(&key) {
+            Some(value) => *value,
+            None => {
+                let tree_value =
+                    self.state.get_raw(&key).map_err(|_| VMError::Unexpected)?;
+                self.result.read_values.insert(*key, tree_value);
+                tree_value
+            }
+        };
+        Ok(value)
+    }
+    fn get_account_count(&self) -> Result<u32, VMError> {
+        if let Some(id) = self.result.account_count {
+            Ok(id)
+        } else {
+            self.state
+                .get_account_count()
+                .map_err(|err| {
+                    eprintln!("syscall error: get account count : {:?}", err);
+                    VMError::Unexpected
+                })
+        }
+    }
+    fn set_account_count(&mut self, count: u32) -> Result<(), VMError> {
+        self.result.account_count = Some(count);
+        Ok(())
+    }
+    fn get_script(&self, script_hash: &H256) -> Option<Script> {
+        self.result
+            .new_scripts
+            .get(script_hash)
+            .map(|data| Script::from_slice(&data).expect("Script"))
+            .or_else(|| self.code_store.get_script(&script_hash))
+    }
+    fn get_script_hash(&mut self, id: u32) -> Result<H256, VMError> {
+        let value = self.get_raw(&build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH).into())
+            .map_err(|err| {
+                eprintln!("syscall error: get script hash by account id : {:?}", err);
+                VMError::Unexpected
+            })?;
+        Ok(value.into())
+    }
+    fn get_account_id_by_script_hash(&mut self, script_hash: &H256) -> Result<Option<u32>, VMError> {
+        let value = self
+            .get_raw(&build_script_hash_to_account_id_key(script_hash.as_slice()).into())
+            .map_err(|err| {
+                eprintln!("syscall error: get account id by script hash : {:?}", err);
+                VMError::Unexpected
+            })?;
+        if value.is_zero() {
+            return Ok(None);
+        }
+        let id = value.to_u32();
+        Ok(Some(id))
+    }
+    fn get_code_by_script_hash(&self, script_hash: &H256) -> Option<Bytes> {
+        self.get_script(script_hash)
+            .and_then(|script| self.code_store.get_code(&script.code_hash().unpack().into()))
+    }
+
+    fn load_program_as_code<Mac: SupportMachine>(&mut self, machine: &mut Mac) -> Result<(), VMError> {
         let addr = machine.registers()[A0].to_u64();
         let memory_size = machine.registers()[A1].to_u64();
         let content_offset = machine.registers()[A2].to_u64();
         let content_size = machine.registers()[A3].to_u64();
         let id: u32 = machine.registers()[A4].to_u64() as u32;
 
-        let script_hash = self.state.get_script_hash(id).map_err(|err| {
+        let script_hash = self.get_script_hash(id).map_err(|err| {
             eprintln!("syscall error: get script hash : {:?}", err);
             VMError::Unexpected
         })?;
         let program = self
-            .code_store
             .get_code_by_script_hash(&script_hash.into())
             .ok_or_else(|| {
                 eprintln!("syscall error: can't find code : {:?}", script_hash);
@@ -294,15 +391,14 @@ impl<'a, S: State> L2Syscalls<'a, S> {
         Ok(())
     }
 
-    fn load_program_as_data<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
+    fn load_program_as_data<Mac: SupportMachine>(&mut self, machine: &mut Mac) -> Result<(), VMError> {
         let id: u32 = machine.registers()[A3].to_u64() as u32;
 
-        let script_hash = self.state.get_script_hash(id).map_err(|err| {
+        let script_hash = self.get_script_hash(id).map_err(|err| {
             eprintln!("syscall error: get script hash : {:?}", err);
             VMError::Unexpected
         })?;
         let program = self
-            .code_store
             .get_code_by_script_hash(&script_hash.into())
             .ok_or_else(|| {
                 eprintln!(

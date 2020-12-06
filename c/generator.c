@@ -17,6 +17,7 @@
 #define GW_SYS_STORE 3051
 #define GW_SYS_LOAD 3052
 #define GW_SYS_SET_RETURN_DATA 3061
+#define GW_SYS_CREATE 3071
 /* internal syscall only for generator */
 #define GW_SYS_LOAD_CALLCONTEXT 4051
 #define GW_SYS_LOAD_BLOCKINFO 4052
@@ -182,6 +183,13 @@ int sys_call(void *ctx, uint32_t to_id, uint8_t *args, uint32_t args_len,
   return 0;
 }
 
+int sys_create(void *ctx,
+               uint8_t *script,
+               uint32_t script_len,
+               gw_call_receipt_t *receipt) {
+  return syscall(GW_SYS_CREATE, script, script_len, 0, 0, 0, 0);
+}
+
 int main() {
   int ret;
   uint8_t code_buffer[CODE_SIZE] __attribute__((aligned(RISCV_PGSIZE)));
@@ -194,6 +202,7 @@ int main() {
   context.sys_store = sys_store;
   context.sys_set_program_return_data = sys_set_program_return_data;
   context.sys_call = sys_call;
+  context.sys_create = sys_create;
   context.sys_get_account_id_by_script_hash = sys_get_account_id_by_script_hash;
   context.sys_get_script_hash_by_account_id = sys_get_script_hash_by_account_id;
   context.sys_get_account_script = sys_get_account_script;
