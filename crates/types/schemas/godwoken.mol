@@ -57,11 +57,10 @@ vector L2TransactionVec <L2Transaction>;
 table RawL2Block {
     number: Uint64,
     aggregator_id: Uint32,
+    stake_cell_owner_lock_hash: Byte32,
     timestamp: Uint64,
     prev_account: AccountMerkleState,
     post_account: AccountMerkleState,
-    leave: LeaveOpt,
-    revert_chain: RevertChainOpt,
     submit_transactions: SubmitTransactionsOpt,
 }
 
@@ -137,6 +136,15 @@ struct DepositionLockArgs {
     account_id: Uint32,
 }
 // --- end of deposition lock ---
+
+// --- stake lock ---
+struct StakeLockArgs {
+    rollup_type_id: Byte32,
+    owner_lock_hash: Byte32,
+    signing_pubkey_hash: Byte20,
+    finalize_block_number: Uint64,
+}
+// --- end of stake lock ---
 
 // --- layer2 SUDT ---
 union SUDTArgs {

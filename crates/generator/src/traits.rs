@@ -43,7 +43,7 @@ impl<S: State + CodeStore> StateExt for S {
             self.update_raw((*k).into(), (*v).into())?;
         }
         if let Some(id) = run_result.account_count {
-            self.set_account_count(id);
+            self.set_account_count(id)?;
         }
         for (script_hash, script) in &run_result.new_scripts {
             self.insert_script(*script_hash, Script::from_slice(&script).expect("script"));
