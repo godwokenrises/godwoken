@@ -1,8 +1,8 @@
 use ckb_types::packed::Transaction;
 use gw_chain::{
     chain::{
-        Chain, HeaderInfo, ProduceBlockParam, SyncParam, SyncTransition, TransactionInfo,
-        WithdrawalRequest,
+        Chain, HeaderInfo, L1Action, L1ActionContext, ProduceBlockParam, SyncEvent, SyncParam,
+        TransactionInfo,
     },
     consensus::{single_aggregator::SingleAggregator, traits::Consensus},
     genesis,
@@ -10,7 +10,10 @@ use gw_chain::{
 };
 use gw_common::smt::H256;
 use gw_config::{Config, GenesisConfig};
-use gw_generator::{generator::DepositionRequest, Generator};
+use gw_generator::{
+    generator::{DepositionRequest, WithdrawalRequest},
+    Generator,
+};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
@@ -96,8 +99,8 @@ declare_types! {
             let mut this = cx.this();
             let js_reverts_vec = cx.argument::<JsArray>(0)?.to_vec(&mut cx)?;
             let js_updates_vec = cx.argument::<JsArray>(1)?.to_vec(&mut cx)?;
-            let mut reverts: Vec<SyncTransition> = vec![];
-            let mut updates: Vec<SyncTransition> = vec![];
+            let mut reverts: Vec<L1Action> = vec![];
+            let mut updates: Vec<L1Action> = vec![];
             for i in 0..js_reverts_vec.len() {
                 let js_revert = js_reverts_vec[i as usize]
                     .downcast::<JsObject>()
@@ -169,7 +172,7 @@ declare_types! {
                         let script_slice = data.as_slice::<u8>();
                         Script::from_slice(script_slice).expect("Building Script from slice")
                     });
-                    let value = js_deposition_request.get(&mut cx, "value")?
+                    let amount = js_deposition_request.get(&mut cx, "amount")?
                         .downcast::<JsNumber>()
                         .or_throw(&mut cx)?
                         //TODO: update the value field type
@@ -177,16 +180,20 @@ declare_types! {
                     let deposition_request = DepositionRequest {
                         script: script,
                         sudt_script: sudt_script,
-                        value: value
+                        amount: amount
                     };
                     deposition_requests.push(deposition_request)
                 }
-                let sync_transaction = SyncTransition {
+                let l1_action_context = L1ActionContext::SubmitTxs {
+                    deposition_requests: deposition_requests,
+                    withdrawal_requests: vec![],
+                };
+                let l1_action= L1Action {
                     transaction_info: transaction_info,
                     header_info: header_info,
-                    deposition_requests: deposition_requests
+                    context: l1_action_context,
                 };
-                reverts.push(sync_transaction);
+                reverts.push(l1_action);
             }
             for i in 0..js_updates_vec.len() {
                 let js_update = js_updates_vec[i as usize]
@@ -259,7 +266,7 @@ declare_types! {
                         let script_slice = data.as_slice::<u8>();
                         Script::from_slice(script_slice).expect("Building Script from slice")
                     });
-                    let value = js_deposition_request.get(&mut cx, "value")?
+                    let amount = js_deposition_request.get(&mut cx, "amount")?
                         .downcast::<JsNumber>()
                         .or_throw(&mut cx)?
                         //TODO: update the value field type
@@ -267,16 +274,20 @@ declare_types! {
                     let deposition_request = DepositionRequest {
                         script: script,
                         sudt_script: sudt_script,
-                        value: value
+                        amount: amount
                     };
                     deposition_requests.push(deposition_request)
                 }
-                let sync_transaction = SyncTransition {
+                let l1_action_context = L1ActionContext::SubmitTxs {
+                    deposition_requests: deposition_requests,
+                    withdrawal_requests: vec![],
+                };
+                let l1_action= L1Action {
                     transaction_info: transaction_info,
                     header_info: header_info,
-                    deposition_requests: deposition_requests
+                    context: l1_action_context,
                 };
-                updates.push(sync_transaction);
+                updates.push(l1_action);
             }
             let sync_param = SyncParam {
                 reverts: reverts,
@@ -284,7 +295,13 @@ declare_types! {
             };
             cx.borrow_mut(&mut this, |data| {
                 let mut chain = data.chain.write().unwrap();
-                chain.sync(sync_param).expect("Syncing chain");
+                match chain.sync(sync_param) {
+                    Ok(SyncEvent::Success) => {}
+                    Ok(SyncEvent::BadBlock(start_challenge)) => {}
+                    Ok(SyncEvent::WaitChallenge) => {}
+                    Ok(SyncEvent::BadChallenge(cancel_challenge)) => {}
+                    Err(error) => { println!("Unknown error: {:?}", error); }
+                }
             });
             Ok(cx.undefined().upcast())
         }
@@ -313,7 +330,7 @@ declare_types! {
                     let script_slice = data.as_slice::<u8>();
                     Script::from_slice(script_slice).expect("Building Script from slice")
                 });
-                let value = js_deposition_request.get(&mut cx, "value")?
+                let amount= js_deposition_request.get(&mut cx, "amount")?
                     .downcast::<JsNumber>()
                     .or_throw(&mut cx)?
                     //TODO: update the value field type
@@ -321,7 +338,7 @@ declare_types! {
                 let deposition_request = DepositionRequest {
                     script: script,
                     sudt_script: sudt_script,
-                    value: value
+                    amount: amount
                 };
                 deposition_requests.push(deposition_request)
             }
@@ -338,10 +355,10 @@ declare_types! {
                     hash[..].copy_from_slice(data.as_slice::<u8>());
                     H256::from(hash)
                 });
-                let js_sudt_type_hash = js_withdrawal_request.get(&mut cx, "sudt_type_hash")?
+                let js_sudt_script_hash = js_withdrawal_request.get(&mut cx, "sudt_script_hash")?
                     .downcast::<JsArrayBuffer>()
                     .or_throw(&mut cx)?;
-                let sudt_type_hash = cx.borrow(&js_sudt_type_hash, |data| {
+                let sudt_script_hash = cx.borrow(&js_sudt_script_hash, |data| {
                     let mut hash = [0u8;32];
                     hash[..].copy_from_slice(data.as_slice::<u8>());
                     H256::from(hash)
@@ -361,7 +378,7 @@ declare_types! {
                 });
                 let withdrawal_request = WithdrawalRequest {
                     lock_hash: lock_hash,
-                    sudt_type_hash: sudt_type_hash,
+                    sudt_script_hash: sudt_script_hash,
                     amount: amount,
                     account_script_hash: account_script_hash
                 };

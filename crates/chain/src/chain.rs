@@ -450,27 +450,6 @@ impl Chain {
             global_state,
         })
     }
-
-    pub fn tx_pool(&self) -> &Arc<Mutex<TxPoolImpl>> {
-        &self.tx_pool
-    }
-
-    fn process_block(
-        &mut self,
-        l2block: L2Block,
-        tx: &RawTransaction,
-        deposition_requests: Vec<DepositionRequest>,
-    ) -> Result<()> {
-        let args = StateTransitionArgs {
-            l2block: l2block.clone(),
-            deposition_requests,
-        };
-        self.generator
-            .apply_state_transition(&mut self.state, args)?;
-        self.state.insert_block(l2block.clone())?;
-        self.state.attach_block(l2block)?;
-        Ok(())
-    }
 }
 
 fn unixtime() -> Result<u64> {
