@@ -61,7 +61,7 @@ int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
     return GW_ERROR_INVALID_CONTEXT;
   }
   /* get account id */
-  uint32_t account_id = gw_ctx->call_context.to_id;
+  uint32_t account_id = gw_ctx->transaction_context.to_id;
   /* raw key */
   uint8_t raw_key[GW_KEY_BYTES];
   gw_build_account_key(account_id, key, raw_key);
@@ -85,7 +85,7 @@ int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
     return GW_ERROR_INVALID_CONTEXT;
   }
   /* get account id */
-  uint32_t account_id = gw_ctx->call_context.to_id;
+  uint32_t account_id = gw_ctx->transaction_context.to_id;
   /* raw key */
   uint8_t raw_key[GW_KEY_BYTES];
   gw_build_account_key(account_id, key, raw_key);
@@ -250,7 +250,7 @@ int main() {
   context.sys_load = sys_load;
   context.sys_store = sys_store;
   context.sys_set_program_return_data = sys_set_program_return_data;
-  ret = gw_parse_call_context(&context.call_context, &call_context_seg);
+  ret = gw_parse_transaction_context(&context.transaction_context, &call_context_seg);
   if (ret != 0) {
     return ret;
   }
@@ -260,7 +260,7 @@ int main() {
   }
 
   /* get contract function pointer */
-  uint8_t call_type = context.call_context.call_type;
+  uint8_t call_type = context.transaction_context.call_type;
   if (call_type != GW_CALL_TYPE_HANDLE_MESSAGE) {
     return GW_ERROR_INVALID_CONTEXT;
   }
