@@ -1,4 +1,4 @@
-use crate::traits::{CodeStore, StateExt};
+use crate::traits::CodeStore;
 use ckb_vm::{
     memory::{Memory, FLAG_EXECUTABLE, FLAG_FREEZED},
     registers::{A0, A1, A2, A3, A4, A7},
@@ -7,14 +7,14 @@ use ckb_vm::{
 use gw_common::{
     h256_ext::H256Ext,
     state::{
-        build_account_field_key, build_account_key, build_script_hash_to_account_id_key, State,
-        GW_ACCOUNT_NONCE, GW_ACCOUNT_SCRIPT_HASH,
+        build_account_field_key, build_script_hash_to_account_id_key, State, GW_ACCOUNT_NONCE,
+        GW_ACCOUNT_SCRIPT_HASH,
     },
     H256,
 };
 use gw_types::{
     bytes::Bytes,
-    packed::{BlockInfo, CallContext, Script},
+    packed::{BlockInfo, RawL2Transaction, Script},
     prelude::*,
 };
 use std::cmp;
@@ -29,7 +29,7 @@ const SYS_LOAD: u64 = 3052;
 const SYS_SET_RETURN_DATA: u64 = 3061;
 const SYS_CREATE: u64 = 3071;
 /* internal syscall numbers */
-const SYS_LOAD_CALLCONTEXT: u64 = 4051;
+const SYS_LOAD_TRANSACTION: u64 = 4051;
 const SYS_LOAD_BLOCKINFO: u64 = 4052;
 const SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID: u64 = 4053;
 const SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH: u64 = 4054;
@@ -55,7 +55,7 @@ pub struct RunResult {
 pub(crate) struct L2Syscalls<'a, S> {
     pub(crate) state: &'a S,
     pub(crate) block_info: &'a BlockInfo,
-    pub(crate) call_context: &'a CallContext,
+    pub(crate) raw_tx: &'a RawL2Transaction,
     pub(crate) code_store: &'a dyn CodeStore,
     pub(crate) result: &'a mut RunResult,
 }
@@ -194,8 +194,8 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
-            SYS_LOAD_CALLCONTEXT => {
-                let data = self.call_context.as_slice();
+            SYS_LOAD_TRANSACTION => {
+                let data = self.raw_tx.as_slice();
                 store_data(machine, data)?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
@@ -206,7 +206,7 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 let script_hash = load_data_h256(machine, script_hash_addr)?;
                 let account_id = self
                     .get_account_id_by_script_hash(&script_hash)
-                    .map_err(|err| VMError::Unexpected)?
+                    .map_err(|_err| VMError::Unexpected)?
                     .ok_or_else(|| {
                         eprintln!("returned zero account id");
                         VMError::Unexpected

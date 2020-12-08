@@ -103,14 +103,6 @@ option SubmitTransactionsOpt (SubmitTransactions);
 table KVPair { k: Byte32, v: Byte32, }
 vector KVPairVec <KVPair>;
 
-table CallContext {
-    from_id: Uint32,
-    to_id: Uint32,
-    // 0: construct, 1: handle_message
-    call_type: byte,
-    args: Bytes,
-}
-
 struct BlockInfo {
     aggregator_id: Uint32,
     number: Uint64,
@@ -119,7 +111,7 @@ struct BlockInfo {
 
 table VerificationContext {
     block_info: BlockInfo,
-    call_context: CallContext,
+    transaction: RawL2Transaction,
     inputs: KVPairVec,
     prev_account_state: Byte32,
     post_account_state: Byte32,

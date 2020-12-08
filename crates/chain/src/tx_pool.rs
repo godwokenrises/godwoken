@@ -64,10 +64,10 @@ impl<S: Store<SMTH256>> TxPool<S> {
         // 1. verify tx signature
         self.verify_tx(&tx)?;
         // 2. execute contract
-        let call_context = tx.raw().to_call_context();
-        let run_result =
-            self.generator
-                .execute(&self.state, &self.next_block_info, &call_context)?;
+        let raw_tx = tx.raw();
+        let run_result = self
+            .generator
+            .execute(&self.state, &self.next_block_info, &raw_tx)?;
         // 3. push tx to pool
         let tx_witness_hash = tx.witness_hash();
         let compacted_post_account_root = {

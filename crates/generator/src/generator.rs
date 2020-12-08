@@ -8,7 +8,7 @@ use gw_common::{
     H256,
 };
 use gw_types::{
-    packed::{BlockInfo, CallContext, L2Block, RawL2Block, Script, StartChallenge},
+    packed::{BlockInfo, L2Block, RawL2Block, RawL2Transaction, Script, StartChallenge},
     prelude::*,
 };
 use lazy_static::lazy_static;
@@ -108,8 +108,7 @@ impl Generator {
                 }
                 // build call context
                 // NOTICE users only allowed to send HandleMessage CallType txs
-                let call_context = raw_tx.to_call_context();
-                let run_result = match self.execute(state, &block_info, &call_context) {
+                let run_result = match self.execute(state, &block_info, &raw_tx) {
                     Ok(run_result) => run_result,
                     Err(err) => {
                         return Err(TransactionErrorWithContext::new(challenge_context, err).into());
@@ -127,7 +126,7 @@ impl Generator {
         &self,
         state: &S,
         block_info: &BlockInfo,
-        call_context: &CallContext,
+        raw_tx: &RawL2Transaction,
     ) -> Result<RunResult, TransactionError> {
         let mut run_result = RunResult::default();
         {
@@ -136,7 +135,7 @@ impl Generator {
                 DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls {
                     state,
                     block_info: block_info,
-                    call_context: call_context,
+                    raw_tx,
                     result: &mut run_result,
                     code_store: state,
                 }));
@@ -149,7 +148,7 @@ impl Generator {
             }
         }
         // set nonce
-        let sender_id: u32 = call_context.from_id().unpack();
+        let sender_id: u32 = raw_tx.from_id().unpack();
         let nonce = state.get_nonce(sender_id)?;
         let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE);
         if run_result.read_values.get(&nonce_raw_key).is_none() {

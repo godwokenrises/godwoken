@@ -10,7 +10,6 @@ use gw_generator::traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     packed::{L2Block, L2Transaction, Script},
-    prelude::*,
 };
 use parking_lot::Mutex;
 use std::collections::HashMap;
