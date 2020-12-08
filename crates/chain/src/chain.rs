@@ -1,4 +1,4 @@
-use crate::consensus::traits::Consensus;
+use crate::next_block_context::NextBlockContext;
 use crate::tx_pool::TxPool;
 use anyhow::{anyhow, Result};
 use ckb_types::{
@@ -53,6 +53,7 @@ pub struct SyncParam {
     pub reverts: Vec<L1Action>,
     /// contains transitions from fork point to new tips
     pub updates: Vec<L1Action>,
+    pub next_block_context: NextBlockContext,
 }
 
 #[derive(Debug)]
@@ -151,20 +152,18 @@ impl LocaLState {
     }
 }
 
-pub struct Chain<Consensus> {
+pub struct Chain {
     rollup_type_script_hash: [u8; 32],
     store: Store<StateStore>,
     local_state: LocaLState,
     generator: Generator,
     tx_pool: Arc<Mutex<TxPoolImpl>>,
-    consensus: Consensus,
 }
 
-impl<C: Consensus> Chain<C> {
+impl Chain {
     pub fn new(
         config: ChainConfig,
         store: Store<StateStore>,
-        consensus: C,
         tip: L2Block,
         last_synced: HeaderInfo,
         generator: Generator,
@@ -178,7 +177,6 @@ impl<C: Consensus> Chain<C> {
             local_state,
             generator,
             tx_pool,
-            consensus,
             rollup_type_script_hash,
         }
     }
@@ -286,10 +284,11 @@ impl<C: Consensus> Chain<C> {
         }
         // update tx pool state
         let overlay_state = self.store.new_overlay()?;
-        let nb_ctx = self.consensus.next_block_context(&self.local_state.tip);
-        self.tx_pool
-            .lock()
-            .update_tip(&self.local_state.tip, overlay_state, nb_ctx)?;
+        self.tx_pool.lock().update_tip(
+            &self.local_state.tip,
+            overlay_state,
+            param.next_block_context,
+        )?;
         Ok(SyncEvent::Success)
     }
 

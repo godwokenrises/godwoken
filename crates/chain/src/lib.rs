@@ -7,7 +7,7 @@
 //! * Submit new blocks to layer1(as an aggregator)
 
 pub mod chain;
-pub mod consensus;
 mod crypto;
 pub mod genesis;
+pub mod next_block_context;
 pub mod tx_pool;

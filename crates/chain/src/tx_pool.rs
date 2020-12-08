@@ -1,5 +1,5 @@
-use crate::consensus::traits::NextBlockContext;
 use crate::crypto::{verify_signature, Signature};
+use crate::next_block_context::NextBlockContext;
 use anyhow::{anyhow, Result};
 use gw_common::{
     merkle_utils::calculate_compacted_account_root,
@@ -194,14 +194,10 @@ fn get_account_state<S: State>(state: &S) -> Result<MerkleState> {
 
 fn gen_next_block_info(tip: &L2Block, nb_ctx: NextBlockContext) -> Result<BlockInfo> {
     let parent_number: u64 = tip.raw().number().unpack();
-    // TODO validate timestamp
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_secs();
     let block_info = BlockInfo::new_builder()
         .aggregator_id(nb_ctx.aggregator_id.pack())
         .number((parent_number + 1).pack())
-        .timestamp(timestamp.pack())
+        .timestamp(nb_ctx.timestamp.pack())
         .build();
     Ok(block_info)
 }
