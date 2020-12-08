@@ -52,6 +52,8 @@ pub enum TransactionError {
     Nonce { expected: u32, actual: u32 },
     #[error("State error {0:?}")]
     State(StateError),
+    #[error("Unknown backend account_id {account_id}")]
+    Backend { account_id: u32 },
 }
 
 impl From<VMError> for TransactionError {

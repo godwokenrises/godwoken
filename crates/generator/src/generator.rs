@@ -1,27 +1,26 @@
-use crate::bytes::Bytes;
-use crate::error::{Error, TransactionError, TransactionErrorWithContext};
+use crate::backend_manage::BackendManage;
 use crate::syscalls::{L2Syscalls, RunResult};
 use crate::traits::{CodeStore, StateExt};
+use crate::{
+    backend_manage::Backend,
+    error::{Error, TransactionError, TransactionErrorWithContext},
+};
 use gw_common::{
+    error::Error as StateError,
     h256_ext::H256Ext,
     state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
     H256,
 };
 use gw_types::{
+    core::ScriptHashType,
     packed::{BlockInfo, L2Block, RawL2Block, RawL2Transaction, Script, StartChallenge},
     prelude::*,
 };
-use lazy_static::lazy_static;
 
 use ckb_vm::{
     machine::asm::{AsmCoreMachine, AsmMachine},
     DefaultMachineBuilder,
 };
-
-lazy_static! {
-    static ref VALIDATOR: Bytes = include_bytes!("../../../c/build/validator").to_vec().into();
-    static ref GENERATOR: Bytes = include_bytes!("../../../c/build/generator").to_vec().into();
-}
 
 #[derive(Debug)]
 pub struct DepositionRequest {
@@ -46,22 +45,12 @@ pub struct StateTransitionArgs {
 }
 
 pub struct Generator {
-    generator: Bytes,
-    validator: Bytes,
-}
-
-impl Default for Generator {
-    fn default() -> Self {
-        Generator {
-            generator: GENERATOR.clone(),
-            validator: VALIDATOR.clone(),
-        }
-    }
+    backend_manage: BackendManage,
 }
 
 impl Generator {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(backend_manage: BackendManage) -> Self {
+        Generator { backend_manage }
     }
 
     /// Apply l2 state transition
@@ -121,6 +110,26 @@ impl Generator {
         Ok(())
     }
 
+    fn load_backend<S: State + CodeStore>(
+        &self,
+        state: &S,
+        account_id: u32,
+    ) -> Result<Option<Backend>, StateError> {
+        let script_hash = state.get_script_hash(account_id)?;
+        Ok(state
+            .get_script(&script_hash)
+            .and_then(|script| {
+                // only accept data script hash type for now
+                if script.hash_type() == ScriptHashType::Data.into() {
+                    let code_hash: [u8; 32] = script.code_hash().unpack();
+                    self.backend_manage.get_backend(&code_hash.into())
+                } else {
+                    None
+                }
+            })
+            .cloned())
+    }
+
     /// execute a layer2 tx
     pub fn execute<S: State + CodeStore>(
         &self,
@@ -140,8 +149,11 @@ impl Generator {
                     code_store: state,
                 }));
             let mut machine = AsmMachine::new(machine_builder.build(), None);
-            let program_name = Bytes::from_static(b"generator");
-            machine.load_program(&self.generator, &[program_name])?;
+            let account_id = raw_tx.to_id().unpack();
+            let backend = self
+                .load_backend(state, account_id)?
+                .ok_or(TransactionError::Backend { account_id })?;
+            machine.load_program(&backend.generator, &[])?;
             let code = machine.run()?;
             if code != 0 {
                 return Err(TransactionError::InvalidExitCode(code).into());
