@@ -1,19 +1,11 @@
 #ifndef GW_COMMON_H_
 #define GW_COMMON_H_
 
-/* Layer2 contract interface */
-#define GW_CONSTRUCT_FUNC "gw_construct"
-#define GW_HANDLE_MESSAGE_FUNC "gw_handle_message"
-
 /* Common parameters */
 #define MAX_PAIRS 1024
 #define SCRIPT_SIZE 128
 #define WITNESS_SIZE (300 * 1024)
 #define CODE_SIZE (512 * 1024)
-
-/* Call type */
-#define GW_CALL_TYPE_CONSTRUCT 0
-#define GW_CALL_TYPE_HANDLE_MESSAGE 1
 
 /* Errors */
 #define GW_ERROR_NOT_FOUND 42
@@ -72,7 +64,8 @@ void gw_build_code_hash_key(uint32_t id, uint8_t key[GW_KEY_BYTES]) {
   key[sizeof(uint32_t)] = GW_ACCOUNT_CODE_HASH;
 }
 
-int gw_parse_transaction_context(gw_transaction_context_t *transaction_context, mol_seg_t *src) {
+int gw_parse_transaction_context(gw_transaction_context_t *transaction_context,
+                                 mol_seg_t *src) {
   if (MolReader_RawL2Transaction_verify(src, false) != MOL_OK) {
     return GW_ERROR_INVALID_DATA;
   }

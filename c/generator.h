@@ -1,3 +1,5 @@
+#ifndef GW_GENERATOR_H_
+#define GW_GENERATOR_H_
 /* Layer2 contract generator
  *
  * The generator supposed to be run off-chain.
@@ -11,7 +13,6 @@
 
 #include "ckb_syscalls.h"
 #include "common.h"
-#include "gw_dlfcn.h"
 
 /* syscalls */
 #define GW_SYS_STORE 3051
@@ -24,30 +25,28 @@
 #define GW_SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID 4053
 #define GW_SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH 4054
 #define GW_SYS_LOAD_ACCOUNT_SCRIPT 4055
-#define GW_SYS_LOAD_PROGRAM_AS_DATA 4061
-#define GW_SYS_LOAD_PROGRAM_AS_CODE 4062
 
 #define CALL_CONTEXT_LEN 128
 #define BLOCK_INFO_LEN 128
 
-int sys_load(void *ctx, const uint8_t key[GW_KEY_BYTES],
+int sys_load(void *ctx, uint32_t account_id, const uint8_t key[GW_KEY_BYTES],
              uint8_t value[GW_VALUE_BYTES]) {
   gw_context_t *gw_ctx = (gw_context_t *)ctx;
   if (gw_ctx == NULL) {
     return GW_ERROR_INVALID_CONTEXT;
   }
-  uint8_t raw_key[GW_KEY_BYTES];
-  gw_build_account_key(gw_ctx->transaction_context.to_id, key, raw_key);
+  uint8_t raw_key[GW_KEY_BYTES] = {0};
+  gw_build_account_key(account_id, key, raw_key);
   return syscall(GW_SYS_LOAD, raw_key, value, 0, 0, 0, 0);
 }
-int sys_store(void *ctx, const uint8_t key[GW_KEY_BYTES],
+int sys_store(void *ctx, uint32_t account_id, const uint8_t key[GW_KEY_BYTES],
               const uint8_t value[GW_VALUE_BYTES]) {
   gw_context_t *gw_ctx = (gw_context_t *)ctx;
   if (gw_ctx == NULL) {
     return GW_ERROR_INVALID_CONTEXT;
   }
   uint8_t raw_key[GW_KEY_BYTES];
-  gw_build_account_key(gw_ctx->transaction_context.to_id, key, raw_key);
+  gw_build_account_key(account_id, key, raw_key);
   return syscall(GW_SYS_STORE, raw_key, value, 0, 0, 0, 0);
 }
 
@@ -92,25 +91,27 @@ int _sys_load_block_info(void *addr, uint64_t *len) {
 }
 
 int sys_create(void *ctx, uint8_t *script, uint32_t script_len,
-               gw_call_receipt_t *receipt) {
-  return syscall(GW_SYS_CREATE, script, script_len, 0, 0, 0, 0);
+               uint32_t *account_id) {
+  return syscall(GW_SYS_CREATE, script, script_len, account_id, 0, 0, 0);
 }
 
 int gw_context_init(gw_context_t *context) {
-  memset(context, sizeof(gw_context_t));
+  memset(context, 0, sizeof(gw_context_t));
   /* setup syscalls */
-  context.sys_load = sys_load;
-  context.sys_store = sys_store;
-  context.sys_set_program_return_data = sys_set_program_return_data;
-  context.sys_create = sys_create;
-  context.sys_get_account_id_by_script_hash = sys_get_account_id_by_script_hash;
-  context.sys_get_script_hash_by_account_id = sys_get_script_hash_by_account_id;
-  context.sys_get_account_script = sys_get_account_script;
+  context->sys_load = sys_load;
+  context->sys_store = sys_store;
+  context->sys_set_program_return_data = sys_set_program_return_data;
+  context->sys_create = sys_create;
+  context->sys_get_account_id_by_script_hash =
+      sys_get_account_id_by_script_hash;
+  context->sys_get_script_hash_by_account_id =
+      sys_get_script_hash_by_account_id;
+  context->sys_get_account_script = sys_get_account_script;
 
   /* initialize context */
   uint8_t transaction_context[CALL_CONTEXT_LEN];
   uint64_t len = CALL_CONTEXT_LEN;
-  ret = _sys_load_call_context(transaction_context, &len);
+  int ret = _sys_load_call_context(transaction_context, &len);
   if (ret != 0) {
     return ret;
   }
@@ -121,7 +122,8 @@ int gw_context_init(gw_context_t *context) {
   mol_seg_t call_context_seg;
   call_context_seg.ptr = transaction_context;
   call_context_seg.size = len;
-  ret = gw_parse_transaction_context(&context.transaction_context, &call_context_seg);
+  ret = gw_parse_transaction_context(&context->transaction_context,
+                                     &call_context_seg);
   if (ret != 0) {
     return ret;
   }
@@ -139,10 +141,12 @@ int gw_context_init(gw_context_t *context) {
   mol_seg_t block_info_seg;
   block_info_seg.ptr = block_info;
   block_info_seg.size = len;
-  ret = gw_parse_block_info(&context.block_info, &block_info_seg);
+  ret = gw_parse_block_info(&context->block_info, &block_info_seg);
   if (ret != 0) {
     return ret;
   }
 
   return 0;
 }
+
+#endif

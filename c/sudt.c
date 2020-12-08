@@ -30,9 +30,7 @@
  */
 
 #include "ckb_syscalls.h"
-#include "common.h"
-#include "godwoken.h"
-#include "gw_def.h"
+#include "gw_syscalls.h"
 #include "stdio.h"
 #include "sudt_utils.h"
 
@@ -94,7 +92,8 @@ int main() {
     if (amount == 0) {
       return ERROR_INVALID_DATA;
     }
-    int ret = sudt_prepare_withdrawal(&ctx, withdrawal_lock_hash_seg.ptr, amount);
+    int ret =
+        sudt_prepare_withdrawal(&ctx, withdrawal_lock_hash_seg.ptr, amount);
     if (ret != 0) {
       return ret;
     }

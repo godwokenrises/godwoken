@@ -1,7 +1,7 @@
 use crate::traits::CodeStore;
 use ckb_vm::{
-    memory::{Memory, FLAG_EXECUTABLE, FLAG_FREEZED},
-    registers::{A0, A1, A2, A3, A4, A7},
+    memory::Memory,
+    registers::{A0, A1, A2, A3, A7},
     Error as VMError, Register, SupportMachine, Syscalls,
 };
 use gw_common::{
@@ -34,14 +34,11 @@ const SYS_LOAD_BLOCKINFO: u64 = 4052;
 const SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID: u64 = 4053;
 const SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH: u64 = 4054;
 const SYS_LOAD_ACCOUNT_SCRIPT: u64 = 4055;
-const SYS_LOAD_PROGRAM_AS_DATA: u64 = 4061;
-const SYS_LOAD_PROGRAM_AS_CODE: u64 = 4062;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
 /* Syscall errors */
 const SUCCESS: u8 = 0;
-const SLICE_OUT_OF_BOUND: u8 = 3;
 
 #[derive(Debug, PartialEq, Clone, Eq, Default)]
 pub struct RunResult {
@@ -158,6 +155,7 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
             SYS_CREATE => {
                 let script_addr = machine.registers()[A0].to_u64();
                 let script_len = machine.registers()[A1].to_u32();
+                let account_id_addr = machine.registers()[A2].clone();
 
                 let script_data = load_bytes(machine, script_addr, script_len as usize)?;
                 let script = Script::from_slice(&script_data[..]).map_err(|err| {
@@ -185,6 +183,9 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                     .new_scripts
                     .insert(script_hash.into(), script.as_slice().to_vec());
                 self.set_account_count(id + 1)?;
+                machine
+                    .memory_mut()
+                    .store32(&account_id_addr, &Mac::REG::from_u32(id))?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -266,14 +267,6 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
-            SYS_LOAD_PROGRAM_AS_DATA => {
-                self.load_program_as_data(machine)?;
-                Ok(true)
-            }
-            SYS_LOAD_PROGRAM_AS_CODE => {
-                self.load_program_as_code(machine)?;
-                Ok(true)
-            }
             DEBUG_PRINT_SYSCALL_NUMBER => {
                 self.output_debug(machine)?;
                 Ok(true)
@@ -346,74 +339,6 @@ impl<'a, S: State> L2Syscalls<'a, S> {
             self.code_store
                 .get_code(&script.code_hash().unpack().into())
         })
-    }
-
-    fn load_program_as_code<Mac: SupportMachine>(
-        &mut self,
-        machine: &mut Mac,
-    ) -> Result<(), VMError> {
-        let addr = machine.registers()[A0].to_u64();
-        let memory_size = machine.registers()[A1].to_u64();
-        let content_offset = machine.registers()[A2].to_u64();
-        let content_size = machine.registers()[A3].to_u64();
-        let id: u32 = machine.registers()[A4].to_u64() as u32;
-
-        let script_hash = self.get_script_hash(id).map_err(|err| {
-            eprintln!("syscall error: get script hash : {:?}", err);
-            VMError::Unexpected
-        })?;
-        let program = self
-            .get_code_by_script_hash(&script_hash.into())
-            .ok_or_else(|| {
-                eprintln!("syscall error: can't find code : {:?}", script_hash);
-                VMError::Unexpected
-            })?;
-
-        let content_end = content_offset
-            .checked_add(content_size)
-            .ok_or(VMError::OutOfBound)?;
-        if content_offset >= program.len() as u64
-            || content_end > program.len() as u64
-            || content_size > memory_size
-        {
-            machine.set_register(A0, Mac::REG::from_u8(SLICE_OUT_OF_BOUND));
-            return Ok(());
-        }
-        let data = program.slice((content_offset as usize)..(content_end as usize));
-        machine.memory_mut().init_pages(
-            addr,
-            memory_size,
-            FLAG_EXECUTABLE | FLAG_FREEZED,
-            Some(data),
-            0,
-        )?;
-
-        machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
-        Ok(())
-    }
-
-    fn load_program_as_data<Mac: SupportMachine>(
-        &mut self,
-        machine: &mut Mac,
-    ) -> Result<(), VMError> {
-        let id: u32 = machine.registers()[A3].to_u64() as u32;
-
-        let script_hash = self.get_script_hash(id).map_err(|err| {
-            eprintln!("syscall error: get script hash : {:?}", err);
-            VMError::Unexpected
-        })?;
-        let program = self
-            .get_code_by_script_hash(&script_hash.into())
-            .ok_or_else(|| {
-                eprintln!(
-                    "syscall error: can't find script script_hash: {:?}",
-                    script_hash
-                );
-                VMError::Unexpected
-            })?;
-        store_data(machine, &program)?;
-        machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
-        Ok(())
     }
 
     fn output_debug<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {

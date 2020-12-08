@@ -27,13 +27,13 @@ clean:
 debug-all: CFLAGS += -DCKB_C_STDLIB_PRINTF 
 debug-all: all
 
-build/sudt-generator: sudt.c sudt_utils.h gw_def.h
-	$(CC) $(CFLAGS) $(LDFLAGS) -shared -o $@ $<
+build/sudt-generator: sudt.c sudt_utils.h gw_def.h generator.h
+	$(CC) $(CFLAGS) -DGW_GENERATOR $(LDFLAGS) -o $@ $<
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
 
-build/examples/sum-generator: examples/sum.c gw_def.h
-	$(CC) $(CFLAGS) $(LDFLAGS) -shared -o $@ $<
+build/examples/sum-generator: examples/sum.c gw_def.h generator.h
+	$(CC) $(CFLAGS) -DGW_GENERATOR $(LDFLAGS) -o $@ $<
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
  

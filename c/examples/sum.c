@@ -9,9 +9,7 @@
  */
 
 #include "ckb_syscalls.h"
-#include "common.h"
-#include "godwoken.h"
-#include "gw_def.h"
+#include "gw_syscalls.h"
 #include "stdio.h"
 
 #define ERROR_INVALID_DATA 10
