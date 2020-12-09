@@ -140,13 +140,11 @@ struct StakeLockArgs {
 
 // --- layer2 SUDT ---
 union SUDTArgs {
-    SUDTScriptHash,
     SUDTQuery,
     SUDTTransfer,
     SUDTPrepareWithdrawal,
 }
 
-table SUDTScriptHash {}
 struct SUDTQuery {
     account_id: Uint32,
 }

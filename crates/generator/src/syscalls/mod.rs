@@ -334,12 +334,6 @@ impl<'a, S: State> L2Syscalls<'a, S> {
         let id = value.to_u32();
         Ok(Some(id))
     }
-    fn get_code_by_script_hash(&self, script_hash: &H256) -> Option<Bytes> {
-        self.get_script(script_hash).and_then(|script| {
-            self.code_store
-                .get_code(&script.code_hash().unpack().into())
-        })
-    }
 
     fn output_debug<Mac: SupportMachine>(&self, machine: &mut Mac) -> Result<(), VMError> {
         let mut addr = machine.registers()[A0].to_u64();

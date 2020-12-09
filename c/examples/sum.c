@@ -31,7 +31,7 @@ int main() {
   if (ret != 0) {
     return ret;
   }
-  uint64_t add_value;
+  uint64_t add_value = 0;
   ret = extract_args(&ctx, &add_value);
   if (ret != 0) {
     return ret;

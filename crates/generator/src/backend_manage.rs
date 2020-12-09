@@ -4,11 +4,11 @@ use lazy_static::lazy_static;
 use std::collections::HashMap;
 
 lazy_static! {
-    static ref SUDT_GENERATOR: Bytes = include_bytes!("../../../c/build/sudt-generator")
+    pub static ref SUDT_GENERATOR: Bytes = include_bytes!("../../../c/build/sudt-generator")
         .to_vec()
         .into();
     // TODO FIXME implement validator
-    static ref SUDT_VALIDATOR: Bytes = include_bytes!("../../../c/build/sudt-generator")
+    pub static ref SUDT_VALIDATOR: Bytes = include_bytes!("../../../c/build/sudt-generator")
         .to_vec()
         .into();
     pub static ref SUDT_VALIDATOR_CODE_HASH: H256 = code_hash(&SUDT_VALIDATOR);

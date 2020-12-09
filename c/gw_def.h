@@ -13,6 +13,7 @@
 #define GW_ACCOUNT_CODE_HASH 3
 
 #define GW_MAX_RETURN_DATA_SIZE 1024
+#define GW_MAX_ARGS_SIZE 1024
 
 /* Call receipt */
 typedef struct {
@@ -147,7 +148,7 @@ typedef int (*gw_log_fn)(void *ctx, uint32_t account_id, uint32_t data_length,
 typedef struct {
   uint32_t from_id;
   uint32_t to_id;
-  uint8_t *args;
+  uint8_t args[GW_MAX_ARGS_SIZE];
   uint32_t args_len;
 } gw_transaction_context_t;
 
