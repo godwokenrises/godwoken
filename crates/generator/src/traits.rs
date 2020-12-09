@@ -7,13 +7,7 @@ use gw_types::{packed::Script, prelude::*};
 
 pub trait CodeStore {
     fn insert_script(&mut self, script_hash: H256, script: Script);
-    fn insert_code(&mut self, code_hash: H256, code: Bytes);
     fn get_script(&self, script_hash: &H256) -> Option<Script>;
-    fn get_code(&self, code_hash: &H256) -> Option<Bytes>;
-    fn get_code_by_script_hash(&self, script_hash: &H256) -> Option<Bytes> {
-        self.get_script(script_hash)
-            .and_then(|script| self.get_code(&script.code_hash().unpack().into()))
-    }
 }
 
 pub trait StateExt {

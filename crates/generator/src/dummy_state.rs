@@ -41,13 +41,7 @@ impl CodeStore for DummyState {
     fn insert_script(&mut self, script_hash: H256, script: Script) {
         self.scripts.insert(script_hash.into(), script);
     }
-    fn insert_code(&mut self, code_hash: H256, code: Bytes) {
-        self.codes.insert(code_hash.into(), code);
-    }
     fn get_script(&self, script_hash: &H256) -> Option<Script> {
         self.scripts.get(&script_hash).cloned()
-    }
-    fn get_code(&self, code_hash: &H256) -> Option<Bytes> {
-        self.codes.get(&code_hash).cloned()
     }
 }

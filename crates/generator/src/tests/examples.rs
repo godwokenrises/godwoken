@@ -1,14 +1,12 @@
-use super::{build_dummy_state, new_block_info, PROXY_PROGRAM_CODE_HASH, SUM_PROGRAM_CODE_HASH};
+use super::{build_dummy_state, new_block_info, SUM_PROGRAM, SUM_PROGRAM_CODE_HASH};
 use crate::{
-    dummy_state::DummyState,
-    traits::{CodeStore, StateExt},
-    Error, Generator,
+    backend_manage::{Backend, BackendManage},
+    traits::StateExt,
+    Generator,
 };
-use gw_common::state::State;
 use gw_types::{
     bytes::Bytes,
-    core::CallType,
-    packed::{CallContext, Script},
+    packed::{RawL2Transaction, Script},
     prelude::*,
 };
 
@@ -16,7 +14,7 @@ use gw_types::{
 fn test_example_sum() {
     let mut tree = build_dummy_state();
     let from_id: u32 = 2;
-    let init_value: u64 = 42;
+    let init_value: u64 = 0;
 
     let contract_id = tree
         .create_account_from_script(
@@ -26,45 +24,26 @@ fn test_example_sum() {
                 .build(),
         )
         .expect("create account");
-
-    // run constructor
-    {
-        let block_info = new_block_info(0, 0, 0);
-        let call_context = CallContext::new_builder()
-            .from_id(from_id.pack())
-            .to_id(contract_id.pack())
-            .call_type(CallType::Construct.into())
-            .args(Bytes::from(init_value.to_le_bytes().to_vec()).pack())
-            .build();
-        let generator = Generator::default();
-        let run_result = generator
-            .execute(&tree, &block_info, &call_context)
-            .expect("construct");
-        let return_value = {
-            let mut buf = [0u8; 8];
-            buf.copy_from_slice(&run_result.return_data);
-            u64::from_le_bytes(buf)
-        };
-        assert_eq!(return_value, init_value);
-
-        tree.apply_run_result(&run_result).expect("update state");
-        println!("result {:?}", run_result);
-    }
 
     // run handle message
     {
+        let mut backend_manage = BackendManage::default();
+        // NOTICE in this test we won't need SUM validator
+        backend_manage.register_backend(Backend::from_binaries(
+            SUM_PROGRAM.clone(),
+            SUM_PROGRAM.clone(),
+        ));
+        let generator = Generator::new(backend_manage);
         let mut sum_value = init_value;
         for (number, add_value) in &[(1u64, 7u64), (2u64, 16u64)] {
             let block_info = new_block_info(0, *number, 0);
-            let call_context = CallContext::new_builder()
+            let raw_tx = RawL2Transaction::new_builder()
                 .from_id(from_id.pack())
                 .to_id(contract_id.pack())
-                .call_type(CallType::HandleMessage.into())
                 .args(Bytes::from(add_value.to_le_bytes().to_vec()).pack())
                 .build();
-            let generator = Generator::default();
             let run_result = generator
-                .execute(&tree, &block_info, &call_context)
+                .execute(&tree, &block_info, &raw_tx)
                 .expect("construct");
             let return_value = {
                 let mut buf = [0u8; 8];
@@ -76,154 +55,5 @@ fn test_example_sum() {
             tree.apply_run_result(&run_result).expect("update state");
             println!("result {:?}", run_result);
         }
-    }
-}
-
-#[test]
-fn test_example_proxy_sum() {
-    let mut tree = build_dummy_state();
-    let from_id: u32 = 2;
-    let init_value: u64 = 42;
-
-    let contract_id = tree
-        .create_account_from_script(
-            Script::new_builder()
-                .code_hash(SUM_PROGRAM_CODE_HASH.pack())
-                .args([0u8; 20].to_vec().pack())
-                .build(),
-        )
-        .expect("create account");
-    let proxy_contract_id = tree
-        .create_account_from_script(
-            Script::new_builder()
-                .code_hash(PROXY_PROGRAM_CODE_HASH.pack())
-                .args([0u8; 20].to_vec().pack())
-                .build(),
-        )
-        .expect("create account");
-
-    {
-        // run sum contract constructor
-        let block_info = new_block_info(0, 0, 0);
-        let call_context = CallContext::new_builder()
-            .from_id(from_id.pack())
-            .to_id(contract_id.pack())
-            .call_type(CallType::Construct.into())
-            .args(Bytes::from(init_value.to_le_bytes().to_vec()).pack())
-            .build();
-        let generator = Generator::default();
-        let run_result = generator
-            .execute(&tree, &block_info, &call_context)
-            .expect("construct");
-        let return_value = {
-            let mut buf = [0u8; 8];
-            buf.copy_from_slice(&run_result.return_data);
-            u64::from_le_bytes(buf)
-        };
-        assert_eq!(return_value, init_value);
-
-        tree.apply_run_result(&run_result).expect("update state");
-        println!("result {:?}", run_result);
-
-        // run proxy contract constructor
-        let block_info = new_block_info(0, 0, 0);
-        let call_context = CallContext::new_builder()
-            .from_id(from_id.pack())
-            .to_id(proxy_contract_id.pack())
-            .call_type(CallType::Construct.into())
-            .build();
-        let generator = Generator::default();
-        let run_result = generator
-            .execute(&tree, &block_info, &call_context)
-            .expect("construct");
-        assert!(run_result.return_data.is_empty());
-
-        tree.apply_run_result(&run_result).expect("update state");
-        println!("result {:?}", run_result);
-    }
-
-    // invoke sum contract via proxy contract
-    {
-        let mut sum_value = init_value;
-        for (number, add_value) in &[(1u64, 7u64), (2u64, 16u64)] {
-            let block_info = new_block_info(0, *number, 0);
-            let mut args = contract_id.to_le_bytes().to_vec();
-            args.extend_from_slice(&add_value.to_le_bytes());
-            let call_context = CallContext::new_builder()
-                .from_id(from_id.pack())
-                .to_id(proxy_contract_id.pack())
-                .call_type(CallType::HandleMessage.into())
-                .args(Bytes::from(args).pack())
-                .build();
-            let generator = Generator::default();
-            let run_result = generator
-                .execute(&tree, &block_info, &call_context)
-                .expect("construct");
-            let return_value = {
-                let mut buf = [0u8; 8];
-                buf.copy_from_slice(&run_result.return_data);
-                u64::from_le_bytes(buf)
-            };
-            sum_value += add_value;
-            assert_eq!(return_value, sum_value);
-            tree.apply_run_result(&run_result).expect("update state");
-            println!("result {:?}", run_result);
-        }
-
-        // check sum contract state
-        let block_info = new_block_info(0, 42, 0);
-        let call_context = CallContext::new_builder()
-            .from_id(from_id.pack())
-            .to_id(contract_id.pack())
-            .call_type(CallType::HandleMessage.into())
-            .args(Bytes::from(0u64.to_le_bytes().to_vec()).pack())
-            .build();
-        let generator = Generator::default();
-        let run_result = generator
-            .execute(&tree, &block_info, &call_context)
-            .expect("handle");
-        let return_value = {
-            let mut buf = [0u8; 8];
-            buf.copy_from_slice(&run_result.return_data);
-            u64::from_le_bytes(buf)
-        };
-        assert_eq!(sum_value, return_value);
-    }
-}
-
-#[test]
-fn test_example_proxy_recursive() {
-    let mut tree = build_dummy_state();
-    let from_id: u32 = 2;
-    let proxy_contract_id = tree
-        .create_account_from_script(
-            Script::new_builder()
-                .code_hash(PROXY_PROGRAM_CODE_HASH.pack())
-                .args([0u8; 20].to_vec().pack())
-                .build(),
-        )
-        .expect("create account");
-
-    // invoke proxy contract
-    {
-        let block_info = new_block_info(0, 0, 0);
-        /* call proxy contract itself */
-        let mut args = proxy_contract_id.to_le_bytes().to_vec();
-        args.extend_from_slice(&proxy_contract_id.to_le_bytes());
-        let call_context = CallContext::new_builder()
-            .from_id(from_id.pack())
-            .to_id(proxy_contract_id.pack())
-            .call_type(CallType::HandleMessage.into())
-            .args(Bytes::from(args).pack())
-            .build();
-        let generator = Generator::default();
-        let err = generator
-            .execute(&tree, &block_info, &call_context)
-            .expect_err("handle");
-        let err_code = match err {
-            Error::InvalidExitCode(code) => code,
-            err => panic!("unexpected {:?}", err),
-        };
-        assert_eq!(err_code, 10);
     }
 }

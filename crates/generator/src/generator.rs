@@ -1,27 +1,26 @@
-use crate::bytes::Bytes;
-use crate::error::{Error, TransactionError, TransactionErrorWithContext};
+use crate::backend_manage::BackendManage;
 use crate::syscalls::{L2Syscalls, RunResult};
 use crate::traits::{CodeStore, StateExt};
+use crate::{
+    backend_manage::Backend,
+    error::{Error, TransactionError, TransactionErrorWithContext},
+};
 use gw_common::{
+    error::Error as StateError,
     h256_ext::H256Ext,
     state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
     H256,
 };
 use gw_types::{
-    packed::{BlockInfo, CallContext, L2Block, RawL2Block, Script, StartChallenge},
+    core::ScriptHashType,
+    packed::{BlockInfo, L2Block, RawL2Block, RawL2Transaction, Script, StartChallenge},
     prelude::*,
 };
-use lazy_static::lazy_static;
 
 use ckb_vm::{
     machine::asm::{AsmCoreMachine, AsmMachine},
     DefaultMachineBuilder,
 };
-
-lazy_static! {
-    static ref VALIDATOR: Bytes = include_bytes!("../../../c/build/validator").to_vec().into();
-    static ref GENERATOR: Bytes = include_bytes!("../../../c/build/generator").to_vec().into();
-}
 
 #[derive(Debug)]
 pub struct DepositionRequest {
@@ -46,22 +45,12 @@ pub struct StateTransitionArgs {
 }
 
 pub struct Generator {
-    generator: Bytes,
-    validator: Bytes,
-}
-
-impl Default for Generator {
-    fn default() -> Self {
-        Generator {
-            generator: GENERATOR.clone(),
-            validator: VALIDATOR.clone(),
-        }
-    }
+    backend_manage: BackendManage,
 }
 
 impl Generator {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(backend_manage: BackendManage) -> Self {
+        Generator { backend_manage }
     }
 
     /// Apply l2 state transition
@@ -108,8 +97,7 @@ impl Generator {
                 }
                 // build call context
                 // NOTICE users only allowed to send HandleMessage CallType txs
-                let call_context = raw_tx.to_call_context();
-                let run_result = match self.execute(state, &block_info, &call_context) {
+                let run_result = match self.execute(state, &block_info, &raw_tx) {
                     Ok(run_result) => run_result,
                     Err(err) => {
                         return Err(TransactionErrorWithContext::new(challenge_context, err).into());
@@ -122,12 +110,32 @@ impl Generator {
         Ok(())
     }
 
+    fn load_backend<S: State + CodeStore>(
+        &self,
+        state: &S,
+        account_id: u32,
+    ) -> Result<Option<Backend>, StateError> {
+        let script_hash = state.get_script_hash(account_id)?;
+        Ok(state
+            .get_script(&script_hash)
+            .and_then(|script| {
+                // only accept data script hash type for now
+                if script.hash_type() == ScriptHashType::Data.into() {
+                    let code_hash: [u8; 32] = script.code_hash().unpack();
+                    self.backend_manage.get_backend(&code_hash.into())
+                } else {
+                    None
+                }
+            })
+            .cloned())
+    }
+
     /// execute a layer2 tx
     pub fn execute<S: State + CodeStore>(
         &self,
         state: &S,
         block_info: &BlockInfo,
-        call_context: &CallContext,
+        raw_tx: &RawL2Transaction,
     ) -> Result<RunResult, TransactionError> {
         let mut run_result = RunResult::default();
         {
@@ -136,20 +144,23 @@ impl Generator {
                 DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls {
                     state,
                     block_info: block_info,
-                    call_context: call_context,
+                    raw_tx,
                     result: &mut run_result,
                     code_store: state,
                 }));
             let mut machine = AsmMachine::new(machine_builder.build(), None);
-            let program_name = Bytes::from_static(b"generator");
-            machine.load_program(&self.generator, &[program_name])?;
+            let account_id = raw_tx.to_id().unpack();
+            let backend = self
+                .load_backend(state, account_id)?
+                .ok_or(TransactionError::Backend { account_id })?;
+            machine.load_program(&backend.generator, &[])?;
             let code = machine.run()?;
             if code != 0 {
                 return Err(TransactionError::InvalidExitCode(code).into());
             }
         }
         // set nonce
-        let sender_id: u32 = call_context.from_id().unpack();
+        let sender_id: u32 = raw_tx.from_id().unpack();
         let nonce = state.get_nonce(sender_id)?;
         let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE);
         if run_result.read_values.get(&nonce_raw_key).is_none() {

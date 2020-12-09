@@ -1,21 +1,10 @@
-use crate::core::CallType;
 /// extension methods
-use crate::packed::{CallContext, L2Block, L2Transaction, RawL2Block, RawL2Transaction, Script};
+use crate::packed::{L2Block, L2Transaction, RawL2Block, RawL2Transaction, Script};
 use crate::prelude::*;
 use core::mem::size_of_val;
 use gw_hash::blake2b::new_blake2b;
 
 impl RawL2Transaction {
-    pub fn to_call_context(&self) -> CallContext {
-        // NOTICE users are only allowed to send HandleMessage CallType txs
-        CallContext::new_builder()
-            .args(self.args())
-            .call_type(CallType::HandleMessage.into())
-            .from_id(self.from_id())
-            .to_id(self.to_id())
-            .build()
-    }
-
     pub fn hash(&self) -> [u8; 32] {
         let mut hasher = new_blake2b();
         hasher.update(self.as_slice());

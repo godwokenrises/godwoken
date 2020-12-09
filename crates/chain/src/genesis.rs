@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     smt::{default_store::DefaultStore, H256, SMT},
     state::State,
-    CKB_TOKEN_ID, SUDT_CODE_HASH,
+    CKB_SUDT_SCRIPT_HASH, SUDT_CODE_HASH,
 };
 use gw_config::GenesisConfig;
 use gw_generator::traits::StateExt;
@@ -16,36 +16,34 @@ use gw_types::{
 pub fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
     // build initialized states
     let mut state: Store<DefaultStore<H256>> = Default::default();
-    let root = state
-        .calculate_root()
-        .map_err(|err| anyhow!("calculate root error: {:?}", err))?;
+    let root = state.calculate_root()?;
     assert!(root.is_zero(), "initial root must be ZERO");
 
     // create a reserved account
     // this account is reserved for special use
     // for example: send a tx to reserved account to create a new contract account
-    let reserved_id = state
-        .create_account_from_script(
-            Script::new_builder()
-                .code_hash([0u8; 32].pack())
-                .args([0u8; 20].to_vec().pack())
-                .build(),
-        )
-        .map_err(|err| anyhow!("create reserved account error: {:?}", err))?;
+    let reserved_id = state.create_account_from_script(
+        Script::new_builder()
+            .code_hash([0u8; 32].pack())
+            .args([0u8; 20].to_vec().pack())
+            .build(),
+    )?;
     assert_eq!(
         reserved_id, RESERVED_ACCOUNT_ID,
         "reserved account id must be zero"
     );
 
     // setup CKB simple UDT contract
-    let ckb_sudt_id = state
-        .create_account_from_script(
-            Script::new_builder()
-                .code_hash(SUDT_CODE_HASH.pack())
-                .args(CKB_TOKEN_ID.to_vec().pack())
-                .build(),
-        )
-        .map_err(|err| anyhow!("create reserved account error: {:?}", err))?;
+    let ckb_sudt_script = Script::new_builder()
+        .code_hash(SUDT_CODE_HASH.pack())
+        .args([0u8; 32].to_vec().pack())
+        .build();
+    assert_eq!(
+        ckb_sudt_script.hash(),
+        CKB_SUDT_SCRIPT_HASH,
+        "ckb simple UDT script hash"
+    );
+    let ckb_sudt_id = state.create_account_from_script(ckb_sudt_script)?;
     assert_eq!(
         ckb_sudt_id, CKB_SUDT_ACCOUNT_ID,
         "ckb simple UDT account id"
@@ -54,31 +52,23 @@ pub fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
     // create initial aggregator
     let initial_aggregator_id = {
         let pubkey_hash: [u8; 20] = config.initial_aggregator_pubkey_hash.clone().into();
-        state
-            .create_account_from_script(
-                Script::new_builder()
-                    .code_hash([0u8; 32].pack())
-                    .args(pubkey_hash.to_vec().pack())
-                    .build(),
-            )
-            .map_err(|err| anyhow!("create initial aggregator error: {:?}", err))?
+        state.create_account_from_script(
+            Script::new_builder()
+                .code_hash([0u8; 32].pack())
+                .args(pubkey_hash.to_vec().pack())
+                .build(),
+        )?
     };
-    state
-        .mint_sudt(
-            ckb_sudt_id,
-            initial_aggregator_id,
-            config.initial_deposition.into(),
-        )
-        .map_err(|err| anyhow!("mint sudt error: {:?}", err))?;
+    state.mint_sudt(
+        ckb_sudt_id,
+        initial_aggregator_id,
+        config.initial_deposition.into(),
+    )?;
 
     // calculate post state
     let post_account = {
-        let root = state
-            .calculate_root()
-            .map_err(|err| anyhow!("calculate root error: {:?}", err))?;
-        let count = state
-            .get_account_count()
-            .map_err(|err| anyhow!("get account count error: {:?}", err))?;
+        let root = state.calculate_root()?;
+        let count = state.get_account_count()?;
         let root: [u8; 32] = root.into();
         AccountMerkleState::new_builder()
             .merkle_root(root.pack())
@@ -98,12 +88,9 @@ pub fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
     let block_proof = {
         let block_key = RawL2Block::compute_smt_key(0);
         let mut smt: SMT<DefaultStore<H256>> = Default::default();
-        smt.update(block_key.into(), genesis_hash.into())
-            .map_err(|err| anyhow!("update smt error: {:?}", err))?;
-        smt.merkle_proof(vec![block_key.into()])
-            .map_err(|err| anyhow!("gen merkle proof error: {:?}", err))?
-            .compile(vec![(block_key.into(), genesis_hash.into())])
-            .map_err(|err| anyhow!("compile merkle proof error: {:?}", err))?
+        smt.update(block_key.into(), genesis_hash.into())?;
+        smt.merkle_proof(vec![block_key.into()])?
+            .compile(vec![(block_key.into(), genesis_hash.into())])?
     };
 
     // build genesis
