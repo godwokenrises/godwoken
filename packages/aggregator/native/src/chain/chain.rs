@@ -4,8 +4,8 @@ use gw_chain::{
         Chain, HeaderInfo, L1Action, L1ActionContext, ProduceBlockParam, SyncEvent, SyncParam,
         TransactionInfo,
     },
-    consensus::{single_aggregator::SingleAggregator, traits::Consensus},
     genesis,
+    next_block_context::NextBlockContext,
     tx_pool::TxPool,
 };
 use gw_common::smt::H256;
@@ -30,7 +30,7 @@ use std::sync::{Arc, RwLock};
 pub struct NativeChain {
     pub config: Config,
     pub running: Arc<AtomicBool>,
-    pub chain: Arc<RwLock<Chain<SingleAggregator>>>,
+    pub chain: Arc<RwLock<Chain>>,
 }
 
 impl NativeChain {
@@ -51,14 +51,13 @@ declare_types! {
             //TODO: replace it with toml file
             let content: serde_json::Value = serde_json::from_reader(file).expect("Reading content from config file");
             let config: Config = serde_json::from_value(content).expect("Constructing config");
-            let consensus = SingleAggregator::new(config.consensus.aggregator_id);
             let tip = genesis::build_genesis(&config.genesis).expect("Building genesis block from config");
             let genesis = unimplemented!();
             let last_synced = HeaderInfo {
                 number: 0,
                 block_hash: unimplemented!(),
             };
-            let state = {
+            let store = {
                 let account_tree = unimplemented!();
                 let account_count = 0u32;
                 let block_tree = unimplemented!();
@@ -71,16 +70,18 @@ declare_types! {
             };
             let tx_pool = {
                 let generator = Generator::new();
-                let nb_ctx = consensus.next_block_context(&tip);
-                let tx_pool = TxPool::create(state.new_overlay().expect("State new overlay"), generator, &tip, nb_ctx).expect("Creating TxPool");
+                let nb_ctx = NextBlockContext {
+                    aggregator_id: 0u32,
+                    timestamp: 0u64,
+                };
+                let tx_pool = TxPool::create(store.new_overlay().expect("State new overlay"), generator, &tip, nb_ctx).expect("Creating TxPool");
                 Arc::new(Mutex::new(tx_pool))
             };
             let chain = {
                 let generator = Generator::new();
                 Chain::new(
                     config.chain,
-                    state,
-                    consensus,
+                    store,
                     tip,
                     last_synced,
                     generator,
@@ -99,6 +100,7 @@ declare_types! {
             let mut this = cx.this();
             let js_reverts_vec = cx.argument::<JsArray>(0)?.to_vec(&mut cx)?;
             let js_updates_vec = cx.argument::<JsArray>(1)?.to_vec(&mut cx)?;
+            let js_next_block_context = cx.argument::<JsObject>(1)?;
             let mut reverts: Vec<L1Action> = vec![];
             let mut updates: Vec<L1Action> = vec![];
             for i in 0..js_reverts_vec.len() {
@@ -289,9 +291,20 @@ declare_types! {
                 };
                 updates.push(l1_action);
             }
+            let aggregator_id = js_next_block_context.get(&mut cx, "aggregator_id")?
+                .downcast::<JsNumber>()
+                .or_throw(&mut cx)?.value() as u32;
+            let timestamp = js_next_block_context.get(&mut cx, "timestamp")?
+                .downcast::<JsNumber>()
+                .or_throw(&mut cx)?.value() as u64;
+            let next_block_context = NextBlockContext {
+                aggregator_id: aggregator_id,
+                timestamp: timestamp,
+            };
             let sync_param = SyncParam {
                 reverts: reverts,
-                updates: updates
+                updates: updates,
+                next_block_context: next_block_context,
             };
             cx.borrow_mut(&mut this, |data| {
                 let mut chain = data.chain.write().unwrap();
