@@ -26,8 +26,7 @@
 #define GW_SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH 4054
 #define GW_SYS_LOAD_ACCOUNT_SCRIPT 4055
 
-#define CALL_CONTEXT_LEN 128
-#define BLOCK_INFO_LEN 128
+#define MAX_BUf_SIZE 65536
 
 int sys_load(void *ctx, uint32_t account_id, const uint8_t key[GW_KEY_BYTES],
              uint8_t value[GW_VALUE_BYTES]) {
@@ -76,7 +75,7 @@ int sys_get_account_script(void *ctx, uint32_t account_id, uint32_t *len,
                  0);
 }
 
-int _sys_load_call_context(void *addr, uint64_t *len) {
+int _sys_load_l2transaction(void *addr, uint64_t *len) {
   volatile uint64_t inner_len = *len;
   int ret = syscall(GW_SYS_LOAD_CALLCONTEXT, addr, &inner_len, 0, 0, 0, 0);
   *len = inner_len;
@@ -109,37 +108,36 @@ int gw_context_init(gw_context_t *context) {
   context->sys_get_account_script = sys_get_account_script;
 
   /* initialize context */
-  uint8_t transaction_context[CALL_CONTEXT_LEN];
-  uint64_t len = CALL_CONTEXT_LEN;
-  int ret = _sys_load_call_context(transaction_context, &len);
+  uint8_t buf[MAX_BUf_SIZE] = {0};
+  uint64_t len = MAX_BUf_SIZE;
+  int ret = _sys_load_l2transaction(buf, &len);
   if (ret != 0) {
     return ret;
   }
-  if (len > CALL_CONTEXT_LEN) {
+  if (len > MAX_BUf_SIZE) {
     return GW_ERROR_INVALID_DATA;
   }
 
-  mol_seg_t call_context_seg;
-  call_context_seg.ptr = transaction_context;
-  call_context_seg.size = len;
+  mol_seg_t l2transaction_seg;
+  l2transaction_seg.ptr = buf;
+  l2transaction_seg.size = len;
   ret = gw_parse_transaction_context(&context->transaction_context,
-                                     &call_context_seg);
+                                     &l2transaction_seg);
   if (ret != 0) {
     return ret;
   }
 
-  uint8_t block_info[BLOCK_INFO_LEN];
-  len = BLOCK_INFO_LEN;
-  ret = _sys_load_block_info(block_info, &len);
+  len = MAX_BUf_SIZE;
+  ret = _sys_load_block_info(buf, &len);
   if (ret != 0) {
     return ret;
   }
-  if (len > BLOCK_INFO_LEN) {
+  if (len > MAX_BUf_SIZE) {
     return GW_ERROR_INVALID_DATA;
   }
 
   mol_seg_t block_info_seg;
-  block_info_seg.ptr = block_info;
+  block_info_seg.ptr = buf;
   block_info_seg.size = len;
   ret = gw_parse_block_info(&context->block_info, &block_info_seg);
   if (ret != 0) {

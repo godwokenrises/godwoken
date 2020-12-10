@@ -13,7 +13,6 @@ use gw_common::{
     H256,
 };
 use gw_types::{
-    bytes::Bytes,
     packed::{BlockInfo, RawL2Transaction, Script},
     prelude::*,
 };

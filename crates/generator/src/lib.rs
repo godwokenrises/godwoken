@@ -13,5 +13,4 @@ pub mod traits;
 // re-exports
 pub use error::Error;
 pub use generator::Generator;
-pub(crate) use gw_types::bytes;
 pub use syscalls::RunResult;

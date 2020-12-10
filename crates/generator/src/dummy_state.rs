@@ -4,7 +4,7 @@ use gw_common::{
     smt::{default_store::DefaultStore, H256, SMT},
     state::State,
 };
-use gw_types::{bytes::Bytes, packed::Script};
+use gw_types::packed::Script;
 use std::collections::HashMap;
 
 #[derive(Default)]
@@ -12,7 +12,6 @@ pub struct DummyState {
     tree: SMT<DefaultStore<H256>>,
     account_count: u32,
     scripts: HashMap<H256, Script>,
-    codes: HashMap<H256, Bytes>,
 }
 
 impl State for DummyState {

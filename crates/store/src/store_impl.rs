@@ -7,10 +7,7 @@ use gw_common::{
     state::State,
 };
 use gw_generator::traits::CodeStore;
-use gw_types::{
-    bytes::Bytes,
-    packed::{L2Block, L2Transaction, Script},
-};
+use gw_types::packed::{L2Block, L2Transaction, Script};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -35,7 +32,6 @@ impl<S: SMTStore<H256>> Store<S> {
         block_tree: SMT<WrapStore<S>>,
         block_count: u64,
         scripts: HashMap<H256, Script>,
-        codes: HashMap<H256, Bytes>,
         blocks: HashMap<H256, L2Block>,
         transactions: HashMap<H256, L2Transaction>,
     ) -> Self {

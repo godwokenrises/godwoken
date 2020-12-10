@@ -1,7 +1,7 @@
 use crate::error::{Error, ValidateError};
 use crate::generator::DepositionRequest;
+use crate::generator::WithdrawalRequest;
 use crate::syscalls::RunResult;
-use crate::{bytes::Bytes, generator::WithdrawalRequest};
 use gw_common::{error::Error as StateError, state::State, FINALITY_BLOCKS, H256};
 use gw_types::{packed::Script, prelude::*};
 
