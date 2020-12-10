@@ -13,7 +13,8 @@
 #define GW_ACCOUNT_CODE_HASH 3
 
 #define GW_MAX_RETURN_DATA_SIZE 1024
-#define GW_MAX_ARGS_SIZE 1024
+/* 128KB */
+#define GW_MAX_ARGS_SIZE 131072
 
 /* Call receipt */
 typedef struct {
