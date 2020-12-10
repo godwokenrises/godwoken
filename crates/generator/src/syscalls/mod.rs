@@ -37,7 +37,8 @@ const SYS_LOAD_ACCOUNT_SCRIPT: u64 = 4055;
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
 /* Syscall errors */
-const SUCCESS: u8 = 0;
+pub(crate) const SUCCESS: u8 = 0;
+pub(crate) const ERROR_DUPLICATED_SCRIPT_HASH: u8 = std::u8::MAX;
 
 #[derive(Debug, PartialEq, Clone, Eq, Default)]
 pub struct RunResult {
@@ -162,6 +163,15 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                     VMError::Unexpected
                 })?;
                 let script_hash = script.hash();
+
+                // Return error if script_hash is exists
+                if self
+                    .get_account_id_by_script_hash(&script_hash.into())?
+                    .is_some()
+                {
+                    machine.set_register(A0, Mac::REG::from_u8(ERROR_DUPLICATED_SCRIPT_HASH));
+                    return Ok(true);
+                }
 
                 // Same logic from State::create_account()
                 let id = self.get_account_count()?;

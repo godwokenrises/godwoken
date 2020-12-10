@@ -4,14 +4,22 @@ use lazy_static::lazy_static;
 use std::collections::HashMap;
 
 lazy_static! {
-    pub static ref SUDT_GENERATOR: Bytes = include_bytes!("../../../c/build/sudt-generator")
+    static ref SUDT_GENERATOR: Bytes = include_bytes!("../../../c/build/sudt-generator")
         .to_vec()
         .into();
     // TODO FIXME implement validator
-    pub static ref SUDT_VALIDATOR: Bytes = include_bytes!("../../../c/build/sudt-generator")
+    static ref SUDT_VALIDATOR: Bytes = include_bytes!("../../../c/build/sudt-generator")
         .to_vec()
         .into();
     pub static ref SUDT_VALIDATOR_CODE_HASH: H256 = code_hash(&SUDT_VALIDATOR);
+    static ref META_CONTRACT_GENERATOR: Bytes = include_bytes!("../../../c/build/meta-contract-generator")
+        .to_vec()
+        .into();
+    // TODO FIXME implement validator
+    static ref META_CONTRACT_VALIDATOR: Bytes = include_bytes!("../../../c/build/meta-contract-generator")
+        .to_vec()
+        .into();
+    pub static ref META_CONTRACT_VALIDATOR_CODE_HASH: H256 = code_hash(&META_CONTRACT_VALIDATOR);
 }
 
 fn code_hash(data: &[u8]) -> H256 {
@@ -50,6 +58,13 @@ impl Default for BackendManage {
         let mut backend_manage = BackendManage {
             backends: Default::default(),
         };
+
+        // Meta contract
+        backend_manage.register_backend(Backend {
+            validator: META_CONTRACT_VALIDATOR.clone(),
+            generator: META_CONTRACT_GENERATOR.clone(),
+            validator_code_hash: META_CONTRACT_VALIDATOR_CODE_HASH.clone(),
+        });
 
         // Simple UDT
         backend_manage.register_backend(Backend {

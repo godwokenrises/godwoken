@@ -1,6 +1,7 @@
-use super::{build_dummy_state, new_block_info, SUM_PROGRAM, SUM_PROGRAM_CODE_HASH};
+use super::{new_block_info, SUM_PROGRAM, SUM_PROGRAM_CODE_HASH};
 use crate::{
     backend_manage::{Backend, BackendManage},
+    dummy_state::DummyState,
     traits::StateExt,
     Generator,
 };
@@ -12,7 +13,7 @@ use gw_types::{
 
 #[test]
 fn test_example_sum() {
-    let mut tree = build_dummy_state();
+    let mut tree = DummyState::default();
     let from_id: u32 = 2;
     let init_value: u64 = 0;
 
