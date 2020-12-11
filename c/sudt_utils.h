@@ -8,8 +8,6 @@
 #include "stdio.h"
 
 /* errors */
-#define ERROR_INVALID_DATA 10
-#define ERROR_UNKNOWN_MSG 11
 #define ERROR_INSUFFICIENT_BALANCE 12
 #define ERROR_AMOUNT_OVERFLOW 13
 

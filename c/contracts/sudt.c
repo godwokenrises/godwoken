@@ -76,10 +76,19 @@ int main() {
     /* Transfer */
     mol_seg_t to_seg = MolReader_SUDTTransfer_get_to(&msg.seg);
     mol_seg_t amount_seg = MolReader_SUDTTransfer_get_amount(&msg.seg);
+    mol_seg_t fee_seg = MolReader_SUDTTransfer_get_fee(&msg.seg);
     uint32_t from_id = ctx.transaction_context.from_id;
     uint32_t to_id = *(uint32_t *)to_seg.ptr;
     uint128_t amount = *(uint128_t *)amount_seg.ptr;
-    int ret = sudt_transfer(&ctx, sudt_id, from_id, to_id, amount);
+    uint128_t fee = *(uint128_t *)fee_seg.ptr;
+    /* pay fee */
+    int ret = sudt_transfer(&ctx, sudt_id, from_id,
+                            ctx.block_info.aggregator_id, fee);
+    if (ret != 0) {
+      return ret;
+    }
+    /* transfer */
+    ret = sudt_transfer(&ctx, sudt_id, from_id, to_id, amount);
     if (ret != 0) {
       return ret;
     }

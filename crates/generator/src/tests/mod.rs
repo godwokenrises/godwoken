@@ -1,10 +1,10 @@
-use crate::dummy_state::DummyState;
 use gw_common::blake2b::new_blake2b;
 use gw_types::{bytes::Bytes, packed::BlockInfo, prelude::*};
 use lazy_static::lazy_static;
 use std::{fs, io::Read, path::PathBuf};
 
 mod examples;
+mod meta_contract;
 mod sudt;
 
 const EXAMPLES_DIR: &'static str = "../../c/build/examples";
@@ -35,8 +35,4 @@ pub fn new_block_info(aggregator_id: u32, number: u64, timestamp: u64) -> BlockI
         .number(number.pack())
         .timestamp(timestamp.pack())
         .build()
-}
-
-pub fn build_dummy_state() -> DummyState {
-    DummyState::default()
 }

@@ -138,6 +138,16 @@ struct StakeLockArgs {
 }
 // --- end of stake lock ---
 
+// --- builtin Meta contract ---
+union MetaContractArgs {
+    CreateAccount,
+}
+
+table CreateAccount {
+    script: Script,
+}
+// --- end of Meta contract
+
 // --- layer2 SUDT ---
 union SUDTArgs {
     SUDTQuery,

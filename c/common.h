@@ -20,6 +20,9 @@
 #define GW_ERROR_INVALID_PROOF 61
 #define GW_ERROR_INVALID_STACK 62
 #define GW_ERROR_INVALID_SIBLING 63
+/* COMMON contract errors */
+#define ERROR_INVALID_DATA 10
+#define ERROR_UNKNOWN_MSG 11
 
 #include "blake2b.h"
 #include "blockchain.h"
