@@ -34,4 +34,3 @@ export class CellProvider {
     return new CellCollector(options, this.cells);
   }
 }
-

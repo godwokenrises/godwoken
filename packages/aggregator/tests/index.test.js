@@ -31,7 +31,6 @@ test("Sync rollup data from CKB network", async (t) => {
     depositionTransactions.push(tx);
   }
 
-
   chain.sync();
 
   t.pass();

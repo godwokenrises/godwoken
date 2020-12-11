@@ -60,7 +60,9 @@ class Chain {
    */
   sync() {
     // start from last_synced block
-    let fromBlock = this.nativeChain.last_synced();
+    let updates = [];
+    let reverts = [];
+    const fromBlock = this.nativeChain.last_synced();
     const depositionQueryOptions = {
         lock: {
             script: {
@@ -73,8 +75,6 @@ class Chain {
         fromBlock: "0x" + BigInt(fromBlock).toString(16),
     };
     const depositionTransactionCollector = new TransactionCollector(depositionQueryOptions);
-    let updates = [];
-    let reverts = [];
     for await (const tx of depositionTransactionCollector.collect()) {
         if (tx.tx_status.status != "committed") {
             continue;
@@ -120,15 +120,41 @@ class Chain {
                 continue;
             }
         }
-        const syncTransition = {
+        const l1ActionContext = {
+            deposition_requests: depositionRequests,
+            // TODO
+            withdrawal_requests: [],
+        };
+        const l1Action = {
             transaction_info: transactionInfo,
             header_info: headerInfo,
-            deposition_requests: depositionRequests,
-        }
+            context: l1ActionContext,
+        };
         //TODO serialize syncTransition
-        updates.push(syncTransition);
+        updates.push(l1Action);
     }
-    this.nativeChain.sync(updates, reverts);
+
+      const depositionToCustodianQueryOptions = {
+          lock: {
+              script: {
+                  code_hash: this.config.chain.rollup_custodian_lock,
+                  hash_type: "type",
+                  args: "any",
+              },
+              ioType: "output",
+          }
+          fromBlock: "0x" + BigInt(fromBlock).toString(16),
+      };
+      const depositionToCustodianTransactionCollector = new TransactionCollector(depositionToCustodianQueryOptions);
+      for await(const tx of depositionToCustodianTransactionCollector.collect()) {
+
+      }
+    //TODO reverts
+    const nextBlockContext = {
+        aggregator_id: 0,
+        timestamp: 1,
+    };
+    this.nativeChain.sync(updates, reverts, nextBlockContext);
   }
 
   /*

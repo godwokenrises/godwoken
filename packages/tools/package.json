@@ -60,5 +60,8 @@
     "require": [
       "ts-node/register"
     ]
+  },
+  "devDependencies": {
+    "@types/node": "^14.14.12"
   }
 }

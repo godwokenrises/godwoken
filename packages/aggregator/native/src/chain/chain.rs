@@ -29,6 +29,7 @@ use std::sync::{Arc, RwLock};
 
 pub struct NativeChain {
     pub config: Config,
+    // Deprecated
     pub running: Arc<AtomicBool>,
     pub chain: Arc<RwLock<Chain>>,
 }
