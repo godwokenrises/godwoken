@@ -21,6 +21,7 @@ pub struct Store<S> {
     block_count: u64,
     // code store
     scripts: HashMap<H256, Script>,
+    codes: HashMap<H256, Bytes>,
     blocks: HashMap<H256, L2Block>,
     transactions: HashMap<H256, L2Transaction>,
 }
@@ -41,6 +42,7 @@ impl<S: SMTStore<H256>> Store<S> {
             block_tree,
             block_count,
             scripts,
+            codes,
             blocks,
             transactions,
         }
@@ -57,6 +59,7 @@ impl<S: SMTStore<H256>> Store<S> {
             store,
             account_count,
             self.scripts.clone(),
+            self.codes.clone(),
         ))
     }
 
@@ -109,6 +112,7 @@ impl<S: SMTStore<H256> + Default> Default for Store<S> {
             block_tree,
             block_count: 0,
             scripts: Default::default(),
+            codes: Default::default(),
             blocks: Default::default(),
             transactions: Default::default(),
         }
@@ -143,5 +147,11 @@ impl<S: SMTStore<H256>> CodeStore for Store<S> {
     }
     fn get_script(&self, script_hash: &H256) -> Option<Script> {
         self.scripts.get(&script_hash).cloned()
+    }
+    fn insert_code(&mut self, script_hash: H256, code: Bytes) {
+        self.codes.insert(script_hash, code);
+    }
+    fn get_code(&self, script_hash: &H256) -> Option<Bytes> {
+        self.codes.get(script_hash).cloned()
     }
 }

@@ -33,6 +33,8 @@ const SYS_LOAD_BLOCKINFO: u64 = 4052;
 const SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID: u64 = 4053;
 const SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH: u64 = 4054;
 const SYS_LOAD_ACCOUNT_SCRIPT: u64 = 4055;
+const SYS_STORE_ACCOUNT_CODE: u64 = 4056;
+const SYS_LOAD_ACCOUNT_CODE: u64 = 4057;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
@@ -47,6 +49,7 @@ pub struct RunResult {
     pub return_data: Vec<u8>,
     pub account_count: Option<u32>,
     pub new_scripts: HashMap<H256, Vec<u8>>,
+    pub new_codes: HashMap<H256, Vec<u8>>
 }
 
 pub(crate) struct L2Syscalls<'a, S> {
@@ -245,6 +248,7 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 let len_addr = machine.registers()[A1].to_u64();
                 let offset = machine.registers()[A2].to_u32() as usize;
                 let script_addr = machine.registers()[A3].to_u64();
+
                 let script_hash = self.get_script_hash(account_id).map_err(|err| {
                     eprintln!("syscall error: get script hash by account id: {:?}", err);
                     VMError::Unexpected
@@ -273,6 +277,56 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 machine
                     .memory_mut()
                     .store_bytes(len_addr, &(new_len as u32).to_le_bytes())?;
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_LOAD_ACCOUNT_CDOE => {
+                let account_id = machine.registers()[A0].to_u32();
+                let len_addr = machine.registers()[A1].to_u64();
+                let offset = machine.registers()[A2].to_u32() as usize;
+                let code_addr = machine.registers()[A3].to_u64();
+
+                let script_hash = self.get_script_hash(account_id).map_err(|err| {
+                    eprintln!("syscall error: get script hash by account id: {:?}", err);
+                    VMError::Unexpected
+                })?;
+                let len = load_data_u32(machine, len_addr)? as usize;
+                let code = self.get_code(&script_hash).ok_or_else(|| {
+                    eprintln!(
+                        "syscall error: code not found by script hash: {:?}",
+                        script_hash
+                    );
+                    VMError::Unexpected
+                })?;
+                let data = code.as_ref();
+                let new_len = if offset >= data.len() {
+                    0
+                } else if (offset + len) > data.len() {
+                    data.len() - offset
+                } else {
+                    len
+                };
+                if new_len > 0 {
+                    machine
+                        .memory_mut()
+                        .store_bytes(code_addr, &data[offset..offset + new_len])?;
+                }
+                machine
+                    .memory_mut()
+                    .store_bytes(len_addr, &(new_len as u32).to_le_bytes())?;
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_STORE_ACCOUNT_CODE => {
+                let account_id = machine.registers()[A0].to_u32();
+                let code_len = machine.registers()[A1].to_u32();
+                let code_addr = machine.registers()[A2].to_u64();
+
+                let script_hash = self.get_script_hash(account_id)?;
+                let code = load_bytes(machine, code_addr, code_len as usize)?;
+                self.result
+                    .new_codes
+                    .insert(script_hash, code.as_slice().to_vec());
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -317,6 +371,13 @@ impl<'a, S: State> L2Syscalls<'a, S> {
             .get(script_hash)
             .map(|data| Script::from_slice(&data).expect("Script"))
             .or_else(|| self.code_store.get_script(&script_hash))
+    }
+    fn get_code(&self, script_hash: &H256) -> Option<Bytes> {
+        self.result
+            .new_codes
+            .get(script_hash)
+            .map(|data| Bytes::from(data.clone()))
+            .or_else(|| self.code_store.get_code(&script_hash))
     }
     fn get_script_hash(&mut self, id: u32) -> Result<H256, VMError> {
         let value = self
