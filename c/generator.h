@@ -25,8 +25,8 @@
 #define GW_SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID 4053
 #define GW_SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH 4054
 #define GW_SYS_LOAD_ACCOUNT_SCRIPT 4055
-#define GW_SYS_STORE_ACCOUNT_CODE 4056
-#define GW_SYS_LOAD_ACCOUNT_CODE 4057
+#define GW_SYS_STORE_DATA 4056
+#define GW_SYS_LOAD_DATA 4057
 #define GW_SYS_LOG 4061
 
 #define MAX_BUF_SIZE 65536
@@ -82,17 +82,16 @@ int sys_get_account_script(void *ctx, uint32_t account_id, uint32_t *len,
                          uint32_t offset, uint8_t *script) {
   return syscall(GW_SYS_LOAD_ACCOUNT_SCRIPT, account_id, len, offset, script, 0, 0);
 }
-/* Store account code by account id */
-int sys_set_account_code(void *ctx,
-                         uint32_t account_id,
-                         uint32_t code_len,
-                         uint8_t *code) {
-  return syscall(GW_SYS_STORE_ACCOUNT_CODE, account_id, code_len, code, 0, 0, 0);
+/* Store data by data hash */
+int sys_store_data(void *ctx,
+                 uint32_t data_len,
+                 uint8_t *data) {
+  return syscall(GW_SYS_STORE_DATA, data_len, data, 0, 0, 0, 0);
 }
-/* Load account code by account id */
-int sys_get_account_code(void *ctx, uint32_t account_id, uint32_t *len,
-                           uint32_t offset, uint8_t *code) {
-  return syscall(GW_SYS_LOAD_ACCOUNT_CODE, account_id, len, offset, code, 0, 0);
+/* Load data by data hash */
+int sys_load_data(void *ctx, uint8_t data_hash[32],
+                 uint32_t *len, uint32_t offset, uint8_t *data) {
+  return syscall(GW_SYS_LOAD_DATA, data_hash, len, offset, data, 0, 0);
 }
 
 int _sys_load_l2transaction(void *addr, uint64_t *len) {
@@ -132,8 +131,8 @@ int gw_context_init(gw_context_t *context) {
   context->sys_get_script_hash_by_account_id =
       sys_get_script_hash_by_account_id;
   context->sys_get_account_script = sys_get_account_script;
-  context->sys_set_account_code = sys_set_account_code;
-  context->sys_get_account_code = sys_get_account_code;
+  context->sys_store_data = sys_store_data;
+  context->sys_load_data = sys_load_data;
   context->sys_log = sys_log;
 
   /* initialize context */

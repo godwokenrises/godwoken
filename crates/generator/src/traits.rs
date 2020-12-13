@@ -3,7 +3,7 @@ use crate::generator::DepositionRequest;
 use crate::generator::WithdrawalRequest;
 use crate::syscalls::RunResult;
 use gw_common::{error::Error as StateError, state::State, FINALITY_BLOCKS, H256};
-use gw_types::{packed::Script, prelude::*};
+use gw_types::{bytes::Bytes, packed::Script, prelude::*};
 
 pub trait CodeStore {
     fn insert_script(&mut self, script_hash: H256, script: Script);
@@ -44,8 +44,8 @@ impl<S: State + CodeStore> StateExt for S {
         for (script_hash, script) in &run_result.new_scripts {
             self.insert_script(*script_hash, Script::from_slice(&script).expect("script"));
         }
-        for (script_hash, code) in &run_result.new_codes {
-            self.insert_code(*script_hash, Bytes::from(code.clone()));
+        for (script_hash, data) in &run_result.new_data {
+            self.insert_code(*script_hash, Bytes::from(data.clone()));
         }
         Ok(())
     }

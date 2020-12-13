@@ -124,22 +124,22 @@ typedef int (*gw_get_account_script_fn)(void *ctx, uint32_t account_id,
                                       uint32_t *len, uint32_t offset,
                                       uint8_t *script);
 /**
- * Get layer 2 contract code by account id
+ * Load data by data hash
  *
  * @param ctx        The godwoken context
- * @param account_id The account id
+ * @param data_hash  The data hash (hash = ckb_blake2b(data))
  * @param len        The length of the script data
  * @param offset     The offset of the script data
- * @param code       The pointer of the layer 2 contract code to save the result
+ * @param data       The pointer of the data to save the result
  * @return           The status code, 0 is success
  */
-typedef int (*gw_get_account_code_fn)(void *ctx, uint32_t account_id,
-                                        uint32_t *len, uint32_t offset,
-                                        uint8_t *code);
+typedef int (*gw_load_data_fn)(void *ctx, uint8_t data_hash[32],
+                              uint32_t *len, uint32_t offset,
+                              uint8_t *data);
 
-typedef int (*gw_set_account_code_fn)(void *ctx, uint32_t account_id,
-                                      uint32_t code_len,
-                                      uint8_t *code);
+typedef int (*gw_store_data_fn)(void *ctx,
+                                uint32_t data_len,
+                                uint8_t *data);
 
 /**
  * Get layer 2 block hash by number
@@ -195,8 +195,8 @@ typedef struct {
   gw_get_script_hash_by_account_id_fn sys_get_script_hash_by_account_id;
   gw_get_account_nonce_fn sys_get_account_nonce;
   gw_get_account_script_fn sys_get_account_script;
-  gw_get_account_code_fn sys_get_account_code;
-  gw_set_account_code_fn sys_set_account_code;
+  gw_load_data_fn sys_load_data;
+  gw_store_data_fn sys_store_data;
   gw_get_block_hash_fn sys_get_block_hash;
   gw_log_fn sys_log;
 } gw_context_t;
