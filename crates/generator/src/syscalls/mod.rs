@@ -280,7 +280,7 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
-            SYS_LOAD_ACCOUNT_CDOE => {
+            SYS_LOAD_ACCOUNT_CODE => {
                 let account_id = machine.registers()[A0].to_u32();
                 let len_addr = machine.registers()[A1].to_u64();
                 let offset = machine.registers()[A2].to_u32() as usize;

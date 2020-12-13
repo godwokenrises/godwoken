@@ -44,6 +44,9 @@ impl<S: State + CodeStore> StateExt for S {
         for (script_hash, script) in &run_result.new_scripts {
             self.insert_script(*script_hash, Script::from_slice(&script).expect("script"));
         }
+        for (script_hash, code) in &run_result.new_codes {
+            self.insert_code(*script_hash, Bytes::from(code.clone()));
+        }
         Ok(())
     }
 
