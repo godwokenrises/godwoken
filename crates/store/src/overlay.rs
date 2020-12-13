@@ -14,12 +14,13 @@ use gw_common::{
     state::State,
 };
 use gw_generator::traits::CodeStore;
-use gw_types::packed::Script;
+use gw_types::{bytes::Bytes, packed::Script};
 use std::collections::{HashMap, HashSet};
 
 pub struct OverlayStore<S> {
     tree: SMT<OverlaySMTStore<S>>,
     scripts: HashMap<H256, Script>,
+    codes: HashMap<H256, Bytes>,
     account_count: u32,
 }
 
@@ -29,12 +30,14 @@ impl<S: SMTStore<H256>> OverlayStore<S> {
         store: OverlaySMTStore<S>,
         account_count: u32,
         scripts: HashMap<H256, Script>,
+        codes: HashMap<H256, Bytes>,
     ) -> Self {
         let tree = SMT::new(root, store);
         OverlayStore {
             tree,
             account_count,
             scripts,
+            codes,
         }
     }
 
@@ -75,6 +78,12 @@ impl<S: SMTStore<H256>> CodeStore for OverlayStore<S> {
     }
     fn get_script(&self, script_hash: &H256) -> Option<Script> {
         self.scripts.get(&script_hash).cloned()
+    }
+    fn insert_code(&mut self, script_hash: H256, code: Bytes) {
+        self.codes.insert(script_hash, code);
+    }
+    fn get_code(&self, script_hash: &H256) -> Option<Bytes> {
+        self.codes.get(script_hash).cloned()
     }
 }
 

@@ -13,7 +13,8 @@
 #define GW_ACCOUNT_CODE_HASH 3
 
 #define GW_MAX_RETURN_DATA_SIZE 1024
-#define GW_MAX_ARGS_SIZE 1024
+/* 128KB */
+#define GW_MAX_ARGS_SIZE 131072
 
 /* Call receipt */
 typedef struct {
@@ -48,6 +49,15 @@ typedef int (*gw_create_fn)(void *ctx, uint8_t *script, uint32_t script_len,
 typedef int (*gw_load_fn)(void *ctx, uint32_t account_id,
                           const uint8_t key[GW_KEY_BYTES],
                           uint8_t value[GW_VALUE_BYTES]);
+/**
+ * Load the nonce of account
+ *
+ * @param ctx         The godwoken context
+ * @param account_id  The account to load nonce
+ * @param value       The pointer to save the nonce value of the key (32 bytes)
+ * @return            The status code, 0 is success
+ */
+typedef int (*gw_load_nonce_fn)(void *ctx, uint32_t account_id, uint8_t value[GW_VALUE_BYTES]);
 
 /**
  * Store key,value pair to current account's storage
@@ -108,18 +118,28 @@ typedef int (*gw_get_account_nonce_fn)(void *ctx, uint32_t account_id,
                                        uint32_t *nonce);
 
 /**
- * Get layer 2 contract script (EVM contract code in polyjuice) by account id
- *
- * @param ctx        The godwoken context
- * @param account_id The account id
- * @param len        The length of the script data
- * @param offset     The offset of the script data
- * @param script     The pointer of the script to save the result
- * @return           The status code, 0 is success
+ * Get account script by account id
  */
 typedef int (*gw_get_account_script_fn)(void *ctx, uint32_t account_id,
-                                        uint32_t *len, uint32_t offset,
-                                        uint8_t *script);
+                                      uint32_t *len, uint32_t offset,
+                                      uint8_t *script);
+/**
+ * Load data by data hash
+ *
+ * @param ctx        The godwoken context
+ * @param data_hash  The data hash (hash = ckb_blake2b(data))
+ * @param len        The length of the script data
+ * @param offset     The offset of the script data
+ * @param data       The pointer of the data to save the result
+ * @return           The status code, 0 is success
+ */
+typedef int (*gw_load_data_fn)(void *ctx, uint8_t data_hash[32],
+                              uint32_t *len, uint32_t offset,
+                              uint8_t *data);
+
+typedef int (*gw_store_data_fn)(void *ctx,
+                                uint32_t data_len,
+                                uint8_t *data);
 
 /**
  * Get layer 2 block hash by number
@@ -144,6 +164,8 @@ typedef int (*gw_get_block_hash_fn)(void *ctx, uint64_t number,
 typedef int (*gw_log_fn)(void *ctx, uint32_t account_id, uint32_t data_length,
                          const uint8_t *data);
 
+
+
 /* Godwoken context */
 typedef struct {
   uint32_t from_id;
@@ -165,6 +187,7 @@ typedef struct {
   gw_call_receipt_t receipt;
   /* layer2 syscalls */
   gw_load_fn sys_load;
+  gw_load_nonce_fn sys_load_nonce;
   gw_store_fn sys_store;
   gw_set_program_return_data_fn sys_set_program_return_data;
   gw_create_fn sys_create;
@@ -172,6 +195,8 @@ typedef struct {
   gw_get_script_hash_by_account_id_fn sys_get_script_hash_by_account_id;
   gw_get_account_nonce_fn sys_get_account_nonce;
   gw_get_account_script_fn sys_get_account_script;
+  gw_load_data_fn sys_load_data;
+  gw_store_data_fn sys_store_data;
   gw_get_block_hash_fn sys_get_block_hash;
   gw_log_fn sys_log;
 } gw_context_t;

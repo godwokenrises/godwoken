@@ -61,10 +61,20 @@ void gw_build_account_key(uint32_t id, const uint8_t key[GW_KEY_BYTES],
   blake2b_final(&blake2b_ctx, raw_key, GW_KEY_BYTES);
 }
 
+void gw_build_account_field_key(uint32_t id,
+                                uint8_t field_type,
+                                uint8_t key[GW_KEY_BYTES]) {
+  memset(key, 0, 32);
+  memcpy(key, (uint8_t *)(&id), sizeof(uint32_t));
+  key[sizeof(uint32_t)] = field_type;
+}
+
+void gw_build_nonce_key(uint32_t id, uint8_t key[GW_KEY_BYTES]) {
+  gw_build_account_field_key(id, GW_ACCOUNT_NONCE, key);
+}
+
 void gw_build_code_hash_key(uint32_t id, uint8_t key[GW_KEY_BYTES]) {
-  memset(key, 0, GW_KEY_BYTES);
-  memcpy(key, (uint8_t *)&id, sizeof(uint32_t));
-  key[sizeof(uint32_t)] = GW_ACCOUNT_CODE_HASH;
+  gw_build_account_field_key(id, GW_ACCOUNT_CODE_HASH, key);
 }
 
 int gw_parse_transaction_context(gw_transaction_context_t *transaction_context,

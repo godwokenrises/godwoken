@@ -7,7 +7,10 @@ use gw_common::{
     state::State,
 };
 use gw_generator::traits::CodeStore;
-use gw_types::packed::{L2Block, L2Transaction, Script};
+use gw_types::{
+    bytes::Bytes,
+    packed::{L2Block, L2Transaction, Script},
+};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -21,6 +24,7 @@ pub struct Store<S> {
     block_count: u64,
     // code store
     scripts: HashMap<H256, Script>,
+    codes: HashMap<H256, Bytes>,
     blocks: HashMap<H256, L2Block>,
     transactions: HashMap<H256, L2Transaction>,
 }
@@ -33,6 +37,7 @@ impl<S: SMTStore<H256>> Store<S> {
         block_count: u64,
         scripts: HashMap<H256, Script>,
         blocks: HashMap<H256, L2Block>,
+        codes: HashMap<H256, Bytes>,
         transactions: HashMap<H256, L2Transaction>,
     ) -> Self {
         Store {
@@ -41,6 +46,7 @@ impl<S: SMTStore<H256>> Store<S> {
             block_tree,
             block_count,
             scripts,
+            codes,
             blocks,
             transactions,
         }
@@ -57,6 +63,7 @@ impl<S: SMTStore<H256>> Store<S> {
             store,
             account_count,
             self.scripts.clone(),
+            self.codes.clone(),
         ))
     }
 
@@ -109,6 +116,7 @@ impl<S: SMTStore<H256> + Default> Default for Store<S> {
             block_tree,
             block_count: 0,
             scripts: Default::default(),
+            codes: Default::default(),
             blocks: Default::default(),
             transactions: Default::default(),
         }
@@ -143,5 +151,11 @@ impl<S: SMTStore<H256>> CodeStore for Store<S> {
     }
     fn get_script(&self, script_hash: &H256) -> Option<Script> {
         self.scripts.get(&script_hash).cloned()
+    }
+    fn insert_code(&mut self, script_hash: H256, code: Bytes) {
+        self.codes.insert(script_hash, code);
+    }
+    fn get_code(&self, script_hash: &H256) -> Option<Bytes> {
+        self.codes.get(script_hash).cloned()
     }
 }

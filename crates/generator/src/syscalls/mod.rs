@@ -5,6 +5,7 @@ use ckb_vm::{
     Error as VMError, Register, SupportMachine, Syscalls,
 };
 use gw_common::{
+    blake2b::new_blake2b,
     h256_ext::H256Ext,
     state::{
         build_account_field_key, build_script_hash_to_account_id_key, State, GW_ACCOUNT_NONCE,
@@ -13,6 +14,7 @@ use gw_common::{
     H256,
 };
 use gw_types::{
+    bytes::Bytes,
     packed::{BlockInfo, RawL2Transaction, Script},
     prelude::*,
 };
@@ -33,6 +35,8 @@ const SYS_LOAD_BLOCKINFO: u64 = 4052;
 const SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID: u64 = 4053;
 const SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH: u64 = 4054;
 const SYS_LOAD_ACCOUNT_SCRIPT: u64 = 4055;
+const SYS_STORE_DATA: u64 = 4056;
+const SYS_LOAD_DATA: u64 = 4057;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
@@ -47,6 +51,7 @@ pub struct RunResult {
     pub return_data: Vec<u8>,
     pub account_count: Option<u32>,
     pub new_scripts: HashMap<H256, Vec<u8>>,
+    pub new_data: HashMap<H256, Vec<u8>>,
 }
 
 pub(crate) struct L2Syscalls<'a, S> {
@@ -245,6 +250,7 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 let len_addr = machine.registers()[A1].to_u64();
                 let offset = machine.registers()[A2].to_u32() as usize;
                 let script_addr = machine.registers()[A3].to_u64();
+
                 let script_hash = self.get_script_hash(account_id).map_err(|err| {
                     eprintln!("syscall error: get script hash by account id: {:?}", err);
                     VMError::Unexpected
@@ -273,6 +279,55 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 machine
                     .memory_mut()
                     .store_bytes(len_addr, &(new_len as u32).to_le_bytes())?;
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_LOAD_DATA => {
+                let data_hash_addr = machine.registers()[A0].to_u64();
+                let len_addr = machine.registers()[A1].to_u64();
+                let offset = machine.registers()[A2].to_u32() as usize;
+                let data_addr = machine.registers()[A3].to_u64();
+
+                let data_hash = load_data_h256(machine, data_hash_addr)?;
+                let len = load_data_u32(machine, len_addr)? as usize;
+                let data = self.get_code(&data_hash).ok_or_else(|| {
+                    eprintln!(
+                        "syscall error: data not found by data hash: {:?}",
+                        data_hash
+                    );
+                    VMError::Unexpected
+                })?;
+                let data_ref = data.as_ref();
+                let new_len = if offset >= data_ref.len() {
+                    0
+                } else if (offset + len) > data_ref.len() {
+                    data_ref.len() - offset
+                } else {
+                    len
+                };
+                if new_len > 0 {
+                    machine
+                        .memory_mut()
+                        .store_bytes(data_addr, &data_ref[offset..offset + new_len])?;
+                }
+                machine
+                    .memory_mut()
+                    .store_bytes(len_addr, &(new_len as u32).to_le_bytes())?;
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_STORE_DATA => {
+                let data_len = machine.registers()[A0].to_u32();
+                let data_addr = machine.registers()[A1].to_u64();
+
+                let data = load_bytes(machine, data_addr, data_len as usize)?;
+                let mut data_hash = [0u8; 32];
+                let mut hasher = new_blake2b();
+                hasher.update(data.as_ref());
+                hasher.finalize(&mut data_hash);
+                self.result
+                    .new_data
+                    .insert(data_hash.into(), data.as_slice().to_vec());
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -317,6 +372,14 @@ impl<'a, S: State> L2Syscalls<'a, S> {
             .get(script_hash)
             .map(|data| Script::from_slice(&data).expect("Script"))
             .or_else(|| self.code_store.get_script(&script_hash))
+    }
+    // TODO: rename get_code to get_data
+    fn get_code(&self, data_hash: &H256) -> Option<Bytes> {
+        self.result
+            .new_data
+            .get(data_hash)
+            .map(|data| Bytes::from(data.clone()))
+            .or_else(|| self.code_store.get_code(&data_hash))
     }
     fn get_script_hash(&mut self, id: u32) -> Result<H256, VMError> {
         let value = self
