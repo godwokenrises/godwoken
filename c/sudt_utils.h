@@ -10,6 +10,7 @@
 /* errors */
 #define ERROR_INSUFFICIENT_BALANCE 12
 #define ERROR_AMOUNT_OVERFLOW 13
+#define ERROR_TO_ID 14
 
 /* Prepare withdrawal fields */
 #define WITHDRAWAL_LOCK_HASH 1
@@ -49,6 +50,10 @@ int sudt_get_balance(gw_context_t *ctx, uint32_t sudt_id, uint32_t account_id,
 /* Transfer Simple UDT */
 int sudt_transfer(gw_context_t *ctx, uint32_t sudt_id, uint32_t from_id,
                   uint32_t to_id, uint128_t amount) {
+  if (from_id == to_id) {
+    return ERROR_TO_ID;
+  }
+
   /* check from account */
   uint8_t from_key[32] = {0};
   _sudt_id_to_key(from_id, from_key);
