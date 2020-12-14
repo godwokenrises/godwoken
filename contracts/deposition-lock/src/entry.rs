@@ -1,12 +1,9 @@
 //! Deposition-lock
 //! A user can send a deposition request cell with this lock.
-//! The cell can be unlocked by the rollup cell which match the rollup_type_id,
+//! The cell can be unlocked by the rollup cell which match the rollup_type_hash,
 //! or can be unlocked by user.
 //!
-//! Args: rollup_type_id|pubkey_hash|account_id
-//!
-//! If the account_id is 0, the Rollup should create a new account which pubkey_hash equals to the pubkey_hash in the args.
-//! If the account_id isn't 0, the Rollup should mint new token to the account_id according to the deposited token.
+//! Args: DepositionLockArgs
 
 // Import from `core` instead of from `std` since we are in no-std mode
 use core::result::Result;
@@ -20,12 +17,10 @@ use core::result::Result;
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::Unpack as CKBTypeUnpack},
-    debug,
-    dynamic_loading::CKBDLContext,
     high_level::{
-        load_cell_type_hash, load_input_since, load_script, load_witness_args, QueryIter,
+        load_cell_lock_hash, load_cell_type_hash, load_input_since, load_script, QueryIter,
     },
-    since::{LockValue, Since},
+    since::Since,
 };
 
 use gw_types::{
@@ -33,14 +28,9 @@ use gw_types::{
     prelude::*,
 };
 
-use ckb_lib_secp256k1::LibSecp256k1;
-
 use crate::error::Error;
 
-// User can unlock the cell after the timeout
-const USER_UNLOCK_TIMEOUT_BLOCKS: u64 = 10;
-
-fn parse_script_args() -> Result<DepositionLockArgs, Error> {
+fn parse_lock_args() -> Result<DepositionLockArgs, Error> {
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
     match DepositionLockArgsReader::verify(&args, false) {
@@ -49,60 +39,41 @@ fn parse_script_args() -> Result<DepositionLockArgs, Error> {
     }
 }
 
-fn search_rollup_id(rollup_id: &[u8; 32]) -> Option<usize> {
+fn search_rollup_cell(rollup_type_hash: &[u8; 32]) -> Option<usize> {
     QueryIter::new(load_cell_type_hash, Source::Input)
-        .position(|type_hash| type_hash.as_ref() == Some(rollup_id))
+        .position(|type_hash| type_hash.as_ref() == Some(rollup_type_hash))
 }
 
-// We have two unlock path
+fn search_owner_cell(owner_lock_hash: &[u8; 32]) -> Option<usize> {
+    QueryIter::new(load_cell_lock_hash, Source::Input)
+        .position(|lock_hash| &lock_hash == owner_lock_hash)
+}
+
+// We have two unlock paths
 // 1. unlock by Rollup cell
-// 2. unlock by user
+// 2. unlock by user after timeout
 //
-// We read the witness_args to determine which unlock path we are trying.
-// if the length of lock_args field is 0 we try to search a Rollup id in the inputs cell,
-// otherwise we try to read the user signature from witness_args then verifies the user lock,
+// We always try the 1 first, then try 2, otherwise the unlock return a failure.
 pub fn main() -> Result<(), Error> {
-    let deposition_lock = parse_script_args()?;
-    debug!("script args is {}", deposition_lock);
-    let witness_args = load_witness_args(0, Source::GroupInput)?;
-    let lock_args: Bytes = witness_args
-        .lock()
-        .to_opt()
-        .map(|lock| lock.unpack())
-        .unwrap_or_else(|| Bytes::default());
-    if lock_args.len() > 0 {
-        // unlock by user
-        // 1. check since is satisfied the timeout blocks
-        let since = Since::new(load_input_since(0, Source::GroupInput)?);
-        if !since.is_relative() {
-            return Err(Error::InvalidSince);
-        }
-        match since.extract_lock_value() {
-            Some(LockValue::BlockNumber(n)) if n >= USER_UNLOCK_TIMEOUT_BLOCKS => {
-                // donothing if the lock value satisfied our requirements.
-            }
-            _ => {
-                return Err(Error::InvalidSince);
-            }
-        }
-        // 2. verify user's signature
-        let mut context = unsafe{ CKBDLContext::<[u8; 128 * 1024]>::new() };
-        let lib = LibSecp256k1::load(&mut context);
-        let mut pubkey_hash = [0u8; 20];
-        lib.validate_blake2b_sighash_all(&mut pubkey_hash)
-            .map_err(|err_code| {
-                debug!("secp256k1 error {}", err_code);
-                Error::Secp256k1
-            })?;
-        if &lock_args[..] != &pubkey_hash[..] {
-            return Err(Error::WrongSignature);
-        }
-    } else {
-        // unlock by Rollup
-        // Search inputs cells by rollup_type_id
-        search_rollup_id(&deposition_lock.rollup_type_id().unpack())
-            .ok_or_else(|| Error::RollupCellNotFound)?;
+    let lock_args = parse_lock_args()?;
+    // try unlock by Rollup
+    // return success if rollup cell in the inputs, the following verification will be handled by rollup state validator.
+    if search_rollup_cell(&lock_args.rollup_type_hash().unpack()).is_some() {
+        return Ok(());
     }
 
-    Ok(())
+    // unlock by user
+    // 1. check since is satisfied the cancel timeout
+    let input_since = Since::new(load_input_since(0, Source::GroupInput)?);
+    let cancel_timeout = Since::new(lock_args.cancel_timeout().unpack());
+    if input_since.flags() != cancel_timeout.flags()
+        || input_since.as_u64() < cancel_timeout.as_u64()
+    {
+        return Err(Error::InvalidSince);
+    }
+    // 2. search owner cell
+    match search_owner_cell(&lock_args.owner_lock_hash().unpack()) {
+        Some(_) => Ok(()),
+        None => Err(Error::OwnerCellNotFound),
+    }
 }

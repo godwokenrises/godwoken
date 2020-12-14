@@ -122,16 +122,18 @@ table VerificationContext {
 // --- end of contract execution ---
 
 // --- deposition lock ---
-struct DepositionLockArgs {
-    rollup_type_id: Byte32,
-    pubkey_hash: Byte20,
-    account_id: Uint32,
+table DepositionLockArgs {
+    rollup_type_hash: Byte32,
+    layer2_lock: Script,
+    cancel_timeout: Uint64,
+    // layer1 lock hash
+    owner_lock_hash: Byte32,
 }
 // --- end of deposition lock ---
 
 // --- stake lock ---
 struct StakeLockArgs {
-    rollup_type_id: Byte32,
+    rollup_type_hash: Byte32,
     owner_lock_hash: Byte32,
     signing_pubkey_hash: Byte20,
     finalize_block_number: Uint64,

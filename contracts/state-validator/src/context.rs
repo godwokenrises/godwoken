@@ -12,7 +12,7 @@ pub struct Context {
     pub kv_pairs: BTreeMap<H256, H256>,
     pub kv_merkle_proof: CompiledMerkleProof,
     pub account_count: u32,
-    pub rollup_type_id: [u8; 32],
+    pub rollup_type_hash: [u8; 32],
     pub block_hash: [u8; 32],
 }
 

@@ -7113,33 +7113,75 @@ impl ::core::fmt::Debug for DepositionLockArgs {
 impl ::core::fmt::Display for DepositionLockArgs {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "rollup_type_id", self.rollup_type_id())?;
-        write!(f, ", {}: {}", "pubkey_hash", self.pubkey_hash())?;
-        write!(f, ", {}: {}", "account_id", self.account_id())?;
+        write!(f, "{}: {}", "rollup_type_hash", self.rollup_type_hash())?;
+        write!(f, ", {}: {}", "layer2_lock", self.layer2_lock())?;
+        write!(f, ", {}: {}", "cancel_timeout", self.cancel_timeout())?;
+        write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
         write!(f, " }}")
     }
 }
 impl ::core::default::Default for DepositionLockArgs {
     fn default() -> Self {
         let v: Vec<u8> = vec![
+            145, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 105, 0, 0, 0, 113, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0,
+            0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0,
         ];
         DepositionLockArgs::new_unchecked(v.into())
     }
 }
 impl DepositionLockArgs {
-    pub const TOTAL_SIZE: usize = 56;
-    pub const FIELD_SIZES: [usize; 3] = [32, 20, 4];
-    pub const FIELD_COUNT: usize = 3;
-    pub fn rollup_type_id(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(0..32))
+    pub const FIELD_COUNT: usize = 4;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
     }
-    pub fn pubkey_hash(&self) -> Byte20 {
-        Byte20::new_unchecked(self.0.slice(32..52))
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
     }
-    pub fn account_id(&self) -> Uint32 {
-        Uint32::new_unchecked(self.0.slice(52..56))
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn rollup_type_hash(&self) -> Byte32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Byte32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn layer2_lock(&self) -> Script {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Script::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn cancel_timeout(&self) -> Uint64 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Uint64::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn owner_lock_hash(&self) -> Byte32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[20..]) as usize;
+            Byte32::new_unchecked(self.0.slice(start..end))
+        } else {
+            Byte32::new_unchecked(self.0.slice(start..))
+        }
     }
     pub fn as_reader<'r>(&'r self) -> DepositionLockArgsReader<'r> {
         DepositionLockArgsReader::new_unchecked(self.as_slice())
@@ -7168,9 +7210,10 @@ impl molecule::prelude::Entity for DepositionLockArgs {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .rollup_type_id(self.rollup_type_id())
-            .pubkey_hash(self.pubkey_hash())
-            .account_id(self.account_id())
+            .rollup_type_hash(self.rollup_type_hash())
+            .layer2_lock(self.layer2_lock())
+            .cancel_timeout(self.cancel_timeout())
+            .owner_lock_hash(self.owner_lock_hash())
     }
 }
 #[derive(Clone, Copy)]
@@ -7192,24 +7235,62 @@ impl<'r> ::core::fmt::Debug for DepositionLockArgsReader<'r> {
 impl<'r> ::core::fmt::Display for DepositionLockArgsReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "rollup_type_id", self.rollup_type_id())?;
-        write!(f, ", {}: {}", "pubkey_hash", self.pubkey_hash())?;
-        write!(f, ", {}: {}", "account_id", self.account_id())?;
+        write!(f, "{}: {}", "rollup_type_hash", self.rollup_type_hash())?;
+        write!(f, ", {}: {}", "layer2_lock", self.layer2_lock())?;
+        write!(f, ", {}: {}", "cancel_timeout", self.cancel_timeout())?;
+        write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
         write!(f, " }}")
     }
 }
 impl<'r> DepositionLockArgsReader<'r> {
-    pub const TOTAL_SIZE: usize = 56;
-    pub const FIELD_SIZES: [usize; 3] = [32, 20, 4];
-    pub const FIELD_COUNT: usize = 3;
-    pub fn rollup_type_id(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
+    pub const FIELD_COUNT: usize = 4;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
     }
-    pub fn pubkey_hash(&self) -> Byte20Reader<'r> {
-        Byte20Reader::new_unchecked(&self.as_slice()[32..52])
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
     }
-    pub fn account_id(&self) -> Uint32Reader<'r> {
-        Uint32Reader::new_unchecked(&self.as_slice()[52..56])
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn rollup_type_hash(&self) -> Byte32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn layer2_lock(&self) -> ScriptReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        ScriptReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn cancel_timeout(&self) -> Uint64Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn owner_lock_hash(&self) -> Byte32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[20..]) as usize;
+            Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            Byte32Reader::new_unchecked(&self.as_slice()[start..])
+        }
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for DepositionLockArgsReader<'r> {
@@ -7224,35 +7305,75 @@ impl<'r> molecule::prelude::Reader<'r> for DepositionLockArgsReader<'r> {
     fn as_slice(&self) -> &'r [u8] {
         self.0
     }
-    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
         use molecule::verification_error as ve;
         let slice_len = slice.len();
-        if slice_len != Self::TOTAL_SIZE {
-            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
         }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        let field_count = offset_first / 4 - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
+        if slice_len < header_size {
+            return ve!(Self, HeaderIsBroken, header_size, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
+            .chunks(molecule::NUMBER_SIZE)
+            .take(field_count)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        Byte32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        ScriptReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Uint64Reader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct DepositionLockArgsBuilder {
-    pub(crate) rollup_type_id: Byte32,
-    pub(crate) pubkey_hash: Byte20,
-    pub(crate) account_id: Uint32,
+    pub(crate) rollup_type_hash: Byte32,
+    pub(crate) layer2_lock: Script,
+    pub(crate) cancel_timeout: Uint64,
+    pub(crate) owner_lock_hash: Byte32,
 }
 impl DepositionLockArgsBuilder {
-    pub const TOTAL_SIZE: usize = 56;
-    pub const FIELD_SIZES: [usize; 3] = [32, 20, 4];
-    pub const FIELD_COUNT: usize = 3;
-    pub fn rollup_type_id(mut self, v: Byte32) -> Self {
-        self.rollup_type_id = v;
+    pub const FIELD_COUNT: usize = 4;
+    pub fn rollup_type_hash(mut self, v: Byte32) -> Self {
+        self.rollup_type_hash = v;
         self
     }
-    pub fn pubkey_hash(mut self, v: Byte20) -> Self {
-        self.pubkey_hash = v;
+    pub fn layer2_lock(mut self, v: Script) -> Self {
+        self.layer2_lock = v;
         self
     }
-    pub fn account_id(mut self, v: Uint32) -> Self {
-        self.account_id = v;
+    pub fn cancel_timeout(mut self, v: Uint64) -> Self {
+        self.cancel_timeout = v;
+        self
+    }
+    pub fn owner_lock_hash(mut self, v: Byte32) -> Self {
+        self.owner_lock_hash = v;
         self
     }
 }
@@ -7260,12 +7381,31 @@ impl molecule::prelude::Builder for DepositionLockArgsBuilder {
     type Entity = DepositionLockArgs;
     const NAME: &'static str = "DepositionLockArgsBuilder";
     fn expected_length(&self) -> usize {
-        Self::TOTAL_SIZE
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.rollup_type_hash.as_slice().len()
+            + self.layer2_lock.as_slice().len()
+            + self.cancel_timeout.as_slice().len()
+            + self.owner_lock_hash.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        writer.write_all(self.rollup_type_id.as_slice())?;
-        writer.write_all(self.pubkey_hash.as_slice())?;
-        writer.write_all(self.account_id.as_slice())?;
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.rollup_type_hash.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.layer2_lock.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.cancel_timeout.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.owner_lock_hash.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.rollup_type_hash.as_slice())?;
+        writer.write_all(self.layer2_lock.as_slice())?;
+        writer.write_all(self.cancel_timeout.as_slice())?;
+        writer.write_all(self.owner_lock_hash.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -7294,7 +7434,7 @@ impl ::core::fmt::Debug for StakeLockArgs {
 impl ::core::fmt::Display for StakeLockArgs {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "rollup_type_id", self.rollup_type_id())?;
+        write!(f, "{}: {}", "rollup_type_hash", self.rollup_type_hash())?;
         write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
         write!(
             f,
@@ -7326,7 +7466,7 @@ impl StakeLockArgs {
     pub const TOTAL_SIZE: usize = 92;
     pub const FIELD_SIZES: [usize; 4] = [32, 32, 20, 8];
     pub const FIELD_COUNT: usize = 4;
-    pub fn rollup_type_id(&self) -> Byte32 {
+    pub fn rollup_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
     pub fn owner_lock_hash(&self) -> Byte32 {
@@ -7365,7 +7505,7 @@ impl molecule::prelude::Entity for StakeLockArgs {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .rollup_type_id(self.rollup_type_id())
+            .rollup_type_hash(self.rollup_type_hash())
             .owner_lock_hash(self.owner_lock_hash())
             .signing_pubkey_hash(self.signing_pubkey_hash())
             .finalize_block_number(self.finalize_block_number())
@@ -7390,7 +7530,7 @@ impl<'r> ::core::fmt::Debug for StakeLockArgsReader<'r> {
 impl<'r> ::core::fmt::Display for StakeLockArgsReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "rollup_type_id", self.rollup_type_id())?;
+        write!(f, "{}: {}", "rollup_type_hash", self.rollup_type_hash())?;
         write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
         write!(
             f,
@@ -7411,7 +7551,7 @@ impl<'r> StakeLockArgsReader<'r> {
     pub const TOTAL_SIZE: usize = 92;
     pub const FIELD_SIZES: [usize; 4] = [32, 32, 20, 8];
     pub const FIELD_COUNT: usize = 4;
-    pub fn rollup_type_id(&self) -> Byte32Reader<'r> {
+    pub fn rollup_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
     pub fn owner_lock_hash(&self) -> Byte32Reader<'r> {
@@ -7447,7 +7587,7 @@ impl<'r> molecule::prelude::Reader<'r> for StakeLockArgsReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct StakeLockArgsBuilder {
-    pub(crate) rollup_type_id: Byte32,
+    pub(crate) rollup_type_hash: Byte32,
     pub(crate) owner_lock_hash: Byte32,
     pub(crate) signing_pubkey_hash: Byte20,
     pub(crate) finalize_block_number: Uint64,
@@ -7456,8 +7596,8 @@ impl StakeLockArgsBuilder {
     pub const TOTAL_SIZE: usize = 92;
     pub const FIELD_SIZES: [usize; 4] = [32, 32, 20, 8];
     pub const FIELD_COUNT: usize = 4;
-    pub fn rollup_type_id(mut self, v: Byte32) -> Self {
-        self.rollup_type_id = v;
+    pub fn rollup_type_hash(mut self, v: Byte32) -> Self {
+        self.rollup_type_hash = v;
         self
     }
     pub fn owner_lock_hash(mut self, v: Byte32) -> Self {
@@ -7480,7 +7620,7 @@ impl molecule::prelude::Builder for StakeLockArgsBuilder {
         Self::TOTAL_SIZE
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        writer.write_all(self.rollup_type_id.as_slice())?;
+        writer.write_all(self.rollup_type_hash.as_slice())?;
         writer.write_all(self.owner_lock_hash.as_slice())?;
         writer.write_all(self.signing_pubkey_hash.as_slice())?;
         writer.write_all(self.finalize_block_number.as_slice())?;

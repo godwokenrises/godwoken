@@ -88,7 +88,7 @@ fn collect_deposition_requests(rollup_id: &[u8; 32]) -> Result<Vec<DepositionReq
             };
 
             // ignore deposition request that do not belong to Rollup
-            if &deposition_args.rollup_type_id().unpack() != rollup_id {
+            if &deposition_args.rollup_type_hash().unpack() != rollup_id {
                 return None;
             }
 
@@ -163,7 +163,7 @@ pub fn handle(context: &mut Context, _block: &L2Block) -> Result<(), Error> {
     // 2. find or create accounts accoding to requests
     // 3. deposit balance to account (how? call contract, or directly alter the balance)
 
-    let deposition_requests = collect_deposition_requests(&context.rollup_type_id)?;
+    let deposition_requests = collect_deposition_requests(&context.rollup_type_hash)?;
     check_outputs_rollup_lock(&deposition_requests)?;
 
     // mint token

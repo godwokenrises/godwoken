@@ -9,10 +9,8 @@ pub enum Error {
     Encoding,
     // Add customized errors here...
     InvalidArgs,
-    RollupCellNotFound,
-    Secp256k1,
-    WrongSignature,
     InvalidSince,
+    OwnerCellNotFound,
 }
 
 impl From<SysError> for Error {
