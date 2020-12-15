@@ -137,7 +137,7 @@ export async function deposit(
     args: "0x", //TODO reset the args
   };
   const rollupTypeHash: Hash = computeScriptHash(rollupTypeScript);
-  const toL2LockScript: Script = parseAddress(toAddress, { config });
+  const toL2LockScript: Script = parseAddress(toAddress, { config: config });
   const args = encodeDepositionLockArgs(
     rollupTypeHash,
     toL2LockScript,
@@ -180,11 +180,11 @@ export async function deposit(
 
   // build input cells
   const fromScripts: Script[] = fromInfos.map(
-    (fromInfo) => parseFromInfo(fromInfo, { config }).fromScript
+    (fromInfo) => parseFromInfo(fromInfo, { config: config }).fromScript
   );
 
   const changeOutputLockScript = changeAddress
-    ? parseAddress(changeAddress, { config })
+    ? parseAddress(changeAddress, { config: config })
     : fromScripts[0];
   let previousInputs = Set<string>();
   let discardChangeCellFlag = false;
@@ -211,7 +211,7 @@ export async function deposit(
       targetOutputCkbCapacity,
       targetOutputSudtAmount,
       previousInputs,
-      { config }
+      { config: config }
     );
     txSkeleton = result.txSkeleton;
     previousInputs = result.previousInputs;
@@ -249,7 +249,7 @@ export async function deposit(
             extraRequiredCkbCapacity,
             0n,
             previousInputs,
-            { config }
+            { config: config }
           );
           txSkeleton = result.txSkeleton;
           previousInputs = result.previousInputs;
@@ -293,7 +293,7 @@ export async function deposit(
           extraRequiredCkbCapacity,
           0n,
           previousInputs,
-          { config }
+          { config: config }
         );
         txSkeleton = result.txSkeleton;
         previousInputs = result.previousInputs;
@@ -340,7 +340,7 @@ export async function deposit(
       targetOutputCkbCapacity,
       targetOutputSudtAmount,
       previousInputs,
-      { config }
+      { config: config }
     );
     txSkeleton = result.txSkeleton;
     previousInputs = result.previousInputs;
