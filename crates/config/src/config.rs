@@ -36,6 +36,7 @@ pub struct GenesisConfig {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ChainConfig {
     pub rollup_type_script: Script,
+    pub genesis_block_hash: [u8; 32],
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

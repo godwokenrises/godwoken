@@ -8,9 +8,11 @@ use gw_chain::{
     next_block_context::NextBlockContext,
     tx_pool::TxPool,
 };
-use gw_common::smt::H256;
+use gw_common::smt::{H256, SMT};
+use gw_common::sparse_merkle_tree::SparseMerkleTree;
 use gw_config::{Config, GenesisConfig};
 use gw_generator::{
+    backend_manage::BackendManage,
     generator::{DepositionRequest, WithdrawalRequest},
     Generator,
 };
@@ -53,24 +55,13 @@ declare_types! {
             let content: serde_json::Value = serde_json::from_reader(file).expect("Reading content from config file");
             let config: Config = serde_json::from_value(content).expect("Constructing config");
             let tip = genesis::build_genesis(&config.genesis).expect("Building genesis block from config");
-            let genesis = unimplemented!();
             let last_synced = HeaderInfo {
                 number: 0,
-                block_hash: unimplemented!(),
+                block_hash: config.chain.genesis_block_hash,
             };
-            let store = {
-                let account_tree = unimplemented!();
-                let account_count = 0u32;
-                let block_tree = unimplemented!();
-                let block_count = 0u64;
-                let scripts: HashMap<H256, Script> = HashMap::new();
-                let codes: HashMap<H256, Bytes> = HashMap::new();
-                let blocks: HashMap<H256, L2Block> = HashMap::new();
-                let transactions: HashMap<H256, L2Transaction> = HashMap::new();
-                Store::new(account_tree, account_count, block_tree, block_count, scripts, codes, blocks, transactions)
-            };
+            let store = Store::default();
             let tx_pool = {
-                let generator = Generator::new();
+                let generator = Generator::new(BackendManage::default());
                 let nb_ctx = NextBlockContext {
                     aggregator_id: 0u32,
                     timestamp: 0u64,
@@ -79,9 +70,9 @@ declare_types! {
                 Arc::new(Mutex::new(tx_pool))
             };
             let chain = {
-                let generator = Generator::new();
+                let generator = Generator::new(BackendManage::default());
                 Chain::new(
-                    config.chain,
+                    config.clone().chain,
                     store,
                     tip,
                     last_synced,
@@ -413,14 +404,30 @@ declare_types! {
         }
 
         method last_synced() {
-            Ok(cx.undefined().upcast())
+            let this = cx.this();
+            let header_info: HeaderInfo = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                chain.last_synced()
+            });
+            let js_header_info = JsObject::new(&mut cx);
+            let js_block_number = cx.string(format!("{:#x}", header_info.number));
+            js_header_info.set(&mut cx, "number", js_block_number)?;
+            let js_block_hash = cx.string(format!("{:#x}", header_info.block_hash));
+            js_header_info.set(&mut cx, "block_hash", js_block_hash)?;
+            Ok(js_header_info.upcast())
         }
+
         method tip() {
+            let this = cx.this();
+            let tip: L2Block = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                chain.tip();
+            })
             Ok(cx.undefined().upcast())
         }
+
         method status() {
             Ok(cx.undefined().upcast())
         }
     }
-
 }

@@ -19,6 +19,7 @@ const RPC_LISTEN_ADDRESS: &str = "rpc-listen-address";
 const LUMOS_CALLBACK_ADDRESS: &str = "lumos-callback-address";
 const LUMOS_ENDPOINT: &str = "lumos-endpoint";
 const ROLLUP_CONTRACT: &str = "rollup-contract-path";
+const GENESIS_BLOCK_HASH: &str = "genesis-block-hash";
 
 fn build_cli(help_msg: &mut Vec<u8>) -> Result<ArgMatches> {
     let mut app = App::new("gw-setup-tool")
@@ -137,6 +138,18 @@ fn run() -> Result<()> {
     let lumos_callback_address = args.value_of(LUMOS_CALLBACK_ADDRESS).unwrap();
     let lumos_endpoint = args.value_of(LUMOS_ENDPOINT).unwrap();
     let rollup_contract_path = args.value_of(ROLLUP_CONTRACT).unwrap();
+    let genesis_block_hash = {
+        let block_hash_hex = args.value_of(GENESIS_BLOCK_HASH).unwrap();
+        let block_hash_hex = block_hash_hex.trim_start_matches("0x");
+        if block_hash_hex.len() != 64 {
+            return Err(anyhow!(
+                "genesis_block_hash should be a 40 length hex string"
+            ));
+        }
+        let mut block_hash = [0u8; 32];
+        hex_decode(block_hash_hex.as_bytes(), &mut block_hash)?;
+        block_hash.into()
+    };
 
     // the zero account_id is reserved, so our initial account id is 1
     let initial_account_id = 1;
@@ -158,7 +171,10 @@ fn run() -> Result<()> {
 
     let rollup_type_script = build_rollup_script(rollup_contract_path)?;
 
-    let chain = ChainConfig { rollup_type_script };
+    let chain = ChainConfig {
+        rollup_type_script: rollup_type_script,
+        genesis_block_hash: genesis_block_hash,
+    };
 
     let rpc = RPC {
         listen: rpc_listen_address.to_string(),

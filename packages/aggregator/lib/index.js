@@ -25,9 +25,6 @@ class Chain {
     this.nativeChain = new addon.NativeChain(configPath);
   }
 
-  /* 1. start godwoken rpc service:
-   * 2. sync from CKB network
-   */
   start() {
       setInterval(() => {
           this.sync();
@@ -44,20 +41,6 @@ class Chain {
     }, this.livenessCheckIntervalSeconds * 1000);
   }
 
-  stop() {
-  }
-
-  // Sync Rollup related data from CKB network:
-  // 1. L1->L2 user deposition transaction
-  // 2. L1 aggregator deposition-collect transaction
-  // 3. L2->L1 aggregator withdraw transaction
-  // 4. L2->L1 user force-withdraw transaction
-  // 5. L2 aggregator submit-block transaction
-  // 6. L2 aggregator rever-block transaction(challenge with fraud proof)
-
-  /*
-   *
-   */
   sync() {
     // start from last_synced block
     let updates = [];
@@ -157,9 +140,6 @@ class Chain {
     this.nativeChain.sync(updates, reverts, nextBlockContext);
   }
 
-  /*
-   *
-   */
   produce_block(aggregator_id, deposition_requests, withdrawal_requests) {}
 }
 

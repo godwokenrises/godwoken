@@ -4,7 +4,8 @@
             "code_hash": "0x82d76d1b75fe2fd9a27dfbaa65a039221a380d76c926f378d3f81cf3e7e13f2e",
             "hash_type": "type",
             "args": "0x"
-        }
+        },
+        "genesis_block_hash": "0xace5ea83c478bb866edf122ff862085789158f5cbff155b7bb5f13058555b708"
     },
     "consensus": {
         "aggregator_id": 1
