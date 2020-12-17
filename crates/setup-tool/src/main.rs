@@ -105,6 +105,7 @@ fn run() -> Result<()> {
     let rpc_listen_address = args.value_of(RPC_LISTEN_ADDRESS).unwrap();
     let lumos_callback_address = args.value_of(LUMOS_CALLBACK_ADDRESS).unwrap();
     let lumos_endpoint = args.value_of(LUMOS_ENDPOINT).unwrap();
+    let rollup_contract_path = args.value_of(ROLLUP_CONTRACT).unwrap();
 
     // the zero account_id is reserved, so our initial account id is 1
     let initial_account_id = 1;

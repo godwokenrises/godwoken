@@ -116,9 +116,25 @@ export type SyncEvent =
 
 export type Status = "Running" | "Halting";
 
+export interface L2Transaction {
+  raw: RawL2Transaction;
+  signature: ArrayBuffer;
+}
+
+export interface RawL2Transaction {
+  from_id: HexNumber;
+  to_id: HexNumber;
+  nonce: HexNumber;
+  args: ArrayBuffer;
+}
+
 export class ChainService {
-  sync(syncParam: SyncParam): SyncEvent;
-  produce_block(produceBlockParam: ProduceBlockParam): L2BlockWithState;
+  constructor();
+  sync(syncParam: SyncParam): Promise<SyncEvent>;
+  produce_block(
+    produceBlockParam: ProduceBlockParam
+  ): Promise<L2BlockWithState>;
+  submitL2Transaction(l2Transaction: L2Transaction): Promise<void>;
   tip(): L2Block;
   lastSynced(): HeaderInfo;
   status(): Status;
