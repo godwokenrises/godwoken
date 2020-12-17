@@ -636,11 +636,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "godwoken"
+name = "godwoken-api"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "ckb-types",
+ "gw-chain",
+ "gw-common",
+ "gw-config",
+ "gw-generator",
+ "gw-jsonrpc-types",
+ "gw-store",
+ "gw-types",
  "neon",
  "neon-build",
+ "parking_lot 0.11.1",
+ "serde_json",
+ "toml",
 ]
 
 [[package]]
