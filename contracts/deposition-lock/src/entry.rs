@@ -14,14 +14,14 @@ use core::result::Result;
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
-use ckb_std::{
+use crate::ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::Unpack as CKBTypeUnpack},
-    high_level::{
-        load_cell_lock_hash, load_cell_type_hash, load_input_since, load_script, QueryIter,
-    },
+    high_level::{load_input_since, load_script},
     since::Since,
 };
+
+use validator_utils::{search_owner_cell, search_rollup_cell};
 
 use gw_types::{
     packed::{DepositionLockArgs, DepositionLockArgsReader},
@@ -37,16 +37,6 @@ fn parse_lock_args() -> Result<DepositionLockArgs, Error> {
         Ok(()) => Ok(DepositionLockArgs::new_unchecked(args)),
         Err(_) => Err(Error::InvalidArgs),
     }
-}
-
-fn search_rollup_cell(rollup_type_hash: &[u8; 32]) -> Option<usize> {
-    QueryIter::new(load_cell_type_hash, Source::Input)
-        .position(|type_hash| type_hash.as_ref() == Some(rollup_type_hash))
-}
-
-fn search_owner_cell(owner_lock_hash: &[u8; 32]) -> Option<usize> {
-    QueryIter::new(load_cell_lock_hash, Source::Input)
-        .position(|lock_hash| &lock_hash == owner_lock_hash)
 }
 
 // We have two unlock paths

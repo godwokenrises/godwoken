@@ -1937,6 +1937,18 @@ impl ::core::fmt::Display for GlobalState {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "account", self.account())?;
         write!(f, ", {}: {}", "block", self.block())?;
+        write!(
+            f,
+            ", {}: {}",
+            "reverted_block_root",
+            self.reverted_block_root()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "last_finalized_block_number",
+            self.last_finalized_block_number()
+        )?;
         write!(f, ", {}: {}", "status", self.status())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -1948,16 +1960,18 @@ impl ::core::fmt::Display for GlobalState {
 impl ::core::default::Default for GlobalState {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            100, 0, 0, 0, 16, 0, 0, 0, 52, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            148, 0, 0, 0, 24, 0, 0, 0, 60, 0, 0, 0, 100, 0, 0, 0, 132, 0, 0, 0, 140, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 4, 0, 0, 0,
         ];
         GlobalState::new_unchecked(v.into())
     }
 }
 impl GlobalState {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 5;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -1986,11 +2000,23 @@ impl GlobalState {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         BlockMerkleState::new_unchecked(self.0.slice(start..end))
     }
-    pub fn status(&self) -> Status {
+    pub fn reverted_block_root(&self) -> Byte32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Byte32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn last_finalized_block_number(&self) -> Uint64 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
+        let end = molecule::unpack_number(&slice[20..]) as usize;
+        Uint64::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn status(&self) -> Status {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[20..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
+            let end = molecule::unpack_number(&slice[24..]) as usize;
             Status::new_unchecked(self.0.slice(start..end))
         } else {
             Status::new_unchecked(self.0.slice(start..))
@@ -2025,6 +2051,8 @@ impl molecule::prelude::Entity for GlobalState {
         Self::new_builder()
             .account(self.account())
             .block(self.block())
+            .reverted_block_root(self.reverted_block_root())
+            .last_finalized_block_number(self.last_finalized_block_number())
             .status(self.status())
     }
 }
@@ -2049,6 +2077,18 @@ impl<'r> ::core::fmt::Display for GlobalStateReader<'r> {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "account", self.account())?;
         write!(f, ", {}: {}", "block", self.block())?;
+        write!(
+            f,
+            ", {}: {}",
+            "reverted_block_root",
+            self.reverted_block_root()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "last_finalized_block_number",
+            self.last_finalized_block_number()
+        )?;
         write!(f, ", {}: {}", "status", self.status())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -2058,7 +2098,7 @@ impl<'r> ::core::fmt::Display for GlobalStateReader<'r> {
     }
 }
 impl<'r> GlobalStateReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 5;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -2087,11 +2127,23 @@ impl<'r> GlobalStateReader<'r> {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         BlockMerkleStateReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn status(&self) -> StatusReader<'r> {
+    pub fn reverted_block_root(&self) -> Byte32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn last_finalized_block_number(&self) -> Uint64Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
+        let end = molecule::unpack_number(&slice[20..]) as usize;
+        Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn status(&self) -> StatusReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[20..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
+            let end = molecule::unpack_number(&slice[24..]) as usize;
             StatusReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             StatusReader::new_unchecked(&self.as_slice()[start..])
@@ -2151,7 +2203,9 @@ impl<'r> molecule::prelude::Reader<'r> for GlobalStateReader<'r> {
         }
         AccountMerkleStateReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         BlockMerkleStateReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        StatusReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        Uint64Reader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        StatusReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
         Ok(())
     }
 }
@@ -2159,16 +2213,26 @@ impl<'r> molecule::prelude::Reader<'r> for GlobalStateReader<'r> {
 pub struct GlobalStateBuilder {
     pub(crate) account: AccountMerkleState,
     pub(crate) block: BlockMerkleState,
+    pub(crate) reverted_block_root: Byte32,
+    pub(crate) last_finalized_block_number: Uint64,
     pub(crate) status: Status,
 }
 impl GlobalStateBuilder {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 5;
     pub fn account(mut self, v: AccountMerkleState) -> Self {
         self.account = v;
         self
     }
     pub fn block(mut self, v: BlockMerkleState) -> Self {
         self.block = v;
+        self
+    }
+    pub fn reverted_block_root(mut self, v: Byte32) -> Self {
+        self.reverted_block_root = v;
+        self
+    }
+    pub fn last_finalized_block_number(mut self, v: Uint64) -> Self {
+        self.last_finalized_block_number = v;
         self
     }
     pub fn status(mut self, v: Status) -> Self {
@@ -2183,6 +2247,8 @@ impl molecule::prelude::Builder for GlobalStateBuilder {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.account.as_slice().len()
             + self.block.as_slice().len()
+            + self.reverted_block_root.as_slice().len()
+            + self.last_finalized_block_number.as_slice().len()
             + self.status.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
@@ -2193,6 +2259,10 @@ impl molecule::prelude::Builder for GlobalStateBuilder {
         offsets.push(total_size);
         total_size += self.block.as_slice().len();
         offsets.push(total_size);
+        total_size += self.reverted_block_root.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.last_finalized_block_number.as_slice().len();
+        offsets.push(total_size);
         total_size += self.status.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
@@ -2200,6 +2270,8 @@ impl molecule::prelude::Builder for GlobalStateBuilder {
         }
         writer.write_all(self.account.as_slice())?;
         writer.write_all(self.block.as_slice())?;
+        writer.write_all(self.reverted_block_root.as_slice())?;
+        writer.write_all(self.last_finalized_block_number.as_slice())?;
         writer.write_all(self.status.as_slice())?;
         Ok(())
     }
@@ -5041,699 +5113,6 @@ impl molecule::prelude::Builder for SubmitTransactionsBuilder {
     }
 }
 #[derive(Clone)]
-pub struct Leave(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for Leave {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for Leave {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for Leave {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ".. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for Leave {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![4, 0, 0, 0];
-        Leave::new_unchecked(v.into())
-    }
-}
-impl Leave {
-    pub const FIELD_COUNT: usize = 0;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn as_reader<'r>(&'r self) -> LeaveReader<'r> {
-        LeaveReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for Leave {
-    type Builder = LeaveBuilder;
-    const NAME: &'static str = "Leave";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        Leave(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        LeaveReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        LeaveReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-    }
-}
-#[derive(Clone, Copy)]
-pub struct LeaveReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for LeaveReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for LeaveReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for LeaveReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ".. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl<'r> LeaveReader<'r> {
-    pub const FIELD_COUNT: usize = 0;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for LeaveReader<'r> {
-    type Entity = Leave;
-    const NAME: &'static str = "LeaveReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        LeaveReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len > molecule::NUMBER_SIZE && !compatible {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, !0);
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct LeaveBuilder {}
-impl LeaveBuilder {
-    pub const FIELD_COUNT: usize = 0;
-}
-impl molecule::prelude::Builder for LeaveBuilder {
-    type Entity = Leave;
-    const NAME: &'static str = "LeaveBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE
-    }
-    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        writer.write_all(&molecule::pack_number(
-            molecule::NUMBER_SIZE as molecule::Number,
-        ))?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        Leave::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct RevertChain(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for RevertChain {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for RevertChain {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for RevertChain {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "reverter_id", self.reverter_id())?;
-        write!(
-            f,
-            ", {}: {}",
-            "invalid_block_number",
-            self.invalid_block_number()
-        )?;
-        write!(f, ", {}: {}", "post_account", self.post_account())?;
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for RevertChain {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-        RevertChain::new_unchecked(v.into())
-    }
-}
-impl RevertChain {
-    pub const TOTAL_SIZE: usize = 48;
-    pub const FIELD_SIZES: [usize; 3] = [4, 8, 36];
-    pub const FIELD_COUNT: usize = 3;
-    pub fn reverter_id(&self) -> Uint32 {
-        Uint32::new_unchecked(self.0.slice(0..4))
-    }
-    pub fn invalid_block_number(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(4..12))
-    }
-    pub fn post_account(&self) -> AccountMerkleState {
-        AccountMerkleState::new_unchecked(self.0.slice(12..48))
-    }
-    pub fn as_reader<'r>(&'r self) -> RevertChainReader<'r> {
-        RevertChainReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for RevertChain {
-    type Builder = RevertChainBuilder;
-    const NAME: &'static str = "RevertChain";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        RevertChain(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        RevertChainReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        RevertChainReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .reverter_id(self.reverter_id())
-            .invalid_block_number(self.invalid_block_number())
-            .post_account(self.post_account())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct RevertChainReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for RevertChainReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for RevertChainReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for RevertChainReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "reverter_id", self.reverter_id())?;
-        write!(
-            f,
-            ", {}: {}",
-            "invalid_block_number",
-            self.invalid_block_number()
-        )?;
-        write!(f, ", {}: {}", "post_account", self.post_account())?;
-        write!(f, " }}")
-    }
-}
-impl<'r> RevertChainReader<'r> {
-    pub const TOTAL_SIZE: usize = 48;
-    pub const FIELD_SIZES: [usize; 3] = [4, 8, 36];
-    pub const FIELD_COUNT: usize = 3;
-    pub fn reverter_id(&self) -> Uint32Reader<'r> {
-        Uint32Reader::new_unchecked(&self.as_slice()[0..4])
-    }
-    pub fn invalid_block_number(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[4..12])
-    }
-    pub fn post_account(&self) -> AccountMerkleStateReader<'r> {
-        AccountMerkleStateReader::new_unchecked(&self.as_slice()[12..48])
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for RevertChainReader<'r> {
-    type Entity = RevertChain;
-    const NAME: &'static str = "RevertChainReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        RevertChainReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len != Self::TOTAL_SIZE {
-            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct RevertChainBuilder {
-    pub(crate) reverter_id: Uint32,
-    pub(crate) invalid_block_number: Uint64,
-    pub(crate) post_account: AccountMerkleState,
-}
-impl RevertChainBuilder {
-    pub const TOTAL_SIZE: usize = 48;
-    pub const FIELD_SIZES: [usize; 3] = [4, 8, 36];
-    pub const FIELD_COUNT: usize = 3;
-    pub fn reverter_id(mut self, v: Uint32) -> Self {
-        self.reverter_id = v;
-        self
-    }
-    pub fn invalid_block_number(mut self, v: Uint64) -> Self {
-        self.invalid_block_number = v;
-        self
-    }
-    pub fn post_account(mut self, v: AccountMerkleState) -> Self {
-        self.post_account = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for RevertChainBuilder {
-    type Entity = RevertChain;
-    const NAME: &'static str = "RevertChainBuilder";
-    fn expected_length(&self) -> usize {
-        Self::TOTAL_SIZE
-    }
-    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        writer.write_all(self.reverter_id.as_slice())?;
-        writer.write_all(self.invalid_block_number.as_slice())?;
-        writer.write_all(self.post_account.as_slice())?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        RevertChain::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct LeaveOpt(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for LeaveOpt {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for LeaveOpt {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for LeaveOpt {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        if let Some(v) = self.to_opt() {
-            write!(f, "{}(Some({}))", Self::NAME, v)
-        } else {
-            write!(f, "{}(None)", Self::NAME)
-        }
-    }
-}
-impl ::core::default::Default for LeaveOpt {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![];
-        LeaveOpt::new_unchecked(v.into())
-    }
-}
-impl LeaveOpt {
-    pub fn is_none(&self) -> bool {
-        self.0.is_empty()
-    }
-    pub fn is_some(&self) -> bool {
-        !self.0.is_empty()
-    }
-    pub fn to_opt(&self) -> Option<Leave> {
-        if self.is_none() {
-            None
-        } else {
-            Some(Leave::new_unchecked(self.0.clone()))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> LeaveOptReader<'r> {
-        LeaveOptReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for LeaveOpt {
-    type Builder = LeaveOptBuilder;
-    const NAME: &'static str = "LeaveOpt";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        LeaveOpt(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        LeaveOptReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        LeaveOptReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().set(self.to_opt())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct LeaveOptReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for LeaveOptReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for LeaveOptReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for LeaveOptReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        if let Some(v) = self.to_opt() {
-            write!(f, "{}(Some({}))", Self::NAME, v)
-        } else {
-            write!(f, "{}(None)", Self::NAME)
-        }
-    }
-}
-impl<'r> LeaveOptReader<'r> {
-    pub fn is_none(&self) -> bool {
-        self.0.is_empty()
-    }
-    pub fn is_some(&self) -> bool {
-        !self.0.is_empty()
-    }
-    pub fn to_opt(&self) -> Option<LeaveReader<'r>> {
-        if self.is_none() {
-            None
-        } else {
-            Some(LeaveReader::new_unchecked(self.as_slice()))
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for LeaveOptReader<'r> {
-    type Entity = LeaveOpt;
-    const NAME: &'static str = "LeaveOptReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        LeaveOptReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        if !slice.is_empty() {
-            LeaveReader::verify(&slice[..], compatible)?;
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct LeaveOptBuilder(pub(crate) Option<Leave>);
-impl LeaveOptBuilder {
-    pub fn set(mut self, v: Option<Leave>) -> Self {
-        self.0 = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for LeaveOptBuilder {
-    type Entity = LeaveOpt;
-    const NAME: &'static str = "LeaveOptBuilder";
-    fn expected_length(&self) -> usize {
-        self.0
-            .as_ref()
-            .map(|ref inner| inner.as_slice().len())
-            .unwrap_or(0)
-    }
-    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        self.0
-            .as_ref()
-            .map(|ref inner| writer.write_all(inner.as_slice()))
-            .unwrap_or(Ok(()))
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        LeaveOpt::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct RevertChainOpt(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for RevertChainOpt {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for RevertChainOpt {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for RevertChainOpt {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        if let Some(v) = self.to_opt() {
-            write!(f, "{}(Some({}))", Self::NAME, v)
-        } else {
-            write!(f, "{}(None)", Self::NAME)
-        }
-    }
-}
-impl ::core::default::Default for RevertChainOpt {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![];
-        RevertChainOpt::new_unchecked(v.into())
-    }
-}
-impl RevertChainOpt {
-    pub fn is_none(&self) -> bool {
-        self.0.is_empty()
-    }
-    pub fn is_some(&self) -> bool {
-        !self.0.is_empty()
-    }
-    pub fn to_opt(&self) -> Option<RevertChain> {
-        if self.is_none() {
-            None
-        } else {
-            Some(RevertChain::new_unchecked(self.0.clone()))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> RevertChainOptReader<'r> {
-        RevertChainOptReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for RevertChainOpt {
-    type Builder = RevertChainOptBuilder;
-    const NAME: &'static str = "RevertChainOpt";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        RevertChainOpt(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        RevertChainOptReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        RevertChainOptReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().set(self.to_opt())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct RevertChainOptReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for RevertChainOptReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for RevertChainOptReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for RevertChainOptReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        if let Some(v) = self.to_opt() {
-            write!(f, "{}(Some({}))", Self::NAME, v)
-        } else {
-            write!(f, "{}(None)", Self::NAME)
-        }
-    }
-}
-impl<'r> RevertChainOptReader<'r> {
-    pub fn is_none(&self) -> bool {
-        self.0.is_empty()
-    }
-    pub fn is_some(&self) -> bool {
-        !self.0.is_empty()
-    }
-    pub fn to_opt(&self) -> Option<RevertChainReader<'r>> {
-        if self.is_none() {
-            None
-        } else {
-            Some(RevertChainReader::new_unchecked(self.as_slice()))
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for RevertChainOptReader<'r> {
-    type Entity = RevertChainOpt;
-    const NAME: &'static str = "RevertChainOptReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        RevertChainOptReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        if !slice.is_empty() {
-            RevertChainReader::verify(&slice[..], compatible)?;
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct RevertChainOptBuilder(pub(crate) Option<RevertChain>);
-impl RevertChainOptBuilder {
-    pub fn set(mut self, v: Option<RevertChain>) -> Self {
-        self.0 = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for RevertChainOptBuilder {
-    type Entity = RevertChainOpt;
-    const NAME: &'static str = "RevertChainOptBuilder";
-    fn expected_length(&self) -> usize {
-        self.0
-            .as_ref()
-            .map(|ref inner| inner.as_slice().len())
-            .unwrap_or(0)
-    }
-    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        self.0
-            .as_ref()
-            .map(|ref inner| writer.write_all(inner.as_slice()))
-            .unwrap_or(Ok(()))
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        RevertChainOpt::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
 pub struct SubmitTransactionsOpt(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for SubmitTransactionsOpt {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -7114,9 +6493,9 @@ impl ::core::fmt::Display for DepositionLockArgs {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "rollup_type_hash", self.rollup_type_hash())?;
+        write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
         write!(f, ", {}: {}", "layer2_lock", self.layer2_lock())?;
         write!(f, ", {}: {}", "cancel_timeout", self.cancel_timeout())?;
-        write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -7127,12 +6506,12 @@ impl ::core::fmt::Display for DepositionLockArgs {
 impl ::core::default::Default for DepositionLockArgs {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            145, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 105, 0, 0, 0, 113, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0,
-            0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            145, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 137, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53,
+            0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
+            0, 0, 0,
         ];
         DepositionLockArgs::new_unchecked(v.into())
     }
@@ -7161,26 +6540,26 @@ impl DepositionLockArgs {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         Byte32::new_unchecked(self.0.slice(start..end))
     }
-    pub fn layer2_lock(&self) -> Script {
+    pub fn owner_lock_hash(&self) -> Byte32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
+        Byte32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn layer2_lock(&self) -> Script {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
         Script::new_unchecked(self.0.slice(start..end))
     }
     pub fn cancel_timeout(&self) -> Uint64 {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
-        Uint64::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn owner_lock_hash(&self) -> Byte32 {
-        let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[20..]) as usize;
-            Byte32::new_unchecked(self.0.slice(start..end))
+            Uint64::new_unchecked(self.0.slice(start..end))
         } else {
-            Byte32::new_unchecked(self.0.slice(start..))
+            Uint64::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> DepositionLockArgsReader<'r> {
@@ -7211,9 +6590,9 @@ impl molecule::prelude::Entity for DepositionLockArgs {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .rollup_type_hash(self.rollup_type_hash())
+            .owner_lock_hash(self.owner_lock_hash())
             .layer2_lock(self.layer2_lock())
             .cancel_timeout(self.cancel_timeout())
-            .owner_lock_hash(self.owner_lock_hash())
     }
 }
 #[derive(Clone, Copy)]
@@ -7236,9 +6615,9 @@ impl<'r> ::core::fmt::Display for DepositionLockArgsReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "rollup_type_hash", self.rollup_type_hash())?;
+        write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
         write!(f, ", {}: {}", "layer2_lock", self.layer2_lock())?;
         write!(f, ", {}: {}", "cancel_timeout", self.cancel_timeout())?;
-        write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -7270,26 +6649,26 @@ impl<'r> DepositionLockArgsReader<'r> {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         Byte32Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn layer2_lock(&self) -> ScriptReader<'r> {
+    pub fn owner_lock_hash(&self) -> Byte32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn layer2_lock(&self) -> ScriptReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
         ScriptReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn cancel_timeout(&self) -> Uint64Reader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
-        Uint64Reader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn owner_lock_hash(&self) -> Byte32Reader<'r> {
-        let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[20..]) as usize;
-            Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+            Uint64Reader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            Byte32Reader::new_unchecked(&self.as_slice()[start..])
+            Uint64Reader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -7345,23 +6724,27 @@ impl<'r> molecule::prelude::Reader<'r> for DepositionLockArgsReader<'r> {
             return ve!(Self, OffsetsNotMatch);
         }
         Byte32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        ScriptReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        Uint64Reader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        Byte32Reader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        ScriptReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        Uint64Reader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct DepositionLockArgsBuilder {
     pub(crate) rollup_type_hash: Byte32,
+    pub(crate) owner_lock_hash: Byte32,
     pub(crate) layer2_lock: Script,
     pub(crate) cancel_timeout: Uint64,
-    pub(crate) owner_lock_hash: Byte32,
 }
 impl DepositionLockArgsBuilder {
     pub const FIELD_COUNT: usize = 4;
     pub fn rollup_type_hash(mut self, v: Byte32) -> Self {
         self.rollup_type_hash = v;
+        self
+    }
+    pub fn owner_lock_hash(mut self, v: Byte32) -> Self {
+        self.owner_lock_hash = v;
         self
     }
     pub fn layer2_lock(mut self, v: Script) -> Self {
@@ -7372,10 +6755,6 @@ impl DepositionLockArgsBuilder {
         self.cancel_timeout = v;
         self
     }
-    pub fn owner_lock_hash(mut self, v: Byte32) -> Self {
-        self.owner_lock_hash = v;
-        self
-    }
 }
 impl molecule::prelude::Builder for DepositionLockArgsBuilder {
     type Entity = DepositionLockArgs;
@@ -7383,9 +6762,9 @@ impl molecule::prelude::Builder for DepositionLockArgsBuilder {
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.rollup_type_hash.as_slice().len()
+            + self.owner_lock_hash.as_slice().len()
             + self.layer2_lock.as_slice().len()
             + self.cancel_timeout.as_slice().len()
-            + self.owner_lock_hash.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -7393,19 +6772,19 @@ impl molecule::prelude::Builder for DepositionLockArgsBuilder {
         offsets.push(total_size);
         total_size += self.rollup_type_hash.as_slice().len();
         offsets.push(total_size);
+        total_size += self.owner_lock_hash.as_slice().len();
+        offsets.push(total_size);
         total_size += self.layer2_lock.as_slice().len();
         offsets.push(total_size);
         total_size += self.cancel_timeout.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.owner_lock_hash.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
         writer.write_all(self.rollup_type_hash.as_slice())?;
+        writer.write_all(self.owner_lock_hash.as_slice())?;
         writer.write_all(self.layer2_lock.as_slice())?;
         writer.write_all(self.cancel_timeout.as_slice())?;
-        writer.write_all(self.owner_lock_hash.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -7413,6 +6792,584 @@ impl molecule::prelude::Builder for DepositionLockArgsBuilder {
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
         DepositionLockArgs::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct CustodianLockArgs(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for CustodianLockArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for CustodianLockArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for CustodianLockArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "rollup_type_hash", self.rollup_type_hash())?;
+        write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
+        write!(
+            f,
+            ", {}: {}",
+            "deposition_block_hash",
+            self.deposition_block_hash()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "deposition_block_number",
+            self.deposition_block_number()
+        )?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for CustodianLockArgs {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            124, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        CustodianLockArgs::new_unchecked(v.into())
+    }
+}
+impl CustodianLockArgs {
+    pub const FIELD_COUNT: usize = 4;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn rollup_type_hash(&self) -> Byte32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Byte32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn owner_lock_hash(&self) -> Byte32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Byte32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn deposition_block_hash(&self) -> Byte32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Byte32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn deposition_block_number(&self) -> Uint64 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[20..]) as usize;
+            Uint64::new_unchecked(self.0.slice(start..end))
+        } else {
+            Uint64::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> CustodianLockArgsReader<'r> {
+        CustodianLockArgsReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for CustodianLockArgs {
+    type Builder = CustodianLockArgsBuilder;
+    const NAME: &'static str = "CustodianLockArgs";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        CustodianLockArgs(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        CustodianLockArgsReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        CustodianLockArgsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .rollup_type_hash(self.rollup_type_hash())
+            .owner_lock_hash(self.owner_lock_hash())
+            .deposition_block_hash(self.deposition_block_hash())
+            .deposition_block_number(self.deposition_block_number())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct CustodianLockArgsReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for CustodianLockArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for CustodianLockArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for CustodianLockArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "rollup_type_hash", self.rollup_type_hash())?;
+        write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
+        write!(
+            f,
+            ", {}: {}",
+            "deposition_block_hash",
+            self.deposition_block_hash()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "deposition_block_number",
+            self.deposition_block_number()
+        )?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> CustodianLockArgsReader<'r> {
+    pub const FIELD_COUNT: usize = 4;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn rollup_type_hash(&self) -> Byte32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn owner_lock_hash(&self) -> Byte32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn deposition_block_hash(&self) -> Byte32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn deposition_block_number(&self) -> Uint64Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[20..]) as usize;
+            Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            Uint64Reader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for CustodianLockArgsReader<'r> {
+    type Entity = CustodianLockArgs;
+    const NAME: &'static str = "CustodianLockArgsReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        CustodianLockArgsReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        let field_count = offset_first / 4 - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
+        if slice_len < header_size {
+            return ve!(Self, HeaderIsBroken, header_size, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
+            .chunks(molecule::NUMBER_SIZE)
+            .take(field_count)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        Byte32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        Uint64Reader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct CustodianLockArgsBuilder {
+    pub(crate) rollup_type_hash: Byte32,
+    pub(crate) owner_lock_hash: Byte32,
+    pub(crate) deposition_block_hash: Byte32,
+    pub(crate) deposition_block_number: Uint64,
+}
+impl CustodianLockArgsBuilder {
+    pub const FIELD_COUNT: usize = 4;
+    pub fn rollup_type_hash(mut self, v: Byte32) -> Self {
+        self.rollup_type_hash = v;
+        self
+    }
+    pub fn owner_lock_hash(mut self, v: Byte32) -> Self {
+        self.owner_lock_hash = v;
+        self
+    }
+    pub fn deposition_block_hash(mut self, v: Byte32) -> Self {
+        self.deposition_block_hash = v;
+        self
+    }
+    pub fn deposition_block_number(mut self, v: Uint64) -> Self {
+        self.deposition_block_number = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for CustodianLockArgsBuilder {
+    type Entity = CustodianLockArgs;
+    const NAME: &'static str = "CustodianLockArgsBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.rollup_type_hash.as_slice().len()
+            + self.owner_lock_hash.as_slice().len()
+            + self.deposition_block_hash.as_slice().len()
+            + self.deposition_block_number.as_slice().len()
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.rollup_type_hash.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.owner_lock_hash.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.deposition_block_hash.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.deposition_block_number.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.rollup_type_hash.as_slice())?;
+        writer.write_all(self.owner_lock_hash.as_slice())?;
+        writer.write_all(self.deposition_block_hash.as_slice())?;
+        writer.write_all(self.deposition_block_number.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        CustodianLockArgs::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct UnlockCustodianViaRevert(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for UnlockCustodianViaRevert {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for UnlockCustodianViaRevert {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for UnlockCustodianViaRevert {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "block_proof", self.block_proof())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for UnlockCustodianViaRevert {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![12, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0];
+        UnlockCustodianViaRevert::new_unchecked(v.into())
+    }
+}
+impl UnlockCustodianViaRevert {
+    pub const FIELD_COUNT: usize = 1;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn block_proof(&self) -> Bytes {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[8..]) as usize;
+            Bytes::new_unchecked(self.0.slice(start..end))
+        } else {
+            Bytes::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> UnlockCustodianViaRevertReader<'r> {
+        UnlockCustodianViaRevertReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for UnlockCustodianViaRevert {
+    type Builder = UnlockCustodianViaRevertBuilder;
+    const NAME: &'static str = "UnlockCustodianViaRevert";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        UnlockCustodianViaRevert(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        UnlockCustodianViaRevertReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        UnlockCustodianViaRevertReader::from_compatible_slice(slice)
+            .map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().block_proof(self.block_proof())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct UnlockCustodianViaRevertReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for UnlockCustodianViaRevertReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for UnlockCustodianViaRevertReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for UnlockCustodianViaRevertReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "block_proof", self.block_proof())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> UnlockCustodianViaRevertReader<'r> {
+    pub const FIELD_COUNT: usize = 1;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn block_proof(&self) -> BytesReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[8..]) as usize;
+            BytesReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            BytesReader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for UnlockCustodianViaRevertReader<'r> {
+    type Entity = UnlockCustodianViaRevert;
+    const NAME: &'static str = "UnlockCustodianViaRevertReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        UnlockCustodianViaRevertReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        let field_count = offset_first / 4 - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
+        if slice_len < header_size {
+            return ve!(Self, HeaderIsBroken, header_size, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
+            .chunks(molecule::NUMBER_SIZE)
+            .take(field_count)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        BytesReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct UnlockCustodianViaRevertBuilder {
+    pub(crate) block_proof: Bytes,
+}
+impl UnlockCustodianViaRevertBuilder {
+    pub const FIELD_COUNT: usize = 1;
+    pub fn block_proof(mut self, v: Bytes) -> Self {
+        self.block_proof = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for UnlockCustodianViaRevertBuilder {
+    type Entity = UnlockCustodianViaRevert;
+    const NAME: &'static str = "UnlockCustodianViaRevertBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1) + self.block_proof.as_slice().len()
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.block_proof.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.block_proof.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        UnlockCustodianViaRevert::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -7445,8 +7402,8 @@ impl ::core::fmt::Display for StakeLockArgs {
         write!(
             f,
             ", {}: {}",
-            "finalize_block_number",
-            self.finalize_block_number()
+            "stake_block_number",
+            self.stake_block_number()
         )?;
         write!(f, " }}")
     }
@@ -7475,7 +7432,7 @@ impl StakeLockArgs {
     pub fn signing_pubkey_hash(&self) -> Byte20 {
         Byte20::new_unchecked(self.0.slice(64..84))
     }
-    pub fn finalize_block_number(&self) -> Uint64 {
+    pub fn stake_block_number(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(84..92))
     }
     pub fn as_reader<'r>(&'r self) -> StakeLockArgsReader<'r> {
@@ -7508,7 +7465,7 @@ impl molecule::prelude::Entity for StakeLockArgs {
             .rollup_type_hash(self.rollup_type_hash())
             .owner_lock_hash(self.owner_lock_hash())
             .signing_pubkey_hash(self.signing_pubkey_hash())
-            .finalize_block_number(self.finalize_block_number())
+            .stake_block_number(self.stake_block_number())
     }
 }
 #[derive(Clone, Copy)]
@@ -7541,8 +7498,8 @@ impl<'r> ::core::fmt::Display for StakeLockArgsReader<'r> {
         write!(
             f,
             ", {}: {}",
-            "finalize_block_number",
-            self.finalize_block_number()
+            "stake_block_number",
+            self.stake_block_number()
         )?;
         write!(f, " }}")
     }
@@ -7560,7 +7517,7 @@ impl<'r> StakeLockArgsReader<'r> {
     pub fn signing_pubkey_hash(&self) -> Byte20Reader<'r> {
         Byte20Reader::new_unchecked(&self.as_slice()[64..84])
     }
-    pub fn finalize_block_number(&self) -> Uint64Reader<'r> {
+    pub fn stake_block_number(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[84..92])
     }
 }
@@ -7590,7 +7547,7 @@ pub struct StakeLockArgsBuilder {
     pub(crate) rollup_type_hash: Byte32,
     pub(crate) owner_lock_hash: Byte32,
     pub(crate) signing_pubkey_hash: Byte20,
-    pub(crate) finalize_block_number: Uint64,
+    pub(crate) stake_block_number: Uint64,
 }
 impl StakeLockArgsBuilder {
     pub const TOTAL_SIZE: usize = 92;
@@ -7608,8 +7565,8 @@ impl StakeLockArgsBuilder {
         self.signing_pubkey_hash = v;
         self
     }
-    pub fn finalize_block_number(mut self, v: Uint64) -> Self {
-        self.finalize_block_number = v;
+    pub fn stake_block_number(mut self, v: Uint64) -> Self {
+        self.stake_block_number = v;
         self
     }
 }
@@ -7623,7 +7580,7 @@ impl molecule::prelude::Builder for StakeLockArgsBuilder {
         writer.write_all(self.rollup_type_hash.as_slice())?;
         writer.write_all(self.owner_lock_hash.as_slice())?;
         writer.write_all(self.signing_pubkey_hash.as_slice())?;
-        writer.write_all(self.finalize_block_number.as_slice())?;
+        writer.write_all(self.stake_block_number.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

@@ -1,7 +1,9 @@
 [workspace]
 members = [
+    "custodian-lock",
     "deposition-lock",
     "state-validator",
+    "validator-utils",
 ]
 
 [profile.release]

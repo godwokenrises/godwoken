@@ -18,6 +18,8 @@ struct AccountMerkleState {
 table GlobalState {
     account: AccountMerkleState,
     block: BlockMerkleState,
+    reverted_block_root: Byte32,
+    last_finalized_block_number: Uint64,
     status: Status,
 }
 
@@ -81,19 +83,6 @@ table SubmitTransactions {
     compacted_post_root_list: Byte32Vec,
 }
 
-// TODO
-table Leave {
-}
-
-// Revert the chain, send reward to reverter
-struct RevertChain {
-    reverter_id: Uint32,
-    invalid_block_number: Uint64,
-    post_account: AccountMerkleState,
-}
-
-option LeaveOpt (Leave);
-option RevertChainOpt (RevertChain);
 option SubmitTransactionsOpt (SubmitTransactions);
 
 // --- end of define actions ---
@@ -124,19 +113,33 @@ table VerificationContext {
 // --- deposition lock ---
 table DepositionLockArgs {
     rollup_type_hash: Byte32,
-    layer2_lock: Script,
-    cancel_timeout: Uint64,
     // layer1 lock hash
     owner_lock_hash: Byte32,
+    layer2_lock: Script,
+    cancel_timeout: Uint64,
 }
 // --- end of deposition lock ---
+
+// --- custodian lock ---
+table CustodianLockArgs {
+    rollup_type_hash: Byte32,
+    // layer1 lock hash
+    owner_lock_hash: Byte32,
+    deposition_block_hash: Byte32,
+    deposition_block_number: Uint64,
+}
+
+table UnlockCustodianViaRevert {
+    block_proof: Bytes,
+}
+// --- end of custodian lock ---
 
 // --- stake lock ---
 struct StakeLockArgs {
     rollup_type_hash: Byte32,
     owner_lock_hash: Byte32,
     signing_pubkey_hash: Byte20,
-    finalize_block_number: Uint64,
+    stake_block_number: Uint64,
 }
 // --- end of stake lock ---
 

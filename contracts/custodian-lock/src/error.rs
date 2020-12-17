@@ -9,8 +9,10 @@ pub enum Error {
     Encoding,
     // Add customized errors here...
     InvalidArgs,
-    InvalidSince,
     OwnerCellNotFound,
+    RollupCellNotFound,
+    ProofNotFound,
+    MerkleProof,
 }
 
 impl From<SysError> for Error {
@@ -25,3 +27,4 @@ impl From<SysError> for Error {
         }
     }
 }
+
