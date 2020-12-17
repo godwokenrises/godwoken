@@ -25,24 +25,33 @@ use gw_types::{
 
 use crate::error::Error;
 
-fn parse_lock_args() -> Result<CustodianLockArgs, Error> {
+/// args: rollup_type_hash | custodian lock args
+fn parse_lock_args() -> Result<([u8; 32], CustodianLockArgs), Error> {
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
+
+    let mut rollup_type_hash: [u8; 32] = [0u8; 32];
+    if args.len() < rollup_type_hash.len() {
+        return Err(Error::InvalidArgs);
+    }
+    rollup_type_hash.copy_from_slice(&args[..32]);
     match CustodianLockArgsReader::verify(&args, false) {
-        Ok(()) => Ok(CustodianLockArgs::new_unchecked(args)),
+        Ok(()) => Ok((
+            rollup_type_hash,
+            CustodianLockArgs::new_unchecked(args.slice(32..)),
+        )),
         Err(_) => Err(Error::InvalidArgs),
     }
 }
 
 pub fn main() -> Result<(), Error> {
-    let lock_args = parse_lock_args()?;
+    let (rollup_type_hash, lock_args) = parse_lock_args()?;
 
     // read global state from rollup cell
-    let global_state =
-        match search_rollup_state(&lock_args.rollup_type_hash().unpack(), Source::Input)? {
-            Some(state) => state,
-            None => return Err(Error::RollupCellNotFound),
-        };
+    let global_state = match search_rollup_state(&rollup_type_hash, Source::Input)? {
+        Some(state) => state,
+        None => return Err(Error::RollupCellNotFound),
+    };
 
     let deposition_block_number: u64 = lock_args.deposition_block_number().unpack();
     let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();

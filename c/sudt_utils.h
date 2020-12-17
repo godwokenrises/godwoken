@@ -87,11 +87,3 @@ int sudt_transfer(gw_context_t *ctx, uint32_t sudt_id, uint32_t from_id,
   }
   return _sudt_set_balance(ctx, sudt_id, to_key, new_to_balance);
 }
-
-int sudt_prepare_withdrawal(gw_context_t *ctx,
-                            const uint8_t withdrawal_lock_hash[32],
-                            uint128_t amount) {
-  /* store prepare withdrawal (account_id, block_number, withdrawal_lock_hash,
-   * amount) */
-  return 0;
-}

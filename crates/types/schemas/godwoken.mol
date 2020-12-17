@@ -111,8 +111,8 @@ table VerificationContext {
 // --- end of contract execution ---
 
 // --- deposition lock ---
+// a rollup_type_hash exists before this args, to make args friendly to prefix search
 table DepositionLockArgs {
-    rollup_type_hash: Byte32,
     // layer1 lock hash
     owner_lock_hash: Byte32,
     layer2_lock: Script,
@@ -121,8 +121,8 @@ table DepositionLockArgs {
 // --- end of deposition lock ---
 
 // --- custodian lock ---
-table CustodianLockArgs {
-    rollup_type_hash: Byte32,
+// a rollup_type_hash exists before this args, to make args friendly to prefix search
+struct CustodianLockArgs {
     // layer1 lock hash
     owner_lock_hash: Byte32,
     deposition_block_hash: Byte32,
@@ -134,9 +134,24 @@ table UnlockCustodianViaRevert {
 }
 // --- end of custodian lock ---
 
+// --- withdrawal lock ---
+// a rollup_type_hash exists before this args, to make args friendly to prefix search
+struct WithdrawalLockArgs {
+    // the original custodian lock
+    custodian_lock_args: CustodianLockArgs,
+    // layer1 lock hash
+    owner_lock_hash: Byte32,
+    withdrawal_block_hash: Byte32,
+    withdrawal_block_number: Uint64,
+    // buyer can pay sell_amount token to unlock
+    sudt_script_hash: Byte32,
+    sell_amount: Uint128,
+}
+// --- end of withdrawal lock ---
+
 // --- stake lock ---
+// a rollup_type_hash exists before this args, to make args friendly to prefix search
 struct StakeLockArgs {
-    rollup_type_hash: Byte32,
     owner_lock_hash: Byte32,
     signing_pubkey_hash: Byte20,
     stake_block_number: Uint64,
@@ -157,7 +172,6 @@ table CreateAccount {
 union SUDTArgs {
     SUDTQuery,
     SUDTTransfer,
-    SUDTPrepareWithdrawal,
 }
 
 struct SUDTQuery {
@@ -166,12 +180,6 @@ struct SUDTQuery {
 
 struct SUDTTransfer {
     to: Uint32,
-    amount: Uint128,
-    fee: Uint128,
-}
-
-struct SUDTPrepareWithdrawal {
-    withdrawal_lock_hash: Byte32,
     amount: Uint128,
     fee: Uint128,
 }

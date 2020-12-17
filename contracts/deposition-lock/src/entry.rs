@@ -30,11 +30,20 @@ use gw_types::{
 
 use crate::error::Error;
 
-fn parse_lock_args() -> Result<DepositionLockArgs, Error> {
+/// args: rollup_type_hash | deposition lock args
+fn parse_lock_args() -> Result<([u8; 32], DepositionLockArgs), Error> {
+    let mut rollup_type_hash = [0u8; 32];
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
+    if args.len() < rollup_type_hash.len() {
+        return Err(Error::InvalidArgs);
+    }
+    rollup_type_hash.copy_from_slice(&args[..32]);
     match DepositionLockArgsReader::verify(&args, false) {
-        Ok(()) => Ok(DepositionLockArgs::new_unchecked(args)),
+        Ok(()) => Ok((
+            rollup_type_hash,
+            DepositionLockArgs::new_unchecked(args.slice(32..)),
+        )),
         Err(_) => Err(Error::InvalidArgs),
     }
 }
@@ -45,10 +54,10 @@ fn parse_lock_args() -> Result<DepositionLockArgs, Error> {
 //
 // We always try the 1 first, then try 2, otherwise the unlock return a failure.
 pub fn main() -> Result<(), Error> {
-    let lock_args = parse_lock_args()?;
+    let (rollup_type_hash, lock_args) = parse_lock_args()?;
     // try unlock by Rollup
     // return success if rollup cell in the inputs, the following verification will be handled by rollup state validator.
-    if search_rollup_cell(&lock_args.rollup_type_hash().unpack()).is_some() {
+    if search_rollup_cell(&rollup_type_hash).is_some() {
         return Ok(());
     }
 

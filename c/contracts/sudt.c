@@ -12,7 +12,6 @@
  *
  * * query(account_id) -> balance
  * * transfer(to, amount, fee)
- * * prepare_withdrawal(withdraw_lock_hash, amount, fee)
  *
  * # Mint & Burn
  *
@@ -22,9 +21,8 @@
  * (Aggregator find a corresponded layer2 SUDT contract by searching
  * sudt_script_hash, or create one if the SUDT hasn't been deposited before)
  *
- * To leave a Rollup, users firstly call prepare_withdrawal on SUDT contract,
- * then after a confirmation time, the Rollup aggregators burn SUDT coins from
- * layer2 and send the layer1 SUDT assets to users.
+ * To leave a Rollup, the Rollup aggregators burn SUDT coins from layer2 and
+ * send the layer1 SUDT assets to users.
  *
  * The aggregators operate Mint & Burn by directly modify the state tree.
  */
@@ -37,7 +35,6 @@
 /* MSG_TYPE */
 #define MSG_QUERY 0
 #define MSG_TRANSFER 1
-#define MSG_PREPAREWITHDRAWAL 2
 
 int main() {
   /* initialize context */
@@ -89,20 +86,6 @@ int main() {
     }
     /* transfer */
     ret = sudt_transfer(&ctx, sudt_id, from_id, to_id, amount);
-    if (ret != 0) {
-      return ret;
-    }
-  } else if (msg.item_id == MSG_PREPAREWITHDRAWAL) {
-    /* Prepare withdrawal */
-    mol_seg_t withdrawal_lock_hash_seg =
-        MolReader_SUDTPrepareWithdrawal_get_withdrawal_lock_hash(&msg.seg);
-    mol_seg_t amount_seg = MolReader_SUDTPrepareWithdrawal_get_amount(&msg.seg);
-    uint128_t amount = *(uint128_t *)amount_seg.ptr;
-    if (amount == 0) {
-      return ERROR_INVALID_DATA;
-    }
-    int ret =
-        sudt_prepare_withdrawal(&ctx, withdrawal_lock_hash_seg.ptr, amount);
     if (ret != 0) {
       return ret;
     }
