@@ -10,7 +10,7 @@ use gw_common::{
 use gw_generator::{
     generator::{DepositionRequest, WithdrawalRequest},
     traits::{CodeStore, StateExt},
-    Generator,
+    Generator, RunResult,
 };
 use gw_store::OverlayStore;
 use gw_types::{
@@ -60,14 +60,11 @@ impl<S: Store<SMTH256>> TxPool<S> {
 
 impl<S: Store<SMTH256>> TxPool<S> {
     /// Push a layer2 tx into pool
-    pub fn push(&mut self, tx: L2Transaction) -> Result<()> {
-        // 1. verify tx signature
-        self.verify_tx(&tx)?;
-        // 2. execute contract
-        let raw_tx = tx.raw();
-        let run_result = self
-            .generator
-            .execute(&self.state, &self.next_block_info, &raw_tx)?;
+    pub fn push(&mut self, tx: L2Transaction) -> Result<RunResult> {
+        // 1. execute tx
+        let run_result = self.execute(tx.clone())?;
+        // 2. update state
+        self.state.apply_run_result(&run_result)?;
         // 3. push tx to pool
         let tx_witness_hash = tx.witness_hash();
         let compacted_post_account_root = {
@@ -80,10 +77,19 @@ impl<S: Store<SMTH256>> TxPool<S> {
             tx_witness_hash,
             compacted_post_account_root,
         });
+        Ok(run_result)
+    }
 
-        // update state
-        self.state.apply_run_result(&run_result)?;
-        Ok(())
+    /// Execute tx without push it into pool
+    pub fn execute(&self, tx: L2Transaction) -> Result<RunResult> {
+        // 1. verify tx signature
+        self.verify_tx(&tx)?;
+        // 2. execute contract
+        let raw_tx = tx.raw();
+        let run_result = self
+            .generator
+            .execute(&self.state, &self.next_block_info, &raw_tx)?;
+        Ok(run_result)
     }
 
     fn verify_tx(&self, tx: &L2Transaction) -> Result<()> {
