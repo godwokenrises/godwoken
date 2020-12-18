@@ -11,15 +11,12 @@ use gw_common::{
     state::State, H256,
 };
 use gw_config::ChainConfig;
-use gw_generator::{
-    generator::{DepositionRequest, StateTransitionArgs, WithdrawalRequest},
-    Error as GeneratorError, Generator,
-};
+use gw_generator::{generator::StateTransitionArgs, Error as GeneratorError, Generator};
 use gw_store::{Store, WrapStore};
 use gw_types::{
     packed::{
-        AccountMerkleState, BlockMerkleState, CancelChallenge, GlobalState, L2Block, L2BlockReader,
-        RawL2Block, StartChallenge, SubmitTransactions,
+        AccountMerkleState, BlockMerkleState, CancelChallenge, DepositionRequest, GlobalState,
+        L2Block, L2BlockReader, RawL2Block, StartChallenge, SubmitTransactions, WithdrawalRequest,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -92,9 +89,10 @@ pub struct HeaderInfo {
     pub block_hash: [u8; 32],
 }
 
-pub struct L2BlockWithState {
+pub struct ProduceBlockResult {
     pub block: L2Block,
     pub global_state: GlobalState,
+    pub invalid_withdrawal_requests: Vec<WithdrawalRequest>,
 }
 
 /// sync method returned events
@@ -335,18 +333,24 @@ impl Chain {
     ///
     /// This function should be called in the turn that the current aggregator to produce the next block,
     /// otherwise the produced block may invalided by the state-validator contract.
-    pub fn produce_block(&mut self, param: ProduceBlockParam) -> Result<L2BlockWithState> {
+    pub fn produce_block(&mut self, param: ProduceBlockParam) -> Result<ProduceBlockResult> {
         let ProduceBlockParam {
             aggregator_id,
             deposition_requests,
             withdrawal_requests,
         } = param;
+
         // take txs from tx pool
         // produce block
-        let pkg = self
-            .tx_pool
-            .lock()
-            .package_txs(&deposition_requests, &withdrawal_requests)?;
+        let (pkg, invalid_withdrawal_requests) = {
+            let mut tx_pool = self.tx_pool.lock();
+            let (valid_withdrawal_requests, invalid_withdrawal_requests): (Vec<_>, Vec<_>) =
+                withdrawal_requests
+                    .into_iter()
+                    .partition(|request| tx_pool.verify_withdrawal_request(request).is_ok());
+            let pkg = tx_pool.package_txs(&deposition_requests, &valid_withdrawal_requests)?;
+            (pkg, invalid_withdrawal_requests)
+        };
         let parent_number: u64 = self.local_state.tip.raw().number().unpack();
         let number = parent_number + 1;
         let timestamp: u64 = unixtime()?;
@@ -445,9 +449,10 @@ impl Chain {
             .account(post_account)
             .block(post_block)
             .build();
-        Ok(L2BlockWithState {
+        Ok(ProduceBlockResult {
             block,
             global_state,
+            invalid_withdrawal_requests,
         })
     }
 }

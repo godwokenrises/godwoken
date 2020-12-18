@@ -8,13 +8,12 @@ use gw_common::{
     H256,
 };
 use gw_generator::{
-    generator::{DepositionRequest, WithdrawalRequest},
     traits::{CodeStore, StateExt},
     Generator, RunResult,
 };
 use gw_store::OverlayStore;
 use gw_types::{
-    packed::{BlockInfo, L2Block, L2Transaction},
+    packed::{BlockInfo, DepositionRequest, L2Block, L2Transaction, WithdrawalRequest},
     prelude::*,
 };
 use std::collections::HashSet;
@@ -92,6 +91,12 @@ impl<S: Store<SMTH256>> TxPool<S> {
         Ok(run_result)
     }
 
+    pub fn verify_withdrawal_request(&self, withdrawal_request: &WithdrawalRequest) -> Result<()> {
+        self.generator
+            .verify_withdrawal_request(&self.state, withdrawal_request)
+            .map_err(Into::into)
+    }
+
     fn verify_tx(&self, tx: &L2Transaction) -> Result<()> {
         let raw_tx = tx.raw();
         let sender_id: u32 = raw_tx.from_id().unpack();
@@ -138,10 +143,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
         // reset overlay, we need to record deposition / withdrawal touched keys to generate proof for state
         self.state.overlay_store_mut().clear_touched_keys();
         // apply withdrawal request to the state
-        self.state.apply_withdrawal_requests(
-            &withdrawal_requests,
-            self.next_block_info.number().unpack(),
-        )?;
+        self.state.apply_withdrawal_requests(&withdrawal_requests)?;
         // apply deposition request to the state
         self.state.apply_deposition_requests(&deposition_requests)?;
         let post_account_state = get_account_state(&self.state)?;

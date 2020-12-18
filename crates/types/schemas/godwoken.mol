@@ -75,6 +75,26 @@ table L2Block {
     block_proof: Bytes,
 }
 
+table DepositionRequest {
+    amount: Uint128,
+    script: Script,
+    sudt_script: Script,
+}
+
+struct RawWithdrawalRequest {
+    amount: Uint128,
+    // layer1 cell to receive the withdraw
+    lock_hash: Byte32,
+    sudt_script_hash: Byte32,
+    account_script_hash: Byte32,
+}
+
+struct WithdrawalRequest {
+    raw: RawWithdrawalRequest,
+    signature: Signature,
+}
+
+
 // --- define actions ---
 table SubmitTransactions {
     tx_witness_root: Byte32,

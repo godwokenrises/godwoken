@@ -1,9 +1,11 @@
-use crate::error::{Error, ValidateError};
-use crate::generator::DepositionRequest;
-use crate::generator::WithdrawalRequest;
+use crate::error::Error;
 use crate::syscalls::RunResult;
-use gw_common::{error::Error as StateError, state::State, FINALITY_BLOCKS, H256};
-use gw_types::{bytes::Bytes, packed::Script, prelude::*};
+use gw_common::{error::Error as StateError, state::State, H256};
+use gw_types::{
+    bytes::Bytes,
+    packed::{DepositionRequest, Script, WithdrawalRequest},
+    prelude::*,
+};
 
 pub trait CodeStore {
     fn insert_script(&mut self, script_hash: H256, script: Script);
@@ -19,11 +21,9 @@ pub trait StateExt {
         &mut self,
         deposition_requests: &[DepositionRequest],
     ) -> Result<(), Error>;
-
     fn apply_withdrawal_requests(
         &mut self,
         withdrawal_requests: &[WithdrawalRequest],
-        block_number: u64,
     ) -> Result<(), Error>;
 }
 
@@ -56,24 +56,24 @@ impl<S: State + CodeStore> StateExt for S {
     ) -> Result<(), Error> {
         for request in deposition_requests {
             // find or create user account
-            let account_script_hash = request.script.hash();
+            let account_script_hash = request.script().hash();
             let id = match self.get_account_id_by_script_hash(&account_script_hash.into())? {
                 Some(id) => id,
                 None => {
-                    self.insert_script(account_script_hash.into(), request.script.clone());
+                    self.insert_script(account_script_hash.into(), request.script().clone());
                     self.create_account(account_script_hash.into())?
                 }
             };
             // find or create Simple UDT account
-            let sudt_script_hash = request.sudt_script.hash();
+            let sudt_script_hash = request.sudt_script().hash();
             let sudt_id = match self.get_account_id_by_script_hash(&sudt_script_hash.into())? {
                 Some(id) => id,
                 None => {
-                    self.insert_script(sudt_script_hash.into(), request.sudt_script.clone());
+                    self.insert_script(sudt_script_hash.into(), request.sudt_script().clone());
                     self.create_account(sudt_script_hash.into())?
                 }
             };
-            self.mint_sudt(sudt_id, id, request.amount)?;
+            self.mint_sudt(sudt_id, id, request.amount().unpack())?;
         }
 
         Ok(())
@@ -82,29 +82,21 @@ impl<S: State + CodeStore> StateExt for S {
     fn apply_withdrawal_requests(
         &mut self,
         withdrawal_requests: &[WithdrawalRequest],
-        block_number: u64,
     ) -> Result<(), Error> {
-        let largest_prepare_number = block_number
-            .checked_sub(FINALITY_BLOCKS)
-            .ok_or(ValidateError::InvalidWithdrawal)?;
         for request in withdrawal_requests {
+            let raw = request.raw();
+            let account_script_hash: [u8; 32] = raw.account_script_hash().unpack();
+            let sudt_script_hash: [u8; 32] = raw.sudt_script_hash().unpack();
+            let amount: u128 = raw.amount().unpack();
             // find user account
             let id = self
-                .get_account_id_by_script_hash(&request.account_script_hash)?
+                .get_account_id_by_script_hash(&account_script_hash.into())?
                 .ok_or(StateError::MissingKey)?; // find Simple UDT account
             let sudt_id = self
-                .get_account_id_by_script_hash(&request.sudt_script_hash)?
+                .get_account_id_by_script_hash(&sudt_script_hash.into())?
                 .ok_or(StateError::MissingKey)?;
-            let record = self.get_prepare_withdrawal(sudt_id, id)?;
-            // check validity of withdrawal
-            if record.amount != request.amount
-                || record.withdrawal_lock_hash != request.lock_hash
-                || record.block_number > largest_prepare_number
-            {
-                return Err(ValidateError::InvalidWithdrawal.into());
-            }
-            // remove prepare withdrawal record
-            self.remove_prepare_withdrawal(sudt_id, id)?;
+            // burn sudt
+            self.burn_sudt(sudt_id, id, amount)?;
         }
 
         Ok(())

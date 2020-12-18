@@ -1,9 +1,15 @@
-use crate::backend_manage::BackendManage;
-use crate::syscalls::{L2Syscalls, RunResult};
-use crate::traits::{CodeStore, StateExt};
+use crate::{account_lock_manage::AccountLockManage, backend_manage::BackendManage};
 use crate::{
     backend_manage::Backend,
     error::{Error, TransactionError, TransactionErrorWithContext},
+};
+use crate::{
+    error::LockAlgorithmError,
+    traits::{CodeStore, StateExt},
+};
+use crate::{
+    error::ValidateError,
+    syscalls::{L2Syscalls, RunResult},
 };
 use gw_common::{
     error::Error as StateError,
@@ -13,7 +19,10 @@ use gw_common::{
 };
 use gw_types::{
     core::ScriptHashType,
-    packed::{BlockInfo, L2Block, RawL2Block, RawL2Transaction, Script, StartChallenge},
+    packed::{
+        BlockInfo, DepositionRequest, L2Block, RawL2Block, RawL2Transaction, StartChallenge,
+        WithdrawalRequest,
+    },
     prelude::*,
 };
 
@@ -21,22 +30,6 @@ use ckb_vm::{
     machine::asm::{AsmCoreMachine, AsmMachine},
     DefaultMachineBuilder,
 };
-
-#[derive(Debug)]
-pub struct DepositionRequest {
-    pub script: Script,
-    pub sudt_script: Script,
-    pub amount: u128,
-}
-
-#[derive(Debug)]
-pub struct WithdrawalRequest {
-    // layer1 ACP cell to receive the withdraw
-    pub lock_hash: H256,
-    pub sudt_script_hash: H256,
-    pub amount: u128,
-    pub account_script_hash: H256,
-}
 
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
@@ -46,11 +39,62 @@ pub struct StateTransitionArgs {
 
 pub struct Generator {
     backend_manage: BackendManage,
+    account_lock_manage: AccountLockManage,
 }
 
 impl Generator {
-    pub fn new(backend_manage: BackendManage) -> Self {
-        Generator { backend_manage }
+    pub fn new(backend_manage: BackendManage, account_lock_manage: AccountLockManage) -> Self {
+        Generator {
+            backend_manage,
+            account_lock_manage,
+        }
+    }
+
+    pub fn verify_withdrawal_request<S: State + CodeStore>(
+        &self,
+        state: &S,
+        withdrawal_request: &WithdrawalRequest,
+    ) -> Result<(), Error> {
+        let raw = withdrawal_request.raw();
+        let account_script_hash: [u8; 32] = raw.account_script_hash().unpack();
+        let sudt_script_hash: [u8; 32] = raw.sudt_script_hash().unpack();
+        let amount: u128 = raw.amount().unpack();
+
+        // check signature
+        let account_script = state
+            .get_script(&account_script_hash.into())
+            .ok_or(StateError::MissingKey)?;
+        let lock_code_hash: [u8; 32] = account_script.code_hash().unpack();
+        let lock_algo = self
+            .account_lock_manage
+            .get_lock_algorithm(&lock_code_hash.into())
+            .ok_or(ValidateError::UnknownAccountLockScript)?;
+
+        let message = raw.hash().into();
+        let valid_signature = lock_algo.verify_signature(
+            account_script.args().unpack(),
+            withdrawal_request.signature(),
+            message,
+        )?;
+
+        if !valid_signature {
+            return Err(LockAlgorithmError::InvalidSignature.into());
+        }
+
+        // find user account
+        let id = state
+            .get_account_id_by_script_hash(&account_script_hash.into())?
+            .ok_or(StateError::MissingKey)?; // find Simple UDT account
+
+        // check balance
+        let sudt_id = state
+            .get_account_id_by_script_hash(&sudt_script_hash.into())?
+            .ok_or(StateError::MissingKey)?;
+        let balance = state.get_sudt_balance(sudt_id, id)?;
+        if amount > balance {
+            return Err(ValidateError::InvalidWithdrawal.into());
+        }
+        Ok(())
     }
 
     /// Apply l2 state transition
@@ -64,9 +108,8 @@ impl Generator {
         args: StateTransitionArgs,
     ) -> Result<(), Error> {
         let raw_block = args.l2block.raw();
-
         // apply withdrawal to state
-        state.apply_withdrawal_requests(&args.withdrawal_requests, raw_block.number().unpack())?;
+        state.apply_withdrawal_requests(&args.withdrawal_requests)?;
         // apply deposition to state
         state.apply_deposition_requests(&args.deposition_requests)?;
 
