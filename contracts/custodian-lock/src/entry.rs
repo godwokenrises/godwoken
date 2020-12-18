@@ -7,7 +7,7 @@ use gw_common::{
     smt::{Blake2bHasher, CompiledMerkleProof},
     H256,
 };
-use validator_utils::{search_owner_cell, search_rollup_state};
+use validator_utils::search_cells::{search_lock_hash, search_rollup_state};
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
@@ -16,10 +16,7 @@ use crate::ckb_std::{
     high_level::load_script, high_level::load_witness_args,
 };
 use gw_types::{
-    packed::{
-        CustodianLockArgs, CustodianLockArgsReader, UnlockCustodianViaRevert,
-        UnlockCustodianViaRevertReader,
-    },
+    packed::{CustodianLockArgs, CustodianLockArgsReader},
     prelude::*,
 };
 
@@ -64,27 +61,27 @@ pub fn main() -> Result<(), Error> {
     // otherwise, the user try to proof the deposition is reverted.
 
     // owner cell must exists
-    if search_owner_cell(&lock_args.owner_lock_hash().unpack()).is_none() {
+    if search_lock_hash(&lock_args.owner_lock_hash().unpack(), Source::Input).is_none() {
         return Err(Error::OwnerCellNotFound);
     }
 
     // read the proof
     let witness_args = load_witness_args(0, Source::GroupInput)?;
-    let witness_lock: Bytes = witness_args
+    let unlock_args: Bytes = witness_args
         .lock()
         .to_opt()
         .ok_or(Error::ProofNotFound)?
         .unpack();
-    let unlock_args = match UnlockCustodianViaRevertReader::verify(&witness_lock, false) {
-        Ok(()) => UnlockCustodianViaRevert::new_unchecked(witness_lock),
-        Err(_) => return Err(Error::ProofNotFound),
-    };
+
+    if unlock_args.is_empty() {
+        return Err(Error::ProofNotFound);
+    }
 
     // check reverted_blocks merkle proof
     let reverted_block_root: [u8; 32] = global_state.reverted_block_root().unpack();
     let block_hash = lock_args.deposition_block_hash().unpack();
 
-    let merkle_proof = CompiledMerkleProof(unlock_args.block_proof().unpack());
+    let merkle_proof = CompiledMerkleProof(unlock_args.into());
     if merkle_proof
         .verify::<Blake2bHasher>(
             &reverted_block_root.into(),

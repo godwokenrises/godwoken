@@ -16,3 +16,7 @@ template_type = "Rust"
 name = "custodian-lock"
 template_type = "Rust"
 
+[[contracts]]
+name = "withdrawal-lock"
+template_type = "Rust"
+

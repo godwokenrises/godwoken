@@ -21,7 +21,7 @@ use crate::ckb_std::{
     since::Since,
 };
 
-use validator_utils::{search_owner_cell, search_rollup_cell};
+use validator_utils::search_cells::{search_lock_hash, search_rollup_cell};
 
 use gw_types::{
     packed::{DepositionLockArgs, DepositionLockArgsReader},
@@ -71,7 +71,7 @@ pub fn main() -> Result<(), Error> {
         return Err(Error::InvalidSince);
     }
     // 2. search owner cell
-    match search_owner_cell(&lock_args.owner_lock_hash().unpack()) {
+    match search_lock_hash(&lock_args.owner_lock_hash().unpack(), Source::Input) {
         Some(_) => Ok(()),
         None => Err(Error::OwnerCellNotFound),
     }

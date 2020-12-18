@@ -1,4 +1,6 @@
-use crate::ckb_std::error::SysError;
+//! godwoken validator errors
+
+use ckb_std::error::SysError;
 
 /// Error
 #[repr(i8)]
@@ -9,10 +11,14 @@ pub enum Error {
     Encoding,
     // Add customized errors here...
     InvalidArgs,
+    InvalidSince,
+    InvalidOutput,
     OwnerCellNotFound,
     RollupCellNotFound,
     ProofNotFound,
     MerkleProof,
+    OverflowAmount,
+    InsufficientAmount,
 }
 
 impl From<SysError> for Error {
@@ -27,4 +33,3 @@ impl From<SysError> for Error {
         }
     }
 }
-

@@ -12,10 +12,9 @@
 
 // define modules
 mod entry;
-mod error;
 
-pub use validator_utils::ckb_std;
 use ckb_std::default_alloc;
+pub use validator_utils::{ckb_std, error};
 
 ckb_std::entry!(program_entry);
 default_alloc!();

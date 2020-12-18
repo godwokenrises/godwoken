@@ -2,6 +2,7 @@
 members = [
     "custodian-lock",
     "deposition-lock",
+    "withdrawal-lock",
     "state-validator",
     "validator-utils",
 ]
