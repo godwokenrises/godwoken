@@ -132,19 +132,19 @@ struct CustodianLockArgs {
 
 // --- withdrawal lock ---
 // a rollup_type_hash exists before this args, to make args friendly to prefix search
-struct WithdrawalLockArgs {
+table WithdrawalLockArgs {
     // the original custodian lock
     // used for helping programs generate reverted custodian cell
     custodian_lock_args: CustodianLockArgs,
     // the original custodian lock hash
     custodian_lock_hash: Byte32,
-    // layer1 lock hash
-    owner_lock_hash: Byte32,
     withdrawal_block_hash: Byte32,
     withdrawal_block_number: Uint64,
     // buyer can pay sell_amount token to unlock
     sudt_script_hash: Byte32,
     sell_amount: Uint128,
+    // layer2 lock
+    owner_lock: Script,
 }
 
 union UnlockWithdrawal {
@@ -158,8 +158,8 @@ table UnlockWithdrawalViaFinalize {
 table UnlockWithdrawalViaRevert {
     block_proof: Bytes,
 }
-struct UnlockWithdrawalViaTrade {
-    owner_lock_hash: Byte32,
+table UnlockWithdrawalViaTrade {
+    owner_lock: Script,
 }
 // --- end of withdrawal lock ---
 

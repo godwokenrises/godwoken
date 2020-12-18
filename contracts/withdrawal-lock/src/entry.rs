@@ -3,30 +3,26 @@ use core::result::Result;
 
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use alloc::{vec, vec::Vec};
+use alloc::vec;
 use gw_common::{
-    blake2b::new_blake2b,
     h256_ext::H256Ext,
     smt::{Blake2bHasher, CompiledMerkleProof},
     H256,
 };
 use gw_types::packed::{UnlockWithdrawalUnion, WithdrawalLockArgs, WithdrawalLockArgsReader};
-use validator_utils::{
-    ckb_std::{
-        ckb_constants::Source,
-        ckb_types::{packed::Script, prelude::Pack as CKBPack},
-        high_level::{
-            load_cell_capacity, load_cell_data_hash, load_cell_type_hash, load_witness_args,
-        },
-    },
-    search_cells::{fetch_token_amount, search_lock_hash, search_rollup_state, TokenType},
+use validator_utils::search_cells::{
+    fetch_token_amount, search_lock_hash, search_rollup_state, TokenType,
 };
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use crate::ckb_std::{
-    ckb_types::{bytes::Bytes, prelude::Unpack as CKBUnpack},
-    high_level::load_script,
+    ckb_constants::Source,
+    ckb_types::{self, bytes::Bytes, prelude::Unpack as CKBUnpack},
+    high_level::{
+        load_cell_capacity, load_cell_data_hash, load_cell_type_hash, load_script,
+        load_witness_args,
+    },
 };
 
 use crate::error::Error;
@@ -36,7 +32,9 @@ use gw_types::{
 };
 
 /// args: rollup_type_hash | withdrawal lock args
-fn parse_lock_args(script: &Script) -> Result<([u8; 32], WithdrawalLockArgs), Error> {
+fn parse_lock_args(
+    script: &ckb_types::packed::Script,
+) -> Result<([u8; 32], WithdrawalLockArgs), Error> {
     let mut rollup_type_hash = [0u8; 32];
     let args: Bytes = script.args().unpack();
     if args.len() < rollup_type_hash.len() {
@@ -129,9 +127,7 @@ pub fn main() -> Result<(), Error> {
                     }
 
                     // withdrawal lock is finalized, unlock for owner
-                    if search_lock_hash(&lock_args.owner_lock_hash().unpack(), Source::Input)
-                        .is_none()
-                    {
+                    if search_lock_hash(&lock_args.owner_lock().hash(), Source::Input).is_none() {
                         return Err(Error::OwnerCellNotFound);
                     }
                     Ok(())
@@ -151,7 +147,7 @@ pub fn main() -> Result<(), Error> {
                 _ => return Err(Error::InvalidArgs),
             };
             // make sure output >= input + sell_amount
-            let owner_lock_hash = lock_args.owner_lock_hash().unpack();
+            let owner_lock_hash = lock_args.owner_lock().hash();
             let sudt_script_hash: [u8; 32] = lock_args.sudt_script_hash().unpack();
             let token_type: TokenType = sudt_script_hash.into();
             let input_amount = fetch_token_amount(&owner_lock_hash, &token_type, Source::Input)?;
@@ -165,30 +161,7 @@ pub fn main() -> Result<(), Error> {
             }
 
             // make sure the output should only change owner_lock_hash field
-            let new_lock_hash = {
-                // new lock_args
-                let new_lock_args = lock_args
-                    .as_builder()
-                    .owner_lock_hash(unlock_args.owner_lock_hash())
-                    .build();
-
-                // new lock script
-                let mut raw_args =
-                    Vec::with_capacity(new_lock_args.as_slice().len() + rollup_type_hash.len());
-                raw_args.extend_from_slice(&rollup_type_hash);
-                raw_args.extend_from_slice(new_lock_args.as_slice());
-                let new_lock_script = script
-                    .as_builder()
-                    .args(CKBPack::pack(&Bytes::from(raw_args)))
-                    .build();
-
-                // new lock hash
-                let mut lock_hash = [0u8; 32];
-                let mut hasher = new_blake2b();
-                hasher.update(new_lock_script.as_slice());
-                hasher.finalize(&mut lock_hash);
-                lock_hash
-            };
+            let new_lock_hash = unlock_args.owner_lock().hash();
 
             let index = match search_lock_hash(&new_lock_hash, Source::Output) {
                 Some(i) => i,
