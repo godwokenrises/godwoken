@@ -1,5 +1,5 @@
 use super::new_block_info;
-use crate::Generator;
+use crate::{account_lock_manage::AccountLockManage, Generator};
 use crate::{
     backend_manage::{BackendManage, SUDT_VALIDATOR_CODE_HASH},
     dummy_state::DummyState,
@@ -31,7 +31,8 @@ fn run_contract<S: State + CodeStore>(
         .args(args.as_bytes().pack())
         .build();
     let backend_manage = BackendManage::default();
-    let generator = Generator::new(backend_manage);
+    let account_lock_manage = AccountLockManage::default();
+    let generator = Generator::new(backend_manage, account_lock_manage);
     let run_result = generator.execute(tree, block_info, &raw_tx)?;
     tree.apply_run_result(&run_result).expect("update state");
     Ok(run_result.return_data)

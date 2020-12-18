@@ -1,5 +1,6 @@
 use super::{new_block_info, SUM_PROGRAM, SUM_PROGRAM_CODE_HASH};
 use crate::{
+    account_lock_manage::AccountLockManage,
     backend_manage::{Backend, BackendManage},
     dummy_state::DummyState,
     traits::StateExt,
@@ -34,7 +35,8 @@ fn test_example_sum() {
             SUM_PROGRAM.clone(),
             SUM_PROGRAM.clone(),
         ));
-        let generator = Generator::new(backend_manage);
+        let account_lock_manage = AccountLockManage::default();
+        let generator = Generator::new(backend_manage, account_lock_manage);
         let mut sum_value = init_value;
         for (number, add_value) in &[(1u64, 7u64), (2u64, 16u64)] {
             let block_info = new_block_info(0, *number, 0);

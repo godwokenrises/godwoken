@@ -36,12 +36,6 @@ struct Reverting {
     challenger_id: Uint32,
 }
 
-struct Account {
-    id: Uint32,
-    nonce: Uint32,
-    script_hash: Byte32,
-}
-
 table RawL2Transaction {
     from_id: Uint32,
     to_id: Uint32,
