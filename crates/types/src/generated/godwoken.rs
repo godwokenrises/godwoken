@@ -4055,6 +4055,12 @@ impl ::core::fmt::Display for RawL2Block {
             "submit_transactions",
             self.submit_transactions()
         )?;
+        write!(
+            f,
+            ", {}: {}",
+            "withdrawal_requests_root",
+            self.withdrawal_requests_root()
+        )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -4065,18 +4071,21 @@ impl ::core::fmt::Display for RawL2Block {
 impl ::core::default::Default for RawL2Block {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            156, 0, 0, 0, 32, 0, 0, 0, 40, 0, 0, 0, 44, 0, 0, 0, 76, 0, 0, 0, 84, 0, 0, 0, 120, 0,
-            0, 0, 156, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            248, 0, 0, 0, 36, 0, 0, 0, 44, 0, 0, 0, 48, 0, 0, 0, 80, 0, 0, 0, 88, 0, 0, 0, 124, 0,
+            0, 0, 160, 0, 0, 0, 216, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0, 48,
+            0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RawL2Block::new_unchecked(v.into())
     }
 }
 impl RawL2Block {
-    pub const FIELD_COUNT: usize = 7;
+    pub const FIELD_COUNT: usize = 8;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -4129,14 +4138,20 @@ impl RawL2Block {
         let end = molecule::unpack_number(&slice[28..]) as usize;
         AccountMerkleState::new_unchecked(self.0.slice(start..end))
     }
-    pub fn submit_transactions(&self) -> SubmitTransactionsOpt {
+    pub fn submit_transactions(&self) -> SubmitTransactions {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[28..]) as usize;
+        let end = molecule::unpack_number(&slice[32..]) as usize;
+        SubmitTransactions::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn withdrawal_requests_root(&self) -> Byte32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[32..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[32..]) as usize;
-            SubmitTransactionsOpt::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[36..]) as usize;
+            Byte32::new_unchecked(self.0.slice(start..end))
         } else {
-            SubmitTransactionsOpt::new_unchecked(self.0.slice(start..))
+            Byte32::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> RawL2BlockReader<'r> {
@@ -4173,6 +4188,7 @@ impl molecule::prelude::Entity for RawL2Block {
             .prev_account(self.prev_account())
             .post_account(self.post_account())
             .submit_transactions(self.submit_transactions())
+            .withdrawal_requests_root(self.withdrawal_requests_root())
     }
 }
 #[derive(Clone, Copy)]
@@ -4211,6 +4227,12 @@ impl<'r> ::core::fmt::Display for RawL2BlockReader<'r> {
             "submit_transactions",
             self.submit_transactions()
         )?;
+        write!(
+            f,
+            ", {}: {}",
+            "withdrawal_requests_root",
+            self.withdrawal_requests_root()
+        )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -4219,7 +4241,7 @@ impl<'r> ::core::fmt::Display for RawL2BlockReader<'r> {
     }
 }
 impl<'r> RawL2BlockReader<'r> {
-    pub const FIELD_COUNT: usize = 7;
+    pub const FIELD_COUNT: usize = 8;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -4272,14 +4294,20 @@ impl<'r> RawL2BlockReader<'r> {
         let end = molecule::unpack_number(&slice[28..]) as usize;
         AccountMerkleStateReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn submit_transactions(&self) -> SubmitTransactionsOptReader<'r> {
+    pub fn submit_transactions(&self) -> SubmitTransactionsReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[28..]) as usize;
+        let end = molecule::unpack_number(&slice[32..]) as usize;
+        SubmitTransactionsReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn withdrawal_requests_root(&self) -> Byte32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[32..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[32..]) as usize;
-            SubmitTransactionsOptReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[36..]) as usize;
+            Byte32Reader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            SubmitTransactionsOptReader::new_unchecked(&self.as_slice()[start..])
+            Byte32Reader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -4340,7 +4368,8 @@ impl<'r> molecule::prelude::Reader<'r> for RawL2BlockReader<'r> {
         Uint64Reader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         AccountMerkleStateReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
         AccountMerkleStateReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
-        SubmitTransactionsOptReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
+        SubmitTransactionsReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
         Ok(())
     }
 }
@@ -4352,10 +4381,11 @@ pub struct RawL2BlockBuilder {
     pub(crate) timestamp: Uint64,
     pub(crate) prev_account: AccountMerkleState,
     pub(crate) post_account: AccountMerkleState,
-    pub(crate) submit_transactions: SubmitTransactionsOpt,
+    pub(crate) submit_transactions: SubmitTransactions,
+    pub(crate) withdrawal_requests_root: Byte32,
 }
 impl RawL2BlockBuilder {
-    pub const FIELD_COUNT: usize = 7;
+    pub const FIELD_COUNT: usize = 8;
     pub fn number(mut self, v: Uint64) -> Self {
         self.number = v;
         self
@@ -4380,8 +4410,12 @@ impl RawL2BlockBuilder {
         self.post_account = v;
         self
     }
-    pub fn submit_transactions(mut self, v: SubmitTransactionsOpt) -> Self {
+    pub fn submit_transactions(mut self, v: SubmitTransactions) -> Self {
         self.submit_transactions = v;
+        self
+    }
+    pub fn withdrawal_requests_root(mut self, v: Byte32) -> Self {
+        self.withdrawal_requests_root = v;
         self
     }
 }
@@ -4397,6 +4431,7 @@ impl molecule::prelude::Builder for RawL2BlockBuilder {
             + self.prev_account.as_slice().len()
             + self.post_account.as_slice().len()
             + self.submit_transactions.as_slice().len()
+            + self.withdrawal_requests_root.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -4415,6 +4450,8 @@ impl molecule::prelude::Builder for RawL2BlockBuilder {
         total_size += self.post_account.as_slice().len();
         offsets.push(total_size);
         total_size += self.submit_transactions.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.withdrawal_requests_root.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -4426,6 +4463,7 @@ impl molecule::prelude::Builder for RawL2BlockBuilder {
         writer.write_all(self.prev_account.as_slice())?;
         writer.write_all(self.post_account.as_slice())?;
         writer.write_all(self.submit_transactions.as_slice())?;
+        writer.write_all(self.withdrawal_requests_root.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -4460,6 +4498,12 @@ impl ::core::fmt::Display for L2Block {
         write!(f, ", {}: {}", "kv_state_proof", self.kv_state_proof())?;
         write!(f, ", {}: {}", "transactions", self.transactions())?;
         write!(f, ", {}: {}", "block_proof", self.block_proof())?;
+        write!(
+            f,
+            ", {}: {}",
+            "withdrawal_requests",
+            self.withdrawal_requests()
+        )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -4470,22 +4514,25 @@ impl ::core::fmt::Display for L2Block {
 impl ::core::default::Default for L2Block {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            9, 1, 0, 0, 28, 0, 0, 0, 184, 0, 0, 0, 249, 0, 0, 0, 253, 0, 0, 0, 1, 1, 0, 0, 5, 1, 0,
-            0, 156, 0, 0, 0, 32, 0, 0, 0, 40, 0, 0, 0, 44, 0, 0, 0, 76, 0, 0, 0, 84, 0, 0, 0, 120,
-            0, 0, 0, 156, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            109, 1, 0, 0, 32, 0, 0, 0, 24, 1, 0, 0, 89, 1, 0, 0, 93, 1, 0, 0, 97, 1, 0, 0, 101, 1,
+            0, 0, 105, 1, 0, 0, 248, 0, 0, 0, 36, 0, 0, 0, 44, 0, 0, 0, 48, 0, 0, 0, 80, 0, 0, 0,
+            88, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0, 216, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0,
+            0, 16, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0,
-            0, 0, 4, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         L2Block::new_unchecked(v.into())
     }
 }
 impl L2Block {
-    pub const FIELD_COUNT: usize = 6;
+    pub const FIELD_COUNT: usize = 7;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -4535,11 +4582,17 @@ impl L2Block {
     pub fn block_proof(&self) -> Bytes {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        Bytes::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn withdrawal_requests(&self) -> WithdrawalRequestVec {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[28..]) as usize;
-            Bytes::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[32..]) as usize;
+            WithdrawalRequestVec::new_unchecked(self.0.slice(start..end))
         } else {
-            Bytes::new_unchecked(self.0.slice(start..))
+            WithdrawalRequestVec::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> L2BlockReader<'r> {
@@ -4575,6 +4628,7 @@ impl molecule::prelude::Entity for L2Block {
             .kv_state_proof(self.kv_state_proof())
             .transactions(self.transactions())
             .block_proof(self.block_proof())
+            .withdrawal_requests(self.withdrawal_requests())
     }
 }
 #[derive(Clone, Copy)]
@@ -4602,6 +4656,12 @@ impl<'r> ::core::fmt::Display for L2BlockReader<'r> {
         write!(f, ", {}: {}", "kv_state_proof", self.kv_state_proof())?;
         write!(f, ", {}: {}", "transactions", self.transactions())?;
         write!(f, ", {}: {}", "block_proof", self.block_proof())?;
+        write!(
+            f,
+            ", {}: {}",
+            "withdrawal_requests",
+            self.withdrawal_requests()
+        )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -4610,7 +4670,7 @@ impl<'r> ::core::fmt::Display for L2BlockReader<'r> {
     }
 }
 impl<'r> L2BlockReader<'r> {
-    pub const FIELD_COUNT: usize = 6;
+    pub const FIELD_COUNT: usize = 7;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -4660,11 +4720,17 @@ impl<'r> L2BlockReader<'r> {
     pub fn block_proof(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        BytesReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn withdrawal_requests(&self) -> WithdrawalRequestVecReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[28..]) as usize;
-            BytesReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[32..]) as usize;
+            WithdrawalRequestVecReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            BytesReader::new_unchecked(&self.as_slice()[start..])
+            WithdrawalRequestVecReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -4725,6 +4791,7 @@ impl<'r> molecule::prelude::Reader<'r> for L2BlockReader<'r> {
         BytesReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         L2TransactionVecReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
         BytesReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
+        WithdrawalRequestVecReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
         Ok(())
     }
 }
@@ -4736,9 +4803,10 @@ pub struct L2BlockBuilder {
     pub(crate) kv_state_proof: Bytes,
     pub(crate) transactions: L2TransactionVec,
     pub(crate) block_proof: Bytes,
+    pub(crate) withdrawal_requests: WithdrawalRequestVec,
 }
 impl L2BlockBuilder {
-    pub const FIELD_COUNT: usize = 6;
+    pub const FIELD_COUNT: usize = 7;
     pub fn raw(mut self, v: RawL2Block) -> Self {
         self.raw = v;
         self
@@ -4763,6 +4831,10 @@ impl L2BlockBuilder {
         self.block_proof = v;
         self
     }
+    pub fn withdrawal_requests(mut self, v: WithdrawalRequestVec) -> Self {
+        self.withdrawal_requests = v;
+        self
+    }
 }
 impl molecule::prelude::Builder for L2BlockBuilder {
     type Entity = L2Block;
@@ -4775,6 +4847,7 @@ impl molecule::prelude::Builder for L2BlockBuilder {
             + self.kv_state_proof.as_slice().len()
             + self.transactions.as_slice().len()
             + self.block_proof.as_slice().len()
+            + self.withdrawal_requests.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -4791,6 +4864,8 @@ impl molecule::prelude::Builder for L2BlockBuilder {
         total_size += self.transactions.as_slice().len();
         offsets.push(total_size);
         total_size += self.block_proof.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.withdrawal_requests.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -4801,6 +4876,7 @@ impl molecule::prelude::Builder for L2BlockBuilder {
         writer.write_all(self.kv_state_proof.as_slice())?;
         writer.write_all(self.transactions.as_slice())?;
         writer.write_all(self.block_proof.as_slice())?;
+        writer.write_all(self.withdrawal_requests.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -5314,6 +5390,279 @@ impl molecule::prelude::Builder for RawWithdrawalRequestBuilder {
     }
 }
 #[derive(Clone)]
+pub struct WithdrawalRequestVec(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for WithdrawalRequestVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for WithdrawalRequestVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for WithdrawalRequestVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl ::core::default::Default for WithdrawalRequestVec {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![0, 0, 0, 0];
+        WithdrawalRequestVec::new_unchecked(v.into())
+    }
+}
+impl WithdrawalRequestVec {
+    pub const ITEM_SIZE: usize = 177;
+    pub fn total_size(&self) -> usize {
+        molecule::NUMBER_SIZE * (self.item_count() + 1)
+    }
+    pub fn item_count(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<WithdrawalRequest> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> WithdrawalRequest {
+        let start = molecule::NUMBER_SIZE + Self::ITEM_SIZE * idx;
+        let end = start + Self::ITEM_SIZE;
+        WithdrawalRequest::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn as_reader<'r>(&'r self) -> WithdrawalRequestVecReader<'r> {
+        WithdrawalRequestVecReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for WithdrawalRequestVec {
+    type Builder = WithdrawalRequestVecBuilder;
+    const NAME: &'static str = "WithdrawalRequestVec";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        WithdrawalRequestVec(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        WithdrawalRequestVecReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        WithdrawalRequestVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().extend(self.into_iter())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct WithdrawalRequestVecReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for WithdrawalRequestVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for WithdrawalRequestVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for WithdrawalRequestVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl<'r> WithdrawalRequestVecReader<'r> {
+    pub const ITEM_SIZE: usize = 177;
+    pub fn total_size(&self) -> usize {
+        molecule::NUMBER_SIZE * (self.item_count() + 1)
+    }
+    pub fn item_count(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<WithdrawalRequestReader<'r>> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> WithdrawalRequestReader<'r> {
+        let start = molecule::NUMBER_SIZE + Self::ITEM_SIZE * idx;
+        let end = start + Self::ITEM_SIZE;
+        WithdrawalRequestReader::new_unchecked(&self.as_slice()[start..end])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for WithdrawalRequestVecReader<'r> {
+    type Entity = WithdrawalRequestVec;
+    const NAME: &'static str = "WithdrawalRequestVecReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        WithdrawalRequestVecReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let item_count = molecule::unpack_number(slice) as usize;
+        if item_count == 0 {
+            if slice_len != molecule::NUMBER_SIZE {
+                return ve!(Self, TotalSizeNotMatch, molecule::NUMBER_SIZE, slice_len);
+            }
+            return Ok(());
+        }
+        let total_size = molecule::NUMBER_SIZE + Self::ITEM_SIZE * item_count;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct WithdrawalRequestVecBuilder(pub(crate) Vec<WithdrawalRequest>);
+impl WithdrawalRequestVecBuilder {
+    pub const ITEM_SIZE: usize = 177;
+    pub fn set(mut self, v: Vec<WithdrawalRequest>) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn push(mut self, v: WithdrawalRequest) -> Self {
+        self.0.push(v);
+        self
+    }
+    pub fn extend<T: ::core::iter::IntoIterator<Item = WithdrawalRequest>>(
+        mut self,
+        iter: T,
+    ) -> Self {
+        for elem in iter {
+            self.0.push(elem);
+        }
+        self
+    }
+}
+impl molecule::prelude::Builder for WithdrawalRequestVecBuilder {
+    type Entity = WithdrawalRequestVec;
+    const NAME: &'static str = "WithdrawalRequestVecBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE + Self::ITEM_SIZE * self.0.len()
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(&molecule::pack_number(self.0.len() as molecule::Number))?;
+        for inner in &self.0[..] {
+            writer.write_all(inner.as_slice())?;
+        }
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        WithdrawalRequestVec::new_unchecked(inner.into())
+    }
+}
+pub struct WithdrawalRequestVecIterator(WithdrawalRequestVec, usize, usize);
+impl ::core::iter::Iterator for WithdrawalRequestVecIterator {
+    type Item = WithdrawalRequest;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl ::core::iter::ExactSizeIterator for WithdrawalRequestVecIterator {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+impl ::core::iter::IntoIterator for WithdrawalRequestVec {
+    type Item = WithdrawalRequest;
+    type IntoIter = WithdrawalRequestVecIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        let len = self.len();
+        WithdrawalRequestVecIterator(self, 0, len)
+    }
+}
+impl<'r> WithdrawalRequestVecReader<'r> {
+    pub fn iter<'t>(&'t self) -> WithdrawalRequestVecReaderIterator<'t, 'r> {
+        WithdrawalRequestVecReaderIterator(&self, 0, self.len())
+    }
+}
+pub struct WithdrawalRequestVecReaderIterator<'t, 'r>(
+    &'t WithdrawalRequestVecReader<'r>,
+    usize,
+    usize,
+);
+impl<'t: 'r, 'r> ::core::iter::Iterator for WithdrawalRequestVecReaderIterator<'t, 'r> {
+    type Item = WithdrawalRequestReader<'t>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for WithdrawalRequestVecReaderIterator<'t, 'r> {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+#[derive(Clone)]
 pub struct WithdrawalRequest(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for WithdrawalRequest {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -5784,169 +6133,6 @@ impl molecule::prelude::Builder for SubmitTransactionsBuilder {
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
         SubmitTransactions::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct SubmitTransactionsOpt(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for SubmitTransactionsOpt {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for SubmitTransactionsOpt {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for SubmitTransactionsOpt {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        if let Some(v) = self.to_opt() {
-            write!(f, "{}(Some({}))", Self::NAME, v)
-        } else {
-            write!(f, "{}(None)", Self::NAME)
-        }
-    }
-}
-impl ::core::default::Default for SubmitTransactionsOpt {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![];
-        SubmitTransactionsOpt::new_unchecked(v.into())
-    }
-}
-impl SubmitTransactionsOpt {
-    pub fn is_none(&self) -> bool {
-        self.0.is_empty()
-    }
-    pub fn is_some(&self) -> bool {
-        !self.0.is_empty()
-    }
-    pub fn to_opt(&self) -> Option<SubmitTransactions> {
-        if self.is_none() {
-            None
-        } else {
-            Some(SubmitTransactions::new_unchecked(self.0.clone()))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> SubmitTransactionsOptReader<'r> {
-        SubmitTransactionsOptReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for SubmitTransactionsOpt {
-    type Builder = SubmitTransactionsOptBuilder;
-    const NAME: &'static str = "SubmitTransactionsOpt";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        SubmitTransactionsOpt(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        SubmitTransactionsOptReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        SubmitTransactionsOptReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().set(self.to_opt())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct SubmitTransactionsOptReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for SubmitTransactionsOptReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for SubmitTransactionsOptReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for SubmitTransactionsOptReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        if let Some(v) = self.to_opt() {
-            write!(f, "{}(Some({}))", Self::NAME, v)
-        } else {
-            write!(f, "{}(None)", Self::NAME)
-        }
-    }
-}
-impl<'r> SubmitTransactionsOptReader<'r> {
-    pub fn is_none(&self) -> bool {
-        self.0.is_empty()
-    }
-    pub fn is_some(&self) -> bool {
-        !self.0.is_empty()
-    }
-    pub fn to_opt(&self) -> Option<SubmitTransactionsReader<'r>> {
-        if self.is_none() {
-            None
-        } else {
-            Some(SubmitTransactionsReader::new_unchecked(self.as_slice()))
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for SubmitTransactionsOptReader<'r> {
-    type Entity = SubmitTransactionsOpt;
-    const NAME: &'static str = "SubmitTransactionsOptReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        SubmitTransactionsOptReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        if !slice.is_empty() {
-            SubmitTransactionsReader::verify(&slice[..], compatible)?;
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct SubmitTransactionsOptBuilder(pub(crate) Option<SubmitTransactions>);
-impl SubmitTransactionsOptBuilder {
-    pub fn set(mut self, v: Option<SubmitTransactions>) -> Self {
-        self.0 = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for SubmitTransactionsOptBuilder {
-    type Entity = SubmitTransactionsOpt;
-    const NAME: &'static str = "SubmitTransactionsOptBuilder";
-    fn expected_length(&self) -> usize {
-        self.0
-            .as_ref()
-            .map(|ref inner| inner.as_slice().len())
-            .unwrap_or(0)
-    }
-    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        self.0
-            .as_ref()
-            .map(|ref inner| writer.write_all(inner.as_slice()))
-            .unwrap_or(Ok(()))
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        SubmitTransactionsOpt::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -10712,17 +10898,21 @@ impl ::core::fmt::Display for CancelChallenge {
 impl ::core::default::Default for CancelChallenge {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            41, 1, 0, 0, 20, 0, 0, 0, 29, 1, 0, 0, 33, 1, 0, 0, 37, 1, 0, 0, 9, 1, 0, 0, 28, 0, 0,
-            0, 184, 0, 0, 0, 249, 0, 0, 0, 253, 0, 0, 0, 1, 1, 0, 0, 5, 1, 0, 0, 156, 0, 0, 0, 32,
-            0, 0, 0, 40, 0, 0, 0, 44, 0, 0, 0, 76, 0, 0, 0, 84, 0, 0, 0, 120, 0, 0, 0, 156, 0, 0,
+            141, 1, 0, 0, 20, 0, 0, 0, 129, 1, 0, 0, 133, 1, 0, 0, 137, 1, 0, 0, 109, 1, 0, 0, 32,
+            0, 0, 0, 24, 1, 0, 0, 89, 1, 0, 0, 93, 1, 0, 0, 97, 1, 0, 0, 101, 1, 0, 0, 105, 1, 0,
+            0, 248, 0, 0, 0, 36, 0, 0, 0, 44, 0, 0, 0, 48, 0, 0, 0, 80, 0, 0, 0, 88, 0, 0, 0, 124,
+            0, 0, 0, 160, 0, 0, 0, 216, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0,
+            48, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0,
+            0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0,
+            0, 0, 0, 0,
         ];
         CancelChallenge::new_unchecked(v.into())
     }

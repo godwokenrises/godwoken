@@ -58,8 +58,6 @@ pub enum L1ActionContext {
     SubmitTxs {
         /// deposition requests
         deposition_requests: Vec<DepositionRequest>,
-        /// withdrawal requests
-        withdrawal_requests: Vec<WithdrawalRequest>,
     },
     Challenge {
         context: StartChallenge,
@@ -213,7 +211,6 @@ impl Chain {
                     Status::Running,
                     L1ActionContext::SubmitTxs {
                         deposition_requests,
-                        withdrawal_requests,
                     },
                 ) => {
                     // Submit transactions
@@ -222,12 +219,9 @@ impl Chain {
                         &transaction_info.transaction,
                         &self.rollup_type_script_hash,
                     )?;
-                    if let Some(start_challenge) = self.process_block(
-                        l2block,
-                        header_info,
-                        deposition_requests,
-                        withdrawal_requests,
-                    )? {
+                    if let Some(start_challenge) =
+                        self.process_block(l2block, header_info, deposition_requests)?
+                    {
                         // stop syncing and return event
                         self.local_state
                             .set_current_bad_block(Some(start_challenge.clone()));
@@ -295,7 +289,6 @@ impl Chain {
         l2block: L2Block,
         header_info: HeaderInfo,
         deposition_requests: Vec<DepositionRequest>,
-        withdrawal_requests: Vec<WithdrawalRequest>,
     ) -> Result<Option<StartChallenge>> {
         let tip_number: u64 = self.local_state.tip.raw().number().unpack();
         assert!(
@@ -307,7 +300,6 @@ impl Chain {
         let args = StateTransitionArgs {
             l2block: l2block.clone(),
             deposition_requests,
-            withdrawal_requests,
         };
         // process transactions
         if let Err(err) = self.generator.apply_state_transition(&mut self.store, args) {
@@ -392,7 +384,7 @@ impl Chain {
             .timestamp(timestamp.pack())
             .post_account(post_account.clone())
             .prev_account(prev_account)
-            .submit_transactions(Some(submit_txs).pack())
+            .submit_transactions(submit_txs)
             .build();
         // generate block fields from current state
         let kv_state: Vec<(H256, H256)> = pkg

@@ -46,5 +46,5 @@ impl<'r> Unpack<([u8; 32], [u8; 32])> for packed::KVPairReader<'r> {
 
 impl_conversion_for_vector!(([u8; 32], [u8; 32]), KVPairVec, KVPairVecReader);
 impl_conversion_for_packed_iterator_pack!(KVPair, KVPairVec);
+impl_conversion_for_packed_iterator_pack!(WithdrawalRequest, WithdrawalRequestVec);
 impl_conversion_for_packed_iterator_pack!(L2Transaction, L2TransactionVec);
-impl_conversion_for_packed_optional_pack!(SubmitTransactions, SubmitTransactionsOpt);

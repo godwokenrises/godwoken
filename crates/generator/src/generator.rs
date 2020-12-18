@@ -34,7 +34,6 @@ use ckb_vm::{
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
     pub deposition_requests: Vec<DepositionRequest>,
-    pub withdrawal_requests: Vec<WithdrawalRequest>,
 }
 
 pub struct Generator {
@@ -108,46 +107,45 @@ impl Generator {
         args: StateTransitionArgs,
     ) -> Result<(), Error> {
         let raw_block = args.l2block.raw();
+        let withdrawal_requests: Vec<_> = args.l2block.withdrawal_requests().into_iter().collect();
         // apply withdrawal to state
-        state.apply_withdrawal_requests(&args.withdrawal_requests)?;
+        state.apply_withdrawal_requests(&withdrawal_requests)?;
         // apply deposition to state
         state.apply_deposition_requests(&args.deposition_requests)?;
 
         // handle transactions
-        if raw_block.submit_transactions().to_opt().is_some() {
-            let block_info = get_block_info(&raw_block);
-            let block_hash = raw_block.hash();
-            for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
-                let raw_tx = tx.raw();
-                // build challenge context
-                let challenge_context = StartChallenge::new_builder()
-                    .block_hash(block_hash.pack())
-                    .block_number(block_info.number())
-                    .tx_index((tx_index as u32).pack())
-                    .build();
-                // check nonce
-                let expected_nonce = state.get_nonce(raw_tx.from_id().unpack())?;
-                let actual_nonce: u32 = raw_tx.nonce().unpack();
-                if actual_nonce != expected_nonce {
-                    return Err(TransactionErrorWithContext::new(
-                        challenge_context,
-                        TransactionError::Nonce {
-                            expected: expected_nonce,
-                            actual: actual_nonce,
-                        },
-                    )
-                    .into());
-                }
-                // build call context
-                // NOTICE users only allowed to send HandleMessage CallType txs
-                let run_result = match self.execute(state, &block_info, &raw_tx) {
-                    Ok(run_result) => run_result,
-                    Err(err) => {
-                        return Err(TransactionErrorWithContext::new(challenge_context, err).into());
-                    }
-                };
-                state.apply_run_result(&run_result)?;
+        let block_info = get_block_info(&raw_block);
+        let block_hash = raw_block.hash();
+        for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
+            let raw_tx = tx.raw();
+            // build challenge context
+            let challenge_context = StartChallenge::new_builder()
+                .block_hash(block_hash.pack())
+                .block_number(block_info.number())
+                .tx_index((tx_index as u32).pack())
+                .build();
+            // check nonce
+            let expected_nonce = state.get_nonce(raw_tx.from_id().unpack())?;
+            let actual_nonce: u32 = raw_tx.nonce().unpack();
+            if actual_nonce != expected_nonce {
+                return Err(TransactionErrorWithContext::new(
+                    challenge_context,
+                    TransactionError::Nonce {
+                        expected: expected_nonce,
+                        actual: actual_nonce,
+                    },
+                )
+                .into());
             }
+            // build call context
+            // NOTICE users only allowed to send HandleMessage CallType txs
+            let run_result = match self.execute(state, &block_info, &raw_tx) {
+                Ok(run_result) => run_result,
+                Err(err) => {
+                    return Err(TransactionErrorWithContext::new(challenge_context, err).into());
+                }
+            };
+            state.apply_run_result(&run_result)?;
         }
 
         Ok(())
