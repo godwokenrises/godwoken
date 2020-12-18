@@ -32,27 +32,14 @@ use std::sync::{Arc, RwLock};
 pub struct NativeChain {
     pub config: Config,
     // Deprecated
-    pub running: Arc<AtomicBool>,
     pub chain: Arc<RwLock<Chain>>,
-}
-
-impl NativeChain {
-    pub fn running(&self) -> bool {
-        self.running.load(Ordering::Acquire)
-    }
-
-    pub fn stop(&self) {
-        self.running.store(false, Ordering::Release);
-    }
 }
 
 declare_types! {
     pub class JsNativeChain for NativeChain {
         init(mut cx) {
-            let config_path = cx.argument::<JsString>(0)?.value();
-            let file = File::open(config_path).expect("Opening config file");
-            //TODO: replace it with toml file
-            let content: serde_json::Value = serde_json::from_reader(file).expect("Reading content from config file");
+            let config_string = cx.argument::<JsString>(0)?.value();
+            let content: serde_json::Value = serde_json::from_str(&config_string).expect("Reading from config string");
             let config: Config = serde_json::from_value(content).expect("Constructing config");
             let tip = genesis::build_genesis(&config.genesis).expect("Building genesis block from config");
             let last_synced = HeaderInfo {
@@ -83,7 +70,6 @@ declare_types! {
 
             Ok(NativeChain {
                 config: config,
-                running: Arc::new(AtomicBool::new(false)),
                 chain: Arc::new(RwLock::new(chain))
             })
         }
@@ -113,3 +99,8 @@ declare_types! {
         }
     }
 }
+
+register_module!(mut cx, {
+    cx.export_class::<JsNativeChain>("NativeChain")?;
+    Ok(())
+});

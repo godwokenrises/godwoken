@@ -13,7 +13,7 @@ export interface L1Action {
 
 export interface NextBlockContext {
   aggregator_id: HexNumber;
-  timestammp: HexNumber;
+  timestamp: HexNumber;
 }
 
 export interface TransactionInfo {
@@ -27,6 +27,7 @@ export interface HeaderInfo {
 }
 
 export interface SubmitTxs {
+  type: "submit_txs";
   deposition_requests: DepositionRequest[];
   withdrawal_requests: WithdrawalRequest[];
 }
@@ -45,16 +46,24 @@ export interface WithdrawalRequest {
 }
 
 export interface StartChallenge {
+  type: "start_challenge";
   block_hash: Hash;
   block_number: HexNumber;
   tx_index: Hash;
 }
 
 export interface CancelChallenge {
+  type: "cancel_challenge";
   l1block: L2Block;
   block_proof: ArrayBuffer;
   kv_state: KVPair[];
   kv_state_proof: ArrayBuffer;
+}
+export interface Revert {
+  type: "revert";
+  block_hash: Hash;
+  block_number: HexNumber;
+  tx_index: Hash;
 }
 
 export interface L2Block {
@@ -106,13 +115,24 @@ export interface BlockMerkleState {
   count: HexNumber;
 }
 
-export type Revert = StartChallenge;
-
 export type SyncEvent =
-  | "Success"
-  | "BadBlock"
-  | "BadChallenge"
-  | "WaitChallenge";
+  | SuccessEvent
+  | BadBlockEvent
+  | BadChallengeEvent
+  | WaitChallengeEvent;
+
+export interface SuccessEvent {
+  type: "success";
+}
+export interface BadBlockEvent {
+  type: "bad_block";
+}
+export interface BadChallengeEvent {
+  type: "bad_challenge";
+}
+export interface WaitChallengeEvent {
+  type: "wait_challenge";
+}
 
 export type Status = "Running" | "Halting";
 
@@ -128,13 +148,56 @@ export interface RawL2Transaction {
   args: ArrayBuffer;
 }
 
+export interface Config {
+  chain: ChainConfig;
+  consensus: ConsensusConfig;
+  rpc: RPC;
+  genesis: GenesisConfig;
+  aggregator?: AggregatorConfig;
+}
+
+export interface ChainConfig {
+  rollup_type_script: Script;
+}
+
+export interface ConsensusConfig {
+  aggregator_id: HexNumber;
+}
+
+export interface RPC {
+  listen: string;
+}
+
+export interface GenesisConfig {
+  initial_aggregator_pubkey_hash: Hash;
+  initial_deposition: HexNumber;
+  timestamp: HexNumber;
+}
+
+export interface AggregatorConfig {
+  account_id: HexNumber;
+  signer: SignerConfig;
+}
+
+export interface SignerConfig {}
+
+export interface RunResult {
+  read_values: Record<Hash, Hash>;
+  write_values: Record<Hash, Hash>;
+  return_data: ArrayBuffer;
+  account_count?: HexNumber;
+  new_scripts: Record<Hash, ArrayBuffer>;
+  new_data: Record<Hash, ArrayBuffer>;
+}
+
 export class ChainService {
-  constructor();
+  constructor(config: Config);
   sync(syncParam: SyncParam): Promise<SyncEvent>;
   produce_block(
     produceBlockParam: ProduceBlockParam
   ): Promise<L2BlockWithState>;
-  submitL2Transaction(l2Transaction: L2Transaction): Promise<void>;
+  submitL2Transaction(l2Transaction: L2Transaction): Promise<RunResult>;
+  execute(l2Transaction: L2Transaction): Promise<RunResult>;
   tip(): L2Block;
   lastSynced(): HeaderInfo;
   status(): Status;
