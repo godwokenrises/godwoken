@@ -46,6 +46,7 @@ pub struct HeaderInfo {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
+#[serde(tag = "type")]
 pub enum L1ActionContext {
     SubmitTxs {
         /// deposition requests
