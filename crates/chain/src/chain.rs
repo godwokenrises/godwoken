@@ -1,5 +1,5 @@
-use crate::next_block_context::NextBlockContext;
 use crate::tx_pool::TxPool;
+use crate::{next_block_context::NextBlockContext, tx_pool::TxPoolPackage};
 use anyhow::{anyhow, Result};
 use ckb_types::{
     bytes::Bytes,
@@ -16,7 +16,7 @@ use gw_store::{Store, WrapStore};
 use gw_types::{
     packed::{
         AccountMerkleState, BlockMerkleState, CancelChallenge, DepositionRequest, GlobalState,
-        L2Block, L2BlockReader, RawL2Block, StartChallenge, SubmitTransactions, WithdrawalRequest,
+        L2Block, L2BlockReader, RawL2Block, StartChallenge, SubmitTransactions,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -38,10 +38,8 @@ pub enum Status {
 pub struct ProduceBlockParam {
     /// aggregator of this block
     pub aggregator_id: u32,
-    /// deposition requests
-    pub deposition_requests: Vec<DepositionRequest>,
-    /// user step2 withdrawal requests, collected from RPC
-    pub withdrawal_requests: Vec<WithdrawalRequest>,
+    /// tx pool package
+    pub tx_pool_pkg: TxPoolPackage,
 }
 
 /// sync params
@@ -90,7 +88,6 @@ pub struct HeaderInfo {
 pub struct ProduceBlockResult {
     pub block: L2Block,
     pub global_state: GlobalState,
-    pub invalid_withdrawal_requests: Vec<WithdrawalRequest>,
 }
 
 /// sync method returned events
@@ -328,35 +325,26 @@ impl Chain {
     pub fn produce_block(&mut self, param: ProduceBlockParam) -> Result<ProduceBlockResult> {
         let ProduceBlockParam {
             aggregator_id,
-            deposition_requests,
-            withdrawal_requests,
+            tx_pool_pkg,
         } = param;
 
         // take txs from tx pool
         // produce block
-        let (pkg, invalid_withdrawal_requests) = {
-            let mut tx_pool = self.tx_pool.lock();
-            let (valid_withdrawal_requests, invalid_withdrawal_requests): (Vec<_>, Vec<_>) =
-                withdrawal_requests
-                    .into_iter()
-                    .partition(|request| tx_pool.verify_withdrawal_request(request).is_ok());
-            let pkg = tx_pool.package_txs(&deposition_requests, &valid_withdrawal_requests)?;
-            (pkg, invalid_withdrawal_requests)
-        };
         let parent_number: u64 = self.local_state.tip.raw().number().unpack();
         let number = parent_number + 1;
         let timestamp: u64 = unixtime()?;
         let submit_txs = {
             let tx_witness_root = calculate_merkle_root(
-                pkg.tx_recipts
+                tx_pool_pkg
+                    .tx_recipts
                     .iter()
                     .map(|tx_recipt| &tx_recipt.tx_witness_hash)
                     .cloned()
                     .collect(),
             )
             .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
-            let tx_count = pkg.tx_recipts.len() as u32;
-            let compacted_post_root_list: Vec<_> = pkg
+            let tx_count = tx_pool_pkg.tx_recipts.len() as u32;
+            let compacted_post_root_list: Vec<_> = tx_pool_pkg
                 .tx_recipts
                 .iter()
                 .map(|tx_recipt| &tx_recipt.compacted_post_account_root)
@@ -368,15 +356,23 @@ impl Chain {
                 .compacted_post_root_list(compacted_post_root_list.pack())
                 .build()
         };
-        let prev_root: [u8; 32] = pkg.prev_account_state.root.into();
+        let withdrawal_requests_root = calculate_merkle_root(
+            tx_pool_pkg
+                .withdrawal_requests
+                .iter()
+                .map(|request| request.raw().hash())
+                .collect(),
+        )
+        .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
+        let prev_root: [u8; 32] = tx_pool_pkg.prev_account_state.root.into();
         let prev_account = AccountMerkleState::new_builder()
             .merkle_root(prev_root.pack())
-            .count(pkg.prev_account_state.count.pack())
+            .count(tx_pool_pkg.prev_account_state.count.pack())
             .build();
-        let post_root: [u8; 32] = pkg.post_account_state.root.into();
+        let post_root: [u8; 32] = tx_pool_pkg.post_account_state.root.into();
         let post_account = AccountMerkleState::new_builder()
             .merkle_root(post_root.pack())
-            .count(pkg.post_account_state.count.pack())
+            .count(tx_pool_pkg.post_account_state.count.pack())
             .build();
         let raw_block = RawL2Block::new_builder()
             .number(number.pack())
@@ -384,10 +380,11 @@ impl Chain {
             .timestamp(timestamp.pack())
             .post_account(post_account.clone())
             .prev_account(prev_account)
+            .withdrawal_requests_root(withdrawal_requests_root.pack())
             .submit_transactions(submit_txs)
             .build();
         // generate block fields from current state
-        let kv_state: Vec<(H256, H256)> = pkg
+        let kv_state: Vec<(H256, H256)> = tx_pool_pkg
             .touched_keys
             .iter()
             .map(|k| {
@@ -413,7 +410,7 @@ impl Chain {
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
             .compile(kv_state)?
             .0;
-        let txs: Vec<_> = pkg.tx_recipts.into_iter().map(|tx| tx.tx).collect();
+        let txs: Vec<_> = tx_pool_pkg.tx_recipts.into_iter().map(|tx| tx.tx).collect();
         let block_proof = self
             .store
             .block_smt()
@@ -425,6 +422,7 @@ impl Chain {
             .kv_state(packed_kv_state)
             .kv_state_proof(proof.pack())
             .transactions(txs.pack())
+            .withdrawal_requests(tx_pool_pkg.withdrawal_requests.pack())
             .block_proof(block_proof.0.pack())
             .build();
         let post_block = {
@@ -444,7 +442,6 @@ impl Chain {
         Ok(ProduceBlockResult {
             block,
             global_state,
-            invalid_withdrawal_requests,
         })
     }
 }

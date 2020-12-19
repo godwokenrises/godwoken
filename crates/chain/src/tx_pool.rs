@@ -20,6 +20,8 @@ use std::collections::HashSet;
 
 /// MAX packaged txs in a l2block
 const MAX_PACKAGED_TXS: usize = 6000;
+/// MAX packaged withdrawal in a l2block
+const MAX_PACKAGED_WITHDRAWAL: usize = 10;
 
 pub struct TxRecipt {
     pub tx: L2Transaction,
@@ -33,6 +35,7 @@ pub struct TxPool<S> {
     state: OverlayStore<S>,
     generator: Generator,
     queue: Vec<TxRecipt>,
+    withdrawal_queue: Vec<WithdrawalRequest>,
     next_block_info: BlockInfo,
     next_prev_account_state: MerkleState,
 }
@@ -45,12 +48,14 @@ impl<S: Store<SMTH256>> TxPool<S> {
         nb_ctx: NextBlockContext,
     ) -> Result<Self> {
         let queue = Vec::with_capacity(MAX_PACKAGED_TXS);
+        let withdrawal_queue = Vec::with_capacity(MAX_PACKAGED_WITHDRAWAL);
         let next_prev_account_state = get_account_state(&state)?;
         let next_block_info = gen_next_block_info(tip, nb_ctx)?;
         Ok(TxPool {
             state,
             generator,
             queue,
+            withdrawal_queue,
             next_block_info,
             next_prev_account_state,
         })
@@ -89,6 +94,13 @@ impl<S: Store<SMTH256>> TxPool<S> {
             .generator
             .execute(&self.state, &self.next_block_info, &raw_tx)?;
         Ok(run_result)
+    }
+
+    /// Push a withdrawal request into pool
+    pub fn push_withdrawal_request(&mut self, withdrawal_request: WithdrawalRequest) -> Result<()> {
+        self.verify_withdrawal_request(&withdrawal_request)?;
+        self.withdrawal_queue.push(withdrawal_request);
+        Ok(())
     }
 
     pub fn verify_withdrawal_request(&self, withdrawal_request: &WithdrawalRequest) -> Result<()> {
@@ -132,16 +144,21 @@ impl<S: Store<SMTH256>> TxPool<S> {
         Ok(())
     }
 
-    /// Package txpool transactions
-    /// this method return a tx package, and remove these txs from the pool
-    pub fn package_txs(
-        &mut self,
-        deposition_requests: &[DepositionRequest],
-        withdrawal_requests: &[WithdrawalRequest],
-    ) -> Result<TxPackage> {
-        let tx_recipts = self.queue.drain(..).collect();
+    /// Package
+    /// this method return a tx pool package contains txs and withdrawal requests,
+    /// and remove these from the pool
+    pub fn package(&mut self, deposition_requests: &[DepositionRequest]) -> Result<TxPoolPackage> {
+        let tx_recipts = self.queue.drain(..MAX_PACKAGED_TXS).collect();
         // reset overlay, we need to record deposition / withdrawal touched keys to generate proof for state
         self.state.overlay_store_mut().clear_touched_keys();
+        // fetch withdrawal request and rerun verifier, drop invalid requests
+        let withdrawal_requests: Vec<_> = self
+            .withdrawal_queue
+            .drain(..MAX_PACKAGED_WITHDRAWAL)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .filter(|withdrawal_request| self.verify_withdrawal_request(withdrawal_request).is_ok())
+            .collect();
         // apply withdrawal request to the state
         self.state.apply_withdrawal_requests(&withdrawal_requests)?;
         // apply deposition request to the state
@@ -154,11 +171,12 @@ impl<S: Store<SMTH256>> TxPool<S> {
             .into_iter()
             .map(|k| (*k).into())
             .collect();
-        let pkg = TxPackage {
+        let pkg = TxPoolPackage {
             touched_keys,
             tx_recipts,
             prev_account_state: self.next_prev_account_state.clone(),
             post_account_state,
+            withdrawal_requests,
         };
         Ok(pkg)
     }
@@ -216,9 +234,9 @@ pub struct MerkleState {
     pub count: u32,
 }
 
-/// TxPackage
+/// TxPoolPackage
 /// a layer2 block can be generated from a package
-pub struct TxPackage {
+pub struct TxPoolPackage {
     /// tx recipts
     pub tx_recipts: Vec<TxRecipt>,
     /// txs touched keys, both reads and writes
@@ -227,4 +245,6 @@ pub struct TxPackage {
     pub prev_account_state: MerkleState,
     /// state after handling deposition requests
     pub post_account_state: MerkleState,
+    /// withdrawal requests
+    pub withdrawal_requests: Vec<WithdrawalRequest>,
 }

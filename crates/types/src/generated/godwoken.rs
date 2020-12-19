@@ -5019,7 +5019,8 @@ impl ::core::fmt::Debug for RawWithdrawalRequest {
 impl ::core::fmt::Display for RawWithdrawalRequest {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "amount", self.amount())?;
+        write!(f, "{}: {}", "nonce", self.nonce())?;
+        write!(f, ", {}: {}", "amount", self.amount())?;
         write!(f, ", {}: {}", "lock_hash", self.lock_hash())?;
         write!(f, ", {}: {}", "sudt_script_hash", self.sudt_script_hash())?;
         write!(
@@ -5037,26 +5038,29 @@ impl ::core::default::Default for RawWithdrawalRequest {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RawWithdrawalRequest::new_unchecked(v.into())
     }
 }
 impl RawWithdrawalRequest {
-    pub const TOTAL_SIZE: usize = 112;
-    pub const FIELD_SIZES: [usize; 4] = [16, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 4;
+    pub const TOTAL_SIZE: usize = 116;
+    pub const FIELD_SIZES: [usize; 5] = [4, 16, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 5;
+    pub fn nonce(&self) -> Uint32 {
+        Uint32::new_unchecked(self.0.slice(0..4))
+    }
     pub fn amount(&self) -> Uint128 {
-        Uint128::new_unchecked(self.0.slice(0..16))
+        Uint128::new_unchecked(self.0.slice(4..20))
     }
     pub fn lock_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(16..48))
+        Byte32::new_unchecked(self.0.slice(20..52))
     }
     pub fn sudt_script_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(48..80))
+        Byte32::new_unchecked(self.0.slice(52..84))
     }
     pub fn account_script_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(80..112))
+        Byte32::new_unchecked(self.0.slice(84..116))
     }
     pub fn as_reader<'r>(&'r self) -> RawWithdrawalRequestReader<'r> {
         RawWithdrawalRequestReader::new_unchecked(self.as_slice())
@@ -5085,6 +5089,7 @@ impl molecule::prelude::Entity for RawWithdrawalRequest {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
+            .nonce(self.nonce())
             .amount(self.amount())
             .lock_hash(self.lock_hash())
             .sudt_script_hash(self.sudt_script_hash())
@@ -5110,7 +5115,8 @@ impl<'r> ::core::fmt::Debug for RawWithdrawalRequestReader<'r> {
 impl<'r> ::core::fmt::Display for RawWithdrawalRequestReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "amount", self.amount())?;
+        write!(f, "{}: {}", "nonce", self.nonce())?;
+        write!(f, ", {}: {}", "amount", self.amount())?;
         write!(f, ", {}: {}", "lock_hash", self.lock_hash())?;
         write!(f, ", {}: {}", "sudt_script_hash", self.sudt_script_hash())?;
         write!(
@@ -5123,20 +5129,23 @@ impl<'r> ::core::fmt::Display for RawWithdrawalRequestReader<'r> {
     }
 }
 impl<'r> RawWithdrawalRequestReader<'r> {
-    pub const TOTAL_SIZE: usize = 112;
-    pub const FIELD_SIZES: [usize; 4] = [16, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 4;
+    pub const TOTAL_SIZE: usize = 116;
+    pub const FIELD_SIZES: [usize; 5] = [4, 16, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 5;
+    pub fn nonce(&self) -> Uint32Reader<'r> {
+        Uint32Reader::new_unchecked(&self.as_slice()[0..4])
+    }
     pub fn amount(&self) -> Uint128Reader<'r> {
-        Uint128Reader::new_unchecked(&self.as_slice()[0..16])
+        Uint128Reader::new_unchecked(&self.as_slice()[4..20])
     }
     pub fn lock_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[16..48])
+        Byte32Reader::new_unchecked(&self.as_slice()[20..52])
     }
     pub fn sudt_script_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[48..80])
+        Byte32Reader::new_unchecked(&self.as_slice()[52..84])
     }
     pub fn account_script_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[80..112])
+        Byte32Reader::new_unchecked(&self.as_slice()[84..116])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for RawWithdrawalRequestReader<'r> {
@@ -5162,15 +5171,20 @@ impl<'r> molecule::prelude::Reader<'r> for RawWithdrawalRequestReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct RawWithdrawalRequestBuilder {
+    pub(crate) nonce: Uint32,
     pub(crate) amount: Uint128,
     pub(crate) lock_hash: Byte32,
     pub(crate) sudt_script_hash: Byte32,
     pub(crate) account_script_hash: Byte32,
 }
 impl RawWithdrawalRequestBuilder {
-    pub const TOTAL_SIZE: usize = 112;
-    pub const FIELD_SIZES: [usize; 4] = [16, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 4;
+    pub const TOTAL_SIZE: usize = 116;
+    pub const FIELD_SIZES: [usize; 5] = [4, 16, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 5;
+    pub fn nonce(mut self, v: Uint32) -> Self {
+        self.nonce = v;
+        self
+    }
     pub fn amount(mut self, v: Uint128) -> Self {
         self.amount = v;
         self
@@ -5195,6 +5209,7 @@ impl molecule::prelude::Builder for RawWithdrawalRequestBuilder {
         Self::TOTAL_SIZE
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(self.nonce.as_slice())?;
         writer.write_all(self.amount.as_slice())?;
         writer.write_all(self.lock_hash.as_slice())?;
         writer.write_all(self.sudt_script_hash.as_slice())?;
@@ -5244,7 +5259,7 @@ impl ::core::default::Default for WithdrawalRequestVec {
     }
 }
 impl WithdrawalRequestVec {
-    pub const ITEM_SIZE: usize = 177;
+    pub const ITEM_SIZE: usize = 181;
     pub fn total_size(&self) -> usize {
         molecule::NUMBER_SIZE * (self.item_count() + 1)
     }
@@ -5328,7 +5343,7 @@ impl<'r> ::core::fmt::Display for WithdrawalRequestVecReader<'r> {
     }
 }
 impl<'r> WithdrawalRequestVecReader<'r> {
-    pub const ITEM_SIZE: usize = 177;
+    pub const ITEM_SIZE: usize = 181;
     pub fn total_size(&self) -> usize {
         molecule::NUMBER_SIZE * (self.item_count() + 1)
     }
@@ -5389,7 +5404,7 @@ impl<'r> molecule::prelude::Reader<'r> for WithdrawalRequestVecReader<'r> {
 #[derive(Debug, Default)]
 pub struct WithdrawalRequestVecBuilder(pub(crate) Vec<WithdrawalRequest>);
 impl WithdrawalRequestVecBuilder {
-    pub const ITEM_SIZE: usize = 177;
+    pub const ITEM_SIZE: usize = 181;
     pub fn set(mut self, v: Vec<WithdrawalRequest>) -> Self {
         self.0 = v;
         self
@@ -5514,20 +5529,20 @@ impl ::core::default::Default for WithdrawalRequest {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
         ];
         WithdrawalRequest::new_unchecked(v.into())
     }
 }
 impl WithdrawalRequest {
-    pub const TOTAL_SIZE: usize = 177;
-    pub const FIELD_SIZES: [usize; 2] = [112, 65];
+    pub const TOTAL_SIZE: usize = 181;
+    pub const FIELD_SIZES: [usize; 2] = [116, 65];
     pub const FIELD_COUNT: usize = 2;
     pub fn raw(&self) -> RawWithdrawalRequest {
-        RawWithdrawalRequest::new_unchecked(self.0.slice(0..112))
+        RawWithdrawalRequest::new_unchecked(self.0.slice(0..116))
     }
     pub fn signature(&self) -> Signature {
-        Signature::new_unchecked(self.0.slice(112..177))
+        Signature::new_unchecked(self.0.slice(116..181))
     }
     pub fn as_reader<'r>(&'r self) -> WithdrawalRequestReader<'r> {
         WithdrawalRequestReader::new_unchecked(self.as_slice())
@@ -5585,14 +5600,14 @@ impl<'r> ::core::fmt::Display for WithdrawalRequestReader<'r> {
     }
 }
 impl<'r> WithdrawalRequestReader<'r> {
-    pub const TOTAL_SIZE: usize = 177;
-    pub const FIELD_SIZES: [usize; 2] = [112, 65];
+    pub const TOTAL_SIZE: usize = 181;
+    pub const FIELD_SIZES: [usize; 2] = [116, 65];
     pub const FIELD_COUNT: usize = 2;
     pub fn raw(&self) -> RawWithdrawalRequestReader<'r> {
-        RawWithdrawalRequestReader::new_unchecked(&self.as_slice()[0..112])
+        RawWithdrawalRequestReader::new_unchecked(&self.as_slice()[0..116])
     }
     pub fn signature(&self) -> SignatureReader<'r> {
-        SignatureReader::new_unchecked(&self.as_slice()[112..177])
+        SignatureReader::new_unchecked(&self.as_slice()[116..181])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for WithdrawalRequestReader<'r> {
@@ -5622,8 +5637,8 @@ pub struct WithdrawalRequestBuilder {
     pub(crate) signature: Signature,
 }
 impl WithdrawalRequestBuilder {
-    pub const TOTAL_SIZE: usize = 177;
-    pub const FIELD_SIZES: [usize; 2] = [112, 65];
+    pub const TOTAL_SIZE: usize = 181;
+    pub const FIELD_SIZES: [usize; 2] = [116, 65];
     pub const FIELD_COUNT: usize = 2;
     pub fn raw(mut self, v: RawWithdrawalRequest) -> Self {
         self.raw = v;

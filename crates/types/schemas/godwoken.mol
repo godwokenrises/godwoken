@@ -78,6 +78,7 @@ table DepositionRequest {
 }
 
 struct RawWithdrawalRequest {
+    nonce: Uint32,
     amount: Uint128,
     // layer1 cell to receive the withdraw
     lock_hash: Byte32,
