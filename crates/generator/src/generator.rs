@@ -93,6 +93,16 @@ impl Generator {
         if amount > balance {
             return Err(ValidateError::InvalidWithdrawal.into());
         }
+        // check nonce
+        let expected_nonce = state.get_nonce(id)?;
+        let actual_nonce: u32 = raw.nonce().unpack();
+        if actual_nonce != expected_nonce {
+            return Err(ValidateError::InvalidWithdrawalNonce {
+                expected: expected_nonce,
+                actual: actual_nonce,
+            }
+            .into());
+        }
         Ok(())
     }
 

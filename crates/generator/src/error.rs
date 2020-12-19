@@ -45,6 +45,8 @@ impl From<LockAlgorithmError> for Error {
 pub enum ValidateError {
     #[error("Invalid withdrawal request")]
     InvalidWithdrawal,
+    #[error("Invalid withdrawal nonce expected {expected} actual {actual}")]
+    InvalidWithdrawalNonce { expected: u32, actual: u32 },
     #[error("Unknown account lock script")]
     UnknownAccountLockScript,
     #[error("unlock error {0}")]
