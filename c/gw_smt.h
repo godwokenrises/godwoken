@@ -79,9 +79,9 @@ void gw_state_normalize(gw_state_t *state) {
   qsort(state->pairs, state->len, sizeof(gw_pair_t), _gw_pair_cmp);
   /* Remove duplicate ones */
   int32_t sorted = 0, next = 0;
-  while (next < state->len) {
+  while (next < (int32_t)state->len) {
     int32_t item_index = next++;
-    while (next < state->len &&
+    while (next < (int32_t)state->len &&
            memcmp(state->pairs[item_index].key, state->pairs[next].key,
                   GW_KEY_BYTES) == 0) {
       next++;
