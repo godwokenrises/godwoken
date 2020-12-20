@@ -9,7 +9,7 @@ use gw_common::{
 use gw_generator::traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
-    packed::{L2Block, L2Transaction, Script},
+    packed::{HeaderInfo, L2Block, L2Transaction, Script},
 };
 use parking_lot::Mutex;
 use std::collections::HashMap;
@@ -21,11 +21,12 @@ pub struct Store<S> {
     // Note: The block tree can use same storage with the account tree
     // But the column must be difference, otherwise the keys may be collision with each other
     block_tree: SMT<WrapStore<S>>,
-    block_count: u64,
     // code store
     scripts: HashMap<H256, Script>,
     codes: HashMap<H256, Bytes>,
     blocks: HashMap<H256, L2Block>,
+    header_infos: HashMap<H256, HeaderInfo>,
+    tip_block_hash: H256,
     transactions: HashMap<H256, L2Transaction>,
 }
 
@@ -34,9 +35,10 @@ impl<S: SMTStore<H256>> Store<S> {
         account_tree: SMT<WrapStore<S>>,
         account_count: u32,
         block_tree: SMT<WrapStore<S>>,
-        block_count: u64,
         scripts: HashMap<H256, Script>,
+        tip_block_hash: H256,
         blocks: HashMap<H256, L2Block>,
+        header_infos: HashMap<H256, HeaderInfo>,
         codes: HashMap<H256, Bytes>,
         transactions: HashMap<H256, L2Transaction>,
     ) -> Self {
@@ -44,10 +46,11 @@ impl<S: SMTStore<H256>> Store<S> {
             tree: account_tree,
             account_count,
             block_tree,
-            block_count,
             scripts,
             codes,
             blocks,
+            header_infos,
+            tip_block_hash,
             transactions,
         }
     }
@@ -91,8 +94,19 @@ impl<S: SMTStore<H256>> Store<S> {
         Ok(())
     }
 
+    pub fn get_tip_block(&self) -> Result<Option<L2Block>, Error> {
+        self.get_block(&self.tip_block_hash)
+    }
+
     pub fn get_block(&self, block_hash: &H256) -> Result<Option<L2Block>, Error> {
         Ok(self.blocks.get(block_hash).cloned())
+    }
+
+    pub fn get_block_synced_header_info(
+        &self,
+        block_hash: &H256,
+    ) -> Result<Option<HeaderInfo>, Error> {
+        Ok(self.header_infos.get(block_hash).cloned())
     }
 
     pub fn get_transaction(&self, tx_hash: &H256) -> Result<Option<L2Transaction>, Error> {
@@ -114,10 +128,11 @@ impl<S: SMTStore<H256> + Default> Default for Store<S> {
             tree,
             account_count: 0,
             block_tree,
-            block_count: 0,
             scripts: Default::default(),
             codes: Default::default(),
             blocks: Default::default(),
+            header_infos: Default::default(),
+            tip_block_hash: H256::zero(),
             transactions: Default::default(),
         }
     }

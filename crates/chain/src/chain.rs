@@ -16,7 +16,7 @@ use gw_store::{Store, WrapStore};
 use gw_types::{
     packed::{
         AccountMerkleState, BlockMerkleState, CancelChallenge, DepositionRequest, GlobalState,
-        L2Block, L2BlockReader, RawL2Block, StartChallenge, SubmitTransactions,
+        HeaderInfo, L2Block, L2BlockReader, RawL2Block, StartChallenge, SubmitTransactions,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -69,20 +69,11 @@ pub enum L1ActionContext {
 }
 
 pub struct L1Action {
-    /// transaction info
-    pub transaction_info: TransactionInfo,
+    /// transaction
+    pub transaction: Transaction,
     /// transactions' header info
     pub header_info: HeaderInfo,
     pub context: L1ActionContext,
-}
-
-pub struct TransactionInfo {
-    pub transaction: Transaction,
-    pub block_hash: [u8; 32],
-}
-pub struct HeaderInfo {
-    pub number: u64,
-    pub block_hash: [u8; 32],
 }
 
 pub struct ProduceBlockResult {
@@ -154,24 +145,28 @@ pub struct Chain {
 }
 
 impl Chain {
-    pub fn new(
+    pub fn create(
         config: ChainConfig,
         store: Store<StateStore>,
-        tip: L2Block,
-        last_synced: HeaderInfo,
         generator: Generator,
         tx_pool: Arc<Mutex<TxPoolImpl>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let rollup_type_script: Script = config.rollup_type_script.clone().into();
         let rollup_type_script_hash = rollup_type_script.calc_script_hash().unpack();
+        let tip = store
+            .get_tip_block()?
+            .ok_or(anyhow!("can't find tip from store"))?;
+        let last_synced = store
+            .get_block_synced_header_info(&tip.hash().into())?
+            .ok_or(anyhow!("can't find HeaderInfo of tip"))?;
         let local_state = LocaLState::new(tip, last_synced, Status::Running);
-        Chain {
+        Ok(Chain {
             store,
             local_state,
             generator,
             tx_pool,
             rollup_type_script_hash,
-        }
+        })
     }
 
     /// return local state
@@ -192,14 +187,16 @@ impl Chain {
         // apply tx to state
         for action in param.updates {
             let L1Action {
-                transaction_info,
+                transaction,
                 header_info,
                 context,
             } = action;
-            debug_assert_eq!(transaction_info.block_hash, header_info.block_hash);
-            let block_number: u64 = header_info.number;
+            let block_number: u64 = header_info.number().unpack();
             assert!(
-                block_number > self.local_state.last_synced.number,
+                block_number > {
+                    let number: u64 = self.local_state.last_synced.number().unpack();
+                    number
+                },
                 "must greater than last synced number"
             );
 
@@ -212,10 +209,7 @@ impl Chain {
                 ) => {
                     // Submit transactions
                     // parse layer2 block
-                    let l2block = parse_l2block(
-                        &transaction_info.transaction,
-                        &self.rollup_type_script_hash,
-                    )?;
+                    let l2block = parse_l2block(&transaction, &self.rollup_type_script_hash)?;
                     if let Some(start_challenge) =
                         self.process_block(l2block, header_info, deposition_requests)?
                     {

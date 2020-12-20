@@ -231,3 +231,9 @@ table CancelChallenge {
     kv_state_proof: Bytes,
 }
 // --- end of challenge ---
+
+// header info
+struct HeaderInfo {
+    number: Uint64,
+    block_hash: Byte32,
+}
