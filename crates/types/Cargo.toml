@@ -14,3 +14,4 @@ std = ["molecule/std"]
 molecule = { version = "0.6", default-features = false }
 cfg-if = "0.1"
 gw-hash = { path = "../hash", default-features = false }
+ckb-fixed-hash = "0.38.0"

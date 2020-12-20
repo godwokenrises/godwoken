@@ -3,7 +3,7 @@ use crate::{next_block_context::NextBlockContext, tx_pool::TxPoolPackage};
 use anyhow::{anyhow, Result};
 use ckb_types::{
     bytes::Bytes,
-    packed::{Script, Transaction, WitnessArgs, WitnessArgsReader},
+    packed::{Transaction, WitnessArgs, WitnessArgsReader},
     prelude::Unpack,
 };
 use gw_common::{

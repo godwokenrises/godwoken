@@ -7,6 +7,5 @@ members = [
   "crates/store",
   "crates/types",
   "crates/jsonrpc-types",
-  "crates/setup-tool",
   "packages/godwoken/native",
 ]
