@@ -1,5 +1,5 @@
-use crate::next_block_context::NextBlockContext;
 use crate::tx_pool::TxPool;
+use crate::{next_block_context::NextBlockContext, tx_pool::TxPoolPackage};
 use anyhow::{anyhow, Result};
 use ckb_types::{
     bytes::Bytes,
@@ -11,15 +11,12 @@ use gw_common::{
     state::State, H256,
 };
 use gw_config::ChainConfig;
-use gw_generator::{
-    generator::{DepositionRequest, StateTransitionArgs, WithdrawalRequest},
-    Error as GeneratorError, Generator,
-};
+use gw_generator::{generator::StateTransitionArgs, Error as GeneratorError, Generator};
 use gw_store::{Store, WrapStore};
 use gw_types::{
     packed::{
-        AccountMerkleState, BlockMerkleState, CancelChallenge, GlobalState, L2Block, L2BlockReader,
-        RawL2Block, StartChallenge, SubmitTransactions,
+        AccountMerkleState, BlockMerkleState, CancelChallenge, DepositionRequest, GlobalState,
+        HeaderInfo, L2Block, L2BlockReader, RawL2Block, StartChallenge, SubmitTransactions,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -41,10 +38,8 @@ pub enum Status {
 pub struct ProduceBlockParam {
     /// aggregator of this block
     pub aggregator_id: u32,
-    /// deposition requests
-    pub deposition_requests: Vec<DepositionRequest>,
-    /// user step2 withdrawal requests, collected from RPC
-    pub withdrawal_requests: Vec<WithdrawalRequest>,
+    /// tx pool package
+    pub tx_pool_pkg: TxPoolPackage,
 }
 
 /// sync params
@@ -61,8 +56,6 @@ pub enum L1ActionContext {
     SubmitTxs {
         /// deposition requests
         deposition_requests: Vec<DepositionRequest>,
-        /// withdrawal requests
-        withdrawal_requests: Vec<WithdrawalRequest>,
     },
     Challenge {
         context: StartChallenge,
@@ -76,23 +69,14 @@ pub enum L1ActionContext {
 }
 
 pub struct L1Action {
-    /// transaction info
-    pub transaction_info: TransactionInfo,
+    /// transaction
+    pub transaction: Transaction,
     /// transactions' header info
     pub header_info: HeaderInfo,
     pub context: L1ActionContext,
 }
 
-pub struct TransactionInfo {
-    pub transaction: Transaction,
-    pub block_hash: [u8; 32],
-}
-pub struct HeaderInfo {
-    pub number: u64,
-    pub block_hash: [u8; 32],
-}
-
-pub struct L2BlockWithState {
+pub struct ProduceBlockResult {
     pub block: L2Block,
     pub global_state: GlobalState,
 }
@@ -161,24 +145,28 @@ pub struct Chain {
 }
 
 impl Chain {
-    pub fn new(
+    pub fn create(
         config: ChainConfig,
         store: Store<StateStore>,
-        tip: L2Block,
-        last_synced: HeaderInfo,
         generator: Generator,
         tx_pool: Arc<Mutex<TxPoolImpl>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let rollup_type_script: Script = config.rollup_type_script.clone().into();
         let rollup_type_script_hash = rollup_type_script.calc_script_hash().unpack();
+        let tip = store
+            .get_tip_block()?
+            .ok_or(anyhow!("can't find tip from store"))?;
+        let last_synced = store
+            .get_block_synced_header_info(&tip.hash().into())?
+            .ok_or(anyhow!("can't find HeaderInfo of tip"))?;
         let local_state = LocaLState::new(tip, last_synced, Status::Running);
-        Chain {
+        Ok(Chain {
             store,
             local_state,
             generator,
             tx_pool,
             rollup_type_script_hash,
-        }
+        })
     }
 
     /// return local state
@@ -199,14 +187,16 @@ impl Chain {
         // apply tx to state
         for action in param.updates {
             let L1Action {
-                transaction_info,
+                transaction,
                 header_info,
                 context,
             } = action;
-            debug_assert_eq!(transaction_info.block_hash, header_info.block_hash);
-            let block_number: u64 = header_info.number;
+            let block_number: u64 = header_info.number().unpack();
             assert!(
-                block_number > self.local_state.last_synced.number,
+                block_number > {
+                    let number: u64 = self.local_state.last_synced.number().unpack();
+                    number
+                },
                 "must greater than last synced number"
             );
 
@@ -215,21 +205,14 @@ impl Chain {
                     Status::Running,
                     L1ActionContext::SubmitTxs {
                         deposition_requests,
-                        withdrawal_requests,
                     },
                 ) => {
                     // Submit transactions
                     // parse layer2 block
-                    let l2block = parse_l2block(
-                        &transaction_info.transaction,
-                        &self.rollup_type_script_hash,
-                    )?;
-                    if let Some(start_challenge) = self.process_block(
-                        l2block,
-                        header_info,
-                        deposition_requests,
-                        withdrawal_requests,
-                    )? {
+                    let l2block = parse_l2block(&transaction, &self.rollup_type_script_hash)?;
+                    if let Some(start_challenge) =
+                        self.process_block(l2block, header_info, deposition_requests)?
+                    {
                         // stop syncing and return event
                         self.local_state
                             .set_current_bad_block(Some(start_challenge.clone()));
@@ -297,7 +280,6 @@ impl Chain {
         l2block: L2Block,
         header_info: HeaderInfo,
         deposition_requests: Vec<DepositionRequest>,
-        withdrawal_requests: Vec<WithdrawalRequest>,
     ) -> Result<Option<StartChallenge>> {
         let tip_number: u64 = self.local_state.tip.raw().number().unpack();
         assert!(
@@ -309,7 +291,6 @@ impl Chain {
         let args = StateTransitionArgs {
             l2block: l2block.clone(),
             deposition_requests,
-            withdrawal_requests,
         };
         // process transactions
         if let Err(err) = self.generator.apply_state_transition(&mut self.store, args) {
@@ -335,32 +316,29 @@ impl Chain {
     ///
     /// This function should be called in the turn that the current aggregator to produce the next block,
     /// otherwise the produced block may invalided by the state-validator contract.
-    pub fn produce_block(&mut self, param: ProduceBlockParam) -> Result<L2BlockWithState> {
+    pub fn produce_block(&mut self, param: ProduceBlockParam) -> Result<ProduceBlockResult> {
         let ProduceBlockParam {
             aggregator_id,
-            deposition_requests,
-            withdrawal_requests,
+            tx_pool_pkg,
         } = param;
+
         // take txs from tx pool
         // produce block
-        let pkg = self
-            .tx_pool
-            .lock()
-            .package_txs(&deposition_requests, &withdrawal_requests)?;
         let parent_number: u64 = self.local_state.tip.raw().number().unpack();
         let number = parent_number + 1;
         let timestamp: u64 = unixtime()?;
         let submit_txs = {
             let tx_witness_root = calculate_merkle_root(
-                pkg.tx_recipts
+                tx_pool_pkg
+                    .tx_recipts
                     .iter()
                     .map(|tx_recipt| &tx_recipt.tx_witness_hash)
                     .cloned()
                     .collect(),
             )
             .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
-            let tx_count = pkg.tx_recipts.len() as u32;
-            let compacted_post_root_list: Vec<_> = pkg
+            let tx_count = tx_pool_pkg.tx_recipts.len() as u32;
+            let compacted_post_root_list: Vec<_> = tx_pool_pkg
                 .tx_recipts
                 .iter()
                 .map(|tx_recipt| &tx_recipt.compacted_post_account_root)
@@ -372,15 +350,23 @@ impl Chain {
                 .compacted_post_root_list(compacted_post_root_list.pack())
                 .build()
         };
-        let prev_root: [u8; 32] = pkg.prev_account_state.root.into();
+        let withdrawal_requests_root = calculate_merkle_root(
+            tx_pool_pkg
+                .withdrawal_requests
+                .iter()
+                .map(|request| request.raw().hash())
+                .collect(),
+        )
+        .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
+        let prev_root: [u8; 32] = tx_pool_pkg.prev_account_state.root.into();
         let prev_account = AccountMerkleState::new_builder()
             .merkle_root(prev_root.pack())
-            .count(pkg.prev_account_state.count.pack())
+            .count(tx_pool_pkg.prev_account_state.count.pack())
             .build();
-        let post_root: [u8; 32] = pkg.post_account_state.root.into();
+        let post_root: [u8; 32] = tx_pool_pkg.post_account_state.root.into();
         let post_account = AccountMerkleState::new_builder()
             .merkle_root(post_root.pack())
-            .count(pkg.post_account_state.count.pack())
+            .count(tx_pool_pkg.post_account_state.count.pack())
             .build();
         let raw_block = RawL2Block::new_builder()
             .number(number.pack())
@@ -388,10 +374,11 @@ impl Chain {
             .timestamp(timestamp.pack())
             .post_account(post_account.clone())
             .prev_account(prev_account)
-            .submit_transactions(Some(submit_txs).pack())
+            .withdrawal_requests_root(withdrawal_requests_root.pack())
+            .submit_transactions(submit_txs)
             .build();
         // generate block fields from current state
-        let kv_state: Vec<(H256, H256)> = pkg
+        let kv_state: Vec<(H256, H256)> = tx_pool_pkg
             .touched_keys
             .iter()
             .map(|k| {
@@ -417,7 +404,7 @@ impl Chain {
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
             .compile(kv_state)?
             .0;
-        let txs: Vec<_> = pkg.tx_recipts.into_iter().map(|tx| tx.tx).collect();
+        let txs: Vec<_> = tx_pool_pkg.tx_recipts.into_iter().map(|tx| tx.tx).collect();
         let block_proof = self
             .store
             .block_smt()
@@ -429,6 +416,7 @@ impl Chain {
             .kv_state(packed_kv_state)
             .kv_state_proof(proof.pack())
             .transactions(txs.pack())
+            .withdrawal_requests(tx_pool_pkg.withdrawal_requests.pack())
             .block_proof(block_proof.0.pack())
             .build();
         let post_block = {
@@ -445,7 +433,7 @@ impl Chain {
             .account(post_account)
             .block(post_block)
             .build();
-        Ok(L2BlockWithState {
+        Ok(ProduceBlockResult {
             block,
             global_state,
         })

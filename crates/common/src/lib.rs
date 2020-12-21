@@ -20,7 +20,6 @@ pub const SUDT_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const CKB_SUDT_SCRIPT_HASH: [u8; 32] = [0u8; 32];
 pub const ACCOUNT_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const ROLLUP_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
-pub const FINALITY_BLOCKS: u64 = 42;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "std")] {

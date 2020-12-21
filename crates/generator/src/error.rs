@@ -22,9 +22,35 @@ impl From<StateError> for Error {
 }
 
 #[derive(Error, Debug, PartialEq, Clone, Eq)]
+pub enum LockAlgorithmError {
+    #[error("Invalid lock args")]
+    InvalidLockArgs,
+    #[error("Invalid signature")]
+    InvalidSignature,
+}
+
+impl From<LockAlgorithmError> for ValidateError {
+    fn from(err: LockAlgorithmError) -> Self {
+        ValidateError::Unlock(err)
+    }
+}
+
+impl From<LockAlgorithmError> for Error {
+    fn from(err: LockAlgorithmError) -> Self {
+        ValidateError::Unlock(err).into()
+    }
+}
+
+#[derive(Error, Debug, PartialEq, Clone, Eq)]
 pub enum ValidateError {
     #[error("Invalid withdrawal request")]
     InvalidWithdrawal,
+    #[error("Invalid withdrawal nonce expected {expected} actual {actual}")]
+    InvalidWithdrawalNonce { expected: u32, actual: u32 },
+    #[error("Unknown account lock script")]
+    UnknownAccountLockScript,
+    #[error("unlock error {0}")]
+    Unlock(LockAlgorithmError),
 }
 
 impl From<ValidateError> for Error {

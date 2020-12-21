@@ -36,12 +36,6 @@ struct Reverting {
     challenger_id: Uint32,
 }
 
-struct Account {
-    id: Uint32,
-    nonce: Uint32,
-    script_hash: Byte32,
-}
-
 table RawL2Transaction {
     from_id: Uint32,
     to_id: Uint32,
@@ -63,7 +57,8 @@ table RawL2Block {
     timestamp: Uint64,
     prev_account: AccountMerkleState,
     post_account: AccountMerkleState,
-    submit_transactions: SubmitTransactionsOpt,
+    submit_transactions: SubmitTransactions,
+    withdrawal_requests_root: Byte32,
 }
 
 table L2Block {
@@ -73,6 +68,29 @@ table L2Block {
     kv_state_proof: Bytes,
     transactions: L2TransactionVec,
     block_proof: Bytes,
+    withdrawal_requests: WithdrawalRequestVec,
+}
+
+table DepositionRequest {
+    amount: Uint128,
+    script: Script,
+    sudt_script: Script,
+}
+
+struct RawWithdrawalRequest {
+    nonce: Uint32,
+    amount: Uint128,
+    // layer1 cell to receive the withdraw
+    lock_hash: Byte32,
+    sudt_script_hash: Byte32,
+    account_script_hash: Byte32,
+}
+
+vector WithdrawalRequestVec <WithdrawalRequest>;
+
+struct WithdrawalRequest {
+    raw: RawWithdrawalRequest,
+    signature: Signature,
 }
 
 // --- define actions ---
@@ -82,8 +100,6 @@ table SubmitTransactions {
     // hash(account_root | account_count) before each transaction
     compacted_post_root_list: Byte32Vec,
 }
-
-option SubmitTransactionsOpt (SubmitTransactions);
 
 // --- end of define actions ---
 
@@ -215,3 +231,9 @@ table CancelChallenge {
     kv_state_proof: Bytes,
 }
 // --- end of challenge ---
+
+// header info
+struct HeaderInfo {
+    number: Uint64,
+    block_hash: Byte32,
+}
