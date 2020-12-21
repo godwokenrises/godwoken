@@ -31,6 +31,9 @@ use ckb_vm::{
     DefaultMachineBuilder,
 };
 
+// TODO ensure this value
+const MIN_WITHDRAWAL_CAPACITY: u64 = 100_0000_0000;
+
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
     pub deposition_requests: Vec<DepositionRequest>,
@@ -58,6 +61,16 @@ impl Generator {
         let account_script_hash: [u8; 32] = raw.account_script_hash().unpack();
         let sudt_script_hash: [u8; 32] = raw.sudt_script_hash().unpack();
         let amount: u128 = raw.amount().unpack();
+        let capacity: u64 = raw.capacity().unpack();
+
+        // check capacity
+        if capacity < MIN_WITHDRAWAL_CAPACITY {
+            return Err(ValidateError::InsufficientCapacity {
+                expected: MIN_WITHDRAWAL_CAPACITY,
+                actual: capacity,
+            }
+            .into());
+        }
 
         // check signature
         let account_script = state

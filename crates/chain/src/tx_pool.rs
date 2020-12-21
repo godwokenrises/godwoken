@@ -159,6 +159,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
             .into_iter()
             .filter(|withdrawal_request| self.verify_withdrawal_request(withdrawal_request).is_ok())
             .collect();
+        // TODO make sure the remain capacity is enough to pay custodian cell
         // apply withdrawal request to the state
         self.state.apply_withdrawal_requests(&withdrawal_requests)?;
         // apply deposition request to the state

@@ -4724,9 +4724,10 @@ impl ::core::fmt::Debug for DepositionRequest {
 impl ::core::fmt::Display for DepositionRequest {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "amount", self.amount())?;
-        write!(f, ", {}: {}", "script", self.script())?;
+        write!(f, "{}: {}", "capacity", self.capacity())?;
+        write!(f, ", {}: {}", "amount", self.amount())?;
         write!(f, ", {}: {}", "sudt_script", self.sudt_script())?;
+        write!(f, ", {}: {}", "script", self.script())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -4737,17 +4738,18 @@ impl ::core::fmt::Display for DepositionRequest {
 impl ::core::default::Default for DepositionRequest {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            138, 0, 0, 0, 16, 0, 0, 0, 32, 0, 0, 0, 85, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            150, 0, 0, 0, 20, 0, 0, 0, 28, 0, 0, 0, 44, 0, 0, 0, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0,
+            0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         DepositionRequest::new_unchecked(v.into())
     }
 }
 impl DepositionRequest {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -4764,23 +4766,29 @@ impl DepositionRequest {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn amount(&self) -> Uint128 {
+    pub fn capacity(&self) -> Uint64 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        Uint128::new_unchecked(self.0.slice(start..end))
+        Uint64::new_unchecked(self.0.slice(start..end))
     }
-    pub fn script(&self) -> Script {
+    pub fn amount(&self) -> Uint128 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
-        Script::new_unchecked(self.0.slice(start..end))
+        Uint128::new_unchecked(self.0.slice(start..end))
     }
     pub fn sudt_script(&self) -> Script {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Script::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn script(&self) -> Script {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
+            let end = molecule::unpack_number(&slice[20..]) as usize;
             Script::new_unchecked(self.0.slice(start..end))
         } else {
             Script::new_unchecked(self.0.slice(start..))
@@ -4813,9 +4821,10 @@ impl molecule::prelude::Entity for DepositionRequest {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
+            .capacity(self.capacity())
             .amount(self.amount())
-            .script(self.script())
             .sudt_script(self.sudt_script())
+            .script(self.script())
     }
 }
 #[derive(Clone, Copy)]
@@ -4837,9 +4846,10 @@ impl<'r> ::core::fmt::Debug for DepositionRequestReader<'r> {
 impl<'r> ::core::fmt::Display for DepositionRequestReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "amount", self.amount())?;
-        write!(f, ", {}: {}", "script", self.script())?;
+        write!(f, "{}: {}", "capacity", self.capacity())?;
+        write!(f, ", {}: {}", "amount", self.amount())?;
         write!(f, ", {}: {}", "sudt_script", self.sudt_script())?;
+        write!(f, ", {}: {}", "script", self.script())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -4848,7 +4858,7 @@ impl<'r> ::core::fmt::Display for DepositionRequestReader<'r> {
     }
 }
 impl<'r> DepositionRequestReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -4865,23 +4875,29 @@ impl<'r> DepositionRequestReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn amount(&self) -> Uint128Reader<'r> {
+    pub fn capacity(&self) -> Uint64Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        Uint128Reader::new_unchecked(&self.as_slice()[start..end])
+        Uint64Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn script(&self) -> ScriptReader<'r> {
+    pub fn amount(&self) -> Uint128Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
-        ScriptReader::new_unchecked(&self.as_slice()[start..end])
+        Uint128Reader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn sudt_script(&self) -> ScriptReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        ScriptReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn script(&self) -> ScriptReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
+            let end = molecule::unpack_number(&slice[20..]) as usize;
             ScriptReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             ScriptReader::new_unchecked(&self.as_slice()[start..])
@@ -4939,30 +4955,36 @@ impl<'r> molecule::prelude::Reader<'r> for DepositionRequestReader<'r> {
         if offsets.windows(2).any(|i| i[0] > i[1]) {
             return ve!(Self, OffsetsNotMatch);
         }
-        Uint128Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        ScriptReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Uint64Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        Uint128Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         ScriptReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        ScriptReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct DepositionRequestBuilder {
+    pub(crate) capacity: Uint64,
     pub(crate) amount: Uint128,
-    pub(crate) script: Script,
     pub(crate) sudt_script: Script,
+    pub(crate) script: Script,
 }
 impl DepositionRequestBuilder {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
+    pub fn capacity(mut self, v: Uint64) -> Self {
+        self.capacity = v;
+        self
+    }
     pub fn amount(mut self, v: Uint128) -> Self {
         self.amount = v;
         self
     }
-    pub fn script(mut self, v: Script) -> Self {
-        self.script = v;
-        self
-    }
     pub fn sudt_script(mut self, v: Script) -> Self {
         self.sudt_script = v;
+        self
+    }
+    pub fn script(mut self, v: Script) -> Self {
+        self.script = v;
         self
     }
 }
@@ -4971,26 +4993,30 @@ impl molecule::prelude::Builder for DepositionRequestBuilder {
     const NAME: &'static str = "DepositionRequestBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.capacity.as_slice().len()
             + self.amount.as_slice().len()
-            + self.script.as_slice().len()
             + self.sudt_script.as_slice().len()
+            + self.script.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
+        total_size += self.capacity.as_slice().len();
+        offsets.push(total_size);
         total_size += self.amount.as_slice().len();
         offsets.push(total_size);
-        total_size += self.script.as_slice().len();
-        offsets.push(total_size);
         total_size += self.sudt_script.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.script.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
+        writer.write_all(self.capacity.as_slice())?;
         writer.write_all(self.amount.as_slice())?;
-        writer.write_all(self.script.as_slice())?;
         writer.write_all(self.sudt_script.as_slice())?;
+        writer.write_all(self.script.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -5020,6 +5046,7 @@ impl ::core::fmt::Display for RawWithdrawalRequest {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "nonce", self.nonce())?;
+        write!(f, ", {}: {}", "capacity", self.capacity())?;
         write!(f, ", {}: {}", "amount", self.amount())?;
         write!(f, ", {}: {}", "lock_hash", self.lock_hash())?;
         write!(f, ", {}: {}", "sudt_script_hash", self.sudt_script_hash())?;
@@ -5039,28 +5066,32 @@ impl ::core::default::Default for RawWithdrawalRequest {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RawWithdrawalRequest::new_unchecked(v.into())
     }
 }
 impl RawWithdrawalRequest {
-    pub const TOTAL_SIZE: usize = 116;
-    pub const FIELD_SIZES: [usize; 5] = [4, 16, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 5;
+    pub const TOTAL_SIZE: usize = 124;
+    pub const FIELD_SIZES: [usize; 6] = [4, 8, 16, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 6;
     pub fn nonce(&self) -> Uint32 {
         Uint32::new_unchecked(self.0.slice(0..4))
     }
+    pub fn capacity(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(4..12))
+    }
     pub fn amount(&self) -> Uint128 {
-        Uint128::new_unchecked(self.0.slice(4..20))
+        Uint128::new_unchecked(self.0.slice(12..28))
     }
     pub fn lock_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(20..52))
+        Byte32::new_unchecked(self.0.slice(28..60))
     }
     pub fn sudt_script_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(52..84))
+        Byte32::new_unchecked(self.0.slice(60..92))
     }
     pub fn account_script_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(84..116))
+        Byte32::new_unchecked(self.0.slice(92..124))
     }
     pub fn as_reader<'r>(&'r self) -> RawWithdrawalRequestReader<'r> {
         RawWithdrawalRequestReader::new_unchecked(self.as_slice())
@@ -5090,6 +5121,7 @@ impl molecule::prelude::Entity for RawWithdrawalRequest {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .nonce(self.nonce())
+            .capacity(self.capacity())
             .amount(self.amount())
             .lock_hash(self.lock_hash())
             .sudt_script_hash(self.sudt_script_hash())
@@ -5116,6 +5148,7 @@ impl<'r> ::core::fmt::Display for RawWithdrawalRequestReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "nonce", self.nonce())?;
+        write!(f, ", {}: {}", "capacity", self.capacity())?;
         write!(f, ", {}: {}", "amount", self.amount())?;
         write!(f, ", {}: {}", "lock_hash", self.lock_hash())?;
         write!(f, ", {}: {}", "sudt_script_hash", self.sudt_script_hash())?;
@@ -5129,23 +5162,26 @@ impl<'r> ::core::fmt::Display for RawWithdrawalRequestReader<'r> {
     }
 }
 impl<'r> RawWithdrawalRequestReader<'r> {
-    pub const TOTAL_SIZE: usize = 116;
-    pub const FIELD_SIZES: [usize; 5] = [4, 16, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 5;
+    pub const TOTAL_SIZE: usize = 124;
+    pub const FIELD_SIZES: [usize; 6] = [4, 8, 16, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 6;
     pub fn nonce(&self) -> Uint32Reader<'r> {
         Uint32Reader::new_unchecked(&self.as_slice()[0..4])
     }
+    pub fn capacity(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[4..12])
+    }
     pub fn amount(&self) -> Uint128Reader<'r> {
-        Uint128Reader::new_unchecked(&self.as_slice()[4..20])
+        Uint128Reader::new_unchecked(&self.as_slice()[12..28])
     }
     pub fn lock_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[20..52])
+        Byte32Reader::new_unchecked(&self.as_slice()[28..60])
     }
     pub fn sudt_script_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[52..84])
+        Byte32Reader::new_unchecked(&self.as_slice()[60..92])
     }
     pub fn account_script_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[84..116])
+        Byte32Reader::new_unchecked(&self.as_slice()[92..124])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for RawWithdrawalRequestReader<'r> {
@@ -5172,17 +5208,22 @@ impl<'r> molecule::prelude::Reader<'r> for RawWithdrawalRequestReader<'r> {
 #[derive(Debug, Default)]
 pub struct RawWithdrawalRequestBuilder {
     pub(crate) nonce: Uint32,
+    pub(crate) capacity: Uint64,
     pub(crate) amount: Uint128,
     pub(crate) lock_hash: Byte32,
     pub(crate) sudt_script_hash: Byte32,
     pub(crate) account_script_hash: Byte32,
 }
 impl RawWithdrawalRequestBuilder {
-    pub const TOTAL_SIZE: usize = 116;
-    pub const FIELD_SIZES: [usize; 5] = [4, 16, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 5;
+    pub const TOTAL_SIZE: usize = 124;
+    pub const FIELD_SIZES: [usize; 6] = [4, 8, 16, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 6;
     pub fn nonce(mut self, v: Uint32) -> Self {
         self.nonce = v;
+        self
+    }
+    pub fn capacity(mut self, v: Uint64) -> Self {
+        self.capacity = v;
         self
     }
     pub fn amount(mut self, v: Uint128) -> Self {
@@ -5210,6 +5251,7 @@ impl molecule::prelude::Builder for RawWithdrawalRequestBuilder {
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
         writer.write_all(self.nonce.as_slice())?;
+        writer.write_all(self.capacity.as_slice())?;
         writer.write_all(self.amount.as_slice())?;
         writer.write_all(self.lock_hash.as_slice())?;
         writer.write_all(self.sudt_script_hash.as_slice())?;
@@ -5259,7 +5301,7 @@ impl ::core::default::Default for WithdrawalRequestVec {
     }
 }
 impl WithdrawalRequestVec {
-    pub const ITEM_SIZE: usize = 181;
+    pub const ITEM_SIZE: usize = 189;
     pub fn total_size(&self) -> usize {
         molecule::NUMBER_SIZE * (self.item_count() + 1)
     }
@@ -5343,7 +5385,7 @@ impl<'r> ::core::fmt::Display for WithdrawalRequestVecReader<'r> {
     }
 }
 impl<'r> WithdrawalRequestVecReader<'r> {
-    pub const ITEM_SIZE: usize = 181;
+    pub const ITEM_SIZE: usize = 189;
     pub fn total_size(&self) -> usize {
         molecule::NUMBER_SIZE * (self.item_count() + 1)
     }
@@ -5404,7 +5446,7 @@ impl<'r> molecule::prelude::Reader<'r> for WithdrawalRequestVecReader<'r> {
 #[derive(Debug, Default)]
 pub struct WithdrawalRequestVecBuilder(pub(crate) Vec<WithdrawalRequest>);
 impl WithdrawalRequestVecBuilder {
-    pub const ITEM_SIZE: usize = 181;
+    pub const ITEM_SIZE: usize = 189;
     pub fn set(mut self, v: Vec<WithdrawalRequest>) -> Self {
         self.0 = v;
         self
@@ -5529,20 +5571,20 @@ impl ::core::default::Default for WithdrawalRequest {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         WithdrawalRequest::new_unchecked(v.into())
     }
 }
 impl WithdrawalRequest {
-    pub const TOTAL_SIZE: usize = 181;
-    pub const FIELD_SIZES: [usize; 2] = [116, 65];
+    pub const TOTAL_SIZE: usize = 189;
+    pub const FIELD_SIZES: [usize; 2] = [124, 65];
     pub const FIELD_COUNT: usize = 2;
     pub fn raw(&self) -> RawWithdrawalRequest {
-        RawWithdrawalRequest::new_unchecked(self.0.slice(0..116))
+        RawWithdrawalRequest::new_unchecked(self.0.slice(0..124))
     }
     pub fn signature(&self) -> Signature {
-        Signature::new_unchecked(self.0.slice(116..181))
+        Signature::new_unchecked(self.0.slice(124..189))
     }
     pub fn as_reader<'r>(&'r self) -> WithdrawalRequestReader<'r> {
         WithdrawalRequestReader::new_unchecked(self.as_slice())
@@ -5600,14 +5642,14 @@ impl<'r> ::core::fmt::Display for WithdrawalRequestReader<'r> {
     }
 }
 impl<'r> WithdrawalRequestReader<'r> {
-    pub const TOTAL_SIZE: usize = 181;
-    pub const FIELD_SIZES: [usize; 2] = [116, 65];
+    pub const TOTAL_SIZE: usize = 189;
+    pub const FIELD_SIZES: [usize; 2] = [124, 65];
     pub const FIELD_COUNT: usize = 2;
     pub fn raw(&self) -> RawWithdrawalRequestReader<'r> {
-        RawWithdrawalRequestReader::new_unchecked(&self.as_slice()[0..116])
+        RawWithdrawalRequestReader::new_unchecked(&self.as_slice()[0..124])
     }
     pub fn signature(&self) -> SignatureReader<'r> {
-        SignatureReader::new_unchecked(&self.as_slice()[116..181])
+        SignatureReader::new_unchecked(&self.as_slice()[124..189])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for WithdrawalRequestReader<'r> {
@@ -5637,8 +5679,8 @@ pub struct WithdrawalRequestBuilder {
     pub(crate) signature: Signature,
 }
 impl WithdrawalRequestBuilder {
-    pub const TOTAL_SIZE: usize = 181;
-    pub const FIELD_SIZES: [usize; 2] = [116, 65];
+    pub const TOTAL_SIZE: usize = 189;
+    pub const FIELD_SIZES: [usize; 2] = [124, 65];
     pub const FIELD_COUNT: usize = 2;
     pub fn raw(mut self, v: RawWithdrawalRequest) -> Self {
         self.raw = v;

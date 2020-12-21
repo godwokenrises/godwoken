@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::syscalls::RunResult;
-use gw_common::{error::Error as StateError, state::State, H256};
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, error::Error as StateError, state::State, H256};
 use gw_types::{
     bytes::Bytes,
     packed::{DepositionRequest, Script, WithdrawalRequest},
@@ -64,6 +64,9 @@ impl<S: State + CodeStore> StateExt for S {
                     self.create_account(account_script_hash.into())?
                 }
             };
+            // mint CKB
+            let capacity: u64 = request.capacity().unpack();
+            self.mint_sudt(CKB_SUDT_ACCOUNT_ID, id, capacity.into())?;
             // find or create Simple UDT account
             let sudt_script_hash = request.sudt_script().hash();
             let sudt_id = match self.get_account_id_by_script_hash(&sudt_script_hash.into())? {
@@ -73,6 +76,7 @@ impl<S: State + CodeStore> StateExt for S {
                     self.create_account(sudt_script_hash.into())?
                 }
             };
+            // mint SUDT
             self.mint_sudt(sudt_id, id, request.amount().unpack())?;
         }
 
@@ -92,6 +96,9 @@ impl<S: State + CodeStore> StateExt for S {
             let id = self
                 .get_account_id_by_script_hash(&account_script_hash.into())?
                 .ok_or(StateError::MissingKey)?; // find Simple UDT account
+            let capacity: u64 = raw.capacity().unpack();
+            // burn CKB
+            self.burn_sudt(CKB_SUDT_ACCOUNT_ID, id, capacity.into())?;
             let sudt_id = self
                 .get_account_id_by_script_hash(&sudt_script_hash.into())?
                 .ok_or(StateError::MissingKey)?;

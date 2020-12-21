@@ -51,6 +51,8 @@ pub enum ValidateError {
     UnknownAccountLockScript,
     #[error("unlock error {0}")]
     Unlock(LockAlgorithmError),
+    #[error("Insufficient capacity expected {expected} actual {actual}")]
+    InsufficientCapacity { expected: u64, actual: u64 },
 }
 
 impl From<ValidateError> for Error {
