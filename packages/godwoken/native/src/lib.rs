@@ -1,6 +1,6 @@
 use anyhow::Result;
 use gw_chain::{
-    chain::{Chain, ProduceBlockParam, ProduceBlockResult, SyncEvent, SyncParam},
+    chain::{Chain, ProduceBlockParam, ProduceBlockResult, Status, SyncEvent, SyncParam},
     next_block_context::NextBlockContext,
     tx_pool::TxPool,
 };
@@ -8,9 +8,9 @@ use gw_config::Config;
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, Generator,
 };
-use gw_jsonrpc_types::{godwoken, parameter};
+use gw_jsonrpc_types::parameter;
 use gw_store::Store;
-use gw_types::packed;
+use gw_types::{packed, prelude::*};
 use neon::prelude::*;
 use parking_lot::Mutex;
 use std::sync::{Arc, RwLock};
@@ -72,7 +72,7 @@ declare_types! {
             }
         }
 
-        method produce_block(mut cx) {
+        method produceBlock(mut cx) {
             let mut this = cx.this();
             let produce_block_param_string = cx.argument::<JsString>(0)?.value();
             let content: serde_json::Value = serde_json::from_str(&produce_block_param_string).expect("Reading from ProduceBlockParam string");
@@ -96,10 +96,9 @@ declare_types! {
 
         method execute(mut cx) {
             let this = cx.this();
-            let l2_transaction_string = cx.argument::<JsString>(0)?.value();
-            let content: serde_json::Value = serde_json::from_str(&l2_transaction_string).expect("Reading from L2Transaction string");
-            let l2_transaction_jsonrpc: godwoken::L2Transaction = serde_json::from_value(content).expect("Constructing L2Transaction");
-            let l2_transaction: packed::L2Transaction = l2_transaction_jsonrpc.into();
+            let js_l2_transaction = cx.argument::<JsArrayBuffer>(0)?;
+            let l2_transaction_slice = cx.borrow(&js_l2_transaction, |data| { data.as_slice::<u8>() });
+            let l2_transaction = packed::L2Transaction::from_slice(l2_transaction_slice).expect("Build packed::L2Transaction from slice");
             let run_result: Result<gw_generator::RunResult > =
                 cx.borrow(&this, |data| {
                     data.chain.write().unwrap().tx_pool.lock().execute(l2_transaction)
@@ -114,12 +113,11 @@ declare_types! {
             }
         }
 
-        method submit_l2_transaction(mut cx) {
+        method submitL2Transaction(mut cx) {
             let mut this = cx.this();
-            let l2_transaction_string = cx.argument::<JsString>(0)?.value();
-            let content: serde_json::Value = serde_json::from_str(&l2_transaction_string).expect("Reading from L2Transaction string");
-            let l2_transaction_jsonrpc: godwoken::L2Transaction = serde_json::from_value(content).expect("Constructing L2Transaction");
-            let l2_transaction: packed::L2Transaction = l2_transaction_jsonrpc.into();
+            let js_l2_transaction = cx.argument::<JsArrayBuffer>(0)?;
+            let l2_transaction_slice = cx.borrow(&js_l2_transaction, |data| { data.as_slice::<u8>() });
+            let l2_transaction = packed::L2Transaction::from_slice(l2_transaction_slice).expect("Build packed::L2Transaction from slice");
             let run_result: Result<gw_generator::RunResult > =
                 cx.borrow(&mut this, |data| {
                     let mut chain = data.chain.write().unwrap();
@@ -136,7 +134,7 @@ declare_types! {
             }
         }
 
-        method last_synced() {
+        method lastSynced() {
             let this = cx.this();
             let header_info: HeaderInfo =
                 cx.borrow(&this, |data| {
@@ -150,7 +148,7 @@ declare_types! {
 
         method tip() {
             let this = cx.this();
-            let l2_block: L2Block=
+            let l2_block: packed::L2Block=
                 cx.borrow(&this, |data| {
                     let chain = data.chain.read().unwrap();
                     chain.tip()

@@ -142,7 +142,9 @@ export class ChainService {
   submitL2Transaction(l2Transaction: ArrayBuffer): Promise<RunResult>;
   execute(l2Transaction: ArrayBuffer): Promise<RunResult>;
   buildGenesisBlock(config: GenesisConfig): Promise<GenesisWithSMTState>;
+  //getStorageAt()
   tip(): ArrayBuffer; // gw_bytes::packed::L2Block
-  lastSynced(): ArrayBuffer; // gw_bytes::packed::L2Block
+  lastSynced(): ArrayBuffer; // gw_bytes::packed::HeaderInfo
   status(): Status;
+  config(): Config;
 }
