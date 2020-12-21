@@ -3,7 +3,7 @@ use crate::{next_block_context::NextBlockContext, tx_pool::TxPoolPackage};
 use anyhow::{anyhow, Result};
 use ckb_types::{
     bytes::Bytes,
-    packed::{Transaction, WitnessArgs, WitnessArgsReader},
+    packed::{Script, Transaction, WitnessArgs, WitnessArgsReader},
     prelude::Unpack,
 };
 use gw_common::{
@@ -137,11 +137,11 @@ impl LocaLState {
 }
 
 pub struct Chain {
-    rollup_type_script_hash: [u8; 32],
-    store: Store<StateStore>,
-    local_state: LocaLState,
-    generator: Generator,
-    tx_pool: Arc<Mutex<TxPoolImpl>>,
+    pub rollup_type_script_hash: [u8; 32],
+    pub store: Store<StateStore>,
+    pub local_state: LocaLState,
+    pub generator: Generator,
+    pub tx_pool: Arc<Mutex<TxPoolImpl>>,
 }
 
 impl Chain {
@@ -331,16 +331,16 @@ impl Chain {
         let submit_txs = {
             let tx_witness_root = calculate_merkle_root(
                 tx_pool_pkg
-                    .tx_recipts
+                    .tx_receipts
                     .iter()
                     .map(|tx_recipt| &tx_recipt.tx_witness_hash)
                     .cloned()
                     .collect(),
             )
             .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
-            let tx_count = tx_pool_pkg.tx_recipts.len() as u32;
+            let tx_count = tx_pool_pkg.tx_receipts.len() as u32;
             let compacted_post_root_list: Vec<_> = tx_pool_pkg
-                .tx_recipts
+                .tx_receipts
                 .iter()
                 .map(|tx_recipt| &tx_recipt.compacted_post_account_root)
                 .cloned()
@@ -405,7 +405,11 @@ impl Chain {
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
             .compile(kv_state)?
             .0;
-        let txs: Vec<_> = tx_pool_pkg.tx_recipts.into_iter().map(|tx| tx.tx).collect();
+        let txs: Vec<_> = tx_pool_pkg
+            .tx_receipts
+            .into_iter()
+            .map(|tx| tx.tx)
+            .collect();
         let block_proof = self
             .store
             .block_smt()
