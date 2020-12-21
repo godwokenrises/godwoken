@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 gw-types = { path = "../types" }
+gw-config = { path = "../config" }
 gw-common = { path = "../common" }
 gw-generator = { path = "../generator" }
 ckb-types = "0.37.0"

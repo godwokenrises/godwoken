@@ -1,19 +1,28 @@
+use std::collections::HashMap;
+
+use crate::Store;
 use anyhow::Result;
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     smt::{default_store::DefaultStore, H256, SMT},
+    sparse_merkle_tree::tree::{BranchNode, LeafNode},
     state::State,
     CKB_SUDT_SCRIPT_HASH, SUDT_CODE_HASH,
 };
 use gw_config::GenesisConfig;
 use gw_generator::traits::StateExt;
-use gw_store::Store;
 use gw_types::{
     packed::{AccountMerkleState, L2Block, RawL2Block, Script},
     prelude::*,
 };
 
-pub fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
+pub struct GenesisWithSMTState {
+    pub genesis: L2Block,
+    pub branches_map: HashMap<H256, BranchNode>,
+    pub leaves_map: HashMap<H256, LeafNode<H256>>,
+}
+
+pub fn build_genesis(config: &GenesisConfig) -> Result<GenesisWithSMTState> {
     // build initialized states
     let mut state: Store<DefaultStore<H256>> = Default::default();
     let root = state.calculate_root()?;
@@ -51,13 +60,8 @@ pub fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
 
     // create initial aggregator
     let initial_aggregator_id = {
-        let pubkey_hash: [u8; 20] = config.initial_aggregator_pubkey_hash.clone().into();
-        state.create_account_from_script(
-            Script::new_builder()
-                .code_hash([0u8; 32].pack())
-                .args(pubkey_hash.to_vec().pack())
-                .build(),
-        )?
+        let script: ckb_types::packed::Script = config.initial_aggregator_script.clone().into();
+        state.create_account_from_script(Script::new_unchecked(script.as_bytes()))?
     };
     state.mint_sudt(
         ckb_sudt_id,
@@ -98,5 +102,13 @@ pub fn build_genesis(config: &GenesisConfig) -> Result<L2Block> {
         .raw(raw_genesis)
         .block_proof(block_proof.0.pack())
         .build();
-    Ok(genesis)
+    let store = state.account_smt().store();
+    {
+        let inner = store.inner().lock();
+        Ok(GenesisWithSMTState {
+            genesis,
+            leaves_map: inner.leaves_map().clone(),
+            branches_map: inner.branches_map().clone(),
+        })
+    }
 }

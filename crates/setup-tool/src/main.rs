@@ -12,7 +12,8 @@ use std::fs;
 const ROLLUP_CONTRACT_PATH: &str = "./build/debug/state-validator";
 
 // Args
-const INITIAL_AGGREGATOR_PUBKEY_HASH: &str = "pubkey-hash";
+const INITIAL_AGGREGATOR_ARGS: &str = "account-args";
+const INITIAL_AGGREGATOR_CODE_HASH: &str = "account-code-hash";
 const INITIAL_AGGREGATOR_DEPOSITION: &str = "deposition-amount";
 const GENESIS_TIMESTAMP: &str = "genesis-timestamp";
 const RPC_LISTEN_ADDRESS: &str = "rpc-listen-address";
@@ -28,11 +29,18 @@ fn build_cli(help_msg: &mut Vec<u8>) -> Result<ArgMatches> {
             App::new("generate-config")
                 .about("generate Godwoken configuration file")
                 .arg(
-                    Arg::new(INITIAL_AGGREGATOR_PUBKEY_HASH)
-                        .about("Pubkey hash of the initial aggregator")
+                    Arg::new(INITIAL_AGGREGATOR_ARGS)
+                        .about("Args of the initial aggregator")
                         .required(true)
                         .takes_value(true)
-                        .long(INITIAL_AGGREGATOR_PUBKEY_HASH),
+                        .long(INITIAL_AGGREGATOR_ARGS),
+                )
+                .arg(
+                    Arg::new(INITIAL_AGGREGATOR_CODE_HASH)
+                        .about("Code hash of the initial aggregator")
+                        .required(true)
+                        .takes_value(true)
+                        .long(INITIAL_AGGREGATOR_CODE_HASH),
                 )
                 .arg(
                     Arg::new(INITIAL_AGGREGATOR_DEPOSITION)
@@ -118,15 +126,25 @@ fn run() -> Result<()> {
             return Err(anyhow!("unrecognized subcommand"));
         }
     };
-    let initial_aggregator_pubkey_hash = {
-        let pk_hash_hex = args.value_of(INITIAL_AGGREGATOR_PUBKEY_HASH).unwrap();
-        let pk_hash_hex = pk_hash_hex.trim_start_matches("0x");
-        if pk_hash_hex.len() != 40 {
-            return Err(anyhow!("pk_hash should be a 40 length hex string"));
-        }
-        let mut pk_hash = [0u8; 20];
-        hex_decode(pk_hash_hex.as_bytes(), &mut pk_hash)?;
-        pk_hash.into()
+    let initial_aggregator_args = {
+        let args_hex = args.value_of(INITIAL_AGGREGATOR_ARGS).unwrap();
+        let args_hex = args_hex.trim_start_matches("0x");
+        let mut args = Vec::new();
+        args.resize(args_hex.len() / 2, 0);
+        hex_decode(args_hex.as_bytes(), &mut args)?;
+        args
+    };
+    let initial_aggregator_code_hash = {
+        let code_hash_hex = args.value_of(INITIAL_AGGREGATOR_CODE_HASH).unwrap();
+        let code_hash_hex = code_hash_hex.trim_start_matches("0x");
+        let mut code_hash = [0u8; 32];
+        hex_decode(code_hash_hex.as_bytes(), &mut code_hash)?;
+        code_hash
+    };
+    let initial_aggregator_script = Script {
+        code_hash: initial_aggregator_code_hash.into(),
+        args: JsonBytes::from_vec(initial_aggregator_args),
+        hash_type: ScriptHashType::Data,
     };
     let initial_deposition = args
         .value_of(INITIAL_AGGREGATOR_DEPOSITION)
@@ -151,7 +169,7 @@ fn run() -> Result<()> {
     };
 
     let genesis = GenesisConfig {
-        initial_aggregator_pubkey_hash,
+        initial_aggregator_script,
         initial_deposition,
         timestamp: genesis_timestamp,
     };

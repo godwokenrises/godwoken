@@ -303,7 +303,8 @@ impl Chain {
                 err => return Err(err.into()),
             }
         }
-        self.store.insert_block(l2block.clone())?;
+        self.store
+            .insert_block(l2block.clone(), header_info.clone())?;
         self.store.attach_block(l2block.clone())?;
 
         // update chain

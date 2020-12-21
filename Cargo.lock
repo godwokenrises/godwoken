@@ -682,6 +682,7 @@ dependencies = [
  "anyhow",
  "ckb-types",
  "gw-common",
+ "gw-config",
  "gw-generator",
  "gw-types",
  "parking_lot 0.11.0",

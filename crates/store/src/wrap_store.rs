@@ -17,6 +17,10 @@ impl<S> WrapStore<S> {
     pub fn new(inner: Arc<Mutex<S>>) -> Self {
         WrapStore { inner }
     }
+
+    pub fn inner(&self) -> &Mutex<S> {
+        &self.inner
+    }
 }
 
 impl<S> Clone for WrapStore<S> {

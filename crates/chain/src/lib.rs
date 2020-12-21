@@ -8,6 +8,5 @@
 
 pub mod chain;
 mod crypto;
-pub mod genesis;
 pub mod next_block_context;
 pub mod tx_pool;

@@ -1,3 +1,4 @@
+pub mod genesis;
 mod overlay;
 mod store_impl;
 mod wrap_store;

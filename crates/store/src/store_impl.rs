@@ -1,3 +1,5 @@
+use crate::genesis::GenesisWithSMTState;
+
 use super::overlay::{OverlaySMTStore, OverlayStore};
 use super::wrap_store::WrapStore;
 use anyhow::{anyhow, Result};
@@ -16,7 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 pub struct Store<S> {
-    tree: SMT<WrapStore<S>>,
+    account_tree: SMT<WrapStore<S>>,
     account_count: u32,
     // Note: The block tree can use same storage with the account tree
     // But the column must be difference, otherwise the keys may be collision with each other
@@ -43,7 +45,7 @@ impl<S: SMTStore<H256>> Store<S> {
         transactions: HashMap<H256, L2Transaction>,
     ) -> Self {
         Store {
-            tree: account_tree,
+            account_tree,
             account_count,
             block_tree,
             scripts,
@@ -55,12 +57,38 @@ impl<S: SMTStore<H256>> Store<S> {
         }
     }
 
+    pub fn init_genesis(
+        &mut self,
+        genesis_with_smt: GenesisWithSMTState,
+        header_info: HeaderInfo,
+    ) -> Result<()> {
+        let GenesisWithSMTState {
+            genesis,
+            leaves_map,
+            branches_map,
+        } = genesis_with_smt;
+
+        // initialize account smt
+        {
+            let smt_store = self.account_tree.store_mut();
+            for (leaf_hash, leaf) in leaves_map {
+                smt_store.insert_leaf(leaf_hash, leaf)?;
+            }
+            for (node, branch) in branches_map {
+                smt_store.insert_branch(node, branch)?;
+            }
+        }
+        self.insert_block(genesis.clone(), header_info)?;
+        self.attach_block(genesis)?;
+        Ok(())
+    }
+
     pub fn new_overlay(&self) -> Result<OverlayStore<WrapStore<S>>> {
-        let root = self.tree.root();
+        let root = self.account_tree.root();
         let account_count = self
             .get_account_count()
             .map_err(|err| anyhow!("get amount count error: {:?}", err))?;
-        let store = OverlaySMTStore::new(self.tree.store().clone());
+        let store = OverlaySMTStore::new(self.account_tree.store().clone());
         Ok(OverlayStore::new(
             *root,
             store,
@@ -71,15 +99,17 @@ impl<S: SMTStore<H256>> Store<S> {
     }
 
     pub fn account_smt(&self) -> &SMT<WrapStore<S>> {
-        &self.tree
+        &self.account_tree
     }
 
     pub fn block_smt(&self) -> &SMT<WrapStore<S>> {
         &self.block_tree
     }
 
-    pub fn insert_block(&mut self, block: L2Block) -> Result<()> {
-        self.blocks.insert(block.hash().into(), block.clone());
+    pub fn insert_block(&mut self, block: L2Block, header_info: HeaderInfo) -> Result<()> {
+        let block_hash = block.hash().into();
+        self.blocks.insert(block_hash, block.clone());
+        self.header_infos.insert(block_hash, header_info);
         for tx in block.transactions() {
             self.transactions.insert(tx.hash().into(), tx);
         }
@@ -116,7 +146,7 @@ impl<S: SMTStore<H256>> Store<S> {
 
 impl<S: SMTStore<H256> + Default> Default for Store<S> {
     fn default() -> Self {
-        let tree = SMT::new(
+        let account_tree = SMT::new(
             H256::zero(),
             WrapStore::new(Arc::new(Mutex::new(S::default()))),
         );
@@ -125,7 +155,7 @@ impl<S: SMTStore<H256> + Default> Default for Store<S> {
             WrapStore::new(Arc::new(Mutex::new(S::default()))),
         );
         Store {
-            tree,
+            account_tree,
             account_count: 0,
             block_tree,
             scripts: Default::default(),
@@ -140,11 +170,11 @@ impl<S: SMTStore<H256> + Default> Default for Store<S> {
 
 impl<S: SMTStore<H256>> State for Store<S> {
     fn get_raw(&self, key: &H256) -> Result<H256, Error> {
-        let v = self.tree.get(&(*key).into())?;
+        let v = self.account_tree.get(&(*key).into())?;
         Ok(v.into())
     }
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), Error> {
-        self.tree.update(key.into(), value.into())?;
+        self.account_tree.update(key.into(), value.into())?;
         Ok(())
     }
     fn get_account_count(&self) -> Result<u32, Error> {
@@ -155,7 +185,7 @@ impl<S: SMTStore<H256>> State for Store<S> {
         Ok(())
     }
     fn calculate_root(&self) -> Result<H256, Error> {
-        let root = (*self.tree.root()).into();
+        let root = (*self.account_tree.root()).into();
         Ok(root)
     }
 }
