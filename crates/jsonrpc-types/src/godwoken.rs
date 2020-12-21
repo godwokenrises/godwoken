@@ -1,5 +1,6 @@
+use crate::blockchain::Script;
 use crate::fixed_bytes::Byte65;
-use ckb_jsonrpc_types::{JsonBytes, Uint32, Uint64};
+use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
 use gw_types::bytes::Bytes;
 use gw_types::{packed, prelude::*, H256};
 use serde::{Deserialize, Serialize};
@@ -21,14 +22,11 @@ impl From<RawL2Transaction> for packed::RawL2Transaction {
             nonce,
             args,
         } = tx;
-        let from_id: u32 = from_id.into();
-        let to_id: u32 = to_id.into();
-        let nonce: u32 = nonce.into();
         let args: Bytes = args.into_bytes();
         packed::RawL2Transaction::new_builder()
-            .from_id(from_id.pack())
-            .to_id(to_id.pack())
-            .nonce(nonce.pack())
+            .from_id(u32::from(from_id).pack())
+            .to_id(u32::from(to_id).pack())
+            .nonce(u32::from(nonce).pack())
             .args(args.pack())
             .build()
     }
@@ -93,12 +91,15 @@ pub struct StartChallenge {
 
 impl From<StartChallenge> for packed::StartChallenge {
     fn from(json: StartChallenge) -> packed::StartChallenge {
-        let block_number: u64 = json.block_number.into();
-        let tx_index: u32 = json.tx_index.into();
+        let StartChallenge {
+            block_hash,
+            block_number,
+            tx_index,
+        } = json;
         packed::StartChallenge::new_builder()
-            .block_hash(json.block_hash.pack())
-            .block_number(block_number.pack())
-            .tx_index(tx_index.pack())
+            .block_hash(block_hash.pack())
+            .block_number(u64::from(block_number).pack())
+            .tx_index(u32::from(tx_index).pack())
             .build()
     }
 }
@@ -168,6 +169,7 @@ pub struct L2Block {
     pub kv_state_proof: JsonBytes,
     pub transactions: Vec<L2Transaction>,
     pub block_proof: JsonBytes,
+    pub withdrawal_requests: Vec<WithdrawalRequest>,
 }
 
 impl From<L2Block> for packed::L2Block {
@@ -179,6 +181,7 @@ impl From<L2Block> for packed::L2Block {
             kv_state_proof,
             transactions,
             block_proof,
+            withdrawal_requests,
         } = json;
         let kv_pair_vec: Vec<packed::KVPair> = kv_state.into_iter().map(|k| k.into()).collect();
         let packed_kv_state = packed::KVPairVec::new_builder().set(kv_pair_vec).build();
@@ -187,6 +190,11 @@ impl From<L2Block> for packed::L2Block {
         let packed_transactions = packed::L2TransactionVec::new_builder()
             .set(transaction_vec)
             .build();
+        let withdrawal_requests_vec: Vec<packed::WithdrawalRequest> =
+            withdrawal_requests.into_iter().map(|w| w.into()).collect();
+        let packed_withdrawal_requests = packed::WithdrawalRequestVec::new_builder()
+            .set(withdrawal_requests_vec)
+            .build();
         packed::L2Block::new_builder()
             .raw(raw.into())
             .signature(signature.into())
@@ -194,6 +202,7 @@ impl From<L2Block> for packed::L2Block {
             .kv_state_proof(kv_state_proof.into_bytes().pack())
             .transactions(packed_transactions)
             .block_proof(block_proof.into_bytes().pack())
+            .withdrawal_requests(packed_withdrawal_requests)
             .build()
     }
 }
@@ -211,6 +220,11 @@ impl From<packed::L2Block> for L2Block {
                 .map(|t| t.into())
                 .collect(),
             block_proof: JsonBytes::from_bytes(l2_block.block_proof().unpack()),
+            withdrawal_requests: l2_block
+                .withdrawal_requests()
+                .into_iter()
+                .map(|w| w.into())
+                .collect(),
         }
     }
 }
@@ -224,7 +238,8 @@ pub struct RawL2Block {
     pub timestamp: Uint64,
     pub prev_account: AccountMerkleState,
     pub post_account: AccountMerkleState,
-    pub submit_transactions: Option<SubmitTransactions>,
+    pub submit_transactions: SubmitTransactions,
+    pub withdrawal_requests_root: H256,
 }
 
 impl From<RawL2Block> for packed::RawL2Block {
@@ -237,26 +252,17 @@ impl From<RawL2Block> for packed::RawL2Block {
             prev_account,
             post_account,
             submit_transactions,
+            withdrawal_requests_root,
         } = json;
-        let number: u64 = number.into();
-        let aggregator_id: u32 = aggregator_id.into();
-        let timestamp: u64 = timestamp.into();
-        let submit_transactions = match submit_transactions {
-            Some(submit_transactions) => packed::SubmitTransactionsOpt::new_builder()
-                .set(Some(submit_transactions.into()))
-                .build(),
-            None => packed::SubmitTransactionsOpt::new_builder()
-                .set(None)
-                .build(),
-        };
         packed::RawL2Block::new_builder()
-            .number(number.pack())
-            .aggregator_id(aggregator_id.pack())
+            .number(u64::from(number).pack())
+            .aggregator_id(u32::from(aggregator_id).pack())
             .stake_cell_owner_lock_hash(stake_cell_owner_lock_hash.pack())
-            .timestamp(timestamp.pack())
+            .timestamp(u64::from(timestamp).pack())
             .prev_account(prev_account.into())
             .post_account(post_account.into())
-            .submit_transactions(submit_transactions)
+            .submit_transactions(submit_transactions.into())
+            .withdrawal_requests_root(withdrawal_requests_root.pack())
             .build()
     }
 }
@@ -266,11 +272,6 @@ impl From<packed::RawL2Block> for RawL2Block {
         let number: u64 = raw_l2_block.number().unpack();
         let aggregator_id: u32 = raw_l2_block.aggregator_id().unpack();
         let timestamp: u64 = raw_l2_block.timestamp().unpack();
-        let submit_transactions: Option<SubmitTransactions> =
-            match raw_l2_block.submit_transactions().to_opt() {
-                Some(submit_transactions) => Some(submit_transactions.into()),
-                None => None,
-            };
         Self {
             number: number.into(),
             aggregator_id: aggregator_id.into(),
@@ -278,7 +279,8 @@ impl From<packed::RawL2Block> for RawL2Block {
             timestamp: timestamp.into(),
             prev_account: raw_l2_block.prev_account().into(),
             post_account: raw_l2_block.post_account().into(),
-            submit_transactions: submit_transactions,
+            submit_transactions: raw_l2_block.submit_transactions().into(),
+            withdrawal_requests_root: raw_l2_block.withdrawal_requests_root().unpack(),
         }
     }
 }
@@ -299,14 +301,13 @@ impl From<SubmitTransactions> for packed::SubmitTransactions {
             tx_count,
             compacted_post_root_list,
         } = json;
-        let tx_count: u32 = tx_count.into();
         let compacted_post_root_list_vec: Vec<packed::Byte32> = compacted_post_root_list
             .into_iter()
             .map(|c| c.pack())
             .collect();
         packed::SubmitTransactions::new_builder()
             .tx_witness_root(tx_witness_root.pack())
-            .tx_count(tx_count.pack())
+            .tx_count(u32::from(tx_count).pack())
             .compacted_post_root_list(
                 packed::Byte32Vec::new_builder()
                     .set(compacted_post_root_list_vec)
@@ -340,10 +341,10 @@ pub struct AccountMerkleState {
 
 impl From<AccountMerkleState> for packed::AccountMerkleState {
     fn from(json: AccountMerkleState) -> packed::AccountMerkleState {
-        let count: u32 = json.count.into();
+        let AccountMerkleState { merkle_root, count } = json;
         packed::AccountMerkleState::new_builder()
-            .merkle_root(json.merkle_root.pack())
-            .count(count.pack())
+            .merkle_root(merkle_root.pack())
+            .count(u32::from(count).pack())
             .build()
     }
 }
@@ -445,11 +446,9 @@ impl From<StatusUnion> for packed::StatusUnion {
                 next_block_number,
                 challenger_id,
             } => {
-                let next_block_number: u64 = next_block_number.into();
-                let challenger_id: u32 = challenger_id.into();
                 let reverting = packed::Reverting::new_builder()
-                    .next_block_number(next_block_number.pack())
-                    .challenger_id(challenger_id.pack())
+                    .next_block_number(u64::from(next_block_number).pack())
+                    .challenger_id(u32::from(challenger_id).pack())
                     .build();
                 packed::StatusUnion::Reverting(reverting)
             }
@@ -503,5 +502,136 @@ impl From<packed::GlobalState> for GlobalState {
             last_finalized_block_number: last_finalized_block_number.into(),
             status: global_state.status().to_enum().into(),
         }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct DepositionRequest {
+    pub script: Script,
+    pub sudt_script: Script,
+    pub amount: Uint128,
+    pub capacity: Uint64,
+}
+
+impl From<DepositionRequest> for packed::DepositionRequest {
+    fn from(json: DepositionRequest) -> packed::DepositionRequest {
+        let DepositionRequest {
+            script,
+            sudt_script,
+            amount,
+            capacity,
+        } = json;
+        packed::DepositionRequest::new_builder()
+            .script(script.into())
+            .sudt_script(sudt_script.into())
+            .amount(u128::from(amount).pack())
+            .capacity(u64::from(capacity).pack())
+            .build()
+    }
+}
+
+impl From<packed::DepositionRequest> for DepositionRequest {
+    fn from(deposition_request: packed::DepositionRequest) -> DepositionRequest {
+        let amount: u128 = deposition_request.amount().unpack();
+        let capacity: u64 = deposition_request.capacity().unpack();
+        Self {
+            script: deposition_request.script().into(),
+            sudt_script: deposition_request.sudt_script().into(),
+            amount: amount.into(),
+            capacity: capacity.into(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct WithdrawalRequest {
+    pub raw: RawWithdrawalRequest,
+    pub signature: Byte65,
+}
+
+impl From<WithdrawalRequest> for packed::WithdrawalRequest {
+    fn from(json: WithdrawalRequest) -> packed::WithdrawalRequest {
+        let WithdrawalRequest { raw, signature } = json;
+        packed::WithdrawalRequest::new_builder()
+            .raw(raw.into())
+            .signature(signature.into())
+            .build()
+    }
+}
+
+impl From<packed::WithdrawalRequest> for WithdrawalRequest {
+    fn from(withdrawal_request: packed::WithdrawalRequest) -> WithdrawalRequest {
+        Self {
+            raw: withdrawal_request.raw().into(),
+            signature: withdrawal_request.signature().into(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct RawWithdrawalRequest {
+    pub nonce: Uint32,
+    pub capacity: Uint64,
+    pub amount: Uint128,
+    // layer1 cell to receive the withdraw
+    pub lock_hash: H256,
+    pub sudt_script_hash: H256,
+    pub account_script_hash: H256,
+}
+
+impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
+    fn from(json: RawWithdrawalRequest) -> packed::RawWithdrawalRequest {
+        let RawWithdrawalRequest {
+            nonce,
+            capacity,
+            amount,
+            lock_hash,
+            sudt_script_hash,
+            account_script_hash,
+        } = json;
+        packed::RawWithdrawalRequest::new_builder()
+            .nonce(u32::from(nonce).pack())
+            .capacity(u64::from(capacity).pack())
+            .amount(u128::from(amount).pack())
+            .lock_hash(lock_hash.pack())
+            .sudt_script_hash(sudt_script_hash.pack())
+            .account_script_hash(account_script_hash.pack())
+            .build()
+    }
+}
+
+impl From<packed::RawWithdrawalRequest> for RawWithdrawalRequest {
+    fn from(raw_withdrawal_request: packed::RawWithdrawalRequest) -> RawWithdrawalRequest {
+        let nonce: u32 = raw_withdrawal_request.nonce().unpack();
+        let capacity: u64 = raw_withdrawal_request.capacity().unpack();
+        let amount: u128 = raw_withdrawal_request.amount().unpack();
+        Self {
+            nonce: nonce.into(),
+            capacity: capacity.into(),
+            amount: amount.into(),
+            lock_hash: raw_withdrawal_request.lock_hash().unpack(),
+            sudt_script_hash: raw_withdrawal_request.sudt_script_hash().unpack(),
+            account_script_hash: raw_withdrawal_request.account_script_hash().unpack(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct HeaderInfo {
+    pub number: Uint64,
+    pub block_hash: H256,
+}
+
+impl From<HeaderInfo> for packed::HeaderInfo {
+    fn from(json: HeaderInfo) -> packed::HeaderInfo {
+        let HeaderInfo { number, block_hash } = json;
+        packed::HeaderInfo::new_builder()
+            .number(u64::from(number).pack())
+            .block_hash(block_hash.pack())
+            .build()
     }
 }
