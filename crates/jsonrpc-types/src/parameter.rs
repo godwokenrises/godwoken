@@ -1,12 +1,15 @@
-use crate::godwoken::{
-    CancelChallenge, DepositionRequest, GlobalState, HeaderInfo, L2Block, L2Transaction,
-    StartChallenge, WithdrawalRequest,
-};
-use ckb_jsonrpc_types::{
-    Script as CkbJsonScript, Transaction as CkbJsonTransaction, Uint32, Uint64,
-};
+use ckb_jsonrpc_types::{JsonBytes, Uint32, Uint64};
+use ckb_types::packed as ckb_packed;
 use ckb_types::H256;
 use gw_chain::{chain, next_block_context, tx_pool};
+use gw_types::{
+    packed::{
+        CancelChallenge, DepositionRequest, HeaderInfo, L2Transaction, StartChallenge,
+        WithdrawalRequest,
+    },
+    prelude::*,
+};
+
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -38,9 +41,9 @@ impl From<SyncParam> for chain::SyncParam {
 #[serde(rename_all = "snake_case")]
 pub struct L1Action {
     /// transaction
-    pub transaction: CkbJsonTransaction,
+    pub transaction: JsonBytes,
     /// transactions' header info
-    pub header_info: HeaderInfo,
+    pub header_info: JsonBytes,
     pub context: L1ActionContext,
 }
 
@@ -51,9 +54,14 @@ impl From<L1Action> for chain::L1Action {
             header_info,
             context,
         } = json;
+        // let transaction_slice: &[u8] = transaction.into_bytes().as_ref();
+        let transaction_bytes = transaction.into_bytes();
+        let header_info_bytes = header_info.into_bytes();
         Self {
-            transaction: transaction.into(),
-            header_info: header_info.into(),
+            transaction: ckb_packed::Transaction::from_slice(transaction_bytes.as_ref())
+                .expect("Build packed::Transaction from slice"),
+            header_info: HeaderInfo::from_slice(header_info_bytes.as_ref())
+                .expect("Build packed::HeaderInfo from slice"),
             context: context.into(),
         }
     }
@@ -85,16 +93,16 @@ impl From<NextBlockContext> for next_block_context::NextBlockContext {
 pub enum L1ActionContext {
     SubmitTxs {
         /// deposition requests
-        deposition_requests: Vec<DepositionRequest>,
+        deposition_requests: Vec<JsonBytes>,
     },
     Challenge {
-        context: StartChallenge,
+        context: JsonBytes,
     },
     CancelChallenge {
-        context: CancelChallenge,
+        context: JsonBytes,
     },
     Revert {
-        context: StartChallenge,
+        context: JsonBytes,
     },
 }
 
@@ -112,23 +120,42 @@ impl From<L1ActionContext> for chain::L1ActionContext {
             L1ActionContext::SubmitTxs {
                 deposition_requests,
             } => chain::L1ActionContext::SubmitTxs {
-                deposition_requests: deposition_requests.into_iter().map(|d| d.into()).collect(),
+                deposition_requests: deposition_requests
+                    .into_iter()
+                    .map(|d| {
+                        let d_bytes = d.into_bytes();
+                        DepositionRequest::from_slice(d_bytes.as_ref())
+                            .expect("Build packed::DepositionRequest from slice")
+                    })
+                    .collect(),
             },
             L1ActionContext::Challenge {
                 context: start_challenge,
-            } => chain::L1ActionContext::Challenge {
-                context: start_challenge.into(),
-            },
+            } => {
+                let start_challenge_bytes = start_challenge.into_bytes();
+                chain::L1ActionContext::Challenge {
+                    context: StartChallenge::from_slice(start_challenge_bytes.as_ref())
+                        .expect("Build packed::StartChallenge from slice"),
+                }
+            }
             L1ActionContext::CancelChallenge {
                 context: cancel_challenge,
-            } => chain::L1ActionContext::CancelChallenge {
-                context: cancel_challenge.into(),
-            },
+            } => {
+                let cancel_challenge_bytes = cancel_challenge.into_bytes();
+                chain::L1ActionContext::CancelChallenge {
+                    context: CancelChallenge::from_slice(cancel_challenge_bytes.as_ref())
+                        .expect("Build packed::CancelChallenge from slice"),
+                }
+            }
             L1ActionContext::Revert {
-                context: cancel_challenge,
-            } => chain::L1ActionContext::Revert {
-                context: cancel_challenge.into(),
-            },
+                context: start_challenge,
+            } => {
+                let start_challenge_bytes = start_challenge.into_bytes();
+                chain::L1ActionContext::Revert {
+                    context: StartChallenge::from_slice(start_challenge_bytes.as_ref())
+                        .expect("Build packed::StartChallenge from slice"),
+                }
+            }
         }
     }
 }
@@ -140,9 +167,9 @@ pub enum SyncEvent {
     // success
     Success,
     // found a invalid block
-    BadBlock(StartChallenge),
+    BadBlock(JsonBytes),
     // found a invalid challenge
-    BadChallenge(CancelChallenge),
+    BadChallenge(JsonBytes),
     // the rollup is in a challenge
     WaitChallenge,
 }
@@ -152,10 +179,10 @@ impl From<chain::SyncEvent> for SyncEvent {
         match sync_event {
             chain::SyncEvent::Success => SyncEvent::Success,
             chain::SyncEvent::BadBlock(start_challenge) => {
-                SyncEvent::BadBlock(start_challenge.into())
+                SyncEvent::BadBlock(JsonBytes::from_bytes(start_challenge.as_bytes()))
             }
             chain::SyncEvent::BadChallenge(cancel_challenge) => {
-                SyncEvent::BadChallenge(cancel_challenge.into())
+                SyncEvent::BadBlock(JsonBytes::from_bytes(cancel_challenge.as_bytes()))
             }
             chain::SyncEvent::WaitChallenge => SyncEvent::WaitChallenge,
         }
@@ -201,7 +228,7 @@ pub struct TxPoolPackage {
     pub touched_keys: HashSet<H256>,
     pub prev_account_state: MerkleState,
     pub post_account_state: MerkleState,
-    pub withdrawal_requests: Vec<WithdrawalRequest>,
+    pub withdrawal_requests: Vec<JsonBytes>,
 }
 
 impl From<TxPoolPackage> for tx_pool::TxPoolPackage {
@@ -222,7 +249,14 @@ impl From<TxPoolPackage> for tx_pool::TxPoolPackage {
             touched_keys: to_touched_keys,
             prev_account_state: prev_account_state.into(),
             post_account_state: post_account_state.into(),
-            withdrawal_requests: withdrawal_requests.into_iter().map(|w| w.into()).collect(),
+            withdrawal_requests: withdrawal_requests
+                .into_iter()
+                .map(|w| {
+                    let w_bytes = w.into_bytes();
+                    WithdrawalRequest::from_slice(w_bytes.as_ref())
+                        .expect("Build packed::WithdrawalRequest from slice")
+                })
+                .collect(),
         }
     }
 }
@@ -244,7 +278,10 @@ impl From<tx_pool::TxPoolPackage> for TxPoolPackage {
             touched_keys: to_touched_keys,
             prev_account_state: prev_account_state.into(),
             post_account_state: post_account_state.into(),
-            withdrawal_requests: withdrawal_requests.into_iter().map(|w| w.into()).collect(),
+            withdrawal_requests: withdrawal_requests
+                .into_iter()
+                .map(|w| JsonBytes::from_bytes(w.as_bytes()))
+                .collect(),
         }
     }
 }
@@ -252,7 +289,7 @@ impl From<tx_pool::TxPoolPackage> for TxPoolPackage {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct TxReceipt {
-    pub tx: L2Transaction,
+    pub tx: JsonBytes,
     pub tx_witness_hash: H256,
     pub compacted_post_account_root: H256,
 }
@@ -264,8 +301,10 @@ impl From<TxReceipt> for tx_pool::TxReceipt {
             tx_witness_hash,
             compacted_post_account_root,
         } = json;
+        let tx_bytes = tx.into_bytes();
         Self {
-            tx: tx.into(),
+            tx: L2Transaction::from_slice(tx_bytes.as_ref())
+                .expect("Build packed::L2Transaction from slice"),
             tx_witness_hash: tx_witness_hash.0,
             compacted_post_account_root: compacted_post_account_root.0,
         }
@@ -279,7 +318,7 @@ impl From<tx_pool::TxReceipt> for TxReceipt {
             compacted_post_account_root,
         } = tx_receipt;
         Self {
-            tx: tx.into(),
+            tx: JsonBytes::from_bytes(tx.as_bytes()),
             tx_witness_hash: H256(tx_witness_hash),
             compacted_post_account_root: H256(compacted_post_account_root),
         }
@@ -445,7 +484,7 @@ impl From<gw_config::ConsensusConfig> for ConsensusConfig {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct GenesisConfig {
-    pub initial_aggregator_script: CkbJsonScript,
+    pub initial_aggregator_script: JsonBytes,
     pub initial_deposition: Uint64,
     pub timestamp: Uint64,
 }
@@ -456,8 +495,12 @@ impl From<GenesisConfig> for gw_config::GenesisConfig {
             initial_deposition,
             timestamp,
         } = json;
+        let initial_aggregator_script_bytes = initial_aggregator_script.into_bytes();
         Self {
-            initial_aggregator_script: initial_aggregator_script.into(),
+            initial_aggregator_script: ckb_packed::Script::from_slice(
+                initial_aggregator_script_bytes.as_ref(),
+            )
+            .expect("Build ckb_packed::Script from slice"),
             initial_deposition: initial_deposition.into(),
             timestamp: timestamp.into(),
         }
@@ -471,7 +514,7 @@ impl From<gw_config::GenesisConfig> for GenesisConfig {
             timestamp,
         } = genesis_config;
         Self {
-            initial_aggregator_script: initial_aggregator_script.into(),
+            initial_aggregator_script: JsonBytes::from_bytes(initial_aggregator_script.as_bytes()),
             initial_deposition: initial_deposition.into(),
             timestamp: timestamp.into(),
         }
@@ -481,20 +524,22 @@ impl From<gw_config::GenesisConfig> for GenesisConfig {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ChainConfig {
-    pub rollup_type_script: CkbJsonScript,
+    pub rollup_type_script: JsonBytes,
 }
 
 impl From<ChainConfig> for gw_config::ChainConfig {
     fn from(json: ChainConfig) -> gw_config::ChainConfig {
+        let rollup_type_script_bytes = json.rollup_type_script.into_bytes();
         Self {
-            rollup_type_script: json.rollup_type_script.into(),
+            rollup_type_script: ckb_packed::Script::from_slice(rollup_type_script_bytes.as_ref())
+                .expect("Build ckb_packed::Script from slice"),
         }
     }
 }
 impl From<gw_config::ChainConfig> for ChainConfig {
     fn from(chain_config: gw_config::ChainConfig) -> ChainConfig {
         Self {
-            rollup_type_script: chain_config.rollup_type_script.into(),
+            rollup_type_script: JsonBytes::from_bytes(chain_config.rollup_type_script.as_bytes()),
         }
     }
 }
@@ -521,15 +566,17 @@ impl From<gw_config::RPC> for RPC {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ProduceBlockResult {
-    pub block: L2Block,
-    pub global_state: GlobalState,
+    pub block: JsonBytes,
+    pub global_state: JsonBytes,
 }
 
 impl From<chain::ProduceBlockResult> for ProduceBlockResult {
     fn from(produce_block_result: chain::ProduceBlockResult) -> ProduceBlockResult {
+        let block_bytes = produce_block_result.block.as_bytes();
+        let global_state_bytes = produce_block_result.global_state.as_bytes();
         Self {
-            block: produce_block_result.block.into(),
-            global_state: produce_block_result.global_state.into(),
+            block: JsonBytes::from_bytes(block_bytes),
+            global_state: JsonBytes::from_bytes(global_state_bytes),
         }
     }
 }

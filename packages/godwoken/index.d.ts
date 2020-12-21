@@ -1,4 +1,4 @@
-import { HexNumber, Hash, Transaction, Script } from "@ckb-lumos/base";
+import { HexNumber, Hash } from "@ckb-lumos/base";
 export interface SyncParam {
   reverts: L1Action[];
   updates: L1Action[];
@@ -6,8 +6,8 @@ export interface SyncParam {
 }
 
 export interface L1Action {
-  transaction_info: TransactionInfo;
-  header_info: HeaderInfo;
+  transaction: ArrayBuffer; // ckb_types::packed::Transaction
+  header_info: ArrayBuffer; // gw_types::packed::HeaderInfo
   context: SubmitTxs | StartChallenge | CancelChallenge | Revert;
 }
 
@@ -16,103 +16,52 @@ export interface NextBlockContext {
   timestamp: HexNumber;
 }
 
-export interface TransactionInfo {
-  transaction: Transaction;
-  block_hash: Hash;
-}
-
-export interface HeaderInfo {
-  number: HexNumber;
-  block_hash: Hash;
-}
-
 export interface SubmitTxs {
   type: "submit_txs";
-  deposition_requests: DepositionRequest[];
-  withdrawal_requests: WithdrawalRequest[];
-}
-
-export interface DepositionRequest {
-  script: Script;
-  sudt_script: Script;
-  amount: HexNumber;
-}
-
-export interface WithdrawalRequest {
-  lock_hash: Hash;
-  sudt_script_hash: Hash;
-  amount: HexNumber;
-  account_script_hash: Hash;
+  deposition_requests: ArrayBuffer[]; // Vec<gw_types::packed::DepositionRequest>
 }
 
 export interface StartChallenge {
   type: "start_challenge";
-  block_hash: Hash;
-  block_number: HexNumber;
-  tx_index: Hash;
+  context: ArrayBuffer; // gw_types::packed::StartChallenge
 }
 
 export interface CancelChallenge {
   type: "cancel_challenge";
-  l1block: L2Block;
-  block_proof: ArrayBuffer;
-  kv_state: KVPair[];
-  kv_state_proof: ArrayBuffer;
+  context: ArrayBuffer; // gw_types::packed::CancelChallenge
 }
 export interface Revert {
   type: "revert";
-  block_hash: Hash;
-  block_number: HexNumber;
-  tx_index: Hash;
-}
-
-export interface L2Block {
-  number: HexNumber;
-  aggregator_id: HexNumber;
-  stake_cell_owner_lock_hash: ArrayBuffer;
-  timestamp: HexNumber;
-  prev_account: AccountMerkleState;
-  post_account: AccountMerkleState;
-  submit_transactions?: SubmitTransactions;
-}
-
-export interface KVPair {
-  k: ArrayBuffer;
-  v: ArrayBuffer;
-}
-
-export interface AccountMerkleState {
-  merkle_root: ArrayBuffer;
-  count: HexNumber;
-}
-
-export interface SubmitTransactions {
-  tx_witness_root: ArrayBuffer;
-  tx_count: HexNumber;
-  // hash(account_root | account_count) before each transaction
-  compacted_post_root_list: ArrayBuffer[];
+  context: ArrayBuffer; // gw_types::packed::StartChallenge
 }
 
 export interface ProduceBlockParam {
   aggregator_id: HexNumber;
-  deposition_requests: DepositionRequest[];
-  withdrawal_requests: WithdrawalRequest[];
+  tx_pool_pkg: TxPoolPackage;
 }
 
-export interface L2BlockWithState {
-  block: L2Block;
-  global_state: GlobalState;
+export interface TxPoolPackage {
+  tx_receipts: TxReceipt[];
+  touched_keys: Set<Hash>;
+  prev_account_state: MerkleState;
+  post_account_state: MerkleState;
+  withdrawal_requests: ArrayBuffer[]; // Vec<gw_types::packed::WithdrawalRequest>
 }
 
-export interface GlobalState {
-  account: AccountMerkleState;
-  block: BlockMerkleState;
-  status: Status;
-}
-
-export interface BlockMerkleState {
-  merkle_root: ArrayBuffer;
+export interface MerkleState {
+  root: Hash;
   count: HexNumber;
+}
+
+export interface TxReceipt {
+  tx: ArrayBuffer; // gw_types::packed::L2Transaction
+  tx_witness_hash: Hash;
+  compacted_post_account_root: Hash;
+}
+
+export interface ProduceBlockResult {
+  block: ArrayBuffer; // gw_types::packed::L2Block
+  global_state: ArrayBuffer; // gw_types::packed::GlobalState
 }
 
 export type SyncEvent =
@@ -136,18 +85,6 @@ export interface WaitChallengeEvent {
 
 export type Status = "Running" | "Halting";
 
-export interface L2Transaction {
-  raw: RawL2Transaction;
-  signature: ArrayBuffer;
-}
-
-export interface RawL2Transaction {
-  from_id: HexNumber;
-  to_id: HexNumber;
-  nonce: HexNumber;
-  args: ArrayBuffer;
-}
-
 export interface Config {
   chain: ChainConfig;
   consensus: ConsensusConfig;
@@ -157,7 +94,7 @@ export interface Config {
 }
 
 export interface ChainConfig {
-  rollup_type_script: Script;
+  rollup_type_script: ArrayBuffer; // ckb_types::packed::Script
 }
 
 export interface ConsensusConfig {
@@ -190,15 +127,22 @@ export interface RunResult {
   new_data: Record<Hash, ArrayBuffer>;
 }
 
+export interface GenesisWithSMTState {
+  genesis: ArrayBuffer; // gw_types::packed::L2Block
+  // branches_map: Record<Hash, BranchNode>,
+  // leaves_map: Record<Hash, LeafNode<H256>>,
+}
+
 export class ChainService {
   constructor(config: Config);
   sync(syncParam: SyncParam): Promise<SyncEvent>;
   produce_block(
     produceBlockParam: ProduceBlockParam
-  ): Promise<L2BlockWithState>;
-  submitL2Transaction(l2Transaction: L2Transaction): Promise<RunResult>;
-  execute(l2Transaction: L2Transaction): Promise<RunResult>;
-  tip(): L2Block;
-  lastSynced(): HeaderInfo;
+  ): Promise<ProduceBlockResult>;
+  submitL2Transaction(l2Transaction: ArrayBuffer): Promise<RunResult>;
+  execute(l2Transaction: ArrayBuffer): Promise<RunResult>;
+  buildGenesisBlock(config: GenesisConfig): Promise<GenesisWithSMTState>;
+  tip(): ArrayBuffer; // gw_bytes::packed::L2Block
+  lastSynced(): ArrayBuffer; // gw_bytes::packed::L2Block
   status(): Status;
 }
