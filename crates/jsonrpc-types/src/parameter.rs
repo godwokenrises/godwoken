@@ -4,14 +4,13 @@ use ckb_types::H256;
 use gw_chain::{chain, next_block_context, tx_pool};
 use gw_types::{
     packed::{
-        CancelChallenge, DepositionRequest, HeaderInfo, L2Transaction, StartChallenge,
-        WithdrawalRequest,
+        CancelChallenge, DepositionRequest, HeaderInfo, StartChallenge,
     },
     prelude::*,
 };
 
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]

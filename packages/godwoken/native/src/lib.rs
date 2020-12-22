@@ -10,6 +10,7 @@ use gw_generator::{
 };
 use gw_jsonrpc_types::parameter;
 use gw_store::Store;
+use gw_common::H256;
 use gw_types::{packed, prelude::*};
 use neon::prelude::*;
 use parking_lot::Mutex;
@@ -17,7 +18,6 @@ use std::sync::{Arc, RwLock};
 
 pub struct NativeChain {
     pub config: Config,
-    // Deprecated
     pub chain: Arc<RwLock<Chain>>,
 }
 
@@ -25,8 +25,7 @@ declare_types! {
     pub class JsNativeChain for NativeChain {
         init(mut cx) {
             let config_string = cx.argument::<JsString>(0)?.value();
-            let content: serde_json::Value = serde_json::from_str(&config_string).expect("Reading from config string");
-            let jsonrpc_config: parameter::Config = serde_json::from_value(content).expect("Constructing config");
+            let jsonrpc_config: parameter::Config = serde_json::from_str(&config_string).expect("Constructing config from string");
             let config: Config = jsonrpc_config.into();
             let store = Store::default();
             let tx_pool = {
@@ -53,8 +52,7 @@ declare_types! {
         method sync(mut cx) {
             let mut this = cx.this();
             let sync_param_string = cx.argument::<JsString>(0)?.value();
-            let content: serde_json::Value = serde_json::from_str(&sync_param_string).expect("Reading from SyncParam string");
-            let sync_param_jsonrpc: parameter::SyncParam = serde_json::from_value(content).expect("Constructing SyncParam");
+            let sync_param_jsonrpc: parameter::SyncParam = serde_json::from_str(&sync_param_string).expect("Constructing SyncParam from string");
             let sync_param: SyncParam = sync_param_jsonrpc.into();
             let sync_result: Result<SyncEvent> =
                 cx.borrow_mut(&mut this, |data| {
@@ -75,8 +73,7 @@ declare_types! {
         method produceBlock(mut cx) {
             let mut this = cx.this();
             let produce_block_param_string = cx.argument::<JsString>(0)?.value();
-            let content: serde_json::Value = serde_json::from_str(&produce_block_param_string).expect("Reading from ProduceBlockParam string");
-            let produce_block_param_jsonrpc: parameter::ProduceBlockParam = serde_json::from_value(content).expect("Constructing ProduceBlockParam");
+            let produce_block_param_jsonrpc: parameter::ProduceBlockParam = serde_json::from_str(&produce_block_param_string).expect("Constructing ProduceBlockParam from string");
             let produce_block_param: ProduceBlockParam = produce_block_param_jsonrpc.into();
             let produce_block_result: Result<ProduceBlockResult> =
                 cx.borrow_mut(&mut this, |data| {
@@ -146,6 +143,30 @@ declare_types! {
             Ok(cx.string(header_info_string).upcast())
         }
 
+        method getStorageAt() {
+            let this = cx.this();
+            let js_raw_key = cx.argument::<JsArrayBuffer>(0)?;
+            let raw_key: H256 = cx.borrow(&js_raw_key, |data| { 
+                let data_slice = data.as_slice();
+                let mut buf = [0u8; 32];
+                buf.copy_from_slice(&data_slice[0..32]);
+                H256::from(buf)
+             });
+            let get_raw_result = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                chain.store.get_raw(raw_key);
+            });
+            match get_raw_result {
+                Ok(value) => {
+                    let array: [u8; 32]= value.into(); 
+                    let value =  packed::Byte32::from_slice(slice: &array[0..32]).expect("Build packed::Byte32 from slice");
+                    let js_value = cx.string(format!("{:#x}", value));
+                    Ok(js_value.upcast())
+                },
+                Err(e) => cx.throw_error(format!("GetStoargeAt failed: {:?}", e))
+            }
+        }
+
         method tip() {
             let this = cx.this();
             let l2_block: packed::L2Block=
@@ -165,7 +186,7 @@ declare_types! {
                     let chain = data.chain.read().unwrap();
                     chain.status()
                 });
-            let status_jsonrpc: paramete::Status= status.into();
+            let status_jsonrpc: parameter::Status= status.into();
             let status_string = serde_json::to_string(&status_jsonrpc).expect("Serializing Status");
             Ok(cx.string(status_string).upcast())
         }

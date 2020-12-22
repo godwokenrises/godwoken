@@ -146,7 +146,7 @@ export class ChainService {
   ): Promise<ProduceBlockResult>;
   submitL2Transaction(l2Transaction: ArrayBuffer): Promise<RunResult>;
   execute(l2Transaction: ArrayBuffer): Promise<RunResult>;
-  //getStorageAt()
+  getStorageAt(rawKey: Hash): Hash;
   tip(): ArrayBuffer; // gw_bytes::packed::L2Block
   lastSynced(): ArrayBuffer; // gw_bytes::packed::HeaderInfo
   status(): Status;
