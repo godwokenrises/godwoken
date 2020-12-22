@@ -1,7 +1,7 @@
 import { RPC } from "ckb-js-toolkit";
 import { Indexer } from "@ckb-lumos/indexer";
 import { Config, ChainService } from "@ckb-godwoken/godwoken";
-import { DeploymentConfig } from "./config";
+import { DeploymentConfig } from "@ckb-godwoken/base";
 import { Runner } from "./runner";
 
 const CKB_RPC_URL = "http://127.0.0.1:8114";

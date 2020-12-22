@@ -1,7 +1,7 @@
 {
-  "name": "@ckb-godwoken/runner",
+  "name": "@ckb-godwoken/base",
   "version": "0.1.0",
-  "description": "Godwoken Runner.",
+  "description": "Godwoken Base Definitions.",
   "author": "Nervos Core Dev <dev@nervos.org>",
   "homepage": "https://github.com/nervosnetwork/godwoken",
   "license": "MIT",
@@ -23,9 +23,7 @@
     "url": "git+https://github.com/nervosnetwork/godwoken.git"
   },
   "dependencies": {
-    "@ckb-godwoken/base": "^0.1.0",
-    "@ckb-godwoken/godwoken": "^0.1.0",
-    "@ckb-lumos/indexer": "^0.14.2-rc1"
+    "@ckb-lumos/base": "^0.14.2-rc1"
   },
   "files": [
     "index.d.ts",
@@ -36,7 +34,7 @@
     "registry": "http://registry.npmjs.org/"
   },
   "scripts": {
-    "fmt": "prettier --write \"src/**/*.ts\" package.json"
+    "fmt": "prettier --write index.d.ts package.json"
   },
   "bugs": {
     "url": "https://github.com/nervosnetwork/godwoken/issues"

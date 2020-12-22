@@ -16,7 +16,7 @@ import {
   TransactionCollector,
 } from "@ckb-lumos/indexer";
 import { Config, ChainService, SubmitTxs } from "@ckb-godwoken/godwoken";
-import { DeploymentConfig } from "./config";
+import { DeploymentConfig } from "@ckb-godwoken/base";
 import {
   L2Block,
   SerializeHeaderInfo,

@@ -1,4 +1,4 @@
-use ckb_jsonrpc_types::{JsonBytes, Uint32, Uint64};
+use ckb_jsonrpc_types::{JsonBytes, Uint32, Uint64, Script as JsonScript};
 use ckb_types::packed as ckb_packed;
 use ckb_types::H256;
 use gw_chain::{chain, next_block_context, tx_pool};
@@ -362,7 +362,7 @@ impl From<gw_config::ConsensusConfig> for ConsensusConfig {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct GenesisConfig {
-    pub initial_aggregator_script: JsonBytes,
+    pub initial_aggregator_script: JsonScript,
     pub initial_deposition: Uint64,
     pub timestamp: Uint64,
 }
@@ -373,12 +373,8 @@ impl From<GenesisConfig> for gw_config::GenesisConfig {
             initial_deposition,
             timestamp,
         } = json;
-        let initial_aggregator_script_bytes = initial_aggregator_script.into_bytes();
         Self {
-            initial_aggregator_script: ckb_packed::Script::from_slice(
-                initial_aggregator_script_bytes.as_ref(),
-            )
-            .expect("Build ckb_packed::Script from slice"),
+            initial_aggregator_script: initial_aggregator_script.into(),
             initial_deposition: initial_deposition.into(),
             timestamp: timestamp.into(),
         }
@@ -392,7 +388,7 @@ impl From<gw_config::GenesisConfig> for GenesisConfig {
             timestamp,
         } = genesis_config;
         Self {
-            initial_aggregator_script: JsonBytes::from_bytes(initial_aggregator_script.as_bytes()),
+            initial_aggregator_script: initial_aggregator_script.into(),
             initial_deposition: initial_deposition.into(),
             timestamp: timestamp.into(),
         }
@@ -402,22 +398,20 @@ impl From<gw_config::GenesisConfig> for GenesisConfig {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ChainConfig {
-    pub rollup_type_script: JsonBytes,
+    pub rollup_type_script: JsonScript,
 }
 
 impl From<ChainConfig> for gw_config::ChainConfig {
     fn from(json: ChainConfig) -> gw_config::ChainConfig {
-        let rollup_type_script_bytes = json.rollup_type_script.into_bytes();
         Self {
-            rollup_type_script: ckb_packed::Script::from_slice(rollup_type_script_bytes.as_ref())
-                .expect("Build ckb_packed::Script from slice"),
+            rollup_type_script: json.rollup_type_script.into(),
         }
     }
 }
 impl From<gw_config::ChainConfig> for ChainConfig {
     fn from(chain_config: gw_config::ChainConfig) -> ChainConfig {
         Self {
-            rollup_type_script: JsonBytes::from_bytes(chain_config.rollup_type_script.as_bytes()),
+            rollup_type_script: chain_config.rollup_type_script.into(),
         }
     }
 }

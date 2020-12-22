@@ -4,13 +4,12 @@ use gw_chain::{
     next_block_context::NextBlockContext,
     tx_pool::TxPool,
 };
-use gw_config::Config;
+use gw_config::{Config, GenesisConfig};
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, Generator,
 };
-use gw_jsonrpc_types::parameter;
-use gw_store::Store;
-use gw_common::H256;
+use gw_jsonrpc_types::{genesis, parameter};
+use gw_store::{genesis::build_genesis, Store};
 use gw_types::{packed, prelude::*};
 use neon::prelude::*;
 use parking_lot::Mutex;
@@ -193,7 +192,20 @@ declare_types! {
     }
 }
 
+pub fn build_genesis_block(mut cx: FunctionContext) -> JsResult<JsString> {
+    let genesis_config = cx.argument::<JsString>(0)?.value();
+    let genesis_config: parameter::GenesisConfig =
+        serde_json::from_str(&genesis_config).expect("Parse genesis config");
+    let genesis_config: GenesisConfig = genesis_config.into();
+    let genesis_state = build_genesis(&genesis_config).expect("build genesis");
+    let genesis_state: genesis::GenesisWithSMTState = genesis_state.into();
+    let genesis_state_string =
+        serde_json::to_string(&genesis_state).expect("serialize genesis config");
+    Ok(cx.string(genesis_state_string))
+}
+
 register_module!(mut cx, {
     cx.export_class::<JsNativeChain>("NativeChain")?;
+    cx.export_function("buildGenesisBlock", build_genesis_block)?;
     Ok(())
 });

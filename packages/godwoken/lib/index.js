@@ -1,5 +1,9 @@
 var addon = require("../native");
 
+function buildGenesisBlock(config) {
+  return JSON.parse(addon.buildGenesisBlock(JSON.stringify(config)));
+}
+
 class ChainService {
   constructor(config) {
     this.config = config;
@@ -48,4 +52,4 @@ class ChainService {
   }
 }
 
-module.exports = { ChainService };
+module.exports = { ChainService, buildGenesisBlock };

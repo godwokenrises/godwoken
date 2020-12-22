@@ -8,7 +8,7 @@ import {
   since as sinceUtils,
   utils,
 } from "@ckb-lumos/base";
-import { DeploymentConfig } from "./config";
+import { DeploymentConfig } from "@ckb-godwoken/base";
 import { DepositionRequest, NormalizeDepositionRequest } from "./types";
 import {
   DepositionLockArgs,

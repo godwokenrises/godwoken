@@ -1,4 +1,4 @@
-import { HexNumber, Hash } from "@ckb-lumos/base";
+import { HexNumber, Hash, Script } from "@ckb-lumos/base";
 export interface SyncParam {
   reverts: L1Action[];
   updates: L1Action[];
@@ -75,7 +75,7 @@ export interface Config {
 }
 
 export interface ChainConfig {
-  rollup_type_script: ArrayBuffer; // ckb_types::packed::Script
+  rollup_type_script: Script;
 }
 
 export interface ConsensusConfig {
@@ -87,7 +87,7 @@ export interface RPC {
 }
 
 export interface GenesisConfig {
-  initial_aggregator_script: ArrayBuffer; // ckb_types::packed::Script
+  initial_aggregator_script: Script;
   initial_deposition: HexNumber;
   timestamp: HexNumber;
 }
@@ -109,34 +109,36 @@ export interface RunResult {
 }
 
 export interface BranchNode {
-  fork_height: HexNumber,
-  key: Hash,
-  node: Hash,
-  sibling: Hash,
+  fork_height: HexNumber;
+  key: Hash;
+  node: Hash;
+  sibling: Hash;
 }
 
 export interface LeafNode {
-  key: Hash,
-  value: Hash,
+  key: Hash;
+  value: Hash;
 }
 
 export interface BranchMapEntry {
-  key: Hash,
-  value: BranchNode,
+  key: Hash;
+  value: BranchNode;
 }
 
 export interface LeafMapEntry {
-  key: Hash,
-  value: LeafNode,
+  key: Hash;
+  value: LeafNode;
 }
 
 export interface GenesisWithSMTState {
   genesis: ArrayBuffer; // gw_types::packed::L2Block
-  branches_map: BranchMapEntry[],
-  leaves_map: LeafMapEntry[],
+  branches_map: BranchMapEntry[];
+  leaves_map: LeafMapEntry[];
 }
 
-export function buildGenesisBlock(config: GenesisConfig): Promise<GenesisWithSMTState>;
+export function buildGenesisBlock(
+  config: GenesisConfig
+): Promise<GenesisWithSMTState>;
 
 export class ChainService {
   constructor(config: Config);
