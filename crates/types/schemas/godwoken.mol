@@ -120,16 +120,6 @@ struct BlockInfo {
     timestamp: Uint64,
 }
 
-table VerificationContext {
-    block_info: BlockInfo,
-    transaction: RawL2Transaction,
-    inputs: KVPairVec,
-    prev_account_state: Byte32,
-    post_account_state: Byte32,
-    return_data_hash: Byte32,
-    proof: Bytes,
-}
-
 // --- end of contract execution ---
 
 // --- deposition lock ---
@@ -230,14 +220,18 @@ struct StartChallenge {
 }
 
 // cancel a challenge by execute the transaction
+vector ScriptVec<Script>;
 table CancelChallenge {
-    l2block: L2Block,
-    block_proof: Bytes,
+    raw_l2block: RawL2Block,
+    l2tx: L2Transaction,
     kv_state: KVPairVec,
     kv_state_proof: Bytes,
+    scripts: ScriptVec,
+    return_data_hash: Byte32,
+    tx_proof: Bytes,
+    block_proof: Bytes,
 }
 // --- end of challenge ---
-
 // header info
 struct HeaderInfo {
     number: Uint64,
