@@ -4,11 +4,11 @@
 #include "common.h"
 
 #ifdef GW_GENERATOR
-#include "generator.h"
+#include "generator_utils.h"
 #endif
 
 #ifdef GW_VALIDATOR
-#include "validator.h"
+#include "validator_utils.h"
 #endif
 
 #endif
