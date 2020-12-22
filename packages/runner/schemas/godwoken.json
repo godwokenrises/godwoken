@@ -1,0 +1,988 @@
+{
+  "namespace": "godwoken",
+  "imports": [
+    {
+      "name": "blockchain",
+      "paths": [],
+      "path_supers": 0
+    }
+  ],
+  "declarations": [
+    {
+      "type": "option",
+      "name": "Byte32Opt",
+      "item": "Byte32"
+    },
+    {
+      "type": "array",
+      "name": "Byte20",
+      "item": "byte",
+      "item_count": 20
+    },
+    {
+      "type": "array",
+      "name": "Signature",
+      "item": "byte",
+      "item_count": 65
+    },
+    {
+      "type": "struct",
+      "name": "BlockMerkleState",
+      "fields": [
+        {
+          "name": "merkle_root",
+          "type": "Byte32"
+        },
+        {
+          "name": "count",
+          "type": "Uint64"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "AccountMerkleState",
+      "fields": [
+        {
+          "name": "merkle_root",
+          "type": "Byte32"
+        },
+        {
+          "name": "count",
+          "type": "Uint32"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "GlobalState",
+      "fields": [
+        {
+          "name": "account",
+          "type": "AccountMerkleState"
+        },
+        {
+          "name": "block",
+          "type": "BlockMerkleState"
+        },
+        {
+          "name": "reverted_block_root",
+          "type": "Byte32"
+        },
+        {
+          "name": "last_finalized_block_number",
+          "type": "Uint64"
+        },
+        {
+          "name": "status",
+          "type": "Status"
+        }
+      ]
+    },
+    {
+      "type": "union",
+      "name": "Status",
+      "items": [
+        "Running",
+        "Reverting"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "Running",
+      "fields": []
+    },
+    {
+      "type": "struct",
+      "name": "Reverting",
+      "fields": [
+        {
+          "name": "next_block_number",
+          "type": "Uint64"
+        },
+        {
+          "name": "challenger_id",
+          "type": "Uint32"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "RawL2Transaction",
+      "fields": [
+        {
+          "name": "from_id",
+          "type": "Uint32"
+        },
+        {
+          "name": "to_id",
+          "type": "Uint32"
+        },
+        {
+          "name": "nonce",
+          "type": "Uint32"
+        },
+        {
+          "name": "args",
+          "type": "Bytes"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "L2Transaction",
+      "fields": [
+        {
+          "name": "raw",
+          "type": "RawL2Transaction"
+        },
+        {
+          "name": "signature",
+          "type": "Signature"
+        }
+      ]
+    },
+    {
+      "type": "dynvec",
+      "name": "L2TransactionVec",
+      "item": "L2Transaction"
+    },
+    {
+      "type": "table",
+      "name": "RawL2Block",
+      "fields": [
+        {
+          "name": "number",
+          "type": "Uint64"
+        },
+        {
+          "name": "aggregator_id",
+          "type": "Uint32"
+        },
+        {
+          "name": "stake_cell_owner_lock_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "timestamp",
+          "type": "Uint64"
+        },
+        {
+          "name": "prev_account",
+          "type": "AccountMerkleState"
+        },
+        {
+          "name": "post_account",
+          "type": "AccountMerkleState"
+        },
+        {
+          "name": "submit_transactions",
+          "type": "SubmitTransactions"
+        },
+        {
+          "name": "withdrawal_requests_root",
+          "type": "Byte32"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "L2Block",
+      "fields": [
+        {
+          "name": "raw",
+          "type": "RawL2Block"
+        },
+        {
+          "name": "signature",
+          "type": "Signature"
+        },
+        {
+          "name": "kv_state",
+          "type": "KVPairVec"
+        },
+        {
+          "name": "kv_state_proof",
+          "type": "Bytes"
+        },
+        {
+          "name": "transactions",
+          "type": "L2TransactionVec"
+        },
+        {
+          "name": "block_proof",
+          "type": "Bytes"
+        },
+        {
+          "name": "withdrawal_requests",
+          "type": "WithdrawalRequestVec"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "DepositionRequest",
+      "fields": [
+        {
+          "name": "capacity",
+          "type": "Uint64"
+        },
+        {
+          "name": "amount",
+          "type": "Uint128"
+        },
+        {
+          "name": "sudt_script",
+          "type": "Script"
+        },
+        {
+          "name": "script",
+          "type": "Script"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "RawWithdrawalRequest",
+      "fields": [
+        {
+          "name": "nonce",
+          "type": "Uint32"
+        },
+        {
+          "name": "capacity",
+          "type": "Uint64"
+        },
+        {
+          "name": "amount",
+          "type": "Uint128"
+        },
+        {
+          "name": "lock_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "sudt_script_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "account_script_hash",
+          "type": "Byte32"
+        }
+      ]
+    },
+    {
+      "type": "fixvec",
+      "name": "WithdrawalRequestVec",
+      "item": "WithdrawalRequest"
+    },
+    {
+      "type": "struct",
+      "name": "WithdrawalRequest",
+      "fields": [
+        {
+          "name": "raw",
+          "type": "RawWithdrawalRequest"
+        },
+        {
+          "name": "signature",
+          "type": "Signature"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "SubmitTransactions",
+      "fields": [
+        {
+          "name": "tx_witness_root",
+          "type": "Byte32"
+        },
+        {
+          "name": "tx_count",
+          "type": "Uint32"
+        },
+        {
+          "name": "compacted_post_root_list",
+          "type": "Byte32Vec"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "KVPair",
+      "fields": [
+        {
+          "name": "k",
+          "type": "Byte32"
+        },
+        {
+          "name": "v",
+          "type": "Byte32"
+        }
+      ]
+    },
+    {
+      "type": "dynvec",
+      "name": "KVPairVec",
+      "item": "KVPair"
+    },
+    {
+      "type": "struct",
+      "name": "BlockInfo",
+      "fields": [
+        {
+          "name": "aggregator_id",
+          "type": "Uint32"
+        },
+        {
+          "name": "number",
+          "type": "Uint64"
+        },
+        {
+          "name": "timestamp",
+          "type": "Uint64"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "VerificationContext",
+      "fields": [
+        {
+          "name": "block_info",
+          "type": "BlockInfo"
+        },
+        {
+          "name": "transaction",
+          "type": "RawL2Transaction"
+        },
+        {
+          "name": "inputs",
+          "type": "KVPairVec"
+        },
+        {
+          "name": "prev_account_state",
+          "type": "Byte32"
+        },
+        {
+          "name": "post_account_state",
+          "type": "Byte32"
+        },
+        {
+          "name": "return_data_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "proof",
+          "type": "Bytes"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "DepositionLockArgs",
+      "fields": [
+        {
+          "name": "owner_lock_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "layer2_lock",
+          "type": "Script"
+        },
+        {
+          "name": "cancel_timeout",
+          "type": "Uint64"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "CustodianLockArgs",
+      "fields": [
+        {
+          "name": "owner_lock_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "deposition_block_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "deposition_block_number",
+          "type": "Uint64"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "WithdrawalLockArgs",
+      "fields": [
+        {
+          "name": "custodian_lock_args",
+          "type": "CustodianLockArgs"
+        },
+        {
+          "name": "custodian_lock_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "withdrawal_block_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "withdrawal_block_number",
+          "type": "Uint64"
+        },
+        {
+          "name": "sudt_script_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "sell_amount",
+          "type": "Uint128"
+        },
+        {
+          "name": "owner_lock",
+          "type": "Script"
+        }
+      ]
+    },
+    {
+      "type": "union",
+      "name": "UnlockWithdrawal",
+      "items": [
+        "UnlockWithdrawalViaFinalize",
+        "UnlockWithdrawalViaRevert",
+        "UnlockWithdrawalViaTrade"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "UnlockWithdrawalViaFinalize",
+      "fields": [
+        {
+          "name": "block_proof",
+          "type": "Bytes"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "UnlockWithdrawalViaRevert",
+      "fields": [
+        {
+          "name": "block_proof",
+          "type": "Bytes"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "UnlockWithdrawalViaTrade",
+      "fields": [
+        {
+          "name": "owner_lock",
+          "type": "Script"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "StakeLockArgs",
+      "fields": [
+        {
+          "name": "owner_lock_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "signing_pubkey_hash",
+          "type": "Byte20"
+        },
+        {
+          "name": "stake_block_number",
+          "type": "Uint64"
+        }
+      ]
+    },
+    {
+      "type": "union",
+      "name": "MetaContractArgs",
+      "items": [
+        "CreateAccount"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "CreateAccount",
+      "fields": [
+        {
+          "name": "script",
+          "type": "Script"
+        }
+      ]
+    },
+    {
+      "type": "union",
+      "name": "SUDTArgs",
+      "items": [
+        "SUDTQuery",
+        "SUDTTransfer"
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "SUDTQuery",
+      "fields": [
+        {
+          "name": "account_id",
+          "type": "Uint32"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "SUDTTransfer",
+      "fields": [
+        {
+          "name": "to",
+          "type": "Uint32"
+        },
+        {
+          "name": "amount",
+          "type": "Uint128"
+        },
+        {
+          "name": "fee",
+          "type": "Uint128"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "StartChallenge",
+      "fields": [
+        {
+          "name": "block_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "block_number",
+          "type": "Uint64"
+        },
+        {
+          "name": "tx_index",
+          "type": "Uint32"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "CancelChallenge",
+      "fields": [
+        {
+          "name": "l2block",
+          "type": "L2Block"
+        },
+        {
+          "name": "block_proof",
+          "type": "Bytes"
+        },
+        {
+          "name": "kv_state",
+          "type": "KVPairVec"
+        },
+        {
+          "name": "kv_state_proof",
+          "type": "Bytes"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "HeaderInfo",
+      "fields": [
+        {
+          "name": "number",
+          "type": "Uint64"
+        },
+        {
+          "name": "block_hash",
+          "type": "Byte32"
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "name": "Uint32",
+      "item": "byte",
+      "item_count": 4,
+      "imported_depth": 1
+    },
+    {
+      "type": "array",
+      "name": "Uint64",
+      "item": "byte",
+      "item_count": 8,
+      "imported_depth": 1
+    },
+    {
+      "type": "array",
+      "name": "Uint128",
+      "item": "byte",
+      "item_count": 16,
+      "imported_depth": 1
+    },
+    {
+      "type": "array",
+      "name": "Byte32",
+      "item": "byte",
+      "item_count": 32,
+      "imported_depth": 1
+    },
+    {
+      "type": "array",
+      "name": "Uint256",
+      "item": "byte",
+      "item_count": 32,
+      "imported_depth": 1
+    },
+    {
+      "type": "fixvec",
+      "name": "Bytes",
+      "item": "byte",
+      "imported_depth": 1
+    },
+    {
+      "type": "option",
+      "name": "BytesOpt",
+      "item": "Bytes",
+      "imported_depth": 1
+    },
+    {
+      "type": "dynvec",
+      "name": "BytesVec",
+      "item": "Bytes",
+      "imported_depth": 1
+    },
+    {
+      "type": "fixvec",
+      "name": "Byte32Vec",
+      "item": "Byte32",
+      "imported_depth": 1
+    },
+    {
+      "type": "option",
+      "name": "ScriptOpt",
+      "item": "Script",
+      "imported_depth": 1
+    },
+    {
+      "type": "array",
+      "name": "ProposalShortId",
+      "item": "byte",
+      "item_count": 10,
+      "imported_depth": 1
+    },
+    {
+      "type": "dynvec",
+      "name": "UncleBlockVec",
+      "item": "UncleBlock",
+      "imported_depth": 1
+    },
+    {
+      "type": "dynvec",
+      "name": "TransactionVec",
+      "item": "Transaction",
+      "imported_depth": 1
+    },
+    {
+      "type": "fixvec",
+      "name": "ProposalShortIdVec",
+      "item": "ProposalShortId",
+      "imported_depth": 1
+    },
+    {
+      "type": "fixvec",
+      "name": "CellDepVec",
+      "item": "CellDep",
+      "imported_depth": 1
+    },
+    {
+      "type": "fixvec",
+      "name": "CellInputVec",
+      "item": "CellInput",
+      "imported_depth": 1
+    },
+    {
+      "type": "dynvec",
+      "name": "CellOutputVec",
+      "item": "CellOutput",
+      "imported_depth": 1
+    },
+    {
+      "type": "table",
+      "name": "Script",
+      "fields": [
+        {
+          "name": "code_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "hash_type",
+          "type": "byte"
+        },
+        {
+          "name": "args",
+          "type": "Bytes"
+        }
+      ],
+      "imported_depth": 1
+    },
+    {
+      "type": "struct",
+      "name": "OutPoint",
+      "fields": [
+        {
+          "name": "tx_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "index",
+          "type": "Uint32"
+        }
+      ],
+      "imported_depth": 1
+    },
+    {
+      "type": "struct",
+      "name": "CellInput",
+      "fields": [
+        {
+          "name": "since",
+          "type": "Uint64"
+        },
+        {
+          "name": "previous_output",
+          "type": "OutPoint"
+        }
+      ],
+      "imported_depth": 1
+    },
+    {
+      "type": "table",
+      "name": "CellOutput",
+      "fields": [
+        {
+          "name": "capacity",
+          "type": "Uint64"
+        },
+        {
+          "name": "lock",
+          "type": "Script"
+        },
+        {
+          "name": "type_",
+          "type": "ScriptOpt"
+        }
+      ],
+      "imported_depth": 1
+    },
+    {
+      "type": "struct",
+      "name": "CellDep",
+      "fields": [
+        {
+          "name": "out_point",
+          "type": "OutPoint"
+        },
+        {
+          "name": "dep_type",
+          "type": "byte"
+        }
+      ],
+      "imported_depth": 1
+    },
+    {
+      "type": "table",
+      "name": "RawTransaction",
+      "fields": [
+        {
+          "name": "version",
+          "type": "Uint32"
+        },
+        {
+          "name": "cell_deps",
+          "type": "CellDepVec"
+        },
+        {
+          "name": "header_deps",
+          "type": "Byte32Vec"
+        },
+        {
+          "name": "inputs",
+          "type": "CellInputVec"
+        },
+        {
+          "name": "outputs",
+          "type": "CellOutputVec"
+        },
+        {
+          "name": "outputs_data",
+          "type": "BytesVec"
+        }
+      ],
+      "imported_depth": 1
+    },
+    {
+      "type": "table",
+      "name": "Transaction",
+      "fields": [
+        {
+          "name": "raw",
+          "type": "RawTransaction"
+        },
+        {
+          "name": "witnesses",
+          "type": "BytesVec"
+        }
+      ],
+      "imported_depth": 1
+    },
+    {
+      "type": "struct",
+      "name": "RawHeader",
+      "fields": [
+        {
+          "name": "version",
+          "type": "Uint32"
+        },
+        {
+          "name": "compact_target",
+          "type": "Uint32"
+        },
+        {
+          "name": "timestamp",
+          "type": "Uint64"
+        },
+        {
+          "name": "number",
+          "type": "Uint64"
+        },
+        {
+          "name": "epoch",
+          "type": "Uint64"
+        },
+        {
+          "name": "parent_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "transactions_root",
+          "type": "Byte32"
+        },
+        {
+          "name": "proposals_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "uncles_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "dao",
+          "type": "Byte32"
+        }
+      ],
+      "imported_depth": 1
+    },
+    {
+      "type": "struct",
+      "name": "Header",
+      "fields": [
+        {
+          "name": "raw",
+          "type": "RawHeader"
+        },
+        {
+          "name": "nonce",
+          "type": "Uint128"
+        }
+      ],
+      "imported_depth": 1
+    },
+    {
+      "type": "table",
+      "name": "UncleBlock",
+      "fields": [
+        {
+          "name": "header",
+          "type": "Header"
+        },
+        {
+          "name": "proposals",
+          "type": "ProposalShortIdVec"
+        }
+      ],
+      "imported_depth": 1
+    },
+    {
+      "type": "table",
+      "name": "Block",
+      "fields": [
+        {
+          "name": "header",
+          "type": "Header"
+        },
+        {
+          "name": "uncles",
+          "type": "UncleBlockVec"
+        },
+        {
+          "name": "transactions",
+          "type": "TransactionVec"
+        },
+        {
+          "name": "proposals",
+          "type": "ProposalShortIdVec"
+        }
+      ],
+      "imported_depth": 1
+    },
+    {
+      "type": "table",
+      "name": "CellbaseWitness",
+      "fields": [
+        {
+          "name": "lock",
+          "type": "Script"
+        },
+        {
+          "name": "message",
+          "type": "Bytes"
+        }
+      ],
+      "imported_depth": 1
+    },
+    {
+      "type": "table",
+      "name": "WitnessArgs",
+      "fields": [
+        {
+          "name": "lock",
+          "type": "BytesOpt"
+        },
+        {
+          "name": "input_type",
+          "type": "BytesOpt"
+        },
+        {
+          "name": "output_type",
+          "type": "BytesOpt"
+        }
+      ],
+      "imported_depth": 1
+    }
+  ]
+}

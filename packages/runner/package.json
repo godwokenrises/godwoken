@@ -1,0 +1,51 @@
+{
+  "name": "@ckb-godwoken/runner",
+  "version": "0.1.0",
+  "description": "Godwoken Runner.",
+  "author": "Nervos Core Dev <dev@nervos.org>",
+  "homepage": "https://github.com/nervosnetwork/godwoken",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "types": "index.d.ts",
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "cpu": [
+    "x64"
+  ],
+  "os": [
+    "win32",
+    "darwin",
+    "linux"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nervosnetwork/godwoken.git"
+  },
+  "dependencies": {
+    "@ckb-godwoken/godwoken": "^0.1.0",
+    "@ckb-lumos/indexer": "^0.14.2-rc1"
+  },
+  "files": [
+    "index.d.ts",
+    "lib",
+    "native/build.rs",
+    "native/Cargo.*",
+    "native/src",
+    "scripts/*"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "http://registry.npmjs.org/"
+  },
+  "scripts": {
+    "fmt": "prettier --write \"src/**/*.ts\" package.json"
+  },
+  "bugs": {
+    "url": "https://github.com/nervosnetwork/godwoken/issues"
+  },
+  "devDependencies": {
+    "prettier": "^2.2.1",
+    "typescript": "^4.1.3"
+  }
+}
