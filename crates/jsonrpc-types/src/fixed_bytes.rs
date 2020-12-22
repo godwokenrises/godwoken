@@ -87,7 +87,7 @@ impl serde::Serialize for Byte65 {
     where
         S: serde::Serializer,
     {
-        let mut buffer = [0u8; 66];
+        let mut buffer = [0u8; 132];
         buffer[0] = b'0';
         buffer[1] = b'x';
         hex_encode(&self.0, &mut buffer[2..])
