@@ -139,22 +139,21 @@ int sys_log(gw_context_t *ctx, uint32_t account_id, uint32_t data_length,
   return syscall(GW_SYS_LOG, account_id, data_length, data, 0, 0, 0);
 }
 
-int gw_context_init(gw_context_t *context) {
-  memset(context, 0, sizeof(gw_context_t));
+int gw_context_init(gw_context_t *ctx) {
   /* setup syscalls */
-  context->sys_load = sys_load;
-  context->sys_load_nonce = sys_load_nonce;
-  context->sys_store = sys_store;
-  context->sys_set_program_return_data = sys_set_program_return_data;
-  context->sys_create = sys_create;
-  context->sys_get_account_id_by_script_hash =
+  ctx->sys_load = sys_load;
+  ctx->sys_load_nonce = sys_load_nonce;
+  ctx->sys_store = sys_store;
+  ctx->sys_set_program_return_data = sys_set_program_return_data;
+  ctx->sys_create = sys_create;
+  ctx->sys_get_account_id_by_script_hash =
       sys_get_account_id_by_script_hash;
-  context->sys_get_script_hash_by_account_id =
+  ctx->sys_get_script_hash_by_account_id =
       sys_get_script_hash_by_account_id;
-  context->sys_get_account_script = sys_get_account_script;
-  context->sys_store_data = sys_store_data;
-  context->sys_load_data = sys_load_data;
-  context->sys_log = sys_log;
+  ctx->sys_get_account_script = sys_get_account_script;
+  ctx->sys_store_data = sys_store_data;
+  ctx->sys_load_data = sys_load_data;
+  ctx->sys_log = sys_log;
 
   /* initialize context */
   uint8_t buf[MAX_BUF_SIZE] = {0};
@@ -170,7 +169,7 @@ int gw_context_init(gw_context_t *context) {
   mol_seg_t l2transaction_seg;
   l2transaction_seg.ptr = buf;
   l2transaction_seg.size = len;
-  ret = gw_parse_transaction_context(&context->transaction_context,
+  ret = gw_parse_transaction_context(&ctx->transaction_context,
                                      &l2transaction_seg);
   if (ret != 0) {
     return ret;
@@ -188,7 +187,7 @@ int gw_context_init(gw_context_t *context) {
   mol_seg_t block_info_seg;
   block_info_seg.ptr = buf;
   block_info_seg.size = len;
-  ret = gw_parse_block_info(&context->block_info, &block_info_seg);
+  ret = gw_parse_block_info(&ctx->block_info, &block_info_seg);
   if (ret != 0) {
     return ret;
   }
@@ -196,4 +195,8 @@ int gw_context_init(gw_context_t *context) {
   return 0;
 }
 
+int gw_finalize(gw_context_t *ctx, gw_call_receipt_t *receipt) {
+  /* do nothing */
+  return 0;
+}
 #endif

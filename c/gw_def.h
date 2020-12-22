@@ -12,7 +12,8 @@
 #define GW_ACCOUNT_SCRIPT_HASH 2
 #define GW_ACCOUNT_SCRIPT_HASH_TO_ID 3
 
-#define GW_MAX_RETURN_DATA_SIZE 1024
+/* 24KB (ethereum max contract code size) */
+#define GW_MAX_RETURN_DATA_SIZE 24576
 /* 128KB */
 #define GW_MAX_ARGS_SIZE 131072
 
@@ -42,6 +43,11 @@ struct gw_context_t;
  * Initialize Godwoken context
  */
 int gw_context_init(struct gw_context_t *ctx);
+
+/**
+ * Finalize Godwoken state
+ */
+int gw_finalize(struct gw_context_t *ctx, gw_call_receipt_t *receipt);
 
 
 /* layer2 syscalls */
