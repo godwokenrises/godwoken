@@ -193,18 +193,25 @@ impl From<chain::SyncEvent> for SyncEvent {
 pub struct ProduceBlockParam {
     /// aggregator of this block
     pub aggregator_id: Uint32,
-    pub tx_pool_pkg: TxPoolPackage,
+    pub deposition_requests: Vec<JsonBytes>,
 }
 
 impl From<ProduceBlockParam> for chain::ProduceBlockParam {
     fn from(json: ProduceBlockParam) -> chain::ProduceBlockParam {
         let ProduceBlockParam {
             aggregator_id,
-            tx_pool_pkg,
+            deposition_requests,
         } = json;
         Self {
             aggregator_id: aggregator_id.into(),
-            tx_pool_pkg: tx_pool_pkg.into(),
+            deposition_requests: deposition_requests
+                .into_iter()
+                .map(|d| {
+                    let d_bytes = d.into_bytes();
+                    DepositionRequest::from_slice(d_bytes.as_ref())
+                        .expect("Build packed::DepositionRequest from slice")
+                })
+                .collect(),
         }
     }
 }
@@ -212,142 +219,14 @@ impl From<chain::ProduceBlockParam> for ProduceBlockParam {
     fn from(json: chain::ProduceBlockParam) -> ProduceBlockParam {
         let chain::ProduceBlockParam {
             aggregator_id,
-            tx_pool_pkg,
+            deposition_requests,
         } = json;
         Self {
             aggregator_id: aggregator_id.into(),
-            tx_pool_pkg: tx_pool_pkg.into(),
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct TxPoolPackage {
-    pub tx_receipts: Vec<TxReceipt>,
-    pub touched_keys: HashSet<H256>,
-    pub prev_account_state: MerkleState,
-    pub post_account_state: MerkleState,
-    pub withdrawal_requests: Vec<JsonBytes>,
-}
-
-impl From<TxPoolPackage> for tx_pool::TxPoolPackage {
-    fn from(json: TxPoolPackage) -> tx_pool::TxPoolPackage {
-        let TxPoolPackage {
-            tx_receipts,
-            touched_keys,
-            prev_account_state,
-            post_account_state,
-            withdrawal_requests,
-        } = json;
-        let mut to_touched_keys: HashSet<gw_common::H256> = HashSet::new();
-        for x in touched_keys.iter() {
-            to_touched_keys.insert(x.0.into());
-        }
-        Self {
-            tx_receipts: tx_receipts.into_iter().map(|t| t.into()).collect(),
-            touched_keys: to_touched_keys,
-            prev_account_state: prev_account_state.into(),
-            post_account_state: post_account_state.into(),
-            withdrawal_requests: withdrawal_requests
+            deposition_requests: deposition_requests
                 .into_iter()
-                .map(|w| {
-                    let w_bytes = w.into_bytes();
-                    WithdrawalRequest::from_slice(w_bytes.as_ref())
-                        .expect("Build packed::WithdrawalRequest from slice")
-                })
+                .map(|d| JsonBytes::from_bytes(d.as_bytes()))
                 .collect(),
-        }
-    }
-}
-impl From<tx_pool::TxPoolPackage> for TxPoolPackage {
-    fn from(tx_pool_pkg: tx_pool::TxPoolPackage) -> TxPoolPackage {
-        let tx_pool::TxPoolPackage {
-            tx_receipts,
-            touched_keys,
-            prev_account_state,
-            post_account_state,
-            withdrawal_requests,
-        } = tx_pool_pkg;
-        let mut to_touched_keys: HashSet<H256> = HashSet::new();
-        for x in touched_keys.iter() {
-            to_touched_keys.insert(H256((*x).into()));
-        }
-        Self {
-            tx_receipts: tx_receipts.into_iter().map(|t| t.into()).collect(),
-            touched_keys: to_touched_keys,
-            prev_account_state: prev_account_state.into(),
-            post_account_state: post_account_state.into(),
-            withdrawal_requests: withdrawal_requests
-                .into_iter()
-                .map(|w| JsonBytes::from_bytes(w.as_bytes()))
-                .collect(),
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct TxReceipt {
-    pub tx: JsonBytes,
-    pub tx_witness_hash: H256,
-    pub compacted_post_account_root: H256,
-}
-
-impl From<TxReceipt> for tx_pool::TxReceipt {
-    fn from(json: TxReceipt) -> tx_pool::TxReceipt {
-        let TxReceipt {
-            tx,
-            tx_witness_hash,
-            compacted_post_account_root,
-        } = json;
-        let tx_bytes = tx.into_bytes();
-        Self {
-            tx: L2Transaction::from_slice(tx_bytes.as_ref())
-                .expect("Build packed::L2Transaction from slice"),
-            tx_witness_hash: tx_witness_hash.0,
-            compacted_post_account_root: compacted_post_account_root.0,
-        }
-    }
-}
-impl From<tx_pool::TxReceipt> for TxReceipt {
-    fn from(tx_receipt: tx_pool::TxReceipt) -> TxReceipt {
-        let tx_pool::TxReceipt {
-            tx,
-            tx_witness_hash,
-            compacted_post_account_root,
-        } = tx_receipt;
-        Self {
-            tx: JsonBytes::from_bytes(tx.as_bytes()),
-            tx_witness_hash: H256(tx_witness_hash),
-            compacted_post_account_root: H256(compacted_post_account_root),
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct MerkleState {
-    root: H256,
-    count: Uint32,
-}
-
-impl From<MerkleState> for tx_pool::MerkleState {
-    fn from(json: MerkleState) -> tx_pool::MerkleState {
-        let MerkleState { root, count } = json;
-        Self {
-            root: root.0.into(),
-            count: count.into(),
-        }
-    }
-}
-
-impl From<tx_pool::MerkleState> for MerkleState {
-    fn from(merkle_state: tx_pool::MerkleState) -> MerkleState {
-        let tx_pool::MerkleState { root, count } = merkle_state;
-        Self {
-            root: H256(root.into()),
-            count: count.into(),
         }
     }
 }

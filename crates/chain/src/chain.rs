@@ -39,7 +39,7 @@ pub struct ProduceBlockParam {
     /// aggregator of this block
     pub aggregator_id: u32,
     /// tx pool package
-    pub tx_pool_pkg: TxPoolPackage,
+    pub deposition_requests: Vec<DepositionRequest>,
 }
 
 /// sync params
@@ -320,9 +320,10 @@ impl Chain {
     pub fn produce_block(&mut self, param: ProduceBlockParam) -> Result<ProduceBlockResult> {
         let ProduceBlockParam {
             aggregator_id,
-            tx_pool_pkg,
+            deposition_requests,
         } = param;
 
+        let tx_pool_pkg = self.tx_pool.lock().package(&deposition_requests)?;
         // take txs from tx pool
         // produce block
         let parent_number: u64 = self.local_state.tip.raw().number().unpack();
