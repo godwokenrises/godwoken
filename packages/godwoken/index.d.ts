@@ -37,26 +37,7 @@ export interface Revert {
 
 export interface ProduceBlockParam {
   aggregator_id: HexNumber;
-  tx_pool_pkg: TxPoolPackage;
-}
-
-export interface TxPoolPackage {
-  tx_receipts: TxReceipt[];
-  touched_keys: Set<Hash>;
-  prev_account_state: MerkleState;
-  post_account_state: MerkleState;
-  withdrawal_requests: ArrayBuffer[]; // Vec<gw_types::packed::WithdrawalRequest>
-}
-
-export interface MerkleState {
-  root: Hash;
-  count: HexNumber;
-}
-
-export interface TxReceipt {
-  tx: ArrayBuffer; // gw_types::packed::L2Transaction
-  tx_witness_hash: Hash;
-  compacted_post_account_root: Hash;
+  deposition_requests: ArrayBuffer[]; // gw_types::packed::DepositionRequest[]
 }
 
 export interface ProduceBlockResult {
