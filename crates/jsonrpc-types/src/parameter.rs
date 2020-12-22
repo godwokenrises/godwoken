@@ -1,11 +1,9 @@
-use ckb_jsonrpc_types::{JsonBytes, Uint32, Uint64, Script as JsonScript};
+use ckb_jsonrpc_types::{JsonBytes, Script as JsonScript, Uint32, Uint64};
 use ckb_types::packed as ckb_packed;
 use ckb_types::H256;
 use gw_chain::{chain, next_block_context, tx_pool};
 use gw_types::{
-    packed::{
-        CancelChallenge, DepositionRequest, HeaderInfo, StartChallenge,
-    },
+    packed::{CancelChallenge, DepositionRequest, HeaderInfo, StartChallenge},
     prelude::*,
 };
 
@@ -166,9 +164,9 @@ pub enum SyncEvent {
     // success
     Success,
     // found a invalid block
-    BadBlock(JsonBytes),
+    BadBlock { context: JsonBytes },
     // found a invalid challenge
-    BadChallenge(JsonBytes),
+    BadChallenge { context: JsonBytes },
     // the rollup is in a challenge
     WaitChallenge,
 }
@@ -177,12 +175,12 @@ impl From<chain::SyncEvent> for SyncEvent {
     fn from(sync_event: chain::SyncEvent) -> SyncEvent {
         match sync_event {
             chain::SyncEvent::Success => SyncEvent::Success,
-            chain::SyncEvent::BadBlock(start_challenge) => {
-                SyncEvent::BadBlock(JsonBytes::from_bytes(start_challenge.as_bytes()))
-            }
-            chain::SyncEvent::BadChallenge(cancel_challenge) => {
-                SyncEvent::BadBlock(JsonBytes::from_bytes(cancel_challenge.as_bytes()))
-            }
+            chain::SyncEvent::BadBlock(start_challenge) => SyncEvent::BadBlock {
+                context: JsonBytes::from_bytes(start_challenge.as_bytes()),
+            },
+            chain::SyncEvent::BadChallenge(cancel_challenge) => SyncEvent::BadBlock {
+                context: JsonBytes::from_bytes(cancel_challenge.as_bytes()),
+            },
             chain::SyncEvent::WaitChallenge => SyncEvent::WaitChallenge,
         }
     }

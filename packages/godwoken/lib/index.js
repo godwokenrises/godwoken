@@ -31,8 +31,8 @@ class ChainService {
     return JSON.parse(runResult);
   }
 
-  getStorageAt(rawKey) {
-    this.nativeChain.getStorageAt(rawKey);
+  async getStorageAt(rawKey) {
+    return JSON.parse(this.nativeChain.getStorageAt(rawKey));
   }
 
   tip() {

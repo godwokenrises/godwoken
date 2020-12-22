@@ -145,7 +145,7 @@ declare_types! {
         method getStorageAt() {
             let this = cx.this();
             let js_raw_key = cx.argument::<JsArrayBuffer>(0)?;
-            let raw_key: H256 = cx.borrow(&js_raw_key, |data| { 
+            let raw_key: H256 = cx.borrow(&js_raw_key, |data| {
                 let data_slice = data.as_slice();
                 let mut buf = [0u8; 32];
                 buf.copy_from_slice(&data_slice[0..32]);
@@ -157,7 +157,7 @@ declare_types! {
             });
             match get_raw_result {
                 Ok(value) => {
-                    let array: [u8; 32]= value.into(); 
+                    let array: [u8; 32]= value.into();
                     let value =  packed::Byte32::from_slice(slice: &array[0..32]).expect("Build packed::Byte32 from slice");
                     let js_value = cx.string(format!("{:#x}", value));
                     Ok(js_value.upcast())

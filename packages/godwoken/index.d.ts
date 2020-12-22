@@ -56,9 +56,11 @@ export interface SuccessEvent {
 }
 export interface BadBlockEvent {
   type: "bad_block";
+  context: ArrayBuffer; // gw_types::packed::StartChallenge
 }
 export interface BadChallengeEvent {
   type: "bad_challenge";
+  context: ArrayBuffer; // gw_types::packed::CancelChallenge
 }
 export interface WaitChallengeEvent {
   type: "wait_challenge";
@@ -148,7 +150,7 @@ export class ChainService {
   ): Promise<ProduceBlockResult>;
   submitL2Transaction(l2Transaction: ArrayBuffer): Promise<RunResult>;
   execute(l2Transaction: ArrayBuffer): Promise<RunResult>;
-  getStorageAt(rawKey: Hash): Hash;
+  getStorageAt(rawKey: Hash): Promise<Hash>;
   tip(): ArrayBuffer; // gw_bytes::packed::L2Block
   lastSynced(): ArrayBuffer; // gw_bytes::packed::HeaderInfo
   status(): Status;
