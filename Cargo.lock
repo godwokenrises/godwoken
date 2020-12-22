@@ -586,6 +586,7 @@ dependencies = [
  "gw-common",
  "gw-config",
  "gw-generator",
+ "gw-store",
  "gw-types",
  "serde",
 ]
