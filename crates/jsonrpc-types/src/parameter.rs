@@ -1,7 +1,7 @@
 use ckb_jsonrpc_types::{JsonBytes, Script as JsonScript, Uint32, Uint64};
 use ckb_types::packed as ckb_packed;
 use ckb_types::H256;
-use gw_chain::{chain, next_block_context, tx_pool};
+use gw_chain::{chain, next_block_context};
 use gw_types::{
     packed::{CancelChallenge, DepositionRequest, HeaderInfo, StartChallenge},
     prelude::*,

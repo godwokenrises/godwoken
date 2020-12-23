@@ -4,6 +4,7 @@ use gw_chain::{
     next_block_context::NextBlockContext,
     tx_pool::TxPool,
 };
+use gw_common::{state::State, H256};
 use gw_config::{Config, GenesisConfig};
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, Generator,
@@ -119,13 +120,13 @@ declare_types! {
         }
 
         method submitL2Transaction(mut cx) {
-            let mut this = cx.this();
+            let this = cx.this();
             let js_l2_transaction = cx.argument::<JsArrayBuffer>(0)?;
             let l2_transaction_slice = cx.borrow(&js_l2_transaction, |data| { data.as_slice::<u8>() });
             let l2_transaction = packed::L2Transaction::from_slice(l2_transaction_slice).expect("Build packed::L2Transaction from slice");
             let run_result: Result<gw_generator::RunResult > =
-                cx.borrow(&mut this, |data| {
-                    let mut chain = data.chain.write().unwrap();
+                cx.borrow(&this, |data| {
+                    let chain = data.chain.write().unwrap();
                     let run_result = chain.tx_pool.lock().push(l2_transaction);
                     run_result
                 });
@@ -150,7 +151,7 @@ declare_types! {
             Ok(js_value.upcast())
         }
 
-        method getStorageAt() {
+        method getStorageAt(mut cx) {
             let this = cx.this();
             let js_raw_key = cx.argument::<JsArrayBuffer>(0)?;
             let raw_key: H256 = cx.borrow(&js_raw_key, |data| {
@@ -161,12 +162,12 @@ declare_types! {
              });
             let get_raw_result = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_raw(raw_key);
+                chain.store.get_raw(&raw_key)
             });
             match get_raw_result {
                 Ok(value) => {
                     let array: [u8; 32]= value.into();
-                    let value =  packed::Byte32::from_slice(slice: &array[0..32]).expect("Build packed::Byte32 from slice");
+                    let value =  packed::Byte32::from_slice(&array[0..32]).expect("Build packed::Byte32 from slice");
                     let js_value = cx.string(format!("{:#x}", value));
                     Ok(js_value.upcast())
                 },
@@ -174,24 +175,23 @@ declare_types! {
             }
         }
 
-        method tip() {
+        method tip(mut cx) {
             let this = cx.this();
             let l2_block: packed::L2Block=
                 cx.borrow(&this, |data| {
                     let chain = data.chain.read().unwrap();
-                    chain.tip()
+                    chain.local_state.tip().clone()
                 });
-            let l2_block_jsonrpc: godwoken::L2Block = l2_block.into();
-            let l2_block_string = serde_json::to_string(&l2_block_jsonrpc).expect("Serializing L2Block");
-            Ok(cx.string(l2_block_string).upcast())
+            let l2_block_string = cx.string(format!("{:#x}", l2_block));
+            Ok(l2_block_string.upcast())
         }
 
-        method status() {
+        method status(mut cx) {
             let this = cx.this();
             let status: Status =
                 cx.borrow(&this, |data| {
                     let chain = data.chain.read().unwrap();
-                    chain.status()
+                    chain.local_state.status().clone()
                 });
             let status_jsonrpc: parameter::Status= status.into();
             let status_string = serde_json::to_string(&status_jsonrpc).expect("Serializing Status");
