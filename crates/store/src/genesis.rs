@@ -58,17 +58,6 @@ pub fn build_genesis(config: &GenesisConfig) -> Result<GenesisWithSMTState> {
         "ckb simple UDT account id"
     );
 
-    // create initial aggregator
-    let initial_aggregator_id = {
-        let script: ckb_types::packed::Script = config.initial_aggregator_script.clone().into();
-        state.create_account_from_script(Script::new_unchecked(script.as_bytes()))?
-    };
-    state.mint_sudt(
-        ckb_sudt_id,
-        initial_aggregator_id,
-        config.initial_deposition.into(),
-    )?;
-
     // calculate post state
     let post_account = {
         let root = state.calculate_root()?;

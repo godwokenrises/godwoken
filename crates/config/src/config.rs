@@ -27,8 +27,6 @@ pub struct ConsensusConfig {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GenesisConfig {
-    pub initial_aggregator_script: Script,
-    pub initial_deposition: u64,
     pub timestamp: u64,
 }
 

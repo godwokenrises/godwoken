@@ -3,7 +3,6 @@
 
 use anyhow::{anyhow, Result};
 use clap::{crate_version, App, Arg, ArgMatches};
-use faster_hex::hex_decode;
 use gw_common::blake2b::new_blake2b;
 use gw_config::*;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{JsonBytes, Script, ScriptHashType};
@@ -12,9 +11,6 @@ use std::fs;
 const ROLLUP_CONTRACT_PATH: &str = "./build/debug/state-validator";
 
 // Args
-const INITIAL_AGGREGATOR_ARGS: &str = "account-args";
-const INITIAL_AGGREGATOR_CODE_HASH: &str = "account-code-hash";
-const INITIAL_AGGREGATOR_DEPOSITION: &str = "deposition-amount";
 const GENESIS_TIMESTAMP: &str = "genesis-timestamp";
 const RPC_LISTEN_ADDRESS: &str = "rpc-listen-address";
 const LUMOS_CALLBACK_ADDRESS: &str = "lumos-callback-address";
@@ -28,27 +24,6 @@ fn build_cli(help_msg: &mut Vec<u8>) -> Result<ArgMatches> {
         .subcommand(
             App::new("generate-config")
                 .about("generate Godwoken configuration file")
-                .arg(
-                    Arg::new(INITIAL_AGGREGATOR_ARGS)
-                        .about("Args of the initial aggregator")
-                        .required(true)
-                        .takes_value(true)
-                        .long(INITIAL_AGGREGATOR_ARGS),
-                )
-                .arg(
-                    Arg::new(INITIAL_AGGREGATOR_CODE_HASH)
-                        .about("Code hash of the initial aggregator")
-                        .required(true)
-                        .takes_value(true)
-                        .long(INITIAL_AGGREGATOR_CODE_HASH),
-                )
-                .arg(
-                    Arg::new(INITIAL_AGGREGATOR_DEPOSITION)
-                        .about("Deposition amount of the initial aggregator")
-                        .required(true)
-                        .takes_value(true)
-                        .long(INITIAL_AGGREGATOR_DEPOSITION),
-                )
                 .arg(
                     Arg::new(GENESIS_TIMESTAMP)
                         .about("Timestamp of the genesis block, represent in unixtime")
@@ -126,30 +101,6 @@ fn run() -> Result<()> {
             return Err(anyhow!("unrecognized subcommand"));
         }
     };
-    let initial_aggregator_args = {
-        let args_hex = args.value_of(INITIAL_AGGREGATOR_ARGS).unwrap();
-        let args_hex = args_hex.trim_start_matches("0x");
-        let mut args = Vec::new();
-        args.resize(args_hex.len() / 2, 0);
-        hex_decode(args_hex.as_bytes(), &mut args)?;
-        args
-    };
-    let initial_aggregator_code_hash = {
-        let code_hash_hex = args.value_of(INITIAL_AGGREGATOR_CODE_HASH).unwrap();
-        let code_hash_hex = code_hash_hex.trim_start_matches("0x");
-        let mut code_hash = [0u8; 32];
-        hex_decode(code_hash_hex.as_bytes(), &mut code_hash)?;
-        code_hash
-    };
-    let initial_aggregator_script = Script {
-        code_hash: initial_aggregator_code_hash.into(),
-        args: JsonBytes::from_vec(initial_aggregator_args),
-        hash_type: ScriptHashType::Data,
-    };
-    let initial_deposition = args
-        .value_of(INITIAL_AGGREGATOR_DEPOSITION)
-        .unwrap()
-        .parse()?;
     let genesis_timestamp = args.value_of(GENESIS_TIMESTAMP).unwrap().parse()?;
     let rpc_listen_address = args.value_of(RPC_LISTEN_ADDRESS).unwrap();
     let lumos_callback_address = args.value_of(LUMOS_CALLBACK_ADDRESS).unwrap();
@@ -169,8 +120,6 @@ fn run() -> Result<()> {
     };
 
     let genesis = GenesisConfig {
-        initial_aggregator_script,
-        initial_deposition,
         timestamp: genesis_timestamp,
     };
 
