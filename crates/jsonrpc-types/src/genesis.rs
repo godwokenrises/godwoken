@@ -153,3 +153,10 @@ impl From<genesis::GenesisWithSMTState> for GenesisWithSMTState {
         }
     }
 }
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct GenesisSetup {
+    pub genesis: GenesisWithSMTState,
+    pub header_info: JsonBytes,
+}

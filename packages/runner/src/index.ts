@@ -8,6 +8,7 @@ import { initializeConfig } from "@ckb-lumos/config-manager";
 import { Runner } from "./runner";
 import { readFileSync } from "fs";
 import Knex from "knex";
+import deepFreeze from "deep-freeze-strict";
 
 interface GenesisStoreConfig {
   type: "genesis";
@@ -32,13 +33,12 @@ program
   .requiredOption(
     "-p, --private-key <privateKey>",
     "aggregator private key to use"
-  )
-  .option("-r, --rpc <rpc>", "rpc path", "http://127.0.0.1:8114");
+  );
 program.parse(argv);
 
 initializeConfig();
-const runnerConfig: RunnerConfig = JSON.parse(
-  readFileSync(program.configFile, "utf8")
+const runnerConfig: RunnerConfig = deepFreeze(
+  JSON.parse(readFileSync(program.configFile, "utf8"))
 );
 
 const rpc = new RPC(runnerConfig.godwokenConfig.rpc.listen);
@@ -52,9 +52,10 @@ indexer.startForever();
 if (runnerConfig.storeConfig.type !== "genesis") {
   throw new Error("Only genesis store config is supported now!");
 }
+
 const chainService = new ChainService(
   runnerConfig.godwokenConfig,
-  runnerConfig.storeConfig.genesis
+  runnerConfig.storeConfig.genesis,
 );
 
 (async () => {

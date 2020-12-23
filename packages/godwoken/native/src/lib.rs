@@ -9,7 +9,7 @@ use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, Generator,
 };
 use gw_jsonrpc_types::{genesis, parameter};
-use gw_store::{genesis::build_genesis, Store};
+use gw_store::{genesis::{build_genesis, GenesisWithSMTState}, Store};
 use gw_types::{packed, prelude::*};
 use neon::prelude::*;
 use parking_lot::Mutex;
@@ -26,7 +26,13 @@ declare_types! {
             let config_string = cx.argument::<JsString>(0)?.value();
             let jsonrpc_config: parameter::Config = serde_json::from_str(&config_string).expect("Constructing config from string");
             let config: Config = jsonrpc_config.into();
-            let store = Store::default();
+            let genesis_setup_string = cx.argument::<JsString>(1)?.value();
+            let genesis_setup: genesis::GenesisSetup = serde_json::from_str(&genesis_setup_string).expect("Construcing genesis setup from string");
+            let genesis_with_smt: GenesisWithSMTState = genesis_setup.genesis.into();
+            let header_info = packed::HeaderInfo::from_slice(genesis_setup.header_info.into_bytes().as_ref()).expect("Constructing header info");
+            let mut store = Store::default();
+            println!("Initializing store!");
+            store.init_genesis(genesis_with_smt, header_info).expect("Initializing store");
             let tx_pool = {
                 let generator = Generator::new(BackendManage::default(), AccountLockManage::default());
                 let nb_ctx = NextBlockContext {

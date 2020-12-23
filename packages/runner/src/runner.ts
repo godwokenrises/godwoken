@@ -20,6 +20,12 @@ import {
   tryExtractDepositionRequest,
 } from "./utils";
 
+type Level = "debug" | "info" | "warn" | "error";
+
+function defaultLogger(level: Level, message: string) {
+  console.log(`[${level}] ${message}`);
+}
+
 function asyncSleep(ms = 0) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -49,6 +55,7 @@ export class Runner {
   deploymentConfig: DeploymentConfig;
   lastBlockNumber: bigint;
   cancelListener: () => void;
+  logger: (level: Level, message: string) => void;
 
   // TODO: change to PoA
   lastProduceBlockTime: bigint;
@@ -57,7 +64,8 @@ export class Runner {
     rpc: RPC,
     indexer: Indexer,
     chainService: ChainService,
-    deploymentConfig: DeploymentConfig
+    deploymentConfig: DeploymentConfig,
+    { logger = defaultLogger } = {}
   ) {
     this.rpc = rpc;
     this.indexer = indexer;
@@ -66,6 +74,7 @@ export class Runner {
     this.lastBlockNumber = 0n;
     this.cancelListener = () => {};
     this.lastProduceBlockTime = 0n;
+    this.logger = logger;
   }
 
   _rollupCellQueryOptions(): QueryOptions {
@@ -165,6 +174,7 @@ export class Runner {
     // TODO: for now, we always rebuild state from genesis cell, so there won't be a
     // forking problem. However if later we implement persistent state store, forking
     // will then need to be handled here.
+    this.logger("info", "Processing committed L2 blocks!");
     const committedL2BlockCollector = new TransactionCollector(
       this.indexer,
       this._rollupCellQueryOptions(),
@@ -190,6 +200,7 @@ export class Runner {
     // Due to on-going syncing, previous methods might result in some blocks not being
     // picked up. Here, we will need to first play catch-up work, till we reached tip
     // version.
+    this.logger("info", "Catching up to tip!");
     await this._syncToTip();
 
     // Now we can boot godwoken to a normal working state: we listen for each new block,
@@ -197,6 +208,7 @@ export class Runner {
     // state machine. Each new block will also incur new timestamp change. At certain
     // time, we need to decide to issue a new L2 block.
 
+    this.logger("info", "Subscribe to median time!");
     const callback = this._newBlockReceived.bind(this);
     const medianTimeEmitter = this.indexer.subscribeMedianTime();
     medianTimeEmitter.on("changed", callback);
@@ -296,10 +308,17 @@ export class Runner {
 
   _newBlockReceived(medianTimeHex: HexNumber) {
     (async () => {
+      this.logger(
+        "info",
+        `New block received! Median time: ${medianTimeHex}(${BigInt(
+          medianTimeHex
+        )})`
+      );
       await this._syncToTip();
       const medianTime = BigInt(medianTimeHex);
       // TODO: change to PoA later, right now it issues a new L2 block every 20 seconds.
       if (medianTime - this.lastProduceBlockTime >= 20n * 1000n) {
+        this.logger("info", "Generating new block!");
         const depositionEntries = await this._queryValidDepositionRequests();
         const depositionRequests = depositionEntries.map(
           ({ packedRequest }) => packedRequest
@@ -324,11 +343,18 @@ export class Runner {
           data: custodianData,
         } = this._generateCustodianCells(packedl2Block, depositionEntries);
         const cell = await this._queryLiveRollupCell();
+        const cellDeps = [
+          this.deploymentConfig.state_validator_lock_dep,
+          this.deploymentConfig.state_validator_type_dep,
+        ];
+        if (depositionEntries.length > 0) {
+          cellDeps.push(this.deploymentConfig.deposition_lock_dep);
+        }
         // TODO: stake cell
         const tx: Transaction = {
           version: "0x0",
           // TODO: fill in cell deps
-          cell_deps: [],
+          cell_deps: cellDeps,
           header_deps: [],
           // TODO: fill in withdrawed custodian cells
           inputs: [
@@ -346,7 +372,7 @@ export class Runner {
           witnesses: [new Reader(packedl2Block).serializeJson()],
         };
         const hash = await this.rpc.send_transaction(tx);
-        console.log(`Submitted l2 block in ${hash}`);
+        this.logger("info", `Submitted l2 block in ${hash}`);
         this.lastProduceBlockTime = medianTime;
       }
     })().catch((e) => {

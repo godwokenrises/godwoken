@@ -1,4 +1,4 @@
-import { HexNumber, Hash, Script } from "@ckb-lumos/base";
+import { HexNumber, HexString, Hash, Script } from "@ckb-lumos/base";
 export interface SyncParam {
   reverts: L1Action[];
   updates: L1Action[];
@@ -133,14 +133,14 @@ export interface LeafMapEntry {
 }
 
 export interface GenesisWithSMTState {
-  genesis: ArrayBuffer; // gw_types::packed::L2Block
+  genesis: HexString; // gw_types::packed::L2Block
   branches_map: BranchMapEntry[];
   leaves_map: LeafMapEntry[];
 }
 
 export interface GenesisSetup {
   genesis: GenesisWithSMTState;
-  header_info: ArrayBuffer; // gw_types::packed::HeaderInfo
+  header_info: HexString; // gw_types::packed::HeaderInfo
 }
 
 export function buildGenesisBlock(
