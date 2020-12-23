@@ -25,7 +25,8 @@
   "dependencies": {
     "@ckb-godwoken/base": "^0.1.0",
     "@ckb-godwoken/godwoken": "^0.1.0",
-    "@ckb-lumos/indexer": "^0.14.2-rc1"
+    "@ckb-lumos/sql-indexer": "^0.14.2-rc1",
+    "commander": "^6.2.1"
   },
   "files": [
     "index.d.ts",

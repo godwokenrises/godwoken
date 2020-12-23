@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { argv } from "process";
 import { Reader, RPC, normalizers } from "ckb-js-toolkit";
-import { DeploymentConfig } from "@ckb-godwoken/base";
+import { DeploymentConfig, schemas, types } from "@ckb-godwoken/base";
 import { Config, buildGenesisBlock } from "@ckb-godwoken/godwoken";
 import { Indexer } from "@ckb-lumos/sql-indexer";
 import { Cell, core, utils } from "@ckb-lumos/base";
@@ -32,10 +32,6 @@ program
   .requiredOption(
     "-o, --output-file <outputFile>",
     "output file for genesis setups"
-  )
-  .requiredOption(
-    "-u, --output-deployment-file <outputDeploymentFile>",
-    "output file with updated deployment infos"
   )
   .requiredOption(
     "-s, --sql-connection <sqlConnection>",
@@ -201,18 +197,16 @@ const run = async () => {
     number: header.number,
     block_hash: blockHash,
   };
+  const packedHeaderInfo = schemas.SerializeHeaderInfo(types.NormalizeHeaderInfo(headerInfo));
   const setup = {
-    header_info: headerInfo,
-    branches_map: genesis.branches_map,
-    leaves_map: genesis.leaves_map,
+    header_info: new Reader(packedHeaderInfo).serializeJson(),
+    genesis: {
+      genesis: new Reader(genesis.genesis).serializeJson(),
+      branches_map: genesis.branches_map,
+      leaves_map: genesis.leaves_map,
+    }
   };
   writeFileSync(program.outputFile, JSON.stringify(setup, null, 2), "utf8");
-  deploymentConfig["rollup_type_hash"] = typeScriptHash;
-  writeFileSync(
-    program.outputDeploymentFile,
-    JSON.stringify(deploymentConfig, null, 2),
-    "utf8"
-  );
 };
 
 run().then(() => {

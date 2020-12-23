@@ -138,12 +138,17 @@ export interface GenesisWithSMTState {
   leaves_map: LeafMapEntry[];
 }
 
+export interface GenesisSetup {
+  genesis: GenesisWithSMTState;
+  header_info: ArrayBuffer; // gw_types::packed::HeaderInfo
+}
+
 export function buildGenesisBlock(
   config: GenesisConfig
 ): Promise<GenesisWithSMTState>;
 
 export class ChainService {
-  constructor(config: Config);
+  constructor(config: Config, genesisSetup: GenesisSetup);
   sync(syncParam: SyncParam): Promise<SyncEvent>;
   produce_block(
     produceBlockParam: ProduceBlockParam

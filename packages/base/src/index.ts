@@ -1,3 +1,6 @@
+export * as types from "./types";
+export * as schemas from "../schemas/godwoken";
+
 import { CellDep, HexString, HexNumber, Hash, Script } from "@ckb-lumos/base";
 
 export interface DeploymentConfig {
