@@ -19,6 +19,7 @@ import { common } from "@ckb-lumos/common-scripts";
 import { getConfig } from "@ckb-lumos/config-manager";
 import {
   TransactionSkeleton,
+  TransactionSkeletonType,
   sealTransaction,
   scriptToAddress,
 } from "@ckb-lumos/helpers";
@@ -282,7 +283,6 @@ export class Runner {
       medianTimeEmitter.off("changed", callback);
     };
   }
-
   async _queryValidDepositionRequests(
     maximum = 20
   ): Promise<Array<DepositionEntry>> {
@@ -527,8 +527,11 @@ export class Runner {
           txSkeleton
         );
         // TODO: stake cell
-        // TODO: fill in withdrawed custodian cells
-        // TODO: fill in created withdraw cells
+
+        txSkeleton = await this._injectWithdrawalRequest(
+          txSkeleton,
+          packedl2Block
+        );
 
         txSkeleton = await common.payFeeByFeeRate(
           txSkeleton,
@@ -568,5 +571,154 @@ export class Runner {
       console.error(`Error processing new block: ${e} ${e.stack}`);
       exit(1);
     });
+  }
+
+  async _injectWithdrawalRequest(
+    txSkeleton: TransactionSkeletonType,
+    packedl2Block: HexString
+  ): Promise<TransactionSkeletonType> {
+    const l2Block = new schemas.L2Block(packedl2Block);
+    const rawL2Block = l2Block.getRaw();
+    const data: DataView = (rawL2Block as any).view;
+    const l2BlockHash = utils.ckbHash(data.buffer).serializeJson();
+    const l2BlockNumber =
+      "0x" + rawL2Block.getNumber().toLittleEndianUint64().toString(16);
+    const withdrawalRequestVec = l2Block.getWithdrawalRequests();
+    if (withdrawalRequestVec.length === 0) {
+      return txSkeleton;
+    }
+    // add custodian lock dep
+    txSkeleton = txSkeleton.update("cellDeps", (cellDeps) => {
+      return cellDeps.push(this._deploymentConfig().custodian_lock_dep);
+    });
+    // collect all finalized and live custodian cells
+    let toBlockNumber =
+      BigInt(l2BlockNumber) -
+      BigInt(this._deploymentConfig().l2_finalized_period);
+    const toBlock = "0x" + toBlockNumber.toString(16);
+    const validCustodianCells = await this._queryValidCustodianCells(toBlock);
+    const deposition_block_hash = validCustodianCells[0].block_hash!;
+    const deposition_block_number = validCustodianCells[0].block_number!;
+    let totalWithdrawalCapacity = 0n;
+    let withdrawalAssets: Map<HexString, BigInt> = new Map();
+    // build withdrawal cells
+    for (let i = 0; i < withdrawalRequestVec.length(); i++) {
+      const rawWithdrawalRequest = withdrawalRequestVec.indexAt(i).getRaw();
+      const withdrawalCapacity = new Reader(
+        rawWithdrawalRequest.getAmount().raw()
+      ).serializeJson();
+      const sudtScriptHash = new Reader(
+        rawWithdrawalRequest.getSudtScriptHash().raw()
+      ).serializeJson();
+      const sudtAmount = new Reader(
+        rawWithdrawalRequest.getAmount().raw()
+      ).serializeJson();
+      // TODO build sudt type script
+      const withdrawalType = undefined;
+      // Record withdrawal assets info for inject input cells later
+      totalWithdrawalCapacity += BigInt(withdrawalCapacity);
+      if (withdrawalAssets.has(sudtScriptHash)) {
+        const updatedAmount =
+          BigInt(withdrawalAssets.get(sudtScriptHash)) + BigInt(sudtAmount);
+        withdrawalAssets.set(sudtScriptHash, updatedAmount);
+      } else {
+        withdrawalAssets.set(sudtScriptHash, BigInt(sudtAmount));
+      }
+      // build withdrawalLockArgs
+      const withdrawalLockArgs = this._buildWithdrawalLockArgs(
+        rawWithdrawalRequest,
+        deposition_block_hash,
+        deposition_block_number,
+        l2BlockHash,
+        l2BlockNumber
+      );
+      const packedWithdrawalLockArgs = schemas.SerializeWithdrawalLockArgs(
+        types.NormalizeWithdrawalLockArgs(withdrawalLockArgs)
+      );
+      const buffer = new ArrayBuffer(32 + packedWithdrawalLockArgs.byteLength);
+      const array = new Uint8Array(buffer);
+      array.set(
+        new Uint8Array(
+          new Reader(this._deploymentConfig().rollup_type_hash).toArrayBuffer()
+        ),
+        0
+      );
+      array.set(new Uint8Array(packedWithdrawalLockArgs), 32);
+      const withdrawalLock = {
+        code_hash: this._deploymentConfig().withdrawal_lock.code_hash,
+        hash_type: this._deploymentConfig().hash_type,
+        args: new Reader(buffer).serializeJson(),
+      };
+      const withdrawalCell = {
+        lock: withdrawalLock,
+        type: withdrawalType,
+        capacity: withdrawalCapacity,
+      };
+      txSkeleton = txSkeleton.update("outputs", (outputs) => {
+        return outputs.push({
+          cell_output: withdrawalCell,
+          data: "0x",
+        });
+      });
+    }
+    // TODO add custodian input cells
+    // TODO add custodian change cells
+    return txSkeleton;
+  }
+
+  _buildWithdrawalLockArgs(
+    rawWithdrawalRequest: schemas.RawWithdrawalRequest,
+    deposition_block_hash: HexString,
+    deposition_block_number: HexNumber,
+    withdrawal_block_hash: HexString,
+    withdrawal_block_number: HexNumber
+  ) {
+    return {
+      deposition_block_hash: deposition_block_hash,
+      deposition_block_number: deposition_block_number,
+      withdrawal_block_hash: withdrawal_block_hash,
+      withdrawal_block_number: withdrawal_block_number,
+      sudt_script_hash: new Reader(
+        rawWithdrawalRequest.getSudtScriptHash().raw()
+      ).serializeJson(),
+      sell_amount: new Reader(
+        rawWithdrawalRequest.getAmount().raw()
+      ).serializeJson(),
+      sell_capacity: new Reader(
+        rawWithdrawalRequest.getCapacity().raw()
+      ).serializeJson(),
+      owner_lock_hash: new Reader(
+        rawWithdrawalRequest.getLockHash().raw()
+      ).serializeJson(),
+      payment_lock_hash: new Reader(
+        rawWithdrawalRequest.getPaymentLockHash().raw()
+      ).serializeJson(),
+    };
+  }
+
+  // valid means finalized and live
+  async _queryValidCustodianCells(toBlock: HexNumber): Promise<Cell[]> {
+    const collector = this.indexer.collector(
+      this._custodianCellQueryOptions(toBlock)
+    );
+    const cells = [];
+    for await (const cell of collector.collect()) {
+      cells.push(cell);
+    }
+    return cells;
+  }
+
+  _custodianCellQueryOptions(toBlock: HexNumber): QueryOptions {
+    return {
+      lock: {
+        script: {
+          code_hash: this._deploymentConfig().custodian_lock.code_hash,
+          hash_type: this._deploymentConfig().custodian_lock.hash_type,
+          args: this.rollupTypeHash,
+        },
+        argsLen: "any",
+      },
+      toBlock: toBlock,
+    };
   }
 }
