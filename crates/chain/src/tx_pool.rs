@@ -16,7 +16,7 @@ use gw_types::{
     packed::{BlockInfo, DepositionRequest, L2Block, L2Transaction, WithdrawalRequest},
     prelude::*,
 };
-use std::collections::HashSet;
+use std::{cmp::min, collections::HashSet};
 
 /// MAX packaged txs in a l2block
 const MAX_PACKAGED_TXS: usize = 6000;
@@ -148,13 +148,15 @@ impl<S: Store<SMTH256>> TxPool<S> {
     /// this method return a tx pool package contains txs and withdrawal requests,
     /// and remove these from the pool
     pub fn package(&mut self, deposition_requests: &[DepositionRequest]) -> Result<TxPoolPackage> {
-        let tx_recipts = self.queue.drain(..MAX_PACKAGED_TXS).collect();
+        let txs_limit = min(MAX_PACKAGED_TXS, self.queue.len());
+        let tx_recipts = self.queue.drain(..txs_limit).collect();
         // reset overlay, we need to record deposition / withdrawal touched keys to generate proof for state
         self.state.overlay_store_mut().clear_touched_keys();
         // fetch withdrawal request and rerun verifier, drop invalid requests
+        let withdrawal_limit = min(MAX_PACKAGED_WITHDRAWAL, self.withdrawal_queue.len());
         let withdrawal_requests: Vec<_> = self
             .withdrawal_queue
-            .drain(..MAX_PACKAGED_WITHDRAWAL)
+            .drain(..withdrawal_limit)
             .collect::<Vec<_>>()
             .into_iter()
             .filter(|withdrawal_request| self.verify_withdrawal_request(withdrawal_request).is_ok())
