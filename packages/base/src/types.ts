@@ -147,3 +147,20 @@ export function NormalizeCustodianLockArgs(
     deposition_block_number: normalizeHexNumber(8),
   });
 }
+
+export function NormalizeWithdrawalLockArgs(
+  args: object,
+  { debugPath = "withdrawal_lock_args" } = {}
+) {
+  return normalizeObject(debugPath, args, {
+    deposition_block_hash: normalizeRawData(32),
+    deposition_block_number: normalizeHexNumber(8),
+    withdrawal_block_hash: normalizeRawData(32),
+    withdrawal_block_number: normalizeHexNumber(8),
+    sudt_script_hash: normalizeRawData(32),
+    sell_capacity: normalizeHexNumber(8),
+    sell_amount: normalizeHexNumber(16),
+    owner_lock_hash: normalizeRawData(32),
+    payment_lock_hash: normalizeRawData(32),
+  });
+}

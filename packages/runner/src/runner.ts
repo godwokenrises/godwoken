@@ -15,6 +15,7 @@ import {
   QueryOptions,
   Indexer,
 } from "@ckb-lumos/base";
+import { Set } from "immutable";
 import { common } from "@ckb-lumos/common-scripts";
 import { getConfig } from "@ckb-lumos/config-manager";
 import {
@@ -22,6 +23,7 @@ import {
   TransactionSkeletonType,
   sealTransaction,
   scriptToAddress,
+  minimalCellCapacity,
 } from "@ckb-lumos/helpers";
 import { ChainService, SubmitTxs } from "@ckb-godwoken/godwoken";
 import {
@@ -46,6 +48,8 @@ import * as secp256k1 from "secp256k1";
 import { exit } from "process";
 import { CanCastToArrayBuffer } from "@ckb-godwoken/base/schemas/godwoken";
 
+const FINALIZED_BLOCKS = 100;
+const DEFAULT_CUSTODIAN_LOCK_ARGS = "0x";
 function isRollupTransction(
   tx: Transaction,
   rollupTypeScript: Script
@@ -181,8 +185,8 @@ export class Runner {
     return {
       lock: {
         script: {
-          code_hash: this._deploymentConfig().deposition_lock.code_hash,
-          hash_type: this._deploymentConfig().deposition_lock.hash_type,
+          code_hash: this.config.deploymentConfig.deposition_lock.code_hash,
+          hash_type: this.config.deploymentConfig.deposition_lock.hash_type,
           args: this.rollupTypeHash,
         },
         ioType: "output",
@@ -394,20 +398,10 @@ export class Runner {
         deposition_block_hash: l2BlockHash,
         deposition_block_number: l2BlockNumber,
       };
-      const packedCustodianLockArgs = schemas.SerializeCustodianLockArgs(
-        types.NormalizeCustodianLockArgs(custodianLockArgs)
-      );
-      const buffer = new ArrayBuffer(32 + packedCustodianLockArgs.byteLength);
-      const array = new Uint8Array(buffer);
-      array.set(
-        new Uint8Array(new Reader(this.rollupTypeHash).toArrayBuffer()),
-        0
-      );
-      array.set(new Uint8Array(packedCustodianLockArgs), 32);
       const lock = {
-        code_hash: this._deploymentConfig().custodian_lock.code_hash,
-        hash_type: this._deploymentConfig().custodian_lock.hash_type,
-        args: new Reader(buffer).serializeJson(),
+        code_hash: this.config.deploymentConfig.custodian_lock.code_hash,
+        hash_type: this.config.deploymentConfig.custodian_lock.hash_type,
+        args: this._packCusotidanLockArgs(custodianLockArgs),
       };
       return {
         cell_output: {
@@ -462,11 +456,11 @@ export class Runner {
         let txSkeleton = TransactionSkeleton({ cellProvider: this.indexer });
         txSkeleton = txSkeleton.update("cellDeps", (cellDeps) => {
           cellDeps = cellDeps
-            .push(this._deploymentConfig().state_validator_lock_dep)
-            .push(this._deploymentConfig().state_validator_type_dep);
+            .push(this.config.deploymentConfig.state_validator_lock_dep)
+            .push(this.config.deploymentConfig.state_validator_type_dep);
           if (depositionEntries.length > 0) {
             cellDeps = cellDeps.push(
-              this._deploymentConfig().deposition_lock_dep
+              this.config.deploymentConfig.deposition_lock_dep
             );
           }
           return cellDeps;
@@ -577,24 +571,26 @@ export class Runner {
     txSkeleton: TransactionSkeletonType,
     packedl2Block: HexString
   ): Promise<TransactionSkeletonType> {
-    const l2Block = new schemas.L2Block(packedl2Block);
+    const l2Block = new schemas.L2Block(
+      new Reader(packedl2Block).toArrayBuffer()
+    );
     const rawL2Block = l2Block.getRaw();
     const data: DataView = (rawL2Block as any).view;
     const l2BlockHash = utils.ckbHash(data.buffer).serializeJson();
     const l2BlockNumber =
-      "0x" + rawL2Block.getNumber().toLittleEndianUint64().toString(16);
+    "0x" + rawL2Block.getNumber().toLittleEndianBigUint64().toString(16);
     const withdrawalRequestVec = l2Block.getWithdrawalRequests();
-    if (withdrawalRequestVec.length === 0) {
+    if (withdrawalRequestVec.length() === 0) {
       return txSkeleton;
     }
     // add custodian lock dep
     txSkeleton = txSkeleton.update("cellDeps", (cellDeps) => {
-      return cellDeps.push(this._deploymentConfig().custodian_lock_dep);
+      return cellDeps.push(this.config.deploymentConfig.custodian_lock_dep);
     });
     // collect all finalized and live custodian cells
     let toBlockNumber =
       BigInt(l2BlockNumber) -
-      BigInt(this._deploymentConfig().l2_finalized_period);
+      BigInt(FINALIZED_BLOCKS);
     const toBlock = "0x" + toBlockNumber.toString(16);
     const validCustodianCells = await this._queryValidCustodianCells(toBlock);
     const deposition_block_hash = validCustodianCells[0].block_hash!;
@@ -621,8 +617,8 @@ export class Runner {
           rawWithdrawalRequest.getAmount().raw()
         ).serializeJson();
         withdrawalType = {
-          code_hash: this._deploymentConfig().sudt_type.code_hash,
-          hash_type: this._deploymentConfig().sudt_type.hash_type,
+          code_hash: this.config.deploymentConfig.sudt_type.code_hash,
+          hash_type: this.config.deploymentConfig.sudt_type.hash_type,
           args: sudtScriptHash,
         };
         outputData = utils.toBigUInt128LE(BigInt(sudtAmount));
@@ -643,43 +639,191 @@ export class Runner {
         l2BlockHash,
         l2BlockNumber
       );
-      const packedWithdrawalLockArgs = schemas.SerializeWithdrawalLockArgs(
-        types.NormalizeWithdrawalLockArgs(withdrawalLockArgs)
-      );
-      const buffer = new ArrayBuffer(32 + packedWithdrawalLockArgs.byteLength);
-      const array = new Uint8Array(buffer);
-      array.set(
-        new Uint8Array(
-          new Reader(this._deploymentConfig().rollup_type_hash).toArrayBuffer()
-        ),
-        0
-      );
-      array.set(new Uint8Array(packedWithdrawalLockArgs), 32);
+
       const withdrawalLock: Script = {
-        code_hash: this._deploymentConfig().withdrawal_lock.code_hash,
-        hash_type: this._deploymentConfig().hash_type,
-        args: new Reader(buffer).serializeJson(),
+        code_hash: this.config.deploymentConfig.withdrawal_lock.code_hash,
+        hash_type: this.config.deploymentConfig.withdrawal_lock.hash_type,
+        args: this._packWithdrawalLockArgs(withdrawalLockArgs),
       };
-      const withdrawalCell = {
-        lock: withdrawalLock,
-        type: withdrawalType,
-        capacity: withdrawalCapacity,
+      const withdrawalOutput: Cell = {
+        cell_output: {
+          lock: withdrawalLock,
+          type: withdrawalType,
+          capacity: withdrawalCapacity,
+        },
+        data: outputData,
       };
+      const minimalCapacity = minimalCellCapacity(withdrawalOutput);
+      // TODO: simply throw an error, may use acp like approach to solve this later ?
+      if (BigInt(withdrawalCapacity) < BigInt(minimalCapacity)) {
+        throw new Error(
+          "Try to withdraw capacity less than minimalCellCapacity"
+        );
+      }
       txSkeleton = txSkeleton.update("outputs", (outputs) => {
-        return outputs.push({
-          cell_output: withdrawalCell,
-          data: outputData,
-        });
+        return outputs.push(withdrawalOutput);
       });
     }
     // add sudt type dep
     if (sudtWithdrawalAssets.size > 0) {
       txSkeleton = txSkeleton.update("cellDeps", (cellDeps) => {
-        return cellDeps.push(this._deploymentConfig().sudt_type_dep);
+        return cellDeps.push(this.config.deploymentConfig.sudt_type_dep);
       });
     }
-    // TODO add custodian input cells
-    // TODO add custodian change cells
+    txSkeleton = this._injectCustodianInputsAndChanges(
+      txSkeleton,
+      ckbWithdrawalCapacity,
+      sudtWithdrawalAssets,
+      validCustodianCells
+    );
+    return txSkeleton;
+  }
+
+  _injectCustodianInputsAndChanges(
+    txSkeleton: TransactionSkeletonType,
+    ckbWithdrawalCapacity: BigInt,
+    sudtWithdrawalAssets: Map<Hash, BigInt>,
+    validCustodianCells: Cell[]
+  ): TransactionSkeletonType {
+    const getInputKey = (input: Cell) =>
+      `${input.out_point!.tx_hash}_${input.out_point!.index}`;
+    let previousInputs = Set<string>();
+    let inputCkbCapacitySum = BigInt(0);
+    let outputCkbCapacitySumForSudtCustodianCells = BigInt(0);
+    for (let [sudtScriptHash, targetSudtAmount] of sudtWithdrawalAssets) {
+      let inputSudtAmountSum = BigInt(0);
+      for (const cell of validCustodianCells) {
+        if (
+          cell.cell_output.type ||
+          cell.cell_output.type!.args === sudtScriptHash
+        ) {
+          const key = getInputKey(cell);
+          if (previousInputs.has(key)) {
+            continue;
+          }
+          previousInputs.add(key);
+          const inputCkbCapacity = BigInt(cell.cell_output.capacity);
+          const inputSudtAmount = utils.readBigUInt128LE(cell.data);
+          inputCkbCapacitySum += inputCkbCapacity;
+          inputSudtAmountSum += inputSudtAmount;
+          txSkeleton = txSkeleton.update("inputs", (inputs) => {
+            return inputs.push(cell);
+          });
+          if (inputSudtAmountSum >= targetSudtAmount) {
+            break;
+          }
+        }
+      }
+      if (inputSudtAmountSum < targetSudtAmount) {
+        throw new Error("Insufficient sudt amount in valid custodian cells");
+      }
+      // build sudt change custodian cell
+      const custodianLock: Script = {
+        code_hash: this.config.deploymentConfig.custodian_lock.code_hash,
+        hash_type: this.config.deploymentConfig.custodian_lock.hash_type,
+        args: DEFAULT_CUSTODIAN_LOCK_ARGS,
+      };
+      const custodianType: Script = {
+        code_hash: this.config.deploymentConfig.sudt_type.code_hash,
+        hash_type: this.config.deploymentConfig.sudt_type.hash_type,
+        args: sudtScriptHash,
+      };
+      let sudtChangeCustodian: Cell = {
+        cell_output: {
+          lock: custodianLock,
+          type: custodianType,
+          capacity: "0x0",
+        },
+        data: utils.toBigUInt128LE(
+          BigInt(inputSudtAmountSum) - BigInt(targetSudtAmount)
+        ),
+      };
+      const minimalCapacity = minimalCellCapacity(sudtChangeCustodian);
+      sudtChangeCustodian.cell_output.capacity =
+        "0x" + minimalCapacity.toString(16);
+      outputCkbCapacitySumForSudtCustodianCells += minimalCapacity;
+      txSkeleton = txSkeleton.update("outputs", (outputs) => {
+        return outputs.push(sudtChangeCustodian);
+      });
+    }
+    if (
+      BigInt(inputCkbCapacitySum) ===
+      BigInt(ckbWithdrawalCapacity) +
+        BigInt(outputCkbCapacitySumForSudtCustodianCells)
+    ) {
+      // so lucky with it, just return
+      return txSkeleton;
+    }
+    // build ckb change custodian cell
+    const custodianLock: Script = {
+      code_hash: this.config.deploymentConfig.custodian_lock.code_hash,
+      hash_type: this.config.deploymentConfig.custodian_lock.hash_type,
+      args: DEFAULT_CUSTODIAN_LOCK_ARGS,
+    };
+    let ckbChangeCustodian: Cell = {
+      cell_output: {
+        lock: custodianLock,
+        type: undefined,
+        capacity: "0x0",
+      },
+      data: utils.toBigUInt128LE(BigInt(0)),
+    };
+    const minimalCapacity = minimalCellCapacity(ckbChangeCustodian);
+    const changeCapacity =
+      BigInt(inputCkbCapacitySum) -
+      BigInt(ckbWithdrawalCapacity) -
+      BigInt(outputCkbCapacitySumForSudtCustodianCells);
+    if (BigInt(changeCapacity) >= BigInt(minimalCapacity)) {
+      // With enough input ckb capacity to build a minimal change cell
+      ckbChangeCustodian.cell_output.capacity =
+        "0x" + changeCapacity.toString(16);
+      txSkeleton = txSkeleton.update("outputs", (outputs) => {
+        return outputs.push(ckbChangeCustodian);
+      });
+      return txSkeleton;
+    }
+    // Gonna collect some more ckb to build the change cell
+    for (const cell of validCustodianCells) {
+      if (!cell.cell_output.type) {
+        const key = getInputKey(cell);
+        if (previousInputs.has(key)) {
+          continue;
+        }
+        previousInputs.add(key);
+        const inputCkbCapacity = BigInt(cell.cell_output.capacity);
+        inputCkbCapacitySum += inputCkbCapacity;
+        txSkeleton = txSkeleton.update("inputs", (inputs) => {
+          return inputs.push(cell);
+        });
+        if (
+          BigInt(inputCkbCapacitySum) >=
+          BigInt(ckbWithdrawalCapacity) +
+            BigInt(outputCkbCapacitySumForSudtCustodianCells) +
+            BigInt(minimalCapacity)
+        ) {
+          break;
+        }
+      }
+    }
+    // TODO collect ckb from other sudt custodian cells if all non sudt custodian cells' ckb capacity is insufficient,
+    // but so far just throw an error here.
+    if (
+      BigInt(inputCkbCapacitySum) <
+      BigInt(ckbWithdrawalCapacity) +
+        BigInt(outputCkbCapacitySumForSudtCustodianCells) +
+        BigInt(minimalCapacity)
+    ) {
+      throw new Error("Insufficient CKB capacity in valid custodian cells");
+    }
+    const newChangeCapacity =
+      BigInt(inputCkbCapacitySum) -
+      BigInt(ckbWithdrawalCapacity) -
+      BigInt(outputCkbCapacitySumForSudtCustodianCells);
+    ckbChangeCustodian.cell_output.capacity =
+      "0x" + newChangeCapacity.toString(16);
+    txSkeleton = txSkeleton.update("outputs", (outputs) => {
+      return outputs.push(ckbChangeCustodian);
+    });
     return txSkeleton;
   }
 
@@ -705,7 +849,7 @@ export class Runner {
         rawWithdrawalRequest.getCapacity().raw()
       ).serializeJson(),
       owner_lock_hash: new Reader(
-        rawWithdrawalRequest.getLockHash().raw()
+        rawWithdrawalRequest.getOwnerLockHash().raw()
       ).serializeJson(),
       payment_lock_hash: new Reader(
         rawWithdrawalRequest.getPaymentLockHash().raw()
@@ -729,13 +873,38 @@ export class Runner {
     return {
       lock: {
         script: {
-          code_hash: this._deploymentConfig().custodian_lock.code_hash,
-          hash_type: this._deploymentConfig().custodian_lock.hash_type,
+          code_hash: this.config.deploymentConfig.custodian_lock.code_hash,
+          hash_type: this.config.deploymentConfig.custodian_lock.hash_type,
           args: this.rollupTypeHash,
         },
         argsLen: "any",
       },
       toBlock: toBlock,
     };
+  }
+  _packCusotidanLockArgs(custodianLockArgs: object): HexString {
+    const packedCustodianLockArgs = schemas.SerializeCustodianLockArgs(
+      types.NormalizeCustodianLockArgs(custodianLockArgs)
+    );
+    return this._packArgsHelper(packedCustodianLockArgs);
+  }
+
+  _packWithdrawalLockArgs(withdrawalLockArgs: object): HexString {
+    const packedWithdrawalLockArgs = schemas.SerializeWithdrawalLockArgs(
+      types.NormalizeWithdrawalLockArgs(withdrawalLockArgs)
+    );
+    return this._packArgsHelper(packedWithdrawalLockArgs);
+  }
+  _packArgsHelper(args: ArrayBuffer): HexString {
+    const buffer = new ArrayBuffer(32 + args.byteLength);
+    const array = new Uint8Array(buffer);
+    array.set(
+      new Uint8Array(
+        new Reader(this.rollupTypeHash).toArrayBuffer()
+      ),
+      0
+    );
+    array.set(new Uint8Array(args), 32);
+    return new Reader(buffer).serializeJson();
   }
 }
