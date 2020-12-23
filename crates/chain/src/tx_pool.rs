@@ -23,7 +23,7 @@ const MAX_PACKAGED_TXS: usize = 6000;
 /// MAX packaged withdrawal in a l2block
 const MAX_PACKAGED_WITHDRAWAL: usize = 10;
 
-pub struct TxRecipt {
+pub struct TxReceipt {
     pub tx: L2Transaction,
     pub tx_witness_hash: [u8; 32],
     // hash(account_root|account_count)
@@ -34,7 +34,7 @@ pub struct TxRecipt {
 pub struct TxPool<S> {
     state: OverlayStore<S>,
     generator: Generator,
-    queue: Vec<TxRecipt>,
+    queue: Vec<TxReceipt>,
     withdrawal_queue: Vec<WithdrawalRequest>,
     next_block_info: BlockInfo,
     next_prev_account_state: MerkleState,
@@ -76,7 +76,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
             let account_count = self.state.get_account_count()?;
             calculate_compacted_account_root(&account_root.as_slice(), account_count)
         };
-        self.queue.push(TxRecipt {
+        self.queue.push(TxReceipt {
             tx,
             tx_witness_hash,
             compacted_post_account_root,
@@ -149,7 +149,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
     /// and remove these from the pool
     pub fn package(&mut self, deposition_requests: &[DepositionRequest]) -> Result<TxPoolPackage> {
         let txs_limit = min(MAX_PACKAGED_TXS, self.queue.len());
-        let tx_recipts = self.queue.drain(..txs_limit).collect();
+        let tx_receipts = self.queue.drain(..txs_limit).collect();
         // reset overlay, we need to record deposition / withdrawal touched keys to generate proof for state
         self.state.overlay_store_mut().clear_touched_keys();
         // fetch withdrawal request and rerun verifier, drop invalid requests
@@ -176,7 +176,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
             .collect();
         let pkg = TxPoolPackage {
             touched_keys,
-            tx_recipts,
+            tx_receipts,
             prev_account_state: self.next_prev_account_state.clone(),
             post_account_state,
             withdrawal_requests,
@@ -241,12 +241,12 @@ pub struct MerkleState {
 /// a layer2 block can be generated from a package
 pub struct TxPoolPackage {
     /// tx recipts
-    pub tx_recipts: Vec<TxRecipt>,
+    pub tx_receipts: Vec<TxReceipt>,
     /// txs touched keys, both reads and writes
     pub touched_keys: HashSet<H256>,
     /// state of last block
     pub prev_account_state: MerkleState,
-    /// state after handling deposition requests
+    /// state after handling depositin requests
     pub post_account_state: MerkleState,
     /// withdrawal requests
     pub withdrawal_requests: Vec<WithdrawalRequest>,

@@ -10,5 +10,12 @@ edition = "2018"
 serde = { version = "1.0", features = ["derive"] }
 faster-hex = "0.4"
 gw-types = { path = "../types" }
+gw-chain = { path = "../chain" }
+gw-generator = { path = "../generator" }
+gw-config = { path = "../config" }
+gw-common = { path = "../common" }
+gw-store = { path = "../store" }
 ckb-types = "0.37.0"
 ckb-jsonrpc-types = "0.37.0"
+failure = "0.1.5"
+
