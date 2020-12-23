@@ -9,25 +9,11 @@ import {
   Transaction,
   TransactionWithStatus,
   QueryOptions,
-} from "@ckb-lumos/base";
-import {
   Indexer,
-  CellCollector,
   TransactionCollector,
-} from "@ckb-lumos/indexer";
+} from "@ckb-lumos/base";
 import { Config, ChainService, SubmitTxs } from "@ckb-godwoken/godwoken";
-import { DeploymentConfig } from "@ckb-godwoken/base";
-import {
-  L2Block,
-  SerializeHeaderInfo,
-  SerializeCustodianLockArgs,
-} from "../schemas/godwoken";
-import {
-  DepositionRequest,
-  HeaderInfo,
-  NormalizeHeaderInfo,
-  NormalizeCustodianLockArgs,
-} from "./types";
+import { DeploymentConfig, schemas, types } from "@ckb-godwoken/base";
 import {
   DepositionEntry,
   scanDepositionCellsInCommittedL2Block,
@@ -113,7 +99,7 @@ export class Runner {
     };
   }
 
-  async _syncL2Block(transaction: Transaction, headerInfo: HeaderInfo) {
+  async _syncL2Block(transaction: Transaction, headerInfo: types.HeaderInfo) {
     const depositionRequests = await scanDepositionCellsInCommittedL2Block(
       transaction,
       this.deploymentConfig,
@@ -127,7 +113,9 @@ export class Runner {
       transaction: core.SerializeTransaction(
         normalizers.NormalizeTransaction(transaction)
       ),
-      header_info: SerializeHeaderInfo(NormalizeHeaderInfo(headerInfo)),
+      header_info: schemas.SerializeHeaderInfo(
+        types.NormalizeHeaderInfo(headerInfo)
+      ),
       context,
     };
     const syncParam = {
@@ -153,7 +141,7 @@ export class Runner {
         // Already synced to tip
         return;
       }
-      const headerInfo: HeaderInfo = {
+      const headerInfo: types.HeaderInfo = {
         number: block.header.number,
         block_hash: block.header.hash,
       };
@@ -221,8 +209,7 @@ export class Runner {
     maximum = 20
   ): Promise<Array<DepositionEntry>> {
     const tipHeader = await this.rpc.get_tip_header();
-    const collector = new CellCollector(
-      this.indexer,
+    const collector = this.indexer.collector(
       this._depositionCellQueryOptions()
     );
     const results = [];
@@ -245,10 +232,7 @@ export class Runner {
   }
 
   async _queryLiveRollupCell(): Promise<Cell> {
-    const collector = new CellCollector(
-      this.indexer,
-      this._rollupCellQueryOptions()
-    );
+    const collector = this.indexer.collector(this._rollupCellQueryOptions());
     const results = [];
     for await (const cell of collector.collect()) {
       results.push(cell);
@@ -263,7 +247,7 @@ export class Runner {
     packedl2Block: ArrayBuffer,
     depositionEntries: DepositionEntry[]
   ) {
-    const l2Block = new L2Block(packedl2Block);
+    const l2Block = new schemas.L2Block(packedl2Block);
     const rawL2Block = l2Block.getRaw();
     const data: DataView = (rawL2Block as any).view;
     const l2BlockHash = utils.ckbHash(data.buffer).serializeJson();
@@ -277,8 +261,8 @@ export class Runner {
         deposition_block_hash: l2BlockHash,
         deposition_block_number: l2BlockNumber,
       };
-      const packedCustodianLockArgs = SerializeCustodianLockArgs(
-        NormalizeCustodianLockArgs(custodianLockArgs)
+      const packedCustodianLockArgs = schemas.SerializeCustodianLockArgs(
+        types.NormalizeCustodianLockArgs(custodianLockArgs)
       );
       const buffer = new ArrayBuffer(32 + packedCustodianLockArgs.byteLength);
       const array = new Uint8Array(buffer);
@@ -340,6 +324,7 @@ export class Runner {
           data: custodianData,
         } = this._generateCustodianCells(packedl2Block, depositionEntries);
         const cell = await this._queryLiveRollupCell();
+        // TODO: stake cell
         const tx: Transaction = {
           version: "0x0",
           // TODO: fill in cell deps

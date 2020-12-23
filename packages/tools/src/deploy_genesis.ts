@@ -31,7 +31,7 @@ program
   )
   .requiredOption(
     "-o, --output-file <outputFile>",
-    "output file for genesis setups"
+    "output file for complete godwoken runner setup"
   )
   .requiredOption(
     "-s, --sql-connection <sqlConnection>",
@@ -146,9 +146,6 @@ const run = async () => {
     });
   });
   const typeScript = txSkeleton.get("outputs").get(0)!.cell_output.type!;
-  const typeScriptHash = utils
-    .ckbHash(core.SerializeScript(normalizers.NormalizeScript(typeScript)))
-    .serializeJson();
   txSkeleton = await common.payFeeByFeeRate(
     txSkeleton,
     [address],
@@ -197,16 +194,34 @@ const run = async () => {
     number: header.number,
     block_hash: blockHash,
   };
-  const packedHeaderInfo = schemas.SerializeHeaderInfo(types.NormalizeHeaderInfo(headerInfo));
+  const packedHeaderInfo = schemas.SerializeHeaderInfo(
+    types.NormalizeHeaderInfo(headerInfo)
+  );
   const setup = {
     header_info: new Reader(packedHeaderInfo).serializeJson(),
     genesis: {
       genesis: new Reader(genesis.genesis).serializeJson(),
       branches_map: genesis.branches_map,
       leaves_map: genesis.leaves_map,
-    }
+    },
   };
-  writeFileSync(program.outputFile, JSON.stringify(setup, null, 2), "utf8");
+  godwokenConfig.chain = {
+    rollup_type_script: typeScript,
+  };
+  const runnerConfig = {
+    deploymentConfig,
+    godwokenConfig,
+    storeConfig: {
+      type: "genesis",
+      genesis: setup,
+    },
+  };
+
+  writeFileSync(
+    program.outputFile,
+    JSON.stringify(runnerConfig, null, 2),
+    "utf8"
+  );
 };
 
 run().then(() => {

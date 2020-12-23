@@ -8,12 +8,7 @@ import {
   since as sinceUtils,
   utils,
 } from "@ckb-lumos/base";
-import { DeploymentConfig } from "@ckb-godwoken/base";
-import { DepositionRequest, NormalizeDepositionRequest } from "./types";
-import {
-  DepositionLockArgs,
-  SerializeDepositionRequest,
-} from "../schemas/godwoken";
+import { DeploymentConfig, schemas, types } from "@ckb-godwoken/base";
 
 const { DenormalizeScript } = denormalizers;
 const { readBigUInt128LE } = utils;
@@ -56,8 +51,8 @@ async function resolveOutPoint(outPoint: OutPoint, rpc: RPC): Promise<Cell> {
 
 export interface DepositionEntry {
   cell: Cell;
-  lockArgs: DepositionLockArgs;
-  request: DepositionRequest;
+  lockArgs: schemas.DepositionLockArgs;
+  request: types.DepositionRequest;
   // Packed binary of gw_types::packed::DepositionRequest type
   packedRequest: ArrayBuffer;
 }
@@ -82,7 +77,7 @@ export async function tryExtractDepositionRequest(
   if (rollupTypeHash !== config.rollup_type_hash) {
     return undefined;
   }
-  const lockArgs = new DepositionLockArgs(new Reader(rollupTypeHash));
+  const lockArgs = new schemas.DepositionLockArgs(new Reader(rollupTypeHash));
   if (tipHeader) {
     // Timeout validation
     const packedSince = new Reader(
@@ -111,8 +106,8 @@ export async function tryExtractDepositionRequest(
     script: DenormalizeScript(lockArgs.getLayer2Lock()),
     sudtScript,
   };
-  const packedRequest = SerializeDepositionRequest(
-    NormalizeDepositionRequest(request)
+  const packedRequest = schemas.SerializeDepositionRequest(
+    types.NormalizeDepositionRequest(request)
   );
   return {
     cell,

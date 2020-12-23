@@ -1,24 +1,69 @@
+import { Command } from "commander";
+import { argv } from "process";
 import { RPC } from "ckb-js-toolkit";
-import { Indexer } from "@ckb-lumos/indexer";
-import { Config, ChainService } from "@ckb-godwoken/godwoken";
+import { Indexer } from "@ckb-lumos/sql-indexer";
+import { Config, ChainService, GenesisSetup } from "@ckb-godwoken/godwoken";
 import { DeploymentConfig } from "@ckb-godwoken/base";
+import { initializeConfig } from "@ckb-lumos/config-manager";
 import { Runner } from "./runner";
+import { readFileSync } from "fs";
+import Knex from "knex";
 
-const CKB_RPC_URL = "http://127.0.0.1:8114";
-const indexer = new Indexer(CKB_RPC_URL, "./indexed-data");
+interface GenesisStoreConfig {
+  type: "genesis";
+  genesis: GenesisSetup;
+}
+
+type StoreConfig = GenesisStoreConfig;
+
+interface RunnerConfig {
+  deploymentConfig: DeploymentConfig;
+  godwokenConfig: Config;
+  storeConfig: StoreConfig;
+}
+
+const program = new Command();
+program
+  .requiredOption("-c, --config-file <configFile>", "runner config file")
+  .requiredOption(
+    "-s, --sql-connection <sqlConnection>",
+    "PostgreSQL connection striong"
+  )
+  .requiredOption(
+    "-p, --private-key <privateKey>",
+    "aggregator private key to use"
+  )
+  .option("-r, --rpc <rpc>", "rpc path", "http://127.0.0.1:8114");
+program.parse(argv);
+
+initializeConfig();
+const runnerConfig: RunnerConfig = JSON.parse(
+  readFileSync(program.configFile, "utf8")
+);
+
+const rpc = new RPC(runnerConfig.godwokenConfig.rpc.listen);
+const knex = Knex({
+  client: "postgresql",
+  connection: program.sqlConnection,
+});
+const indexer = new Indexer(runnerConfig.godwokenConfig.rpc.listen, knex);
 indexer.startForever();
 
-const rpc = new RPC(CKB_RPC_URL);
-
-// TODO: deal with config setup later. A tool should commit genesis on chain, after
-// that, godwoken should only load genesis block, and sync from there.
-const chainConfig = ("TODO" as unknown) as Config;
-const chainService = new ChainService(chainConfig);
-
-const deploymentConfig = ("TODO" as unknown) as DeploymentConfig;
+if (runnerConfig.storeConfig.type !== "genesis") {
+  throw new Error("Only genesis store config is supported now!");
+}
+const chainService = new ChainService(
+  runnerConfig.godwokenConfig,
+  runnerConfig.storeConfig.genesis
+);
 
 (async () => {
-  const runner = new Runner(rpc, indexer, chainService, deploymentConfig);
+  const runner = new Runner(
+    rpc,
+    indexer,
+    chainService,
+    runnerConfig.deploymentConfig
+  );
   await runner.start();
 })().catch((e) => {
   console.error(`Error occurs: ${e}`);
