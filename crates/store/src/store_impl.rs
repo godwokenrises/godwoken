@@ -12,6 +12,7 @@ use gw_generator::traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     packed::{HeaderInfo, L2Block, L2Transaction, Script},
+    prelude::*,
 };
 use parking_lot::Mutex;
 use std::collections::HashMap;
@@ -29,6 +30,7 @@ pub struct Store<S> {
     blocks: HashMap<H256, L2Block>,
     header_infos: HashMap<H256, HeaderInfo>,
     tip_block_hash: H256,
+    tip_block_number: u64,
     transactions: HashMap<H256, L2Transaction>,
 }
 
@@ -39,6 +41,7 @@ impl<S: SMTStore<H256>> Store<S> {
         block_tree: SMT<WrapStore<S>>,
         scripts: HashMap<H256, Script>,
         tip_block_hash: H256,
+        tip_block_number: u64,
         blocks: HashMap<H256, L2Block>,
         header_infos: HashMap<H256, HeaderInfo>,
         codes: HashMap<H256, Bytes>,
@@ -53,6 +56,7 @@ impl<S: SMTStore<H256>> Store<S> {
             blocks,
             header_infos,
             tip_block_hash,
+            tip_block_number,
             transactions,
         }
     }
@@ -119,8 +123,14 @@ impl<S: SMTStore<H256>> Store<S> {
     /// Attach block to the rollup main chain
     pub fn attach_block(&mut self, block: L2Block) -> Result<()> {
         let raw = block.raw();
+        let block_number: u64 = raw.number().unpack();
+        if block_number != 0 {
+            assert_eq!(self.tip_block_number + 1, block_number);
+        }
         self.block_tree
             .update(raw.smt_key().into(), raw.hash().into())?;
+        self.tip_block_hash = raw.hash().into();
+        self.tip_block_number = block_number;
         Ok(())
     }
 
@@ -163,6 +173,7 @@ impl<S: SMTStore<H256> + Default> Default for Store<S> {
             blocks: Default::default(),
             header_infos: Default::default(),
             tip_block_hash: H256::zero(),
+            tip_block_number: 0,
             transactions: Default::default(),
         }
     }
