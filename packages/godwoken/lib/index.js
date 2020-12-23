@@ -7,7 +7,10 @@ function buildGenesisBlock(config) {
 class ChainService {
   constructor(config, genesis) {
     this.config = config;
-    this.nativeChain = new addon.NativeChain(JSON.stringify(config), JSON.stringify(genesis));
+    this.nativeChain = new addon.NativeChain(
+      JSON.stringify(config),
+      JSON.stringify(genesis)
+    );
   }
 
   async sync(syncParam) {

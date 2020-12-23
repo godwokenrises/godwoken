@@ -139,16 +139,15 @@ declare_types! {
             }
         }
 
-        method lastSynced() {
+        method lastSynced(mut cx) {
             let this = cx.this();
-            let header_info: HeaderInfo =
+            let header_info: packed::HeaderInfo =
                 cx.borrow(&this, |data| {
                     let chain = data.chain.read().unwrap();
-                    chain.last_synced()
+                    chain.local_state.last_synced().clone()
                 });
-            let header_info_jsonrpc: parameter::HeaderInfo = header_info.into();
-            let header_info_string = serde_json::to_string(&header_info_jsonrpc).expect("Serializing HeaderInfo");
-            Ok(cx.string(header_info_string).upcast())
+            let js_value = cx.string(format!("{:#x}", header_info));
+            Ok(js_value.upcast())
         }
 
         method getStorageAt() {

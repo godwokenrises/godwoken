@@ -2,23 +2,42 @@ import { normalizers, Reader, RPC } from "ckb-js-toolkit";
 import {
   core,
   utils,
+  values,
   Cell,
   Hash,
   HexNumber,
   HexString,
+  Script,
   Transaction,
   TransactionWithStatus,
   QueryOptions,
   Indexer,
-  TransactionCollector,
 } from "@ckb-lumos/base";
-import { Config, ChainService, SubmitTxs } from "@ckb-godwoken/godwoken";
+import {
+  Config,
+  ChainService,
+  SubmitTxs,
+  GenesisSetup,
+} from "@ckb-godwoken/godwoken";
 import { DeploymentConfig, schemas, types } from "@ckb-godwoken/base";
 import {
   DepositionEntry,
   scanDepositionCellsInCommittedL2Block,
   tryExtractDepositionRequest,
 } from "./utils";
+
+export interface GenesisStoreConfig {
+  type: "genesis";
+  genesis: GenesisSetup;
+}
+
+export type StoreConfig = GenesisStoreConfig;
+
+export interface RunnerConfig {
+  deploymentConfig: DeploymentConfig;
+  godwokenConfig: Config;
+  storeConfig: StoreConfig;
+}
 
 type Level = "debug" | "info" | "warn" | "error";
 
@@ -32,17 +51,17 @@ function asyncSleep(ms = 0) {
 
 function isRollupTransction(
   tx: Transaction,
-  config: DeploymentConfig
+  rollupTypeScript: Script
 ): boolean {
+  const rollupValue = new values.ScriptValue(rollupTypeScript, {
+    validate: false,
+  });
   for (const output of tx.outputs) {
-    const { lock } = output;
-    if (
-      lock.code_hash === config.state_validator_type.code_hash &&
-      lock.hash_type === config.state_validator_type.hash_type &&
-      lock.args.length >= 66 &&
-      lock.args.substr(0, 66) === config.rollup_type_hash
-    ) {
-      return true;
+    if (output.type) {
+      const value = new values.ScriptValue(output.type, { validate: false });
+      if (value.equals(rollupValue)) {
+        return true;
+      }
     }
   }
   return false;
@@ -52,10 +71,11 @@ export class Runner {
   rpc: RPC;
   indexer: Indexer;
   chainService: ChainService;
-  deploymentConfig: DeploymentConfig;
+  config: RunnerConfig;
   lastBlockNumber: bigint;
   cancelListener: () => void;
   logger: (level: Level, message: string) => void;
+  rollupTypeHash: Hash;
 
   // TODO: change to PoA
   lastProduceBlockTime: bigint;
@@ -64,27 +84,40 @@ export class Runner {
     rpc: RPC,
     indexer: Indexer,
     chainService: ChainService,
-    deploymentConfig: DeploymentConfig,
+    config: RunnerConfig,
     { logger = defaultLogger } = {}
   ) {
     this.rpc = rpc;
     this.indexer = indexer;
     this.chainService = chainService;
-    this.deploymentConfig = deploymentConfig;
-    this.lastBlockNumber = 0n;
-    this.cancelListener = () => {};
+    this.config = config;
     this.lastProduceBlockTime = 0n;
+    this.cancelListener = () => {};
     this.logger = logger;
+    this.rollupTypeHash = utils
+      .ckbHash(
+        core.SerializeScript(
+          normalizers.NormalizeScript(
+            config.godwokenConfig.chain.rollup_type_script
+          )
+        )
+      )
+      .serializeJson();
+
+    const lastSynced = new schemas.HeaderInfo(
+      new Reader(chainService.lastSynced()).toArrayBuffer()
+    );
+    this.lastBlockNumber = lastSynced.getNumber().toLittleEndianBigUint64();
+  }
+
+  _deploymentConfig(): DeploymentConfig {
+    return this.config.deploymentConfig;
   }
 
   _rollupCellQueryOptions(): QueryOptions {
     return {
       type: {
-        script: {
-          code_hash: this.deploymentConfig.state_validator_type.code_hash,
-          hash_type: this.deploymentConfig.state_validator_type.hash_type,
-          args: this.deploymentConfig.rollup_type_hash,
-        },
+        script: this.config.godwokenConfig.chain.rollup_type_script,
         ioType: "output",
         argsLen: "any",
       },
@@ -97,9 +130,9 @@ export class Runner {
     return {
       lock: {
         script: {
-          code_hash: this.deploymentConfig.deposition_lock.code_hash,
-          hash_type: this.deploymentConfig.deposition_lock.hash_type,
-          args: this.deploymentConfig.rollup_type_hash,
+          code_hash: this._deploymentConfig().deposition_lock.code_hash,
+          hash_type: this._deploymentConfig().deposition_lock.hash_type,
+          args: this.rollupTypeHash,
         },
         ioType: "output",
         argsLen: "any",
@@ -111,7 +144,7 @@ export class Runner {
   async _syncL2Block(transaction: Transaction, headerInfo: types.HeaderInfo) {
     const depositionRequests = await scanDepositionCellsInCommittedL2Block(
       transaction,
-      this.deploymentConfig,
+      this._deploymentConfig(),
       this.rpc
     );
     const context: SubmitTxs = {
@@ -119,12 +152,12 @@ export class Runner {
       deposition_requests: depositionRequests,
     };
     const update = {
-      transaction: core.SerializeTransaction(
-        normalizers.NormalizeTransaction(transaction)
-      ),
-      header_info: schemas.SerializeHeaderInfo(
-        types.NormalizeHeaderInfo(headerInfo)
-      ),
+      transaction: new Reader(
+        core.SerializeTransaction(normalizers.NormalizeTransaction(transaction))
+      ).serializeJson(),
+      header_info: new Reader(
+        schemas.SerializeHeaderInfo(types.NormalizeHeaderInfo(headerInfo))
+      ).serializeJson(),
       context,
     };
     const syncParam = {
@@ -155,7 +188,12 @@ export class Runner {
         block_hash: block.header.hash,
       };
       for (const tx of block.transactions) {
-        if (isRollupTransction(tx, this.deploymentConfig)) {
+        if (
+          isRollupTransction(
+            tx,
+            this.config.godwokenConfig.chain.rollup_type_script
+          )
+        ) {
           await this._syncL2Block(tx, headerInfo);
         }
       }
@@ -174,28 +212,28 @@ export class Runner {
     // TODO: for now, we always rebuild state from genesis cell, so there won't be a
     // forking problem. However if later we implement persistent state store, forking
     // will then need to be handled here.
-    this.logger("info", "Processing committed L2 blocks!");
-    const committedL2BlockCollector = new TransactionCollector(
-      this.indexer,
-      this._rollupCellQueryOptions(),
-      {
-        includeStatus: true,
-      }
-    );
+    // this.logger("info", "Processing committed L2 blocks!");
+    // const committedL2BlockCollector = new TransactionCollector(
+    //   this.indexer,
+    //   this._rollupCellQueryOptions(),
+    //   {
+    //     includeStatus: true,
+    //   }
+    // );
     // TODO: confirm how genesis will be handled later. If genesis is handled
     // in chain service initialization, we need to skip one transaction here.
-    for await (const result of committedL2BlockCollector.collect()) {
-      const txWithStatus = result as TransactionWithStatus;
-      const transaction: Transaction = txWithStatus.transaction;
-      const blockHash: Hash = txWithStatus.tx_status.block_hash!;
-      const header = await this.rpc.get_header(blockHash);
-      const headerInfo = {
-        number: header.number,
-        block_hash: header.hash,
-      };
-      await this._syncL2Block(transaction, headerInfo);
-      this.lastBlockNumber = BigInt(headerInfo.number);
-    }
+    // for await (const result of committedL2BlockCollector.collect()) {
+    //   const txWithStatus = result as TransactionWithStatus;
+    //   const transaction: Transaction = txWithStatus.transaction;
+    //   const blockHash: Hash = txWithStatus.tx_status.block_hash!;
+    //   const header = await this.rpc.get_header(blockHash);
+    //   const headerInfo = {
+    //     number: header.number,
+    //     block_hash: header.hash,
+    //   };
+    //   await this._syncL2Block(transaction, headerInfo);
+    //   this.lastBlockNumber = BigInt(headerInfo.number);
+    // }
 
     // Due to on-going syncing, previous methods might result in some blocks not being
     // picked up. Here, we will need to first play catch-up work, till we reached tip
@@ -229,7 +267,7 @@ export class Runner {
       const cellHeader = await this.rpc.get_header(cell.block_hash);
       const entry = await tryExtractDepositionRequest(
         cell,
-        this.deploymentConfig,
+        this._deploymentConfig(),
         tipHeader,
         cellHeader
       );
@@ -250,21 +288,23 @@ export class Runner {
       results.push(cell);
     }
     if (results.length !== 1) {
-      throw new Error("Invalid number of rollup cells!");
+      throw new Error(`Invalid number of rollup cells: ${results.length}`);
     }
     return results[0];
   }
 
   _generateCustodianCells(
-    packedl2Block: ArrayBuffer,
+    packedl2Block: HexString,
     depositionEntries: DepositionEntry[]
   ) {
-    const l2Block = new schemas.L2Block(packedl2Block);
+    const l2Block = new schemas.L2Block(
+      new Reader(packedl2Block).toArrayBuffer()
+    );
     const rawL2Block = l2Block.getRaw();
     const data: DataView = (rawL2Block as any).view;
     const l2BlockHash = utils.ckbHash(data.buffer).serializeJson();
     const l2BlockNumber =
-      "0x" + rawL2Block.getNumber().toLittleEndianUint64().toString(16);
+      "0x" + rawL2Block.getNumber().toLittleEndianBigUint64().toString(16);
     const custodianCells = depositionEntries.map(({ cell, lockArgs }) => {
       const custodianLockArgs = {
         owner_lock_hash: new Reader(
@@ -279,15 +319,13 @@ export class Runner {
       const buffer = new ArrayBuffer(32 + packedCustodianLockArgs.byteLength);
       const array = new Uint8Array(buffer);
       array.set(
-        new Uint8Array(
-          new Reader(this.deploymentConfig.rollup_type_hash).toArrayBuffer()
-        ),
+        new Uint8Array(new Reader(this.rollupTypeHash).toArrayBuffer()),
         0
       );
       array.set(new Uint8Array(packedCustodianLockArgs), 32);
       const lock = {
-        code_hash: this.deploymentConfig.custodian_lock.code_hash,
-        hash_type: this.deploymentConfig.custodian_lock.hash_type,
+        code_hash: this._deploymentConfig().custodian_lock.code_hash,
+        hash_type: this._deploymentConfig().custodian_lock.hash_type,
         args: new Reader(buffer).serializeJson(),
       };
       return {
@@ -336,7 +374,7 @@ export class Runner {
         const {
           block: packedl2Block,
           global_state,
-        } = await this.chainService.produce_block(param);
+        } = await this.chainService.produceBlock(param);
 
         const {
           cells: custodianCells,
@@ -344,12 +382,13 @@ export class Runner {
         } = this._generateCustodianCells(packedl2Block, depositionEntries);
         const cell = await this._queryLiveRollupCell();
         const cellDeps = [
-          this.deploymentConfig.state_validator_lock_dep,
-          this.deploymentConfig.state_validator_type_dep,
+          this._deploymentConfig().state_validator_lock_dep,
+          this._deploymentConfig().state_validator_type_dep,
         ];
         if (depositionEntries.length > 0) {
-          cellDeps.push(this.deploymentConfig.deposition_lock_dep);
+          cellDeps.push(this._deploymentConfig().deposition_lock_dep);
         }
+        // TODO: transaction fees
         // TODO: stake cell
         const tx: Transaction = {
           version: "0x0",
@@ -376,7 +415,7 @@ export class Runner {
         this.lastProduceBlockTime = medianTime;
       }
     })().catch((e) => {
-      console.error(`Error processing new block: ${e}`);
+      console.error(`Error processing new block: ${e} ${e.stack}`);
       // Clear the median time subscriber to exit
       this.cancelListener();
     });

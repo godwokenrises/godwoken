@@ -6,8 +6,8 @@ export interface SyncParam {
 }
 
 export interface L1Action {
-  transaction: ArrayBuffer; // ckb_types::packed::Transaction
-  header_info: ArrayBuffer; // gw_types::packed::HeaderInfo
+  transaction: HexString; // ckb_types::packed::Transaction
+  header_info: HexString; // gw_types::packed::HeaderInfo
   context: SubmitTxs | StartChallenge | CancelChallenge | Revert;
 }
 
@@ -18,31 +18,31 @@ export interface NextBlockContext {
 
 export interface SubmitTxs {
   type: "submit_txs";
-  deposition_requests: ArrayBuffer[]; // Vec<gw_types::packed::DepositionRequest>
+  deposition_requests: HexString[]; // Vec<gw_types::packed::DepositionRequest>
 }
 
 export interface StartChallenge {
   type: "start_challenge";
-  context: ArrayBuffer; // gw_types::packed::StartChallenge
+  context: HexString; // gw_types::packed::StartChallenge
 }
 
 export interface CancelChallenge {
   type: "cancel_challenge";
-  context: ArrayBuffer; // gw_types::packed::CancelChallenge
+  context: HexString; // gw_types::packed::CancelChallenge
 }
 export interface Revert {
   type: "revert";
-  context: ArrayBuffer; // gw_types::packed::StartChallenge
+  context: HexString; // gw_types::packed::StartChallenge
 }
 
 export interface ProduceBlockParam {
   aggregator_id: HexNumber;
-  deposition_requests: ArrayBuffer[]; // gw_types::packed::DepositionRequest[]
+  deposition_requests: HexString[]; // gw_types::packed::DepositionRequest[]
 }
 
 export interface ProduceBlockResult {
-  block: ArrayBuffer; // gw_types::packed::L2Block
-  global_state: ArrayBuffer; // gw_types::packed::GlobalState
+  block: HexString; // gw_types::packed::L2Block
+  global_state: HexString; // gw_types::packed::GlobalState
 }
 
 export type SyncEvent =
@@ -56,11 +56,11 @@ export interface SuccessEvent {
 }
 export interface BadBlockEvent {
   type: "bad_block";
-  context: ArrayBuffer; // gw_types::packed::StartChallenge
+  context: HexString; // gw_types::packed::StartChallenge
 }
 export interface BadChallengeEvent {
   type: "bad_challenge";
-  context: ArrayBuffer; // gw_types::packed::CancelChallenge
+  context: HexString; // gw_types::packed::CancelChallenge
 }
 export interface WaitChallengeEvent {
   type: "wait_challenge";
@@ -89,8 +89,6 @@ export interface RPC {
 }
 
 export interface GenesisConfig {
-  initial_aggregator_script: Script;
-  initial_deposition: HexNumber;
   timestamp: HexNumber;
 }
 
@@ -104,10 +102,10 @@ export interface SignerConfig {}
 export interface RunResult {
   read_values: Record<Hash, Hash>;
   write_values: Record<Hash, Hash>;
-  return_data: ArrayBuffer;
+  return_data: HexString;
   account_count?: HexNumber;
-  new_scripts: Record<Hash, ArrayBuffer>;
-  new_data: Record<Hash, ArrayBuffer>;
+  new_scripts: Record<Hash, HexString>;
+  new_data: Record<Hash, HexString>;
 }
 
 export interface BranchNode {
@@ -150,14 +148,14 @@ export function buildGenesisBlock(
 export class ChainService {
   constructor(config: Config, genesisSetup: GenesisSetup);
   sync(syncParam: SyncParam): Promise<SyncEvent>;
-  produce_block(
+  produceBlock(
     produceBlockParam: ProduceBlockParam
   ): Promise<ProduceBlockResult>;
-  submitL2Transaction(l2Transaction: ArrayBuffer): Promise<RunResult>;
-  execute(l2Transaction: ArrayBuffer): Promise<RunResult>;
+  submitL2Transaction(l2Transaction: HexString): Promise<RunResult>;
+  execute(l2Transaction: HexString): Promise<RunResult>;
   getStorageAt(rawKey: Hash): Promise<Hash>;
-  tip(): ArrayBuffer; // gw_bytes::packed::L2Block
-  lastSynced(): ArrayBuffer; // gw_bytes::packed::HeaderInfo
+  tip(): HexString; // gw_bytes::packed::L2Block
+  lastSynced(): HexString; // gw_bytes::packed::HeaderInfo
   status(): Status;
   config(): Config;
 }

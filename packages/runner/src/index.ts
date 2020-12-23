@@ -2,26 +2,13 @@ import { Command } from "commander";
 import { argv } from "process";
 import { RPC } from "ckb-js-toolkit";
 import { Indexer } from "@ckb-lumos/sql-indexer";
-import { Config, ChainService, GenesisSetup } from "@ckb-godwoken/godwoken";
+import { Config, ChainService } from "@ckb-godwoken/godwoken";
 import { DeploymentConfig } from "@ckb-godwoken/base";
 import { initializeConfig } from "@ckb-lumos/config-manager";
-import { Runner } from "./runner";
+import { Runner, RunnerConfig } from "./runner";
 import { readFileSync } from "fs";
 import Knex from "knex";
 import deepFreeze from "deep-freeze-strict";
-
-interface GenesisStoreConfig {
-  type: "genesis";
-  genesis: GenesisSetup;
-}
-
-type StoreConfig = GenesisStoreConfig;
-
-interface RunnerConfig {
-  deploymentConfig: DeploymentConfig;
-  godwokenConfig: Config;
-  storeConfig: StoreConfig;
-}
 
 const program = new Command();
 program
@@ -55,16 +42,11 @@ if (runnerConfig.storeConfig.type !== "genesis") {
 
 const chainService = new ChainService(
   runnerConfig.godwokenConfig,
-  runnerConfig.storeConfig.genesis,
+  runnerConfig.storeConfig.genesis
 );
 
 (async () => {
-  const runner = new Runner(
-    rpc,
-    indexer,
-    chainService,
-    runnerConfig.deploymentConfig
-  );
+  const runner = new Runner(rpc, indexer, chainService, runnerConfig);
   await runner.start();
 })().catch((e) => {
   console.error(`Error occurs: ${e}`);

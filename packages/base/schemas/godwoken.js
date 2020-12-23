@@ -535,7 +535,7 @@
 
     validate(compatible = false) {
       const offsets = verifyAndExtractOffsets(this.view, 0, true);
-      for (let i = 0; i < len(offsets) - 1; i++) {
+      for (let i = 0; i < offsets.length - 1; i++) {
         new L2Transaction(this.view.buffer.slice(offsets[i], offsets[i + 1]), { validate: false }).validate();
       }
     }
@@ -1026,7 +1026,7 @@
 
     validate(compatible = false) {
       const offsets = verifyAndExtractOffsets(this.view, 0, true);
-      for (let i = 0; i < len(offsets) - 1; i++) {
+      for (let i = 0; i < offsets.length - 1; i++) {
         new KVPair(this.view.buffer.slice(offsets[i], offsets[i + 1]), { validate: false }).validate();
       }
     }
@@ -1793,7 +1793,7 @@
 
     validate(compatible = false) {
       const offsets = verifyAndExtractOffsets(this.view, 0, true);
-      for (let i = 0; i < len(offsets) - 1; i++) {
+      for (let i = 0; i < offsets.length - 1; i++) {
         new Script(this.view.buffer.slice(offsets[i], offsets[i + 1]), { validate: false }).validate();
       }
     }
@@ -2008,7 +2008,7 @@
     }
 
     toLittleEndianBigUint64() {
-      return this.view.getUint64(0, true);
+      return this.view.getBigUint64(0, true);
     }
 
     static size() {
@@ -2193,7 +2193,7 @@
 
     validate(compatible = false) {
       const offsets = verifyAndExtractOffsets(this.view, 0, true);
-      for (let i = 0; i < len(offsets) - 1; i++) {
+      for (let i = 0; i < offsets.length - 1; i++) {
         new Bytes(this.view.buffer.slice(offsets[i], offsets[i + 1]), { validate: false }).validate();
       }
     }
@@ -2332,7 +2332,7 @@
 
     validate(compatible = false) {
       const offsets = verifyAndExtractOffsets(this.view, 0, true);
-      for (let i = 0; i < len(offsets) - 1; i++) {
+      for (let i = 0; i < offsets.length - 1; i++) {
         new UncleBlock(this.view.buffer.slice(offsets[i], offsets[i + 1]), { validate: false }).validate();
       }
     }
@@ -2370,7 +2370,7 @@
 
     validate(compatible = false) {
       const offsets = verifyAndExtractOffsets(this.view, 0, true);
-      for (let i = 0; i < len(offsets) - 1; i++) {
+      for (let i = 0; i < offsets.length - 1; i++) {
         new Transaction(this.view.buffer.slice(offsets[i], offsets[i + 1]), { validate: false }).validate();
       }
     }
@@ -2525,7 +2525,7 @@
 
     validate(compatible = false) {
       const offsets = verifyAndExtractOffsets(this.view, 0, true);
-      for (let i = 0; i < len(offsets) - 1; i++) {
+      for (let i = 0; i < offsets.length - 1; i++) {
         new CellOutput(this.view.buffer.slice(offsets[i], offsets[i + 1]), { validate: false }).validate();
       }
     }

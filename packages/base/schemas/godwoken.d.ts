@@ -403,8 +403,8 @@ export class Uint64 {
   validate(compatible?: boolean): void;
   indexAt(i: number): number;
   raw(): ArrayBuffer;
-  toBigEndianUint64(): BigInt;
-  toLittleEndianUint64(): BigInt;
+  toBigEndianBigUint64(): bigint;
+  toLittleEndianBigUint64(): bigint;
   static size(): Number;
 }
 

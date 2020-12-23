@@ -2,6 +2,7 @@ import { RPC, Reader } from "ckb-js-toolkit";
 import {
   Cell,
   Header,
+  HexString,
   OutPoint,
   Transaction,
   denormalizers,
@@ -17,8 +18,8 @@ export async function scanDepositionCellsInCommittedL2Block(
   l2Block: Transaction,
   config: DeploymentConfig,
   rpc: RPC
-): Promise<Array<ArrayBuffer>> {
-  const results: Array<ArrayBuffer> = [];
+): Promise<Array<HexString>> {
+  const results: Array<HexString> = [];
   for (const input of l2Block.inputs) {
     const cell = await resolveOutPoint(input.previous_output, rpc);
     const entry = await tryExtractDepositionRequest(cell, config);
@@ -54,7 +55,7 @@ export interface DepositionEntry {
   lockArgs: schemas.DepositionLockArgs;
   request: types.DepositionRequest;
   // Packed binary of gw_types::packed::DepositionRequest type
-  packedRequest: ArrayBuffer;
+  packedRequest: HexString;
 }
 
 export async function tryExtractDepositionRequest(
@@ -106,9 +107,11 @@ export async function tryExtractDepositionRequest(
     script: DenormalizeScript(lockArgs.getLayer2Lock()),
     sudtScript,
   };
-  const packedRequest = schemas.SerializeDepositionRequest(
-    types.NormalizeDepositionRequest(request)
-  );
+  const packedRequest = new Reader(
+    schemas.SerializeDepositionRequest(
+      types.NormalizeDepositionRequest(request)
+    )
+  ).serializeJson();
   return {
     cell,
     lockArgs,
