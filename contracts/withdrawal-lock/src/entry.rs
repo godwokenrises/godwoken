@@ -127,7 +127,9 @@ pub fn main() -> Result<(), Error> {
                     }
 
                     // withdrawal lock is finalized, unlock for owner
-                    if search_lock_hash(&lock_args.owner_lock().hash(), Source::Input).is_none() {
+                    if search_lock_hash(&lock_args.owner_lock_hash().unpack(), Source::Input)
+                        .is_none()
+                    {
                         return Err(Error::OwnerCellNotFound);
                     }
                     Ok(())
@@ -147,16 +149,24 @@ pub fn main() -> Result<(), Error> {
                 _ => return Err(Error::InvalidArgs),
             };
             // make sure output >= input + sell_amount
-            let owner_lock_hash = lock_args.owner_lock().hash();
+            let payment_lock_hash = lock_args.payment_lock_hash().unpack();
             let sudt_script_hash: [u8; 32] = lock_args.sudt_script_hash().unpack();
             let token_type: TokenType = sudt_script_hash.into();
-            let input_amount = fetch_token_amount(&owner_lock_hash, &token_type, Source::Input)?;
-            let output_amount = fetch_token_amount(&owner_lock_hash, &token_type, Source::Output)?;
+            let input_token = fetch_token_amount(&payment_lock_hash, &token_type, Source::Input)?;
+            let output_token = fetch_token_amount(&payment_lock_hash, &token_type, Source::Output)?;
             let sell_amount: u128 = lock_args.sell_amount().unpack();
-            let expected_output_amount = input_amount
+            let sell_capacity: u64 = lock_args.sell_capacity().unpack();
+            let expected_output_amount = input_token
+                .total_token_amount
                 .checked_add(sell_amount)
                 .ok_or(Error::OverflowAmount)?;
-            if output_amount < expected_output_amount {
+            let expected_output_capacity = input_token
+                .total_capacity
+                .checked_add(sell_capacity as u128)
+                .ok_or(Error::OverflowAmount)?;
+            if output_token.total_token_amount < expected_output_amount
+                || output_token.total_capacity < expected_output_capacity
+            {
                 return Err(Error::InsufficientAmount);
             }
 

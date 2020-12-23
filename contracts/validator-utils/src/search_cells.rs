@@ -5,11 +5,12 @@ use ckb_std::{
     },
     syscalls::SysError,
 };
-use alloc::vec::Vec;
 use gw_types::{
     packed::{GlobalState, GlobalStateReader},
     prelude::*,
 };
+
+use crate::error::Error;
 
 pub fn search_rollup_cell(rollup_type_hash: &[u8; 32]) -> Option<usize> {
     QueryIter::new(load_cell_type_hash, Source::Input)
@@ -53,37 +54,46 @@ impl From<[u8; 32]> for TokenType {
     }
 }
 
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct CellTokenAmount {
+    pub total_token_amount: u128,
+    pub total_capacity: u128,
+}
+
 pub fn fetch_token_amount(
     owner_lock_hash: &[u8; 32],
     token_type: &TokenType,
     source: Source,
-) -> Result<u128, SysError> {
-    let amount = QueryIter::new(load_cell_lock_hash, source)
+) -> Result<CellTokenAmount, Error> {
+    let mut total_token_amount = 0u128;
+    let mut total_capacity = 0u128;
+    for (i, lock_hash) in QueryIter::new(load_cell_lock_hash, source)
         .into_iter()
         .enumerate()
-        .filter_map(|(i, lock_hash)| {
-            if &lock_hash != owner_lock_hash {
-                return None;
+    {
+        if &lock_hash != owner_lock_hash {
+            continue;
+        }
+
+        let capacity = load_cell_capacity(i, source)?;
+        total_capacity = total_capacity
+            .checked_add(capacity as u128)
+            .ok_or(Error::OverflowAmount)?;
+        let amount = match load_cell_type_hash(i, source)? {
+            Some(type_hash) if &TokenType::SUDT(type_hash) == token_type => {
+                let data = load_cell_data(i, source)?;
+                let mut buf = [0u8; 16];
+                buf.copy_from_slice(&data[..16]);
+                u128::from_le_bytes(buf)
             }
-            match load_cell_type_hash(i, source) {
-                Ok(Some(type_hash)) if &TokenType::SUDT(type_hash) == token_type => {
-                    Some(load_cell_data(i, source).map(|data| {
-                        let mut buf = [0u8; 16];
-                        buf.copy_from_slice(&data[..16]);
-                        u128::from_le_bytes(buf)
-                    }))
-                }
-                Ok(None) if &TokenType::CKB == token_type => {
-                    Some(load_cell_capacity(i, source).map(|capacity| capacity as u128))
-                }
-                Err(err) => {
-                    return Some(Err(err));
-                }
-                Ok(_) => None,
-            }
-        })
-        .collect::<Result<Vec<u128>, SysError>>()?
-        .into_iter()
-        .sum::<u128>();
-    Ok(amount)
+            _ => 0,
+        };
+        total_token_amount = total_token_amount
+            .checked_add(amount)
+            .ok_or(Error::OverflowAmount)?;
+    }
+    Ok(CellTokenAmount {
+        total_token_amount,
+        total_capacity,
+    })
 }

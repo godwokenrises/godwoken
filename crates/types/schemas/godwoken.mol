@@ -86,10 +86,16 @@ struct RawWithdrawalRequest {
     capacity: Uint64,
     // SUDT amount
     amount: Uint128,
-    // layer1 cell to receive the withdraw
-    lock_hash: Byte32,
     sudt_script_hash: Byte32,
+    // layer2 account_script_hash
     account_script_hash: Byte32,
+    // buyer can pay sell_amount and sell_capacity to unlock
+    sell_amount: Uint128,
+    sell_capacity: Uint64,
+    // layer1 lock to withdraw after challenge period
+    owner_lock_hash: Byte32,
+    // layer1 lock to receive the payment, must exists on the chain
+    payment_lock_hash: Byte32,
 }
 
 vector WithdrawalRequestVec <WithdrawalRequest>;
@@ -155,8 +161,11 @@ table WithdrawalLockArgs {
     // buyer can pay sell_amount token to unlock
     sudt_script_hash: Byte32,
     sell_amount: Uint128,
-    // layer2 lock
-    owner_lock: Script,
+    sell_capacity: Uint64,
+    // layer1 lock to withdraw after challenge period
+    owner_lock_hash: Byte32,
+    // layer1 lock to receive the payment, must exists on the chain
+    payment_lock_hash: Byte32,
 }
 
 union UnlockWithdrawal {
