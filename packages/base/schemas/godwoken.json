@@ -258,15 +258,27 @@
           "type": "Uint128"
         },
         {
-          "name": "lock_hash",
-          "type": "Byte32"
-        },
-        {
           "name": "sudt_script_hash",
           "type": "Byte32"
         },
         {
           "name": "account_script_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "sell_amount",
+          "type": "Uint128"
+        },
+        {
+          "name": "sell_capacity",
+          "type": "Uint64"
+        },
+        {
+          "name": "owner_lock_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "payment_lock_hash",
           "type": "Byte32"
         }
       ]
@@ -347,40 +359,6 @@
     },
     {
       "type": "table",
-      "name": "VerificationContext",
-      "fields": [
-        {
-          "name": "block_info",
-          "type": "BlockInfo"
-        },
-        {
-          "name": "transaction",
-          "type": "RawL2Transaction"
-        },
-        {
-          "name": "inputs",
-          "type": "KVPairVec"
-        },
-        {
-          "name": "prev_account_state",
-          "type": "Byte32"
-        },
-        {
-          "name": "post_account_state",
-          "type": "Byte32"
-        },
-        {
-          "name": "return_data_hash",
-          "type": "Byte32"
-        },
-        {
-          "name": "proof",
-          "type": "Bytes"
-        }
-      ]
-    },
-    {
-      "type": "table",
       "name": "DepositionLockArgs",
       "fields": [
         {
@@ -398,12 +376,12 @@
       ]
     },
     {
-      "type": "struct",
+      "type": "table",
       "name": "CustodianLockArgs",
       "fields": [
         {
-          "name": "owner_lock_hash",
-          "type": "Byte32"
+          "name": "deposition_lock_args",
+          "type": "DepositionLockArgs"
         },
         {
           "name": "deposition_block_hash",
@@ -417,15 +395,29 @@
     },
     {
       "type": "table",
+      "name": "UnlockCustodianViaRevert",
+      "fields": [
+        {
+          "name": "block_proof",
+          "type": "Bytes"
+        },
+        {
+          "name": "deposition_lock_hash",
+          "type": "Byte32"
+        }
+      ]
+    },
+    {
+      "type": "struct",
       "name": "WithdrawalLockArgs",
       "fields": [
         {
-          "name": "custodian_lock_args",
-          "type": "CustodianLockArgs"
+          "name": "deposition_block_hash",
+          "type": "Byte32"
         },
         {
-          "name": "custodian_lock_hash",
-          "type": "Byte32"
+          "name": "deposition_block_number",
+          "type": "Uint64"
         },
         {
           "name": "withdrawal_block_hash",
@@ -444,8 +436,16 @@
           "type": "Uint128"
         },
         {
-          "name": "owner_lock",
-          "type": "Script"
+          "name": "sell_capacity",
+          "type": "Uint64"
+        },
+        {
+          "name": "owner_lock_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "payment_lock_hash",
+          "type": "Byte32"
         }
       ]
     },
@@ -475,6 +475,10 @@
         {
           "name": "block_proof",
           "type": "Bytes"
+        },
+        {
+          "name": "custodian_lock_hash",
+          "type": "Byte32"
         }
       ]
     },
@@ -578,16 +582,21 @@
       ]
     },
     {
+      "type": "dynvec",
+      "name": "ScriptVec",
+      "item": "Script"
+    },
+    {
       "type": "table",
       "name": "CancelChallenge",
       "fields": [
         {
-          "name": "l2block",
-          "type": "L2Block"
+          "name": "raw_l2block",
+          "type": "RawL2Block"
         },
         {
-          "name": "block_proof",
-          "type": "Bytes"
+          "name": "l2tx",
+          "type": "L2Transaction"
         },
         {
           "name": "kv_state",
@@ -595,6 +604,22 @@
         },
         {
           "name": "kv_state_proof",
+          "type": "Bytes"
+        },
+        {
+          "name": "scripts",
+          "type": "ScriptVec"
+        },
+        {
+          "name": "return_data_hash",
+          "type": "Byte32"
+        },
+        {
+          "name": "tx_proof",
+          "type": "Bytes"
+        },
+        {
+          "name": "block_proof",
           "type": "Bytes"
         }
       ]

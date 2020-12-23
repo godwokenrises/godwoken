@@ -162,9 +162,12 @@ export class RawWithdrawalRequest {
   getNonce(): Uint32;
   getCapacity(): Uint64;
   getAmount(): Uint128;
-  getLockHash(): Byte32;
   getSudtScriptHash(): Byte32;
   getAccountScriptHash(): Byte32;
+  getSellAmount(): Uint128;
+  getSellCapacity(): Uint64;
+  getOwnerLockHash(): Byte32;
+  getPaymentLockHash(): Byte32;
 }
 
 export function SerializeWithdrawalRequestVec(value: Array<object>): ArrayBuffer;
@@ -219,19 +222,6 @@ export class BlockInfo {
   getTimestamp(): Uint64;
 }
 
-export function SerializeVerificationContext(value: object): ArrayBuffer;
-export class VerificationContext {
-  constructor(reader: CanCastToArrayBuffer, options?: CreateOptions);
-  validate(compatible?: boolean): void;
-  getBlockInfo(): BlockInfo;
-  getTransaction(): RawL2Transaction;
-  getInputs(): KVPairVec;
-  getPrevAccountState(): Byte32;
-  getPostAccountState(): Byte32;
-  getReturnDataHash(): Byte32;
-  getProof(): Bytes;
-}
-
 export function SerializeDepositionLockArgs(value: object): ArrayBuffer;
 export class DepositionLockArgs {
   constructor(reader: CanCastToArrayBuffer, options?: CreateOptions);
@@ -245,23 +235,33 @@ export function SerializeCustodianLockArgs(value: object): ArrayBuffer;
 export class CustodianLockArgs {
   constructor(reader: CanCastToArrayBuffer, options?: CreateOptions);
   validate(compatible?: boolean): void;
-  static size(): Number;
-  getOwnerLockHash(): Byte32;
+  getDepositionLockArgs(): DepositionLockArgs;
   getDepositionBlockHash(): Byte32;
   getDepositionBlockNumber(): Uint64;
+}
+
+export function SerializeUnlockCustodianViaRevert(value: object): ArrayBuffer;
+export class UnlockCustodianViaRevert {
+  constructor(reader: CanCastToArrayBuffer, options?: CreateOptions);
+  validate(compatible?: boolean): void;
+  getBlockProof(): Bytes;
+  getDepositionLockHash(): Byte32;
 }
 
 export function SerializeWithdrawalLockArgs(value: object): ArrayBuffer;
 export class WithdrawalLockArgs {
   constructor(reader: CanCastToArrayBuffer, options?: CreateOptions);
   validate(compatible?: boolean): void;
-  getCustodianLockArgs(): CustodianLockArgs;
-  getCustodianLockHash(): Byte32;
+  static size(): Number;
+  getDepositionBlockHash(): Byte32;
+  getDepositionBlockNumber(): Uint64;
   getWithdrawalBlockHash(): Byte32;
   getWithdrawalBlockNumber(): Uint64;
   getSudtScriptHash(): Byte32;
   getSellAmount(): Uint128;
-  getOwnerLock(): Script;
+  getSellCapacity(): Uint64;
+  getOwnerLockHash(): Byte32;
+  getPaymentLockHash(): Byte32;
 }
 
 export function SerializeUnlockWithdrawal(value: UnionType): ArrayBuffer;
@@ -284,6 +284,7 @@ export class UnlockWithdrawalViaRevert {
   constructor(reader: CanCastToArrayBuffer, options?: CreateOptions);
   validate(compatible?: boolean): void;
   getBlockProof(): Bytes;
+  getCustodianLockHash(): Byte32;
 }
 
 export function SerializeUnlockWithdrawalViaTrade(value: object): ArrayBuffer;
@@ -354,14 +355,26 @@ export class StartChallenge {
   getTxIndex(): Uint32;
 }
 
+export function SerializeScriptVec(value: Array<object>): ArrayBuffer;
+export class ScriptVec {
+  constructor(reader: CanCastToArrayBuffer, options?: CreateOptions);
+  validate(compatible?: boolean): void;
+  indexAt(i: number): Script;
+  length(): number;
+}
+
 export function SerializeCancelChallenge(value: object): ArrayBuffer;
 export class CancelChallenge {
   constructor(reader: CanCastToArrayBuffer, options?: CreateOptions);
   validate(compatible?: boolean): void;
-  getL2Block(): L2Block;
-  getBlockProof(): Bytes;
+  getRawL2Block(): RawL2Block;
+  getL2Tx(): L2Transaction;
   getKvState(): KVPairVec;
   getKvStateProof(): Bytes;
+  getScripts(): ScriptVec;
+  getReturnDataHash(): Byte32;
+  getTxProof(): Bytes;
+  getBlockProof(): Bytes;
 }
 
 export function SerializeHeaderInfo(value: object): ArrayBuffer;
