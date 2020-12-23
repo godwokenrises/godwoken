@@ -599,30 +599,41 @@ export class Runner {
     const validCustodianCells = await this._queryValidCustodianCells(toBlock);
     const deposition_block_hash = validCustodianCells[0].block_hash!;
     const deposition_block_number = validCustodianCells[0].block_number!;
-    let totalWithdrawalCapacity = 0n;
-    let withdrawalAssets: Map<HexString, BigInt> = new Map();
+    let ckbWithdrawalCapacity = 0n;
+    let sudtWithdrawalAssets: Map<HexString, BigInt> = new Map();
     // build withdrawal cells
     for (let i = 0; i < withdrawalRequestVec.length(); i++) {
       const rawWithdrawalRequest = withdrawalRequestVec.indexAt(i).getRaw();
       const withdrawalCapacity = new Reader(
         rawWithdrawalRequest.getAmount().raw()
       ).serializeJson();
+      // Record withdrawal assets info for inject input cells later
+      ckbWithdrawalCapacity =
+        ckbWithdrawalCapacity + BigInt(withdrawalCapacity);
       const sudtScriptHash = new Reader(
         rawWithdrawalRequest.getSudtScriptHash().raw()
       ).serializeJson();
-      const sudtAmount = new Reader(
-        rawWithdrawalRequest.getAmount().raw()
-      ).serializeJson();
-      // TODO build sudt type script
-      const withdrawalType = undefined;
-      // Record withdrawal assets info for inject input cells later
-      totalWithdrawalCapacity += BigInt(withdrawalCapacity);
-      if (withdrawalAssets.has(sudtScriptHash)) {
-        const updatedAmount =
-          BigInt(withdrawalAssets.get(sudtScriptHash)) + BigInt(sudtAmount);
-        withdrawalAssets.set(sudtScriptHash, updatedAmount);
-      } else {
-        withdrawalAssets.set(sudtScriptHash, BigInt(sudtAmount));
+      let withdrawalType: Script | undefined = undefined;
+      let outputData = "0x";
+      // TODO update the condition for non sudt withdrawal request later
+      if (!sudtScriptHash) {
+        const sudtAmount = new Reader(
+          rawWithdrawalRequest.getAmount().raw()
+        ).serializeJson();
+        withdrawalType = {
+          code_hash: this._deploymentConfig().sudt_type.code_hash,
+          hash_type: this._deploymentConfig().sudt_type.hash_type,
+          args: sudtScriptHash,
+        };
+        outputData = utils.toBigUInt128LE(BigInt(sudtAmount));
+        if (sudtWithdrawalAssets.has(sudtScriptHash)) {
+          const updatedAmount =
+            BigInt(sudtWithdrawalAssets.get(sudtScriptHash)) +
+            BigInt(sudtAmount);
+          sudtWithdrawalAssets.set(sudtScriptHash, updatedAmount);
+        } else {
+          sudtWithdrawalAssets.set(sudtScriptHash, BigInt(sudtAmount));
+        }
       }
       // build withdrawalLockArgs
       const withdrawalLockArgs = this._buildWithdrawalLockArgs(
@@ -644,7 +655,7 @@ export class Runner {
         0
       );
       array.set(new Uint8Array(packedWithdrawalLockArgs), 32);
-      const withdrawalLock = {
+      const withdrawalLock: Script = {
         code_hash: this._deploymentConfig().withdrawal_lock.code_hash,
         hash_type: this._deploymentConfig().hash_type,
         args: new Reader(buffer).serializeJson(),
@@ -657,8 +668,14 @@ export class Runner {
       txSkeleton = txSkeleton.update("outputs", (outputs) => {
         return outputs.push({
           cell_output: withdrawalCell,
-          data: "0x",
+          data: outputData,
         });
+      });
+    }
+    // add sudt type dep
+    if (sudtWithdrawalAssets.size > 0) {
+      txSkeleton = txSkeleton.update("cellDeps", (cellDeps) => {
+        return cellDeps.push(this._deploymentConfig().sudt_type_dep);
       });
     }
     // TODO add custodian input cells
