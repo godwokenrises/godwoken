@@ -227,15 +227,6 @@ impl Chain {
                             // bad block is in challenge, just wait.
                             return Ok(SyncEvent::WaitChallenge);
                         }
-                        let current_bad_block_number: u64 =
-                            current_bad_block.block_number().unpack();
-                        let challenge_block_number: u64 = context.block_number().unpack();
-                        if challenge_block_number >= current_bad_block_number {
-                            // Because of the block is later than a bad block we found we can't determine wether the block is bad.
-                            // So we just wait for the end and send a new challenge.
-                            return Ok(SyncEvent::WaitChallenge);
-                        }
-
                         return Ok(SyncEvent::WaitChallenge);
                     }
                     // now, either we haven't found a bad block or the challenge is challenge a validate block

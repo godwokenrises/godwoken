@@ -144,7 +144,6 @@ impl Generator {
             // build challenge context
             let challenge_context = StartChallenge::new_builder()
                 .block_hash(block_hash.pack())
-                .block_number(block_info.number())
                 .tx_index((tx_index as u32).pack())
                 .build();
             // check nonce

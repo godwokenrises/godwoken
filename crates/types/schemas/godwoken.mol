@@ -232,7 +232,6 @@ struct SUDTTransfer {
 // start a challenge
 struct StartChallenge {
     block_hash: Byte32, // hash of challenged block
-    block_number: Uint64, // number of challenged block
     tx_index: Uint32, // challenge tx
 }
 
@@ -241,14 +240,22 @@ vector ScriptVec<Script>;
 table CancelChallenge {
     raw_l2block: RawL2Block,
     l2tx: L2Transaction,
+    tx_proof: Bytes,
     kv_state: KVPairVec,
     kv_state_proof: Bytes,
     scripts: ScriptVec,
     return_data_hash: Byte32,
-    tx_proof: Bytes,
-    block_proof: Bytes,
+    account_count: Uint32,
 }
 // --- end of challenge ---
+
+// --- unlock account ---
+struct UnlockAccount {
+    message: Byte32,
+    signature: Signature,
+}
+// --- end of unlock account ---
+
 // header info
 struct HeaderInfo {
     number: Uint64,

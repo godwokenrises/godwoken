@@ -74,7 +74,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
         let compacted_post_account_root = {
             let account_root = self.state.calculate_root()?;
             let account_count = self.state.get_account_count()?;
-            calculate_compacted_account_root(&account_root.as_slice(), account_count)
+            calculate_compacted_account_root(&account_root.into(), account_count)
         };
         self.queue.push(TxReceipt {
             tx,

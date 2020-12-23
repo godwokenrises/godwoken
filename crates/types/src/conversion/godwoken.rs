@@ -38,6 +38,8 @@ impl Pack<packed::KVPair> for ([u8; 32], [u8; 32]) {
     }
 }
 
+impl_conversion_for_entity_unpack!(([u8; 32], [u8; 32]), KVPair);
+
 impl<'r> Unpack<([u8; 32], [u8; 32])> for packed::KVPairReader<'r> {
     fn unpack(&self) -> ([u8; 32], [u8; 32]) {
         (self.k().unpack(), self.v().unpack())

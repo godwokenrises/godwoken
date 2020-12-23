@@ -6,7 +6,7 @@ use crate::{
 };
 
 // Calculate compacted account root
-pub fn calculate_compacted_account_root(root: &[u8], count: u32) -> [u8; 32] {
+pub fn calculate_compacted_account_root(root: &[u8; 32], count: u32) -> [u8; 32] {
     let mut buf = [0u8; 32];
     let mut hasher = new_blake2b();
     hasher.update(root);
