@@ -398,13 +398,17 @@ impl Chain {
             })
             .collect::<Vec<_>>()
             .pack();
-        let proof = self
-            .store
-            .account_smt()
-            .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
-            .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
-            .compile(kv_state)?
-            .0;
+        let proof = if kv_state.is_empty() {
+            // nothing need to prove
+            Vec::new()
+        } else {
+            self.store
+                .account_smt()
+                .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
+                .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
+                .compile(kv_state)?
+                .0
+        };
         let txs: Vec<_> = tx_pool_pkg.tx_recipts.into_iter().map(|tx| tx.tx).collect();
         let block_proof = self
             .store
