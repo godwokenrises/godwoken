@@ -11,6 +11,8 @@ import Knex from "knex";
 import deepFreeze from "deep-freeze-strict";
 
 const program = new Command();
+// TODO: private key should come from an environment variable or config file,
+// cli arguments is not secure enough.
 program
   .requiredOption("-c, --config-file <configFile>", "runner config file")
   .requiredOption(
@@ -46,7 +48,13 @@ const chainService = new ChainService(
 );
 
 (async () => {
-  const runner = new Runner(rpc, indexer, chainService, runnerConfig);
+  const runner = new Runner(
+    rpc,
+    indexer,
+    chainService,
+    runnerConfig,
+    program.privateKey
+  );
   await runner.start();
 })().catch((e) => {
   console.error(`Error occurs: ${e}`);

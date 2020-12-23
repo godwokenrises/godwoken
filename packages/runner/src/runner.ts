@@ -13,6 +13,13 @@ import {
   QueryOptions,
   Indexer,
 } from "@ckb-lumos/base";
+import { common } from "@ckb-lumos/common-scripts";
+import { getConfig } from "@ckb-lumos/config-manager";
+import {
+  TransactionSkeleton,
+  sealTransaction,
+  scriptToAddress,
+} from "@ckb-lumos/helpers";
 import {
   Config,
   ChainService,
@@ -25,6 +32,7 @@ import {
   scanDepositionCellsInCommittedL2Block,
   tryExtractDepositionRequest,
 } from "./utils";
+import * as secp256k1 from "secp256k1";
 
 export interface GenesisStoreConfig {
   type: "genesis";
@@ -76,6 +84,7 @@ export class Runner {
   cancelListener: () => void;
   logger: (level: Level, message: string) => void;
   rollupTypeHash: Hash;
+  privateKey: HexString;
 
   // TODO: change to PoA
   lastProduceBlockTime: bigint;
@@ -85,6 +94,7 @@ export class Runner {
     indexer: Indexer,
     chainService: ChainService,
     config: RunnerConfig,
+    privateKey: HexString,
     { logger = defaultLogger } = {}
   ) {
     this.rpc = rpc;
@@ -94,6 +104,7 @@ export class Runner {
     this.lastProduceBlockTime = 0n;
     this.cancelListener = () => {};
     this.logger = logger;
+    this.privateKey = privateKey;
     this.rollupTypeHash = utils
       .ckbHash(
         core.SerializeScript(
@@ -108,6 +119,24 @@ export class Runner {
       new Reader(chainService.lastSynced()).toArrayBuffer()
     );
     this.lastBlockNumber = lastSynced.getNumber().toLittleEndianBigUint64();
+  }
+
+  _ckbAddress(): string {
+    const privateKeyBuffer = new Reader(this.privateKey).toArrayBuffer();
+    const publicKeyArray = secp256k1.publicKeyCreate(
+      new Uint8Array(privateKeyBuffer)
+    );
+    const publicKeyHash = utils
+      .ckbHash(publicKeyArray.buffer)
+      .serializeJson()
+      .substr(0, 42);
+    const scriptConfig = getConfig().SCRIPTS.SECP256K1_BLAKE160!;
+    const script = {
+      code_hash: scriptConfig.CODE_HASH,
+      hash_type: scriptConfig.HASH_TYPE,
+      args: publicKeyHash,
+    };
+    return scriptToAddress(script);
   }
 
   _deploymentConfig(): DeploymentConfig {
@@ -305,7 +334,7 @@ export class Runner {
     const l2BlockHash = utils.ckbHash(data.buffer).serializeJson();
     const l2BlockNumber =
       "0x" + rawL2Block.getNumber().toLittleEndianBigUint64().toString(16);
-    const custodianCells = depositionEntries.map(({ cell, lockArgs }) => {
+    return depositionEntries.map(({ cell, lockArgs }) => {
       const custodianLockArgs = {
         owner_lock_hash: new Reader(
           lockArgs.getOwnerLockHash().raw()
@@ -329,19 +358,14 @@ export class Runner {
         args: new Reader(buffer).serializeJson(),
       };
       return {
-        capacity: cell.cell_output.capacity,
-        lock,
-        type: cell.cell_output.type,
+        cell_output: {
+          capacity: cell.cell_output.capacity,
+          lock,
+          type: cell.cell_output.type,
+        },
+        data: cell.data,
       };
     });
-    const custodianData: HexString[] = depositionEntries.map(
-      ({ cell }) => cell.data
-    );
-
-    return {
-      cells: custodianCells,
-      data: custodianData,
-    };
   }
 
   _newBlockReceived(medianTimeHex: HexNumber) {
@@ -361,12 +385,6 @@ export class Runner {
         const depositionRequests = depositionEntries.map(
           ({ packedRequest }) => packedRequest
         );
-        const depositionInputs = depositionEntries.map(({ cell }) => {
-          return {
-            previous_output: cell.out_point!,
-            since: "0x0",
-          };
-        });
         const param = {
           aggregator_id: "0x0",
           deposition_requests: depositionRequests,
@@ -375,41 +393,75 @@ export class Runner {
           block: packedl2Block,
           global_state,
         } = await this.chainService.produceBlock(param);
-
-        const {
-          cells: custodianCells,
-          data: custodianData,
-        } = this._generateCustodianCells(packedl2Block, depositionEntries);
         const cell = await this._queryLiveRollupCell();
-        const cellDeps = [
-          this._deploymentConfig().state_validator_lock_dep,
-          this._deploymentConfig().state_validator_type_dep,
-        ];
-        if (depositionEntries.length > 0) {
-          cellDeps.push(this._deploymentConfig().deposition_lock_dep);
+
+        let txSkeleton = TransactionSkeleton({ cellProvider: this.indexer });
+        txSkeleton = txSkeleton.update("cellDeps", (cellDeps) => {
+          cellDeps = cellDeps
+            .push(this._deploymentConfig().state_validator_lock_dep)
+            .push(this._deploymentConfig().state_validator_type_dep);
+          if (depositionEntries.length > 0) {
+            cellDeps = cellDeps.push(
+              this._deploymentConfig().deposition_lock_dep
+            );
+          }
+          return cellDeps;
+        });
+        // TODO: PoA might need to alter since
+        txSkeleton = txSkeleton.update("inputs", (inputs) => inputs.push(cell));
+        txSkeleton = txSkeleton.update("witnesses", (witnesses) => {
+          return witnesses.push(new Reader(packedl2Block).serializeJson());
+        });
+        txSkeleton = txSkeleton.update("outputs", (outputs) => {
+          return outputs.push({
+            cell_output: cell.cell_output,
+            data: new Reader(global_state).serializeJson(),
+          });
+        });
+        for (const { cell } of depositionEntries) {
+          txSkeleton = txSkeleton.update("inputs", (inputs) =>
+            inputs.push(cell)
+          );
+          // Placeholders so we can make sure cells used to pay fees have signature
+          // at correct place.
+          txSkeleton = txSkeleton.update("witnesses", (witnesses) =>
+            witnesses.push("0x")
+          );
         }
-        // TODO: transaction fees
+        for (const cell of this._generateCustodianCells(
+          packedl2Block,
+          depositionEntries
+        )) {
+          txSkeleton = txSkeleton.update("outputs", (outputs) =>
+            outputs.push(cell)
+          );
+        }
         // TODO: stake cell
-        const tx: Transaction = {
-          version: "0x0",
-          // TODO: fill in cell deps
-          cell_deps: cellDeps,
-          header_deps: [],
-          // TODO: fill in withdrawed custodian cells
-          inputs: [
-            {
-              previous_output: cell.out_point!,
-              // TODO: PoA might need this
-              since: "0x0",
-            },
-          ].concat(depositionInputs),
-          // TODO: fill in created withdraw cells
-          outputs: [cell.cell_output].concat(custodianCells),
-          outputs_data: [new Reader(global_state).serializeJson()].concat(
-            custodianData
-          ),
-          witnesses: [new Reader(packedl2Block).serializeJson()],
-        };
+        // TODO: fill in withdrawed custodian cells
+        // TODO: fill in created withdraw cells
+
+        // TODO: transaction fees
+        txSkeleton = await common.payFeeByFeeRate(
+          txSkeleton,
+          [this._ckbAddress()],
+          BigInt(1000)
+        );
+        txSkeleton = common.prepareSigningEntries(txSkeleton);
+        const signatures = [];
+        for (const { message } of txSkeleton.get("signingEntries").toArray()) {
+          const signObject = secp256k1.ecdsaSign(
+            new Uint8Array(new Reader(message).toArrayBuffer()),
+            new Uint8Array(new Reader(this.privateKey).toArrayBuffer())
+          );
+          const signatureBuffer = new ArrayBuffer(65);
+          const signatureArray = new Uint8Array(signatureBuffer);
+          signatureArray.set(signObject.signature, 0);
+          signatureArray.set([signObject.recid], 64);
+          const signature = new Reader(signatureBuffer).serializeJson();
+          signatures.push(signature);
+        }
+        const tx = sealTransaction(txSkeleton, signatures);
+
         const hash = await this.rpc.send_transaction(tx);
         this.logger("info", `Submitted l2 block in ${hash}`);
         this.lastProduceBlockTime = medianTime;
