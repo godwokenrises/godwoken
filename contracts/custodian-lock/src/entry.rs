@@ -5,9 +5,12 @@ use alloc::vec;
 use gw_common::{
     h256_ext::H256Ext,
     smt::{Blake2bHasher, CompiledMerkleProof},
-    H256,
+    DEPOSITION_LOCK_CODE_HASH, H256,
 };
-use validator_utils::search_cells::{search_lock_hash, search_rollup_state};
+use validator_utils::{
+    ckb_std::high_level::load_cell_lock,
+    search_cells::{search_lock_hash, search_rollup_state},
+};
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
@@ -16,7 +19,10 @@ use crate::ckb_std::{
     high_level::load_script, high_level::load_witness_args,
 };
 use gw_types::{
-    packed::{CustodianLockArgs, CustodianLockArgsReader},
+    packed::{
+        CustodianLockArgs, CustodianLockArgsReader, UnlockCustodianViaRevert,
+        UnlockCustodianViaRevertReader,
+    },
     prelude::*,
 };
 
@@ -58,30 +64,38 @@ pub fn main() -> Result<(), Error> {
         return Ok(());
     }
 
-    // otherwise, the user try to proof the deposition is reverted.
-
-    // owner cell must exists
-    if search_lock_hash(&lock_args.owner_lock_hash().unpack(), Source::Input).is_none() {
-        return Err(Error::OwnerCellNotFound);
-    }
+    // otherwise, the submitter try to proof the deposition is reverted.
 
     // read the proof
     let witness_args = load_witness_args(0, Source::GroupInput)?;
-    let unlock_args: Bytes = witness_args
+    let data: Bytes = witness_args
         .lock()
         .to_opt()
         .ok_or(Error::ProofNotFound)?
         .unpack();
 
-    if unlock_args.is_empty() {
-        return Err(Error::ProofNotFound);
+    let unlock_args = match UnlockCustodianViaRevertReader::verify(&data, false) {
+        Ok(_) => UnlockCustodianViaRevert::new_unchecked(data),
+        Err(_) => return Err(Error::ProofNotFound),
+    };
+
+    // the reverted deposition cell must exists
+    let deposition_cell_index =
+        search_lock_hash(&unlock_args.deposition_lock_hash().unpack(), Source::Output)
+            .ok_or(Error::InvalidOutput)?;
+    let deposition_lock = load_cell_lock(deposition_cell_index, Source::Output)?;
+    let deposition_lock_code_hash = deposition_lock.code_hash().unpack();
+    if deposition_lock_code_hash != DEPOSITION_LOCK_CODE_HASH
+        || deposition_lock.args().as_slice() != lock_args.deposition_lock_args().as_slice()
+    {
+        return Err(Error::InvalidOutput);
     }
 
     // check reverted_blocks merkle proof
     let reverted_block_root: [u8; 32] = global_state.reverted_block_root().unpack();
     let block_hash = lock_args.deposition_block_hash().unpack();
 
-    let merkle_proof = CompiledMerkleProof(unlock_args.into());
+    let merkle_proof = CompiledMerkleProof(unlock_args.block_proof().unpack());
     if merkle_proof
         .verify::<Blake2bHasher>(
             &reverted_block_root.into(),

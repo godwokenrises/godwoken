@@ -7,11 +7,15 @@ use alloc::vec;
 use gw_common::{
     h256_ext::H256Ext,
     smt::{Blake2bHasher, CompiledMerkleProof},
-    H256,
+    CUSTODIAN_LOCK_CODE_HASH, H256,
 };
-use gw_types::packed::{UnlockWithdrawalUnion, WithdrawalLockArgs, WithdrawalLockArgsReader};
-use validator_utils::search_cells::{
-    fetch_token_amount, search_lock_hash, search_rollup_state, TokenType,
+use gw_types::packed::{
+    CustodianLockArgs, CustodianLockArgsReader, UnlockWithdrawalUnion, WithdrawalLockArgs,
+    WithdrawalLockArgsReader,
+};
+use validator_utils::{
+    ckb_std::high_level::load_cell_lock,
+    search_cells::{fetch_token_amount, search_lock_hash, search_rollup_state, TokenType},
 };
 
 // Import CKB syscalls and structures
@@ -76,7 +80,7 @@ pub fn main() -> Result<(), Error> {
             let block_hash = lock_args.withdrawal_block_hash().unpack();
 
             match unlock_args.to_enum() {
-                UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(unlock_args) => {
+                UnlockWithdrawalUnion::UnlockWithdrawalViaRevert(unlock_args) => {
                     // we can revert withdrawal at anytime even it is 'finalized'
                     let merkle_proof = CompiledMerkleProof(unlock_args.block_proof().unpack());
 
@@ -90,8 +94,7 @@ pub fn main() -> Result<(), Error> {
                     {
                         return Err(Error::MerkleProof);
                     }
-                    let custodian_lock_hash: [u8; 32] = lock_args.custodian_lock_hash().unpack();
-
+                    let custodian_lock_hash: [u8; 32] = unlock_args.custodian_lock_hash().unpack();
                     // check there are a reverted custodian lock in the output
                     let custodian_cell_index =
                         match search_lock_hash(&custodian_lock_hash, Source::Output) {
@@ -99,11 +102,35 @@ pub fn main() -> Result<(), Error> {
                             None => return Err(Error::InvalidOutput),
                         };
 
+                    // check reverted custodian deposition info.
+                    let custodian_lock = load_cell_lock(custodian_cell_index, Source::Output)?;
+                    let custodian_lock_args = {
+                        let args: Bytes = custodian_lock.args().unpack();
+                        match CustodianLockArgsReader::verify(&args, false) {
+                            Ok(_) => CustodianLockArgs::new_unchecked(args),
+                            Err(_) => return Err(Error::InvalidOutput),
+                        }
+                    };
+                    let custodian_code_hash: [u8; 32] = custodian_lock.code_hash().unpack();
+                    let custodian_deposition_block_hash: [u8; 32] =
+                        custodian_lock_args.deposition_block_hash().unpack();
+                    let custodian_deposition_block_number: u64 =
+                        custodian_lock_args.deposition_block_number().unpack();
+                    let deposition_block_hash: [u8; 32] =
+                        lock_args.deposition_block_hash().unpack();
+                    let deposition_block_number: u64 = lock_args.deposition_block_number().unpack();
+                    if custodian_code_hash != CUSTODIAN_LOCK_CODE_HASH
+                        || custodian_deposition_block_hash != deposition_block_hash
+                        || custodian_deposition_block_number != deposition_block_number
+                    {
+                        return Err(Error::InvalidOutput);
+                    }
+
                     // check capacity, data_hash, type_hash
                     check_output_cell_has_same_content(custodian_cell_index)?;
                     Ok(())
                 }
-                UnlockWithdrawalUnion::UnlockWithdrawalViaRevert(unlock_args) => {
+                UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(unlock_args) => {
                     let merkle_proof = CompiledMerkleProof(unlock_args.block_proof().unpack());
                     // check finality
                     let withdrawal_block_number: u64 = lock_args.withdrawal_block_number().unpack();

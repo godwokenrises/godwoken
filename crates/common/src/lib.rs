@@ -15,7 +15,8 @@ pub use sparse_merkle_tree;
 
 /// Common constants
 
-pub const DEPOSITION_CODE_HASH: [u8; 32] = [0u8; 32];
+pub const DEPOSITION_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
+pub const CUSTODIAN_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const SUDT_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const CKB_SUDT_SCRIPT_HASH: [u8; 32] = [0u8; 32];
 pub const ACCOUNT_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];

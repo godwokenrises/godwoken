@@ -140,22 +140,29 @@ table DepositionLockArgs {
 
 // --- custodian lock ---
 // a rollup_type_hash exists before this args, to make args friendly to prefix search
-struct CustodianLockArgs {
-    // layer1 lock hash
-    owner_lock_hash: Byte32,
+table CustodianLockArgs {
+    // used for revert this cell to deposition request cell
+    // after finalize, this lock is meaningless
+    deposition_lock_args: DepositionLockArgs,
     deposition_block_hash: Byte32,
     deposition_block_number: Uint64,
 }
+
+table UnlockCustodianViaRevert {
+    block_proof: Bytes,
+    deposition_lock_hash: Byte32,
+}
+
 // --- end of custodian lock ---
 
 // --- withdrawal lock ---
 // a rollup_type_hash exists before this args, to make args friendly to prefix search
-table WithdrawalLockArgs {
-    // the original custodian lock
+struct WithdrawalLockArgs {
+    // the original deposition info
     // used for helping programs generate reverted custodian cell
-    custodian_lock_args: CustodianLockArgs,
+    deposition_block_hash: Byte32,
+    deposition_block_number: Uint64,
     // the original custodian lock hash
-    custodian_lock_hash: Byte32,
     withdrawal_block_hash: Byte32,
     withdrawal_block_number: Uint64,
     // buyer can pay sell_amount token to unlock
@@ -178,6 +185,7 @@ table UnlockWithdrawalViaFinalize {
 }
 table UnlockWithdrawalViaRevert {
     block_proof: Bytes,
+    custodian_lock_hash: Byte32,
 }
 table UnlockWithdrawalViaTrade {
     owner_lock: Script,
