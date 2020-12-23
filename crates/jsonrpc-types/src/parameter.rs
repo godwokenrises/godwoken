@@ -360,34 +360,20 @@ impl From<gw_config::ConsensusConfig> for ConsensusConfig {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct GenesisConfig {
-    pub initial_aggregator_script: JsonScript,
-    pub initial_deposition: Uint64,
     pub timestamp: Uint64,
 }
 impl From<GenesisConfig> for gw_config::GenesisConfig {
     fn from(json: GenesisConfig) -> gw_config::GenesisConfig {
-        let GenesisConfig {
-            initial_aggregator_script,
-            initial_deposition,
-            timestamp,
-        } = json;
+        let GenesisConfig { timestamp } = json;
         Self {
-            initial_aggregator_script: initial_aggregator_script.into(),
-            initial_deposition: initial_deposition.into(),
             timestamp: timestamp.into(),
         }
     }
 }
 impl From<gw_config::GenesisConfig> for GenesisConfig {
     fn from(genesis_config: gw_config::GenesisConfig) -> GenesisConfig {
-        let gw_config::GenesisConfig {
-            initial_aggregator_script,
-            initial_deposition,
-            timestamp,
-        } = genesis_config;
+        let gw_config::GenesisConfig { timestamp } = genesis_config;
         Self {
-            initial_aggregator_script: initial_aggregator_script.into(),
-            initial_deposition: initial_deposition.into(),
             timestamp: timestamp.into(),
         }
     }

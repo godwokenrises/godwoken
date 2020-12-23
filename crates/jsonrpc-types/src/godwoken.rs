@@ -119,44 +119,43 @@ impl From<packed::StartChallenge> for StartChallenge {
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct CancelChallenge {
-    pub l2block: L2Block,
-    pub block_proof: JsonBytes,
+    pub raw_l2block: RawL2Block,
+    pub l2tx: L2Transaction,
     pub kv_state: Vec<KVPair>,
     pub kv_state_proof: JsonBytes,
+    pub scripts: Vec<Script>,
+    pub return_data_hash: H256,
+    pub tx_proof: JsonBytes,
+    pub block_proof: JsonBytes,
 }
 
 impl From<CancelChallenge> for packed::CancelChallenge {
     fn from(json: CancelChallenge) -> packed::CancelChallenge {
         let CancelChallenge {
-            l2block,
-            block_proof,
+            raw_l2block,
+            l2tx,
             kv_state,
             kv_state_proof,
+            scripts,
+            return_data_hash,
+            tx_proof,
+            block_proof,
         } = json;
         let kv_pair_vec: Vec<packed::KVPair> = kv_state.into_iter().map(|k| k.into()).collect();
         let packed_kv_state_vec = packed::KVPairVec::new_builder().set(kv_pair_vec).build();
+        let script_vec: Vec<packed::Script> = scripts.into_iter().map(|s| s.into()).collect();
+        let packed_script_vec = packed::ScriptVec::new_builder().set(script_vec).build();
 
         packed::CancelChallenge::new_builder()
-            .l2block(l2block.into())
-            .block_proof(block_proof.into_bytes().pack())
+            .raw_l2block(raw_l2block.into())
+            .l2tx(l2tx.into())
             .kv_state(packed_kv_state_vec)
             .kv_state_proof(kv_state_proof.into_bytes().pack())
+            .scripts(packed_script_vec)
+            .return_data_hash(return_data_hash.pack())
+            .tx_proof(tx_proof.into_bytes().pack())
+            .block_proof(block_proof.into_bytes().pack())
             .build()
-    }
-}
-
-impl From<packed::CancelChallenge> for CancelChallenge {
-    fn from(cancel_challenge: packed::CancelChallenge) -> CancelChallenge {
-        Self {
-            l2block: cancel_challenge.l2block().into(),
-            block_proof: JsonBytes::from_bytes(cancel_challenge.block_proof().unpack()),
-            kv_state: cancel_challenge
-                .kv_state()
-                .into_iter()
-                .map(|k| k.into())
-                .collect(),
-            kv_state_proof: JsonBytes::from_bytes(cancel_challenge.kv_state_proof().unpack()),
-        }
     }
 }
 
@@ -576,10 +575,15 @@ pub struct RawWithdrawalRequest {
     pub nonce: Uint32,
     pub capacity: Uint64,
     pub amount: Uint128,
-    // layer1 cell to receive the withdraw
-    pub lock_hash: H256,
+    // buyer can pay sell_amount and sell_capacity to unlock
+    pub sell_amount: Uint128,
+    pub sell_capacity: Uint64,
     pub sudt_script_hash: H256,
     pub account_script_hash: H256,
+    // layer1 lock to withdraw after challenge period
+    pub owner_lock_hash: H256,
+    // layer1 lock to receive the payment, must exists on the chain
+    pub payment_lock_hash: H256,
 }
 
 impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
@@ -588,17 +592,23 @@ impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
             nonce,
             capacity,
             amount,
-            lock_hash,
+            sell_amount,
+            sell_capacity,
             sudt_script_hash,
             account_script_hash,
+            owner_lock_hash,
+            payment_lock_hash,
         } = json;
         packed::RawWithdrawalRequest::new_builder()
             .nonce(u32::from(nonce).pack())
             .capacity(u64::from(capacity).pack())
             .amount(u128::from(amount).pack())
-            .lock_hash(lock_hash.pack())
+            .sell_amount(u128::from(sell_amount).pack())
+            .sell_capacity(u64::from(sell_capacity).pack())
             .sudt_script_hash(sudt_script_hash.pack())
             .account_script_hash(account_script_hash.pack())
+            .owner_lock_hash(owner_lock_hash.pack())
+            .payment_lock_hash(payment_lock_hash.pack())
             .build()
     }
 }
@@ -608,13 +618,18 @@ impl From<packed::RawWithdrawalRequest> for RawWithdrawalRequest {
         let nonce: u32 = raw_withdrawal_request.nonce().unpack();
         let capacity: u64 = raw_withdrawal_request.capacity().unpack();
         let amount: u128 = raw_withdrawal_request.amount().unpack();
+        let sell_capacity: u64 = raw_withdrawal_request.sell_capacity().unpack();
+        let sell_amount: u128 = raw_withdrawal_request.sell_amount().unpack();
         Self {
             nonce: nonce.into(),
             capacity: capacity.into(),
             amount: amount.into(),
-            lock_hash: raw_withdrawal_request.lock_hash().unpack(),
+            sell_capacity: sell_capacity.into(),
+            sell_amount: sell_amount.into(),
             sudt_script_hash: raw_withdrawal_request.sudt_script_hash().unpack(),
             account_script_hash: raw_withdrawal_request.account_script_hash().unpack(),
+            owner_lock_hash: raw_withdrawal_request.owner_lock_hash().unpack(),
+            payment_lock_hash: raw_withdrawal_request.payment_lock_hash().unpack(),
         }
     }
 }

@@ -9,7 +9,10 @@ use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, Generator,
 };
 use gw_jsonrpc_types::{genesis, parameter};
-use gw_store::{genesis::{build_genesis, GenesisWithSMTState}, Store};
+use gw_store::{
+    genesis::{build_genesis, GenesisWithSMTState},
+    Store,
+};
 use gw_types::{packed, prelude::*};
 use neon::prelude::*;
 use parking_lot::Mutex;
