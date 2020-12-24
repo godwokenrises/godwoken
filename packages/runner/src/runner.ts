@@ -27,7 +27,9 @@ import {
   scanDepositionCellsInCommittedL2Block,
   tryExtractDepositionRequest,
   RunnerConfig,
+  StateValidatorLockGenerator,
 } from "./utils";
+import { AlwaysSuccessGenerator } from "./locks";
 import * as secp256k1 from "secp256k1";
 
 type Level = "debug" | "info" | "warn" | "error";
@@ -69,8 +71,7 @@ export class Runner {
   rollupTypeHash: Hash;
   privateKey: HexString;
 
-  // TODO: change to PoA
-  lastProduceBlockTime: bigint;
+  lockGenerator: StateValidatorLockGenerator;
 
   constructor(
     rpc: RPC,
@@ -84,7 +85,6 @@ export class Runner {
     this.indexer = indexer;
     this.chainService = chainService;
     this.config = config;
-    this.lastProduceBlockTime = 0n;
     this.cancelListener = () => {};
     this.logger = logger;
     this.privateKey = privateKey;
@@ -102,6 +102,10 @@ export class Runner {
       new Reader(chainService.lastSynced()).toArrayBuffer()
     );
     this.lastBlockNumber = lastSynced.getNumber().toLittleEndianBigUint64();
+    if (config.aggregatorConfig === "poa") {
+      throw new Error("Implement PoA!");
+    }
+    this.lockGenerator = new AlwaysSuccessGenerator();
   }
 
   _ckbAddress(): string {
@@ -360,9 +364,13 @@ export class Runner {
         )})`
       );
       await this._syncToTip();
-      const medianTime = BigInt(medianTimeHex);
-      // TODO: change to PoA later, right now it issues a new L2 block every 20 seconds.
-      if (medianTime - this.lastProduceBlockTime >= 20n * 1000n) {
+      const tipCell = await this._queryLiveRollupCell();
+      if (
+        (await this.lockGenerator.shouldIssueNewBlock(
+          medianTimeHex,
+          tipCell
+        )) === "Yes"
+      ) {
         this.logger("info", "Generating new block!");
         const depositionEntries = await this._queryValidDepositionRequests();
         this.logger(
@@ -394,7 +402,6 @@ export class Runner {
           }
           return cellDeps;
         });
-        // TODO: PoA might need to alter since
         txSkeleton = txSkeleton.update("inputs", (inputs) => inputs.push(cell));
         txSkeleton = txSkeleton.update("witnesses", (witnesses) => {
           const witnessArgs = {
@@ -431,6 +438,9 @@ export class Runner {
             outputs.push(cell)
           );
         }
+        txSkeleton = await this.lockGenerator.fixTransactionSkeleton(
+          txSkeleton
+        );
         // TODO: stake cell
         // TODO: fill in withdrawed custodian cells
         // TODO: fill in created withdraw cells
@@ -458,7 +468,6 @@ export class Runner {
 
         const hash = await this.rpc.send_transaction(tx);
         this.logger("info", `Submitted l2 block in ${hash}`);
-        this.lastProduceBlockTime = medianTime;
       }
     })().catch((e) => {
       console.error(`Error processing new block: ${e} ${e.stack}`);

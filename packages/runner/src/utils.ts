@@ -2,6 +2,7 @@ import { RPC, Reader, normalizers } from "ckb-js-toolkit";
 import {
   Cell,
   Header,
+  HexNumber,
   HexString,
   OutPoint,
   Transaction,
@@ -10,11 +11,25 @@ import {
   core,
   utils,
 } from "@ckb-lumos/base";
+import { TransactionSkeletonType } from "@ckb-lumos/helpers";
 import { DeploymentConfig, schemas, types } from "@ckb-godwoken/base";
 import { Config, GenesisSetup } from "@ckb-godwoken/godwoken";
 
 const { DenormalizeScript } = denormalizers;
 const { readBigUInt128LE } = utils;
+
+export type StateValidatorLockGeneratorState = "Yes" | "YesIfFull" | "No";
+
+export interface StateValidatorLockGenerator {
+  shouldIssueNewBlock(
+    medianTime: HexNumber,
+    tipCell: Cell
+  ): Promise<StateValidatorLockGeneratorState>;
+
+  fixTransactionSkeleton(
+    txSkeleton: TransactionSkeletonType
+  ): Promise<TransactionSkeletonType>;
+}
 
 export interface GenesisStoreConfig {
   type: "genesis";
@@ -23,10 +38,13 @@ export interface GenesisStoreConfig {
 
 export type StoreConfig = GenesisStoreConfig;
 
+export type AggregatorConfig = "always_success" | "poa";
+
 export interface RunnerConfig {
   deploymentConfig: DeploymentConfig;
   godwokenConfig: Config;
   storeConfig: StoreConfig;
+  aggregatorConfig: AggregatorConfig;
 }
 
 export async function scanDepositionCellsInCommittedL2Block(
