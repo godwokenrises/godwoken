@@ -611,8 +611,11 @@ export class Runner {
       ).serializeJson();
       let withdrawalType: Script | undefined = undefined;
       let outputData = "0x";
-      // TODO update the condition for non sudt withdrawal request later
-      if (!sudtScriptHash) {
+      // check if it includes sudt withdrawal request
+      if (
+        sudtScriptHash !=
+        "0x0000000000000000000000000000000000000000000000000000000000000000"
+      ) {
         const sudtAmount = new Reader(
           rawWithdrawalRequest.getAmount().raw()
         ).serializeJson();
@@ -654,7 +657,7 @@ export class Runner {
         data: outputData,
       };
       const minimalCapacity = minimalCellCapacity(withdrawalOutput);
-      // TODO: simply throw an error, may use acp like approach to solve this later ?
+      // simply throw an error, may use acp like approach to solve this later ?
       if (BigInt(withdrawalCapacity) < BigInt(minimalCapacity)) {
         throw new Error(
           "Try to withdraw capacity less than minimalCellCapacity"
