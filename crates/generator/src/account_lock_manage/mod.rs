@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use gw_common::H256;
 use gw_types::{bytes::Bytes, packed::Signature};
 
+pub mod always_success;
+
 use crate::error::LockAlgorithmError;
 
 pub trait LockAlgorithm {

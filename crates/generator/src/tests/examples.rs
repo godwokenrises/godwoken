@@ -1,11 +1,12 @@
 use super::{new_block_info, SUM_PROGRAM, SUM_PROGRAM_CODE_HASH};
 use crate::{
-    account_lock_manage::AccountLockManage,
+    account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::{Backend, BackendManage},
     dummy_state::DummyState,
     traits::StateExt,
     Generator,
 };
+use gw_common::H256;
 use gw_types::{
     bytes::Bytes,
     packed::{RawL2Transaction, Script},
@@ -35,7 +36,9 @@ fn test_example_sum() {
             SUM_PROGRAM.clone(),
             SUM_PROGRAM.clone(),
         ));
-        let account_lock_manage = AccountLockManage::default();
+        let mut account_lock_manage = AccountLockManage::default();
+        account_lock_manage
+            .register_lock_algorithm(H256::zero(), Box::new(AlwaysSuccess::default()));
         let generator = Generator::new(backend_manage, account_lock_manage);
         let mut sum_value = init_value;
         for (number, add_value) in &[(1u64, 7u64), (2u64, 16u64)] {
