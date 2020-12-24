@@ -1,4 +1,4 @@
-import { RPC, Reader } from "ckb-js-toolkit";
+import { RPC, Reader, normalizers } from "ckb-js-toolkit";
 import {
   Cell,
   Header,
@@ -7,16 +7,31 @@ import {
   Transaction,
   denormalizers,
   since as sinceUtils,
+  core,
   utils,
 } from "@ckb-lumos/base";
 import { DeploymentConfig, schemas, types } from "@ckb-godwoken/base";
+import { Config, GenesisSetup } from "@ckb-godwoken/godwoken";
 
 const { DenormalizeScript } = denormalizers;
 const { readBigUInt128LE } = utils;
 
+export interface GenesisStoreConfig {
+  type: "genesis";
+  genesis: GenesisSetup;
+}
+
+export type StoreConfig = GenesisStoreConfig;
+
+export interface RunnerConfig {
+  deploymentConfig: DeploymentConfig;
+  godwokenConfig: Config;
+  storeConfig: StoreConfig;
+}
+
 export async function scanDepositionCellsInCommittedL2Block(
   l2Block: Transaction,
-  config: DeploymentConfig,
+  config: RunnerConfig,
   rpc: RPC
 ): Promise<Array<HexString>> {
   const results: Array<HexString> = [];
@@ -60,13 +75,15 @@ export interface DepositionEntry {
 
 export async function tryExtractDepositionRequest(
   cell: Cell,
-  config: DeploymentConfig,
+  config: RunnerConfig,
   tipHeader?: Header,
   cellHeader?: Header
 ): Promise<DepositionEntry | undefined> {
   if (
-    cell.cell_output.lock.code_hash !== config.deposition_lock.code_hash ||
-    cell.cell_output.lock.hash_type !== config.deposition_lock.hash_type
+    cell.cell_output.lock.code_hash !==
+      config.deploymentConfig.deposition_lock.code_hash ||
+    cell.cell_output.lock.hash_type !==
+      config.deploymentConfig.deposition_lock.hash_type
   ) {
     return undefined;
   }
@@ -75,7 +92,16 @@ export async function tryExtractDepositionRequest(
     throw new Error("Invalid args length!");
   }
   const rollupTypeHash = args.serializeJson().substr(0, 66);
-  if (rollupTypeHash !== config.rollup_type_hash) {
+  const expectedRollupTypeHash = utils
+    .ckbHash(
+      core.SerializeScript(
+        normalizers.NormalizeScript(
+          config.godwokenConfig.chain.rollup_type_script
+        )
+      )
+    )
+    .serializeJson();
+  if (rollupTypeHash !== expectedRollupTypeHash) {
     return undefined;
   }
   const lockArgs = new schemas.DepositionLockArgs(

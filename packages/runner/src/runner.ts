@@ -20,32 +20,15 @@ import {
   sealTransaction,
   scriptToAddress,
 } from "@ckb-lumos/helpers";
-import {
-  Config,
-  ChainService,
-  SubmitTxs,
-  GenesisSetup,
-} from "@ckb-godwoken/godwoken";
+import { ChainService, SubmitTxs } from "@ckb-godwoken/godwoken";
 import { DeploymentConfig, schemas, types } from "@ckb-godwoken/base";
 import {
   DepositionEntry,
   scanDepositionCellsInCommittedL2Block,
   tryExtractDepositionRequest,
+  RunnerConfig,
 } from "./utils";
 import * as secp256k1 from "secp256k1";
-
-export interface GenesisStoreConfig {
-  type: "genesis";
-  genesis: GenesisSetup;
-}
-
-export type StoreConfig = GenesisStoreConfig;
-
-export interface RunnerConfig {
-  deploymentConfig: DeploymentConfig;
-  godwokenConfig: Config;
-  storeConfig: StoreConfig;
-}
 
 type Level = "debug" | "info" | "warn" | "error";
 
@@ -173,7 +156,7 @@ export class Runner {
   async _syncL2Block(transaction: Transaction, headerInfo: types.HeaderInfo) {
     const depositionRequests = await scanDepositionCellsInCommittedL2Block(
       transaction,
-      this._deploymentConfig(),
+      this.config,
       this.rpc
     );
     const context: SubmitTxs = {
@@ -296,7 +279,7 @@ export class Runner {
       const cellHeader = await this.rpc.get_header(cell.block_hash);
       const entry = await tryExtractDepositionRequest(
         cell,
-        this._deploymentConfig(),
+        this.config,
         tipHeader,
         cellHeader
       );
