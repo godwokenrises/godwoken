@@ -218,6 +218,7 @@ struct SUDTTransfer {
 
 // --- challenge ---
 // start a challenge
+// a rollup_type_hash exists before this args, to make args friendly to prefix search
 struct StartChallenge {
     block_hash: Byte32, // hash of challenged block
     tx_index: Uint32, // challenge tx
@@ -243,6 +244,13 @@ table CancelChallenge {
     account_count: Uint32,
 }
 // --- end of challenge ---
+
+// --- stake ---
+// a rollup_type_hash exists before this args, to make args friendly to prefix search
+struct StakeArgs {
+    unlock_block_number: Uint64,
+}
+// --- end of stake ---
 
 // --- unlock account ---
 struct UnlockAccount {

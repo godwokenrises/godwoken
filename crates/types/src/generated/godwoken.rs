@@ -10955,6 +10955,163 @@ impl molecule::prelude::Builder for CancelChallengeBuilder {
     }
 }
 #[derive(Clone)]
+pub struct StakeArgs(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for StakeArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for StakeArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for StakeArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(
+            f,
+            "{}: {}",
+            "unlock_block_number",
+            self.unlock_block_number()
+        )?;
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for StakeArgs {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0];
+        StakeArgs::new_unchecked(v.into())
+    }
+}
+impl StakeArgs {
+    pub const TOTAL_SIZE: usize = 8;
+    pub const FIELD_SIZES: [usize; 1] = [8];
+    pub const FIELD_COUNT: usize = 1;
+    pub fn unlock_block_number(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(0..8))
+    }
+    pub fn as_reader<'r>(&'r self) -> StakeArgsReader<'r> {
+        StakeArgsReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for StakeArgs {
+    type Builder = StakeArgsBuilder;
+    const NAME: &'static str = "StakeArgs";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        StakeArgs(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        StakeArgsReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        StakeArgsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().unlock_block_number(self.unlock_block_number())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct StakeArgsReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for StakeArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for StakeArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for StakeArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(
+            f,
+            "{}: {}",
+            "unlock_block_number",
+            self.unlock_block_number()
+        )?;
+        write!(f, " }}")
+    }
+}
+impl<'r> StakeArgsReader<'r> {
+    pub const TOTAL_SIZE: usize = 8;
+    pub const FIELD_SIZES: [usize; 1] = [8];
+    pub const FIELD_COUNT: usize = 1;
+    pub fn unlock_block_number(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[0..8])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for StakeArgsReader<'r> {
+    type Entity = StakeArgs;
+    const NAME: &'static str = "StakeArgsReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        StakeArgsReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct StakeArgsBuilder {
+    pub(crate) unlock_block_number: Uint64,
+}
+impl StakeArgsBuilder {
+    pub const TOTAL_SIZE: usize = 8;
+    pub const FIELD_SIZES: [usize; 1] = [8];
+    pub const FIELD_COUNT: usize = 1;
+    pub fn unlock_block_number(mut self, v: Uint64) -> Self {
+        self.unlock_block_number = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for StakeArgsBuilder {
+    type Entity = StakeArgs;
+    const NAME: &'static str = "StakeArgsBuilder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(self.unlock_block_number.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        StakeArgs::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
 pub struct UnlockAccount(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for UnlockAccount {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
