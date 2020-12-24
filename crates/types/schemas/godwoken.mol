@@ -15,25 +15,13 @@ struct AccountMerkleState {
     count: Uint32,
 }
 
-table GlobalState {
+struct GlobalState {
     account: AccountMerkleState,
     block: BlockMerkleState,
     reverted_block_root: Byte32,
     last_finalized_block_number: Uint64,
-    status: Status,
-}
-
-union Status {
-    Running,
-    Reverting,
-}
-
-// normal status
-table Running {}
-// layer2 chain is reverting
-struct Reverting {
-    next_block_number: Uint64,
-    challenger_id: Uint32,
+    // 0: running, 1: halting
+    status: byte,
 }
 
 table RawL2Transaction {
@@ -232,23 +220,37 @@ struct SUDTTransfer {
 // start a challenge
 struct StartChallenge {
     block_hash: Byte32, // hash of challenged block
-    block_number: Uint64, // number of challenged block
     tx_index: Uint32, // challenge tx
 }
 
-// cancel a challenge by execute the transaction
+// witness to prove the validity of challenge
+table StartChallengeWitness {
+    raw_l2block: RawL2Block,
+    block_proof: Bytes, // block proof
+}
+
 vector ScriptVec<Script>;
+
+// witness to cancel a challenge by execute the transaction
 table CancelChallenge {
     raw_l2block: RawL2Block,
     l2tx: L2Transaction,
+    tx_proof: Bytes,
     kv_state: KVPairVec,
     kv_state_proof: Bytes,
     scripts: ScriptVec,
     return_data_hash: Byte32,
-    tx_proof: Bytes,
-    block_proof: Bytes,
+    account_count: Uint32,
 }
 // --- end of challenge ---
+
+// --- unlock account ---
+struct UnlockAccount {
+    message: Byte32,
+    signature: Signature,
+}
+// --- end of unlock account ---
+
 // header info
 struct HeaderInfo {
     number: Uint64,

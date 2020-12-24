@@ -99,7 +99,7 @@ pub fn main() -> Result<(), Error> {
     if merkle_proof
         .verify::<Blake2bHasher>(
             &reverted_block_root.into(),
-            vec![(block_hash.into(), H256::from_u32(1))],
+            vec![(block_hash.into(), H256::one())],
         )
         .map_err(|_err| Error::MerkleProof)?
     {

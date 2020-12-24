@@ -19,6 +19,7 @@ pub enum Error {
     MerkleProof,
     OverflowAmount,
     InsufficientAmount,
+    SMTKeyMissing,
 }
 
 impl From<SysError> for Error {

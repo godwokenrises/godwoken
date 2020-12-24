@@ -3,6 +3,7 @@ members = [
     "custodian-lock",
     "deposition-lock",
     "withdrawal-lock",
+    "challenge-lock",
     "state-validator",
     "validator-utils",
 ]

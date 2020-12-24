@@ -1,6 +1,9 @@
 use crate::error::Error;
-use crate::syscalls::RunResult;
-use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, error::Error as StateError, state::State, H256};
+use crate::types::RunResult;
+use gw_common::{
+    builtins::CKB_SUDT_ACCOUNT_ID, error::Error as StateError,
+    merkle_utils::calculate_compacted_account_root, state::State, H256,
+};
 use gw_types::{
     bytes::Bytes,
     packed::{DepositionRequest, Script, WithdrawalRequest},
@@ -10,8 +13,8 @@ use gw_types::{
 pub trait CodeStore {
     fn insert_script(&mut self, script_hash: H256, script: Script);
     fn get_script(&self, script_hash: &H256) -> Option<Script>;
-    fn insert_code(&mut self, script_hash: H256, code: Bytes);
-    fn get_code(&self, script_hash: &H256) -> Option<Bytes>;
+    fn insert_data(&mut self, data_hash: H256, code: Bytes);
+    fn get_data(&self, data_hash: &H256) -> Option<Bytes>;
 }
 
 pub trait StateExt {
@@ -25,6 +28,7 @@ pub trait StateExt {
         &mut self,
         withdrawal_requests: &[WithdrawalRequest],
     ) -> Result<(), Error>;
+    fn calculate_compacted_account_root(&self) -> Result<H256, Error>;
 }
 
 impl<S: State + CodeStore> StateExt for S {
@@ -34,6 +38,7 @@ impl<S: State + CodeStore> StateExt for S {
         let id = self.create_account(script_hash.into())?;
         Ok(id)
     }
+
     fn apply_run_result(&mut self, run_result: &RunResult) -> Result<(), Error> {
         for (k, v) in &run_result.write_values {
             self.update_raw((*k).into(), (*v).into())?;
@@ -44,8 +49,10 @@ impl<S: State + CodeStore> StateExt for S {
         for (script_hash, script) in &run_result.new_scripts {
             self.insert_script(*script_hash, Script::from_slice(&script).expect("script"));
         }
-        for (script_hash, data) in &run_result.new_data {
-            self.insert_code(*script_hash, Bytes::from(data.clone()));
+        for (data_hash, data) in &run_result.write_data {
+            // register data hash into SMT
+            self.store_data_hash(*data_hash)?;
+            self.insert_data(*data_hash, Bytes::from(data.clone()));
         }
         Ok(())
     }
@@ -107,5 +114,11 @@ impl<S: State + CodeStore> StateExt for S {
         }
 
         Ok(())
+    }
+
+    fn calculate_compacted_account_root(&self) -> Result<H256, Error> {
+        let account_root = self.calculate_root()?;
+        let account_count = self.get_account_count()?;
+        Ok(calculate_compacted_account_root(&account_root.into(), account_count).into())
     }
 }

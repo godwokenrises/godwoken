@@ -1,4 +1,5 @@
 use crate::traits::CodeStore;
+use crate::types::RunResult;
 use ckb_vm::{
     memory::Memory,
     registers::{A0, A1, A2, A3, A7},
@@ -19,7 +20,6 @@ use gw_types::{
     prelude::*,
 };
 use std::cmp;
-use std::collections::HashMap;
 
 /* Constants */
 const MAX_SET_RETURN_DATA_SIZE: u64 = 1024;
@@ -43,16 +43,6 @@ const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 /* Syscall errors */
 pub(crate) const SUCCESS: u8 = 0;
 pub(crate) const ERROR_DUPLICATED_SCRIPT_HASH: u8 = std::u8::MAX;
-
-#[derive(Debug, PartialEq, Clone, Eq, Default)]
-pub struct RunResult {
-    pub read_values: HashMap<H256, H256>,
-    pub write_values: HashMap<H256, H256>,
-    pub return_data: Vec<u8>,
-    pub account_count: Option<u32>,
-    pub new_scripts: HashMap<H256, Vec<u8>>,
-    pub new_data: HashMap<H256, Vec<u8>>,
-}
 
 pub(crate) struct L2Syscalls<'a, S> {
     pub(crate) state: &'a S,
@@ -282,6 +272,21 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
+            SYS_STORE_DATA => {
+                let data_len = machine.registers()[A0].to_u32();
+                let data_addr = machine.registers()[A1].to_u64();
+
+                let data = load_bytes(machine, data_addr, data_len as usize)?;
+                let mut data_hash = [0u8; 32];
+                let mut hasher = new_blake2b();
+                hasher.update(data.as_ref());
+                hasher.finalize(&mut data_hash);
+                self.result
+                    .write_data
+                    .insert(data_hash.into(), data.as_slice().to_vec());
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
             SYS_LOAD_DATA => {
                 let data_hash_addr = machine.registers()[A0].to_u64();
                 let len_addr = machine.registers()[A1].to_u64();
@@ -290,7 +295,7 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
 
                 let data_hash = load_data_h256(machine, data_hash_addr)?;
                 let len = load_data_u32(machine, len_addr)? as usize;
-                let data = self.get_code(&data_hash).ok_or_else(|| {
+                let data = self.get_data(&data_hash).ok_or_else(|| {
                     eprintln!(
                         "syscall error: data not found by data hash: {:?}",
                         data_hash
@@ -313,21 +318,7 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 machine
                     .memory_mut()
                     .store_bytes(len_addr, &(new_len as u32).to_le_bytes())?;
-                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
-                Ok(true)
-            }
-            SYS_STORE_DATA => {
-                let data_len = machine.registers()[A0].to_u32();
-                let data_addr = machine.registers()[A1].to_u64();
-
-                let data = load_bytes(machine, data_addr, data_len as usize)?;
-                let mut data_hash = [0u8; 32];
-                let mut hasher = new_blake2b();
-                hasher.update(data.as_ref());
-                hasher.finalize(&mut data_hash);
-                self.result
-                    .new_data
-                    .insert(data_hash.into(), data.as_slice().to_vec());
+                self.result.read_data.insert(data_hash, data.len());
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -373,13 +364,12 @@ impl<'a, S: State> L2Syscalls<'a, S> {
             .map(|data| Script::from_slice(&data).expect("Script"))
             .or_else(|| self.code_store.get_script(&script_hash))
     }
-    // TODO: rename get_code to get_data
-    fn get_code(&self, data_hash: &H256) -> Option<Bytes> {
+    fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
         self.result
-            .new_data
+            .write_data
             .get(data_hash)
             .map(|data| Bytes::from(data.clone()))
-            .or_else(|| self.code_store.get_code(&data_hash))
+            .or_else(|| self.code_store.get_data(&data_hash))
     }
     fn get_script_hash(&mut self, id: u32) -> Result<H256, VMError> {
         let value = self

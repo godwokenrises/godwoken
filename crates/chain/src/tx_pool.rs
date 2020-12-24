@@ -2,14 +2,13 @@ use crate::crypto::{verify_signature, Signature};
 use crate::next_block_context::NextBlockContext;
 use anyhow::{anyhow, Result};
 use gw_common::{
-    merkle_utils::calculate_compacted_account_root,
     smt::{Store, H256 as SMTH256},
     state::State,
     H256,
 };
 use gw_generator::{
     traits::{CodeStore, StateExt},
-    Generator, RunResult,
+    Generator, RunResult, TxReceipt,
 };
 use gw_store::OverlayStore;
 use gw_types::{
@@ -22,19 +21,13 @@ use std::{cmp::min, collections::HashSet};
 const MAX_PACKAGED_TXS: usize = 6000;
 /// MAX packaged withdrawal in a l2block
 const MAX_PACKAGED_WITHDRAWAL: usize = 10;
-
-pub struct TxReceipt {
-    pub tx: L2Transaction,
-    pub tx_witness_hash: [u8; 32],
-    // hash(account_root|account_count)
-    pub compacted_post_account_root: [u8; 32],
-}
+const MAX_DATA_BYTES_LIMIT: usize = 25_000;
 
 /// TODO remove txs from pool if a new block already contains txs
 pub struct TxPool<S> {
     state: OverlayStore<S>,
     generator: Generator,
-    queue: Vec<TxReceipt>,
+    queue: Vec<(L2Transaction, TxReceipt)>,
     withdrawal_queue: Vec<WithdrawalRequest>,
     next_block_info: BlockInfo,
     next_prev_account_state: MerkleState,
@@ -70,17 +63,14 @@ impl<S: Store<SMTH256>> TxPool<S> {
         // 2. update state
         self.state.apply_run_result(&run_result)?;
         // 3. push tx to pool
-        let tx_witness_hash = tx.witness_hash();
-        let compacted_post_account_root = {
-            let account_root = self.state.calculate_root()?;
-            let account_count = self.state.get_account_count()?;
-            calculate_compacted_account_root(&account_root.as_slice(), account_count)
-        };
-        self.queue.push(TxReceipt {
-            tx,
+        let tx_witness_hash = tx.witness_hash().into();
+        let compacted_post_account_root = self.state.calculate_compacted_account_root()?;
+        let receipt = TxReceipt {
             tx_witness_hash,
             compacted_post_account_root,
-        });
+            read_data_hashes: run_result.read_data.iter().map(|(hash, _)| *hash).collect(),
+        };
+        self.queue.push((tx, receipt));
         Ok(run_result)
     }
 
@@ -93,6 +83,22 @@ impl<S: Store<SMTH256>> TxPool<S> {
         let run_result = self
             .generator
             .execute(&self.state, &self.next_block_info, &raw_tx)?;
+        let write_data_bytes: usize = run_result.write_data.values().map(|data| data.len()).sum();
+        if write_data_bytes > MAX_DATA_BYTES_LIMIT {
+            return Err(anyhow!(
+                "tx write data exceeded the limitation. write data bytes: {} max data bytes: {}",
+                write_data_bytes,
+                MAX_DATA_BYTES_LIMIT
+            ));
+        }
+        let read_data_bytes: usize = run_result.read_data.values().sum();
+        if read_data_bytes > MAX_DATA_BYTES_LIMIT {
+            return Err(anyhow!(
+                "tx read data exceeded the limitation. read data bytes: {} max data bytes: {}",
+                read_data_bytes,
+                MAX_DATA_BYTES_LIMIT
+            ));
+        }
         Ok(run_result)
     }
 
@@ -240,8 +246,8 @@ pub struct MerkleState {
 /// TxPoolPackage
 /// a layer2 block can be generated from a package
 pub struct TxPoolPackage {
-    /// tx recipts
-    pub tx_receipts: Vec<TxReceipt>,
+    /// tx receipts
+    pub tx_receipts: Vec<(L2Transaction, TxReceipt)>,
     /// txs touched keys, both reads and writes
     pub touched_keys: HashSet<H256>,
     /// state of last block

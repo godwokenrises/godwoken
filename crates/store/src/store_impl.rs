@@ -8,7 +8,7 @@ use gw_common::{
     smt::{Store as SMTStore, H256, SMT},
     state::State,
 };
-use gw_generator::traits::CodeStore;
+use gw_generator::{traits::CodeStore, TxReceipt};
 use gw_types::{
     bytes::Bytes,
     packed::{HeaderInfo, L2Block, L2Transaction, Script},
@@ -31,7 +31,7 @@ pub struct Store<S> {
     header_infos: HashMap<H256, HeaderInfo>,
     tip_block_hash: H256,
     tip_block_number: u64,
-    transactions: HashMap<H256, L2Transaction>,
+    transactions: HashMap<H256, (L2Transaction, TxReceipt)>,
 }
 
 impl<S: SMTStore<H256>> Store<S> {
@@ -45,7 +45,7 @@ impl<S: SMTStore<H256>> Store<S> {
         blocks: HashMap<H256, L2Block>,
         header_infos: HashMap<H256, HeaderInfo>,
         codes: HashMap<H256, Bytes>,
-        transactions: HashMap<H256, L2Transaction>,
+        transactions: HashMap<H256, (L2Transaction, TxReceipt)>,
     ) -> Self {
         Store {
             account_tree,
@@ -82,7 +82,11 @@ impl<S: SMTStore<H256>> Store<S> {
                 smt_store.insert_branch(node, branch)?;
             }
         }
-        self.insert_block(genesis.clone(), header_info)?;
+        assert!(
+            genesis.transactions().is_empty(),
+            "assume genesis has no txs"
+        );
+        self.insert_block(genesis.clone(), header_info, Vec::new())?;
         self.attach_block(genesis)?;
         Ok(())
     }
@@ -110,12 +114,18 @@ impl<S: SMTStore<H256>> Store<S> {
         &self.block_tree
     }
 
-    pub fn insert_block(&mut self, block: L2Block, header_info: HeaderInfo) -> Result<()> {
+    pub fn insert_block(
+        &mut self,
+        block: L2Block,
+        header_info: HeaderInfo,
+        tx_receipts: Vec<TxReceipt>,
+    ) -> Result<()> {
         let block_hash = block.hash().into();
         self.blocks.insert(block_hash, block.clone());
         self.header_infos.insert(block_hash, header_info);
-        for tx in block.transactions() {
-            self.transactions.insert(tx.hash().into(), tx);
+        debug_assert_eq!(block.transactions().len(), tx_receipts.len());
+        for (tx, tx_receipt) in block.transactions().into_iter().zip(tx_receipts) {
+            self.transactions.insert(tx.hash().into(), (tx, tx_receipt));
         }
         Ok(())
     }
@@ -150,7 +160,15 @@ impl<S: SMTStore<H256>> Store<S> {
     }
 
     pub fn get_transaction(&self, tx_hash: &H256) -> Result<Option<L2Transaction>, Error> {
-        Ok(self.transactions.get(tx_hash).cloned())
+        Ok(self.transactions.get(tx_hash).map(|(tx, _)| tx).cloned())
+    }
+
+    pub fn get_transaction_receipt(&self, tx_hash: &H256) -> Result<Option<TxReceipt>, Error> {
+        Ok(self
+            .transactions
+            .get(tx_hash)
+            .map(|(_, tx_receipt)| tx_receipt)
+            .cloned())
     }
 }
 
@@ -208,10 +226,10 @@ impl<S: SMTStore<H256>> CodeStore for Store<S> {
     fn get_script(&self, script_hash: &H256) -> Option<Script> {
         self.scripts.get(&script_hash).cloned()
     }
-    fn insert_code(&mut self, script_hash: H256, code: Bytes) {
+    fn insert_data(&mut self, script_hash: H256, code: Bytes) {
         self.codes.insert(script_hash, code);
     }
-    fn get_code(&self, script_hash: &H256) -> Option<Bytes> {
+    fn get_data(&self, script_hash: &H256) -> Option<Bytes> {
         self.codes.get(script_hash).cloned()
     }
 }
