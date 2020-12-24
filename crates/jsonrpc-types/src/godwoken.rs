@@ -542,57 +542,7 @@ pub struct GlobalState {
     pub block: BlockMerkleState,
     pub reverted_block_root: H256,
     pub last_finalized_block_number: Uint64,
-    pub status: StatusUnion,
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
-pub enum StatusUnion {
-    Running {},
-    Reverting {
-        next_block_number: Uint64,
-        challenger_id: Uint32,
-    },
-}
-
-impl Default for StatusUnion {
-    fn default() -> Self {
-        StatusUnion::Running {}
-    }
-}
-impl From<StatusUnion> for packed::StatusUnion {
-    fn from(json: StatusUnion) -> packed::StatusUnion {
-        match json {
-            StatusUnion::Running {} => {
-                packed::StatusUnion::Running(packed::Running::new_builder().build())
-            }
-            StatusUnion::Reverting {
-                next_block_number,
-                challenger_id,
-            } => {
-                let reverting = packed::Reverting::new_builder()
-                    .next_block_number(u64::from(next_block_number).pack())
-                    .challenger_id(u32::from(challenger_id).pack())
-                    .build();
-                packed::StatusUnion::Reverting(reverting)
-            }
-        }
-    }
-}
-
-impl From<packed::StatusUnion> for StatusUnion {
-    fn from(status_union: packed::StatusUnion) -> StatusUnion {
-        match status_union {
-            packed::StatusUnion::Running(_running) => StatusUnion::Running {},
-            packed::StatusUnion::Reverting(reverting) => {
-                let next_block_number: u64 = reverting.next_block_number().unpack();
-                let challenger_id: u32 = reverting.challenger_id().unpack();
-                StatusUnion::Reverting {
-                    next_block_number: next_block_number.into(),
-                    challenger_id: challenger_id.into(),
-                }
-            }
-        }
-    }
+    pub status: Uint32,
 }
 
 impl From<GlobalState> for packed::GlobalState {
@@ -605,25 +555,26 @@ impl From<GlobalState> for packed::GlobalState {
             status,
         } = json;
         let last_finalized_block_number: u64 = last_finalized_block_number.into();
-        let status: packed::Status = packed::Status::new_builder().set(status).build();
+        let status: u32 = status.into();
         packed::GlobalState::new_builder()
             .account(account.into())
             .block(block.into())
             .reverted_block_root(reverted_block_root.pack())
             .last_finalized_block_number(last_finalized_block_number.pack())
-            .status(status)
+            .status((status as u8).into())
             .build()
     }
 }
 impl From<packed::GlobalState> for GlobalState {
     fn from(global_state: packed::GlobalState) -> GlobalState {
         let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();
+        let status: u8 = global_state.status().into();
         Self {
             account: global_state.account().into(),
             block: global_state.block().into(),
             reverted_block_root: global_state.reverted_block_root().unpack(),
             last_finalized_block_number: last_finalized_block_number.into(),
-            status: global_state.status().to_enum().into(),
+            status: (status as u32).into(),
         }
     }
 }

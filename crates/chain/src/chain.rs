@@ -8,7 +8,7 @@ use ckb_types::{
 };
 use gw_common::{
     h256_ext::H256Ext, merkle_utils::calculate_merkle_root, smt::Blake2bHasher, sparse_merkle_tree,
-    state::State, H256,
+    state::State, FINALIZE_BLOCKS, H256,
 };
 use gw_config::ChainConfig;
 use gw_generator::{
@@ -32,9 +32,10 @@ use std::time::SystemTime;
 
 /// Rollup status
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[repr(u8)]
 pub enum Status {
-    Running,
-    Halting,
+    Running = 0,
+    Halting = 1,
 }
 
 /// Produce block param
@@ -455,9 +456,13 @@ impl Chain {
                 .count(block_count.pack())
                 .build()
         };
+        // reverted_block_root: Byte32,
+        let last_finalized_block_number = number.saturating_sub(FINALIZE_BLOCKS);
         let global_state = GlobalState::new_builder()
             .account(post_account)
             .block(post_block)
+            .last_finalized_block_number(last_finalized_block_number.pack())
+            .status((Status::Running as u8).into())
             .build();
         Ok(ProduceBlockResult {
             block,

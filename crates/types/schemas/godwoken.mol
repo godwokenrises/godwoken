@@ -15,25 +15,13 @@ struct AccountMerkleState {
     count: Uint32,
 }
 
-table GlobalState {
+struct GlobalState {
     account: AccountMerkleState,
     block: BlockMerkleState,
     reverted_block_root: Byte32,
     last_finalized_block_number: Uint64,
-    status: Status,
-}
-
-union Status {
-    Running,
-    Reverting,
-}
-
-// normal status
-table Running {}
-// layer2 chain is reverting
-struct Reverting {
-    next_block_number: Uint64,
-    challenger_id: Uint32,
+    // 0: running, 1: halting
+    status: byte,
 }
 
 table RawL2Transaction {
