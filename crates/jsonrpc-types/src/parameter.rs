@@ -2,12 +2,12 @@ use ckb_jsonrpc_types::{JsonBytes, Script as JsonScript, Uint32, Uint64};
 use ckb_types::packed as ckb_packed;
 use ckb_types::H256;
 use gw_chain::{chain, next_block_context};
-use gw_types::{packed, prelude::*};
+use gw_types::{core, packed, prelude::*};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::godwoken::{CancelChallenge, ChallengeContext, TxReceipt};
+use crate::godwoken::{CancelChallenge, ChallengeContext, GlobalState, TxReceipt};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
@@ -41,6 +41,7 @@ pub struct L1Action {
     /// transactions' header info
     pub header_info: JsonBytes,
     pub context: L1ActionContext,
+    pub global_state: GlobalState,
 }
 
 impl From<L1Action> for chain::L1Action {
@@ -49,6 +50,7 @@ impl From<L1Action> for chain::L1Action {
             transaction,
             header_info,
             context,
+            global_state,
         } = json;
         // let transaction_slice: &[u8] = transaction.into_bytes().as_ref();
         let transaction_bytes = transaction.into_bytes();
@@ -59,6 +61,7 @@ impl From<L1Action> for chain::L1Action {
             header_info: packed::HeaderInfo::from_slice(header_info_bytes.as_ref())
                 .expect("Build packed::HeaderInfo from slice"),
             context: context.into(),
+            global_state: global_state.into(),
         }
     }
 }
@@ -249,19 +252,19 @@ impl Default for Status {
     }
 }
 
-impl From<Status> for chain::Status {
+impl From<Status> for core::Status {
     fn from(json: Status) -> Self {
         match json {
-            Status::Running => chain::Status::Running,
-            Status::Halting => chain::Status::Halting,
+            Status::Running => core::Status::Running,
+            Status::Halting => core::Status::Halting,
         }
     }
 }
-impl From<chain::Status> for Status {
-    fn from(status: chain::Status) -> Self {
+impl From<core::Status> for Status {
+    fn from(status: core::Status) -> Self {
         match status {
-            chain::Status::Running => Status::Running,
-            chain::Status::Halting => Status::Halting,
+            core::Status::Running => Status::Running,
+            core::Status::Halting => Status::Halting,
         }
     }
 }

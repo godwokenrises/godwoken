@@ -1,6 +1,6 @@
 use anyhow::Result;
 use gw_chain::{
-    chain::{Chain, ProduceBlockParam, ProduceBlockResult, Status, SyncEvent, SyncParam},
+    chain::{Chain, ProduceBlockParam, ProduceBlockResult, SyncEvent, SyncParam},
     next_block_context::NextBlockContext,
     tx_pool::TxPool,
 };
@@ -14,7 +14,7 @@ use gw_store::{
     genesis::{build_genesis, GenesisWithSMTState},
     Store,
 };
-use gw_types::{packed, prelude::*};
+use gw_types::{core::Status, packed, prelude::*};
 use neon::prelude::*;
 use parking_lot::Mutex;
 use std::sync::{Arc, RwLock};
