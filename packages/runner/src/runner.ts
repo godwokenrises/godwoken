@@ -410,7 +410,15 @@ export class Runner {
         // TODO: PoA might need to alter since
         txSkeleton = txSkeleton.update("inputs", (inputs) => inputs.push(cell));
         txSkeleton = txSkeleton.update("witnesses", (witnesses) => {
-          return witnesses.push(new Reader(packedl2Block).serializeJson());
+          const witnessArgs = {
+            output_type: new Reader(packedl2Block).serializeJson(),
+          };
+          const packedWitnessArgs = new Reader(
+            core.SerializeWitnessArgs(
+              normalizers.NormalizeWitnessArgs(witnessArgs)
+            )
+          ).serializeJson();
+          return witnesses.push(packedWitnessArgs);
         });
         txSkeleton = txSkeleton.update("outputs", (outputs) => {
           return outputs.push({
@@ -440,7 +448,6 @@ export class Runner {
         // TODO: fill in withdrawed custodian cells
         // TODO: fill in created withdraw cells
 
-        // TODO: transaction fees
         txSkeleton = await common.payFeeByFeeRate(
           txSkeleton,
           [this._ckbAddress()],
