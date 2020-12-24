@@ -10973,27 +10973,29 @@ impl ::core::fmt::Debug for StakeArgs {
 impl ::core::fmt::Display for StakeArgs {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(
-            f,
-            "{}: {}",
-            "unlock_block_number",
-            self.unlock_block_number()
-        )?;
+        write!(f, "{}: {}", "stake_block_number", self.stake_block_number())?;
+        write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
         write!(f, " }}")
     }
 }
 impl ::core::default::Default for StakeArgs {
     fn default() -> Self {
-        let v: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0];
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
         StakeArgs::new_unchecked(v.into())
     }
 }
 impl StakeArgs {
-    pub const TOTAL_SIZE: usize = 8;
-    pub const FIELD_SIZES: [usize; 1] = [8];
-    pub const FIELD_COUNT: usize = 1;
-    pub fn unlock_block_number(&self) -> Uint64 {
+    pub const TOTAL_SIZE: usize = 40;
+    pub const FIELD_SIZES: [usize; 2] = [8, 32];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn stake_block_number(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(0..8))
+    }
+    pub fn owner_lock_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(8..40))
     }
     pub fn as_reader<'r>(&'r self) -> StakeArgsReader<'r> {
         StakeArgsReader::new_unchecked(self.as_slice())
@@ -11021,7 +11023,9 @@ impl molecule::prelude::Entity for StakeArgs {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder().unlock_block_number(self.unlock_block_number())
+        Self::new_builder()
+            .stake_block_number(self.stake_block_number())
+            .owner_lock_hash(self.owner_lock_hash())
     }
 }
 #[derive(Clone, Copy)]
@@ -11043,21 +11047,20 @@ impl<'r> ::core::fmt::Debug for StakeArgsReader<'r> {
 impl<'r> ::core::fmt::Display for StakeArgsReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(
-            f,
-            "{}: {}",
-            "unlock_block_number",
-            self.unlock_block_number()
-        )?;
+        write!(f, "{}: {}", "stake_block_number", self.stake_block_number())?;
+        write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
         write!(f, " }}")
     }
 }
 impl<'r> StakeArgsReader<'r> {
-    pub const TOTAL_SIZE: usize = 8;
-    pub const FIELD_SIZES: [usize; 1] = [8];
-    pub const FIELD_COUNT: usize = 1;
-    pub fn unlock_block_number(&self) -> Uint64Reader<'r> {
+    pub const TOTAL_SIZE: usize = 40;
+    pub const FIELD_SIZES: [usize; 2] = [8, 32];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn stake_block_number(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[0..8])
+    }
+    pub fn owner_lock_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[8..40])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for StakeArgsReader<'r> {
@@ -11083,14 +11086,19 @@ impl<'r> molecule::prelude::Reader<'r> for StakeArgsReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct StakeArgsBuilder {
-    pub(crate) unlock_block_number: Uint64,
+    pub(crate) stake_block_number: Uint64,
+    pub(crate) owner_lock_hash: Byte32,
 }
 impl StakeArgsBuilder {
-    pub const TOTAL_SIZE: usize = 8;
-    pub const FIELD_SIZES: [usize; 1] = [8];
-    pub const FIELD_COUNT: usize = 1;
-    pub fn unlock_block_number(mut self, v: Uint64) -> Self {
-        self.unlock_block_number = v;
+    pub const TOTAL_SIZE: usize = 40;
+    pub const FIELD_SIZES: [usize; 2] = [8, 32];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn stake_block_number(mut self, v: Uint64) -> Self {
+        self.stake_block_number = v;
+        self
+    }
+    pub fn owner_lock_hash(mut self, v: Byte32) -> Self {
+        self.owner_lock_hash = v;
         self
     }
 }
@@ -11101,7 +11109,8 @@ impl molecule::prelude::Builder for StakeArgsBuilder {
         Self::TOTAL_SIZE
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        writer.write_all(self.unlock_block_number.as_slice())?;
+        writer.write_all(self.stake_block_number.as_slice())?;
+        writer.write_all(self.owner_lock_hash.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

@@ -248,7 +248,8 @@ table CancelChallenge {
 // --- stake ---
 // a rollup_type_hash exists before this args, to make args friendly to prefix search
 struct StakeArgs {
-    unlock_block_number: Uint64,
+    stake_block_number: Uint64,
+    owner_lock_hash: Byte32,
 }
 // --- end of stake ---
 
