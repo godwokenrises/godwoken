@@ -22,7 +22,7 @@
     "url": "git+https://github.com/nervosnetwork/godwoken.git"
   },
   "dependencies": {
-    "@ckb-lumos/base": "^0.14.2-rc1"
+    "@ckb-lumos/base": "^0.14.2-rc2"
   },
   "files": [
     "index.d.ts",
