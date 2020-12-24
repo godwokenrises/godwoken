@@ -22,6 +22,8 @@ jobs:
         node-version: ${{ matrix.node-version }}
     - name: Init submodules
       run: git submodule init && git submodule update -r
+    - name: Install moleculec
+      run: cargo install moleculec --version 0.6.1
     - name: Install neon-cli
       run: npm install -g neon-cli
     - name: Compile C contracts
