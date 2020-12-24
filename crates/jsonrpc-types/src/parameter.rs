@@ -2,13 +2,12 @@ use ckb_jsonrpc_types::{JsonBytes, Script as JsonScript, Uint32, Uint64};
 use ckb_types::packed as ckb_packed;
 use ckb_types::H256;
 use gw_chain::{chain, next_block_context};
-use gw_types::{
-    packed::{CancelChallenge, DepositionRequest, HeaderInfo, StartChallenge},
-    prelude::*,
-};
+use gw_types::{packed, prelude::*};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use crate::godwoken::{CancelChallenge, ChallengeContext, TxReceipt};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
@@ -57,7 +56,7 @@ impl From<L1Action> for chain::L1Action {
         Self {
             transaction: ckb_packed::Transaction::from_slice(transaction_bytes.as_ref())
                 .expect("Build packed::Transaction from slice"),
-            header_info: HeaderInfo::from_slice(header_info_bytes.as_ref())
+            header_info: packed::HeaderInfo::from_slice(header_info_bytes.as_ref())
                 .expect("Build packed::HeaderInfo from slice"),
             context: context.into(),
         }
@@ -121,7 +120,7 @@ impl From<L1ActionContext> for chain::L1ActionContext {
                     .into_iter()
                     .map(|d| {
                         let d_bytes = d.into_bytes();
-                        DepositionRequest::from_slice(d_bytes.as_ref())
+                        packed::DepositionRequest::from_slice(d_bytes.as_ref())
                             .expect("Build packed::DepositionRequest from slice")
                     })
                     .collect(),
@@ -131,7 +130,7 @@ impl From<L1ActionContext> for chain::L1ActionContext {
             } => {
                 let start_challenge_bytes = start_challenge.into_bytes();
                 chain::L1ActionContext::Challenge {
-                    context: StartChallenge::from_slice(start_challenge_bytes.as_ref())
+                    context: packed::StartChallenge::from_slice(start_challenge_bytes.as_ref())
                         .expect("Build packed::StartChallenge from slice"),
                 }
             }
@@ -140,7 +139,7 @@ impl From<L1ActionContext> for chain::L1ActionContext {
             } => {
                 let cancel_challenge_bytes = cancel_challenge.into_bytes();
                 chain::L1ActionContext::CancelChallenge {
-                    context: CancelChallenge::from_slice(cancel_challenge_bytes.as_ref())
+                    context: packed::CancelChallenge::from_slice(cancel_challenge_bytes.as_ref())
                         .expect("Build packed::CancelChallenge from slice"),
                 }
             }
@@ -149,7 +148,7 @@ impl From<L1ActionContext> for chain::L1ActionContext {
             } => {
                 let start_challenge_bytes = start_challenge.into_bytes();
                 chain::L1ActionContext::Revert {
-                    context: StartChallenge::from_slice(start_challenge_bytes.as_ref())
+                    context: packed::StartChallenge::from_slice(start_challenge_bytes.as_ref())
                         .expect("Build packed::StartChallenge from slice"),
                 }
             }
@@ -164,9 +163,14 @@ pub enum SyncEvent {
     // success
     Success,
     // found a invalid block
-    BadBlock { context: JsonBytes },
+    BadBlock {
+        context: ChallengeContext,
+    },
     // found a invalid challenge
-    BadChallenge { context: JsonBytes },
+    BadChallenge {
+        witness: CancelChallenge,
+        tx_receipt: TxReceipt,
+    },
     // the rollup is in a challenge
     WaitChallenge,
 }
@@ -175,11 +179,15 @@ impl From<chain::SyncEvent> for SyncEvent {
     fn from(sync_event: chain::SyncEvent) -> SyncEvent {
         match sync_event {
             chain::SyncEvent::Success => SyncEvent::Success,
-            chain::SyncEvent::BadBlock(start_challenge) => SyncEvent::BadBlock {
-                context: JsonBytes::from_bytes(start_challenge.as_bytes()),
+            chain::SyncEvent::BadBlock(challenge_context) => SyncEvent::BadBlock {
+                context: challenge_context.into(),
             },
-            chain::SyncEvent::BadChallenge(cancel_challenge) => SyncEvent::BadBlock {
-                context: JsonBytes::from_bytes(cancel_challenge.as_bytes()),
+            chain::SyncEvent::BadChallenge {
+                witness,
+                tx_receipt,
+            } => SyncEvent::BadChallenge {
+                witness: witness.into(),
+                tx_receipt: tx_receipt.into(),
             },
             chain::SyncEvent::WaitChallenge => SyncEvent::WaitChallenge,
         }
@@ -205,7 +213,7 @@ impl From<ProduceBlockParam> for chain::ProduceBlockParam {
                 .into_iter()
                 .map(|d| {
                     let d_bytes = d.into_bytes();
-                    DepositionRequest::from_slice(d_bytes.as_ref())
+                    packed::DepositionRequest::from_slice(d_bytes.as_ref())
                         .expect("Build packed::DepositionRequest from slice")
                 })
                 .collect(),
@@ -445,7 +453,8 @@ pub struct RunResult {
     pub return_data: Vec<u8>,
     pub account_count: Option<Uint32>,
     pub new_scripts: HashMap<H256, Vec<u8>>,
-    pub new_data: HashMap<H256, Vec<u8>>,
+    pub write_data: HashMap<H256, Vec<u8>>,
+    pub read_data: HashMap<H256, Uint32>,
 }
 
 impl From<RunResult> for gw_generator::RunResult {
@@ -456,7 +465,8 @@ impl From<RunResult> for gw_generator::RunResult {
             return_data,
             account_count,
             new_scripts,
-            new_data,
+            write_data,
+            read_data,
         } = json;
         let mut to_read_values: HashMap<gw_common::H256, gw_common::H256> = HashMap::new();
         for (k, v) in read_values.iter() {
@@ -474,17 +484,26 @@ impl From<RunResult> for gw_generator::RunResult {
         for (k, v) in new_scripts.iter() {
             to_new_scripts.insert(k.0.into(), v.to_vec());
         }
-        let mut to_new_data: HashMap<gw_common::H256, Vec<u8>> = HashMap::new();
-        for (k, v) in new_data.iter() {
-            to_new_data.insert(k.0.into(), v.to_vec());
+        let mut to_write_data: HashMap<gw_common::H256, Vec<u8>> = HashMap::new();
+        for (k, v) in write_data.iter() {
+            to_write_data.insert(k.0.into(), v.to_vec());
         }
+        let read_data = read_data
+            .into_iter()
+            .map(|(k, v)| {
+                let key: gw_common::H256 = k.0.into();
+                let v: u32 = v.into();
+                (key, v as usize)
+            })
+            .collect();
         Self {
             read_values: to_read_values,
             write_values: to_write_values,
             return_data: return_data,
             account_count: to_account_count,
             new_scripts: to_new_scripts,
-            new_data: to_new_data,
+            write_data: to_write_data,
+            read_data,
         }
     }
 }
@@ -497,7 +516,8 @@ impl From<gw_generator::RunResult> for RunResult {
             return_data,
             account_count,
             new_scripts,
-            new_data,
+            write_data,
+            read_data,
         } = run_result;
         let mut to_read_values: HashMap<H256, H256> = HashMap::new();
         for (k, v) in read_values.iter() {
@@ -521,17 +541,26 @@ impl From<gw_generator::RunResult> for RunResult {
         for (k, v) in new_scripts.iter() {
             to_new_scripts.insert(H256((*k as gw_common::H256).into()), v.to_vec());
         }
-        let mut to_new_data: HashMap<H256, Vec<u8>> = HashMap::new();
-        for (k, v) in new_data.iter() {
-            to_new_data.insert(H256((*k as gw_common::H256).into()), v.to_vec());
+        let mut to_write_data: HashMap<H256, Vec<u8>> = HashMap::new();
+        for (k, v) in write_data.iter() {
+            to_write_data.insert(H256((*k as gw_common::H256).into()), v.to_vec());
         }
+        let read_data = read_data
+            .into_iter()
+            .map(|(k, v)| {
+                let key: [u8; 32] = k.into();
+                let value = v as u32;
+                (key.into(), value.into())
+            })
+            .collect();
         Self {
             read_values: to_read_values,
             write_values: to_write_values,
             return_data: return_data,
             account_count: to_account_count,
             new_scripts: to_new_scripts,
-            new_data: to_new_data,
+            write_data: to_write_data,
+            read_data,
         }
     }
 }

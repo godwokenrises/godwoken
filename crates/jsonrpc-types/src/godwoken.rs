@@ -1,8 +1,7 @@
 use crate::blockchain::Script;
 use crate::fixed_bytes::Byte65;
 use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
-use gw_types::bytes::Bytes;
-use gw_types::{packed, prelude::*, H256};
+use gw_types::{bytes::Bytes, packed, prelude::*, H256};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
@@ -81,24 +80,77 @@ pub struct L2TransactionView {
     pub hash: H256,
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct TxReceipt {
+    pub tx_witness_hash: H256,
+    pub compacted_post_account_root: H256,
+    pub read_data_hashes: Vec<H256>,
+}
+
+impl From<TxReceipt> for gw_generator::TxReceipt {
+    fn from(json: TxReceipt) -> gw_generator::TxReceipt {
+        let TxReceipt {
+            tx_witness_hash,
+            compacted_post_account_root,
+            read_data_hashes,
+        } = json;
+        let tx_witness_hash: [u8; 32] = tx_witness_hash.into();
+        let compacted_post_account_root: [u8; 32] = compacted_post_account_root.into();
+        let read_data_hashes: Vec<_> = read_data_hashes
+            .into_iter()
+            .map(|hash| {
+                let hash: [u8; 32] = hash.into();
+                hash.into()
+            })
+            .collect();
+        gw_generator::TxReceipt {
+            tx_witness_hash: tx_witness_hash.into(),
+            compacted_post_account_root: compacted_post_account_root.into(),
+            read_data_hashes,
+        }
+    }
+}
+
+impl From<gw_generator::TxReceipt> for TxReceipt {
+    fn from(data: gw_generator::TxReceipt) -> TxReceipt {
+        let gw_generator::TxReceipt {
+            tx_witness_hash,
+            compacted_post_account_root,
+            read_data_hashes,
+        } = data;
+        let tx_witness_hash: [u8; 32] = tx_witness_hash.into();
+        let compacted_post_account_root: [u8; 32] = compacted_post_account_root.into();
+        let read_data_hashes: Vec<_> = read_data_hashes
+            .into_iter()
+            .map(|hash| {
+                let hash: [u8; 32] = hash.into();
+                hash.into()
+            })
+            .collect();
+        TxReceipt {
+            tx_witness_hash: tx_witness_hash.into(),
+            compacted_post_account_root: compacted_post_account_root.into(),
+            read_data_hashes,
+        }
+    }
+}
+
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct StartChallenge {
-    pub block_hash: H256,     // hash of challenged block
-    pub block_number: Uint64, // number of challenged block
-    pub tx_index: Uint32,     // challenge tx
+    pub block_hash: H256, // hash of challenged block
+    pub tx_index: Uint32, // challenge tx
 }
 
 impl From<StartChallenge> for packed::StartChallenge {
     fn from(json: StartChallenge) -> packed::StartChallenge {
         let StartChallenge {
             block_hash,
-            block_number,
             tx_index,
         } = json;
         packed::StartChallenge::new_builder()
             .block_hash(block_hash.pack())
-            .block_number(u64::from(block_number).pack())
             .tx_index(u32::from(tx_index).pack())
             .build()
     }
@@ -106,13 +158,68 @@ impl From<StartChallenge> for packed::StartChallenge {
 
 impl From<packed::StartChallenge> for StartChallenge {
     fn from(start_challenge: packed::StartChallenge) -> StartChallenge {
-        let block_number: u64 = start_challenge.block_number().unpack();
         let tx_index: u32 = start_challenge.tx_index().unpack();
         Self {
             block_hash: start_challenge.block_hash().unpack(),
-            block_number: Uint64::from(block_number),
             tx_index: Uint32::from(tx_index),
         }
+    }
+}
+
+#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct StartChallengeWitness {
+    pub raw_l2block: RawL2Block,
+    pub block_proof: JsonBytes, // block proof
+}
+
+impl From<StartChallengeWitness> for packed::StartChallengeWitness {
+    fn from(json: StartChallengeWitness) -> packed::StartChallengeWitness {
+        let StartChallengeWitness {
+            raw_l2block,
+            block_proof,
+        } = json;
+        let raw_l2block: packed::RawL2Block = raw_l2block.into();
+        packed::StartChallengeWitness::new_builder()
+            .raw_l2block(raw_l2block)
+            .block_proof(block_proof.into_bytes().pack())
+            .build()
+    }
+}
+
+impl From<packed::StartChallengeWitness> for StartChallengeWitness {
+    fn from(data: packed::StartChallengeWitness) -> StartChallengeWitness {
+        let raw_l2block: RawL2Block = data.raw_l2block().into();
+        let block_proof = JsonBytes::from_bytes(data.block_proof().unpack());
+        Self {
+            raw_l2block,
+            block_proof,
+        }
+    }
+}
+
+#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct ChallengeContext {
+    pub args: StartChallenge,
+    pub witness: StartChallengeWitness,
+}
+
+impl From<ChallengeContext> for gw_generator::ChallengeContext {
+    fn from(json: ChallengeContext) -> gw_generator::ChallengeContext {
+        let ChallengeContext { args, witness } = json;
+        let args: packed::StartChallenge = args.into();
+        let witness: packed::StartChallengeWitness = witness.into();
+        gw_generator::ChallengeContext { args, witness }
+    }
+}
+
+impl From<gw_generator::ChallengeContext> for ChallengeContext {
+    fn from(data: gw_generator::ChallengeContext) -> ChallengeContext {
+        let gw_generator::ChallengeContext { args, witness } = data;
+        let args: StartChallenge = args.into();
+        let witness: StartChallengeWitness = witness.into();
+        Self { args, witness }
     }
 }
 
@@ -126,7 +233,6 @@ pub struct CancelChallenge {
     pub scripts: Vec<Script>,
     pub return_data_hash: H256,
     pub tx_proof: JsonBytes,
-    pub block_proof: JsonBytes,
 }
 
 impl From<CancelChallenge> for packed::CancelChallenge {
@@ -139,7 +245,6 @@ impl From<CancelChallenge> for packed::CancelChallenge {
             scripts,
             return_data_hash,
             tx_proof,
-            block_proof,
         } = json;
         let kv_pair_vec: Vec<packed::KVPair> = kv_state.into_iter().map(|k| k.into()).collect();
         let packed_kv_state_vec = packed::KVPairVec::new_builder().set(kv_pair_vec).build();
@@ -154,8 +259,27 @@ impl From<CancelChallenge> for packed::CancelChallenge {
             .scripts(packed_script_vec)
             .return_data_hash(return_data_hash.pack())
             .tx_proof(tx_proof.into_bytes().pack())
-            .block_proof(block_proof.into_bytes().pack())
             .build()
+    }
+}
+
+impl From<packed::CancelChallenge> for CancelChallenge {
+    fn from(data: packed::CancelChallenge) -> CancelChallenge {
+        let kv_state: Vec<KVPair> = data.kv_state().into_iter().map(|k| k.into()).collect();
+        let scripts: Vec<Script> = data.scripts().into_iter().map(|s| s.into()).collect();
+
+        CancelChallenge {
+            raw_l2block: data.raw_l2block().into(),
+            l2tx: data.l2tx().into(),
+            kv_state,
+            kv_state_proof: JsonBytes::from_bytes(data.kv_state_proof().unpack()),
+            scripts,
+            return_data_hash: {
+                let return_data_hash: [u8; 32] = data.return_data_hash().unpack();
+                return_data_hash.into()
+            },
+            tx_proof: JsonBytes::from_bytes(data.tx_proof().unpack()),
+        }
     }
 }
 

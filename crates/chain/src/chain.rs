@@ -1,5 +1,5 @@
+use crate::next_block_context::NextBlockContext;
 use crate::tx_pool::TxPool;
-use crate::{next_block_context::NextBlockContext, tx_pool::TxPoolPackage};
 use anyhow::{anyhow, Result};
 use ckb_types::{
     bytes::Bytes,
@@ -11,12 +11,15 @@ use gw_common::{
     state::State, H256,
 };
 use gw_config::ChainConfig;
-use gw_generator::{generator::StateTransitionArgs, Error as GeneratorError, Generator};
+use gw_generator::{
+    generator::StateTransitionArgs, ChallengeContext, Error as GeneratorError, Generator, TxReceipt,
+};
 use gw_store::{Store, WrapStore};
 use gw_types::{
     packed::{
         AccountMerkleState, BlockMerkleState, CancelChallenge, DepositionRequest, GlobalState,
-        HeaderInfo, L2Block, L2BlockReader, RawL2Block, StartChallenge, SubmitTransactions,
+        HeaderInfo, L2Block, L2BlockReader, RawL2Block, StartChallenge, StartChallengeWitness,
+        SubmitTransactions,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -86,9 +89,12 @@ pub enum SyncEvent {
     // success
     Success,
     // found a invalid block
-    BadBlock(StartChallenge),
+    BadBlock(ChallengeContext),
     // found a invalid challenge
-    BadChallenge(CancelChallenge),
+    BadChallenge {
+        witness: CancelChallenge,
+        tx_receipt: TxReceipt,
+    },
     // the rollup is in a challenge
     WaitChallenge,
 }
@@ -210,13 +216,13 @@ impl Chain {
                     // Submit transactions
                     // parse layer2 block
                     let l2block = parse_l2block(&transaction, &self.rollup_type_script_hash)?;
-                    if let Some(start_challenge) =
+                    if let Some(challenge_context) =
                         self.process_block(l2block, header_info, deposition_requests)?
                     {
                         // stop syncing and return event
                         self.local_state
-                            .set_current_bad_block(Some(start_challenge.clone()));
-                        return Ok(SyncEvent::BadBlock(start_challenge));
+                            .set_current_bad_block(Some(challenge_context.args.clone()));
+                        return Ok(SyncEvent::BadBlock(challenge_context));
                     }
                 }
                 (Status::Running, L1ActionContext::Challenge { context }) => {
@@ -231,8 +237,12 @@ impl Chain {
                     }
                     // now, either we haven't found a bad block or the challenge is challenge a validate block
                     // in both cases the challenge is bad
-                    let cancel_challenge = unimplemented!();
-                    return Ok(SyncEvent::BadChallenge(cancel_challenge));
+                    let witness = CancelChallenge::default();
+                    let tx_receipt = unimplemented!();
+                    return Ok(SyncEvent::BadChallenge {
+                        witness,
+                        tx_receipt,
+                    });
                 }
                 (Status::Halting, L1ActionContext::CancelChallenge { context: _ }) => {
                     self.local_state.set_status(Status::Running);
@@ -271,7 +281,7 @@ impl Chain {
         l2block: L2Block,
         header_info: HeaderInfo,
         deposition_requests: Vec<DepositionRequest>,
-    ) -> Result<Option<StartChallenge>> {
+    ) -> Result<Option<ChallengeContext>> {
         let tip_number: u64 = self.local_state.tip.raw().number().unpack();
         assert!(
             l2block.raw().number().unpack() == tip_number + 1,
@@ -284,18 +294,35 @@ impl Chain {
             deposition_requests,
         };
         // process transactions
-        if let Err(err) = self.generator.apply_state_transition(&mut self.store, args) {
-            // handle tx error
-            match err {
-                GeneratorError::Transaction(err) => {
-                    // TODO run offchain validator before send challenge, to make sure the block is bad
-                    return Ok(Some(err.challenge_context));
+        let result = match self.generator.apply_state_transition(&mut self.store, args) {
+            Ok(result) => result,
+            Err(err) => {
+                // handle tx error
+                match err {
+                    GeneratorError::Transaction(err) => {
+                        // TODO run offchain validator before send challenge, to make sure the block is bad
+                        let block_hash: [u8; 32] = err.context.block_hash().unpack();
+                        let block_proof = self
+                            .store()
+                            .block_smt()
+                            .merkle_proof(vec![l2block.smt_key().into()])?
+                            .compile(vec![(l2block.smt_key().into(), block_hash.into())])?;
+                        let witness = StartChallengeWitness::new_builder()
+                            .raw_l2block(l2block.raw())
+                            .block_proof(block_proof.0.pack())
+                            .build();
+                        let challenge_context = ChallengeContext {
+                            args: err.context,
+                            witness,
+                        };
+                        return Ok(Some(challenge_context));
+                    }
+                    err => return Err(err.into()),
                 }
-                err => return Err(err.into()),
             }
-        }
+        };
         self.store
-            .insert_block(l2block.clone(), header_info.clone())?;
+            .insert_block(l2block.clone(), header_info.clone(), result.receipts)?;
         self.store.attach_block(l2block.clone())?;
 
         // update chain
@@ -325,17 +352,15 @@ impl Chain {
                 tx_pool_pkg
                     .tx_receipts
                     .iter()
-                    .map(|tx_recipt| &tx_recipt.tx_witness_hash)
-                    .cloned()
+                    .map(|(_tx, tx_receipt)| tx_receipt.tx_witness_hash.clone().into())
                     .collect(),
             )
             .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
             let tx_count = tx_pool_pkg.tx_receipts.len() as u32;
-            let compacted_post_root_list: Vec<_> = tx_pool_pkg
+            let compacted_post_root_list: Vec<[u8; 32]> = tx_pool_pkg
                 .tx_receipts
                 .iter()
-                .map(|tx_recipt| &tx_recipt.compacted_post_account_root)
-                .cloned()
+                .map(|(_tx, tx_receipt)| tx_receipt.compacted_post_account_root.clone().into())
                 .collect();
             SubmitTransactions::new_builder()
                 .tx_witness_root(tx_witness_root.pack())
@@ -404,7 +429,7 @@ impl Chain {
         let txs: Vec<_> = tx_pool_pkg
             .tx_receipts
             .into_iter()
-            .map(|tx| tx.tx)
+            .map(|(tx, _)| tx)
             .collect();
         let block_proof = self
             .store

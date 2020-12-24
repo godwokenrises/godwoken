@@ -3,6 +3,7 @@
 pub use sparse_merkle_tree::H256;
 
 pub trait H256Ext {
+    fn one() -> H256;
     fn from_u32(n: u32) -> H256;
     fn to_u32(&self) -> u32;
     fn from_u64(n: u64) -> H256;
@@ -12,6 +13,9 @@ pub trait H256Ext {
 }
 
 impl H256Ext for H256 {
+    fn one() -> H256 {
+        H256::from_u32(1)
+    }
     fn from_u32(n: u32) -> H256 {
         let mut buf = [0u8; 32];
         buf[..4].copy_from_slice(&n.to_le_bytes());

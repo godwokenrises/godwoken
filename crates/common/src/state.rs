@@ -7,7 +7,9 @@ use core::mem::size_of;
 pub const GW_ACCOUNT_KV: u8 = 0;
 pub const GW_ACCOUNT_NONCE: u8 = 1;
 pub const GW_ACCOUNT_SCRIPT_HASH: u8 = 2;
-pub const GW_ACCOUNT_SCRIPT_HASH_TO_ID: u8 = 3;
+/* prefix */
+pub const GW_SCRIPT_HASH_TO_ID_PREFIX: [u8; 5] = [0, 0, 0, 0, 3];
+pub const GW_DATA_HASH_PREFIX: [u8; 5] = [0, 0, 0, 0, 4];
 
 /* Generate a SMT key
  * raw_key: blake2b(id | type | key)
@@ -34,8 +36,17 @@ pub fn build_account_field_key(id: u32, type_: u8) -> H256 {
 pub fn build_script_hash_to_account_id_key(script_hash: &[u8]) -> H256 {
     let mut key: [u8; 32] = H256::zero().into();
     let mut hasher = new_blake2b();
-    hasher.update(&[GW_ACCOUNT_SCRIPT_HASH_TO_ID]);
+    hasher.update(&GW_SCRIPT_HASH_TO_ID_PREFIX);
     hasher.update(script_hash);
+    hasher.finalize(&mut key);
+    key.into()
+}
+
+pub fn build_data_hash_key(data_hash: &[u8]) -> H256 {
+    let mut key: [u8; 32] = H256::zero().into();
+    let mut hasher = new_blake2b();
+    hasher.update(&GW_DATA_HASH_PREFIX);
+    hasher.update(data_hash);
     hasher.finalize(&mut key);
     key.into()
 }
@@ -109,6 +120,17 @@ pub trait State {
         // get balance
         let balance = self.get_value(sudt_id, &H256::from_u32(id))?;
         Ok(balance.to_u128())
+    }
+
+    fn store_data_hash(&mut self, data_hash: H256) -> Result<(), Error> {
+        let key = build_data_hash_key(data_hash.as_slice());
+        self.update_raw(key, H256::one())?;
+        Ok(())
+    }
+    fn get_data_hash(&mut self, data_hash: &H256) -> Result<bool, Error> {
+        let key = build_data_hash_key(data_hash.as_slice());
+        let v = self.get_raw(&key)?;
+        Ok(v == H256::one())
     }
 
     /// Mint SUDT token on layer2

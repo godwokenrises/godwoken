@@ -235,8 +235,15 @@ struct StartChallenge {
     tx_index: Uint32, // challenge tx
 }
 
-// cancel a challenge by execute the transaction
+// witness to prove the validity of challenge
+table StartChallengeWitness {
+    raw_l2block: RawL2Block,
+    block_proof: Bytes, // block proof
+}
+
 vector ScriptVec<Script>;
+
+// witness to cancel a challenge by execute the transaction
 table CancelChallenge {
     raw_l2block: RawL2Block,
     l2tx: L2Transaction,

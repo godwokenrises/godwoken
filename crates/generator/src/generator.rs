@@ -1,4 +1,4 @@
-use crate::{account_lock_manage::AccountLockManage, backend_manage::BackendManage};
+use crate::{account_lock_manage::AccountLockManage, backend_manage::BackendManage, TxReceipt};
 use crate::{
     backend_manage::Backend,
     error::{Error, TransactionError, TransactionErrorWithContext},
@@ -7,10 +7,7 @@ use crate::{
     error::LockAlgorithmError,
     traits::{CodeStore, StateExt},
 };
-use crate::{
-    error::ValidateError,
-    syscalls::{L2Syscalls, RunResult},
-};
+use crate::{error::ValidateError, syscalls::L2Syscalls, types::RunResult};
 use gw_common::{
     error::Error as StateError,
     h256_ext::H256Ext,
@@ -37,6 +34,10 @@ const MIN_WITHDRAWAL_CAPACITY: u64 = 100_0000_0000;
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
     pub deposition_requests: Vec<DepositionRequest>,
+}
+
+pub struct StateTransitionResult {
+    pub receipts: Vec<TxReceipt>,
 }
 
 pub struct Generator {
@@ -128,7 +129,7 @@ impl Generator {
         &self,
         state: &mut S,
         args: StateTransitionArgs,
-    ) -> Result<(), Error> {
+    ) -> Result<StateTransitionResult, Error> {
         let raw_block = args.l2block.raw();
         let withdrawal_requests: Vec<_> = args.l2block.withdrawal_requests().into_iter().collect();
         // apply withdrawal to state
@@ -139,19 +140,15 @@ impl Generator {
         // handle transactions
         let block_info = get_block_info(&raw_block);
         let block_hash = raw_block.hash();
+        let mut receipts = Vec::with_capacity(args.l2block.transactions().len());
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
             let raw_tx = tx.raw();
-            // build challenge context
-            let challenge_context = StartChallenge::new_builder()
-                .block_hash(block_hash.pack())
-                .tx_index((tx_index as u32).pack())
-                .build();
             // check nonce
             let expected_nonce = state.get_nonce(raw_tx.from_id().unpack())?;
             let actual_nonce: u32 = raw_tx.nonce().unpack();
             if actual_nonce != expected_nonce {
                 return Err(TransactionErrorWithContext::new(
-                    challenge_context,
+                    build_challenge_context(tx_index as u32, block_hash),
                     TransactionError::Nonce {
                         expected: expected_nonce,
                         actual: actual_nonce,
@@ -164,13 +161,31 @@ impl Generator {
             let run_result = match self.execute(state, &block_info, &raw_tx) {
                 Ok(run_result) => run_result,
                 Err(err) => {
-                    return Err(TransactionErrorWithContext::new(challenge_context, err).into());
+                    return Err(TransactionErrorWithContext::new(
+                        build_challenge_context(tx_index as u32, block_hash),
+                        err,
+                    )
+                    .into());
                 }
             };
             state.apply_run_result(&run_result)?;
+
+            let compacted_post_account_root = state.calculate_compacted_account_root()?;
+            let tx_receipt = TxReceipt {
+                tx_witness_hash: tx.witness_hash().into(),
+                compacted_post_account_root: compacted_post_account_root.into(),
+                read_data_hashes: run_result
+                    .read_data
+                    .into_iter()
+                    .map(|(hash, _)| hash.into())
+                    .collect(),
+            };
+            receipts.push(tx_receipt);
         }
 
-        Ok(())
+        let result = StateTransitionResult { receipts };
+
+        Ok(result)
     }
 
     fn load_backend<S: State + CodeStore>(
@@ -235,6 +250,7 @@ impl Generator {
         run_result
             .write_values
             .insert(nonce_raw_key, H256::from_u32(nonce + 1));
+
         Ok(run_result)
     }
 }
@@ -244,5 +260,12 @@ fn get_block_info(l2block: &RawL2Block) -> BlockInfo {
         .aggregator_id(l2block.aggregator_id())
         .number(l2block.number())
         .timestamp(l2block.timestamp())
+        .build()
+}
+
+fn build_challenge_context(tx_index: u32, block_hash: [u8; 32]) -> StartChallenge {
+    StartChallenge::new_builder()
+        .tx_index(tx_index.pack())
+        .block_hash(block_hash.pack())
         .build()
 }

@@ -10,8 +10,9 @@ pub mod syscalls;
 #[cfg(test)]
 mod tests;
 pub mod traits;
+mod types;
 
 // re-exports
 pub use error::Error;
 pub use generator::Generator;
-pub use syscalls::RunResult;
+pub use types::*;

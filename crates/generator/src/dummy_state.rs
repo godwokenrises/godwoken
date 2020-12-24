@@ -44,10 +44,10 @@ impl CodeStore for DummyState {
     fn get_script(&self, script_hash: &H256) -> Option<Script> {
         self.scripts.get(&script_hash).cloned()
     }
-    fn insert_code(&mut self, script_hash: H256, code: Bytes) {
+    fn insert_data(&mut self, script_hash: H256, code: Bytes) {
         self.codes.insert(script_hash, code);
     }
-    fn get_code(&self, script_hash: &H256) -> Option<Bytes> {
+    fn get_data(&self, script_hash: &H256) -> Option<Bytes> {
         self.codes.get(script_hash).cloned()
     }
 }
