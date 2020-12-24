@@ -78,7 +78,9 @@ export async function tryExtractDepositionRequest(
   if (rollupTypeHash !== config.rollup_type_hash) {
     return undefined;
   }
-  const lockArgs = new schemas.DepositionLockArgs(new Reader(rollupTypeHash));
+  const lockArgs = new schemas.DepositionLockArgs(
+    args.toArrayBuffer().slice(32)
+  );
   if (tipHeader) {
     // Timeout validation
     const packedSince = new Reader(
