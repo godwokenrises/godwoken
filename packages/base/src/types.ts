@@ -1,5 +1,6 @@
-import { Hash, HexNumber, Script } from "@ckb-lumos/base";
+import { Hash, HexNumber, Script, denormalizers } from "@ckb-lumos/base";
 import { normalizers, BigIntToHexString, Reader } from "ckb-js-toolkit";
+import * as schemas from "../schemas/godwoken";
 
 // Taken for now from https://github.com/xxuejie/ckb-js-toolkit/blob/68f5ff709f78eb188ee116b2887a362123b016cc/src/normalizers.js#L17-L69,
 // later we can think about exposing those functions directly.
@@ -69,7 +70,7 @@ function toNormalize(normalize: Function) {
 export interface DepositionRequest {
   capacity: HexNumber;
   amount: HexNumber;
-  sudtScript: Script;
+  sudt_script: Script;
   script: Script;
 }
 
@@ -80,7 +81,7 @@ export function NormalizeDepositionRequest(
   return normalizeObject(debugPath, request, {
     capacity: normalizeHexNumber(8),
     amount: normalizeHexNumber(16),
-    sudtScript: toNormalize(normalizers.NormalizeScript),
+    sudt_script: toNormalize(normalizers.NormalizeScript),
     script: toNormalize(normalizers.NormalizeScript),
   });
 }
@@ -100,8 +101,38 @@ export function NormalizeHeaderInfo(
   });
 }
 
-export interface CustodianLockArgs {
+export interface DepositionLockArgs {
   owner_lock_hash: Hash;
+  layer2_lock: Script;
+  cancel_timeout: HexNumber;
+}
+
+export function DenormalizeDepositionLockArgs(
+  lockArgs: schemas.DepositionLockArgs
+) {
+  return {
+    owner_lock_hash: new Reader(
+      lockArgs.getOwnerLockHash().raw()
+    ).serializeJson(),
+    layer2_lock: denormalizers.DenormalizeScript(lockArgs.getLayer2Lock()),
+    cancel_timeout:
+      "0x" + lockArgs.getCancelTimeout().toLittleEndianBigUint64().toString(16),
+  };
+}
+
+export function NormalizeDepositionLockArgs(
+  depositionLockArgs: object,
+  { debugPath = "deposition_lock_args" } = {}
+) {
+  return normalizeObject(debugPath, depositionLockArgs, {
+    owner_lock_hash: normalizeRawData(32),
+    layer2_lock: toNormalize(normalizers.NormalizeScript),
+    cancel_timeout: normalizeHexNumber(8),
+  });
+}
+
+export interface CustodianLockArgs {
+  deposition_lock_args: DepositionLockArgs;
   deposition_block_hash: Hash;
   deposition_block_number: HexNumber;
 }
@@ -111,7 +142,7 @@ export function NormalizeCustodianLockArgs(
   { debugPath = "custondian_lock_args" } = {}
 ) {
   return normalizeObject(debugPath, args, {
-    owner_lock_hash: normalizeRawData(32),
+    deposition_lock_args: toNormalize(NormalizeDepositionLockArgs),
     deposition_block_hash: normalizeRawData(32),
     deposition_block_number: normalizeHexNumber(8),
   });

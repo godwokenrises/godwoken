@@ -133,7 +133,7 @@ export async function tryExtractDepositionRequest(
     amount,
     capacity: cell.cell_output.capacity,
     script: DenormalizeScript(lockArgs.getLayer2Lock()),
-    sudtScript,
+    sudt_script: sudtScript,
   };
   const packedRequest = new Reader(
     schemas.SerializeDepositionRequest(
