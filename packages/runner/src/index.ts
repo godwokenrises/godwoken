@@ -5,6 +5,7 @@ import { Indexer } from "@ckb-lumos/sql-indexer";
 import { Config, ChainService } from "@ckb-godwoken/godwoken";
 import { DeploymentConfig } from "@ckb-godwoken/base";
 import { initializeConfig } from "@ckb-lumos/config-manager";
+import { JsonrpcServer } from "./jsonrpc_server";
 import { Runner } from "./runner";
 import { RunnerConfig } from "./utils";
 import { readFileSync } from "fs";
@@ -23,6 +24,11 @@ program
   .requiredOption(
     "-p, --private-key <privateKey>",
     "aggregator private key to use"
+  )
+  .option(
+    "-l, --listen <listen>",
+    "JSONRPC listen path",
+    "127.0.0.1:8119"
   );
 program.parse(argv);
 
@@ -48,15 +54,16 @@ const chainService = new ChainService(
   runnerConfig.storeConfig.genesis
 );
 
-(async () => {
-  const runner = new Runner(
-    rpc,
-    indexer,
-    chainService,
-    runnerConfig,
-    program.privateKey
-  );
-  await runner.start();
-})().catch((e) => {
+const jsonrpcServer = new JsonrpcServer(chainService, program.listen);
+
+const runner = new Runner(
+  rpc,
+  indexer,
+  chainService,
+  runnerConfig,
+  program.privateKey
+);
+
+Promise.all([jsonrpcServer.start(), runner.start()]).catch((e) => {
   console.error(`Error occurs: ${e}`);
 });
