@@ -5,8 +5,6 @@ use gw_types::{packed, prelude::*, H256};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::godwoken::GlobalState;
-
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct BranchNode {
@@ -95,9 +93,9 @@ pub struct LeafMapEntry {
 #[serde(rename_all = "snake_case")]
 pub struct GenesisWithSMTState {
     pub genesis: JsonBytes,
+    pub global_state: JsonBytes,
     pub branches_map: Vec<BranchMapEntry>,
     pub leaves_map: Vec<LeafMapEntry>,
-    pub global_state: GlobalState,
 }
 
 impl From<GenesisWithSMTState> for genesis::GenesisWithSMTState {
@@ -121,9 +119,12 @@ impl From<GenesisWithSMTState> for genesis::GenesisWithSMTState {
         genesis::GenesisWithSMTState {
             genesis: packed::L2Block::from_slice(genesis.genesis.into_bytes().as_ref())
                 .expect("Build packed::L2Block from slice"),
+            global_state: packed::GlobalState::from_slice(
+                genesis.global_state.into_bytes().as_ref(),
+            )
+            .expect("Build packed::GlobalState from slice"),
             branches_map,
             leaves_map,
-            global_state: genesis.global_state.into(),
         }
     }
 }
@@ -132,7 +133,7 @@ impl From<genesis::GenesisWithSMTState> for GenesisWithSMTState {
     fn from(genesis: genesis::GenesisWithSMTState) -> Self {
         GenesisWithSMTState {
             genesis: JsonBytes::from_bytes(genesis.genesis.as_bytes()),
-            global_state: genesis.global_state.into(),
+            global_state: JsonBytes::from_bytes(genesis.global_state.as_bytes()),
             branches_map: genesis
                 .branches_map
                 .into_iter()

@@ -7,7 +7,7 @@ use gw_types::{core, packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::godwoken::{CancelChallenge, ChallengeContext, GlobalState, TxReceipt};
+use crate::godwoken::{CancelChallenge, ChallengeContext, TxReceipt};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
@@ -41,7 +41,6 @@ pub struct L1Action {
     /// transactions' header info
     pub header_info: JsonBytes,
     pub context: L1ActionContext,
-    pub global_state: GlobalState,
 }
 
 impl From<L1Action> for chain::L1Action {
@@ -50,7 +49,6 @@ impl From<L1Action> for chain::L1Action {
             transaction,
             header_info,
             context,
-            global_state,
         } = json;
         // let transaction_slice: &[u8] = transaction.into_bytes().as_ref();
         let transaction_bytes = transaction.into_bytes();
@@ -61,7 +59,6 @@ impl From<L1Action> for chain::L1Action {
             header_info: packed::HeaderInfo::from_slice(header_info_bytes.as_ref())
                 .expect("Build packed::HeaderInfo from slice"),
             context: context.into(),
-            global_state: global_state.into(),
         }
     }
 }

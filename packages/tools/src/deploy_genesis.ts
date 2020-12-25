@@ -103,7 +103,7 @@ const run = async () => {
           "0x00000000000000000000000000000000000000000000000000545950455f4944",
       },
     },
-    data: new Reader(genesis.genesis).serializeJson(),
+    data: genesis.global_state,
   };
   const cellCapacity = minimalCellCapacity(cell);
   cell.cell_output.capacity = "0x" + cellCapacity.toString(16);
@@ -124,6 +124,27 @@ const run = async () => {
         field: "outputs",
         index: 0,
       });
+  });
+  // L2Block is kept in witness field.
+  txSkeleton = txSkeleton.update("witnesses", (witnesses) => {
+    return witnesses.update(0, (witness) => {
+      const originalWitnessArgs = new core.WitnessArgs(new Reader(witness));
+      const witnessArgs: any = {};
+      if (originalWitnessArgs.getLock().hasValue()) {
+        witnessArgs.lock = new Reader(
+          originalWitnessArgs.getLock().value().raw()
+        ).serializeJson();
+      }
+      if (originalWitnessArgs.getInputType().hasValue()) {
+        witnessArgs.input_type = new Reader(
+          originalWitnessArgs.getInputType().value().raw()
+        ).serializeJson();
+      }
+      witnessArgs.output_type = genesis.genesis;
+      return new Reader(
+        core.SerializeWitnessArgs(normalizers.NormalizeWitnessArgs(witnessArgs))
+      ).serializeJson();
+    });
   });
   // Type ID
   const firstInput = {
@@ -199,11 +220,7 @@ const run = async () => {
   );
   const setup = {
     header_info: new Reader(packedHeaderInfo).serializeJson(),
-    genesis: {
-      genesis: new Reader(genesis.genesis).serializeJson(),
-      branches_map: genesis.branches_map,
-      leaves_map: genesis.leaves_map,
-    },
+    genesis,
   };
   godwokenConfig.chain = {
     rollup_type_script: typeScript,

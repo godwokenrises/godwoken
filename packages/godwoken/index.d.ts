@@ -132,6 +132,7 @@ export interface LeafMapEntry {
 
 export interface GenesisWithSMTState {
   genesis: HexString; // gw_types::packed::L2Block
+  global_state: HexString; // gw_types::packed::GlobalState
   branches_map: BranchMapEntry[];
   leaves_map: LeafMapEntry[];
 }

@@ -71,7 +71,6 @@ pub struct L1Action {
     /// transactions' header info
     pub header_info: HeaderInfo,
     pub context: L1ActionContext,
-    pub global_state: GlobalState,
 }
 
 pub struct ProduceBlockResult {
@@ -208,18 +207,17 @@ impl Chain {
                 transaction,
                 header_info,
                 context,
-                global_state,
             } = action;
-            assert_eq!(
+            let global_state = parse_global_state(&transaction, &self.rollup_type_script_hash)?;
+            assert!(
                 {
                     let number: u64 = header_info.number().unpack();
                     number
-                },
-                {
+                } >= {
                     let number: u64 = self.local_state.last_synced.number().unpack();
                     number
                 },
-                "must greater than last synced number"
+                "must be greater than or equalled to last synced number"
             );
             let status = {
                 let status: u8 = self.local_state.last_global_state.status().into();
@@ -510,6 +508,32 @@ fn unixtime() -> Result<u64> {
         .duration_since(SystemTime::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .map_err(Into::into)
+}
+
+fn parse_global_state(tx: &Transaction, rollup_id: &[u8; 32]) -> Result<GlobalState> {
+    // find rollup state cell from outputs
+    let (i, _) = tx
+        .raw()
+        .outputs()
+        .into_iter()
+        .enumerate()
+        .find(|(_i, output)| {
+            output
+                .type_()
+                .to_opt()
+                .map(|type_| type_.calc_script_hash().unpack())
+                .as_ref()
+                == Some(rollup_id)
+        })
+        .ok_or_else(|| anyhow!("no rollup cell found"))?;
+
+    let output_data: Bytes = tx
+        .raw()
+        .outputs_data()
+        .get(i)
+        .ok_or_else(|| anyhow!("no output data"))?
+        .unpack();
+    GlobalState::from_slice(&output_data).map_err(|_| anyhow!("global state unpacking error"))
 }
 
 fn parse_l2block(tx: &Transaction, rollup_id: &[u8; 32]) -> Result<L2Block> {
