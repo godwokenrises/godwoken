@@ -43,8 +43,11 @@ class ChainService {
     );
   }
 
-  async getStorageAt(rawKey) {
-    return this.nativeChain.getStorageAt(new Reader(rawKey).toArrayBuffer());
+  async getStorageAt(accountId, rawKey) {
+    return this.nativeChain.getStorageAt(
+      accountId,
+      new Reader(rawKey).toArrayBuffer()
+    );
   }
 
   async getAccountIdByScript(scriptHash) {

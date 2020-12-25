@@ -186,7 +186,8 @@ declare_types! {
 
         method getStorageAt(mut cx) {
             let this = cx.this();
-            let js_raw_key = cx.argument::<JsArrayBuffer>(0)?;
+            let account_id = cx.argument::<JsNumber>(0)?.value() as u32;
+            let js_raw_key = cx.argument::<JsArrayBuffer>(1)?;
             let raw_key: H256 = cx.borrow(&js_raw_key, |data| {
                 let data_slice = data.as_slice();
                 let mut buf = [0u8; 32];
@@ -195,7 +196,7 @@ declare_types! {
              });
             let get_raw_result = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_raw(&raw_key)
+                chain.store.get_value(account_id, &raw_key)
             });
             match get_raw_result {
                 Ok(value) => {
