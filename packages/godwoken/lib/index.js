@@ -1,4 +1,4 @@
-import { Reader } from "ckb-js-toolkit";
+const { Reader } = require("ckb-js-toolkit");
 var addon = require("../native");
 
 function buildGenesisBlock(config) {
