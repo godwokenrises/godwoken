@@ -258,12 +258,13 @@ impl Chain {
                     } else {
                         // now, either we haven't found a bad block or the challenge is challenge a validate block
                         // in both cases the challenge is bad
-                        let witness = CancelChallenge::default();
-                        let tx_receipt = unimplemented!();
-                        SyncEvent::BadChallenge {
-                            witness,
-                            tx_receipt,
-                        }
+                        // TODO: implement this
+                        let _witness = CancelChallenge::default();
+                        let _tx_receipt = unimplemented!();
+                        // SyncEvent::BadChallenge {
+                        //     witness,
+                        //     tx_receipt,
+                        // }
                     }
                 }
                 (Status::Halting, L1ActionContext::CancelChallenge { context: _ }) => {
