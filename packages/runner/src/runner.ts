@@ -214,6 +214,8 @@ export class Runner {
   }
 
   async start() {
+    this.logger("debug", `Rollup Type Hash: ${this.rollupTypeHash}`);
+    this.logger("debug", `CKB Address: ${this._ckbAddress()}`);
     // Wait for indexer sync
     await this.indexer.waitForSync();
 
@@ -319,9 +321,7 @@ export class Runner {
       "0x" + rawL2Block.getNumber().toLittleEndianBigUint64().toString(16);
     return depositionEntries.map(({ cell, lockArgs }) => {
       const custodianLockArgs = {
-        owner_lock_hash: new Reader(
-          lockArgs.getOwnerLockHash().raw()
-        ).serializeJson(),
+        deposition_lock_args: types.DenormalizeDepositionLockArgs(lockArgs),
         deposition_block_hash: l2BlockHash,
         deposition_block_number: l2BlockNumber,
       };
@@ -365,6 +365,10 @@ export class Runner {
       if (medianTime - this.lastProduceBlockTime >= 20n * 1000n) {
         this.logger("info", "Generating new block!");
         const depositionEntries = await this._queryValidDepositionRequests();
+        this.logger(
+          "debug",
+          `Valid deposition entries: ${depositionEntries.length}`
+        );
         const depositionRequests = depositionEntries.map(
           ({ packedRequest }) => packedRequest
         );
