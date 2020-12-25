@@ -127,7 +127,7 @@ export async function tryExtractDepositionRequest(
     code_hash:
       "0x0000000000000000000000000000000000000000000000000000000000000000",
     hash_type: "data",
-    args: "0x",
+    args: "0x0000000000000000000000000000000000000000000000000000000000000000",
   };
   const request = {
     amount,
