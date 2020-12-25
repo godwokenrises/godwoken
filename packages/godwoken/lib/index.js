@@ -43,6 +43,10 @@ class ChainService {
     );
   }
 
+  async getBalance(accountId, sudtId) {
+    return this.nativeChain.getBalance(accountId, sudtId);
+  }
+
   async getStorageAt(accountId, rawKey) {
     return this.nativeChain.getStorageAt(
       accountId,

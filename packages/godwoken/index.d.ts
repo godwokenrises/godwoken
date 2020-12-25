@@ -155,6 +155,7 @@ export class ChainService {
   submitL2Transaction(l2Transaction: HexString): Promise<RunResult>;
   submitWithdrawalRequest(withdrawalRequest: HexString): Promise<void>;
   execute(l2Transaction: HexString): Promise<RunResult>;
+  getBalance(accountId: number, sudtId: number): Promise<HexNumber>;
   getStorageAt(accountId: number, rawKey: Hash): Promise<Hash>;
   getAccountIdByScriptHash(hash: Hash): Promise<number | undefined>;
   tip(): HexString; // gw_bytes::packed::L2Block

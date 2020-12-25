@@ -184,6 +184,23 @@ declare_types! {
             Ok(js_value.upcast())
         }
 
+        method getBalance(mut cx) {
+            let this = cx.this();
+            let account_id = cx.argument::<JsNumber>(0)?.value() as u32;
+            let sudt_id = cx.argument::<JsNumber>(1)?.value() as u32;
+            let balance = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                chain.store.get_sudt_balance(sudt_id, account_id)
+            });
+            match balance {
+                Ok(value) => {
+                    let js_value = cx.string(format!("{:#x}", value));
+                    Ok(js_value.upcast())
+                },
+                Err(e) => cx.throw_error(format!("GetBalance failed: {:?}", e))
+            }
+        }
+
         method getStorageAt(mut cx) {
             let this = cx.this();
             let account_id = cx.argument::<JsNumber>(0)?.value() as u32;
