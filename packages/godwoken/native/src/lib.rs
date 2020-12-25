@@ -7,7 +7,9 @@ use gw_chain::{
 use gw_common::{state::State, H256};
 use gw_config::{Config, GenesisConfig};
 use gw_generator::{
-    account_lock_manage::AccountLockManage, backend_manage::BackendManage, Generator,
+    account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
+    backend_manage::BackendManage,
+    Generator,
 };
 use gw_jsonrpc_types::{genesis, parameter};
 use gw_store::{
@@ -24,6 +26,17 @@ pub struct NativeChain {
     pub chain: Arc<RwLock<Chain>>,
 }
 
+fn build_generator() -> Generator {
+    let mut account_lock_manage = AccountLockManage::default();
+    let code_hash = H256::from([
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 1,
+    ]);
+    // TODO: add a real signature verifying implementation later
+    account_lock_manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
+    Generator::new(BackendManage::default(), account_lock_manage)
+}
+
 declare_types! {
     pub class JsNativeChain for NativeChain {
         init(mut cx) {
@@ -35,20 +48,20 @@ declare_types! {
             let genesis_with_smt: GenesisWithSMTState = genesis_setup.genesis.into();
             let header_info = packed::HeaderInfo::from_slice(genesis_setup.header_info.into_bytes().as_ref()).expect("Constructing header info");
             let mut store = Store::default();
-            println!("Initializing store!");
             store.init_genesis(genesis_with_smt, header_info).expect("Initializing store");
             let tx_pool = {
-                let generator = Generator::new(BackendManage::default(), AccountLockManage::default());
                 let nb_ctx = NextBlockContext {
                     aggregator_id: 0u32,
                     timestamp: 0u64,
                 };
                 let tip = packed::L2Block::default();
-                let tx_pool = TxPool::create(store.new_overlay().expect("State new overlay"), generator, &tip, nb_ctx).expect("Creating TxPool");
+                let tx_pool = TxPool::create(
+                    store.new_overlay().expect("State new overlay"), build_generator(),
+                    &tip, nb_ctx).expect("Creating TxPool");
                 Arc::new(Mutex::new(tx_pool))
             };
-            let generator = Generator::new(BackendManage::default(), AccountLockManage::default());
-            let chain_result: Result<Chain> = Chain::create(config.clone().chain, store, generator, Arc::clone(&tx_pool));
+            let chain_result: Result<Chain> = Chain::create(
+                config.clone().chain, store, build_generator(), Arc::clone(&tx_pool));
             match chain_result {
                 Ok(chain) => Ok(NativeChain {
                     config: config,
