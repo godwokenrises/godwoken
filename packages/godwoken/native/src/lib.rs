@@ -153,6 +153,26 @@ declare_types! {
             }
         }
 
+        method submitWithdrawalRequest(mut cx) {
+            let this = cx.this();
+            let js_withdrawal_request = cx.argument::<JsArrayBuffer>(0)?;
+            let withdrawal_request_slice = cx.borrow(&js_withdrawal_request, |data| { data.as_slice::<u8>() });
+            let withdrawal_request = packed::WithdrawalRequest::from_slice(withdrawal_request_slice)
+                .expect("Build packed::WithdrawalRequest from slice");
+            let run_result: Result<()> =
+                cx.borrow(&this, |data| {
+                    let chain = data.chain.write().unwrap();
+                    let result = chain.tx_pool.lock().push_withdrawal_request(withdrawal_request);
+                    result
+                });
+            match run_result {
+                Ok(()) => {
+                    Ok(cx.undefined().upcast())
+                }
+                Err(e) => cx.throw_error(format!("Chain submit L2Transaction failed: {:?}", e))
+            }
+        }
+
         method lastSynced(mut cx) {
             let this = cx.this();
             let header_info: packed::HeaderInfo =
@@ -185,6 +205,26 @@ declare_types! {
                     Ok(js_value.upcast())
                 },
                 Err(e) => cx.throw_error(format!("GetStoargeAt failed: {:?}", e))
+            }
+        }
+
+        method getAccountIdByScript(mut cx) {
+            let this = cx.this();
+            let js_raw_key = cx.argument::<JsArrayBuffer>(0)?;
+            let raw_key: H256 = cx.borrow(&js_raw_key, |data| {
+                let data_slice = data.as_slice();
+                let mut buf = [0u8; 32];
+                buf.copy_from_slice(&data_slice[0..32]);
+                H256::from(buf)
+             });
+            let get_raw_result = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                chain.store.get_account_id_by_script_hash(&raw_key)
+            });
+            match get_raw_result {
+                Ok(Some(id)) => Ok(cx.number(id).upcast()),
+                Ok(None) => Ok(cx.undefined().upcast()),
+                Err(e) => cx.throw_error(format!("GetAccountIdByScript failed: {:?}", e))
             }
         }
 

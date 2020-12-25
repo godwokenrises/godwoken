@@ -153,8 +153,10 @@ export class ChainService {
     produceBlockParam: ProduceBlockParam
   ): Promise<ProduceBlockResult>;
   submitL2Transaction(l2Transaction: HexString): Promise<RunResult>;
+  submitWithdrawalRequest(withdrawalRequest: HexString): Promise<void>;
   execute(l2Transaction: HexString): Promise<RunResult>;
   getStorageAt(rawKey: Hash): Promise<Hash>;
+  getAccountIdByScriptHash(hash: Hash): Promise<number | undefined>;
   tip(): HexString; // gw_bytes::packed::L2Block
   lastSynced(): HexString; // gw_bytes::packed::HeaderInfo
   status(): Status;

@@ -1,3 +1,4 @@
+const { Reader } = require("ckb-js-toolkit");
 var addon = require("../native");
 
 function buildGenesisBlock(config) {
@@ -29,13 +30,27 @@ class ChainService {
     return JSON.parse(runResult);
   }
 
-  async submitL2Block(l2Transaction) {
-    const runResult = this.nativeChain.submitL2Block(l2Transaction);
+  async submitL2Tranaction(l2Transaction) {
+    const runResult = this.nativeChain.submitL2Tranaction(
+      new Reader(l2Transaction).toArrayBuffer()
+    );
     return JSON.parse(runResult);
   }
 
+  async submitWithdrawalRequest(withdrawalRequest) {
+    this.nativeChain.submitWithdrawalRequest(
+      new Reader(withdrawalRequest).toArrayBuffer()
+    );
+  }
+
   async getStorageAt(rawKey) {
-    return JSON.parse(this.nativeChain.getStorageAt(rawKey));
+    return this.nativeChain.getStorageAt(new Reader(rawKey).toArrayBuffer());
+  }
+
+  async getAccountIdByScript(scriptHash) {
+    return this.nativeChain.getAccountIdByScript(
+      new Reader(scriptHash).toArrayBuffer()
+    );
   }
 
   tip() {
