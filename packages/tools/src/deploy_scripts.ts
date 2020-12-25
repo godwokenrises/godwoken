@@ -101,21 +101,22 @@ const run = async () => {
 
     let txSkeleton = TransactionSkeleton({ cellProvider: indexer });
     txSkeleton = txSkeleton.update("outputs", (outputs) => outputs.push(cell));
+    txSkeleton = txSkeleton.update("fixedEntries", (fixedEntries) => {
+      return fixedEntries.push({
+        field: "outputs",
+        index: 0,
+      });
+    });
     txSkeleton = await common.injectCapacity(
       txSkeleton,
       [address],
       cellCapacity
     );
     txSkeleton = txSkeleton.update("fixedEntries", (fixedEntries) => {
-      return fixedEntries
-        .push({
-          field: "inputs",
-          index: 0,
-        })
-        .push({
-          field: "outputs",
-          index: 0,
-        });
+      return fixedEntries.push({
+        field: "inputs",
+        index: 0,
+      });
     });
     // Type ID
     const firstInput = {
@@ -177,6 +178,7 @@ const run = async () => {
         txWithStatus.tx_status &&
         txWithStatus.tx_status.status === "committed"
       ) {
+        await indexer.waitForSync(0);
         break;
       }
     }
