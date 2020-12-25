@@ -2,7 +2,7 @@ use ckb_jsonrpc_types::{JsonBytes, Script as JsonScript, Uint32, Uint64};
 use ckb_types::packed as ckb_packed;
 use ckb_types::H256;
 use gw_chain::{chain, next_block_context};
-use gw_types::{packed, prelude::*};
+use gw_types::{core, packed, prelude::*};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -249,19 +249,19 @@ impl Default for Status {
     }
 }
 
-impl From<Status> for chain::Status {
+impl From<Status> for core::Status {
     fn from(json: Status) -> Self {
         match json {
-            Status::Running => chain::Status::Running,
-            Status::Halting => chain::Status::Halting,
+            Status::Running => core::Status::Running,
+            Status::Halting => core::Status::Halting,
         }
     }
 }
-impl From<chain::Status> for Status {
-    fn from(status: chain::Status) -> Self {
+impl From<core::Status> for Status {
+    fn from(status: core::Status) -> Self {
         match status {
-            chain::Status::Running => Status::Running,
-            chain::Status::Halting => Status::Halting,
+            core::Status::Running => Status::Running,
+            core::Status::Halting => Status::Halting,
         }
     }
 }

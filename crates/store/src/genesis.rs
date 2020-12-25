@@ -12,12 +12,14 @@ use gw_common::{
 use gw_config::GenesisConfig;
 use gw_generator::traits::StateExt;
 use gw_types::{
-    packed::{AccountMerkleState, L2Block, RawL2Block, Script},
+    core::Status,
+    packed::{AccountMerkleState, BlockMerkleState, GlobalState, L2Block, RawL2Block, Script},
     prelude::*,
 };
 
 pub struct GenesisWithSMTState {
     pub genesis: L2Block,
+    pub global_state: GlobalState,
     pub branches_map: HashMap<H256, BranchNode>,
     pub leaves_map: HashMap<H256, LeafNode<H256>>,
 }
@@ -73,17 +75,20 @@ pub fn build_genesis(config: &GenesisConfig) -> Result<GenesisWithSMTState> {
         .number(0u64.pack())
         .aggregator_id(0u32.pack())
         .timestamp(config.timestamp.pack())
-        .post_account(post_account)
+        .post_account(post_account.clone())
         .build();
 
     // generate block proof
     let genesis_hash = raw_genesis.hash();
-    let block_proof = {
+    let (block_root, block_proof) = {
         let block_key = RawL2Block::compute_smt_key(0);
         let mut smt: SMT<DefaultStore<H256>> = Default::default();
         smt.update(block_key.into(), genesis_hash.into())?;
-        smt.merkle_proof(vec![block_key.into()])?
-            .compile(vec![(block_key.into(), genesis_hash.into())])?
+        let block_proof = smt
+            .merkle_proof(vec![block_key.into()])?
+            .compile(vec![(block_key.into(), genesis_hash.into())])?;
+        let block_root = smt.root().clone();
+        (block_root, block_proof)
     };
 
     // build genesis
@@ -91,11 +96,26 @@ pub fn build_genesis(config: &GenesisConfig) -> Result<GenesisWithSMTState> {
         .raw(raw_genesis)
         .block_proof(block_proof.0.pack())
         .build();
+    let global_state = {
+        let post_block = BlockMerkleState::new_builder()
+            .merkle_root({
+                let root: [u8; 32] = block_root.into();
+                root.pack()
+            })
+            .count(1u64.pack())
+            .build();
+        GlobalState::new_builder()
+            .account(post_account)
+            .block(post_block)
+            .status((Status::Running as u8).into())
+            .build()
+    };
     let store = state.account_smt().store();
     {
         let inner = store.inner().lock();
         Ok(GenesisWithSMTState {
             genesis,
+            global_state,
             leaves_map: inner.leaves_map().clone(),
             branches_map: inner.branches_map().clone(),
         })

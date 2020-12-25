@@ -11,7 +11,7 @@ use gw_common::{
 use gw_generator::{traits::CodeStore, TxReceipt};
 use gw_types::{
     bytes::Bytes,
-    packed::{HeaderInfo, L2Block, L2Transaction, Script},
+    packed::{GlobalState, HeaderInfo, L2Block, L2Transaction, Script},
     prelude::*,
 };
 use parking_lot::Mutex;
@@ -31,6 +31,7 @@ pub struct Store<S> {
     header_infos: HashMap<H256, HeaderInfo>,
     tip_block_hash: H256,
     tip_block_number: u64,
+    tip_global_state: GlobalState,
     transactions: HashMap<H256, (L2Transaction, TxReceipt)>,
 }
 
@@ -42,6 +43,7 @@ impl<S: SMTStore<H256>> Store<S> {
         scripts: HashMap<H256, Script>,
         tip_block_hash: H256,
         tip_block_number: u64,
+        tip_global_state: GlobalState,
         blocks: HashMap<H256, L2Block>,
         header_infos: HashMap<H256, HeaderInfo>,
         codes: HashMap<H256, Bytes>,
@@ -57,6 +59,7 @@ impl<S: SMTStore<H256>> Store<S> {
             header_infos,
             tip_block_hash,
             tip_block_number,
+            tip_global_state,
             transactions,
         }
     }
@@ -70,6 +73,7 @@ impl<S: SMTStore<H256>> Store<S> {
             genesis,
             leaves_map,
             branches_map,
+            global_state,
         } = genesis_with_smt;
 
         // initialize account smt
@@ -88,6 +92,7 @@ impl<S: SMTStore<H256>> Store<S> {
         );
         self.insert_block(genesis.clone(), header_info, Vec::new())?;
         self.attach_block(genesis)?;
+        self.set_tip_global_state(global_state)?;
         Ok(())
     }
 
@@ -148,6 +153,15 @@ impl<S: SMTStore<H256>> Store<S> {
         self.get_block(&self.tip_block_hash)
     }
 
+    pub fn get_tip_global_state(&self) -> Result<GlobalState, Error> {
+        Ok(self.tip_global_state.clone())
+    }
+
+    pub fn set_tip_global_state(&mut self, global_state: GlobalState) -> Result<(), Error> {
+        self.tip_global_state = global_state;
+        Ok(())
+    }
+
     pub fn get_block(&self, block_hash: &H256) -> Result<Option<L2Block>, Error> {
         Ok(self.blocks.get(block_hash).cloned())
     }
@@ -192,6 +206,7 @@ impl<S: SMTStore<H256> + Default> Default for Store<S> {
             header_infos: Default::default(),
             tip_block_hash: H256::zero(),
             tip_block_number: 0,
+            tip_global_state: Default::default(),
             transactions: Default::default(),
         }
     }
