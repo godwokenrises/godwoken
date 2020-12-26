@@ -24,3 +24,7 @@ template_type = "Rust"
 name = "challenge-lock"
 template_type = "Rust"
 
+[[contracts]]
+name = "stake-lock"
+template_type = "Rust"
+

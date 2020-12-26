@@ -4,6 +4,7 @@ members = [
     "deposition-lock",
     "withdrawal-lock",
     "challenge-lock",
+    "stake-lock",
     "state-validator",
     "validator-utils",
 ]

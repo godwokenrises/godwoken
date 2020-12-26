@@ -20,6 +20,7 @@ pub enum Error {
     OverflowAmount,
     InsufficientAmount,
     SMTKeyMissing,
+    InvalidStakeCellUnlock,
 }
 
 impl From<SysError> for Error {
