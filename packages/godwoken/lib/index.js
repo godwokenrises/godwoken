@@ -60,6 +60,32 @@ class ChainService {
     );
   }
 
+  async getNonce(accountId) {
+    return this.nativeChain.getNonce(accountId);
+  }
+
+  async getScriptHash(accountId) {
+    return this.nativeChain.getScriptHash(accountId);
+  }
+
+  async getScript(scriptHash) {
+    const result = this.nativeChain.getScript(
+      new Reader(scriptHash).toArrayBuffer()
+    );
+    if (result) {
+      return JSON.parse(result);
+    }
+    return undefined;
+  }
+
+  async getDataHash(dataHash) {
+    return this.nativeChange.getDataHash(new Reader(dataHash).toArrayBuffer());
+  }
+
+  async getData(dataHash) {
+    return this.nativeChange.getData(new Reader(dataHash).toArrayBuffer());
+  }
+
   tip() {
     return this.nativeChain.tip();
   }

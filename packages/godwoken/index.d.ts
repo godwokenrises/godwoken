@@ -158,6 +158,11 @@ export class ChainService {
   getBalance(accountId: number, sudtId: number): Promise<HexNumber>;
   getStorageAt(accountId: number, rawKey: Hash): Promise<Hash>;
   getAccountIdByScriptHash(hash: Hash): Promise<number | undefined>;
+  getNonce(accountId: number): Promise<number>;
+  getScriptHash(accountId: number): Promise<Hash>;
+  getScript(scriptHash: Hash): Promise<Script | undefined>;
+  getDataHash(dataHash: Hash): Promise<boolean>;
+  getData(dataHash: Hash): Promise<HexString | undefined>;
   tip(): HexString; // gw_bytes::packed::L2Block
   lastSynced(): HexString; // gw_bytes::packed::HeaderInfo
   status(): Status;

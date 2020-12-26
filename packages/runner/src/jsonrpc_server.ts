@@ -1,3 +1,4 @@
+import { Script } from "@ckb-lumos/base";
 import { ChainService } from "@ckb-godwoken/godwoken";
 import jayson from "jayson/promise";
 import cors from "cors";
@@ -26,6 +27,11 @@ export class JsonrpcServer {
       gw_getBalance: this.getBalance.bind(this),
       gw_getStorageAt: this.getStorageAt.bind(this),
       gw_getAccountIdByScriptHash: this.getAccountIdByScriptHash.bind(this),
+      gw_getNonce: this.getNonce.bind(this),
+      gw_getScript: this.getScript.bind(this),
+      gw_getScriptHash: this.getScriptHash.bind(this),
+      gw_getData: this.getData.bind(this),
+      gw_getDataHash: this.getDataHash.bind(this),
     });
     this.listen = listen;
   }
@@ -75,6 +81,41 @@ export class JsonrpcServer {
       throw this.server.error(501, "Invalid arguments!");
     }
     return await this.chainService.getAccountIdByScriptHash(args[0]);
+  }
+
+  async getNonce(args: any) {
+    if (args.length !== 1 || typeof args[0] !== "number") {
+      throw this.server.error(501, "Invalid arguments!");
+    }
+    return await this.chainService.getNonce(args[0]);
+  }
+
+  async getScriptHash(args: any) {
+    if (args.length !== 1 || typeof args[0] !== "number") {
+      throw this.server.error(501, "Invalid arguments!");
+    }
+    return await this.chainService.getScriptHash(args[0]);
+  }
+
+  async getScript(args: any): Promise<Script | undefined> {
+    if (args.length !== 1 || !isHash(args[0])) {
+      throw this.server.error(501, "Invalid arguments!");
+    }
+    return await this.chainService.getScript(args[0]);
+  }
+
+  async getData(args: any) {
+    if (args.length !== 1 || !isHash(args[0])) {
+      throw this.server.error(501, "Invalid arguments!");
+    }
+    return await this.chainService.getData(args[0]);
+  }
+
+  async getDataHash(args: any) {
+    if (args.length !== 1 || !isHash(args[0])) {
+      throw this.server.error(501, "Invalid arguments!");
+    }
+    return await this.chainService.getDataHash(args[0]);
   }
 
   async start() {

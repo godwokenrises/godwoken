@@ -9,9 +9,10 @@ use gw_config::{Config, GenesisConfig};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
+    traits::CodeStore,
     Generator,
 };
-use gw_jsonrpc_types::{genesis, parameter};
+use gw_jsonrpc_types::{blockchain, genesis, parameter};
 use gw_store::{
     genesis::{build_genesis, GenesisWithSMTState},
     Store,
@@ -243,6 +244,101 @@ declare_types! {
                 Ok(Some(id)) => Ok(cx.number(id).upcast()),
                 Ok(None) => Ok(cx.undefined().upcast()),
                 Err(e) => cx.throw_error(format!("GetAccountIdByScript failed: {:?}", e))
+            }
+        }
+
+        method getNonce(mut cx) {
+            let this = cx.this();
+            let account_id = cx.argument::<JsNumber>(0)?.value() as u32;
+            let nonce = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                chain.store.get_nonce(account_id)
+            });
+            match nonce {
+                Ok(value) => Ok(cx.number(value).upcast()),
+                Err(e) => cx.throw_error(format!("GetNonce failed: {:?}", e))
+            }
+        }
+
+        method getScriptHash(mut cx) {
+            let this = cx.this();
+            let account_id = cx.argument::<JsNumber>(0)?.value() as u32;
+            let script_hash = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                chain.store.get_script_hash(account_id)
+            });
+            match script_hash {
+                Ok(value) => {
+                    let array: [u8; 32]= value.into();
+                    let value =  packed::Byte32::from_slice(&array[0..32]).expect("Build packed::Byte32 from slice");
+                    let js_value = cx.string(format!("{:#x}", value));
+                    Ok(js_value.upcast())
+                },
+                Err(e) => cx.throw_error(format!("GetNonce failed: {:?}", e))
+            }
+        }
+
+        method getScript(mut cx) {
+            let this = cx.this();
+            let js_raw_key = cx.argument::<JsArrayBuffer>(0)?;
+            let raw_key: H256 = cx.borrow(&js_raw_key, |data| {
+                let data_slice = data.as_slice();
+                let mut buf = [0u8; 32];
+                buf.copy_from_slice(&data_slice[0..32]);
+                H256::from(buf)
+             });
+            let script = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                chain.store.get_script(&raw_key)
+            });
+            match script {
+                Some(value) => {
+                    let script_jsonrpc: blockchain::Script = value.into();
+                    let script_string = serde_json::to_string(&script_jsonrpc).expect("Serializing Script");
+                    Ok(cx.string(script_string).upcast())
+                },
+                None => Ok(cx.undefined().upcast())
+            }
+        }
+
+        method getDataHash(mut cx) {
+            let this = cx.this();
+            let js_raw_key = cx.argument::<JsArrayBuffer>(0)?;
+            let raw_key: H256 = cx.borrow(&js_raw_key, |data| {
+                let data_slice = data.as_slice();
+                let mut buf = [0u8; 32];
+                buf.copy_from_slice(&data_slice[0..32]);
+                H256::from(buf)
+             });
+            let data = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                chain.store.get_data_hash(&raw_key)
+            });
+            match data {
+                Ok(value) => Ok(cx.boolean(value).upcast()),
+                Err(e) => cx.throw_error(format!("GetDataHash failed: {:?}", e))
+            }
+        }
+
+        method getData(mut cx) {
+            let this = cx.this();
+            let js_raw_key = cx.argument::<JsArrayBuffer>(0)?;
+            let raw_key: H256 = cx.borrow(&js_raw_key, |data| {
+                let data_slice = data.as_slice();
+                let mut buf = [0u8; 32];
+                buf.copy_from_slice(&data_slice[0..32]);
+                H256::from(buf)
+             });
+            let data = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                chain.store.get_data(&raw_key)
+            });
+            match data {
+                Some(value) => {
+                    let js_value = cx.string(format!("{:#x}", value));
+                    Ok(js_value.upcast())
+                },
+                None => Ok(cx.undefined().upcast())
             }
         }
 
