@@ -184,7 +184,6 @@ table UnlockWithdrawalViaTrade {
 // a rollup_type_hash exists before this args, to make args friendly to prefix search
 struct StakeLockArgs {
     owner_lock_hash: Byte32,
-    signing_pubkey_hash: Byte20,
     stake_block_number: Uint64,
 }
 // --- end of stake lock ---
@@ -244,14 +243,6 @@ table CancelChallenge {
     account_count: Uint32,
 }
 // --- end of challenge ---
-
-// --- stake ---
-// a rollup_type_hash exists before this args, to make args friendly to prefix search
-struct StakeArgs {
-    stake_block_number: Uint64,
-    owner_lock_hash: Byte32,
-}
-// --- end of stake ---
 
 // --- unlock account ---
 struct UnlockAccount {
