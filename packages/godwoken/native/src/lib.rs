@@ -227,7 +227,7 @@ declare_types! {
             }
         }
 
-        method getAccountIdByScript(mut cx) {
+        method getAccountIdByScriptHash(mut cx) {
             let this = cx.this();
             let js_raw_key = cx.argument::<JsArrayBuffer>(0)?;
             let raw_key: H256 = cx.borrow(&js_raw_key, |data| {

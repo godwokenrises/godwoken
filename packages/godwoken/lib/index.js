@@ -54,8 +54,8 @@ class ChainService {
     );
   }
 
-  async getAccountIdByScript(scriptHash) {
-    return this.nativeChain.getAccountIdByScript(
+  async getAccountIdByScriptHash(scriptHash) {
+    return this.nativeChain.getAccountIdByScriptHash(
       new Reader(scriptHash).toArrayBuffer()
     );
   }
