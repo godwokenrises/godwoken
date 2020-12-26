@@ -28,15 +28,10 @@ import {
   tryExtractDepositionRequest,
   RunnerConfig,
   StateValidatorLockGenerator,
+  Logger,
 } from "./utils";
 import { AlwaysSuccessGenerator } from "./locks";
 import * as secp256k1 from "secp256k1";
-
-type Level = "debug" | "info" | "warn" | "error";
-
-function defaultLogger(level: Level, message: string) {
-  console.log(`[${level}] ${message}`);
-}
 
 function asyncSleep(ms = 0) {
   return new Promise((r) => setTimeout(r, ms));
@@ -67,7 +62,7 @@ export class Runner {
   config: RunnerConfig;
   lastBlockNumber: bigint;
   cancelListener: () => void;
-  logger: (level: Level, message: string) => void;
+  logger: Logger;
   rollupTypeHash: Hash;
   privateKey: HexString;
 
@@ -79,7 +74,7 @@ export class Runner {
     chainService: ChainService,
     config: RunnerConfig,
     privateKey: HexString,
-    { logger = defaultLogger } = {}
+    logger: Logger
   ) {
     this.rpc = rpc;
     this.indexer = indexer;

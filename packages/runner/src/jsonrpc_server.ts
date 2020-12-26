@@ -4,6 +4,7 @@ import jayson from "jayson/promise";
 import cors from "cors";
 import connect from "connect";
 import { json } from "body-parser";
+import { Logger } from "./utils";
 
 function isHexString(s: any) {
   return typeof s === "string" && /^0x([0-9a-fA-F][0-9a-fA-F])*$/.test(s);
@@ -16,24 +17,41 @@ function isHash(s: any) {
 export class JsonrpcServer {
   chainService: ChainService;
   server: jayson.Server;
+  logger: Logger;
   listen: string;
 
-  constructor(chainService: ChainService, listen: string) {
+  constructor(chainService: ChainService, listen: string, logger: Logger) {
     this.chainService = chainService;
     this.server = new jayson.Server({
-      gw_submitL2Transaction: this.submitL2Transaction.bind(this),
-      gw_executeL2Tranaction: this.executeL2Transaction.bind(this),
-      gw_submitWithdrawalRequest: this.submitWithdrawalRequest.bind(this),
-      gw_getBalance: this.getBalance.bind(this),
-      gw_getStorageAt: this.getStorageAt.bind(this),
-      gw_getAccountIdByScriptHash: this.getAccountIdByScriptHash.bind(this),
-      gw_getNonce: this.getNonce.bind(this),
-      gw_getScript: this.getScript.bind(this),
-      gw_getScriptHash: this.getScriptHash.bind(this),
-      gw_getData: this.getData.bind(this),
-      gw_getDataHash: this.getDataHash.bind(this),
+      gw_submitL2Transaction: this.wrapWithLogger(this.submitL2Transaction),
+      gw_executeL2Tranaction: this.wrapWithLogger(this.executeL2Transaction),
+      gw_submitWithdrawalRequest: this.wrapWithLogger(
+        this.submitWithdrawalRequest
+      ),
+      gw_getBalance: this.wrapWithLogger(this.getBalance),
+      gw_getStorageAt: this.wrapWithLogger(this.getStorageAt),
+      gw_getAccountIdByScriptHash: this.wrapWithLogger(
+        this.getAccountIdByScriptHash
+      ),
+      gw_getNonce: this.wrapWithLogger(this.getNonce),
+      gw_getScript: this.wrapWithLogger(this.getScript),
+      gw_getScriptHash: this.wrapWithLogger(this.getScriptHash),
+      gw_getData: this.wrapWithLogger(this.getData),
+      gw_getDataHash: this.wrapWithLogger(this.getDataHash),
     });
     this.listen = listen;
+    this.logger = logger;
+  }
+
+  wrapWithLogger(f: Function) {
+    return async (args: any) => {
+      try {
+        return await f.bind(this)(args);
+      } catch (e) {
+        this.logger("error", `Error: ${e} ${e.stack}`);
+        return this.server.error(502, "Internal error, check server logs!");
+      }
+    };
   }
 
   async submitL2Transaction(args: any) {
