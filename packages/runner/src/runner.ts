@@ -578,7 +578,7 @@ export class Runner {
     const data: DataView = (rawL2Block as any).view;
     const l2BlockHash = utils.ckbHash(data.buffer).serializeJson();
     const l2BlockNumber =
-    "0x" + rawL2Block.getNumber().toLittleEndianBigUint64().toString(16);
+      "0x" + rawL2Block.getNumber().toLittleEndianBigUint64().toString(16);
     const withdrawalRequestVec = l2Block.getWithdrawalRequests();
     if (withdrawalRequestVec.length() === 0) {
       return txSkeleton;
@@ -588,9 +588,7 @@ export class Runner {
       return cellDeps.push(this.config.deploymentConfig.custodian_lock_dep);
     });
     // collect all finalized and live custodian cells
-    let toBlockNumber =
-      BigInt(l2BlockNumber) -
-      BigInt(FINALIZED_BLOCKS);
+    let toBlockNumber = BigInt(l2BlockNumber) - BigInt(FINALIZED_BLOCKS);
     const toBlock = "0x" + toBlockNumber.toString(16);
     const validCustodianCells = await this._queryValidCustodianCells(toBlock);
     const deposition_block_hash = validCustodianCells[0].block_hash!;
@@ -657,7 +655,7 @@ export class Runner {
         data: outputData,
       };
       const minimalCapacity = minimalCellCapacity(withdrawalOutput);
-      // simply throw an error, may use acp like approach to solve this later ?
+      // Withdraw sudt only or ckb with capacity less than minimal capacity is not support so far.
       if (BigInt(withdrawalCapacity) < BigInt(minimalCapacity)) {
         throw new Error(
           "Try to withdraw capacity less than minimalCellCapacity"
@@ -898,13 +896,12 @@ export class Runner {
     );
     return this._packArgsHelper(packedWithdrawalLockArgs);
   }
+
   _packArgsHelper(args: ArrayBuffer): HexString {
     const buffer = new ArrayBuffer(32 + args.byteLength);
     const array = new Uint8Array(buffer);
     array.set(
-      new Uint8Array(
-        new Reader(this.rollupTypeHash).toArrayBuffer()
-      ),
+      new Uint8Array(new Reader(this.rollupTypeHash).toArrayBuffer()),
       0
     );
     array.set(new Uint8Array(args), 32);
