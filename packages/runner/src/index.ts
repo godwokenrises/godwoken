@@ -25,7 +25,7 @@ program
     "-p, --private-key <privateKey>",
     "aggregator private key to use"
   )
-  .option("-l, --listen <listen>", "JSONRPC listen path", "127.0.0.1:8119");
+  .option("-l, --listen <listen>", "JSONRPC listen path", "8119");
 program.parse(argv);
 
 initializeConfig();
