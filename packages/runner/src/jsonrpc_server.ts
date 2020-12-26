@@ -20,12 +20,12 @@ export class JsonrpcServer {
   constructor(chainService: ChainService, listen: string) {
     this.chainService = chainService;
     this.server = new jayson.Server({
-      ckb_submitL2Transaction: this.submitL2Transaction.bind(this),
-      ckb_executeL2Tranaction: this.executeL2Transaction.bind(this),
-      ckb_submitWithdrawalRequest: this.submitWithdrawalRequest.bind(this),
-      ckb_getBalance: this.getBalance.bind(this),
-      ckb_getStorageAt: this.getStorageAt.bind(this),
-      ckb_getAccountIdByScriptHash: this.getAccountIdByScriptHash.bind(this),
+      gw_submitL2Transaction: this.submitL2Transaction.bind(this),
+      gw_executeL2Tranaction: this.executeL2Transaction.bind(this),
+      gw_submitWithdrawalRequest: this.submitWithdrawalRequest.bind(this),
+      gw_getBalance: this.getBalance.bind(this),
+      gw_getStorageAt: this.getStorageAt.bind(this),
+      gw_getAccountIdByScriptHash: this.getAccountIdByScriptHash.bind(this),
     });
     this.listen = listen;
   }
