@@ -4,6 +4,7 @@ use gw_common::H256;
 use gw_types::{bytes::Bytes, packed::Signature};
 
 pub mod always_success;
+pub mod secp256k1;
 
 use crate::error::LockAlgorithmError;
 

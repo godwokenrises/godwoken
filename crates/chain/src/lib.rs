@@ -7,6 +7,5 @@
 //! * Submit new blocks to layer1(as an aggregator)
 
 pub mod chain;
-mod crypto;
 pub mod next_block_context;
 pub mod tx_pool;

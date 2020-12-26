@@ -4,7 +4,7 @@
 pub mod account_lock_manage;
 pub mod backend_manage;
 pub mod dummy_state;
-mod error;
+pub mod error;
 pub mod generator;
 pub mod syscalls;
 #[cfg(test)]

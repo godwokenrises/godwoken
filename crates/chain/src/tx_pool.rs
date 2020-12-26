@@ -1,4 +1,3 @@
-use crate::crypto::{verify_signature, Signature};
 use crate::next_block_context::NextBlockContext;
 use anyhow::{anyhow, Result};
 use gw_common::{
@@ -7,6 +6,7 @@ use gw_common::{
     H256,
 };
 use gw_generator::{
+    error::{LockAlgorithmError, ValidateError},
     traits::{CodeStore, StateExt},
     Generator, RunResult, TxReceipt,
 };
@@ -136,17 +136,18 @@ impl<S: Store<SMTH256>> TxPool<S> {
             .get_script_hash(sender_id)
             .expect("get script hash");
         let script = self.state.get_script(&script_hash).expect("get script");
-        let pubkey_hash = {
-            let mut buf = [0u8; 20];
-            let args: Vec<u8> = script.args().unpack();
-            // pubkey hash length is 20
-            assert_eq!(args.len(), 20);
-            buf.copy_from_slice(args.as_slice());
-            buf.into()
-        };
+        let lock_code_hash: [u8; 32] = script.code_hash().unpack();
         let tx_hash = tx.hash();
-        let sig = Signature(tx.signature().unpack());
-        verify_signature(&sig, &tx_hash, &pubkey_hash)?;
+        let lock_algo = self
+            .generator
+            .account_lock_manage()
+            .get_lock_algorithm(&lock_code_hash.into())
+            .ok_or(ValidateError::UnknownAccountLockScript)?;
+        let valid_signature =
+            lock_algo.verify_signature(script.args().unpack(), tx.signature(), tx_hash.into())?;
+        if !valid_signature {
+            return Err(LockAlgorithmError::InvalidSignature.into());
+        }
         Ok(())
     }
 

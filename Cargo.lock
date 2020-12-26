@@ -531,7 +531,6 @@ dependencies = [
  "gw-types",
  "lazy_static",
  "parking_lot",
- "secp256k1",
  "thiserror",
  "toml",
 ]
@@ -564,6 +563,7 @@ dependencies = [
  "gw-types",
  "hex",
  "lazy_static",
+ "secp256k1",
  "thiserror",
 ]
 

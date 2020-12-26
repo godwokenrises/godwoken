@@ -53,6 +53,10 @@ impl Generator {
         }
     }
 
+    pub fn account_lock_manage(&self) -> &AccountLockManage {
+        &self.account_lock_manage
+    }
+
     pub fn verify_withdrawal_request<S: State + CodeStore>(
         &self,
         state: &S,
