@@ -30,6 +30,7 @@ export interface StateValidatorLockGenerator {
   ): Promise<StateValidatorLockGeneratorState>;
 
   fixTransactionSkeleton(
+    medianTime: HexNumber,
     txSkeleton: TransactionSkeletonType
   ): Promise<TransactionSkeletonType>;
 }

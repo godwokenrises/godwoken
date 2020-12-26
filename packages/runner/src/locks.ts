@@ -23,6 +23,7 @@ export class AlwaysSuccessGenerator {
   }
 
   async fixTransactionSkeleton(
+    _medianTimeHex: HexNumber,
     txSkeleton: TransactionSkeletonType
   ): Promise<TransactionSkeletonType> {
     return txSkeleton;

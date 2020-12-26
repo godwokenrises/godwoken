@@ -218,39 +218,6 @@ export class Runner {
     // Wait for indexer sync
     await this.indexer.waitForSync();
 
-    // Use rollup type hash to look for transactions in a backwards fashion, using those
-    // transactions, we can then rebuild godwoken internal states. In a future version
-    // where godwoken has persistent storage, things could be simplified, but right now
-    // this provides a good solution for cold start.
-    // TODO: for now, we always rebuild state from genesis cell, so there won't be a
-    // forking problem. However if later we implement persistent state store, forking
-    // will then need to be handled here.
-    // this.logger("info", "Processing committed L2 blocks!");
-    // const committedL2BlockCollector = new TransactionCollector(
-    //   this.indexer,
-    //   this._rollupCellQueryOptions(),
-    //   {
-    //     includeStatus: true,
-    //   }
-    // );
-    // TODO: confirm how genesis will be handled later. If genesis is handled
-    // in chain service initialization, we need to skip one transaction here.
-    // for await (const result of committedL2BlockCollector.collect()) {
-    //   const txWithStatus = result as TransactionWithStatus;
-    //   const transaction: Transaction = txWithStatus.transaction;
-    //   const blockHash: Hash = txWithStatus.tx_status.block_hash!;
-    //   const header = await this.rpc.get_header(blockHash);
-    //   const headerInfo = {
-    //     number: header.number,
-    //     block_hash: header.hash,
-    //   };
-    //   await this._syncL2Block(transaction, headerInfo);
-    //   this.lastBlockNumber = BigInt(headerInfo.number);
-    // }
-
-    // Due to on-going syncing, previous methods might result in some blocks not being
-    // picked up. Here, we will need to first play catch-up work, till we reached tip
-    // version.
     this.logger("info", "Catching up to tip!");
     await this._syncToTip();
 
@@ -434,6 +401,7 @@ export class Runner {
           );
         }
         txSkeleton = await this.lockGenerator.fixTransactionSkeleton(
+          medianTimeHex,
           txSkeleton
         );
         // TODO: stake cell
