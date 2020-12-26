@@ -46,22 +46,19 @@ fn parse_lock_args() -> Result<([u8; 32], StakeLockArgs), Error> {
 pub fn main() -> Result<(), Error> {
     let (rollup_type_hash, lock_args) = parse_lock_args()?;
 
-    // read global state from rollup cell
-    let global_state = match search_rollup_state(&rollup_type_hash, Source::Dep)? {
-        Some(state) => state,
-        None => return Err(Error::RollupCellNotFound),
-    };
-
-    let stake_block_number: u64 = lock_args.stake_block_number().unpack();
-    let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();
-
     // Unlock by User
-    // 1. check if stake_block_number is finalized
-    // 2. check if owner_lock_hash exists in input cells
-    if stake_block_number <= last_finalized_block_number
-        && search_lock_hash(&lock_args.owner_lock_hash().unpack(), Source::Input).is_some()
-    {
-        return Ok(());
+    // read global state from rollup cell in deps
+    if let Some(global_state) = search_rollup_state(&rollup_type_hash, Source::Dep)? {
+        let stake_block_number: u64 = lock_args.stake_block_number().unpack();
+        let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();
+
+        // 1. check if stake_block_number is finalized
+        // 2. check if owner_lock_hash exists in input cells
+        if stake_block_number <= last_finalized_block_number
+            && search_lock_hash(&lock_args.owner_lock_hash().unpack(), Source::Input).is_some()
+        {
+            return Ok(());
+        }
     }
 
     // Unlock by Rollup cell
