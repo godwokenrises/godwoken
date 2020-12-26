@@ -18,6 +18,9 @@ import { Config, GenesisSetup } from "@ckb-godwoken/godwoken";
 const { DenormalizeScript } = denormalizers;
 const { readBigUInt128LE } = utils;
 
+export type Level = "debug" | "info" | "warn" | "error";
+export type Logger = (level: Level, message: string) => void;
+
 export type StateValidatorLockGeneratorState = "Yes" | "YesIfFull" | "No";
 
 export interface StateValidatorLockGenerator {

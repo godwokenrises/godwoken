@@ -43,14 +43,47 @@ class ChainService {
     );
   }
 
-  async getStorageAt(rawKey) {
-    return this.nativeChain.getStorageAt(new Reader(rawKey).toArrayBuffer());
+  async getBalance(accountId, sudtId) {
+    return this.nativeChain.getBalance(accountId, sudtId);
   }
 
-  async getAccountIdByScript(scriptHash) {
-    return this.nativeChain.getAccountIdByScript(
+  async getStorageAt(accountId, rawKey) {
+    return this.nativeChain.getStorageAt(
+      accountId,
+      new Reader(rawKey).toArrayBuffer()
+    );
+  }
+
+  async getAccountIdByScriptHash(scriptHash) {
+    return this.nativeChain.getAccountIdByScriptHash(
       new Reader(scriptHash).toArrayBuffer()
     );
+  }
+
+  async getNonce(accountId) {
+    return this.nativeChain.getNonce(accountId);
+  }
+
+  async getScriptHash(accountId) {
+    return this.nativeChain.getScriptHash(accountId);
+  }
+
+  async getScript(scriptHash) {
+    const result = this.nativeChain.getScript(
+      new Reader(scriptHash).toArrayBuffer()
+    );
+    if (result) {
+      return JSON.parse(result);
+    }
+    return undefined;
+  }
+
+  async getDataHash(dataHash) {
+    return this.nativeChange.getDataHash(new Reader(dataHash).toArrayBuffer());
+  }
+
+  async getData(dataHash) {
+    return this.nativeChange.getData(new Reader(dataHash).toArrayBuffer());
   }
 
   tip() {

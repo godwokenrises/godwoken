@@ -5,8 +5,9 @@ import { Indexer } from "@ckb-lumos/sql-indexer";
 import { Config, ChainService } from "@ckb-godwoken/godwoken";
 import { DeploymentConfig } from "@ckb-godwoken/base";
 import { initializeConfig } from "@ckb-lumos/config-manager";
+import { JsonrpcServer } from "./jsonrpc_server";
 import { Runner } from "./runner";
-import { RunnerConfig } from "./utils";
+import { Level, RunnerConfig } from "./utils";
 import { readFileSync } from "fs";
 import Knex from "knex";
 import deepFreeze from "deep-freeze-strict";
@@ -23,7 +24,8 @@ program
   .requiredOption(
     "-p, --private-key <privateKey>",
     "aggregator private key to use"
-  );
+  )
+  .option("-l, --listen <listen>", "JSONRPC listen path", "8119");
 program.parse(argv);
 
 initializeConfig();
@@ -48,15 +50,25 @@ const chainService = new ChainService(
   runnerConfig.storeConfig.genesis
 );
 
-(async () => {
-  const runner = new Runner(
-    rpc,
-    indexer,
-    chainService,
-    runnerConfig,
-    program.privateKey
-  );
-  await runner.start();
-})().catch((e) => {
+function defaultLogger(level: Level, message: string) {
+  console.log(`[${level}] ${message}`);
+}
+
+const jsonrpcServer = new JsonrpcServer(
+  chainService,
+  program.listen,
+  defaultLogger
+);
+
+const runner = new Runner(
+  rpc,
+  indexer,
+  chainService,
+  runnerConfig,
+  program.privateKey,
+  defaultLogger
+);
+
+Promise.all([jsonrpcServer.start(), runner.start()]).catch((e) => {
   console.error(`Error occurs: ${e}`);
 });
