@@ -8,7 +8,7 @@ use gw_common::{state::State, H256};
 use gw_config::{Config, GenesisConfig};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
-    backend_manage::BackendManage,
+    backend_manage::{Backend, BackendManage},
     traits::CodeStore,
     Generator,
 };
@@ -17,7 +17,7 @@ use gw_store::{
     genesis::{build_genesis, GenesisWithSMTState},
     Store,
 };
-use gw_types::{core::Status, packed, prelude::*};
+use gw_types::{bytes::Bytes, core::Status, packed, prelude::*};
 use neon::prelude::*;
 use parking_lot::Mutex;
 use std::sync::{Arc, RwLock};
@@ -28,6 +28,22 @@ pub struct NativeChain {
 }
 
 fn build_generator() -> Generator {
+    let mut backend_manage = BackendManage::default();
+    let polyjuice_backend = {
+        let validator = godwoken_polyjuice::BUNDLED_CELL
+            .get("build/validator")
+            .expect("get polyjuice validator binary");
+        let generator = godwoken_polyjuice::BUNDLED_CELL
+            .get("build/generator")
+            .expect("get polyjuice generator binary");
+        let validator_code_hash = godwoken_polyjuice::CODE_HASH_VALIDATOR.into();
+        Backend {
+            validator: Bytes::from(validator.into_owned()),
+            generator: Bytes::from(generator.into_owned()),
+            validator_code_hash,
+        }
+    };
+    backend_manage.register_backend(polyjuice_backend);
     let mut account_lock_manage = AccountLockManage::default();
     let code_hash = H256::from([
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -35,7 +51,7 @@ fn build_generator() -> Generator {
     ]);
     // TODO: add a real signature verifying implementation later
     account_lock_manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
-    Generator::new(BackendManage::default(), account_lock_manage)
+    Generator::new(backend_manage, account_lock_manage)
 }
 
 declare_types! {
