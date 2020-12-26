@@ -30,8 +30,8 @@ class ChainService {
     return JSON.parse(runResult);
   }
 
-  async submitL2Tranaction(l2Transaction) {
-    const runResult = this.nativeChain.submitL2Tranaction(
+  async submitL2Transaction(l2Transaction) {
+    const runResult = this.nativeChain.submitL2Transaction(
       new Reader(l2Transaction).toArrayBuffer()
     );
     return JSON.parse(runResult);
