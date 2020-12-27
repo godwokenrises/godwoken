@@ -57,7 +57,7 @@ function defaultLogger(level: Level, message: string) {
 const jsonrpcServer = new JsonrpcServer(
   chainService,
   program.listen,
-  !!program.privateKey,
+  !program.privateKey,
   defaultLogger
 );
 
