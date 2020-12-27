@@ -35,7 +35,7 @@ pub struct Store<S> {
     transactions: HashMap<H256, (L2Transaction, TxReceipt)>,
 }
 
-impl<S: SMTStore<H256>> Store<S> {
+impl<S: SMTStore<H256> + Default> Store<S> {
     pub fn new(
         account_tree: SMT<WrapStore<S>>,
         account_count: u32,
@@ -77,15 +77,18 @@ impl<S: SMTStore<H256>> Store<S> {
         } = genesis_with_smt;
 
         // initialize account smt
-        {
-            let smt_store = self.account_tree.store_mut();
+        let account_tree = {
+            let mut smt_store: WrapStore<S> = WrapStore::new(Default::default());
             for (leaf_hash, leaf) in leaves_map {
                 smt_store.insert_leaf(leaf_hash, leaf)?;
             }
             for (node, branch) in branches_map {
                 smt_store.insert_branch(node, branch)?;
             }
-        }
+            let root: [u8; 32] = genesis.raw().post_account().merkle_root().unpack();
+            SMT::new(root.into(), smt_store)
+        };
+        self.account_tree = account_tree;
         assert!(
             genesis.transactions().is_empty(),
             "assume genesis has no txs"
