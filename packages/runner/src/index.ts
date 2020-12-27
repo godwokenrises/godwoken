@@ -21,9 +21,9 @@ program
     "-s, --sql-connection <sqlConnection>",
     "PostgreSQL connection striong"
   )
-  .requiredOption(
+  .option(
     "-p, --private-key <privateKey>",
-    "aggregator private key to use"
+    "aggregator private key to use, when omitted, readOnly mode will be used"
   )
   .option("-l, --listen <listen>", "JSONRPC listen path", "8119");
 program.parse(argv);
@@ -57,6 +57,7 @@ function defaultLogger(level: Level, message: string) {
 const jsonrpcServer = new JsonrpcServer(
   chainService,
   program.listen,
+  !!program.privateKey,
   defaultLogger
 );
 
