@@ -1,5 +1,3 @@
-use crate::genesis::GenesisWithSMTState;
-
 use super::overlay::{OverlaySMTStore, OverlayStore};
 use super::wrap_store::WrapStore;
 use anyhow::{anyhow, Result};
@@ -26,7 +24,7 @@ pub struct Store<S> {
     block_tree: SMT<WrapStore<S>>,
     // code store
     scripts: HashMap<H256, Script>,
-    codes: HashMap<H256, Bytes>,
+    data_map: HashMap<H256, Bytes>,
     blocks: HashMap<H256, L2Block>,
     header_infos: HashMap<H256, HeaderInfo>,
     tip_block_hash: H256,
@@ -35,7 +33,7 @@ pub struct Store<S> {
     transactions: HashMap<H256, (L2Transaction, TxReceipt)>,
 }
 
-impl<S: SMTStore<H256> + Default> Store<S> {
+impl<S: SMTStore<H256>> Store<S> {
     pub fn new(
         account_tree: SMT<WrapStore<S>>,
         account_count: u32,
@@ -46,7 +44,7 @@ impl<S: SMTStore<H256> + Default> Store<S> {
         tip_global_state: GlobalState,
         blocks: HashMap<H256, L2Block>,
         header_infos: HashMap<H256, HeaderInfo>,
-        codes: HashMap<H256, Bytes>,
+        data_map: HashMap<H256, Bytes>,
         transactions: HashMap<H256, (L2Transaction, TxReceipt)>,
     ) -> Self {
         Store {
@@ -54,7 +52,7 @@ impl<S: SMTStore<H256> + Default> Store<S> {
             account_count,
             block_tree,
             scripts,
-            codes,
+            data_map,
             blocks,
             header_infos,
             tip_block_hash,
@@ -62,41 +60,6 @@ impl<S: SMTStore<H256> + Default> Store<S> {
             tip_global_state,
             transactions,
         }
-    }
-
-    pub fn init_genesis(
-        &mut self,
-        genesis_with_smt: GenesisWithSMTState,
-        header_info: HeaderInfo,
-    ) -> Result<()> {
-        let GenesisWithSMTState {
-            genesis,
-            leaves_map,
-            branches_map,
-            global_state,
-        } = genesis_with_smt;
-
-        // initialize account smt
-        let account_tree = {
-            let mut smt_store: WrapStore<S> = WrapStore::new(Default::default());
-            for (leaf_hash, leaf) in leaves_map {
-                smt_store.insert_leaf(leaf_hash, leaf)?;
-            }
-            for (node, branch) in branches_map {
-                smt_store.insert_branch(node, branch)?;
-            }
-            let root: [u8; 32] = genesis.raw().post_account().merkle_root().unpack();
-            SMT::new(root.into(), smt_store)
-        };
-        self.account_tree = account_tree;
-        assert!(
-            genesis.transactions().is_empty(),
-            "assume genesis has no txs"
-        );
-        self.insert_block(genesis.clone(), header_info, Vec::new())?;
-        self.attach_block(genesis)?;
-        self.set_tip_global_state(global_state)?;
-        Ok(())
     }
 
     pub fn new_overlay(&self) -> Result<OverlayStore<WrapStore<S>>> {
@@ -110,7 +73,7 @@ impl<S: SMTStore<H256> + Default> Store<S> {
             store,
             account_count,
             self.scripts.clone(),
-            self.codes.clone(),
+            self.data_map.clone(),
         ))
     }
 
@@ -204,7 +167,7 @@ impl<S: SMTStore<H256> + Default> Default for Store<S> {
             account_count: 0,
             block_tree,
             scripts: Default::default(),
-            codes: Default::default(),
+            data_map: Default::default(),
             blocks: Default::default(),
             header_infos: Default::default(),
             tip_block_hash: H256::zero(),
@@ -244,10 +207,10 @@ impl<S: SMTStore<H256>> CodeStore for Store<S> {
     fn get_script(&self, script_hash: &H256) -> Option<Script> {
         self.scripts.get(&script_hash).cloned()
     }
-    fn insert_data(&mut self, script_hash: H256, code: Bytes) {
-        self.codes.insert(script_hash, code);
+    fn insert_data(&mut self, data_hash: H256, code: Bytes) {
+        self.data_map.insert(data_hash, code);
     }
-    fn get_data(&self, script_hash: &H256) -> Option<Bytes> {
-        self.codes.get(script_hash).cloned()
+    fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
+        self.data_map.get(data_hash).cloned()
     }
 }
