@@ -13,10 +13,7 @@ use gw_generator::{
     Generator,
 };
 use gw_jsonrpc_types::{blockchain, genesis, parameter};
-use gw_store::{
-    genesis::{build_genesis, GenesisWithSMTState},
-    Store,
-};
+use gw_store::{genesis::build_genesis, Store};
 use gw_types::{bytes::Bytes, core::Status, packed, prelude::*};
 use neon::prelude::*;
 use parking_lot::Mutex;
@@ -62,10 +59,10 @@ declare_types! {
             let config: Config = jsonrpc_config.into();
             let genesis_setup_string = cx.argument::<JsString>(1)?.value();
             let genesis_setup: genesis::GenesisSetup = serde_json::from_str(&genesis_setup_string).expect("Construcing genesis setup from string");
-            let genesis_with_smt: GenesisWithSMTState = genesis_setup.genesis.into();
+            let genesis_config: GenesisConfig = genesis_setup.genesis_config.into();
             let header_info = packed::HeaderInfo::from_slice(genesis_setup.header_info.into_bytes().as_ref()).expect("Constructing header info");
             let mut store = Store::default();
-            store.init_genesis(genesis_with_smt, header_info).expect("Initializing store");
+            store.init_genesis(&genesis_config, header_info).expect("Initializing store");
             let tx_pool = {
                 let nb_ctx = NextBlockContext {
                     aggregator_id: 0u32,
@@ -389,7 +386,7 @@ pub fn build_genesis_block(mut cx: FunctionContext) -> JsResult<JsString> {
         serde_json::from_str(&genesis_config).expect("Parse genesis config");
     let genesis_config: GenesisConfig = genesis_config.into();
     let genesis_state = build_genesis(&genesis_config).expect("build genesis");
-    let genesis_state: genesis::GenesisWithSMTState = genesis_state.into();
+    let genesis_state: genesis::GenesisWithGlobalState = genesis_state.into();
     let genesis_state_string =
         serde_json::to_string(&genesis_state).expect("serialize genesis config");
     Ok(cx.string(genesis_state_string))

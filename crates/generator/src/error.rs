@@ -48,10 +48,12 @@ pub enum ValidateError {
     InvalidWithdrawalNonce { expected: u32, actual: u32 },
     #[error("Unknown account lock script")]
     UnknownAccountLockScript,
-    #[error("unlock error {0}")]
+    #[error("Unlock error {0}")]
     Unlock(LockAlgorithmError),
     #[error("Insufficient capacity expected {expected} actual {actual}")]
     InsufficientCapacity { expected: u64, actual: u64 },
+    #[error("Invalid SUDT operation")]
+    InvalidSUDTOperation,
 }
 
 impl From<ValidateError> for Error {
