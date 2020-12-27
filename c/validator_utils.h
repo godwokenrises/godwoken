@@ -2,14 +2,10 @@
 #define GW_VALIDATOR_H_
 
 #include "ckb_syscalls.h"
-#include "gw_smt.h"
 #include "common.h"
+#include "gw_smt.h"
 
-#define MAX_BUF_SIZE 65536
-/* 2048 * (32 + 32 + 8) = 147456 Byte (~144KB)*/
-#define KV_STATE_CAPACITY 2048
-
-typedef struct  {
+typedef struct {
   uint8_t merkle_root[32];
   uint32_t count;
 } gw_account_merkle_state_t;
@@ -21,6 +17,12 @@ typedef struct {
   bool hashed;
   mol_seg_t script_seg;
 } script_pair_t;
+
+/* Call receipt */
+typedef struct {
+  uint8_t return_data[GW_MAX_RETURN_DATA_SIZE];
+  uint32_t return_data_len;
+} gw_call_receipt_t;
 
 typedef struct gw_context_t {
   /* verification context */
@@ -58,34 +60,44 @@ typedef struct gw_context_t {
 
   /* return data hash */
   uint8_t return_data_hash[32];
+  gw_call_receipt_t receipt;
 } gw_context_t;
 
-int sys_load(gw_context_t *ctx, uint32_t account_id, const uint8_t key[GW_KEY_BYTES],
-             uint8_t value[GW_VALUE_BYTES]) {
+int sys_load(gw_context_t *ctx, uint32_t account_id,
+             const uint8_t key[GW_KEY_BYTES], uint8_t value[GW_VALUE_BYTES]) {
   uint8_t raw_key[GW_KEY_BYTES] = {0};
   gw_build_account_key(account_id, key, raw_key);
   return gw_state_fetch(&ctx->kv_state, raw_key, value);
 }
-int sys_store(gw_context_t *ctx, uint32_t account_id, const uint8_t key[GW_KEY_BYTES],
+int sys_store(gw_context_t *ctx, uint32_t account_id,
+              const uint8_t key[GW_KEY_BYTES],
               const uint8_t value[GW_VALUE_BYTES]) {
   uint8_t raw_key[GW_KEY_BYTES];
   gw_build_account_key(account_id, key, raw_key);
   return gw_state_insert(&ctx->kv_state, raw_key, value);
 }
 
-int sys_load_nonce(gw_context_t *ctx, uint32_t account_id, uint8_t value[GW_VALUE_BYTES]) {
+int sys_load_nonce(gw_context_t *ctx, uint32_t account_id,
+                   uint8_t value[GW_VALUE_BYTES]) {
   uint8_t key[32];
   gw_build_nonce_key(account_id, key);
   return gw_state_fetch(&ctx->kv_state, key, value);
 }
 
 /* set call return data */
-int sys_set_program_return_data(gw_context_t *ctx, uint8_t *data, uint32_t len) {
+int sys_set_program_return_data(gw_context_t *ctx, uint8_t *data,
+                                uint32_t len) {
+  if (len > GW_MAX_RETURN_DATA_SIZE) {
+    return GW_ERROR_INSUFFICIENT_CAPACITY;
+  }
+  memcpy(ctx->receipt.return_data, data, len);
+  ctx->receipt.return_data_len = len;
   return 0;
 }
 
 /* Get account id by account script_hash */
-int sys_get_account_id_by_script_hash(gw_context_t *ctx, uint8_t script_hash[32],
+int sys_get_account_id_by_script_hash(gw_context_t *ctx,
+                                      uint8_t script_hash[32],
                                       uint32_t *account_id) {
   uint8_t raw_key[32];
   uint8_t value[32];
@@ -105,8 +117,7 @@ int sys_get_account_id_by_script_hash(gw_context_t *ctx, uint8_t script_hash[32]
 }
 
 /* Get account script_hash by account id */
-int sys_get_script_hash_by_account_id(gw_context_t *ctx,
-                                      uint32_t account_id,
+int sys_get_script_hash_by_account_id(gw_context_t *ctx, uint32_t account_id,
                                       uint8_t script_hash[32]) {
   uint8_t raw_key[32];
   gw_build_account_field_key(account_id, GW_ACCOUNT_SCRIPT_HASH, raw_key);
@@ -114,11 +125,8 @@ int sys_get_script_hash_by_account_id(gw_context_t *ctx,
 }
 
 /* Get account script by account id */
-int sys_get_account_script(gw_context_t *ctx,
-                           uint32_t account_id,
-                           uint32_t *len,
-                           uint32_t offset,
-                           uint8_t *script) {
+int sys_get_account_script(gw_context_t *ctx, uint32_t account_id,
+                           uint32_t *len, uint32_t offset, uint8_t *script) {
   int ret;
 
   if (account_id == 0) {
@@ -142,7 +150,8 @@ int sys_get_account_script(gw_context_t *ctx,
       if (!current->hashed) {
         blake2b_state blake2b_ctx;
         blake2b_init(&blake2b_ctx, 32);
-        blake2b_update(&blake2b_ctx, current->script_seg.ptr, current->script_seg.size);
+        blake2b_update(&blake2b_ctx, current->script_seg.ptr,
+                       current->script_seg.size);
         blake2b_final(&blake2b_ctx, current->hash, 32);
         current->hashed = true;
       }
@@ -175,29 +184,29 @@ int sys_get_account_script(gw_context_t *ctx,
   }
 }
 /* Store data by data hash */
-int sys_store_data(gw_context_t *ctx,
-                 uint32_t data_len,
-                 uint8_t *data) {
+int sys_store_data(gw_context_t *ctx, uint32_t data_len, uint8_t *data) {
   /* TODO: any verification ? */
   /* do nothing for now */
   return 0;
 }
 /* Load data by data hash */
-int sys_load_data(gw_context_t *ctx, uint8_t data_hash[32],
-                 uint32_t *len, uint32_t offset, uint8_t *data) {
+int sys_load_data(gw_context_t *ctx, uint8_t data_hash[32], uint32_t *len,
+                  uint32_t offset, uint8_t *data) {
   int ret;
   size_t index = 0;
   uint64_t hash_len = 32;
   uint8_t hash[32];
   while (1) {
-    ret = ckb_load_cell_by_field(hash, &hash_len, 0, index, CKB_SOURCE_CELL_DEP, CKB_CELL_FIELD_DATA_HASH);
+    ret = ckb_load_cell_by_field(hash, &hash_len, 0, index, CKB_SOURCE_CELL_DEP,
+                                 CKB_CELL_FIELD_DATA_HASH);
     if (ret == CKB_ITEM_MISSING) {
       ckb_debug("not found cell data by data hash");
       return -1;
     } else if (ret == CKB_SUCCESS) {
       if (memcmp(hash, data_hash, 32) == 0) {
         uint64_t data_len = (uint64_t)*len;
-        ret = ckb_load_cell_data(data, &data_len, offset, index, CKB_SOURCE_CELL_DEP);
+        ret = ckb_load_cell_data(data, &data_len, offset, index,
+                                 CKB_SOURCE_CELL_DEP);
         if (ret != CKB_SUCCESS) {
           ckb_debug("load cell data failed");
           return -1;
@@ -291,7 +300,7 @@ int _load_challenge_cell(gw_context_t *ctx) {
     return -1;
   }
   mol_seg_t tx_index_seg = MolReader_StartChallenge_get_tx_index(&cell_seg);
-  ctx->tx_index = *((uint32_t *) tx_index_seg.ptr);
+  ctx->tx_index = *((uint32_t *)tx_index_seg.ptr);
   return 0;
 }
 
@@ -325,13 +334,16 @@ int _load_cancel_challenge_witness(gw_context_t *ctx) {
     return -1;
   }
   mol_seg_t cancel_challenge_seg = MolReader_Bytes_raw_bytes(&content_seg);
-  if (MolReader_CancelChallenge_verify(&cancel_challenge_seg, false) != MOL_OK) {
+  if (MolReader_CancelChallenge_verify(&cancel_challenge_seg, false) !=
+      MOL_OK) {
     ckb_debug("input field is not CancelChallenge");
     return -1;
   }
 
-  mol_seg_t raw_l2block_seg = MolReader_CancelChallenge_get_raw_l2block(&cancel_challenge_seg);
-  mol_seg_t l2tx_seg = MolReader_CancelChallenge_get_l2tx(&cancel_challenge_seg);
+  mol_seg_t raw_l2block_seg =
+      MolReader_CancelChallenge_get_raw_l2block(&cancel_challenge_seg);
+  mol_seg_t l2tx_seg =
+      MolReader_CancelChallenge_get_l2tx(&cancel_challenge_seg);
   mol_seg_t raw_l2tx_seg = MolReader_L2Transaction_get_raw(&l2tx_seg);
 
   /* load transaction context */
@@ -345,21 +357,25 @@ int _load_cancel_challenge_witness(gw_context_t *ctx) {
   /* load block info */
   gw_block_info_t *block_info = &ctx->block_info;
   mol_seg_t number_seg = MolReader_RawL2Block_get_number(&raw_l2block_seg);
-  mol_seg_t timestamp_seg = MolReader_RawL2Block_get_timestamp(&raw_l2block_seg);
-  mol_seg_t aggregator_id_seg = MolReader_RawL2Block_get_aggregator_id(&raw_l2block_seg);
+  mol_seg_t timestamp_seg =
+      MolReader_RawL2Block_get_timestamp(&raw_l2block_seg);
+  mol_seg_t aggregator_id_seg =
+      MolReader_RawL2Block_get_aggregator_id(&raw_l2block_seg);
   block_info->number = *((uint32_t *)number_seg.ptr);
   block_info->timestamp = *((uint32_t *)timestamp_seg.ptr);
   block_info->aggregator_id = *((uint32_t *)aggregator_id_seg.ptr);
 
   /* load kv state */
-  mol_seg_t kv_state_seg = MolReader_CancelChallenge_get_kv_state(&cancel_challenge_seg);
+  mol_seg_t kv_state_seg =
+      MolReader_CancelChallenge_get_kv_state(&cancel_challenge_seg);
   uint32_t kv_length = MolReader_KVPairVec_length(&kv_state_seg);
-  if (kv_length > KV_STATE_CAPACITY) {
+  if (kv_length > MAX_KV_STATE_CAPACITY) {
     ckb_debug("too many key/value pair");
     return -1;
   }
-  gw_pair_t *kv_pairs = (gw_pair_t *)malloc(sizeof(gw_pair_t) * KV_STATE_CAPACITY);
-  gw_state_init(&ctx->kv_state, kv_pairs, KV_STATE_CAPACITY);
+  gw_pair_t *kv_pairs =
+      (gw_pair_t *)malloc(sizeof(gw_pair_t) * MAX_KV_STATE_CAPACITY);
+  gw_state_init(&ctx->kv_state, kv_pairs, MAX_KV_STATE_CAPACITY);
   for (uint32_t i = 0; i < kv_length; i++) {
     mol_seg_res_t seg_res = MolReader_KVPairVec_get(&kv_state_seg, i);
     uint8_t error_num = *(uint8_t *)(&seg_res);
@@ -372,31 +388,39 @@ int _load_cancel_challenge_witness(gw_context_t *ctx) {
     gw_state_insert(&ctx->kv_state, key_seg.ptr, value_seg.ptr);
   }
 
-  mol_seg_t kv_state_proof_seg = MolReader_CancelChallenge_get_kv_state_proof(&cancel_challenge_seg);
+  mol_seg_t kv_state_proof_seg =
+      MolReader_CancelChallenge_get_kv_state_proof(&cancel_challenge_seg);
   ctx->kv_state_proof = (uint8_t *)malloc(kv_state_proof_seg.size);
-  memcpy(ctx->kv_state_proof,
-         kv_state_proof_seg.ptr,
-         kv_state_proof_seg.size);
+  memcpy(ctx->kv_state_proof, kv_state_proof_seg.ptr, kv_state_proof_seg.size);
   ctx->kv_state_proof_size = (size_t)kv_state_proof_seg.size;
 
   /* load previous account state */
-  mol_seg_t prev_account_seg = MolReader_RawL2Block_get_prev_account(&raw_l2block_seg);
-  mol_seg_t prev_merkle_root_seg = MolReader_AccountMerkleState_get_merkle_root(&prev_account_seg);
-  mol_seg_t prev_count_seg = MolReader_AccountMerkleState_get_count(&prev_account_seg);
+  mol_seg_t prev_account_seg =
+      MolReader_RawL2Block_get_prev_account(&raw_l2block_seg);
+  mol_seg_t prev_merkle_root_seg =
+      MolReader_AccountMerkleState_get_merkle_root(&prev_account_seg);
+  mol_seg_t prev_count_seg =
+      MolReader_AccountMerkleState_get_count(&prev_account_seg);
   memcpy(ctx->prev_account.merkle_root, prev_merkle_root_seg.ptr, 32);
   ctx->prev_account.count = *((uint32_t *)prev_count_seg.ptr);
   /* load post account state */
-  mol_seg_t post_account_seg = MolReader_RawL2Block_get_post_account(&raw_l2block_seg);
-  mol_seg_t post_merkle_root_seg = MolReader_AccountMerkleState_get_merkle_root(&post_account_seg);
-  mol_seg_t post_count_seg = MolReader_AccountMerkleState_get_count(&post_account_seg);
+  mol_seg_t post_account_seg =
+      MolReader_RawL2Block_get_post_account(&raw_l2block_seg);
+  mol_seg_t post_merkle_root_seg =
+      MolReader_AccountMerkleState_get_merkle_root(&post_account_seg);
+  mol_seg_t post_count_seg =
+      MolReader_AccountMerkleState_get_count(&post_account_seg);
   memcpy(ctx->post_account.merkle_root, post_merkle_root_seg.ptr, 32);
   ctx->post_account.count = *((uint32_t *)post_count_seg.ptr);
 
   /* load scripts */
-  mol_seg_t scripts_seg = MolReader_CancelChallenge_get_scripts(&cancel_challenge_seg);
+  mol_seg_t scripts_seg =
+      MolReader_CancelChallenge_get_scripts(&cancel_challenge_seg);
   uint32_t scripts_size = MolReader_ScriptVec_length(&scripts_seg);
-  uint32_t max_scripts_size = scripts_size + (ctx->post_account.count - ctx->prev_account.count);
-  ctx->scripts = (script_pair_t *)malloc(sizeof(script_pair_t) * max_scripts_size);
+  uint32_t max_scripts_size =
+      scripts_size + (ctx->post_account.count - ctx->prev_account.count);
+  ctx->scripts =
+      (script_pair_t *)malloc(sizeof(script_pair_t) * max_scripts_size);
   ctx->scripts_size = scripts_size;
   ctx->max_scripts_size = max_scripts_size;
   for (uint32_t i = 0; i < max_scripts_size; i++) {
@@ -422,7 +446,8 @@ int _load_cancel_challenge_witness(gw_context_t *ctx) {
   }
 
   /* load return data hash */
-  mol_seg_t return_data_hash_seg = MolReader_CancelChallenge_get_return_data_hash(&cancel_challenge_seg);
+  mol_seg_t return_data_hash_seg =
+      MolReader_CancelChallenge_get_return_data_hash(&cancel_challenge_seg);
   memcpy(ctx->return_data_hash, return_data_hash_seg.ptr, 32);
 
   return 0;
@@ -435,10 +460,8 @@ int gw_context_init(gw_context_t *ctx) {
   ctx->sys_store = sys_store;
   ctx->sys_set_program_return_data = sys_set_program_return_data;
   ctx->sys_create = sys_create;
-  ctx->sys_get_account_id_by_script_hash =
-      sys_get_account_id_by_script_hash;
-  ctx->sys_get_script_hash_by_account_id =
-      sys_get_script_hash_by_account_id;
+  ctx->sys_get_account_id_by_script_hash = sys_get_account_id_by_script_hash;
+  ctx->sys_get_script_hash_by_account_id = sys_get_script_hash_by_account_id;
   ctx->sys_get_account_script = sys_get_account_script;
   ctx->sys_store_data = sys_store_data;
   ctx->sys_load_data = sys_load_data;
@@ -455,10 +478,8 @@ int gw_context_init(gw_context_t *ctx) {
     return ret;
   }
 
-  ret = gw_smt_verify(ctx->prev_account.merkle_root,
-                      &ctx->kv_state,
-                      ctx->kv_state_proof,
-                      ctx->kv_state_proof_size);
+  ret = gw_smt_verify(ctx->prev_account.merkle_root, &ctx->kv_state,
+                      ctx->kv_state_proof, ctx->kv_state_proof_size);
   if (ret != 0) {
     return ret;
   }
@@ -466,7 +487,7 @@ int gw_context_init(gw_context_t *ctx) {
   return 0;
 }
 
-int gw_finalize(gw_context_t *ctx, gw_call_receipt_t *receipt) {
+int gw_finalize(gw_context_t *ctx) {
   if (ctx->post_account.count != ctx->prev_account.count) {
     ckb_debug("account count not match");
     return -1;
@@ -475,16 +496,15 @@ int gw_finalize(gw_context_t *ctx, gw_call_receipt_t *receipt) {
   uint8_t return_data_hash[32];
   blake2b_state blake2b_ctx;
   blake2b_init(&blake2b_ctx, 32);
-  blake2b_update(&blake2b_ctx, receipt->return_data, receipt->return_data_len);
+  blake2b_update(&blake2b_ctx, ctx->receipt.return_data,
+                 ctx->receipt.return_data_len);
   blake2b_final(&blake2b_ctx, return_data_hash, 32);
   if (memcmp(return_data_hash, ctx->return_data_hash, 32) != 0) {
     ckb_debug("return data hash not match");
     return -1;
   }
 
-  return gw_smt_verify(ctx->post_account.merkle_root,
-                       &ctx->kv_state,
-                       ctx->kv_state_proof,
-                       ctx->kv_state_proof_size);
+  return gw_smt_verify(ctx->post_account.merkle_root, &ctx->kv_state,
+                       ctx->kv_state_proof, ctx->kv_state_proof_size);
 }
 #endif

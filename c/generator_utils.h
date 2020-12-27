@@ -195,7 +195,7 @@ int gw_context_init(gw_context_t *ctx) {
   return 0;
 }
 
-int gw_finalize(gw_context_t *ctx, gw_call_receipt_t *receipt) {
+int gw_finalize(gw_context_t *ctx) {
   /* do nothing */
   return 0;
 }

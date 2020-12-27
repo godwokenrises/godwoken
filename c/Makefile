@@ -11,7 +11,10 @@ PROTOCOL_SCHEMA_DIR := ../crates/types/schemas
 # docker pull nervos/ckb-riscv-gnu-toolchain:gnu-bionic-20191012
 BUILDER_DOCKER := nervos/ckb-riscv-gnu-toolchain@sha256:aae8a3f79705f67d505d1f1d5ddc694a4fd537ed1c7e9622420a470d59ba2ec3
 
-BINS := build/meta-contract-generator build/sudt-generator build/examples/sum-generator
+GENERATORS := build/meta-contract-generator build/sudt-generator build/examples/sum-generator
+VALIDATORS := build/meta-contract-validator build/sudt-validator build/examples/sum-validator
+
+BINS := $(GENERATORS) $(VALIDATORS)
 
 all-via-docker: generate-protocol
 	docker run --rm -v `pwd`:/code -w /code ${BUILDER_DOCKER} bash -c "make all"
@@ -32,13 +35,28 @@ build/meta-contract-generator: contracts/meta_contract.c gw_def.h generator_util
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
 
+build/meta-contract-validator: contracts/meta_contract.c gw_def.h validator_utils.h
+	$(CC) $(CFLAGS) -DGW_VALIDATOR $(LDFLAGS) -o $@ $<
+	$(OBJCOPY) --only-keep-debug $@ $@.debug
+	$(OBJCOPY) --strip-debug --strip-all $@
+
 build/sudt-generator: contracts/sudt.c sudt_utils.h gw_def.h generator_utils.h
 	$(CC) $(CFLAGS) -DGW_GENERATOR $(LDFLAGS) -o $@ $<
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
 
+build/sudt-validator: contracts/sudt.c sudt_utils.h gw_def.h validator_utils.h
+	$(CC) $(CFLAGS) -DGW_VALIDATOR $(LDFLAGS) -o $@ $<
+	$(OBJCOPY) --only-keep-debug $@ $@.debug
+	$(OBJCOPY) --strip-debug --strip-all $@
+
 build/examples/sum-generator: examples/sum.c gw_def.h generator_utils.h
 	$(CC) $(CFLAGS) -DGW_GENERATOR $(LDFLAGS) -o $@ $<
+	$(OBJCOPY) --only-keep-debug $@ $@.debug
+	$(OBJCOPY) --strip-debug --strip-all $@
+
+build/examples/sum-validator: examples/sum.c gw_def.h validator_utils.h
+	$(CC) $(CFLAGS) -DGW_VALIDATOR $(LDFLAGS) -o $@ $<
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
  
