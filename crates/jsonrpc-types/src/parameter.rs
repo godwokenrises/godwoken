@@ -450,10 +450,10 @@ impl From<chain::ProduceBlockResult> for ProduceBlockResult {
 pub struct RunResult {
     pub read_values: HashMap<H256, H256>,
     pub write_values: HashMap<H256, H256>,
-    pub return_data: Vec<u8>,
+    pub return_data: JsonBytes,
     pub account_count: Option<Uint32>,
-    pub new_scripts: HashMap<H256, Vec<u8>>,
-    pub write_data: HashMap<H256, Vec<u8>>,
+    pub new_scripts: HashMap<H256, JsonBytes>,
+    pub write_data: HashMap<H256, JsonBytes>,
     pub read_data: HashMap<H256, Uint32>,
 }
 
@@ -482,11 +482,11 @@ impl From<RunResult> for gw_generator::RunResult {
         };
         let mut to_new_scripts: HashMap<gw_common::H256, Vec<u8>> = HashMap::new();
         for (k, v) in new_scripts.iter() {
-            to_new_scripts.insert(k.0.into(), v.to_vec());
+            to_new_scripts.insert(k.0.into(), v.as_bytes().to_vec());
         }
         let mut to_write_data: HashMap<gw_common::H256, Vec<u8>> = HashMap::new();
         for (k, v) in write_data.iter() {
-            to_write_data.insert(k.0.into(), v.to_vec());
+            to_write_data.insert(k.0.into(), v.as_bytes().to_vec());
         }
         let read_data = read_data
             .into_iter()
@@ -499,7 +499,7 @@ impl From<RunResult> for gw_generator::RunResult {
         Self {
             read_values: to_read_values,
             write_values: to_write_values,
-            return_data: return_data,
+            return_data: return_data.as_bytes().to_vec(),
             account_count: to_account_count,
             new_scripts: to_new_scripts,
             write_data: to_write_data,
@@ -537,13 +537,19 @@ impl From<gw_generator::RunResult> for RunResult {
             Some(count) => Some(count.into()),
             None => None,
         };
-        let mut to_new_scripts: HashMap<H256, Vec<u8>> = HashMap::new();
+        let mut to_new_scripts: HashMap<H256, JsonBytes> = HashMap::new();
         for (k, v) in new_scripts.iter() {
-            to_new_scripts.insert(H256((*k as gw_common::H256).into()), v.to_vec());
+            to_new_scripts.insert(
+                H256((*k as gw_common::H256).into()),
+                JsonBytes::from_vec(v.to_vec()),
+            );
         }
-        let mut to_write_data: HashMap<H256, Vec<u8>> = HashMap::new();
+        let mut to_write_data: HashMap<H256, JsonBytes> = HashMap::new();
         for (k, v) in write_data.iter() {
-            to_write_data.insert(H256((*k as gw_common::H256).into()), v.to_vec());
+            to_write_data.insert(
+                H256((*k as gw_common::H256).into()),
+                JsonBytes::from_vec(v.to_vec()),
+            );
         }
         let read_data = read_data
             .into_iter()
@@ -556,7 +562,7 @@ impl From<gw_generator::RunResult> for RunResult {
         Self {
             read_values: to_read_values,
             write_values: to_write_values,
-            return_data: return_data,
+            return_data: JsonBytes::from_vec(return_data),
             account_count: to_account_count,
             new_scripts: to_new_scripts,
             write_data: to_write_data,
