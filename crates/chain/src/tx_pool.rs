@@ -131,10 +131,13 @@ impl<S: Store<SMTH256>> TxPool<S> {
         }
 
         // verify signature
-        let script_hash = self
-            .state
-            .get_script_hash(sender_id)
-            .expect("get script hash");
+        let script_hash = self.state.get_script_hash(sender_id)?;
+        if script_hash.is_zero() {
+            return Err(anyhow!(
+                "can not find script hash for account id: {}",
+                sender_id
+            ));
+        }
         let script = self.state.get_script(&script_hash).expect("get script");
         let lock_code_hash: [u8; 32] = script.code_hash().unpack();
         let tx_hash = tx.hash();
