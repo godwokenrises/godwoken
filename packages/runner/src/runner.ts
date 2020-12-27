@@ -21,7 +21,13 @@ import {
   scriptToAddress,
 } from "@ckb-lumos/helpers";
 import { ChainService, SubmitTxs } from "@ckb-godwoken/godwoken";
-import { DeploymentConfig, schemas, types } from "@ckb-godwoken/base";
+import {
+  asyncSleep,
+  waitForBlockSync,
+  DeploymentConfig,
+  schemas,
+  types,
+} from "@ckb-godwoken/base";
 import {
   DepositionEntry,
   scanDepositionCellsInCommittedL2Block,
@@ -33,10 +39,6 @@ import {
 import { AlwaysSuccessGenerator } from "./locks";
 import { generator as poaGeneratorModule } from "clerkb-lumos-integrator";
 import * as secp256k1 from "secp256k1";
-
-function asyncSleep(ms = 0) {
-  return new Promise((r) => setTimeout(r, ms));
-}
 
 function isRollupTransction(
   tx: Transaction,
@@ -211,6 +213,7 @@ export class Runner {
       );
       if (!block) {
         // Already synced to tip
+        await waitForBlockSync(this.indexer, this.rpc, undefined, blockNumber);
         return;
       }
       const headerInfo: types.HeaderInfo = {
