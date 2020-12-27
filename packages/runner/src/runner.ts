@@ -103,7 +103,14 @@ export class Runner {
     this.lockGenerator = new AlwaysSuccessGenerator();
   }
 
+  _readOnlyMode(): boolean {
+    return !this.privateKey;
+  }
+
   _ckbAddress(): string {
+    if (this._readOnlyMode()) {
+      throw new Error("Read only mode is used!");
+    }
     const privateKeyBuffer = new Reader(this.privateKey).toArrayBuffer();
     const publicKeyArray = secp256k1.publicKeyCreate(
       new Uint8Array(privateKeyBuffer)
@@ -214,7 +221,11 @@ export class Runner {
 
   async start() {
     this.logger("debug", `Rollup Type Hash: ${this.rollupTypeHash}`);
-    this.logger("debug", `CKB Address: ${this._ckbAddress()}`);
+    if (this._readOnlyMode()) {
+      this.logger("info", "Current server is running in readonly mode!");
+    } else {
+      this.logger("debug", `CKB Address: ${this._ckbAddress()}`);
+    }
     // Wait for indexer sync
     await this.indexer.waitForSync();
 
@@ -328,6 +339,7 @@ export class Runner {
       await this._syncToTip();
       const tipCell = await this._queryLiveRollupCell();
       if (
+        !this._readOnlyMode() &&
         (await this.lockGenerator.shouldIssueNewBlock(
           medianTimeHex,
           tipCell

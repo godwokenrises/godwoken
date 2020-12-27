@@ -20,14 +20,15 @@ export class JsonrpcServer {
   logger: Logger;
   listen: string;
 
-  constructor(chainService: ChainService, listen: string, logger: Logger) {
+  constructor(
+    chainService: ChainService,
+    listen: string,
+    readOnlyMode: boolean,
+    logger: Logger
+  ) {
     this.chainService = chainService;
-    this.server = new jayson.Server({
-      gw_submitL2Transaction: this.wrapWithLogger(this.submitL2Transaction),
+    let methods = {
       gw_executeL2Tranaction: this.wrapWithLogger(this.executeL2Transaction),
-      gw_submitWithdrawalRequest: this.wrapWithLogger(
-        this.submitWithdrawalRequest
-      ),
       gw_getBalance: this.wrapWithLogger(this.getBalance),
       gw_getStorageAt: this.wrapWithLogger(this.getStorageAt),
       gw_getAccountIdByScriptHash: this.wrapWithLogger(
@@ -38,7 +39,16 @@ export class JsonrpcServer {
       gw_getScriptHash: this.wrapWithLogger(this.getScriptHash),
       gw_getData: this.wrapWithLogger(this.getData),
       gw_getDataHash: this.wrapWithLogger(this.getDataHash),
-    });
+    };
+    if (!readOnlyMode) {
+      methods = Object.assign({}, methods, {
+        gw_submitL2Transaction: this.wrapWithLogger(this.submitL2Transaction),
+        gw_submitWithdrawalRequest: this.wrapWithLogger(
+          this.submitWithdrawalRequest
+        ),
+      });
+    }
+    this.server = new jayson.Server(methods);
     this.listen = listen;
     this.logger = logger;
   }
