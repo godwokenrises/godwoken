@@ -27,17 +27,17 @@ clean:
 debug-all: CFLAGS += -DCKB_C_STDLIB_PRINTF 
 debug-all: all
 
-build/meta-contract-generator: contracts/meta_contract.c gw_def.h generator.h
+build/meta-contract-generator: contracts/meta_contract.c gw_def.h generator_utils.h
 	$(CC) $(CFLAGS) -DGW_GENERATOR $(LDFLAGS) -o $@ $<
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
 
-build/sudt-generator: contracts/sudt.c sudt_utils.h gw_def.h generator.h
+build/sudt-generator: contracts/sudt.c sudt_utils.h gw_def.h generator_utils.h
 	$(CC) $(CFLAGS) -DGW_GENERATOR $(LDFLAGS) -o $@ $<
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
 
-build/examples/sum-generator: examples/sum.c gw_def.h generator.h
+build/examples/sum-generator: examples/sum.c gw_def.h generator_utils.h
 	$(CC) $(CFLAGS) -DGW_GENERATOR $(LDFLAGS) -o $@ $<
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
