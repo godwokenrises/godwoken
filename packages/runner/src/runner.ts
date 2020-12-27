@@ -31,6 +31,7 @@ import {
   Logger,
 } from "./utils";
 import { AlwaysSuccessGenerator } from "./locks";
+import { generator as poaGeneratorModule } from "clerkb-lumos-integrator";
 import * as secp256k1 from "secp256k1";
 
 function asyncSleep(ms = 0) {
@@ -66,7 +67,7 @@ export class Runner {
   rollupTypeHash: Hash;
   privateKey: HexString;
 
-  lockGenerator: StateValidatorLockGenerator;
+  lockGenerator?: StateValidatorLockGenerator;
 
   constructor(
     rpc: RPC,
@@ -97,10 +98,18 @@ export class Runner {
       new Reader(chainService.lastSynced()).toArrayBuffer()
     );
     this.lastBlockNumber = lastSynced.getNumber().toLittleEndianBigUint64();
-    if (config.aggregatorConfig === "poa") {
-      throw new Error("Implement PoA!");
+
+    if (!this._readOnlyMode()) {
+      if (config.aggregatorConfig.type === "poa") {
+        this.lockGenerator = new poaGeneratorModule.PoAGenerator(
+          this._ckbAddress(),
+          this.indexer,
+          [config.deploymentConfig.poa_state_dep!]
+        );
+      } else {
+        this.lockGenerator = new AlwaysSuccessGenerator();
+      }
     }
-    this.lockGenerator = new AlwaysSuccessGenerator();
   }
 
   _readOnlyMode(): boolean {
@@ -340,7 +349,7 @@ export class Runner {
       const tipCell = await this._queryLiveRollupCell();
       if (
         !this._readOnlyMode() &&
-        (await this.lockGenerator.shouldIssueNewBlock(
+        (await this.lockGenerator!.shouldIssueNewBlock(
           medianTimeHex,
           tipCell
         )) === "Yes"
@@ -412,7 +421,7 @@ export class Runner {
             outputs.push(cell)
           );
         }
-        txSkeleton = await this.lockGenerator.fixTransactionSkeleton(
+        txSkeleton = await this.lockGenerator!.fixTransactionSkeleton(
           medianTimeHex,
           txSkeleton
         );

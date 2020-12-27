@@ -14,6 +14,7 @@ import {
 import { TransactionSkeletonType } from "@ckb-lumos/helpers";
 import { DeploymentConfig, schemas, types } from "@ckb-godwoken/base";
 import { Config } from "@ckb-godwoken/godwoken";
+import { config as poaConfigModule } from "clerkb-lumos-integrator";
 
 const { DenormalizeScript } = denormalizers;
 const { readBigUInt128LE } = utils;
@@ -42,7 +43,16 @@ export interface GenesisStoreConfig {
 
 export type StoreConfig = GenesisStoreConfig;
 
-export type AggregatorConfig = "always_success" | "poa";
+export interface AlwaysSuccessAggregatorConfig {
+  type: "always_success";
+}
+
+export interface PoAConfig {
+  type: "poa";
+  config: poaConfigModule.Config;
+}
+
+export type AggregatorConfig = AlwaysSuccessAggregatorConfig | PoAConfig;
 
 export interface RunnerConfig {
   deploymentConfig: DeploymentConfig;
