@@ -212,7 +212,6 @@ impl<S: Store<SMTH256>> TxPool<S> {
         state: OverlayStore<S>,
         nb_ctx: NextBlockContext,
     ) -> Result<()> {
-        // TODO catch abandoned txs and recompute them.
         self.state = state;
         self.update_tip_without_status(tip, nb_ctx)?;
         Ok(())
@@ -227,10 +226,16 @@ impl<S: Store<SMTH256>> TxPool<S> {
         tip: &L2Block,
         nb_ctx: NextBlockContext,
     ) -> Result<()> {
-        // TODO catch abandoned txs and recompute them.
-        self.queue.clear();
         self.next_block_info = gen_next_block_info(tip, nb_ctx)?;
         self.next_prev_account_state = get_account_state(&self.state)?;
+        // re-verify txs
+        let queue: Vec<_> = self.queue.drain(..).collect();
+        for (tx, _receipt) in queue {
+            if self.push(tx.clone()).is_err() {
+                let tx_hash: ckb_types::H256 = tx.hash().into();
+                eprintln!("TxPool: drop tx {}", tx_hash);
+            }
+        }
         Ok(())
     }
 }
