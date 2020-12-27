@@ -1,11 +1,12 @@
 use anyhow::Result;
+use ckb_types::prelude::Unpack as CkbUnpack;
 use gw_chain::{
     chain::{Chain, ProduceBlockParam, ProduceBlockResult, SyncEvent, SyncParam},
     next_block_context::NextBlockContext,
     tx_pool::TxPool,
 };
 use gw_common::{state::State, H256};
-use gw_config::{Config, GenesisConfig};
+use gw_config::{ChainConfig, Config, GenesisConfig};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::{Backend, BackendManage},
@@ -27,7 +28,7 @@ pub struct NativeChain {
     pub chain: Arc<RwLock<Chain>>,
 }
 
-fn build_generator() -> Generator {
+fn build_generator(chain_config: &ChainConfig) -> Generator {
     let mut backend_manage = BackendManage::default();
     let polyjuice_backend = {
         let validator = godwoken_polyjuice::BUNDLED_CELL
@@ -51,7 +52,13 @@ fn build_generator() -> Generator {
     ]);
     // TODO: add a real signature verifying implementation later
     account_lock_manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
-    Generator::new(backend_manage, account_lock_manage)
+    let rollup_type_script_hash: [u8; 32] =
+        chain_config.rollup_type_script.calc_script_hash().unpack();
+    Generator::new(
+        backend_manage,
+        account_lock_manage,
+        rollup_type_script_hash.into(),
+    )
 }
 
 declare_types! {
@@ -73,12 +80,12 @@ declare_types! {
                 };
                 let tip = packed::L2Block::default();
                 let tx_pool = TxPool::create(
-                    store.new_overlay().expect("State new overlay"), build_generator(),
+                    store.new_overlay().expect("State new overlay"), build_generator(&config.chain),
                     &tip, nb_ctx).expect("Creating TxPool");
                 Arc::new(Mutex::new(tx_pool))
             };
             let chain_result: Result<Chain> = Chain::create(
-                config.clone().chain, store, build_generator(), Arc::clone(&tx_pool));
+                config.clone().chain, store, build_generator(&config.chain), Arc::clone(&tx_pool));
             match chain_result {
                 Ok(chain) => Ok(NativeChain {
                     config: config,

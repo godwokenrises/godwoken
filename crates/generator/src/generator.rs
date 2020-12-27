@@ -9,6 +9,7 @@ use crate::{
 };
 use crate::{error::ValidateError, syscalls::L2Syscalls, types::RunResult};
 use gw_common::{
+    blake2b::new_blake2b,
     error::Error as StateError,
     h256_ext::H256Ext,
     state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
@@ -43,13 +44,19 @@ pub struct StateTransitionResult {
 pub struct Generator {
     backend_manage: BackendManage,
     account_lock_manage: AccountLockManage,
+    pub rollup_type_script_hash: H256,
 }
 
 impl Generator {
-    pub fn new(backend_manage: BackendManage, account_lock_manage: AccountLockManage) -> Self {
+    pub fn new(
+        backend_manage: BackendManage,
+        account_lock_manage: AccountLockManage,
+        rollup_type_script_hash: H256,
+    ) -> Self {
         Generator {
             backend_manage,
             account_lock_manage,
+            rollup_type_script_hash,
         }
     }
 
@@ -87,11 +94,15 @@ impl Generator {
             .get_lock_algorithm(&lock_code_hash.into())
             .ok_or(ValidateError::UnknownAccountLockScript)?;
 
-        let message = raw.hash().into();
+        let mut hasher = new_blake2b();
+        hasher.update(self.rollup_type_script_hash.as_slice());
+        hasher.update(&raw.as_slice());
+        let mut message = [0u8; 32];
+        hasher.finalize(&mut message);
         let valid_signature = lock_algo.verify_signature(
             account_script.args().unpack(),
             withdrawal_request.signature(),
-            message,
+            message.into(),
         )?;
 
         if !valid_signature {

@@ -1,6 +1,7 @@
 use crate::next_block_context::NextBlockContext;
 use anyhow::{anyhow, Result};
 use gw_common::{
+    blake2b::new_blake2b,
     smt::{Store, H256 as SMTH256},
     state::State,
     H256,
@@ -31,6 +32,7 @@ pub struct TxPool<S> {
     withdrawal_queue: Vec<WithdrawalRequest>,
     next_block_info: BlockInfo,
     next_prev_account_state: MerkleState,
+    rollup_type_script_hash: H256,
 }
 
 impl<S: Store<SMTH256>> TxPool<S> {
@@ -44,6 +46,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
         let withdrawal_queue = Vec::with_capacity(MAX_PACKAGED_WITHDRAWAL);
         let next_prev_account_state = get_account_state(&state)?;
         let next_block_info = gen_next_block_info(tip, nb_ctx)?;
+        let rollup_type_script_hash = generator.rollup_type_script_hash.into();
         Ok(TxPool {
             state,
             generator,
@@ -51,6 +54,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
             withdrawal_queue,
             next_block_info,
             next_prev_account_state,
+            rollup_type_script_hash,
         })
     }
 }
@@ -137,14 +141,20 @@ impl<S: Store<SMTH256>> TxPool<S> {
             .expect("get script hash");
         let script = self.state.get_script(&script_hash).expect("get script");
         let lock_code_hash: [u8; 32] = script.code_hash().unpack();
-        let tx_hash = tx.hash();
+
+        let mut hasher = new_blake2b();
+        hasher.update(self.rollup_type_script_hash.as_slice());
+        hasher.update(&raw_tx.as_slice());
+        let mut message = [0u8; 32];
+        hasher.finalize(&mut message);
+
         let lock_algo = self
             .generator
             .account_lock_manage()
             .get_lock_algorithm(&lock_code_hash.into())
             .ok_or(ValidateError::UnknownAccountLockScript)?;
         let valid_signature =
-            lock_algo.verify_signature(script.args().unpack(), tx.signature(), tx_hash.into())?;
+            lock_algo.verify_signature(script.args().unpack(), tx.signature(), message.into())?;
         if !valid_signature {
             return Err(LockAlgorithmError::InvalidSignature.into());
         }
