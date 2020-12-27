@@ -6,11 +6,11 @@ function buildGenesisBlock(config) {
 }
 
 class ChainService {
-  constructor(config, genesis) {
+  constructor(config, headerInfo) {
     this.config = config;
     this.nativeChain = new addon.NativeChain(
       JSON.stringify(config),
-      JSON.stringify(genesis)
+      new Reader(headerInfo).toArrayBuffer()
     );
   }
 

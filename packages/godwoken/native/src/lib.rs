@@ -57,12 +57,11 @@ declare_types! {
             let config_string = cx.argument::<JsString>(0)?.value();
             let jsonrpc_config: parameter::Config = serde_json::from_str(&config_string).expect("Constructing config from string");
             let config: Config = jsonrpc_config.into();
-            let genesis_setup_string = cx.argument::<JsString>(1)?.value();
-            let genesis_setup: genesis::GenesisSetup = serde_json::from_str(&genesis_setup_string).expect("Construcing genesis setup from string");
-            let genesis_config: GenesisConfig = genesis_setup.genesis_config.into();
-            let header_info = packed::HeaderInfo::from_slice(genesis_setup.header_info.into_bytes().as_ref()).expect("Constructing header info");
+            let js_header_info = cx.argument::<JsArrayBuffer>(1)?;
+            let js_header_info_slice = cx.borrow(&js_header_info, |data| { data.as_slice::<u8>() });
+            let header_info = packed::HeaderInfo::from_slice(js_header_info_slice).expect("Constructing header info");
             let mut store = Store::default();
-            store.init_genesis(&genesis_config, header_info).expect("Initializing store");
+            store.init_genesis(&config.genesis, header_info).expect("Initializing store");
             let tx_pool = {
                 let nb_ctx = NextBlockContext {
                     aggregator_id: 0u32,

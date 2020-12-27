@@ -13,7 +13,7 @@ import {
 } from "@ckb-lumos/base";
 import { TransactionSkeletonType } from "@ckb-lumos/helpers";
 import { DeploymentConfig, schemas, types } from "@ckb-godwoken/base";
-import { Config, GenesisSetup } from "@ckb-godwoken/godwoken";
+import { Config } from "@ckb-godwoken/godwoken";
 
 const { DenormalizeScript } = denormalizers;
 const { readBigUInt128LE } = utils;
@@ -37,7 +37,7 @@ export interface StateValidatorLockGenerator {
 
 export interface GenesisStoreConfig {
   type: "genesis";
-  genesis: GenesisSetup;
+  headerInfo: HexString;
 }
 
 export type StoreConfig = GenesisStoreConfig;
