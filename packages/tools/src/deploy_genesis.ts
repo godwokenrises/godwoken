@@ -218,10 +218,6 @@ const run = async () => {
   const packedHeaderInfo = schemas.SerializeHeaderInfo(
     types.NormalizeHeaderInfo(headerInfo)
   );
-  const setup = {
-    header_info: new Reader(packedHeaderInfo).serializeJson(),
-    genesis,
-  };
   godwokenConfig.chain = {
     rollup_type_script: typeScript,
   };
@@ -230,7 +226,7 @@ const run = async () => {
     godwokenConfig,
     storeConfig: {
       type: "genesis",
-      genesis: setup,
+      headerInfo: new Reader(packedHeaderInfo).serializeJson(),
     },
   };
 

@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::error::{Error, ValidateError};
 use crate::types::RunResult;
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, error::Error as StateError,
@@ -83,6 +83,10 @@ impl<S: State + CodeStore> StateExt for S {
                     self.create_account(sudt_script_hash.into())?
                 }
             };
+            // prevent fake CKB SUDT, the caller should filter these invalid depositions
+            if sudt_id == CKB_SUDT_ACCOUNT_ID {
+                return Err(ValidateError::InvalidSUDTOperation.into());
+            }
             // mint SUDT
             self.mint_sudt(sudt_id, id, request.amount().unpack())?;
         }

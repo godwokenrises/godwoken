@@ -8,7 +8,7 @@ lazy_static! {
         .to_vec()
         .into();
     // TODO FIXME implement validator
-    static ref SUDT_VALIDATOR: Bytes = include_bytes!("../../../c/build/sudt-generator")
+    static ref SUDT_VALIDATOR: Bytes = include_bytes!("../../../c/build/sudt-validator")
         .to_vec()
         .into();
     pub static ref SUDT_VALIDATOR_CODE_HASH: H256 = code_hash(&SUDT_VALIDATOR);
@@ -16,7 +16,7 @@ lazy_static! {
         .to_vec()
         .into();
     // TODO FIXME implement validator
-    static ref META_CONTRACT_VALIDATOR: Bytes = include_bytes!("../../../c/build/meta-contract-generator")
+    static ref META_CONTRACT_VALIDATOR: Bytes = include_bytes!("../../../c/build/meta-contract-validator")
         .to_vec()
         .into();
     pub static ref META_CONTRACT_VALIDATOR_CODE_HASH: H256 = code_hash(&META_CONTRACT_VALIDATOR);

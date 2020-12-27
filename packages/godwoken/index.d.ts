@@ -108,46 +108,17 @@ export interface RunResult {
   new_data: Record<Hash, HexString>;
 }
 
-export interface BranchNode {
-  fork_height: HexNumber;
-  key: Hash;
-  node: Hash;
-  sibling: Hash;
-}
-
-export interface LeafNode {
-  key: Hash;
-  value: Hash;
-}
-
-export interface BranchMapEntry {
-  key: Hash;
-  value: BranchNode;
-}
-
-export interface LeafMapEntry {
-  key: Hash;
-  value: LeafNode;
-}
-
-export interface GenesisWithSMTState {
+export interface GenesisWithGlobalState {
   genesis: HexString; // gw_types::packed::L2Block
   global_state: HexString; // gw_types::packed::GlobalState
-  branches_map: BranchMapEntry[];
-  leaves_map: LeafMapEntry[];
-}
-
-export interface GenesisSetup {
-  genesis: GenesisWithSMTState;
-  header_info: HexString; // gw_types::packed::HeaderInfo
 }
 
 export function buildGenesisBlock(
   config: GenesisConfig
-): Promise<GenesisWithSMTState>;
+): Promise<GenesisWithGlobalState>;
 
 export class ChainService {
-  constructor(config: Config, genesisSetup: GenesisSetup);
+  constructor(config: Config, headerInfo: HexString);
   sync(syncParam: SyncParam): Promise<SyncEvent>;
   produceBlock(
     produceBlockParam: ProduceBlockParam

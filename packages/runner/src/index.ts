@@ -47,7 +47,7 @@ if (runnerConfig.storeConfig.type !== "genesis") {
 
 const chainService = new ChainService(
   runnerConfig.godwokenConfig,
-  runnerConfig.storeConfig.genesis
+  runnerConfig.storeConfig.headerInfo
 );
 
 function defaultLogger(level: Level, message: string) {
