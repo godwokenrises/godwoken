@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { argv } from "process";
 import { Reader, RPC, normalizers } from "ckb-js-toolkit";
-import { Cell, core, utils } from "@ckb-lumos/base";
+import { Cell, Hash, core, utils } from "@ckb-lumos/base";
 import { common } from "@ckb-lumos/common-scripts";
 import { getConfig, initializeConfig } from "@ckb-lumos/config-manager";
 import {
@@ -56,6 +56,23 @@ function ckbAddress(address: any, privateKey: any) {
 
 function asyncSleep(ms = 0) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+async function waitForBlockSync(indexer: Indexer, rpc: RPC, blockHash: Hash) {
+  const header = await rpc.get_header(blockHash);
+  const blockNumber = BigInt(header.number);
+  while (true) {
+    await indexer.waitForSync();
+    const tip = await indexer.tip();
+    if (tip) {
+      const indexedNumber = BigInt(tip.block_number);
+      if (indexedNumber >= blockNumber) {
+        // TODO: do we need to handle forks?
+        break;
+      }
+    }
+    await asyncSleep(2000);
+  }
 }
 
 const run = async () => {
@@ -178,7 +195,7 @@ const run = async () => {
         txWithStatus.tx_status &&
         txWithStatus.tx_status.status === "committed"
       ) {
-        await indexer.waitForSync(0);
+        await waitForBlockSync(indexer, rpc, txWithStatus.tx_status.block_hash);
         break;
       }
     }
