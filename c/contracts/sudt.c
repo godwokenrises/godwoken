@@ -92,5 +92,6 @@ int main() {
   } else {
     return ERROR_UNKNOWN_MSG;
   }
-  return 0;
+
+  return gw_finalize(&ctx);
 }

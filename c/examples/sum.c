@@ -40,7 +40,11 @@ int main() {
   /* return current counter value as data */
   ctx.sys_set_program_return_data(&ctx, (uint8_t *)&counter_value,
                                   sizeof(uint64_t));
-  return write_counter(&ctx, counter_value);
+  ret = write_counter(&ctx, counter_value);
+  if (ret != 0) {
+    return ret;
+  }
+  return gw_finalize(&ctx);
 }
 
 /* helper functions */

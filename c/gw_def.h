@@ -16,12 +16,11 @@
 #define GW_MAX_RETURN_DATA_SIZE 24576
 /* 128KB */
 #define GW_MAX_ARGS_SIZE 131072
+/* Buffer to receive data */
+#define MAX_BUF_SIZE 65536
+/* 2048 * (32 + 32 + 8) = 147456 Byte (~144KB)*/
+#define MAX_KV_STATE_CAPACITY 2048
 
-/* Call receipt */
-typedef struct {
-  uint8_t return_data[GW_MAX_RETURN_DATA_SIZE];
-  uint32_t return_data_len;
-} gw_call_receipt_t;
 
 /* Godwoken context */
 typedef struct {
@@ -47,7 +46,7 @@ int gw_context_init(struct gw_context_t *ctx);
 /**
  * Finalize Godwoken state
  */
-int gw_finalize(struct gw_context_t *ctx, gw_call_receipt_t *receipt);
+int gw_finalize(struct gw_context_t *ctx);
 
 
 /* layer2 syscalls */
