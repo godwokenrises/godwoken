@@ -77,6 +77,14 @@ impl LockAlgorithm for Secp256k1Eth {
         if lock_args.len() != 20 {
             return Err(LockAlgorithmError::InvalidLockArgs);
         }
+        let mut hasher = Keccak256::new();
+        hasher.update("\x19Ethereum Signed Message:\n32");
+        hasher.update(message.as_slice());
+        let buf = hasher.finalize();
+        let mut signing_message = [0u8; 32];
+        signing_message.copy_from_slice(&buf[..]);
+        let signing_message = H256::from(signing_message);
+
         let mut expected_pubkey_hash = [0u8; 20];
         expected_pubkey_hash.copy_from_slice(&lock_args);
         let signature: RecoverableSignature = {
@@ -87,7 +95,7 @@ impl LockAlgorithm for Secp256k1Eth {
             RecoverableSignature::from_compact(data, recid)
                 .map_err(|_| LockAlgorithmError::InvalidSignature)?
         };
-        let msg = secp256k1::Message::from_slice(message.as_slice())
+        let msg = secp256k1::Message::from_slice(signing_message.as_slice())
             .map_err(|_| LockAlgorithmError::InvalidSignature)?;
         let pubkey = SECP256K1
             .recover(&msg, &signature)
@@ -109,13 +117,7 @@ impl LockAlgorithm for Secp256k1Eth {
 
 #[test]
 fn test_secp256k1_eth() {
-    let mut hasher = Keccak256::new();
-    hasher.update("\x19Ethereum Signed Message:\n32");
-    hasher.update(&[0u8; 32]);
-    let buf = hasher.finalize();
-    let mut signing_message = [0u8; 32];
-    signing_message.copy_from_slice(&buf[..]);
-    let signing_message = H256::from(signing_message);
+    let message = H256::from([0u8; 32]);
     let test_signature = Signature::from_slice(
         &hex::decode("c2ae67217b65b785b1add7db1e9deb1df2ae2c7f57b9c29de0dfc40c59ab8d47341a863876660e3d0142b71248338ed71d2d4eb7ca078455565733095ac25a5800").expect("hex decode"))
         .expect("create signature structure");
@@ -123,7 +125,7 @@ fn test_secp256k1_eth() {
         Bytes::from(hex::decode("ffafb3db9377769f5b59bfff6cd2cf942a34ab17").expect("hex decode"));
     let eth = Secp256k1Eth {};
     let result = eth
-        .verify_signature(address, test_signature, signing_message)
+        .verify_signature(address, test_signature, message)
         .expect("verify signature");
     assert!(result);
 }
