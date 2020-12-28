@@ -26,7 +26,9 @@ class ChainService {
     return JSON.parse(produceBlockResult);
   }
   async execute(l2Transaction) {
-    const runResult = this.nativeChain.execute(l2Transaction);
+    const runResult = this.nativeChain.execute(
+      new Reader(l2Transaction).toArrayBuffer()
+    );
     return JSON.parse(runResult);
   }
 
