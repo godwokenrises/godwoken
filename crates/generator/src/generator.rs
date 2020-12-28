@@ -1,4 +1,4 @@
-use crate::{account_lock_manage::AccountLockManage, backend_manage::BackendManage, TxReceipt};
+use crate::{account_lock_manage::AccountLockManage, backend_manage::BackendManage};
 use crate::{
     backend_manage::Backend,
     error::{Error, TransactionError, TransactionErrorWithContext},
@@ -16,7 +16,7 @@ use gw_common::{
     H256,
 };
 use gw_types::{
-    core::ScriptHashType,
+    core::{ScriptHashType, TxReceipt},
     packed::{
         BlockInfo, DepositionRequest, L2Block, RawL2Block, RawL2Transaction, StartChallenge,
         WithdrawalRequest,

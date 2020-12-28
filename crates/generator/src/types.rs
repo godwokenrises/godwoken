@@ -9,14 +9,6 @@ use std::{
 };
 
 #[derive(Debug, PartialEq, Clone, Eq, Default)]
-pub struct TxReceipt {
-    pub tx_witness_hash: H256,
-    // hash(account_root|account_count)
-    pub compacted_post_account_root: H256,
-    pub read_data_hashes: Vec<H256>,
-}
-
-#[derive(Debug, PartialEq, Clone, Eq, Default)]
 pub struct RunResult {
     pub read_values: HashMap<H256, H256>,
     pub write_values: HashMap<H256, H256>,

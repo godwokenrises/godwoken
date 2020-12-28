@@ -1,6 +1,6 @@
 use core::convert::TryFrom;
-
 use molecule::prelude::Byte;
+use sparse_merkle_tree::H256;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ScriptHashType {
@@ -37,4 +37,12 @@ impl TryFrom<u8> for Status {
             n => return Err(n),
         }
     }
+}
+
+#[derive(Debug, PartialEq, Clone, Eq, Default)]
+pub struct TxReceipt {
+    pub tx_witness_hash: H256,
+    // hash(account_root|account_count)
+    pub compacted_post_account_root: H256,
+    pub read_data_hashes: Vec<H256>,
 }
