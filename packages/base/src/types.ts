@@ -70,7 +70,7 @@ function toNormalize(normalize: Function) {
 export interface DepositionRequest {
   capacity: HexNumber;
   amount: HexNumber;
-  sudt_script: Script;
+  sudt_script_hash: Hash;
   script: Script;
 }
 
@@ -81,7 +81,7 @@ export function NormalizeDepositionRequest(
   return normalizeObject(debugPath, request, {
     capacity: normalizeHexNumber(8),
     amount: normalizeHexNumber(16),
-    sudt_script: toNormalize(normalizers.NormalizeScript),
+    sudt_script_hash: normalizeRawData(32),
     script: toNormalize(normalizers.NormalizeScript),
   });
 }
