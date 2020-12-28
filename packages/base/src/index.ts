@@ -13,4 +13,7 @@ export interface DeploymentConfig {
   custodian_lock_dep: CellDep;
   state_validator_lock_dep: CellDep;
   state_validator_type_dep: CellDep;
+
+  poa_state?: Script;
+  poa_state_dep?: CellDep;
 }

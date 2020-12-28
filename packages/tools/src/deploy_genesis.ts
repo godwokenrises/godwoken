@@ -4,11 +4,12 @@ import { Reader, RPC, normalizers } from "ckb-js-toolkit";
 import { DeploymentConfig, schemas, types } from "@ckb-godwoken/base";
 import { Config, buildGenesisBlock } from "@ckb-godwoken/godwoken";
 import { Indexer } from "@ckb-lumos/sql-indexer";
-import { Cell, core, utils } from "@ckb-lumos/base";
+import { Cell, HashType, HexString, core, utils } from "@ckb-lumos/base";
 import { common } from "@ckb-lumos/common-scripts";
 import { getConfig, initializeConfig } from "@ckb-lumos/config-manager";
 import {
   TransactionSkeleton,
+  TransactionSkeletonType,
   minimalCellCapacity,
   scriptToAddress,
   sealTransaction,
@@ -18,6 +19,7 @@ import { dirname, join } from "path";
 import { exit } from "process";
 import * as secp256k1 from "secp256k1";
 import Knex from "knex";
+import { config as poaConfigModule } from "clerkb-lumos-integrator";
 
 const program = new Command();
 program
@@ -37,7 +39,11 @@ program
     "-s, --sql-connection <sqlConnection>",
     "PostgreSQL connection striong"
   )
-  .option("-p, --private-key <privateKey>", "private key to use")
+  .requiredOption("-p, --private-key <privateKey>", "private key to use")
+  .option(
+    "-e, --poa-setup-file <poaSetupFile>",
+    "poa setup file, use PoA lock if this is present"
+  )
   .option("-a, --address <address>", "address to use")
   .option("-r, --rpc <rpc>", "rpc path", "http://127.0.0.1:8114");
 program.parse(argv);
@@ -67,6 +73,25 @@ function asyncSleep(ms = 0) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function calculateTypeId(
+  txSkeleton: TransactionSkeletonType,
+  outputIndex: number
+): HexString {
+  const firstInput = {
+    previous_output: txSkeleton.get("inputs").get(0)!.out_point,
+    since: txSkeleton.get("inputSinces").get(0) || "0x0",
+  };
+  const typeIdHasher = new utils.CKBHasher();
+  typeIdHasher.update(
+    core.SerializeCellInput(normalizers.NormalizeCellInput(firstInput))
+  );
+  const buffer = new ArrayBuffer(8);
+  const view = new DataView(buffer);
+  view.setBigUint64(0, BigInt(outputIndex), true);
+  typeIdHasher.update(buffer);
+  return typeIdHasher.digestHex();
+}
+
 const run = async () => {
   if (!program.privateKey && !program.address) {
     throw new Error("You must either provide privateKey or address!");
@@ -83,6 +108,10 @@ const run = async () => {
   await indexer.waitForSync();
   console.log("Syncing done!");
 
+  let poaConfig: poaConfigModule.Config | undefined = undefined;
+  if (program.poaSetupFile) {
+    poaConfig = poaConfigModule.readConfig(program.poaSetupFile);
+  }
   const deploymentConfig: DeploymentConfig = JSON.parse(
     readFileSync(program.deploymentFile, "utf8")
   );
@@ -92,6 +121,12 @@ const run = async () => {
   const address = ckbAddress(program.address, program.privateKey);
   const genesis = await buildGenesisBlock(godwokenConfig.genesis);
 
+  let txSkeleton = TransactionSkeleton({ cellProvider: indexer });
+  txSkeleton = txSkeleton.update("cellDeps", (cellDeps) =>
+    cellDeps.push(deploymentConfig.state_validator_type_dep)
+  );
+
+  // Insert main rollup cell
   const cell: Cell = {
     cell_output: {
       capacity: "0x0",
@@ -105,26 +140,156 @@ const run = async () => {
     },
     data: genesis.global_state,
   };
-  const cellCapacity = minimalCellCapacity(cell);
-  cell.cell_output.capacity = "0x" + cellCapacity.toString(16);
-
-  let txSkeleton = TransactionSkeleton({ cellProvider: indexer });
-  txSkeleton = txSkeleton.update("cellDeps", (cellDeps) =>
-    cellDeps.push(deploymentConfig.state_validator_type_dep)
-  );
-  txSkeleton = txSkeleton.update("outputs", (outputs) => outputs.push(cell));
-  txSkeleton = await common.injectCapacity(txSkeleton, [address], cellCapacity);
-  txSkeleton = txSkeleton.update("fixedEntries", (fixedEntries) => {
-    return fixedEntries
-      .push({
-        field: "inputs",
-        index: 0,
-      })
-      .push({
+  cell.cell_output.capacity = "0x" + minimalCellCapacity(cell).toString(16);
+  txSkeleton = txSkeleton
+    .update("outputs", (outputs) => outputs.push(cell))
+    .update("fixedEntries", (fixedEntries) => {
+      return fixedEntries.push({
         field: "outputs",
         index: 0,
       });
+    });
+
+  if (poaConfig) {
+    // PoA requires 64 byte lock args
+    txSkeleton = txSkeleton.update("outputs", (outputs) => {
+      return outputs.update(0, (output) => {
+        output.cell_output.lock.args =
+          "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        output.cell_output.capacity =
+          "0x" + minimalCellCapacity(output).toString(16);
+        return output;
+      });
+    });
+    // Insert PoA data cell and PoA setup cell
+    const medianTime =
+      BigInt((await rpc.get_blockchain_info()).median_time) / 1000n;
+    const startOutputIndex = txSkeleton.get("outputs").count();
+    // Generate PoA Setup cell
+    const poaSetupCell = {
+      cell_output: {
+        capacity: "0x0",
+        lock: {
+          code_hash: deploymentConfig.poa_state!.code_hash,
+          hash_type: deploymentConfig.poa_state!.hash_type,
+          args:
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+        },
+        type: {
+          code_hash:
+            "0x00000000000000000000000000000000000000000000000000545950455f4944",
+          hash_type: "type" as HashType,
+          args:
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+        },
+      },
+      data: new Reader(
+        poaConfigModule.serializePoASetup(poaConfig.poa_setup)
+      ).serializeJson(),
+    };
+    poaSetupCell.cell_output.capacity =
+      "0x" + minimalCellCapacity(poaSetupCell).toString(16);
+    // Generate PoA Data cell
+    const poaData = {
+      round_initial_subtime: medianTime,
+      subblock_subtime: medianTime,
+      subblock_index: 0,
+      aggregator_index: 0,
+    };
+    const poaDataCell = {
+      cell_output: {
+        capacity: "0x0",
+        lock: {
+          code_hash: deploymentConfig.poa_state!.code_hash,
+          hash_type: deploymentConfig.poa_state!.hash_type,
+          args:
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+        },
+        type: {
+          code_hash:
+            "0x00000000000000000000000000000000000000000000000000545950455f4944",
+          hash_type: "type" as HashType,
+          args:
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+        },
+      },
+      data: new Reader(
+        poaConfigModule.serializePoAData(poaData)
+      ).serializeJson(),
+    };
+    poaDataCell.cell_output.capacity =
+      "0x" + minimalCellCapacity(poaDataCell).toString(16);
+    // Insert both cells into transaction skeleton, inject capacity to hold the 2
+    // new cells, as well as the newly added lock args.
+    txSkeleton = txSkeleton
+      .update("outputs", (outputs) => {
+        return outputs.push(poaSetupCell).push(poaDataCell);
+      })
+      .update("fixedEntries", (fixedEntries) => {
+        return fixedEntries
+          .push({
+            field: "outputs",
+            index: 1,
+          })
+          .push({
+            field: "outputs",
+            index: 2,
+          });
+      });
+  }
+
+  // Provide capacity for all outputs.
+  let capacity = 0n;
+  for (const cell of txSkeleton.get("outputs").toArray()) {
+    capacity += minimalCellCapacity(cell);
+  }
+  txSkeleton = await common.injectCapacity(txSkeleton, [address], capacity);
+  txSkeleton = txSkeleton.update("fixedEntries", (fixedEntries) => {
+    return fixedEntries.push({
+      field: "inputs",
+      index: 0,
+    });
   });
+
+  // Setup Type IDs
+  const typeId = calculateTypeId(txSkeleton, 0);
+  txSkeleton = txSkeleton.update("outputs", (outputs) => {
+    return outputs.update(0, (output) => {
+      output.cell_output.type!.args = typeId;
+      return output;
+    });
+  });
+  const typeScript = txSkeleton.get("outputs").get(0)!.cell_output.type!;
+  if (poaConfig) {
+    const poaSetupCellTypeId = calculateTypeId(txSkeleton, 1);
+    const poaDataCellTypeId = calculateTypeId(txSkeleton, 2);
+    txSkeleton = txSkeleton.update("outputs", (outputs) => {
+      // Use the combination of PoA setup cell's type ID, and PoA data cell's type ID
+      // as PoA's main lock args.
+      const args = poaSetupCellTypeId + poaDataCellTypeId.substr(2);
+      return outputs.update(0, (output) => {
+        output.cell_output.lock.args = args;
+        return output;
+      });
+    });
+    const lockScriptHash = utils.computeScriptHash(
+      txSkeleton.get("outputs").get(0)!.cell_output.lock
+    );
+    txSkeleton = txSkeleton.update("outputs", (outputs) => {
+      return outputs
+        .update(1, (output) => {
+          output.cell_output.type!.args = poaSetupCellTypeId;
+          output.cell_output.lock.args = lockScriptHash;
+          return output;
+        })
+        .update(2, (output) => {
+          output.cell_output.type!.args = poaDataCellTypeId;
+          output.cell_output.lock.args = lockScriptHash;
+          return output;
+        });
+    });
+  }
+
   // L2Block is kept in witness field.
   txSkeleton = txSkeleton.update("witnesses", (witnesses) => {
     return witnesses.update(0, (witness) => {
@@ -146,27 +311,7 @@ const run = async () => {
       ).serializeJson();
     });
   });
-  // Type ID
-  const firstInput = {
-    previous_output: txSkeleton.get("inputs").get(0)!.out_point,
-    since: txSkeleton.get("inputSinces").get(0) || "0x0",
-  };
-  const typeIdHasher = new utils.CKBHasher();
-  typeIdHasher.update(
-    core.SerializeCellInput(normalizers.NormalizeCellInput(firstInput))
-  );
-  const buffer = new ArrayBuffer(8);
-  const view = new DataView(buffer);
-  view.setBigUint64(0, 0n, true);
-  typeIdHasher.update(buffer);
-  const typeId = typeIdHasher.digestHex();
-  txSkeleton = txSkeleton.update("outputs", (outputs) => {
-    return outputs.update(0, (output) => {
-      output.cell_output.type!.args = typeId;
-      return output;
-    });
-  });
-  const typeScript = txSkeleton.get("outputs").get(0)!.cell_output.type!;
+
   txSkeleton = await common.payFeeByFeeRate(
     txSkeleton,
     [address],
@@ -228,7 +373,16 @@ const run = async () => {
       type: "genesis",
       headerInfo: new Reader(packedHeaderInfo).serializeJson(),
     },
+    aggregatorConfig: undefined as any,
   };
+  if (poaConfig) {
+    runnerConfig.aggregatorConfig = {
+      type: "poa",
+      config: poaConfig,
+    };
+  } else {
+    runnerConfig.aggregatorConfig = { type: "always_success" };
+  }
 
   writeFileSync(
     program.outputFile,
