@@ -19,7 +19,7 @@ pub const FINALIZE_BLOCKS: u64 = 1000;
 
 pub const DEPOSITION_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const CUSTODIAN_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
-pub const SUDT_CODE_HASH: [u8; 32] = [0u8; 32];
+pub const L2_SUDT_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const CKB_SUDT_SCRIPT_HASH: [u8; 32] = [
     184, 77, 129, 128, 107, 82, 41, 144, 123, 102, 187, 144, 60, 28, 67, 38, 13, 58, 155, 0, 13,
     242, 255, 113, 167, 248, 112, 241, 195, 15, 146, 119,

@@ -649,6 +649,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "blake2b-rs 0.2.0",
+ "ckb-types",
  "ckb-vm",
  "gw-common",
  "gw-types",

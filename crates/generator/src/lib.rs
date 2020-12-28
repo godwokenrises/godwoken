@@ -6,6 +6,7 @@ pub mod backend_manage;
 pub mod dummy_state;
 pub mod error;
 pub mod generator;
+pub mod sudt;
 pub mod syscalls;
 #[cfg(test)]
 mod tests;

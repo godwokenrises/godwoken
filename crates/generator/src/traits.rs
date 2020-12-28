@@ -1,4 +1,5 @@
 use crate::error::{Error, ValidateError};
+use crate::sudt::build_l2_sudt_script;
 use crate::types::RunResult;
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, error::Error as StateError,
@@ -75,12 +76,13 @@ impl<S: State + CodeStore> StateExt for S {
             let capacity: u64 = request.capacity().unpack();
             self.mint_sudt(CKB_SUDT_ACCOUNT_ID, id, capacity.into())?;
             // find or create Simple UDT account
-            let sudt_script_hash = request.sudt_script().hash();
-            let sudt_id = match self.get_account_id_by_script_hash(&sudt_script_hash.into())? {
+            let l2_sudt_script = build_l2_sudt_script(request.sudt_script_hash().unpack());
+            let l2_sudt_script_hash: [u8; 32] = l2_sudt_script.hash();
+            let sudt_id = match self.get_account_id_by_script_hash(&l2_sudt_script_hash.into())? {
                 Some(id) => id,
                 None => {
-                    self.insert_script(sudt_script_hash.into(), request.sudt_script().clone());
-                    self.create_account(sudt_script_hash.into())?
+                    self.insert_script(l2_sudt_script_hash.into(), l2_sudt_script);
+                    self.create_account(l2_sudt_script_hash.into())?
                 }
             };
             // prevent fake CKB SUDT, the caller should filter these invalid depositions
@@ -101,7 +103,8 @@ impl<S: State + CodeStore> StateExt for S {
         for request in withdrawal_requests {
             let raw = request.raw();
             let account_script_hash: [u8; 32] = raw.account_script_hash().unpack();
-            let sudt_script_hash: [u8; 32] = raw.sudt_script_hash().unpack();
+            let l2_sudt_script_hash: [u8; 32] =
+                build_l2_sudt_script(raw.sudt_script_hash().unpack()).hash();
             let amount: u128 = raw.amount().unpack();
             // find user account
             let id = self
@@ -111,7 +114,7 @@ impl<S: State + CodeStore> StateExt for S {
             // burn CKB
             self.burn_sudt(CKB_SUDT_ACCOUNT_ID, id, capacity.into())?;
             let sudt_id = self
-                .get_account_id_by_script_hash(&sudt_script_hash.into())?
+                .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
                 .ok_or(StateError::MissingKey)?;
             // burn sudt
             self.burn_sudt(sudt_id, id, amount)?;
