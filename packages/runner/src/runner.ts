@@ -107,7 +107,7 @@ export class Runner {
           [config.deploymentConfig.poa_state_dep!],
           (message) => {
             this.logger("debug", `[aggregator] ${message}`);
-          },
+          }
         );
       } else {
         this.lockGenerator = new AlwaysSuccessGenerator();
