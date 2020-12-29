@@ -51,7 +51,7 @@ const chainService = new ChainService(
 );
 
 function defaultLogger(level: Level, message: string) {
-  console.log(`[${level}] ${message}`);
+  console.log(`[${new Date().toISOString()}] [${level}] ${message}`);
 }
 
 const jsonrpcServer = new JsonrpcServer(
