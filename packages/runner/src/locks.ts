@@ -9,6 +9,8 @@ export class AlwaysSuccessGenerator {
     this.lastProduceBlockTime = 0n;
   }
 
+  async cancelIssueBlock(): Promise<void> {}
+
   async shouldIssueNewBlock(
     medianTimeHex: HexNumber,
     tipCell: Cell

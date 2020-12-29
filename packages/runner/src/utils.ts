@@ -34,6 +34,8 @@ export interface StateValidatorLockGenerator {
     medianTime: HexNumber,
     txSkeleton: TransactionSkeletonType
   ): Promise<TransactionSkeletonType>;
+
+  cancelIssueBlock(): Promise<void>;
 }
 
 export interface GenesisStoreConfig {
