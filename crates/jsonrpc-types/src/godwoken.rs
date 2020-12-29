@@ -1,7 +1,8 @@
 use crate::blockchain::Script;
 use crate::fixed_bytes::Byte65;
+use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
-use gw_types::{bytes::Bytes, packed, prelude::*, H256};
+use gw_types::{bytes::Bytes, packed, prelude::*};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]

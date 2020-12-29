@@ -181,18 +181,8 @@ version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8f629a4199407c8ab70585aa7c565c6e121334b268689ab5cf2dadaefe941cd"
 dependencies = [
- "ckb-fixed-hash-core 0.37.0",
- "ckb-fixed-hash-macros 0.37.0",
-]
-
-[[package]]
-name = "ckb-fixed-hash"
-version = "0.38.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "815e47dc312b1fea6400a7242522caaba3e8ce763c69c2a005d2783925db2480"
-dependencies = [
- "ckb-fixed-hash-core 0.38.0",
- "ckb-fixed-hash-macros 0.38.0",
+ "ckb-fixed-hash-core",
+ "ckb-fixed-hash-macros",
 ]
 
 [[package]]
@@ -207,38 +197,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "ckb-fixed-hash-core"
-version = "0.38.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d70f4d93b9d621f5594dd6b5b8127c48348656ee2145f13bdb38b6209fbbed3"
-dependencies = [
- "failure",
- "faster-hex",
- "serde",
-]
-
-[[package]]
 name = "ckb-fixed-hash-macros"
 version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab08726ca4fa3db89fbb730167bd8fdb0756dd0098b475fe95a811ed83becb7d"
 dependencies = [
- "ckb-fixed-hash-core 0.37.0",
+ "ckb-fixed-hash-core",
  "proc-macro2 0.4.30",
  "quote 0.6.13",
  "syn 0.15.44",
-]
-
-[[package]]
-name = "ckb-fixed-hash-macros"
-version = "0.38.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3320df6adf6d6f4190a176c9a49be64ddea504f78e7620d0c6960df464f8316"
-dependencies = [
- "ckb-fixed-hash-core 0.38.0",
- "proc-macro2 1.0.24",
- "quote 1.0.7",
- "syn 1.0.54",
 ]
 
 [[package]]
@@ -312,7 +279,7 @@ dependencies = [
  "bytes",
  "ckb-channel",
  "ckb-error",
- "ckb-fixed-hash 0.37.0",
+ "ckb-fixed-hash",
  "ckb-hash",
  "ckb-occupied-capacity",
  "ckb-rational",
@@ -671,6 +638,7 @@ dependencies = [
 name = "gw-jsonrpc-types"
 version = "0.1.0"
 dependencies = [
+ "ckb-fixed-hash",
  "ckb-jsonrpc-types",
  "ckb-types",
  "failure",
@@ -702,7 +670,7 @@ name = "gw-types"
 version = "0.1.0"
 dependencies = [
  "cfg-if 0.1.10",
- "ckb-fixed-hash 0.38.0",
+ "ckb-fixed-hash",
  "gw-hash",
  "molecule",
 ]

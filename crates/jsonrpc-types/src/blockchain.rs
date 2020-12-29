@@ -1,6 +1,7 @@
+use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Uint32, Uint64};
 use failure::{err_msg, Error as FailureError};
-use gw_types::{packed, prelude::*, H256};
+use gw_types::{packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
