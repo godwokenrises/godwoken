@@ -34,7 +34,7 @@ fn parse_lock_args() -> Result<([u8; 32], StakeLockArgs), Error> {
         return Err(Error::InvalidArgs);
     }
     rollup_type_hash.copy_from_slice(&args[..32]);
-    match StakeLockArgsReader::verify(&args, false) {
+    match StakeLockArgsReader::verify(&args.slice(32..), false) {
         Ok(()) => Ok((
             rollup_type_hash,
             StakeLockArgs::new_unchecked(args.slice(32..)),

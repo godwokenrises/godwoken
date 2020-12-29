@@ -45,7 +45,7 @@ fn parse_lock_args() -> Result<([u8; 32], StartChallenge), Error> {
         return Err(Error::InvalidArgs);
     }
     rollup_type_hash.copy_from_slice(&args[..32]);
-    match StartChallengeReader::verify(&args, false) {
+    match StartChallengeReader::verify(&args.slice(32..), false) {
         Ok(()) => Ok((
             rollup_type_hash,
             StartChallenge::new_unchecked(args.slice(32..)),

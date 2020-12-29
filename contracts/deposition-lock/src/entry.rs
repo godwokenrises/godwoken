@@ -39,7 +39,7 @@ fn parse_lock_args() -> Result<([u8; 32], DepositionLockArgs), Error> {
         return Err(Error::InvalidArgs);
     }
     rollup_type_hash.copy_from_slice(&args[..32]);
-    match DepositionLockArgsReader::verify(&args, false) {
+    match DepositionLockArgsReader::verify(&args.slice(32..), false) {
         Ok(()) => Ok((
             rollup_type_hash,
             DepositionLockArgs::new_unchecked(args.slice(32..)),
