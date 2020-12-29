@@ -104,7 +104,10 @@ export class Runner {
         this.lockGenerator = new poaGeneratorModule.PoAGenerator(
           this._ckbAddress(),
           this.indexer,
-          [config.deploymentConfig.poa_state_dep!]
+          [config.deploymentConfig.poa_state_dep!],
+          (message) => {
+            this.logger("debug", `[aggregator] ${message}`);
+          },
         );
       } else {
         this.lockGenerator = new AlwaysSuccessGenerator();
