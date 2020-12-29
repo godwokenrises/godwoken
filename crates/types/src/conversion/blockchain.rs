@@ -1,18 +1,5 @@
 use crate::vec::Vec;
-use crate::{bytes::Bytes, packed, prelude::*, H256};
-
-impl Pack<packed::Byte32> for H256 {
-    fn pack(&self) -> packed::Byte32 {
-        packed::Byte32::from_slice(self.as_bytes()).expect("impossible: fail to pack H256")
-    }
-}
-
-impl<'r> Unpack<H256> for packed::Byte32Reader<'r> {
-    fn unpack(&self) -> H256 {
-        H256::from_slice(self.as_slice()).expect("internal error: fail to unpack H256")
-    }
-}
-impl_conversion_for_entity_unpack!(H256, Byte32);
+use crate::{bytes::Bytes, packed, prelude::*};
 
 impl Pack<packed::Byte32> for [u8; 32] {
     fn pack(&self) -> packed::Byte32 {

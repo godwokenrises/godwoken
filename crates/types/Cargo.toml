@@ -8,10 +8,10 @@ edition = "2018"
 
 [features]
 default = ["std"]
-std = ["molecule/std"]
+std = ["molecule/std", "ckb-fixed-hash"]
 
 [dependencies]
 molecule = { version = "0.6", default-features = false }
 cfg-if = "0.1"
 gw-hash = { path = "../hash", default-features = false }
-ckb-fixed-hash = "0.38.0"
+ckb-fixed-hash = { version = "0.37.0", optional = true }

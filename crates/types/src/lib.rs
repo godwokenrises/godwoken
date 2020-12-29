@@ -8,7 +8,6 @@ pub mod core;
 mod extension;
 mod generated;
 pub mod prelude;
-pub use ckb_fixed_hash::{h160, h256, H160, H256};
 
 pub use generated::packed;
 pub use molecule::bytes;
