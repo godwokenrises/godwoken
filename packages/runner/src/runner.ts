@@ -455,8 +455,6 @@ export class Runner {
       }
     })().catch((e) => {
       console.error(`Error processing new block: ${e} ${e.stack}`);
-      // Clear the median time subscriber to exit
-      this.cancelListener();
     });
   }
 }
