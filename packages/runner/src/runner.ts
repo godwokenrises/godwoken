@@ -21,7 +21,13 @@ import {
   scriptToAddress,
 } from "@ckb-lumos/helpers";
 import { ChainService, SubmitTxs } from "@ckb-godwoken/godwoken";
-import { DeploymentConfig, schemas, types } from "@ckb-godwoken/base";
+import {
+  asyncSleep,
+  waitForBlockSync,
+  DeploymentConfig,
+  schemas,
+  types,
+} from "@ckb-godwoken/base";
 import {
   DepositionEntry,
   scanDepositionCellsInCommittedL2Block,
@@ -33,10 +39,6 @@ import {
 import { AlwaysSuccessGenerator } from "./locks";
 import { generator as poaGeneratorModule } from "clerkb-lumos-integrator";
 import * as secp256k1 from "secp256k1";
-
-function asyncSleep(ms = 0) {
-  return new Promise((r) => setTimeout(r, ms));
-}
 
 function isRollupTransction(
   tx: Transaction,
@@ -104,7 +106,10 @@ export class Runner {
         this.lockGenerator = new poaGeneratorModule.PoAGenerator(
           this._ckbAddress(),
           this.indexer,
-          [config.deploymentConfig.poa_state_dep!]
+          [config.deploymentConfig.poa_state_dep!],
+          (message) => {
+            this.logger("debug", `[aggregator] ${message}`);
+          }
         );
       } else {
         this.lockGenerator = new AlwaysSuccessGenerator();
@@ -198,6 +203,10 @@ export class Runner {
     };
     // TODO: process sync event.
     const event = await this.chainService.sync(syncParam);
+    this.logger(
+      "info",
+      `Synced l2 blocks at l1 block number: ${headerInfo.number}`
+    );
   }
 
   async _syncToTip() {
@@ -208,6 +217,7 @@ export class Runner {
       );
       if (!block) {
         // Already synced to tip
+        await waitForBlockSync(this.indexer, this.rpc, undefined, blockNumber);
         return;
       }
       const headerInfo: types.HeaderInfo = {
@@ -450,13 +460,18 @@ export class Runner {
         }
         const tx = sealTransaction(txSkeleton, signatures);
 
-        const hash = await this.rpc.send_transaction(tx);
-        this.logger("info", `Submitted l2 block in ${hash}`);
+        try {
+          const hash = await this.rpc.send_transaction(tx);
+          this.logger("info", `Submitted l2 block in ${hash}`);
+        } catch (e) {
+          this.logger("error", `Error submiting block: ${e}`);
+          this.lockGenerator!.cancelIssueBlock().catch((e) => {
+            console.error(`Error cancelling block: ${e}`);
+          });
+        }
       }
     })().catch((e) => {
       console.error(`Error processing new block: ${e} ${e.stack}`);
-      // Clear the median time subscriber to exit
-      this.cancelListener();
     });
   }
 }
