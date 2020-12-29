@@ -11,6 +11,7 @@ import {
   sealTransaction,
 } from "@ckb-lumos/helpers";
 import { Indexer } from "@ckb-lumos/sql-indexer";
+import { asyncSleep, waitForBlockSync } from "@ckb-godwoken/base";
 import { readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { exit } from "process";
@@ -52,27 +53,6 @@ function ckbAddress(address: any, privateKey: any) {
     args: publicKeyHash,
   };
   return scriptToAddress(script);
-}
-
-function asyncSleep(ms = 0) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-async function waitForBlockSync(indexer: Indexer, rpc: RPC, blockHash: Hash) {
-  const header = await rpc.get_header(blockHash);
-  const blockNumber = BigInt(header.number);
-  while (true) {
-    await indexer.waitForSync();
-    const tip = await indexer.tip();
-    if (tip) {
-      const indexedNumber = BigInt(tip.block_number);
-      if (indexedNumber >= blockNumber) {
-        // TODO: do we need to handle forks?
-        break;
-      }
-    }
-    await asyncSleep(2000);
-  }
 }
 
 const run = async () => {

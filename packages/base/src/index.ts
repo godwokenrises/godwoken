@@ -1,7 +1,15 @@
 export * as types from "./types";
 export * as schemas from "../schemas/godwoken";
 
-import { CellDep, HexString, HexNumber, Hash, Script } from "@ckb-lumos/base";
+import { RPC } from "ckb-js-toolkit";
+import {
+  CellDep,
+  HexString,
+  HexNumber,
+  Hash,
+  Indexer,
+  Script,
+} from "@ckb-lumos/base";
 
 export interface DeploymentConfig {
   deposition_lock: Script;
@@ -16,4 +24,32 @@ export interface DeploymentConfig {
 
   poa_state?: Script;
   poa_state_dep?: CellDep;
+}
+
+export function asyncSleep(ms = 0) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+export async function waitForBlockSync(
+  indexer: Indexer,
+  rpc: RPC,
+  blockHash?: Hash,
+  blockNumber?: bigint
+) {
+  if (!blockNumber) {
+    const header = await rpc.get_header(blockHash);
+    blockNumber = BigInt(header.number);
+  }
+  while (true) {
+    await indexer.waitForSync();
+    const tip = await indexer.tip();
+    if (tip) {
+      const indexedNumber = BigInt(tip.block_number);
+      if (indexedNumber >= blockNumber) {
+        // TODO: do we need to handle forks?
+        break;
+      }
+    }
+    await asyncSleep(2000);
+  }
 }

@@ -1,7 +1,12 @@
 import { Command } from "commander";
 import { argv } from "process";
 import { Reader, RPC, normalizers } from "ckb-js-toolkit";
-import { DeploymentConfig, schemas, types } from "@ckb-godwoken/base";
+import {
+  asyncSleep,
+  DeploymentConfig,
+  schemas,
+  types,
+} from "@ckb-godwoken/base";
 import { Config, buildGenesisBlock } from "@ckb-godwoken/godwoken";
 import { Indexer } from "@ckb-lumos/sql-indexer";
 import { Cell, HashType, HexString, core, utils } from "@ckb-lumos/base";
@@ -67,10 +72,6 @@ function ckbAddress(address: any, privateKey: any) {
     args: publicKeyHash,
   };
   return scriptToAddress(script);
-}
-
-function asyncSleep(ms = 0) {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 function calculateTypeId(
