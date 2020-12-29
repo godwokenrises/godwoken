@@ -203,6 +203,10 @@ export class Runner {
     };
     // TODO: process sync event.
     const event = await this.chainService.sync(syncParam);
+    this.logger(
+      "info",
+      `Synced l2 blocks at l1 block number: ${headerInfo.number}`
+    );
   }
 
   async _syncToTip() {
