@@ -456,8 +456,15 @@ export class Runner {
         }
         const tx = sealTransaction(txSkeleton, signatures);
 
-        const hash = await this.rpc.send_transaction(tx);
-        this.logger("info", `Submitted l2 block in ${hash}`);
+        try {
+          const hash = await this.rpc.send_transaction(tx);
+          this.logger("info", `Submitted l2 block in ${hash}`);
+        } catch (e) {
+          this.logger("error", `Error submiting block: ${e}`);
+          this.lockGenerator!.cancelIssueBlock().catch((e) => {
+            console.error(`Error cancelling block: ${e}`);
+          });
+        }
       }
     })().catch((e) => {
       console.error(`Error processing new block: ${e} ${e.stack}`);

@@ -29,7 +29,7 @@
     "@ckb-lumos/helpers": "^0.14.2-rc2",
     "@ckb-lumos/sql-indexer": "^0.14.2-rc2",
     "@types/secp256k1": "^4.0.1",
-    "clerkb-lumos-integrator": "^0.2.0",
+    "clerkb-lumos-integrator": "^0.3.0",
     "commander": "^6.2.1",
     "pg": "^8.2.1",
     "secp256k1": "^4.0.2"
