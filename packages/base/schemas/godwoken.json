@@ -54,7 +54,7 @@
       ]
     },
     {
-      "type": "table",
+      "type": "struct",
       "name": "GlobalState",
       "fields": [
         {
@@ -75,34 +75,7 @@
         },
         {
           "name": "status",
-          "type": "Status"
-        }
-      ]
-    },
-    {
-      "type": "union",
-      "name": "Status",
-      "items": [
-        "Running",
-        "Reverting"
-      ]
-    },
-    {
-      "type": "table",
-      "name": "Running",
-      "fields": []
-    },
-    {
-      "type": "struct",
-      "name": "Reverting",
-      "fields": [
-        {
-          "name": "next_block_number",
-          "type": "Uint64"
-        },
-        {
-          "name": "challenger_id",
-          "type": "Uint32"
+          "type": "byte"
         }
       ]
     },
@@ -232,8 +205,8 @@
           "type": "Uint128"
         },
         {
-          "name": "sudt_script",
-          "type": "Script"
+          "name": "sudt_script_hash",
+          "type": "Byte32"
         },
         {
           "name": "script",
@@ -501,10 +474,6 @@
           "type": "Byte32"
         },
         {
-          "name": "signing_pubkey_hash",
-          "type": "Byte20"
-        },
-        {
           "name": "stake_block_number",
           "type": "Uint64"
         }
@@ -572,12 +541,22 @@
           "type": "Byte32"
         },
         {
-          "name": "block_number",
-          "type": "Uint64"
-        },
-        {
           "name": "tx_index",
           "type": "Uint32"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "name": "StartChallengeWitness",
+      "fields": [
+        {
+          "name": "raw_l2block",
+          "type": "RawL2Block"
+        },
+        {
+          "name": "block_proof",
+          "type": "Bytes"
         }
       ]
     },
@@ -599,6 +578,10 @@
           "type": "L2Transaction"
         },
         {
+          "name": "tx_proof",
+          "type": "Bytes"
+        },
+        {
           "name": "kv_state",
           "type": "KVPairVec"
         },
@@ -615,12 +598,22 @@
           "type": "Byte32"
         },
         {
-          "name": "tx_proof",
-          "type": "Bytes"
+          "name": "account_count",
+          "type": "Uint32"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "UnlockAccount",
+      "fields": [
+        {
+          "name": "message",
+          "type": "Byte32"
         },
         {
-          "name": "block_proof",
-          "type": "Bytes"
+          "name": "signature",
+          "type": "Signature"
         }
       ]
     },
