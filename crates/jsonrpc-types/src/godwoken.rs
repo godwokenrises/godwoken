@@ -583,7 +583,7 @@ impl From<packed::GlobalState> for GlobalState {
 #[serde(rename_all = "snake_case")]
 pub struct DepositionRequest {
     pub script: Script,
-    pub sudt_script: Script,
+    pub sudt_script_hash: H256,
     pub amount: Uint128,
     pub capacity: Uint64,
 }
@@ -592,13 +592,13 @@ impl From<DepositionRequest> for packed::DepositionRequest {
     fn from(json: DepositionRequest) -> packed::DepositionRequest {
         let DepositionRequest {
             script,
-            sudt_script,
+            sudt_script_hash,
             amount,
             capacity,
         } = json;
         packed::DepositionRequest::new_builder()
             .script(script.into())
-            .sudt_script(sudt_script.into())
+            .sudt_script_hash(sudt_script_hash.pack())
             .amount(u128::from(amount).pack())
             .capacity(u64::from(capacity).pack())
             .build()
@@ -611,7 +611,7 @@ impl From<packed::DepositionRequest> for DepositionRequest {
         let capacity: u64 = deposition_request.capacity().unpack();
         Self {
             script: deposition_request.script().into(),
-            sudt_script: deposition_request.sudt_script().into(),
+            sudt_script_hash: deposition_request.sudt_script_hash().unpack(),
             amount: amount.into(),
             capacity: capacity.into(),
         }

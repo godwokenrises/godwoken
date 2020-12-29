@@ -64,7 +64,7 @@ table DepositionRequest {
     capacity: Uint64,
     // SUDT amount
     amount: Uint128,
-    sudt_script: Script,
+    sudt_script_hash: Byte32,
     script: Script,
 }
 
