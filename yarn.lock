@@ -892,10 +892,10 @@ clean-yaml-object@^0.1.0:
   resolved "https://registry.yarnpkg.com/clean-yaml-object/-/clean-yaml-object-0.1.0.tgz#63fb110dc2ce1a84dc21f6d9334876d010ae8b68"
   integrity sha1-Y/sRDcLOGoTcIfbZM0h20BCui2g=
 
-clerkb-lumos-integrator@^0.1.2:
-  version "0.1.2"
-  resolved "https://registry.yarnpkg.com/clerkb-lumos-integrator/-/clerkb-lumos-integrator-0.1.2.tgz#eb777942c8fe15abaf2cdfe3a52abbbf6756a56f"
-  integrity sha512-mRp1XjybdqSjgNMz5zvZbmmWiwMYpmGmaJ3QJ6VgIbm8yTAdu+t+vHagypkv1emcIh4pSvhSaoheEb2tXqNp4A==
+clerkb-lumos-integrator@^0.2.0:
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/clerkb-lumos-integrator/-/clerkb-lumos-integrator-0.2.0.tgz#171916f98f5571366fe0c5198f0193084d6ab282"
+  integrity sha512-NPUIoyd+3Qcpo1ivZLmw2GhVJZzIlMEDpFg7Tma11jN9lPtHRKzC2zhtFBNuVonAyzm7xm1JGDbU2KceQKM6JQ==
   dependencies:
     "@ckb-lumos/common-scripts" "^0.14.2-rc2"
     "@ckb-lumos/config-manager" "^0.14.2-rc2"
