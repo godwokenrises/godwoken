@@ -38,7 +38,7 @@ fn parse_lock_args() -> Result<([u8; 32], CustodianLockArgs), Error> {
         return Err(Error::InvalidArgs);
     }
     rollup_type_hash.copy_from_slice(&args[..32]);
-    match CustodianLockArgsReader::verify(&args, false) {
+    match CustodianLockArgsReader::verify(&args.slice(32..), false) {
         Ok(()) => Ok((
             rollup_type_hash,
             CustodianLockArgs::new_unchecked(args.slice(32..)),

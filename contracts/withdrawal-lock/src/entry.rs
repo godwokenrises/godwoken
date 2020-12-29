@@ -45,7 +45,7 @@ fn parse_lock_args(
         return Err(Error::InvalidArgs);
     }
     rollup_type_hash.copy_from_slice(&args[..32]);
-    match WithdrawalLockArgsReader::verify(&args, false) {
+    match WithdrawalLockArgsReader::verify(&args.slice(32..), false) {
         Ok(()) => Ok((
             rollup_type_hash,
             WithdrawalLockArgs::new_unchecked(args.slice(32..)),
