@@ -59,7 +59,7 @@ export class JsonrpcServer {
         return await f.bind(this)(args);
       } catch (e) {
         this.logger("error", `JSONRPC Server Error: ${e} ${e.stack}`);
-        return this.server.error(502, `Server error: ${e}`);
+        throw this.server.error(502, `Server error: ${e}`);
       }
     };
   }
