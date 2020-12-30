@@ -130,8 +130,8 @@ pub fn main() -> Result<(), Error> {
                     check_output_cell_has_same_content(custodian_cell_index)?;
                     Ok(())
                 }
-                UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(unlock_args) => {
-                    let merkle_proof = CompiledMerkleProof(unlock_args.block_proof().unpack());
+                UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(_unlock_args) => {
+                    // let merkle_proof = CompiledMerkleProof(unlock_args.block_proof().unpack());
                     // check finality
                     let withdrawal_block_number: u64 = lock_args.withdrawal_block_number().unpack();
                     let last_finalized_block_number: u64 =
@@ -143,15 +143,16 @@ pub fn main() -> Result<(), Error> {
                     }
 
                     // prove the block is not reverted
-                    if !merkle_proof
-                        .verify::<Blake2bHasher>(
-                            &reverted_block_root.into(),
-                            vec![(block_hash.into(), H256::zero())],
-                        )
-                        .map_err(|_| Error::MerkleProof)?
-                    {
-                        return Err(Error::MerkleProof);
-                    }
+                    // TODO: add this part back when revert flow is properly implemented.
+                    // if !merkle_proof
+                    //     .verify::<Blake2bHasher>(
+                    //         &reverted_block_root.into(),
+                    //         vec![(block_hash.into(), H256::zero())],
+                    //     )
+                    //     .map_err(|_| Error::MerkleProof)?
+                    // {
+                    //     return Err(Error::MerkleProof);
+                    // }
 
                     // withdrawal lock is finalized, unlock for owner
                     if search_lock_hash(&lock_args.owner_lock_hash().unpack(), Source::Input)
