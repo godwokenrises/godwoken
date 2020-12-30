@@ -615,9 +615,12 @@ export class Runner {
     // build withdrawal cells
     for (let i = 0; i < withdrawalRequestVec.length(); i++) {
       const rawWithdrawalRequest = withdrawalRequestVec.indexAt(i).getRaw();
-      const withdrawalCapacity = new Reader(
-        rawWithdrawalRequest.getAmount().raw()
-      ).serializeJson();
+      const withdrawalCapacity =
+        "0x" +
+        rawWithdrawalRequest
+          .getCapacity()
+          .toLittleEndianBigUint64()
+          .toString(16);
       // Record withdrawal assets info for inject input cells later
       ckbWithdrawalCapacity =
         ckbWithdrawalCapacity + BigInt(withdrawalCapacity);
