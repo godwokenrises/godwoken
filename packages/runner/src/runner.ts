@@ -500,7 +500,7 @@ export class Runner {
             data: new Reader(global_state).serializeJson(),
           });
         });
-        const addedCellDeps = new Set();
+        const addedCellDeps = Set();
         for (const { cell } of depositionEntries) {
           txSkeleton = txSkeleton.update("inputs", (inputs) =>
             inputs.push(cell)
