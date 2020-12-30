@@ -823,8 +823,11 @@ export class Runner {
         }
       }
     }
-    // TODO collect ckb from other sudt custodian cells if all non sudt custodian cells' ckb capacity is insufficient,
-    // but so far just throw an error here.
+    // We explicitly throw an error here.
+    // checks should be make in Godwoken:
+    // 1. if someone chooses to withdraw SUDT, he/she must withdraw CKB of enough capacity to store the SUDTs.
+    // 2. Also, the left CKBs must be enough to hold a left-over custodian cell.
+    // otherwise the withdraw request should be reject.
     if (
       BigInt(inputCkbCapacitySum) <
       BigInt(ckbWithdrawalCapacity) +
