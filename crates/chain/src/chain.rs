@@ -148,7 +148,7 @@ impl LocalState {
 
 pub struct Chain {
     pub rollup_type_script_hash: [u8; 32],
-    pub store: Store<StateStore>,
+    pub store: Store,
     pub bad_block_context: Option<StartChallenge>,
     pub local_state: LocalState,
     pub generator: Generator,
@@ -158,7 +158,7 @@ pub struct Chain {
 impl Chain {
     pub fn create(
         config: ChainConfig,
-        store: Store<StateStore>,
+        store: Store,
         generator: Generator,
         tx_pool: Arc<Mutex<TxPoolImpl>>,
     ) -> Result<Self> {
@@ -191,7 +191,7 @@ impl Chain {
         &self.local_state
     }
 
-    pub fn store(&self) -> &Store<StateStore> {
+    pub fn store(&self) -> &Store {
         &self.store
     }
 
@@ -394,7 +394,7 @@ impl Chain {
             let compacted_post_root_list: Vec<[u8; 32]> = tx_pool_pkg
                 .tx_receipts
                 .iter()
-                .map(|(_tx, tx_receipt)| tx_receipt.compacted_post_account_root.clone().into())
+                .map(|(_tx, tx_receipt)| tx_receipt.compacted_post_account_root().unpack())
                 .collect();
             SubmitTransactions::new_builder()
                 .tx_witness_root(tx_witness_root.pack())

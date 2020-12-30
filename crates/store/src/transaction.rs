@@ -12,8 +12,8 @@ use gw_common::{
 };
 use gw_db::schema::{
     Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BLOCK, COLUMN_BLOCK_SMT_BRANCH,
-    COLUMN_BLOCK_SMT_LEAF, COLUMN_DATA, COLUMN_INDEX, COLUMN_META, COLUMN_NUMBER_HASH,
-    COLUMN_SCRIPT, COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
+    COLUMN_BLOCK_SMT_LEAF, COLUMN_DATA, COLUMN_INDEX, COLUMN_META, COLUMN_SCRIPT,
+    COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
     COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY,
     META_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY, META_TIP_GLOBAL_STATE_KEY,
 };
@@ -137,7 +137,7 @@ impl StoreTransaction {
             .map(|slice| packed::Byte32Reader::from_slice_should_be_ok(&slice.as_ref()).to_entity())
     }
 
-    fn get_block_smt_root(&self) -> Result<H256, Error> {
+    pub fn get_block_smt_root(&self) -> Result<H256, Error> {
         let slice = self
             .get(COLUMN_META, META_BLOCK_SMT_ROOT_KEY)
             .expect("must has root");
@@ -146,7 +146,8 @@ impl StoreTransaction {
         root.copy_from_slice(&slice);
         Ok(root.into())
     }
-    fn set_block_smt_root(&self, root: H256) -> Result<(), Error> {
+
+    pub fn set_block_smt_root(&self, root: H256) -> Result<(), Error> {
         self.insert_raw(COLUMN_META, META_BLOCK_SMT_ROOT_KEY, root.as_slice())?;
         Ok(())
     }
@@ -158,7 +159,7 @@ impl StoreTransaction {
         Ok(SMT::new(root, smt_store))
     }
 
-    fn get_account_smt_root(&self) -> Result<H256, Error> {
+    pub fn get_account_smt_root(&self) -> Result<H256, Error> {
         let slice = self
             .get(COLUMN_META, META_ACCOUNT_SMT_ROOT_KEY)
             .expect("must has root");
@@ -167,7 +168,8 @@ impl StoreTransaction {
         root.copy_from_slice(&slice);
         Ok(root.into())
     }
-    fn set_account_smt_root(&self, root: H256) -> Result<(), Error> {
+
+    pub fn set_account_smt_root(&self, root: H256) -> Result<(), Error> {
         self.insert_raw(COLUMN_META, META_ACCOUNT_SMT_ROOT_KEY, root.as_slice())?;
         Ok(())
     }
@@ -177,6 +179,13 @@ impl StoreTransaction {
         let smt_store =
             SMTStoreTransaction::new(COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ACCOUNT_SMT_BRANCH, self);
         Ok(SMT::new(root, smt_store))
+    }
+
+    pub fn account_state_tree<'a>(&'a self) -> Result<StateTree<'a>, Error> {
+        Ok(StateTree {
+            tree: self.account_smt()?,
+            db: self,
+        })
     }
 
     pub fn insert_tip_hash(&self, hash: &[u8; 32]) -> Result<(), Error> {
@@ -223,7 +232,6 @@ impl StoreTransaction {
     pub fn attach_block(&self, block: packed::L2Block) -> Result<(), Error> {
         let raw = block.raw();
         let raw_number = raw.number();
-        let block_number: u64 = raw_number.unpack();
         let block_hash = raw.hash();
 
         // build tx info
@@ -273,7 +281,7 @@ impl StoreTransaction {
         }
         let block_number = block.raw().number();
         self.delete(COLUMN_INDEX, block_number.as_slice())?;
-        self.delete(COLUMN_INDEX, &block.hash());
+        self.delete(COLUMN_INDEX, &block.hash())?;
 
         // update block tree
         let mut block_smt = self.block_smt()?;
@@ -307,19 +315,22 @@ impl StoreTransaction {
     }
 }
 
-impl State for StoreTransaction {
+pub struct StateTree<'a> {
+    tree: SMT<SMTStoreTransaction<'a>>,
+    db: &'a StoreTransaction,
+}
+impl<'a> State for StateTree<'a> {
     fn get_raw(&self, key: &H256) -> Result<H256, StateError> {
-        let v = self.account_smt().expect("tree").get(&(*key).into())?;
+        let v = self.tree.get(&(*key).into())?;
         Ok(v.into())
     }
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
-        self.account_smt()
-            .expect("tree")
-            .update(key.into(), value.into())?;
+        self.tree.update(key.into(), value.into())?;
         Ok(())
     }
     fn get_account_count(&self) -> Result<u32, StateError> {
         let slice = self
+            .db
             .get(COLUMN_META, META_ACCOUNT_SMT_COUNT_KEY)
             .expect("account count");
         let count = packed::Uint32Reader::from_slice_should_be_ok(&slice.as_ref()).to_entity();
@@ -327,23 +338,25 @@ impl State for StoreTransaction {
     }
     fn set_account_count(&mut self, count: u32) -> Result<(), StateError> {
         let count: packed::Uint32 = count.pack();
-        self.insert_raw(COLUMN_META, META_ACCOUNT_SMT_COUNT_KEY, count.as_slice())
+        self.db
+            .insert_raw(COLUMN_META, META_ACCOUNT_SMT_COUNT_KEY, count.as_slice())
             .expect("insert");
         Ok(())
     }
     fn calculate_root(&self) -> Result<H256, StateError> {
-        let root = self.get_account_smt_root().expect("root");
-        Ok(root)
+        let root = self.tree.root();
+        Ok(*root)
     }
 }
 
-impl CodeStore for StoreTransaction {
+impl<'a> CodeStore for StateTree<'a> {
     fn insert_script(&mut self, script_hash: H256, script: packed::Script) {
-        self.insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())
+        self.db
+            .insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())
             .expect("insert script");
     }
     fn get_script(&self, script_hash: &H256) -> Option<packed::Script> {
-        match self.get(COLUMN_SCRIPT, script_hash.as_slice()) {
+        match self.db.get(COLUMN_SCRIPT, script_hash.as_slice()) {
             Some(slice) => {
                 Some(packed::ScriptReader::from_slice_should_be_ok(&slice.as_ref()).to_entity())
             }
@@ -351,11 +364,12 @@ impl CodeStore for StoreTransaction {
         }
     }
     fn insert_data(&mut self, data_hash: H256, code: Bytes) {
-        self.insert_raw(COLUMN_DATA, data_hash.as_slice(), &code)
+        self.db
+            .insert_raw(COLUMN_DATA, data_hash.as_slice(), &code)
             .expect("insert data");
     }
     fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
-        match self.get(COLUMN_DATA, data_hash.as_slice()) {
+        match self.db.get(COLUMN_DATA, data_hash.as_slice()) {
             Some(slice) => Some(Bytes::from(slice.to_vec())),
             None => None,
         }

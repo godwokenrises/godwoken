@@ -25,7 +25,7 @@ where
     fn from_slice_should_be_ok(slice: &'r [u8]) -> Self {
         match Self::from_slice(slice) {
             Ok(ret) => ret,
-            Err(err) => panic!(err),
+            Err(_err) => panic!("invalid molecule structure"),
         }
     }
 }

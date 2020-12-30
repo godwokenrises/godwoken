@@ -1,8 +1,5 @@
 use ckb_types::core::ScriptHashType;
-use gw_common::{
-    sparse_merkle_tree::{default_store::DefaultStore, H256},
-    state::State,
-};
+use gw_common::{sparse_merkle_tree::H256, state::State};
 use gw_config::GenesisConfig;
 use gw_generator::traits::CodeStore;
 use gw_store::{genesis::build_genesis, Store};
@@ -17,21 +14,22 @@ const GENESIS_BLOCK_HASH: [u8; 32] = [
 #[test]
 fn test_init_genesis() {
     let config = GenesisConfig { timestamp: 42 };
-    let mut store: Store<DefaultStore<H256>> = Store::default();
     let genesis = build_genesis(&config).unwrap();
     let genesis_block_hash: [u8; 32] = genesis.genesis.hash();
     assert_eq!(genesis_block_hash, GENESIS_BLOCK_HASH);
     let header_info = HeaderInfo::default();
+    let mut store: Store = Store::open_tmp().unwrap();
     store.init_genesis(&config, header_info).unwrap();
+    let db = store.begin_transaction();
     // check init values
-    assert_ne!(store.account_smt().root(), &H256::zero());
-    assert!(store.get_account_count().unwrap() > 0);
+    assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());
+    assert_ne!(db.get_account_smt_root().unwrap(), H256::zero());
+    let tree = db.account_state_tree().unwrap();
+    assert!(tree.get_account_count().unwrap() > 0);
     // get reserved account's script
-    let meta_contract_script_hash = store.get_script_hash(0).expect("script hash");
+    let meta_contract_script_hash = tree.get_script_hash(0).expect("script hash");
     assert_ne!(meta_contract_script_hash, H256::zero());
-    let script = store
-        .get_script(&meta_contract_script_hash)
-        .expect("script");
+    let script = tree.get_script(&meta_contract_script_hash).expect("script");
     let hash_type: ScriptHashType = script.hash_type().try_into().unwrap();
     assert!(hash_type == ScriptHashType::Data);
     let code_hash: [u8; 32] = script.code_hash().unpack();

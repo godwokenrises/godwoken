@@ -9,11 +9,11 @@ use gw_common::{
 use gw_generator::{
     error::{LockAlgorithmError, ValidateError},
     traits::{CodeStore, StateExt},
-    Generator, RunResult, TxReceipt,
+    Generator, RunResult,
 };
 use gw_store::OverlayStore;
 use gw_types::{
-    packed::{BlockInfo, DepositionRequest, L2Block, L2Transaction, WithdrawalRequest},
+    packed::{BlockInfo, DepositionRequest, L2Block, L2Transaction, TxReceipt, WithdrawalRequest},
     prelude::*,
 };
 use std::{cmp::min, collections::HashSet};
@@ -77,13 +77,20 @@ impl<S: Store<SMTH256>> TxPool<S> {
         // 2. update state
         self.state.apply_run_result(&run_result)?;
         // 3. push tx to pool
-        let tx_witness_hash = tx.witness_hash().into();
+        let tx_witness_hash = tx.witness_hash();
         let compacted_post_account_root = self.state.calculate_compacted_account_root()?;
-        let receipt = TxReceipt {
-            tx_witness_hash,
-            compacted_post_account_root,
-            read_data_hashes: run_result.read_data.iter().map(|(hash, _)| *hash).collect(),
-        };
+        let receipt = TxReceipt::new_builder()
+            .tx_witness_hash(tx_witness_hash.pack())
+            .compacted_post_account_root(compacted_post_account_root.pack())
+            .read_data_hashes(
+                run_result
+                    .read_data
+                    .iter()
+                    .map(|(hash, _)| *hash)
+                    .collect::<Vec<_>>()
+                    .pack(),
+            )
+            .build();
         self.queue.push((tx, receipt));
         Ok(run_result)
     }

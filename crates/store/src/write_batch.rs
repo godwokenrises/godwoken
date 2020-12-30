@@ -5,7 +5,6 @@ use gw_db::{
     schema::{Col, COLUMN_BLOCK, COLUMN_NUMBER_HASH},
     RocksDBWriteBatch,
 };
-use gw_types::{packed, prelude::*};
 
 pub struct StoreWriteBatch {
     pub(crate) inner: RocksDBWriteBatch,

@@ -12,7 +12,7 @@ use gw_common::{
 use gw_db::{
     iter::{DBIter, DBIterator, IteratorMode},
     schema::{
-        Col, COLUMN_BLOCK, COLUMN_META, COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION,
+        Col, COLUMNS, COLUMN_BLOCK, COLUMN_META, COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION,
         COLUMN_TRANSACTION_RECEIPT, META_TIP_BLOCK_HASH_KEY, META_TIP_GLOBAL_STATE_KEY,
     },
     DBPinnableSlice, RocksDB,
@@ -35,6 +35,11 @@ pub struct Store {
 impl<'a> Store {
     pub fn new(db: RocksDB) -> Self {
         Store { db }
+    }
+
+    pub fn open_tmp() -> Result<Self> {
+        let db = RocksDB::open_tmp(COLUMNS);
+        Ok(Self::new(db))
     }
 
     fn get(&'a self, col: Col, key: &[u8]) -> Option<DBPinnableSlice<'a>> {
