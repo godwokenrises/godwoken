@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { argv } from "process";
+import { argv, exit } from "process";
 import { RPC } from "ckb-js-toolkit";
 import { Indexer } from "@ckb-lumos/sql-indexer";
 import { Config, ChainService } from "@ckb-godwoken/godwoken";
@@ -72,4 +72,5 @@ const runner = new Runner(
 
 Promise.all([jsonrpcServer.start(), runner.start()]).catch((e) => {
   console.error(`Error occurs: ${e}`);
+  exit(1);
 });
