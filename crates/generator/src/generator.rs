@@ -1,3 +1,4 @@
+use crate::sudt::build_l2_sudt_script;
 use crate::{account_lock_manage::AccountLockManage, backend_manage::BackendManage, TxReceipt};
 use crate::{
     backend_manage::Backend,
@@ -10,6 +11,7 @@ use crate::{
 use crate::{error::ValidateError, syscalls::L2Syscalls, types::RunResult};
 use gw_common::{
     blake2b::new_blake2b,
+    builtins::CKB_SUDT_ACCOUNT_ID,
     error::Error as StateError,
     h256_ext::H256Ext,
     state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
@@ -18,8 +20,8 @@ use gw_common::{
 use gw_types::{
     core::ScriptHashType,
     packed::{
-        BlockInfo, DepositionRequest, L2Block, RawL2Block, RawL2Transaction, StartChallenge,
-        WithdrawalRequest,
+        BlockInfo, DepositionRequest, L2Block, RawL2Block, RawL2Transaction, Script,
+        StartChallenge, WithdrawalRequest,
     },
     prelude::*,
 };
@@ -114,14 +116,26 @@ impl Generator {
             .get_account_id_by_script_hash(&account_script_hash.into())?
             .ok_or(StateError::MissingKey)?; // find Simple UDT account
 
-        // check balance
-        let sudt_id = state
-            .get_account_id_by_script_hash(&sudt_script_hash.into())?
-            .ok_or(StateError::MissingKey)?;
-        let balance = state.get_sudt_balance(sudt_id, id)?;
-        if amount > balance {
+        // check CKB balance
+        let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, id)?;
+        if capacity > ckb_balance as u64 {
             return Err(ValidateError::InvalidWithdrawal.into());
         }
+        // check sudt balance
+        // when sudt_script_hash is [0u8;32] means only withdraw ckb in the withdrawal_request,
+        // otherwise check the sudt existence and balance.
+        if sudt_script_hash != [0u8; 32] {
+            let l2_sudt_script: Script = build_l2_sudt_script(sudt_script_hash);
+            let l2_sudt_script_hash: [u8; 32] = l2_sudt_script.hash();
+            let sudt_id = state
+                .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
+                .ok_or(StateError::MissingKey)?;
+            let balance = state.get_sudt_balance(sudt_id, id)?;
+            if amount > balance {
+                return Err(ValidateError::InvalidWithdrawal.into());
+            }
+        }
+
         // check nonce
         let expected_nonce = state.get_nonce(id)?;
         let actual_nonce: u32 = raw.nonce().unpack();
