@@ -47,7 +47,7 @@ import * as secp256k1 from "secp256k1";
 import { exit } from "process";
 import { CanCastToArrayBuffer } from "@ckb-godwoken/base/schemas/godwoken";
 
-const FINALIZED_BLOCKS = 100;
+const L1_FINALIZED_BLOCKS = 100;
 function isRollupTransction(
   tx: Transaction,
   rollupTypeScript: Script
@@ -605,9 +605,10 @@ export class Runner {
       return cellDeps.push(this.config.deploymentConfig.custodian_lock_dep);
     });
     // collect all finalized and live custodian cells
-    let toBlockNumber = BigInt(l2BlockNumber) - BigInt(FINALIZED_BLOCKS);
-    const toBlock = "0x" + toBlockNumber.toString(16);
-    const validCustodianCells = await this._queryValidCustodianCells(toBlock);
+    // let toBlockNumber = BigInt(l2BlockNumber) - BigInt(FINALIZED_BLOCKS);
+    // const toBlock = "0x" + toBlockNumber.toString(16);
+    // const validCustodianCells = await this._queryValidCustodianCells(toBlock);
+    const validCustodianCells = await this._queryValidCustodianCells();
     const deposition_block_hash = validCustodianCells[0].block_hash!;
     const deposition_block_number = validCustodianCells[0].block_number!;
     let ckbWithdrawalCapacity = 0n;
@@ -718,8 +719,8 @@ export class Runner {
       let inputSudtAmountSum = BigInt(0);
       for (const cell of validCustodianCells) {
         if (
-          cell.cell_output.type ||
-          cell.cell_output.type!.args === sudtScriptHash
+          cell.cell_output.type &&
+          utils.computeScriptHash(cell.cell_output.type) === sudtScriptHash
         ) {
           const key = getInputKey(cell);
           if (previousInputs.has(key)) {
@@ -885,10 +886,8 @@ export class Runner {
   }
 
   // valid means finalized and live
-  async _queryValidCustodianCells(toBlock: HexNumber): Promise<Cell[]> {
-    const collector = this.indexer.collector(
-      this._custodianCellQueryOptions(toBlock)
-    );
+  async _queryValidCustodianCells(): Promise<Cell[]> {
+    const collector = this.indexer.collector(this._custodianCellQueryOptions());
     const cells = [];
     for await (const cell of collector.collect()) {
       cells.push(cell);
@@ -896,7 +895,7 @@ export class Runner {
     return cells;
   }
 
-  _custodianCellQueryOptions(toBlock: HexNumber): QueryOptions {
+  _custodianCellQueryOptions(): QueryOptions {
     return {
       lock: {
         script: {
@@ -906,7 +905,6 @@ export class Runner {
         },
         argsLen: "any",
       },
-      toBlock: toBlock,
     };
   }
   _packCustodianLockArgs(custodianLockArgs: object): HexString {
