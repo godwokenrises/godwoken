@@ -10,6 +10,7 @@ exclude = ["artifacts.json", "index.node"]
 [lib]
 name = "godwoken_api"
 crate-type = ["cdylib"]
+test = false
 
 [build-dependencies]
 neon-build = "0.5.0"
