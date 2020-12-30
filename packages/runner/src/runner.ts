@@ -4,6 +4,7 @@ import {
   utils,
   values,
   Cell,
+  CellDep,
   Hash,
   HexNumber,
   HexString,
@@ -274,6 +275,11 @@ export class Runner {
     );
     const results = [];
     for await (const cell of collector.collect()) {
+      // Since custodian cells requires much bigger storage, ignore
+      // deposition request with less than 400 CKB for now.
+      if (BigInt(cell.cell_output.capacity) < 40000000000n) {
+        continue;
+      }
       const cellHeader = await this.rpc.get_header(cell.block_hash);
       const entry = await tryExtractDepositionRequest(
         cell,
@@ -289,6 +295,33 @@ export class Runner {
       }
     }
     return results;
+  }
+
+  // Use the transaction containing specified cell to look for a dep cell
+  // one can use here.
+  // TODO: this works but is quite slow, maybe we can cache found cell deps
+  // to reduce queries to CKB.
+  async _queryTypeScriptCellDep(cell: Cell): Promise<CellDep> {
+    const tx: Transaction = (
+      await this.rpc.get_transaction(cell.out_point!.tx_hash)
+    ).transaction;
+    for (const cellDep of tx.cell_deps) {
+      if (cellDep.dep_type === "dep_group") {
+        throw new Error("TODO: dep group support!");
+      }
+      const codeCell = await this.rpc.get_live_cell(cellDep.out_point, true);
+      if (cell.cell_output.type!.hash_type == "data") {
+        if (codeCell.cell.data.hash === cell.cell_output.type!.code_hash) {
+          return cellDep;
+        }
+      } else if (codeCell.cell.output.type) {
+        const typeHash = utils.computeScriptHash(codeCell.cell.output.type);
+        if (typeHash === cell.cell_output.type!.code_hash) {
+          return cellDep;
+        }
+      }
+    }
+    throw new Error(`Cannot find cell dep for ${cell.cell_output.type!}`);
   }
 
   async _queryLiveRollupCell(): Promise<Cell> {
@@ -413,6 +446,7 @@ export class Runner {
             data: new Reader(global_state).serializeJson(),
           });
         });
+        const addedCellDeps = new Set();
         for (const { cell } of depositionEntries) {
           txSkeleton = txSkeleton.update("inputs", (inputs) =>
             inputs.push(cell)
@@ -422,6 +456,20 @@ export class Runner {
           txSkeleton = txSkeleton.update("witnesses", (witnesses) =>
             witnesses.push("0x")
           );
+          // Some deposition cells might have type scripts for sUDTs, handle cell deps
+          // here.
+          if (cell.cell_output.type) {
+            const cellDep = await this._queryTypeScriptCellDep(cell);
+            const packedCellDep = new Reader(
+              core.SerializeCellDep(normalizers.NormalizeCellDep(cellDep))
+            ).serializeJson();
+            if (!addedCellDeps.has(packedCellDep)) {
+              txSkeleton = txSkeleton.update("cellDeps", (cellDeps) =>
+                cellDeps.push(cellDep)
+              );
+              addedCellDeps.add(packedCellDep);
+            }
+          }
         }
         for (const cell of this._generateCustodianCells(
           packedl2Block,
