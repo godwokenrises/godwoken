@@ -73,7 +73,7 @@ pub fn main() -> Result<(), Error> {
     };
 
     // read global state from rollup cell
-    match search_rollup_state(&rollup_type_hash, Source::Input)? {
+    match search_rollup_state(&rollup_type_hash, Source::CellDep)? {
         Some(global_state) => {
             // read merkle proof
             let reverted_block_root: [u8; 32] = global_state.reverted_block_root().unpack();
