@@ -40,6 +40,7 @@ import {
 import { AlwaysSuccessGenerator } from "./locks";
 import { generator as poaGeneratorModule } from "clerkb-lumos-integrator";
 import * as secp256k1 from "secp256k1";
+import { exit } from "process";
 
 function isRollupTransction(
   tx: Transaction,
@@ -520,6 +521,7 @@ export class Runner {
       }
     })().catch((e) => {
       console.error(`Error processing new block: ${e} ${e.stack}`);
+      exit(1);
     });
   }
 }
