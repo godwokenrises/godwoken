@@ -130,7 +130,7 @@ pub fn main() -> Result<(), Error> {
                     check_output_cell_has_same_content(custodian_cell_index)?;
                     Ok(())
                 }
-                UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(unlock_args) => {
+                UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(_unlock_args) => {
                     // let merkle_proof = CompiledMerkleProof(unlock_args.block_proof().unpack());
                     // check finality
                     let withdrawal_block_number: u64 = lock_args.withdrawal_block_number().unpack();
