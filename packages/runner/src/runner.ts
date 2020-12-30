@@ -642,14 +642,17 @@ export class Runner {
           hash_type: this.config.deploymentConfig.sudt_type.hash_type,
           args: sudtScriptHash,
         };
-        outputData = utils.toBigUInt128LE(BigInt(sudtAmount));
+        outputData = sudtAmount;
         if (sudtWithdrawalAssets.has(sudtScriptHash)) {
           const updatedAmount =
             BigInt(sudtWithdrawalAssets.get(sudtScriptHash)) +
-            BigInt(sudtAmount);
+            utils.readBigUInt128LE(sudtAmount);
           sudtWithdrawalAssets.set(sudtScriptHash, updatedAmount);
         } else {
-          sudtWithdrawalAssets.set(sudtScriptHash, BigInt(sudtAmount));
+          sudtWithdrawalAssets.set(
+            sudtScriptHash,
+            utils.readBigUInt128LE(sudtAmount)
+          );
         }
       }
       // build withdrawalLockArgs
@@ -787,7 +790,7 @@ export class Runner {
         type: undefined,
         capacity: "0x0",
       },
-      data: utils.toBigUInt128LE(BigInt(0)),
+      data: "0x",
     };
     const minimalCapacity = minimalCellCapacity(ckbChangeCustodian);
     const changeCapacity =
