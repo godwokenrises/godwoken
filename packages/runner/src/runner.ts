@@ -81,7 +81,7 @@ function outPointsUnpacker(data: CanCastToArrayBuffer) {
 
 function buildDefaultCustodianLockArgs() {
   return {
-    depositionLockArgs: {
+    deposition_lock_args: {
       owner_lock_hash:
         "0x0000000000000000000000000000000000000000000000000000000000000000",
       layer2_lock: {
@@ -92,9 +92,9 @@ function buildDefaultCustodianLockArgs() {
       },
       cancel_timeout: "0x0",
     },
-    depositionBlockHash:
+    deposition_block_hash:
       "0x0000000000000000000000000000000000000000000000000000000000000000",
-    depositionBlockNumber: "0x0",
+    deposition_block_number: "0x0",
   };
 }
 
