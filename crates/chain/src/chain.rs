@@ -12,15 +12,15 @@ use gw_common::{
 };
 use gw_config::ChainConfig;
 use gw_generator::{
-    generator::StateTransitionArgs, ChallengeContext, Error as GeneratorError, Generator, TxReceipt,
+    generator::StateTransitionArgs, ChallengeContext, Error as GeneratorError, Generator,
 };
-use gw_store::{Store, WrapStore};
+use gw_store::Store;
 use gw_types::{
     core::Status,
     packed::{
         AccountMerkleState, BlockMerkleState, CancelChallenge, DepositionRequest, GlobalState,
         HeaderInfo, L2Block, L2BlockReader, RawL2Block, StartChallenge, StartChallengeWitness,
-        SubmitTransactions,
+        SubmitTransactions, TxReceipt,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -109,7 +109,10 @@ impl PartialEq for SyncEvent {
                     witness: witness2,
                     tx_receipt: tx_receipt2,
                 },
-            ) => tx_receipt1 == tx_receipt2 && witness1.as_slice() == witness2.as_slice(),
+            ) => {
+                tx_receipt1.as_slice() == tx_receipt2.as_slice()
+                    && witness1.as_slice() == witness2.as_slice()
+            }
             (WaitChallenge, WaitChallenge) => true,
             _ => false,
         }
@@ -294,7 +297,9 @@ impl Chain {
             // update last global state
             self.local_state.last_global_state = global_state.clone();
             self.local_state.last_synced = header_info;
-            self.store.set_tip_global_state(global_state)?;
+            let db = self.store.begin_transaction();
+            db.set_tip_global_state(global_state)?;
+            db.commit()?;
             // return to caller if any event happen
             if event != SyncEvent::Success {
                 return Ok(event);
@@ -327,8 +332,10 @@ impl Chain {
             l2block: l2block.clone(),
             deposition_requests,
         };
+        let db = self.store.begin_transaction();
+        let mut tree = db.account_state_tree()?;
         // process transactions
-        let result = match self.generator.apply_state_transition(&mut self.store, args) {
+        let result = match self.generator.apply_state_transition(&mut tree, args) {
             Ok(result) => result,
             Err(err) => {
                 // handle tx error
@@ -336,9 +343,9 @@ impl Chain {
                     GeneratorError::Transaction(err) => {
                         // TODO run offchain validator before send challenge, to make sure the block is bad
                         let block_hash: [u8; 32] = err.context.block_hash().unpack();
-                        let block_proof = self
-                            .store()
-                            .block_smt()
+                        let db = self.store().begin_transaction();
+                        let block_proof = db
+                            .block_smt()?
                             .merkle_proof(vec![l2block.smt_key().into()])?
                             .compile(vec![(l2block.smt_key().into(), block_hash.into())])?;
                         let witness = StartChallengeWitness::new_builder()
@@ -357,9 +364,11 @@ impl Chain {
         };
 
         // update chain
-        self.store
-            .insert_block(l2block.clone(), header_info.clone(), result.receipts)?;
-        self.store.attach_block(l2block.clone())?;
+        db.insert_block(l2block.clone(), header_info.clone(), result.receipts)?;
+        db.attach_block(l2block.clone())?;
+        let root = tree.calculate_root()?;
+        db.set_account_smt_root(root)?;
+        db.commit()?;
         self.local_state.tip = l2block;
         Ok(None)
     }
@@ -385,7 +394,7 @@ impl Chain {
                 tx_pool_pkg
                     .tx_receipts
                     .iter()
-                    .map(|(_tx, tx_receipt)| tx_receipt.tx_witness_hash.clone().into())
+                    .map(|(_tx, tx_receipt)| tx_receipt.tx_witness_hash().unpack())
                     .collect(),
             )
             .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
@@ -428,12 +437,14 @@ impl Chain {
             .withdrawal_requests_root(withdrawal_requests_root.pack())
             .submit_transactions(submit_txs)
             .build();
+        let db = self.store.begin_transaction();
+        let account_state_tree = db.account_state_tree()?;
         // generate block fields from current state
         let kv_state: Vec<(H256, H256)> = tx_pool_pkg
             .touched_keys
             .iter()
             .map(|k| {
-                self.store
+                account_state_tree
                     .get_raw(k)
                     .map(|v| (*k, v))
                     .map_err(|err| anyhow!("can't fetch value error: {:?}", err))
@@ -448,12 +459,12 @@ impl Chain {
             })
             .collect::<Vec<_>>()
             .pack();
+        let account_smt = db.account_smt()?;
         let proof = if kv_state.is_empty() {
             // nothing need to prove
             Vec::new()
         } else {
-            self.store
-                .account_smt()
+            account_smt
                 .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
                 .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
                 .compile(kv_state)?
@@ -464,9 +475,8 @@ impl Chain {
             .into_iter()
             .map(|(tx, _)| tx)
             .collect();
-        let block_proof = self
-            .store
-            .block_smt()
+        let block_smt = db.block_smt()?;
+        let block_proof = block_smt
             .merkle_proof(vec![H256::from_u64(number)])
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
             .compile(vec![(H256::from_u64(number), H256::zero())])?;

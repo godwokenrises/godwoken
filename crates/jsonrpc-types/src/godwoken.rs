@@ -89,8 +89,8 @@ pub struct TxReceipt {
     pub read_data_hashes: Vec<H256>,
 }
 
-impl From<TxReceipt> for gw_generator::TxReceipt {
-    fn from(json: TxReceipt) -> gw_generator::TxReceipt {
+impl From<TxReceipt> for packed::TxReceipt {
+    fn from(json: TxReceipt) -> packed::TxReceipt {
         let TxReceipt {
             tx_witness_hash,
             compacted_post_account_root,
@@ -102,30 +102,26 @@ impl From<TxReceipt> for gw_generator::TxReceipt {
             .into_iter()
             .map(|hash| {
                 let hash: [u8; 32] = hash.into();
-                hash.into()
+                hash.pack()
             })
             .collect();
-        gw_generator::TxReceipt {
-            tx_witness_hash: tx_witness_hash.into(),
-            compacted_post_account_root: compacted_post_account_root.into(),
-            read_data_hashes,
-        }
+        packed::TxReceipt::new_builder()
+            .tx_witness_hash(tx_witness_hash.pack())
+            .compacted_post_account_root(compacted_post_account_root.pack())
+            .read_data_hashes(read_data_hashes.pack())
+            .build()
     }
 }
 
-impl From<gw_generator::TxReceipt> for TxReceipt {
-    fn from(data: gw_generator::TxReceipt) -> TxReceipt {
-        let gw_generator::TxReceipt {
-            tx_witness_hash,
-            compacted_post_account_root,
-            read_data_hashes,
-        } = data;
-        let tx_witness_hash: [u8; 32] = tx_witness_hash.into();
-        let compacted_post_account_root: [u8; 32] = compacted_post_account_root.into();
-        let read_data_hashes: Vec<_> = read_data_hashes
+impl From<packed::TxReceipt> for TxReceipt {
+    fn from(data: packed::TxReceipt) -> TxReceipt {
+        let tx_witness_hash: [u8; 32] = data.tx_witness_hash().unpack();
+        let compacted_post_account_root: [u8; 32] = data.compacted_post_account_root().unpack();
+        let read_data_hashes: Vec<_> = data
+            .read_data_hashes()
             .into_iter()
             .map(|hash| {
-                let hash: [u8; 32] = hash.into();
+                let hash: [u8; 32] = hash.unpack();
                 hash.into()
             })
             .collect();

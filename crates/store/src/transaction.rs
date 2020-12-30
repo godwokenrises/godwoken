@@ -148,7 +148,7 @@ impl StoreTransaction {
         Ok(())
     }
 
-    fn block_smt<'a>(&'a self) -> Result<SMT<SMTStoreTransaction<'a>>, Error> {
+    pub fn block_smt<'a>(&'a self) -> Result<SMT<SMTStoreTransaction<'a>>, Error> {
         let root = self.get_block_smt_root()?;
         let smt_store =
             SMTStoreTransaction::new(COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_SMT_BRANCH, self);
@@ -176,7 +176,7 @@ impl StoreTransaction {
         Ok(smt_store)
     }
 
-    fn account_smt<'a>(&'a self) -> Result<SMT<SMTStoreTransaction<'a>>, Error> {
+    pub fn account_smt<'a>(&'a self) -> Result<SMT<SMTStoreTransaction<'a>>, Error> {
         let root = self.get_account_smt_root()?;
         let smt_store = self.account_smt_store()?;
         Ok(SMT::new(root, smt_store))
@@ -306,7 +306,7 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn set_tip_global_state(&mut self, global_state: packed::GlobalState) -> Result<(), Error> {
+    pub fn set_tip_global_state(&self, global_state: packed::GlobalState) -> Result<(), Error> {
         self.insert_raw(
             COLUMN_META,
             META_TIP_GLOBAL_STATE_KEY,

@@ -67,7 +67,7 @@ declare_types! {
             let js_header_info = cx.argument::<JsArrayBuffer>(1)?;
             let js_header_info_slice = cx.borrow(&js_header_info, |data| { data.as_slice::<u8>() });
             let header_info = packed::HeaderInfo::from_slice(js_header_info_slice).expect("Constructing header info");
-            let mut store = Store::default();
+            let mut store = Store::open_tmp().expect("open store");
             store.init_genesis(&config.genesis, header_info).expect("Initializing store");
             let tx_pool = {
                 let nb_ctx = NextBlockContext {
@@ -210,7 +210,9 @@ declare_types! {
             let sudt_id = cx.argument::<JsNumber>(1)?.value() as u32;
             let balance = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_sudt_balance(sudt_id, account_id)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_sudt_balance(sudt_id, account_id)
             });
             match balance {
                 Ok(value) => {
@@ -233,7 +235,9 @@ declare_types! {
              });
             let get_raw_result = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_value(account_id, &raw_key)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_value(account_id, &raw_key)
             });
             match get_raw_result {
                 Ok(value) => {
@@ -257,7 +261,9 @@ declare_types! {
              });
             let get_raw_result = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_account_id_by_script_hash(&raw_key)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_account_id_by_script_hash(&raw_key)
             });
             match get_raw_result {
                 Ok(Some(id)) => Ok(cx.number(id).upcast()),
@@ -271,7 +277,9 @@ declare_types! {
             let account_id = cx.argument::<JsNumber>(0)?.value() as u32;
             let nonce = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_nonce(account_id)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_nonce(account_id)
             });
             match nonce {
                 Ok(value) => Ok(cx.number(value).upcast()),
@@ -284,7 +292,9 @@ declare_types! {
             let account_id = cx.argument::<JsNumber>(0)?.value() as u32;
             let script_hash = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_script_hash(account_id)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_script_hash(account_id)
             });
             match script_hash {
                 Ok(value) => {
@@ -308,7 +318,9 @@ declare_types! {
              });
             let script = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_script(&raw_key)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_script(&raw_key)
             });
             match script {
                 Some(value) => {
@@ -331,7 +343,9 @@ declare_types! {
              });
             let data = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_data_hash(&raw_key)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_data_hash(&raw_key)
             });
             match data {
                 Ok(value) => Ok(cx.boolean(value).upcast()),
@@ -350,7 +364,9 @@ declare_types! {
              });
             let data = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_data(&raw_key)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_data(&raw_key)
             });
             match data {
                 Some(value) => {

@@ -1,4 +1,4 @@
-use crate::{core::TxReceipt, packed, prelude::*};
+use crate::{packed, prelude::*};
 use sparse_merkle_tree::{
     tree::{BranchNode, LeafNode},
     H256 as SMTH256,
@@ -71,24 +71,3 @@ impl<'r> Unpack<LeafNode<SMTH256>> for packed::SMTLeafNodeReader<'r> {
     }
 }
 impl_conversion_for_entity_unpack!(LeafNode<SMTH256>, SMTLeafNode);
-
-impl Pack<packed::TxReceipt> for TxReceipt {
-    fn pack(&self) -> packed::TxReceipt {
-        packed::TxReceipt::new_builder()
-            .tx_witness_hash(self.tx_witness_hash.pack())
-            .compacted_post_account_root(self.compacted_post_account_root.pack())
-            .read_data_hashes(self.read_data_hashes.pack())
-            .build()
-    }
-}
-
-impl<'r> Unpack<TxReceipt> for packed::TxReceiptReader<'r> {
-    fn unpack(&self) -> TxReceipt {
-        TxReceipt {
-            tx_witness_hash: self.tx_witness_hash().unpack(),
-            compacted_post_account_root: self.compacted_post_account_root().unpack(),
-            read_data_hashes: self.read_data_hashes().unpack(),
-        }
-    }
-}
-impl_conversion_for_entity_unpack!(TxReceipt, TxReceipt);
