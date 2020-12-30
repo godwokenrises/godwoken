@@ -1,33 +1,22 @@
-use super::overlay::{OverlaySMTStore, OverlayStore};
-use super::wrap_store::WrapStore;
+use super::overlay::OverlayStore;
 use crate::snapshot::StoreSnapshot;
 use crate::transaction::StoreTransaction;
 use crate::write_batch::StoreWriteBatch;
-use anyhow::{anyhow, Result};
-use gw_common::{
-    error::Error,
-    smt::{Store as SMTStore, H256, SMT},
-    state::State,
-};
+use anyhow::Result;
+use gw_common::{error::Error, smt::H256, state::State};
 use gw_db::{
-    iter::{DBIter, DBIterator, IteratorMode},
     schema::{
         Col, COLUMNS, COLUMN_BLOCK, COLUMN_META, COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION,
         COLUMN_TRANSACTION_RECEIPT, META_TIP_BLOCK_HASH_KEY, META_TIP_GLOBAL_STATE_KEY,
     },
     DBPinnableSlice, RocksDB,
 };
-use gw_generator::traits::CodeStore;
 use gw_types::{
-    bytes::Bytes,
-    core::TxReceipt,
-    packed::{self, GlobalState, HeaderInfo, L2Block, L2Transaction, Script},
+    packed::{self, GlobalState, HeaderInfo, L2Block, L2Transaction},
     prelude::*,
 };
-use parking_lot::Mutex;
-use std::collections::HashMap;
-use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct Store {
     db: RocksDB,
 }
@@ -48,9 +37,9 @@ impl<'a> Store {
             .expect("db operation should be ok")
     }
 
-    fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
-        self.db.iter(col, mode).expect("db operation should be ok")
-    }
+    // fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
+    //     self.db.iter(col, mode).expect("db operation should be ok")
+    // }
 
     pub fn begin_transaction(&self) -> StoreTransaction {
         StoreTransaction {
@@ -79,20 +68,13 @@ impl<'a> Store {
     }
 
     /// TODO use RocksDB snapshot
-    pub fn new_overlay<S: SMTStore<H256>>(&self) -> Result<OverlayStore<WrapStore<S>>> {
-        unimplemented!()
-        // let root = self.account_tree.root();
-        // let account_count = self
-        //     .get_account_count()
-        //     .map_err(|err| anyhow!("get amount count error: {:?}", err))?;
-        // let store = OverlaySMTStore::new(self.account_tree.store().clone());
-        // Ok(OverlayStore::new(
-        //     *root,
-        //     store,
-        //     account_count,
-        //     self.scripts.clone(),
-        //     self.data_map.clone(),
-        // ))
+    pub fn new_overlay(&self) -> Result<OverlayStore> {
+        let db = self.begin_transaction();
+        let root = db.get_account_smt_root()?;
+        let tree = db.account_state_tree()?;
+        let account_count = tree.get_account_count()?;
+        let store = self.clone();
+        Ok(OverlayStore::new(root, store, account_count))
     }
 
     pub fn get_tip_block_hash(&self) -> Result<H256, Error> {

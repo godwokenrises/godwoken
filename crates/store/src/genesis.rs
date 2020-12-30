@@ -1,16 +1,13 @@
 use crate::{transaction::StoreTransaction, Store};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
-    smt::{default_store::DefaultStore, Store as SMTStore, H256, SMT},
+    smt::{default_store::DefaultStore, H256, SMT},
     state::State,
     CKB_SUDT_SCRIPT_ARGS, CKB_SUDT_SCRIPT_HASH,
 };
 use gw_config::GenesisConfig;
-use gw_generator::{
-    backend_manage::{META_CONTRACT_VALIDATOR_CODE_HASH, SUDT_VALIDATOR_CODE_HASH},
-    traits::StateExt,
-};
+use gw_generator::{backend_manage::META_CONTRACT_VALIDATOR_CODE_HASH, traits::StateExt};
 use gw_types::{
     core::Status,
     packed::{

@@ -119,7 +119,6 @@ impl Eq for SyncEvent {}
 
 /// concrete type aliases
 pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
-pub type TxPoolImpl = TxPool<WrapStore<StateStore>>;
 
 pub struct LocalState {
     tip: L2Block,
@@ -152,7 +151,7 @@ pub struct Chain {
     pub bad_block_context: Option<StartChallenge>,
     pub local_state: LocalState,
     pub generator: Generator,
-    pub tx_pool: Arc<Mutex<TxPoolImpl>>,
+    pub tx_pool: Arc<Mutex<TxPool>>,
 }
 
 impl Chain {
@@ -160,7 +159,7 @@ impl Chain {
         config: ChainConfig,
         store: Store,
         generator: Generator,
-        tx_pool: Arc<Mutex<TxPoolImpl>>,
+        tx_pool: Arc<Mutex<TxPool>>,
     ) -> Result<Self> {
         let rollup_type_script: Script = config.rollup_type_script.clone().into();
         let rollup_type_script_hash = rollup_type_script.calc_script_hash().unpack();

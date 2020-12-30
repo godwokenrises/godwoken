@@ -29,8 +29,8 @@ const MAX_PACKAGED_WITHDRAWAL: usize = 10;
 const MAX_DATA_BYTES_LIMIT: usize = 25_000;
 
 /// TODO remove txs from pool if a new block already contains txs
-pub struct TxPool<S> {
-    state: OverlayStore<S>,
+pub struct TxPool {
+    state: OverlayStore,
     generator: Generator,
     queue: Vec<(L2Transaction, TxReceipt)>,
     withdrawal_queue: Vec<WithdrawalRequest>,
@@ -39,9 +39,9 @@ pub struct TxPool<S> {
     rollup_type_script_hash: H256,
 }
 
-impl<S: Store<SMTH256>> TxPool<S> {
+impl TxPool {
     pub fn create(
-        state: OverlayStore<S>,
+        state: OverlayStore,
         generator: Generator,
         tip: &L2Block,
         nb_ctx: NextBlockContext,
@@ -63,7 +63,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
     }
 }
 
-impl<S: Store<SMTH256>> TxPool<S> {
+impl TxPool {
     /// Push a layer2 tx into pool
     pub fn push(&mut self, tx: L2Transaction) -> Result<RunResult> {
         if self.queue.len() >= MAX_IN_POOL_TXS {
@@ -231,7 +231,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
     pub fn update_tip(
         &mut self,
         tip: &L2Block,
-        state: OverlayStore<S>,
+        state: OverlayStore,
         nb_ctx: NextBlockContext,
     ) -> Result<()> {
         self.state = state;

@@ -17,11 +17,7 @@ use gw_db::schema::{
     COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY,
     META_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY, META_TIP_GLOBAL_STATE_KEY,
 };
-use gw_db::{
-    error::Error,
-    iter::{DBIter, DBIterator, IteratorMode},
-    DBVector, RocksDBTransaction, RocksDBTransactionSnapshot,
-};
+use gw_db::{error::Error, DBVector, RocksDBTransaction, RocksDBTransactionSnapshot};
 use gw_generator::traits::CodeStore;
 use gw_types::{bytes::Bytes, packed, prelude::*};
 
@@ -103,11 +99,11 @@ impl StoreTransaction {
         self.inner.get(col, key).expect("db operation should be ok")
     }
 
-    fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
-        self.inner
-            .iter(col, mode)
-            .expect("db operation should be ok")
-    }
+    // fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
+    //     self.inner
+    //         .iter(col, mode)
+    //         .expect("db operation should be ok")
+    // }
 
     pub fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
         self.inner.put(col, key, value)
@@ -174,10 +170,15 @@ impl StoreTransaction {
         Ok(())
     }
 
-    fn account_smt<'a>(&'a self) -> Result<SMT<SMTStoreTransaction<'a>>, Error> {
-        let root = self.get_account_smt_root()?;
+    pub fn account_smt_store<'a>(&'a self) -> Result<SMTStoreTransaction<'a>, Error> {
         let smt_store =
             SMTStoreTransaction::new(COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ACCOUNT_SMT_BRANCH, self);
+        Ok(smt_store)
+    }
+
+    fn account_smt<'a>(&'a self) -> Result<SMT<SMTStoreTransaction<'a>>, Error> {
+        let root = self.get_account_smt_root()?;
+        let smt_store = self.account_smt_store()?;
         Ok(SMT::new(root, smt_store))
     }
 

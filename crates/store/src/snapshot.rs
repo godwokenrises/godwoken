@@ -4,10 +4,12 @@ use gw_db::{
     DBPinnableSlice, RocksDBSnapshot,
 };
 
+#[allow(dead_code)]
 pub struct StoreSnapshot {
     pub(crate) inner: RocksDBSnapshot,
 }
 
+#[allow(dead_code)]
 impl<'a> StoreSnapshot {
     fn get(&'a self, col: Col, key: &[u8]) -> Option<DBPinnableSlice<'a>> {
         self.inner

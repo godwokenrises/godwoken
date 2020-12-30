@@ -1,10 +1,4 @@
-use crate::db_utils::build_transaction_key;
-use gw_common::H256;
-use gw_db::{
-    error::Error,
-    schema::{Col, COLUMN_BLOCK, COLUMN_NUMBER_HASH},
-    RocksDBWriteBatch,
-};
+use gw_db::{error::Error, schema::Col, RocksDBWriteBatch};
 
 pub struct StoreWriteBatch {
     pub(crate) inner: RocksDBWriteBatch,
