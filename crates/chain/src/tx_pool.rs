@@ -18,8 +18,12 @@ use gw_types::{
 };
 use std::{cmp::min, collections::HashSet};
 
+/// MAX mem pool txs
+const MAX_IN_POOL_TXS: usize = 6000;
+/// MAX mem pool withdrawal requests
+const MAX_IN_POOL_WITHDRAWAL: usize = 3000;
 /// MAX packaged txs in a l2block
-const MAX_PACKAGED_TXS: usize = 6000;
+const MAX_PACKAGED_TXS: usize = 100;
 /// MAX packaged withdrawal in a l2block
 const MAX_PACKAGED_WITHDRAWAL: usize = 10;
 const MAX_DATA_BYTES_LIMIT: usize = 25_000;
@@ -62,6 +66,12 @@ impl<S: Store<SMTH256>> TxPool<S> {
 impl<S: Store<SMTH256>> TxPool<S> {
     /// Push a layer2 tx into pool
     pub fn push(&mut self, tx: L2Transaction) -> Result<RunResult> {
+        if self.queue.len() >= MAX_IN_POOL_TXS {
+            return Err(anyhow!(
+                "Too many txs in the pool! MAX_IN_POOL_TXS: {}",
+                MAX_IN_POOL_TXS
+            ));
+        }
         // 1. execute tx
         let run_result = self.execute(tx.clone())?;
         // 2. update state
@@ -108,6 +118,12 @@ impl<S: Store<SMTH256>> TxPool<S> {
 
     /// Push a withdrawal request into pool
     pub fn push_withdrawal_request(&mut self, withdrawal_request: WithdrawalRequest) -> Result<()> {
+        if self.withdrawal_queue.len() >= MAX_IN_POOL_WITHDRAWAL {
+            return Err(anyhow!(
+                "Too many withdrawal in the pool! MAX_IN_POOL_WITHDRAWAL: {}",
+                MAX_IN_POOL_WITHDRAWAL
+            ));
+        }
         self.verify_withdrawal_request(&withdrawal_request)?;
         self.withdrawal_queue.push(withdrawal_request);
         Ok(())
