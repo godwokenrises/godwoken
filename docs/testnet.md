@@ -1,4 +1,4 @@
-We now have a deployed Godwoken instance running on CKB Aggron4 testnet using PoA as block issuance mechanism. You can setup your own Godwoken instance to connect to the testnet one in readonly mode. Readonly mode here means:
+We now have a [deployed Godwoken instance](https://explorer.nervos.org/aggron/address/ckt1qjd66s4u2xr3djsxahrwnmvkx94tl8j294klugw3ju2nv6h4krhc2t7ddtlvvtj44q4p7w4jlhfzyal5rlwlr9gakvqlxdkqrydv2h22ms4grg40q7w9656uvwk942srzsnep7f4hf5ncqg9pru2mkwv9ctsjp65tp) running on CKB Aggron4 testnet using PoA as block issuance mechanism. You can setup your own Godwoken instance to connect to the testnet one in readonly mode. Readonly mode here means:
 
 * You can sync new layer 2 blocks as a typical Godwoken instance.
 * You can query for on chain states, such as account balance, storage state, etc.
