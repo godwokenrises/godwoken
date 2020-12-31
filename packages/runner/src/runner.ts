@@ -282,17 +282,26 @@ export class Runner {
         continue;
       }
       const cellHeader = await this.rpc.get_header(cell.block_hash);
-      const entry = await tryExtractDepositionRequest(
-        cell,
-        this.config,
-        tipHeader,
-        cellHeader
-      );
-      if (entry) {
-        results.push(entry);
-        if (results.length === maximum) {
-          break;
+      try {
+        const entry = await tryExtractDepositionRequest(
+          cell,
+          this.config,
+          tipHeader,
+          cellHeader
+        );
+        if (entry) {
+          results.push(entry);
+          if (results.length === maximum) {
+            break;
+          }
         }
+      } catch (e) {
+        this.logger(
+          "error",
+          `Ignoring deposition cell ${cell.out_point!.tx_hash} - ${
+            cell.out_point!.index
+          } error: ${e}`
+        );
       }
     }
     return results;
