@@ -21,6 +21,8 @@ use neon::prelude::*;
 use parking_lot::Mutex;
 use std::sync::{Arc, RwLock};
 
+pub const MINIMAL_WITHDRAW_CAPACITY: u64 = 400_0000_0000;
+
 pub struct NativeChain {
     pub config: Config,
     pub chain: Arc<RwLock<Chain>>,
@@ -193,6 +195,10 @@ declare_types! {
             let withdrawal_request_slice = cx.borrow(&js_withdrawal_request, |data| { data.as_slice::<u8>() });
             let withdrawal_request = packed::WithdrawalRequest::from_slice(withdrawal_request_slice)
                 .expect("Build packed::WithdrawalRequest from slice");
+            let capacity: u64 = withdrawal_request.raw().capacity().unpack();
+            if capacity < MINIMAL_WITHDRAW_CAPACITY {
+                return cx.throw_error(format!("The withdrawal capacity is below 400 CKB."));
+            }
             let run_result: Result<()> =
                 cx.borrow(&this, |data| {
                     let chain = data.chain.write().unwrap();
