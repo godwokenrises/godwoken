@@ -47,7 +47,6 @@ import * as secp256k1 from "secp256k1";
 import { exit } from "process";
 import { CanCastToArrayBuffer } from "@ckb-godwoken/base/schemas/godwoken";
 
-const L1_FINALIZED_BLOCKS = 100;
 function isRollupTransction(
   tx: Transaction,
   rollupTypeScript: Script
@@ -96,6 +95,23 @@ function buildDefaultCustodianLockArgs() {
       "0x0000000000000000000000000000000000000000000000000000000000000000",
     deposition_block_number: "0x0",
   };
+}
+function extractSudtTypeScriptFromScriptHash(
+  validCustodianCells: Cell[],
+  sudtScriptHash: Hash
+): Script {
+  for (const cell of validCustodianCells) {
+    if (
+      cell.cell_output.type &&
+      utils.computeScriptHash(cell.cell_output.type) === sudtScriptHash
+    ) {
+      return cell.cell_output.type;
+    }
+  }
+  throw new Error(
+    "Cannot find sudt type script in validCustodianCells, sudtScriptHash: " +
+      sudtScriptHash
+  );
 }
 
 export class Runner {
@@ -635,21 +651,21 @@ export class Runner {
       const sudtScriptHash = new Reader(
         rawWithdrawalRequest.getSudtScriptHash().raw()
       ).serializeJson();
-      let withdrawalType: Script | undefined = undefined;
+      let sudtType: Script | undefined = undefined;
+
       let outputData = "0x";
       // check if it includes sudt withdrawal request
       if (
         sudtScriptHash !=
         "0x0000000000000000000000000000000000000000000000000000000000000000"
       ) {
+        sudtType = extractSudtTypeScriptFromScriptHash(
+          validCustodianCells,
+          sudtScriptHash
+        );
         const sudtAmount = new Reader(
           rawWithdrawalRequest.getAmount().raw()
         ).serializeJson();
-        withdrawalType = {
-          code_hash: this.config.deploymentConfig.sudt_type.code_hash,
-          hash_type: this.config.deploymentConfig.sudt_type.hash_type,
-          args: sudtScriptHash,
-        };
         outputData = sudtAmount;
         this.logger(
           "debug",
@@ -686,7 +702,7 @@ export class Runner {
       const withdrawalOutput: Cell = {
         cell_output: {
           lock: withdrawalLock,
-          type: withdrawalType,
+          type: sudtType,
           capacity: withdrawalCapacity,
         },
         data: outputData,
@@ -704,9 +720,19 @@ export class Runner {
     }
     // add sudt type dep
     if (sudtWithdrawalAssets.size > 0) {
-      txSkeleton = txSkeleton.update("cellDeps", (cellDeps) => {
-        return cellDeps.push(this.config.deploymentConfig.sudt_type_dep);
-      });
+      const sudtScriptHash = sudtWithdrawalAssets.keys().next().value();
+      for (const cell of validCustodianCells) {
+        if (
+          cell.cell_output.type &&
+          utils.computeScriptHash(cell.cell_output.type) === sudtScriptHash
+        ) {
+          const sudtTypeDep = await this._queryTypeScriptCellDep(cell);
+          txSkeleton = txSkeleton.update("cellDeps", (cellDeps) => {
+            return cellDeps.push(sudtTypeDep);
+          });
+          break;
+        }
+      }
     }
     txSkeleton = this._injectCustodianInputsAndChanges(
       txSkeleton,
@@ -761,15 +787,14 @@ export class Runner {
         hash_type: this.config.deploymentConfig.custodian_lock.hash_type,
         args: this._packCustodianLockArgs(buildDefaultCustodianLockArgs()),
       };
-      const custodianType: Script = {
-        code_hash: this.config.deploymentConfig.sudt_type.code_hash,
-        hash_type: this.config.deploymentConfig.sudt_type.hash_type,
-        args: sudtScriptHash,
-      };
+      const sudtType = extractSudtTypeScriptFromScriptHash(
+        validCustodianCells,
+        sudtScriptHash
+      );
       let sudtChangeCustodian: Cell = {
         cell_output: {
           lock: custodianLock,
-          type: custodianType,
+          type: sudtType,
           capacity: "0x0",
         },
         data: utils.toBigUInt128LE(
