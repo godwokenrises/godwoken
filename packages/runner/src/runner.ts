@@ -720,7 +720,7 @@ export class Runner {
     }
     // add sudt type dep
     if (sudtWithdrawalAssets.size > 0) {
-      const sudtScriptHash = sudtWithdrawalAssets.keys().next().value();
+      const sudtScriptHash = sudtWithdrawalAssets.keys().next().value;
       for (const cell of validCustodianCells) {
         if (
           cell.cell_output.type &&
