@@ -600,14 +600,15 @@ export class Runner {
     if (withdrawalRequestVec.length() === 0) {
       return txSkeleton;
     }
+    this.logger(
+      "debug",
+      `Withdrawal requests vector length: ${withdrawalRequestVec.length()}`
+    );
     // add custodian lock dep
     txSkeleton = txSkeleton.update("cellDeps", (cellDeps) => {
       return cellDeps.push(this.config.deploymentConfig.custodian_lock_dep);
     });
-    // collect all finalized and live custodian cells
-    // let toBlockNumber = BigInt(l2BlockNumber) - BigInt(FINALIZED_BLOCKS);
-    // const toBlock = "0x" + toBlockNumber.toString(16);
-    // const validCustodianCells = await this._queryValidCustodianCells(toBlock);
+    // TODO collect all finalized and live custodian cells
     const validCustodianCells = await this._queryValidCustodianCells();
     const deposition_block_hash = validCustodianCells[0].block_hash!;
     const deposition_block_number = validCustodianCells[0].block_number!;
@@ -622,6 +623,12 @@ export class Runner {
           .getCapacity()
           .toLittleEndianBigUint64()
           .toString(16);
+      this.logger(
+        "debug",
+        `Withdrawal request ${i} try withdraw CKB capacity: ${BigInt(
+          withdrawalCapacity
+        )}`
+      );
       // Record withdrawal assets info for inject input cells later
       ckbWithdrawalCapacity =
         ckbWithdrawalCapacity + BigInt(withdrawalCapacity);
@@ -644,6 +651,12 @@ export class Runner {
           args: sudtScriptHash,
         };
         outputData = sudtAmount;
+        this.logger(
+          "debug",
+          `Withdrawal request ${i} try withdraw sudt amount: ${utils.readBigUInt128LE(
+            sudtAmount
+          )}, l1 sudt script hash: ${sudtScriptHash}`
+        );
         if (sudtWithdrawalAssets.has(sudtScriptHash)) {
           const updatedAmount =
             BigInt(sudtWithdrawalAssets.get(sudtScriptHash)) +

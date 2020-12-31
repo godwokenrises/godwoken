@@ -15,7 +15,7 @@ pub use sparse_merkle_tree;
 
 /// Common constants
 
-pub const FINALIZE_BLOCKS: u64 = 1000;
+pub const FINALIZE_BLOCKS: u64 = 0;
 
 pub const DEPOSITION_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const CUSTODIAN_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
