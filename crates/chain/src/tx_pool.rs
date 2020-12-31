@@ -169,17 +169,16 @@ impl<S: Store<SMTH256>> TxPool<S> {
     /// and remove these from the pool
     pub fn package(&mut self, deposition_requests: &[DepositionRequest]) -> Result<TxPoolPackage> {
         let txs_limit = min(MAX_PACKAGED_TXS, self.queue.len());
-        let tx_receipts = self.queue.drain(..txs_limit).collect();
+        let tx_receipts = self.queue.iter().take(txs_limit).cloned().collect();
         // reset overlay, we need to record deposition / withdrawal touched keys to generate proof for state
         self.state.overlay_store_mut().clear_touched_keys();
         // fetch withdrawal request and rerun verifier, drop invalid requests
         let withdrawal_limit = min(MAX_PACKAGED_WITHDRAWAL, self.withdrawal_queue.len());
         let withdrawal_requests: Vec<_> = self
             .withdrawal_queue
-            .drain(..withdrawal_limit)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .filter(|withdrawal_request| self.verify_withdrawal_request(withdrawal_request).is_ok())
+            .iter()
+            .take(withdrawal_limit)
+            .cloned()
             .collect();
         // TODO make sure the remain capacity is enough to pay custodian cell
         // apply withdrawal request to the state
@@ -234,6 +233,12 @@ impl<S: Store<SMTH256>> TxPool<S> {
             if self.push(tx.clone()).is_err() {
                 let tx_hash: ckb_types::H256 = tx.hash().into();
                 eprintln!("TxPool: drop tx {}", tx_hash);
+            }
+        }
+        let withdrawal_queue: Vec<_> = self.withdrawal_queue.drain(..).collect();
+        for request in withdrawal_queue {
+            if self.push_withdrawal_request(request.clone()).is_err() {
+                eprintln!("TxPool: drop withdrawal {:?}", request);
             }
         }
         Ok(())
