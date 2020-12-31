@@ -120,6 +120,41 @@ export function DenormalizeDepositionLockArgs(
   };
 }
 
+export function DenormalizeRawWithdrawalRequest(
+  rawWithdrawalRequest: schemas.RawWithdrawalRequest
+) {
+  return {
+    nonce:
+      "0x" +
+      rawWithdrawalRequest.getNonce().toLittleEndianUint32().toString(16),
+    capacity:
+      "0x" +
+      rawWithdrawalRequest.getCapacity().toLittleEndianBigUint64().toString(16),
+    amount: new Reader(rawWithdrawalRequest.getAmount().raw()).serializeJson(),
+    sudt_script_hash: new Reader(
+      rawWithdrawalRequest.getSudtScriptHash().raw()
+    ).serializeJson(),
+    account_script_hash: new Reader(
+      rawWithdrawalRequest.getAccountScriptHash().raw()
+    ).serializeJson(),
+    sell_amount: new Reader(
+      rawWithdrawalRequest.getSellAmount().raw()
+    ).serializeJson(),
+    sell_capacity:
+      "0x" +
+      rawWithdrawalRequest
+        .getSellCapacity()
+        .toLittleEndianBigUint64()
+        .toString(16),
+    owner_lock_hash: new Reader(
+      rawWithdrawalRequest.getOwnerLockHash().raw()
+    ).serializeJson(),
+    payment_lock_hash: new Reader(
+      rawWithdrawalRequest.getPaymentLockHash().raw()
+    ).serializeJson(),
+  };
+}
+
 export function NormalizeDepositionLockArgs(
   depositionLockArgs: object,
   { debugPath = "deposition_lock_args" } = {}
