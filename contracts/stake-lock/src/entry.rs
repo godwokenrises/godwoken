@@ -12,14 +12,13 @@ use core::result::Result;
 use crate::ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::Unpack as CKBTypeUnpack},
-    high_level::{load_input_since, load_script},
-    since::Since,
+    high_level::load_script,
 };
 
 use validator_utils::search_cells::{search_lock_hash, search_rollup_cell, search_rollup_state};
 
 use gw_types::{
-    packed::{StakeArgsLockReader, StakeLockArgs},
+    packed::{StakeLockArgs, StakeLockArgsReader},
     prelude::*,
 };
 
@@ -48,7 +47,7 @@ pub fn main() -> Result<(), Error> {
 
     // Unlock by User
     // read global state from rollup cell in deps
-    if let Some(global_state) = search_rollup_state(&rollup_type_hash, Source::Dep)? {
+    if let Some(global_state) = search_rollup_state(&rollup_type_hash, Source::CellDep)? {
         let stake_block_number: u64 = lock_args.stake_block_number().unpack();
         let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();
 
