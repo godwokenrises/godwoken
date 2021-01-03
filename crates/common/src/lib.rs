@@ -27,7 +27,6 @@ pub const CKB_SUDT_SCRIPT_HASH: [u8; 32] = [
 pub const CKB_SUDT_SCRIPT_ARGS: [u8; 32] = [0; 32];
 pub const ACCOUNT_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const ROLLUP_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
-pub const CKB_NON_SUDT_CHECK_ARGS: [u8; 32] = [0u8; 32];
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "std")] {
