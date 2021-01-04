@@ -257,9 +257,8 @@ impl StoreTransaction {
             .map_err(|err| Error::from(format!("SMT error {}", err)))?;
         let root = block_smt.root();
         self.set_block_smt_root(*root)?;
-
         // update tip
-        self.insert_raw(COLUMN_INDEX, &META_TIP_BLOCK_HASH_KEY, &block_hash)?;
+        self.insert_raw(COLUMN_META, &META_TIP_BLOCK_HASH_KEY, &block_hash)?;
         Ok(())
     }
 

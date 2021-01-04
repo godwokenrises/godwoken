@@ -1,6 +1,6 @@
-use ckb_jsonrpc_types::{JsonBytes, Script as JsonScript, Uint32, Uint64};
-use ckb_types::packed as ckb_packed;
-use ckb_types::H256;
+use crate::blockchain::Script as JsonScript;
+use ckb_fixed_hash::H256;
+use ckb_jsonrpc_types::{JsonBytes, Uint32, Uint64};
 use gw_chain::{chain, next_block_context};
 use gw_types::{core, packed, prelude::*};
 
@@ -54,7 +54,7 @@ impl From<L1Action> for chain::L1Action {
         let transaction_bytes = transaction.into_bytes();
         let header_info_bytes = header_info.into_bytes();
         Self {
-            transaction: ckb_packed::Transaction::from_slice(transaction_bytes.as_ref())
+            transaction: packed::Transaction::from_slice(transaction_bytes.as_ref())
                 .expect("Build packed::Transaction from slice"),
             header_info: packed::HeaderInfo::from_slice(header_info_bytes.as_ref())
                 .expect("Build packed::HeaderInfo from slice"),

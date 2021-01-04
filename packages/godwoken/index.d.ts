@@ -6,7 +6,7 @@ export interface SyncParam {
 }
 
 export interface L1Action {
-  transaction: HexString; // ckb_types::packed::Transaction
+  transaction: HexString; // gw_types::packed::Transaction
   header_info: HexString; // gw_types::packed::HeaderInfo
   context: SubmitTxs | StartChallenge | CancelChallenge | Revert;
 }

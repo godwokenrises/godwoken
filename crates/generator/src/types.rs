@@ -1,8 +1,5 @@
 use gw_common::H256;
-use gw_types::{
-    packed::{StartChallenge, StartChallengeWitness},
-    prelude::*,
-};
+use gw_types::packed::{StartChallenge, StartChallengeWitness};
 use std::{
     collections::HashMap,
     fmt::{self, Display},
@@ -20,7 +17,7 @@ pub struct RunResult {
     pub read_data: HashMap<H256, usize>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ChallengeContext {
     pub args: StartChallenge,
     pub witness: StartChallengeWitness,
@@ -31,12 +28,3 @@ impl Display for ChallengeContext {
         write!(f, "{{args: {}, witness: {}}}", self.args, self.witness)
     }
 }
-
-impl PartialEq for ChallengeContext {
-    fn eq(&self, other: &Self) -> bool {
-        self.args.as_slice() == other.args.as_slice()
-            && self.witness.as_slice() == other.witness.as_slice()
-    }
-}
-
-impl Eq for ChallengeContext {}

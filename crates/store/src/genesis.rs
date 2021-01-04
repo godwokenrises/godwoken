@@ -127,7 +127,7 @@ fn build_genesis_from_store(
 }
 
 impl Store {
-    pub fn init_genesis(&mut self, config: &GenesisConfig, header: HeaderInfo) -> Result<()> {
+    pub fn init_genesis(&self, config: &GenesisConfig, header: HeaderInfo) -> Result<()> {
         let mut db = self.begin_transaction();
         let GenesisWithGlobalState {
             genesis,

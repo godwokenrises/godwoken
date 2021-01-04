@@ -11,7 +11,7 @@ use gw_types::{
     packed::{BlockInfo, DepositionRequest, L2Block, L2Transaction, TxReceipt, WithdrawalRequest},
     prelude::*,
 };
-use std::{cmp::min, collections::HashSet};
+use std::{cmp::min, collections::HashSet, sync::Arc};
 
 /// MAX mem pool txs
 const MAX_IN_POOL_TXS: usize = 6000;
@@ -26,7 +26,7 @@ const MAX_DATA_BYTES_LIMIT: usize = 25_000;
 /// TODO remove txs from pool if a new block already contains txs
 pub struct TxPool {
     state: OverlayStore,
-    generator: Generator,
+    generator: Arc<Generator>,
     queue: Vec<(L2Transaction, TxReceipt)>,
     withdrawal_queue: Vec<WithdrawalRequest>,
     next_block_info: BlockInfo,
@@ -37,7 +37,7 @@ pub struct TxPool {
 impl TxPool {
     pub fn create(
         state: OverlayStore,
-        generator: Generator,
+        generator: Arc<Generator>,
         tip: &L2Block,
         nb_ctx: NextBlockContext,
     ) -> Result<Self> {
@@ -249,7 +249,7 @@ impl TxPool {
         let queue: Vec<_> = self.queue.drain(..).collect();
         for (tx, _receipt) in queue {
             if self.push(tx.clone()).is_err() {
-                let tx_hash: ckb_types::H256 = tx.hash().into();
+                let tx_hash: ckb_fixed_hash::H256 = tx.hash().into();
                 eprintln!("TxPool: drop tx {}", tx_hash);
             }
         }

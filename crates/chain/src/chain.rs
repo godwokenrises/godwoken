@@ -1,11 +1,6 @@
 use crate::next_block_context::NextBlockContext;
 use crate::tx_pool::TxPool;
 use anyhow::{anyhow, Result};
-use ckb_types::{
-    bytes::Bytes,
-    packed::{Script, Transaction, WitnessArgs, WitnessArgsReader},
-    prelude::Unpack,
-};
 use gw_common::{
     h256_ext::H256Ext, merkle_utils::calculate_merkle_root, smt::Blake2bHasher, sparse_merkle_tree,
     state::State, FINALIZE_BLOCKS, H256,
@@ -16,11 +11,13 @@ use gw_generator::{
 };
 use gw_store::Store;
 use gw_types::{
+    bytes::Bytes,
     core::Status,
     packed::{
         AccountMerkleState, BlockMerkleState, CancelChallenge, DepositionRequest, GlobalState,
-        HeaderInfo, L2Block, L2BlockReader, RawL2Block, StartChallenge, StartChallengeWitness,
-        SubmitTransactions, TxReceipt,
+        HeaderInfo, L2Block, L2BlockReader, RawL2Block, Script, StartChallenge,
+        StartChallengeWitness, SubmitTransactions, Transaction, TxReceipt, WitnessArgs,
+        WitnessArgsReader,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -79,7 +76,7 @@ pub struct ProduceBlockResult {
 }
 
 /// sync method returned events
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum SyncEvent {
     // success
     Success,
@@ -93,32 +90,6 @@ pub enum SyncEvent {
     // the rollup is in a challenge
     WaitChallenge,
 }
-
-impl PartialEq for SyncEvent {
-    fn eq(&self, other: &SyncEvent) -> bool {
-        use SyncEvent::*;
-        match (self, other) {
-            (Success, Success) => true,
-            (BadBlock(ctx1), BadBlock(ctx2)) => ctx1 == ctx2,
-            (
-                BadChallenge {
-                    witness: witness1,
-                    tx_receipt: tx_receipt1,
-                },
-                BadChallenge {
-                    witness: witness2,
-                    tx_receipt: tx_receipt2,
-                },
-            ) => {
-                tx_receipt1.as_slice() == tx_receipt2.as_slice()
-                    && witness1.as_slice() == witness2.as_slice()
-            }
-            (WaitChallenge, WaitChallenge) => true,
-            _ => false,
-        }
-    }
-}
-impl Eq for SyncEvent {}
 
 /// concrete type aliases
 pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
@@ -153,7 +124,7 @@ pub struct Chain {
     pub store: Store,
     pub bad_block_context: Option<StartChallenge>,
     pub local_state: LocalState,
-    pub generator: Generator,
+    pub generator: Arc<Generator>,
     pub tx_pool: Arc<Mutex<TxPool>>,
 }
 
@@ -161,11 +132,11 @@ impl Chain {
     pub fn create(
         config: ChainConfig,
         store: Store,
-        generator: Generator,
+        generator: Arc<Generator>,
         tx_pool: Arc<Mutex<TxPool>>,
     ) -> Result<Self> {
         let rollup_type_script: Script = config.rollup_type_script.clone().into();
-        let rollup_type_script_hash = rollup_type_script.calc_script_hash().unpack();
+        let rollup_type_script_hash = rollup_type_script.hash();
         let tip = store
             .get_tip_block()?
             .ok_or(anyhow!("can't find tip from store"))?;
@@ -528,12 +499,7 @@ fn parse_global_state(tx: &Transaction, rollup_id: &[u8; 32]) -> Result<GlobalSt
         .into_iter()
         .enumerate()
         .find(|(_i, output)| {
-            output
-                .type_()
-                .to_opt()
-                .map(|type_| type_.calc_script_hash().unpack())
-                .as_ref()
-                == Some(rollup_id)
+            output.type_().to_opt().map(|type_| type_.hash()).as_ref() == Some(rollup_id)
         })
         .ok_or_else(|| anyhow!("no rollup cell found"))?;
 
@@ -554,12 +520,7 @@ fn parse_l2block(tx: &Transaction, rollup_id: &[u8; 32]) -> Result<L2Block> {
         .into_iter()
         .enumerate()
         .find(|(_i, output)| {
-            output
-                .type_()
-                .to_opt()
-                .map(|type_| type_.calc_script_hash().unpack())
-                .as_ref()
-                == Some(rollup_id)
+            output.type_().to_opt().map(|type_| type_.hash()).as_ref() == Some(rollup_id)
         })
         .ok_or_else(|| anyhow!("no rollup cell found"))?;
 

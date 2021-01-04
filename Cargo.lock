@@ -614,7 +614,6 @@ name = "godwoken-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ckb-types",
  "godwoken-polyjuice",
  "gw-chain",
  "gw-common",
@@ -648,7 +647,7 @@ name = "gw-chain"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ckb-types",
+ "ckb-fixed-hash",
  "crossbeam-channel 0.5.0",
  "gw-common",
  "gw-config",
@@ -675,7 +674,7 @@ dependencies = [
 name = "gw-config"
 version = "0.1.0"
 dependencies = [
- "ckb-types",
+ "gw-types",
 ]
 
 [[package]]
@@ -695,7 +694,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "blake2b-rs 0.2.0",
- "ckb-types",
  "ckb-vm",
  "gw-common",
  "gw-types",
@@ -719,7 +717,6 @@ version = "0.1.0"
 dependencies = [
  "ckb-fixed-hash",
  "ckb-jsonrpc-types",
- "ckb-types",
  "failure",
  "faster-hex",
  "gw-chain",
@@ -736,7 +733,6 @@ name = "gw-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ckb-types",
  "gw-common",
  "gw-config",
  "gw-db",

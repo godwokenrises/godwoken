@@ -1,4 +1,4 @@
-use ckb_types::packed::Script;
+use gw_types::packed::Script;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Config {

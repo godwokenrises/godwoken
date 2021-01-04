@@ -1,9 +1,8 @@
-use ckb_types::core::ScriptHashType;
 use gw_common::{sparse_merkle_tree::H256, state::State};
 use gw_config::GenesisConfig;
 use gw_generator::traits::CodeStore;
 use gw_store::{genesis::build_genesis, Store};
-use gw_types::{packed::HeaderInfo, prelude::*};
+use gw_types::{core::ScriptHashType, packed::HeaderInfo, prelude::*};
 use std::convert::TryInto;
 
 const GENESIS_BLOCK_HASH: [u8; 32] = [
@@ -18,7 +17,7 @@ fn test_init_genesis() {
     let genesis_block_hash: [u8; 32] = genesis.genesis.hash();
     assert_eq!(genesis_block_hash, GENESIS_BLOCK_HASH);
     let header_info = HeaderInfo::default();
-    let mut store: Store = Store::open_tmp().unwrap();
+    let store: Store = Store::open_tmp().unwrap();
     store.init_genesis(&config, header_info).unwrap();
     let db = store.begin_transaction();
     // check init values
