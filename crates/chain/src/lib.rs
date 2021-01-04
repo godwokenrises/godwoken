@@ -8,4 +8,6 @@
 
 pub mod chain;
 pub mod next_block_context;
+#[cfg(test)]
+mod tests;
 pub mod tx_pool;

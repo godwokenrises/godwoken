@@ -55,6 +55,7 @@ impl Unpack<Bytes> for packed::Bytes {
 impl_conversion_for_vector!(Bytes, BytesVec, BytesVecReader);
 impl_conversion_for_vector!([u8; 32], Byte32Vec, Byte32VecReader);
 impl_conversion_for_packed_optional_pack!(Script, ScriptOpt);
+impl_conversion_for_packed_optional_pack!(Bytes, BytesOpt);
 impl_conversion_for_packed_iterator_pack!(ProposalShortId, ProposalShortIdVec);
 impl_conversion_for_packed_iterator_pack!(Bytes, BytesVec);
 impl_conversion_for_packed_iterator_pack!(Transaction, TransactionVec);

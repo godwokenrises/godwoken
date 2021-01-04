@@ -1,5 +1,5 @@
-use core::convert::TryFrom;
 use crate::packed;
+use core::convert::TryFrom;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ScriptHashType {
