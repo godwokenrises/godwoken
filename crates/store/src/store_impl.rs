@@ -6,8 +6,9 @@ use anyhow::Result;
 use gw_common::{error::Error, smt::H256, state::State};
 use gw_db::{
     schema::{
-        Col, COLUMNS, COLUMN_BLOCK, COLUMN_META, COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION,
-        COLUMN_TRANSACTION_RECEIPT, META_TIP_BLOCK_HASH_KEY, META_TIP_GLOBAL_STATE_KEY,
+        Col, COLUMNS, COLUMN_BLOCK, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_META,
+        COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION, COLUMN_TRANSACTION_RECEIPT,
+        META_TIP_BLOCK_HASH_KEY,
     },
     DBPinnableSlice, RocksDB,
 };
@@ -88,15 +89,15 @@ impl<'a> Store {
         )
     }
 
-    pub fn get_tip_block(&self) -> Result<Option<L2Block>, Error> {
+    pub fn get_tip_block(&self) -> Result<L2Block, Error> {
         let tip_block_hash = self.get_tip_block_hash()?;
-        self.get_block(&tip_block_hash)
+        Ok(self.get_block(&tip_block_hash)?.expect("get tip block"))
     }
 
-    pub fn get_tip_global_state(&self) -> Result<GlobalState, Error> {
+    pub fn get_block_post_global_state(&self, block_hash: &H256) -> Result<GlobalState, Error> {
         let slice = self
-            .get(COLUMN_META, META_TIP_GLOBAL_STATE_KEY)
-            .expect("get tip global state");
+            .get(COLUMN_BLOCK_GLOBAL_STATE, block_hash.as_slice())
+            .expect("get block post global state");
         Ok(packed::GlobalStateReader::from_slice_should_be_ok(&slice.as_ref()).to_entity())
     }
 

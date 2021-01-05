@@ -39,13 +39,13 @@ pub struct ProduceBlockParam {
 /// sync params
 pub struct SyncParam {
     // contains transitions from tip to fork point
-    pub reverts: Vec<L1Action>,
+    pub reverts: Vec<RevertedL1Action>,
     /// contains transitions from fork point to new tips
     pub updates: Vec<L1Action>,
     pub next_block_context: NextBlockContext,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum L1ActionContext {
     SubmitTxs {
         /// deposition requests
@@ -62,7 +62,19 @@ pub enum L1ActionContext {
     },
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct L1Action {
+    /// transaction
+    pub transaction: Transaction,
+    /// transactions' header info
+    pub header_info: HeaderInfo,
+    pub context: L1ActionContext,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct RevertedL1Action {
+    /// input global state
+    pub prev_global_state: GlobalState,
     /// transaction
     pub transaction: Transaction,
     /// transactions' header info
@@ -137,13 +149,11 @@ impl Chain {
     ) -> Result<Self> {
         let rollup_type_script: Script = config.rollup_type_script.clone().into();
         let rollup_type_script_hash = rollup_type_script.hash();
-        let tip = store
-            .get_tip_block()?
-            .ok_or(anyhow!("can't find tip from store"))?;
+        let tip = store.get_tip_block()?;
         let last_synced = store
             .get_block_synced_header_info(&tip.hash().into())?
             .ok_or(anyhow!("can't find last synced header info"))?;
-        let last_global_state = store.get_tip_global_state()?;
+        let last_global_state = store.get_block_post_global_state(&tip.hash().into())?;
         let local_state = LocalState {
             tip,
             last_synced,
@@ -168,109 +178,160 @@ impl Chain {
         &self.store
     }
 
+    /// update a layer1 action
+    fn update_l1action(&mut self, action: L1Action) -> Result<SyncEvent> {
+        let L1Action {
+            transaction,
+            header_info,
+            context,
+        } = action;
+        let global_state = parse_global_state(&transaction, &self.rollup_type_script_hash)?;
+        assert!(
+            {
+                let number: u64 = header_info.number().unpack();
+                number
+            } >= {
+                let number: u64 = self.local_state.last_synced.number().unpack();
+                number
+            },
+            "must be greater than or equalled to last synced number"
+        );
+        let status = {
+            let status: u8 = self.local_state.last_global_state.status().into();
+            Status::try_from(status).expect("invalid status")
+        };
+        let event = match (status, context) {
+            (
+                Status::Running,
+                L1ActionContext::SubmitTxs {
+                    deposition_requests,
+                },
+            ) => {
+                // Submit transactions
+                // parse layer2 block
+                let l2block = parse_l2block(&transaction, &self.rollup_type_script_hash)?;
+                if let Some(challenge_context) = self.process_block(
+                    l2block.clone(),
+                    header_info.clone(),
+                    global_state.clone(),
+                    deposition_requests,
+                )? {
+                    // stop syncing and return event
+                    self.bad_block_context = Some(challenge_context.args.clone());
+                    SyncEvent::BadBlock(challenge_context)
+                } else {
+                    SyncEvent::Success
+                }
+            }
+            (Status::Running, L1ActionContext::Challenge { context }) => {
+                // Challenge
+                let status: u8 = global_state.status().into();
+                assert_eq!(Status::try_from(status), Ok(Status::Halting));
+                if let Some(current_bad_block) = self.bad_block_context.as_ref() {
+                    if current_bad_block.as_slice() == context.as_slice() {
+                        // bad block is in challenge, just wait.
+                        return Ok(SyncEvent::WaitChallenge);
+                    }
+                    SyncEvent::WaitChallenge
+                } else {
+                    // now, either we haven't found a bad block or the challenge is challenge a validate block
+                    // in both cases the challenge is bad
+                    // TODO: implement this
+                    let _witness = CancelChallenge::default();
+                    let _tx_receipt = unimplemented!();
+                    // SyncEvent::BadChallenge {
+                    //     witness,
+                    //     tx_receipt,
+                    // }
+                }
+            }
+            (Status::Halting, L1ActionContext::CancelChallenge { context: _ }) => {
+                // TODO update states
+                let status: u8 = global_state.status().into();
+                assert_eq!(Status::try_from(status), Ok(Status::Running));
+                SyncEvent::Success
+            }
+            (Status::Halting, L1ActionContext::Revert { context }) => {
+                // TODO revert layer2 status
+                let status: u8 = global_state.status().into();
+                assert_eq!(Status::try_from(status), Ok(Status::Running));
+                assert_eq!(
+                    self.bad_block_context.as_ref().map(|b| b.as_slice()),
+                    Some(context.as_slice()),
+                    "revert from the bad block"
+                );
+                SyncEvent::Success
+            }
+            (status, context) => {
+                panic!(
+                    "unsupported syncing state: status {:?} context {:?}",
+                    status, context
+                );
+            }
+        };
+
+        // update last global state
+        self.local_state.last_global_state = global_state.clone();
+        self.local_state.last_synced = header_info;
+        Ok(event)
+    }
+
+    /// revert a layer1 action
+    fn revert_l1action(&mut self, action: RevertedL1Action) -> Result<()> {
+        let RevertedL1Action {
+            prev_global_state,
+            transaction,
+            header_info,
+            context,
+        } = action;
+        assert!(
+            {
+                let number: u64 = header_info.number().unpack();
+                number
+            } <= {
+                let number: u64 = self.local_state.last_synced.number().unpack();
+                number
+            },
+            "must be smaller than or equalled to last synced number"
+        );
+        let db = self.store.begin_transaction();
+        match context {
+            L1ActionContext::SubmitTxs {
+                deposition_requests: _,
+            } => {
+                // parse layer2 block
+                let l2block = parse_l2block(&transaction, &self.rollup_type_script_hash)?;
+                assert_eq!(
+                    l2block.hash(),
+                    self.local_state.tip.hash(),
+                    "reverted l2block must be current tip"
+                );
+                db.detach_block(&l2block)?;
+            }
+            _ => {
+                // do nothing
+            }
+        };
+
+        // update last global state
+        self.local_state.last_global_state = prev_global_state.clone();
+        self.local_state.tip = db.get_tip_block()?;
+        self.local_state.last_synced = db
+            .get_block_synced_header_info(&self.local_state.tip.hash().into())?
+            .expect("last header info");
+        db.commit()?;
+        Ok(())
+    }
+
     /// Sync chain from layer1
     pub fn sync(&mut self, param: SyncParam) -> Result<SyncEvent> {
-        // TODO handle layer1 reorg
-        if !param.reverts.is_empty() {
-            panic!("layer1 chain has forked!")
+        // revert layer1 actions
+        for reverted_action in param.reverts {
+            self.revert_l1action(reverted_action)?;
         }
         // apply tx to state
         for action in param.updates {
-            let L1Action {
-                transaction,
-                header_info,
-                context,
-            } = action;
-            let global_state = parse_global_state(&transaction, &self.rollup_type_script_hash)?;
-            assert!(
-                {
-                    let number: u64 = header_info.number().unpack();
-                    number
-                } >= {
-                    let number: u64 = self.local_state.last_synced.number().unpack();
-                    number
-                },
-                "must be greater than or equalled to last synced number"
-            );
-            let status = {
-                let status: u8 = self.local_state.last_global_state.status().into();
-                Status::try_from(status).expect("invalid status")
-            };
-            let event = match (status, context) {
-                (
-                    Status::Running,
-                    L1ActionContext::SubmitTxs {
-                        deposition_requests,
-                    },
-                ) => {
-                    // Submit transactions
-                    // parse layer2 block
-                    let l2block = parse_l2block(&transaction, &self.rollup_type_script_hash)?;
-                    if let Some(challenge_context) = self.process_block(
-                        l2block.clone(),
-                        header_info.clone(),
-                        deposition_requests,
-                    )? {
-                        // stop syncing and return event
-                        self.bad_block_context = Some(challenge_context.args.clone());
-                        SyncEvent::BadBlock(challenge_context)
-                    } else {
-                        SyncEvent::Success
-                    }
-                }
-                (Status::Running, L1ActionContext::Challenge { context }) => {
-                    // Challenge
-                    let status: u8 = global_state.status().into();
-                    assert_eq!(Status::try_from(status), Ok(Status::Halting));
-                    if let Some(current_bad_block) = self.bad_block_context.as_ref() {
-                        if current_bad_block.as_slice() == context.as_slice() {
-                            // bad block is in challenge, just wait.
-                            return Ok(SyncEvent::WaitChallenge);
-                        }
-                        SyncEvent::WaitChallenge
-                    } else {
-                        // now, either we haven't found a bad block or the challenge is challenge a validate block
-                        // in both cases the challenge is bad
-                        // TODO: implement this
-                        let _witness = CancelChallenge::default();
-                        let _tx_receipt = unimplemented!();
-                        // SyncEvent::BadChallenge {
-                        //     witness,
-                        //     tx_receipt,
-                        // }
-                    }
-                }
-                (Status::Halting, L1ActionContext::CancelChallenge { context: _ }) => {
-                    // TODO update states
-                    let status: u8 = global_state.status().into();
-                    assert_eq!(Status::try_from(status), Ok(Status::Running));
-                    SyncEvent::Success
-                }
-                (Status::Halting, L1ActionContext::Revert { context }) => {
-                    // TODO revert layer2 status
-                    let status: u8 = global_state.status().into();
-                    assert_eq!(Status::try_from(status), Ok(Status::Running));
-                    assert_eq!(
-                        self.bad_block_context.as_ref().map(|b| b.as_slice()),
-                        Some(context.as_slice()),
-                        "revert from the bad block"
-                    );
-                    SyncEvent::Success
-                }
-                (status, context) => {
-                    panic!(
-                        "unsupported syncing state: status {:?} context {:?}",
-                        status, context
-                    );
-                }
-            };
-
-            // update last global state
-            self.local_state.last_global_state = global_state.clone();
-            self.local_state.last_synced = header_info;
-            let db = self.store.begin_transaction();
-            db.set_tip_global_state(global_state)?;
-            db.commit()?;
+            let event = self.update_l1action(action)?;
             // return to caller if any event happen
             if event != SyncEvent::Success {
                 return Ok(event);
@@ -290,6 +351,7 @@ impl Chain {
         &mut self,
         l2block: L2Block,
         header_info: HeaderInfo,
+        global_state: GlobalState,
         deposition_requests: Vec<DepositionRequest>,
     ) -> Result<Option<ChallengeContext>> {
         let tip_number: u64 = self.local_state.tip.raw().number().unpack();
@@ -335,7 +397,7 @@ impl Chain {
         };
 
         // update chain
-        db.insert_block(l2block.clone(), header_info.clone(), result.receipts)?;
+        db.insert_block(l2block.clone(), header_info, global_state, result.receipts)?;
         db.attach_block(l2block.clone())?;
         let root = tree.calculate_root()?;
         db.set_account_smt_root(root)?;

@@ -11,11 +11,11 @@ use gw_common::{
     H256,
 };
 use gw_db::schema::{
-    Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BLOCK, COLUMN_BLOCK_SMT_BRANCH,
-    COLUMN_BLOCK_SMT_LEAF, COLUMN_DATA, COLUMN_INDEX, COLUMN_META, COLUMN_SCRIPT,
-    COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
-    COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY,
-    META_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY, META_TIP_GLOBAL_STATE_KEY,
+    Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BLOCK,
+    COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_DATA,
+    COLUMN_INDEX, COLUMN_META, COLUMN_SCRIPT, COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION,
+    COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY,
+    META_ACCOUNT_SMT_ROOT_KEY, META_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
 use gw_db::{error::Error, DBVector, RocksDBTransaction, RocksDBTransactionSnapshot};
 use gw_generator::traits::CodeStore;
@@ -189,10 +189,6 @@ impl StoreTransaction {
         })
     }
 
-    pub fn insert_tip_hash(&self, hash: &[u8; 32]) -> Result<(), Error> {
-        self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, hash)
-    }
-
     pub fn get_block(&self, block_hash: &H256) -> Result<Option<packed::L2Block>, Error> {
         match self.get(COLUMN_BLOCK, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
@@ -202,10 +198,39 @@ impl StoreTransaction {
         }
     }
 
+    pub fn get_tip_block_hash(&self) -> Result<H256, Error> {
+        let slice = self
+            .get(COLUMN_META, META_TIP_BLOCK_HASH_KEY)
+            .expect("get tip block hash");
+        Ok(
+            packed::Byte32Reader::from_slice_should_be_ok(&slice.as_ref())
+                .to_entity()
+                .unpack(),
+        )
+    }
+
+    pub fn get_tip_block(&self) -> Result<packed::L2Block, Error> {
+        let tip_block_hash = self.get_tip_block_hash()?;
+        Ok(self.get_block(&tip_block_hash)?.expect("get tip block"))
+    }
+
+    pub fn get_block_synced_header_info(
+        &self,
+        block_hash: &H256,
+    ) -> Result<Option<packed::HeaderInfo>, Error> {
+        match self.get(COLUMN_SYNC_BLOCK_HEADER_INFO, block_hash.as_slice()) {
+            Some(slice) => Ok(Some(
+                packed::HeaderInfoReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+            )),
+            None => Ok(None),
+        }
+    }
+
     pub fn insert_block(
         &self,
         block: packed::L2Block,
         header_info: packed::HeaderInfo,
+        global_state: packed::GlobalState,
         tx_receipts: Vec<packed::TxReceipt>,
     ) -> Result<(), Error> {
         debug_assert_eq!(block.transactions().len(), tx_receipts.len());
@@ -216,6 +241,12 @@ impl StoreTransaction {
             &block_hash,
             header_info.as_slice(),
         )?;
+        self.insert_raw(
+            COLUMN_BLOCK_GLOBAL_STATE,
+            &block_hash,
+            global_state.as_slice(),
+        )?;
+
         for (index, (tx, tx_receipt)) in block
             .transactions()
             .into_iter()
@@ -298,18 +329,9 @@ impl StoreTransaction {
             .get_block_hash_by_number(parent_number)?
             .expect("parent block hash");
         self.insert_raw(
-            COLUMN_INDEX,
+            COLUMN_META,
             &META_TIP_BLOCK_HASH_KEY,
             parent_block_hash.as_slice(),
-        )?;
-        Ok(())
-    }
-
-    pub fn set_tip_global_state(&self, global_state: packed::GlobalState) -> Result<(), Error> {
-        self.insert_raw(
-            COLUMN_META,
-            META_TIP_GLOBAL_STATE_KEY,
-            global_state.as_slice(),
         )?;
         Ok(())
     }

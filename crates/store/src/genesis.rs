@@ -119,7 +119,6 @@ fn build_genesis_from_store(
     };
     db.set_account_smt_root(global_state.account().merkle_root().unpack())?;
     db.set_block_smt_root(global_state.block().merkle_root().unpack())?;
-    db.set_tip_global_state(global_state.clone())?;
     Ok(GenesisWithGlobalState {
         genesis,
         global_state,
@@ -131,9 +130,9 @@ impl Store {
         let mut db = self.begin_transaction();
         let GenesisWithGlobalState {
             genesis,
-            global_state: _,
+            global_state,
         } = build_genesis_from_store(&mut db, config)?;
-        db.insert_block(genesis.clone(), header, Vec::new())?;
+        db.insert_block(genesis.clone(), header, global_state, Vec::new())?;
         db.attach_block(genesis)?;
         db.commit()?;
         Ok(())

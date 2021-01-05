@@ -17,3 +17,7 @@ impl_std_eq!(CancelChallenge);
 impl_std_eq!(TxReceipt);
 impl_std_eq!(StartChallenge);
 impl_std_eq!(StartChallengeWitness);
+impl_std_eq!(HeaderInfo);
+impl_std_eq!(Transaction);
+impl_std_eq!(DepositionRequest);
+impl_std_eq!(GlobalState);

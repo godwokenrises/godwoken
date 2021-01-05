@@ -12,33 +12,33 @@ pub const COLUMN_INDEX: Col = "1";
 pub const COLUMN_BLOCK: Col = "2";
 /// Column store block's header info
 pub const COLUMN_BLOCK_HEADER_INFO: Col = "3";
+/// Column store block's global state
+pub const COLUMN_BLOCK_GLOBAL_STATE: Col = "4";
 /// Column store transaction
-pub const COLUMN_TRANSACTION: Col = "4";
+pub const COLUMN_TRANSACTION: Col = "5";
 /// Column store transaction receipt
-pub const COLUMN_TRANSACTION_RECEIPT: Col = "5";
+pub const COLUMN_TRANSACTION_RECEIPT: Col = "6";
 /// Column store sync block header info
-pub const COLUMN_SYNC_BLOCK_HEADER_INFO: Col = "6";
+pub const COLUMN_SYNC_BLOCK_HEADER_INFO: Col = "7";
 /// Column store transaction extra information
-pub const COLUMN_TRANSACTION_INFO: Col = "7";
+pub const COLUMN_TRANSACTION_INFO: Col = "8";
 /// Column account SMT branch
-pub const COLUMN_ACCOUNT_SMT_BRANCH: Col = "8";
+pub const COLUMN_ACCOUNT_SMT_BRANCH: Col = "9";
 /// Column account SMT leaf
-pub const COLUMN_ACCOUNT_SMT_LEAF: Col = "9";
+pub const COLUMN_ACCOUNT_SMT_LEAF: Col = "10";
 /// Column block SMT branch
-pub const COLUMN_BLOCK_SMT_BRANCH: Col = "10";
+pub const COLUMN_BLOCK_SMT_BRANCH: Col = "11";
 /// Column block SMT leaf
-pub const COLUMN_BLOCK_SMT_LEAF: Col = "11";
+pub const COLUMN_BLOCK_SMT_LEAF: Col = "12";
 /// Column store block number-hash pair
-pub const COLUMN_NUMBER_HASH: Col = "12";
+pub const COLUMN_NUMBER_HASH: Col = "13";
 /// Column script
-pub const COLUMN_SCRIPT: Col = "13";
+pub const COLUMN_SCRIPT: Col = "14";
 /// Column data
-pub const COLUMN_DATA: Col = "14";
+pub const COLUMN_DATA: Col = "15";
 
-/// META_TIP_HEADER_KEY tracks the latest known best block hash
+/// META_TIP_BLOCK_HASH_KEY tracks the latest known best block hash
 pub const META_TIP_BLOCK_HASH_KEY: &[u8] = b"TIP_BLOCK_HASH";
-/// META_TIP_HEADER_KEY tracks the latest known best block hash
-pub const META_TIP_GLOBAL_STATE_KEY: &[u8] = b"TIP_GLOBAL_STATE_KEY";
 /// block SMT root
 pub const META_BLOCK_SMT_ROOT_KEY: &[u8] = b"BLOCK_SMT_ROOT_KEY";
 /// account SMT root
