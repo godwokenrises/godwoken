@@ -3,7 +3,7 @@ pub mod genesis;
 mod overlay;
 mod snapshot;
 mod store_impl;
-mod transaction;
+pub mod transaction;
 mod write_batch;
 
 pub use overlay::OverlayStore;

@@ -5,11 +5,11 @@ use gw_common::{
     h256_ext::H256Ext, merkle_utils::calculate_merkle_root, smt::Blake2bHasher, sparse_merkle_tree,
     state::State, FINALIZE_BLOCKS, H256,
 };
-use gw_config::ChainConfig;
+use gw_config::{ChainConfig, GenesisConfig};
 use gw_generator::{
     generator::StateTransitionArgs, ChallengeContext, Error as GeneratorError, Generator,
 };
-use gw_store::Store;
+use gw_store::{transaction::StoreTransaction, Store};
 use gw_types::{
     bytes::Bytes,
     core::Status,
@@ -153,7 +153,9 @@ impl Chain {
         let last_synced = store
             .get_block_synced_header_info(&tip.hash().into())?
             .ok_or(anyhow!("can't find last synced header info"))?;
-        let last_global_state = store.get_block_post_global_state(&tip.hash().into())?;
+        let last_global_state = store
+            .get_block_post_global_state(&tip.hash().into())?
+            .ok_or(anyhow!("can't find last global state"))?;
         let local_state = LocalState {
             tip,
             last_synced,
@@ -179,7 +181,7 @@ impl Chain {
     }
 
     /// update a layer1 action
-    fn update_l1action(&mut self, action: L1Action) -> Result<SyncEvent> {
+    fn update_l1action(&mut self, db: &StoreTransaction, action: L1Action) -> Result<SyncEvent> {
         let L1Action {
             transaction,
             header_info,
@@ -211,6 +213,7 @@ impl Chain {
                 // parse layer2 block
                 let l2block = parse_l2block(&transaction, &self.rollup_type_script_hash)?;
                 if let Some(challenge_context) = self.process_block(
+                    db,
                     l2block.clone(),
                     header_info.clone(),
                     global_state.clone(),
@@ -277,7 +280,7 @@ impl Chain {
     }
 
     /// revert a layer1 action
-    fn revert_l1action(&mut self, action: RevertedL1Action) -> Result<()> {
+    fn revert_l1action(&mut self, db: &StoreTransaction, action: RevertedL1Action) -> Result<()> {
         let RevertedL1Action {
             prev_global_state,
             transaction,
@@ -294,7 +297,6 @@ impl Chain {
             },
             "must be smaller than or equalled to last synced number"
         );
-        let db = self.store.begin_transaction();
         match context {
             L1ActionContext::SubmitTxs {
                 deposition_requests: _,
@@ -319,24 +321,35 @@ impl Chain {
         self.local_state.last_synced = db
             .get_block_synced_header_info(&self.local_state.tip.hash().into())?
             .expect("last header info");
-        db.commit()?;
         Ok(())
     }
 
     /// Sync chain from layer1
     pub fn sync(&mut self, param: SyncParam) -> Result<SyncEvent> {
+        let db = self.store.begin_transaction();
         // revert layer1 actions
-        for reverted_action in param.reverts {
-            self.revert_l1action(reverted_action)?;
-        }
-        // apply tx to state
-        for action in param.updates {
-            let event = self.update_l1action(action)?;
-            // return to caller if any event happen
+        if !param.reverts.is_empty() {
+            // revert
+            for reverted_action in param.reverts {
+                self.revert_l1action(&db, reverted_action)?;
+            }
+            // reconstruct account state tree
+            let event = self.replay_chain(&db)?;
             if event != SyncEvent::Success {
+                db.commit()?;
                 return Ok(event);
             }
         }
+        // update layer1 actions
+        for action in param.updates {
+            let event = self.update_l1action(&db, action)?;
+            // return to caller if any event happen
+            if event != SyncEvent::Success {
+                db.commit()?;
+                return Ok(event);
+            }
+        }
+        db.commit()?;
         // update tx pool state
         let overlay_state = self.store.new_overlay()?;
         self.tx_pool.lock().update_tip(
@@ -344,28 +357,112 @@ impl Chain {
             overlay_state,
             param.next_block_context,
         )?;
+        // check consistency of account SMT
+        {
+            // check account SMT, should be able to calculate account state root
+            let expected_account_root: H256 = self
+                .local_state
+                .tip
+                .raw()
+                .post_account()
+                .merkle_root()
+                .unpack();
+            assert_eq!(
+                db.get_account_smt_root().unwrap(),
+                expected_account_root,
+                "account root consistent in DB"
+            );
+            let tree = db.account_state_tree().unwrap();
+            let current_account_root = tree.calculate_root().unwrap();
+            assert_eq!(
+                current_account_root, expected_account_root,
+                "check account tree"
+            );
+        }
+        Ok(SyncEvent::Success)
+    }
+
+    // replay chain to reconstruct account SMT
+    // TODO this method should be replaced with a version based storage
+    fn replay_chain(&mut self, db: &StoreTransaction) -> Result<SyncEvent> {
+        let tip_number: u64 = self.local_state.tip.raw().number().unpack();
+        // reset local state
+        let genesis_hash = db.get_block_hash_by_number(0)?.expect("genesis").into();
+        let genesis = db.get_block(&genesis_hash)?.expect("genesis");
+        let genesis_header_info = db
+            .get_block_synced_header_info(&genesis_hash.into())?
+            .expect("genesis");
+        let genesis_global_state = db
+            .get_block_post_global_state(&genesis_hash.into())?
+            .expect("genesis");
+        self.local_state = LocalState {
+            tip: genesis.clone(),
+            last_synced: genesis_header_info,
+            last_global_state: genesis_global_state,
+        };
+        // reset account SMT to genesis
+        // TODO use version based storage
+        db.clear_account_state_tree()?;
+        gw_store::genesis::build_genesis_from_store(
+            db,
+            &GenesisConfig {
+                timestamp: genesis.raw().timestamp().unpack(),
+            },
+        )?;
+        // replay blocks
+        for number in 1..tip_number {
+            let block_hash = db
+                .get_block_hash_by_number(number)?
+                .expect("get l2block")
+                .into();
+            let l2block = db.get_block(&block_hash)?.expect("l2block");
+            let header_info = db
+                .get_block_synced_header_info(&block_hash)?
+                .expect("get l2block header info");
+            let global_state = db
+                .get_block_post_global_state(&block_hash)?
+                .expect("get l2block global state");
+            let deposition_requests = db
+                .get_block_deposition_requests(&block_hash)?
+                .expect("get l2block deposition requests");
+            if let Some(challenge_context) = self.process_block(
+                db,
+                l2block.clone(),
+                header_info.clone(),
+                global_state.clone(),
+                deposition_requests,
+            )? {
+                // stop syncing and return event
+                self.bad_block_context = Some(challenge_context.args.clone());
+                return Ok(SyncEvent::BadBlock(challenge_context));
+            }
+        }
         Ok(SyncEvent::Success)
     }
 
     fn process_block(
         &mut self,
+        db: &StoreTransaction,
         l2block: L2Block,
         header_info: HeaderInfo,
         global_state: GlobalState,
         deposition_requests: Vec<DepositionRequest>,
     ) -> Result<Option<ChallengeContext>> {
         let tip_number: u64 = self.local_state.tip.raw().number().unpack();
-        assert!(
-            l2block.raw().number().unpack() == tip_number + 1,
+        assert_eq!(
+            {
+                let number: u64 = l2block.raw().number().unpack();
+                number
+            },
+            tip_number + 1,
             "new l2block number must be the successor of the tip"
         );
 
         // process l2block
         let args = StateTransitionArgs {
             l2block: l2block.clone(),
-            deposition_requests,
+            deposition_requests: deposition_requests.clone(),
         };
-        let db = self.store.begin_transaction();
         let mut tree = db.account_state_tree()?;
         // process transactions
         let result = match self.generator.apply_state_transition(&mut tree, args) {
@@ -376,7 +473,6 @@ impl Chain {
                     GeneratorError::Transaction(err) => {
                         // TODO run offchain validator before send challenge, to make sure the block is bad
                         let block_hash: [u8; 32] = err.context.block_hash().unpack();
-                        let db = self.store().begin_transaction();
                         let block_proof = db
                             .block_smt()?
                             .merkle_proof(vec![l2block.smt_key().into()])?
@@ -397,11 +493,14 @@ impl Chain {
         };
 
         // update chain
-        db.insert_block(l2block.clone(), header_info, global_state, result.receipts)?;
+        db.insert_block(
+            l2block.clone(),
+            header_info,
+            global_state,
+            result.receipts,
+            deposition_requests,
+        )?;
         db.attach_block(l2block.clone())?;
-        let root = tree.calculate_root()?;
-        db.set_account_smt_root(root)?;
-        db.commit()?;
         self.local_state.tip = l2block;
         Ok(None)
     }
@@ -410,7 +509,7 @@ impl Chain {
     ///
     /// This function should be called in the turn that the current aggregator to produce the next block,
     /// otherwise the produced block may invalided by the state-validator contract.
-    pub fn produce_block(&mut self, param: ProduceBlockParam) -> Result<ProduceBlockResult> {
+    pub fn produce_block(&self, param: ProduceBlockParam) -> Result<ProduceBlockResult> {
         let ProduceBlockParam {
             aggregator_id,
             deposition_requests,
@@ -451,14 +550,12 @@ impl Chain {
                 .collect(),
         )
         .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
-        let prev_root: [u8; 32] = tx_pool_pkg.prev_account_state.root.into();
         let prev_account = AccountMerkleState::new_builder()
-            .merkle_root(prev_root.pack())
+            .merkle_root(tx_pool_pkg.prev_account_state.root.pack())
             .count(tx_pool_pkg.prev_account_state.count.pack())
             .build();
-        let post_root: [u8; 32] = tx_pool_pkg.post_account_state.root.into();
         let post_account = AccountMerkleState::new_builder()
-            .merkle_root(post_root.pack())
+            .merkle_root(tx_pool_pkg.post_account_state.root.pack())
             .count(tx_pool_pkg.post_account_state.count.pack())
             .build();
         let raw_block = RawL2Block::new_builder()

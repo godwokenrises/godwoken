@@ -12,12 +12,16 @@ use gw_common::{
 };
 use gw_db::schema::{
     Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BLOCK,
-    COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_DATA,
-    COLUMN_INDEX, COLUMN_META, COLUMN_SCRIPT, COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION,
-    COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY,
-    META_ACCOUNT_SMT_ROOT_KEY, META_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
+    COLUMN_BLOCK_DEPOSITION_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH,
+    COLUMN_BLOCK_SMT_LEAF, COLUMN_DATA, COLUMN_INDEX, COLUMN_META, COLUMN_SCRIPT,
+    COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
+    COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY,
+    META_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
-use gw_db::{error::Error, DBVector, RocksDBTransaction, RocksDBTransactionSnapshot};
+use gw_db::{
+    error::Error, iter::DBIter, DBIterator, DBVector, IteratorMode, RocksDBTransaction,
+    RocksDBTransactionSnapshot,
+};
 use gw_generator::traits::CodeStore;
 use gw_types::{bytes::Bytes, packed, prelude::*};
 
@@ -99,11 +103,11 @@ impl StoreTransaction {
         self.inner.get(col, key).expect("db operation should be ok")
     }
 
-    // fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
-    //     self.inner
-    //         .iter(col, mode)
-    //         .expect("db operation should be ok")
-    // }
+    fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
+        self.inner
+            .iter(col, mode)
+            .expect("db operation should be ok")
+    }
 
     pub fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
         self.inner.put(col, key, value)
@@ -170,6 +174,13 @@ impl StoreTransaction {
         Ok(())
     }
 
+    fn set_account_count(&self, count: u32) -> Result<(), Error> {
+        let count: packed::Uint32 = count.pack();
+        self.insert_raw(COLUMN_META, META_ACCOUNT_SMT_COUNT_KEY, count.as_slice())
+            .expect("insert");
+        Ok(())
+    }
+
     pub fn account_smt_store<'a>(&'a self) -> Result<SMTStoreTransaction<'a>, Error> {
         let smt_store =
             SMTStoreTransaction::new(COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ACCOUNT_SMT_BRANCH, self);
@@ -187,6 +198,18 @@ impl StoreTransaction {
             tree: self.account_smt()?,
             db: self,
         })
+    }
+
+    /// clear account state tree, delete leaves and branches from DB
+    pub fn clear_account_state_tree(&self) -> Result<(), Error> {
+        self.set_account_smt_root(H256::zero())?;
+        self.set_account_count(0)?;
+        for col in &[COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ACCOUNT_SMT_BRANCH] {
+            for (k, _v) in self.get_iter(col, IteratorMode::Start) {
+                self.delete(col, k.as_ref())?;
+            }
+        }
+        Ok(())
     }
 
     pub fn get_block(&self, block_hash: &H256) -> Result<Option<packed::L2Block>, Error> {
@@ -226,12 +249,40 @@ impl StoreTransaction {
         }
     }
 
+    pub fn get_block_deposition_requests(
+        &self,
+        block_hash: &H256,
+    ) -> Result<Option<Vec<packed::DepositionRequest>>, Error> {
+        match self.get(COLUMN_BLOCK_DEPOSITION_REQUESTS, block_hash.as_slice()) {
+            Some(slice) => Ok(Some(
+                packed::DepositionRequestVecReader::from_slice_should_be_ok(&slice.as_ref())
+                    .to_entity()
+                    .into_iter()
+                    .collect(),
+            )),
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_block_post_global_state(
+        &self,
+        block_hash: &H256,
+    ) -> Result<Option<packed::GlobalState>, Error> {
+        match self.get(COLUMN_BLOCK_GLOBAL_STATE, block_hash.as_slice()) {
+            Some(slice) => Ok(Some(
+                packed::GlobalStateReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+            )),
+            None => Ok(None),
+        }
+    }
+
     pub fn insert_block(
         &self,
         block: packed::L2Block,
         header_info: packed::HeaderInfo,
         global_state: packed::GlobalState,
         tx_receipts: Vec<packed::TxReceipt>,
+        deposition_requests: Vec<packed::DepositionRequest>,
     ) -> Result<(), Error> {
         debug_assert_eq!(block.transactions().len(), tx_receipts.len());
         let block_hash = block.hash();
@@ -245,6 +296,12 @@ impl StoreTransaction {
             COLUMN_BLOCK_GLOBAL_STATE,
             &block_hash,
             global_state.as_slice(),
+        )?;
+        let deposition_requests_vec: packed::DepositionRequestVec = deposition_requests.pack();
+        self.insert_raw(
+            COLUMN_BLOCK_DEPOSITION_REQUESTS,
+            &block_hash,
+            deposition_requests_vec.as_slice(),
         )?;
 
         for (index, (tx, tx_receipt)) in block
@@ -348,6 +405,9 @@ impl<'a> State for StateTree<'a> {
     }
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
         self.tree.update(key.into(), value.into())?;
+        self.db
+            .set_account_smt_root(*self.tree.root())
+            .expect("set smt root");
         Ok(())
     }
     fn get_account_count(&self) -> Result<u32, StateError> {
@@ -359,11 +419,7 @@ impl<'a> State for StateTree<'a> {
         Ok(count.unpack())
     }
     fn set_account_count(&mut self, count: u32) -> Result<(), StateError> {
-        let count: packed::Uint32 = count.pack();
-        self.db
-            .insert_raw(COLUMN_META, META_ACCOUNT_SMT_COUNT_KEY, count.as_slice())
-            .expect("insert");
-        Ok(())
+        Ok(self.db.set_account_count(count).expect("set account count"))
     }
     fn calculate_root(&self) -> Result<H256, StateError> {
         let root = self.tree.root();

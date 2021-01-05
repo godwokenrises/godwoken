@@ -94,11 +94,16 @@ impl<'a> Store {
         Ok(self.get_block(&tip_block_hash)?.expect("get tip block"))
     }
 
-    pub fn get_block_post_global_state(&self, block_hash: &H256) -> Result<GlobalState, Error> {
-        let slice = self
-            .get(COLUMN_BLOCK_GLOBAL_STATE, block_hash.as_slice())
-            .expect("get block post global state");
-        Ok(packed::GlobalStateReader::from_slice_should_be_ok(&slice.as_ref()).to_entity())
+    pub fn get_block_post_global_state(
+        &self,
+        block_hash: &H256,
+    ) -> Result<Option<GlobalState>, Error> {
+        match self.get(COLUMN_BLOCK_GLOBAL_STATE, block_hash.as_slice()) {
+            Some(slice) => Ok(Some(
+                packed::GlobalStateReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+            )),
+            None => Ok(None),
+        }
     }
 
     pub fn get_block(&self, block_hash: &H256) -> Result<Option<L2Block>, Error> {

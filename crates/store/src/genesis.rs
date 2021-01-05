@@ -28,8 +28,10 @@ pub struct GenesisWithGlobalState {
     pub global_state: GlobalState,
 }
 
-fn build_genesis_from_store(
-    db: &mut StoreTransaction,
+/// build genesis from store
+/// This function initialize db to genesis state
+pub fn build_genesis_from_store(
+    db: &StoreTransaction,
     config: &GenesisConfig,
 ) -> Result<GenesisWithGlobalState> {
     // initialize store
@@ -117,7 +119,6 @@ fn build_genesis_from_store(
             .status((Status::Running as u8).into())
             .build()
     };
-    db.set_account_smt_root(global_state.account().merkle_root().unpack())?;
     db.set_block_smt_root(global_state.block().merkle_root().unpack())?;
     Ok(GenesisWithGlobalState {
         genesis,
@@ -132,7 +133,13 @@ impl Store {
             genesis,
             global_state,
         } = build_genesis_from_store(&mut db, config)?;
-        db.insert_block(genesis.clone(), header, global_state, Vec::new())?;
+        db.insert_block(
+            genesis.clone(),
+            header,
+            global_state,
+            Vec::new(),
+            Vec::new(),
+        )?;
         db.attach_block(genesis)?;
         db.commit()?;
         Ok(())

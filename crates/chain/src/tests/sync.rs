@@ -1,8 +1,12 @@
 use crate::{
-    chain::{Chain, L1Action, L1ActionContext, RevertedL1Action, SyncEvent, SyncParam},
+    chain::{
+        Chain, L1Action, L1ActionContext, ProduceBlockParam, ProduceBlockResult, RevertedL1Action,
+        SyncEvent, SyncParam,
+    },
     next_block_context::NextBlockContext,
     tx_pool::TxPool,
 };
+use gw_common::{state::State, H256};
 use gw_config::{ChainConfig, GenesisConfig};
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, Generator,
@@ -10,7 +14,7 @@ use gw_generator::{
 use gw_store::Store;
 use gw_types::{
     packed::{
-        CellOutput, GlobalState, HeaderInfo, L2Block, RawL2Block, RawTransaction, Script,
+        CellOutput, DepositionRequest, GlobalState, HeaderInfo, RawTransaction, Script,
         Transaction, WitnessArgs,
     },
     prelude::*,
@@ -53,14 +57,13 @@ fn setup_chain(rollup_type_script: &Script) -> Chain {
     Chain::create(config, store, generator, Arc::new(Mutex::new(tx_pool))).unwrap()
 }
 
-fn build_sync_tx(block_number: u64, rollup_cell: CellOutput) -> Transaction {
-    let global_state = GlobalState::default();
-    let raw_l2block = RawL2Block::new_builder()
-        .number(block_number.pack())
-        .build();
-    let l2block = L2Block::new_builder().raw(raw_l2block).build();
+fn build_sync_tx(rollup_cell: CellOutput, produce_block_result: ProduceBlockResult) -> Transaction {
+    let ProduceBlockResult {
+        block,
+        global_state,
+    } = produce_block_result;
     let witness = WitnessArgs::new_builder()
-        .output_type(Pack::<_>::pack(&Some(l2block.as_bytes())))
+        .output_type(Pack::<_>::pack(&Some(block.as_bytes())))
         .build();
     let raw = RawTransaction::new_builder()
         .outputs(vec![rollup_cell].pack())
@@ -84,16 +87,38 @@ fn test_sync_a_block() {
         timestamp,
     };
 
-    // build update tx
+    let user_script = Script::new_builder().args(vec![42].pack()).build();
+    let deposition = DepositionRequest::new_builder()
+        .capacity(100u64.pack())
+        .script(user_script)
+        .build();
+    let param = ProduceBlockParam {
+        aggregator_id,
+        deposition_requests: vec![deposition.clone()],
+    };
+    let block_result = chain.produce_block(param).unwrap();
+    assert_eq!(
+        {
+            let tip_block_number: u64 = chain
+                .store()
+                .get_tip_block()
+                .unwrap()
+                .raw()
+                .number()
+                .unpack();
+            tip_block_number
+        },
+        0
+    );
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script).pack())
         .build();
-    let transaction = build_sync_tx(1, rollup_cell);
+    let transaction = build_sync_tx(rollup_cell, block_result);
     let header_info = HeaderInfo::default();
 
     let update = L1Action {
         context: L1ActionContext::SubmitTxs {
-            deposition_requests: Default::default(),
+            deposition_requests: vec![deposition.clone()],
         },
         transaction,
         header_info,
@@ -111,6 +136,9 @@ fn test_sync_a_block() {
 fn test_layer1_fork() {
     let rollup_type_script = Script::default();
     let mut chain = setup_chain(&rollup_type_script);
+    let rollup_cell = CellOutput::new_builder()
+        .type_(Some(rollup_type_script.clone()).pack())
+        .build();
 
     let aggregator_id = 0;
     let timestamp = 1000;
@@ -119,28 +147,74 @@ fn test_layer1_fork() {
         timestamp,
     };
 
-    // update 2 blocks
-    let rollup_cell = CellOutput::new_builder()
-        .type_(Some(rollup_type_script).pack())
-        .build();
-    let updates = vec![
+    // build fork block 1
+    let fork_action = {
+        // build fork from another chain to avoid mess up the tx pool
+        let charlie_script = Script::new_builder().args(vec![7].pack()).build();
+        let deposition = DepositionRequest::new_builder()
+            .capacity(120u64.pack())
+            .script(charlie_script)
+            .build();
+        let param = ProduceBlockParam {
+            aggregator_id,
+            deposition_requests: vec![deposition.clone()],
+        };
+        let chain = setup_chain(&rollup_type_script);
+        let block_result = chain.produce_block(param).unwrap();
+
         L1Action {
             context: L1ActionContext::SubmitTxs {
-                deposition_requests: Default::default(),
+                deposition_requests: vec![deposition],
             },
-            transaction: build_sync_tx(1, rollup_cell.clone()),
+            transaction: build_sync_tx(rollup_cell.clone(), block_result),
             header_info: HeaderInfo::new_builder().number(1u64.pack()).build(),
+        }
+    };
+    // update block 1
+    let alice_script = Script::new_builder().args(vec![42].pack()).build();
+    let deposition = DepositionRequest::new_builder()
+        .capacity(100u64.pack())
+        .script(alice_script)
+        .build();
+    let param = ProduceBlockParam {
+        aggregator_id,
+        deposition_requests: vec![deposition.clone()],
+    };
+    let block_result = chain.produce_block(param).unwrap();
+    let action1 = L1Action {
+        context: L1ActionContext::SubmitTxs {
+            deposition_requests: vec![deposition.clone()],
         },
-        L1Action {
-            context: L1ActionContext::SubmitTxs {
-                deposition_requests: Default::default(),
-            },
-            transaction: build_sync_tx(2, rollup_cell.clone()),
-            header_info: HeaderInfo::new_builder().number(2u64.pack()).build(),
-        },
-    ];
+        transaction: build_sync_tx(rollup_cell.clone(), block_result),
+        header_info: HeaderInfo::new_builder().number(1u64.pack()).build(),
+    };
     let param = SyncParam {
-        updates: updates.clone(),
+        updates: vec![action1.clone()],
+        reverts: Default::default(),
+        next_block_context: nb_ctx.clone(),
+    };
+    let event = chain.sync(param).unwrap();
+    assert_eq!(event, SyncEvent::Success);
+    // update block 2
+    let bob_script = Script::new_builder().args(vec![43].pack()).build();
+    let deposition = DepositionRequest::new_builder()
+        .capacity(500u64.pack())
+        .script(bob_script)
+        .build();
+    let param = ProduceBlockParam {
+        aggregator_id,
+        deposition_requests: vec![deposition.clone()],
+    };
+    let block_result = chain.produce_block(param).unwrap();
+    let action2 = L1Action {
+        context: L1ActionContext::SubmitTxs {
+            deposition_requests: vec![deposition],
+        },
+        transaction: build_sync_tx(rollup_cell.clone(), block_result),
+        header_info: HeaderInfo::new_builder().number(2u64.pack()).build(),
+    };
+    let param = SyncParam {
+        updates: vec![action2.clone()],
         reverts: Default::default(),
         next_block_context: nb_ctx.clone(),
     };
@@ -151,6 +225,7 @@ fn test_layer1_fork() {
     assert_eq!(tip_block_number, 2);
 
     // revert blocks
+    let updates = vec![action1, action2];
     let reverts = updates
         .into_iter()
         .rev()
@@ -169,13 +244,7 @@ fn test_layer1_fork() {
             }
         })
         .collect::<Vec<_>>();
-    let forks = vec![L1Action {
-        context: L1ActionContext::SubmitTxs {
-            deposition_requests: Default::default(),
-        },
-        transaction: build_sync_tx(1, rollup_cell.clone()),
-        header_info: HeaderInfo::new_builder().number(1u64.pack()).build(),
-    }];
+    let forks = vec![fork_action];
 
     let param = SyncParam {
         updates: forks,
@@ -187,4 +256,16 @@ fn test_layer1_fork() {
     let tip_block = chain.store().get_tip_block().unwrap();
     let tip_block_number: u64 = tip_block.raw().number().unpack();
     assert_eq!(tip_block_number, 1);
+
+    // check account SMT, should be able to calculate account state root
+    {
+        let db = chain.store().begin_transaction();
+        let tree = db.account_state_tree().unwrap();
+        let current_account_root = tree.calculate_root().unwrap();
+        let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
+        assert_eq!(
+            current_account_root, expected_account_root,
+            "check account tree"
+        );
+    }
 }

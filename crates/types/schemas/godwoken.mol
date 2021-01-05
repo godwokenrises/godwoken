@@ -68,6 +68,8 @@ table DepositionRequest {
     script: Script,
 }
 
+vector DepositionRequestVec <DepositionRequest>;
+
 struct RawWithdrawalRequest {
     nonce: Uint32,
     // CKB amount

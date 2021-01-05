@@ -118,7 +118,7 @@ declare_types! {
             let produce_block_param: ProduceBlockParam = produce_block_param_jsonrpc.into();
             let produce_block_result: Result<ProduceBlockResult> =
                 cx.borrow_mut(&mut this, |data| {
-                    let mut chain = data.chain.write().unwrap();
+                    let chain = data.chain.write().unwrap();
                     let produce_block_result = chain.produce_block(produce_block_param);
                     produce_block_result
                 });

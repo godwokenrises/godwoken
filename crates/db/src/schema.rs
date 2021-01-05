@@ -3,7 +3,7 @@
 /// Column families alias type
 pub type Col = &'static str;
 /// Total column number
-pub const COLUMNS: u32 = 15;
+pub const COLUMNS: u32 = 17;
 /// Column store meta data
 pub const COLUMN_META: Col = "0";
 /// Column store chain index
@@ -36,6 +36,8 @@ pub const COLUMN_NUMBER_HASH: Col = "13";
 pub const COLUMN_SCRIPT: Col = "14";
 /// Column data
 pub const COLUMN_DATA: Col = "15";
+/// Column block deposition requests
+pub const COLUMN_BLOCK_DEPOSITION_REQUESTS: Col = "16";
 
 /// META_TIP_BLOCK_HASH_KEY tracks the latest known best block hash
 pub const META_TIP_BLOCK_HASH_KEY: &[u8] = b"TIP_BLOCK_HASH";
