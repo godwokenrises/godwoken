@@ -627,9 +627,9 @@ export class Runner {
     // TODO collect all finalized and live custodian cells
     const validCustodianCells = await this._queryValidCustodianCells();
     if (validCustodianCells.length === 0) {
-        this.logger("error", "No valid custodian cells found!");
-        throw new Error("No valid custodian cells found!");
-    } 
+      this.logger("error", "No valid custodian cells found!");
+      throw new Error("No valid custodian cells found!");
+    }
     const deposition_block_hash = validCustodianCells[0].block_hash!;
     const deposition_block_number = validCustodianCells[0].block_number!;
     let ckbWithdrawalCapacity = 0n;
