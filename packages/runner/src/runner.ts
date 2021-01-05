@@ -927,12 +927,27 @@ export class Runner {
     };
   }
 
-  // valid means finalized and live
+  // Valid means both finalized and live custodian cells.
+  // 1. collect all live custodian cells
+  // 2. collect rollup cell
+  // 3. extract `deposition_block_number` from `custodianLockArgs`, compare it with `globalState`'s `last_finalized_block_number`
   async _queryValidCustodianCells(): Promise<Cell[]> {
     const collector = this.indexer.collector(this._custodianCellQueryOptions());
+    const rollupCell = await this._queryLiveRollupCell();
+    const globalState = types.DenormalizeGlobalState(
+      new schemas.GlobalState(new Reader(rollupCell.data).toArrayBuffer())
+    );
     const cells = [];
     for await (const cell of collector.collect()) {
-      cells.push(cell);
+      const custodianLockArgs = this._unpackCustodianLockArgs(
+        cell.cell_output.lock.args
+      );
+      if (
+        BigInt(custodianLockArgs.deposition_block_number) <=
+        BigInt(globalState.last_finalized_block_number)
+      ) {
+        cells.push(cell);
+      }
     }
     return cells;
   }
@@ -949,6 +964,7 @@ export class Runner {
       },
     };
   }
+
   _packCustodianLockArgs(custodianLockArgs: object): HexString {
     const packedCustodianLockArgs = schemas.SerializeCustodianLockArgs(
       types.NormalizeCustodianLockArgs(custodianLockArgs)
@@ -972,5 +988,14 @@ export class Runner {
     );
     array.set(new Uint8Array(args), 32);
     return new Reader(buffer).serializeJson();
+  }
+
+  _unpackCustodianLockArgs(packedCustodianLockArgs: HexString) {
+    const buffer = new Reader(packedCustodianLockArgs).toArrayBuffer();
+    const array = new Uint8Array(buffer);
+    const custodianLockArgsBuffer = array.slice(32);
+    return types.DenormalizeCustodianLockArgs(
+      new schemas.CustodianLockArgs(custodianLockArgsBuffer)
+    );
   }
 }
