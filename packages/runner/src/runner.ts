@@ -317,7 +317,8 @@ export class Runner {
     ).transaction;
     for (const cellDep of tx.cell_deps) {
       if (cellDep.dep_type === "dep_group") {
-        throw new Error("TODO: dep group support!");
+        // throw new Error("TODO: dep group support!");
+        continue;
       }
       const codeCell = await this.rpc.get_live_cell(cellDep.out_point, true);
       if (cell.cell_output.type!.hash_type == "data") {
