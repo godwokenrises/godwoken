@@ -318,14 +318,13 @@ impl Chain {
         deposition_requests: Vec<DepositionRequest>,
     ) -> Result<Option<ChallengeContext>> {
         let tip_number: u64 = self.local_state.tip.raw().number().unpack();
-        assert_eq!(
-            {
-                let number: u64 = l2block.raw().number().unpack();
-                number
-            },
-            tip_number + 1,
-            "new l2block number must be the successor of the tip"
-        );
+        let number: u64 = l2block.raw().number().unpack();
+        if number != tip_number + 1 {
+            eprintln!(
+                "new l2block number must be the successor of the tip number {} tip {}",
+                number, tip_number
+            );
+        }
 
         // process l2block
         let args = StateTransitionArgs {
