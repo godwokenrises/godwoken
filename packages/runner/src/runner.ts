@@ -938,9 +938,21 @@ export class Runner {
       new schemas.GlobalState(new Reader(rollupCell.data).toArrayBuffer())
     );
     const cells = [];
+    this.logger(
+      "debug",
+      `GlobalState last_finalized_block_number: ${BigInt(
+        globalState.last_finalized_block_number
+      )}`
+    );
     for await (const cell of collector.collect()) {
       const custodianLockArgs = this._unpackCustodianLockArgs(
         cell.cell_output.lock.args
+      );
+      this.logger(
+        "debug",
+        `CustodianLockArgs deposition_block_number: ${BigInt(
+          custodianLockArgs.deposition_block_number
+        )}, deposition_block_hash: ${custodianLockArgs.deposition_block_hash}`
       );
       if (
         BigInt(custodianLockArgs.deposition_block_number) <=
@@ -995,7 +1007,7 @@ export class Runner {
     const array = new Uint8Array(buffer);
     const custodianLockArgsBuffer = array.slice(32);
     return types.DenormalizeCustodianLockArgs(
-      new schemas.CustodianLockArgs(custodianLockArgsBuffer)
+      new schemas.CustodianLockArgs(custodianLockArgsBuffer.buffer)
     );
   }
 }
