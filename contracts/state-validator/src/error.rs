@@ -1,5 +1,5 @@
-use ckb_std::error::SysError;
-use gw_common::{sparse_merkle_tree::error::Error as SMTError, state::Error as StateError};
+use crate::ckb_std::error::SysError;
+use gw_common::{error::Error as StateError, sparse_merkle_tree::error::Error as SMTError};
 
 /// Error
 #[repr(i8)]
@@ -48,6 +48,8 @@ impl From<StateError> for Error {
             StateError::AmountOverflow => Error::AmountOverflow,
             StateError::MerkleProof => Error::MerkleProof,
             StateError::SMT(e) => Error::MerkleProof,
+            StateError::MissingKey => Error::MerkleProof,
+            StateError::Store => Error::MerkleProof,
         }
     }
 }

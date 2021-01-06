@@ -93,14 +93,11 @@ pub fn main() -> Result<(), Error> {
 
     // check reverted_blocks merkle proof
     let reverted_block_root: [u8; 32] = global_state.reverted_block_root().unpack();
-    let block_hash = lock_args.deposition_block_hash().unpack();
+    let block_hash: H256 = lock_args.deposition_block_hash().unpack();
 
     let merkle_proof = CompiledMerkleProof(unlock_args.block_proof().unpack());
     if merkle_proof
-        .verify::<Blake2bHasher>(
-            &reverted_block_root.into(),
-            vec![(block_hash.into(), H256::one())],
-        )
+        .verify::<Blake2bHasher>(&reverted_block_root.into(), vec![(block_hash, H256::one())])
         .map_err(|_err| Error::MerkleProof)?
     {
         Ok(())

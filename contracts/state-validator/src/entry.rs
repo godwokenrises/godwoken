@@ -8,7 +8,7 @@ use alloc::{collections::BTreeMap, vec};
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
-use ckb_std::{
+use crate::ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::*},
     dynamic_loading::CKBDLContext,
@@ -16,7 +16,7 @@ use ckb_std::{
 };
 
 use gw_types::{
-    packed::{GlobalState, GlobalStateReader, L2Block, RawL2Block, L2BlockReader},
+    packed::{GlobalState, GlobalStateReader, L2Block, L2BlockReader, RawL2Block},
     prelude::{Reader as GodwokenTypesReader, Unpack as GodwokenTypesUnpack},
 };
 
@@ -28,8 +28,8 @@ use gw_common::{
     state::State,
 };
 
-use crate::actions;
-use crate::consensus::verify_aggregator;
+// use crate::actions;
+// use crate::consensus::verify_aggregator;
 use crate::context::Context;
 use crate::error::Error;
 
@@ -56,33 +56,33 @@ fn parse_global_state(source: Source) -> Result<GlobalState, Error> {
     }
 }
 
-fn verify_block_signature(
-    context: &Context,
-    lib_secp256k1: &LibSecp256k1,
-    l2block: &L2Block,
-) -> Result<(), Error> {
-    let pubkey_hash = context
-        .get_pubkey_hash(context.aggregator_id)?;
-    let message = &context.block_hash;
-    let signature: [u8; 65] = l2block.signature().unpack();
-    let prefilled_data = lib_secp256k1
-        .load_prefilled_data()
-        .map_err(|_err| Error::Secp256k1)?;
-    let pubkey = lib_secp256k1
-        .recover_pubkey(&prefilled_data, &signature, message)
-        .map_err(|_err| Error::Secp256k1)?;
-    let actual_pubkey_hash = {
-        let mut pubkey_hash = [0u8; 32];
-        let mut hasher = new_blake2b();
-        hasher.update(pubkey.as_slice());
-        hasher.finalize(&mut pubkey_hash);
-        pubkey_hash
-    };
-    if pubkey_hash != actual_pubkey_hash[..20] {
-        return Err(Error::WrongSignature);
-    }
-    Ok(())
-}
+// fn verify_block_signature(
+//     context: &Context,
+//     lib_secp256k1: &LibSecp256k1,
+//     l2block: &L2Block,
+// ) -> Result<(), Error> {
+//     let pubkey_hash = context
+//         .get_pubkey_hash(context.aggregator_id)?;
+//     let message = &context.block_hash;
+//     let signature: [u8; 65] = l2block.signature().unpack();
+//     let prefilled_data = lib_secp256k1
+//         .load_prefilled_data()
+//         .map_err(|_err| Error::Secp256k1)?;
+//     let pubkey = lib_secp256k1
+//         .recover_pubkey(&prefilled_data, &signature, message)
+//         .map_err(|_err| Error::Secp256k1)?;
+//     let actual_pubkey_hash = {
+//         let mut pubkey_hash = [0u8; 32];
+//         let mut hasher = new_blake2b();
+//         hasher.update(pubkey.as_slice());
+//         hasher.finalize(&mut pubkey_hash);
+//         pubkey_hash
+//     };
+//     if pubkey_hash != actual_pubkey_hash[..20] {
+//         return Err(Error::WrongSignature);
+//     }
+//     Ok(())
+// }
 
 fn verify_l2block(
     l2block: &L2Block,
@@ -90,9 +90,6 @@ fn verify_l2block(
     post_global_state: &GlobalState,
 ) -> Result<Context, Error> {
     let raw_block = l2block.raw();
-    if raw_block.valid() == 0u8.into() {
-        return Err(Error::SubmitInvalidBlock);
-    }
 
     // Check pre block merkle proof
     let number: u64 = raw_block.number().unpack();
@@ -179,27 +176,27 @@ fn verify_l2block(
         block_hash,
     };
 
-    // Verify aggregator
-    verify_aggregator(&context)?;
+    // // Verify aggregator
+    // verify_aggregator(&context)?;
 
     Ok(context)
 }
 
 pub fn main() -> Result<(), Error> {
-    // Initialize CKBDLContext
-    let mut context = unsafe{ CKBDLContext::<[u8; 128 * 1024]>::new() };
-    let lib_secp256k1 = LibSecp256k1::load(&mut context);
+    // // Initialize CKBDLContext
+    // let mut context = unsafe{ CKBDLContext::<[u8; 128 * 1024]>::new() };
+    // let lib_secp256k1 = LibSecp256k1::load(&mut context);
     // basic verification
     let prev_global_state = parse_global_state(Source::GroupInput)?;
     let post_global_state = parse_global_state(Source::GroupOutput)?;
     let l2block = parse_l2block()?;
     let mut context = verify_l2block(&l2block, &prev_global_state, &post_global_state)?;
-    // check signature
-    verify_block_signature(&context, &lib_secp256k1, &l2block)?;
+    // // check signature
+    // verify_block_signature(&context, &lib_secp256k1, &l2block)?;
 
-    // handle state transitions
-    actions::submit_transactions::handle(&mut context, &l2block)?;
-    actions::join::handle(&mut context, &l2block)?;
+    // // handle state transitions
+    // actions::submit_transactions::handle(&mut context, &l2block)?;
+    // actions::join::handle(&mut context, &l2block)?;
 
     Ok(())
 }

@@ -11,13 +11,14 @@
 #![feature(panic_info_message)]
 
 // define modules
-mod actions;
-mod consensus;
+// mod actions;
+// mod consensus;
 mod context;
 mod entry;
 mod error;
 
 use ckb_std::default_alloc;
+pub use validator_utils::ckb_std;
 
 ckb_std::entry!(program_entry);
 default_alloc!();
