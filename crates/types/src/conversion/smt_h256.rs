@@ -1,4 +1,4 @@
-use crate::{packed, prelude::*};
+use crate::{packed, prelude::*, vec::Vec};
 use sparse_merkle_tree::H256;
 
 impl Pack<packed::Byte32> for H256 {
