@@ -80,6 +80,7 @@ $ cd $TOP
 $ git clone --recursive https://github.com/nervosnetwork/godwoken
 $ cd godwoken
 $ cd c
+$ cargo install moleculec --version 0.6.1
 $ make all-via-docker
 $ cd ..
 $ cargo build
