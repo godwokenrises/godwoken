@@ -15,6 +15,8 @@ jobs:
       run: cargo install moleculec --version 0.6.1
     - name: Check format
       run: cargo fmt -- --check
+    - name: Check contracts format
+      run: cd contracts && cargo fmt -- --check
     - name: Init submodules
       run: git submodule init && git submodule update -r
     - name: Compile C contracts
