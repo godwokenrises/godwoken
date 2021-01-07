@@ -1,6 +1,6 @@
-use ckb_jsonrpc_types::{JsonBytes, Script as JsonScript, Uint32, Uint64};
-use ckb_types::packed as ckb_packed;
-use ckb_types::H256;
+use crate::blockchain::Script as JsonScript;
+use ckb_fixed_hash::H256;
+use ckb_jsonrpc_types::{JsonBytes, Uint32, Uint64};
 use gw_chain::{chain, next_block_context};
 use gw_types::{core, packed, prelude::*};
 
@@ -12,7 +12,7 @@ use crate::godwoken::{CancelChallenge, ChallengeContext, TxReceipt};
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct SyncParam {
-    pub reverts: Vec<L1Action>,
+    pub reverts: Vec<RevertedL1Action>,
     /// contains transitions from fork point to new tips
     pub updates: Vec<L1Action>,
     pub next_block_context: NextBlockContext,
@@ -54,7 +54,42 @@ impl From<L1Action> for chain::L1Action {
         let transaction_bytes = transaction.into_bytes();
         let header_info_bytes = header_info.into_bytes();
         Self {
-            transaction: ckb_packed::Transaction::from_slice(transaction_bytes.as_ref())
+            transaction: packed::Transaction::from_slice(transaction_bytes.as_ref())
+                .expect("Build packed::Transaction from slice"),
+            header_info: packed::HeaderInfo::from_slice(header_info_bytes.as_ref())
+                .expect("Build packed::HeaderInfo from slice"),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct RevertedL1Action {
+    /// prev global state
+    pub prev_global_state: JsonBytes,
+    /// transaction
+    pub transaction: JsonBytes,
+    /// transactions' header info
+    pub header_info: JsonBytes,
+    pub context: L1ActionContext,
+}
+
+impl From<RevertedL1Action> for chain::RevertedL1Action {
+    fn from(json: RevertedL1Action) -> chain::RevertedL1Action {
+        let RevertedL1Action {
+            prev_global_state,
+            transaction,
+            header_info,
+            context,
+        } = json;
+        let prev_global_state_bytes = prev_global_state.into_bytes();
+        let transaction_bytes = transaction.into_bytes();
+        let header_info_bytes = header_info.into_bytes();
+        Self {
+            prev_global_state: packed::GlobalState::from_slice(prev_global_state_bytes.as_ref())
+                .expect("Build packed::GlobalState from slice"),
+            transaction: packed::Transaction::from_slice(transaction_bytes.as_ref())
                 .expect("Build packed::Transaction from slice"),
             header_info: packed::HeaderInfo::from_slice(header_info_bytes.as_ref())
                 .expect("Build packed::HeaderInfo from slice"),

@@ -1,6 +1,5 @@
+use crate::packed;
 use core::convert::TryFrom;
-
-use molecule::prelude::Byte;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ScriptHashType {
@@ -8,15 +7,21 @@ pub enum ScriptHashType {
     Type = 1,
 }
 
-impl Into<u8> for ScriptHashType {
-    fn into(self) -> u8 {
-        self as u8
+impl Into<packed::Byte> for ScriptHashType {
+    fn into(self) -> packed::Byte {
+        (self as u8).into()
     }
 }
 
-impl Into<Byte> for ScriptHashType {
-    fn into(self) -> Byte {
-        (self as u8).into()
+impl TryFrom<packed::Byte> for ScriptHashType {
+    type Error = u8;
+
+    fn try_from(v: packed::Byte) -> Result<Self, Self::Error> {
+        match Into::<u8>::into(v) {
+            0 => Ok(ScriptHashType::Data),
+            1 => Ok(ScriptHashType::Type),
+            n => Err(n),
+        }
     }
 }
 

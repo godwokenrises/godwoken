@@ -3,7 +3,7 @@ use crate::sudt::build_l2_sudt_script;
 use crate::types::RunResult;
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, error::Error as StateError,
-    merkle_utils::calculate_compacted_account_root, state::State, H256,
+    merkle_utils::calculate_compacted_account_root, state::State, CKB_SUDT_SCRIPT_ARGS, H256,
 };
 use gw_types::{
     bytes::Bytes,
@@ -75,22 +75,26 @@ impl<S: State + CodeStore> StateExt for S {
             // mint CKB
             let capacity: u64 = request.capacity().unpack();
             self.mint_sudt(CKB_SUDT_ACCOUNT_ID, id, capacity.into())?;
-            // find or create Simple UDT account
-            let l2_sudt_script = build_l2_sudt_script(request.sudt_script_hash().unpack());
-            let l2_sudt_script_hash: [u8; 32] = l2_sudt_script.hash();
-            let sudt_id = match self.get_account_id_by_script_hash(&l2_sudt_script_hash.into())? {
-                Some(id) => id,
-                None => {
-                    self.insert_script(l2_sudt_script_hash.into(), l2_sudt_script);
-                    self.create_account(l2_sudt_script_hash.into())?
+            let sudt_script_hash = request.sudt_script_hash().unpack();
+            if sudt_script_hash != CKB_SUDT_SCRIPT_ARGS {
+                // find or create Simple UDT account
+                let l2_sudt_script = build_l2_sudt_script(sudt_script_hash);
+                let l2_sudt_script_hash: [u8; 32] = l2_sudt_script.hash();
+                let sudt_id =
+                    match self.get_account_id_by_script_hash(&l2_sudt_script_hash.into())? {
+                        Some(id) => id,
+                        None => {
+                            self.insert_script(l2_sudt_script_hash.into(), l2_sudt_script);
+                            self.create_account(l2_sudt_script_hash.into())?
+                        }
+                    };
+                // prevent fake CKB SUDT, the caller should filter these invalid depositions
+                if sudt_id == CKB_SUDT_ACCOUNT_ID {
+                    return Err(ValidateError::InvalidSUDTOperation.into());
                 }
-            };
-            // prevent fake CKB SUDT, the caller should filter these invalid depositions
-            if sudt_id == CKB_SUDT_ACCOUNT_ID {
-                return Err(ValidateError::InvalidSUDTOperation.into());
+                // mint SUDT
+                self.mint_sudt(sudt_id, id, request.amount().unpack())?;
             }
-            // mint SUDT
-            self.mint_sudt(sudt_id, id, request.amount().unpack())?;
         }
 
         Ok(())

@@ -13,6 +13,8 @@ cfg_if::cfg_if! {
             MerkleProof,
             #[error("Missing key error")]
             MissingKey,
+            #[error("Store error")]
+            Store,
         }
     } else {
         #[derive(Debug, Eq, PartialEq, Clone)]
@@ -21,6 +23,7 @@ cfg_if::cfg_if! {
             AmountOverflow,
             MerkleProof,
             MissingKey,
+            Store,
         }
     }
 }

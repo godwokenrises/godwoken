@@ -7,10 +7,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+gw-db = { path = "../db" }
 gw-types = { path = "../types" }
 gw-config = { path = "../config" }
 gw-common = { path = "../common" }
 gw-generator = { path = "../generator" }
-ckb-types = "0.37.0"
 anyhow = "1.0"
+thiserror = "1.0"
 parking_lot = "0.11"

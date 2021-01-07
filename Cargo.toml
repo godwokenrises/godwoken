@@ -4,6 +4,7 @@ members = [
   "crates/config",
   "crates/common",
   "crates/generator",
+  "crates/db",
   "crates/store",
   "crates/types",
   "crates/jsonrpc-types",

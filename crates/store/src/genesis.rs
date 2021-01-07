@@ -1,16 +1,13 @@
-use crate::Store;
-use anyhow::{anyhow, Result};
+use crate::{transaction::StoreTransaction, Store};
+use anyhow::Result;
 use gw_common::{
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
-    smt::{default_store::DefaultStore, Store as SMTStore, H256, SMT},
+    smt::{default_store::DefaultStore, H256, SMT},
     state::State,
     CKB_SUDT_SCRIPT_ARGS, CKB_SUDT_SCRIPT_HASH,
 };
 use gw_config::GenesisConfig;
-use gw_generator::{
-    backend_manage::{META_CONTRACT_VALIDATOR_CODE_HASH, SUDT_VALIDATOR_CODE_HASH},
-    traits::StateExt,
-};
+use gw_generator::{backend_manage::META_CONTRACT_VALIDATOR_CODE_HASH, traits::StateExt};
 use gw_types::{
     core::Status,
     packed::{
@@ -21,8 +18,9 @@ use gw_types::{
 
 /// Build genesis block
 pub fn build_genesis(config: &GenesisConfig) -> Result<GenesisWithGlobalState> {
-    let mut store: Store<DefaultStore<H256>> = Store::default();
-    build_genesis_from_store(&mut store, config)
+    let store = Store::open_tmp()?;
+    let mut db = store.begin_transaction();
+    build_genesis_from_store(&mut db, config)
 }
 
 pub struct GenesisWithGlobalState {
@@ -30,19 +28,22 @@ pub struct GenesisWithGlobalState {
     pub global_state: GlobalState,
 }
 
-fn build_genesis_from_store<S: SMTStore<H256>>(
-    store: &mut Store<S>,
+/// build genesis from store
+/// This function initialize db to genesis state
+pub fn build_genesis_from_store(
+    db: &StoreTransaction,
     config: &GenesisConfig,
 ) -> Result<GenesisWithGlobalState> {
-    let root = store.calculate_root()?;
-    if !root.is_zero() {
-        return Err(anyhow!("initial state root must be ZERO"));
-    }
+    // initialize store
+    db.set_account_smt_root(H256::zero())?;
+    db.set_block_smt_root(H256::zero())?;
+    let mut tree = db.account_state_tree()?;
+    tree.set_account_count(0)?;
 
     // create a reserved account
     // this account is reserved for special use
     // for example: send a tx to reserved account to create a new contract account
-    let reserved_id = store.create_account_from_script(
+    let reserved_id = tree.create_account_from_script(
         Script::new_builder()
             .code_hash({
                 let code_hash: [u8; 32] = (*META_CONTRACT_VALIDATOR_CODE_HASH).into();
@@ -56,19 +57,13 @@ fn build_genesis_from_store<S: SMTStore<H256>>(
     );
 
     // setup CKB simple UDT contract
-    let ckb_sudt_script = Script::new_builder()
-        .code_hash({
-            let code_hash: [u8; 32] = (*SUDT_VALIDATOR_CODE_HASH).into();
-            code_hash.pack()
-        })
-        .args(CKB_SUDT_SCRIPT_ARGS.to_vec().pack())
-        .build();
+    let ckb_sudt_script = gw_generator::sudt::build_l2_sudt_script(CKB_SUDT_SCRIPT_ARGS.into());
     assert_eq!(
         ckb_sudt_script.hash(),
         CKB_SUDT_SCRIPT_HASH,
         "ckb simple UDT script hash"
     );
-    let ckb_sudt_id = store.create_account_from_script(ckb_sudt_script)?;
+    let ckb_sudt_id = tree.create_account_from_script(ckb_sudt_script)?;
     assert_eq!(
         ckb_sudt_id, CKB_SUDT_ACCOUNT_ID,
         "ckb simple UDT account id"
@@ -76,8 +71,8 @@ fn build_genesis_from_store<S: SMTStore<H256>>(
 
     // calculate post state
     let post_account = {
-        let root = store.calculate_root()?;
-        let count = store.get_account_count()?;
+        let root = tree.calculate_root()?;
+        let count = tree.get_account_count()?;
         let root: [u8; 32] = root.into();
         AccountMerkleState::new_builder()
             .merkle_root(root.pack())
@@ -124,21 +119,29 @@ fn build_genesis_from_store<S: SMTStore<H256>>(
             .status((Status::Running as u8).into())
             .build()
     };
-    store.set_tip_global_state(global_state.clone())?;
+    db.set_block_smt_root(global_state.block().merkle_root().unpack())?;
     Ok(GenesisWithGlobalState {
         genesis,
         global_state,
     })
 }
 
-impl<S: SMTStore<H256>> Store<S> {
-    pub fn init_genesis(&mut self, config: &GenesisConfig, header: HeaderInfo) -> Result<()> {
+impl Store {
+    pub fn init_genesis(&self, config: &GenesisConfig, header: HeaderInfo) -> Result<()> {
+        let mut db = self.begin_transaction();
         let GenesisWithGlobalState {
             genesis,
-            global_state: _,
-        } = build_genesis_from_store(self, config)?;
-        self.insert_block(genesis.clone(), header, Vec::new())?;
-        self.attach_block(genesis)?;
+            global_state,
+        } = build_genesis_from_store(&mut db, config)?;
+        db.insert_block(
+            genesis.clone(),
+            header,
+            global_state,
+            Vec::new(),
+            Vec::new(),
+        )?;
+        db.attach_block(genesis)?;
+        db.commit()?;
         Ok(())
     }
 }
