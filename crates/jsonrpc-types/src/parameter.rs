@@ -7,7 +7,7 @@ use gw_types::{core, packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::godwoken::{CancelChallenge, ChallengeContext, TxReceipt};
+use crate::godwoken::{CancelChallenge, ChallengeContext, LogItem, TxReceipt};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
@@ -440,6 +440,26 @@ impl From<chain::ProduceBlockResult> for ProduceBlockResult {
     }
 }
 
+impl From<LogItem> for gw_generator::LogItem {
+    fn from(json: LogItem) -> gw_generator::LogItem {
+        let LogItem { account_id, data } = json;
+        gw_generator::LogItem {
+            account_id: account_id.value(),
+            data: data.as_bytes().to_vec(),
+        }
+    }
+}
+
+impl From<gw_generator::LogItem> for LogItem {
+    fn from(item: gw_generator::LogItem) -> LogItem {
+        let gw_generator::LogItem { account_id, data } = item;
+        LogItem {
+            account_id: Uint32::from(account_id),
+            data: JsonBytes::from_vec(data),
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct RunResult {
@@ -450,6 +470,7 @@ pub struct RunResult {
     pub new_scripts: HashMap<H256, JsonBytes>,
     pub write_data: HashMap<H256, JsonBytes>,
     pub read_data: HashMap<H256, Uint32>,
+    pub logs: Vec<LogItem>,
 }
 
 impl From<RunResult> for gw_generator::RunResult {
@@ -462,6 +483,7 @@ impl From<RunResult> for gw_generator::RunResult {
             new_scripts,
             write_data,
             read_data,
+            logs,
         } = json;
         let mut to_read_values: HashMap<gw_common::H256, gw_common::H256> = HashMap::new();
         for (k, v) in read_values.iter() {
@@ -491,6 +513,7 @@ impl From<RunResult> for gw_generator::RunResult {
                 (key, v as usize)
             })
             .collect();
+        let logs = logs.into_iter().map(|item| item.into()).collect();
         Self {
             read_values: to_read_values,
             write_values: to_write_values,
@@ -499,6 +522,7 @@ impl From<RunResult> for gw_generator::RunResult {
             new_scripts: to_new_scripts,
             write_data: to_write_data,
             read_data,
+            logs,
         }
     }
 }
@@ -513,6 +537,7 @@ impl From<gw_generator::RunResult> for RunResult {
             new_scripts,
             write_data,
             read_data,
+            logs,
         } = run_result;
         let mut to_read_values: HashMap<H256, H256> = HashMap::new();
         for (k, v) in read_values.iter() {
@@ -554,6 +579,7 @@ impl From<gw_generator::RunResult> for RunResult {
                 (key.into(), value.into())
             })
             .collect();
+        let logs = logs.into_iter().map(|item| item.into()).collect();
         Self {
             read_values: to_read_values,
             write_values: to_write_values,
@@ -562,6 +588,7 @@ impl From<gw_generator::RunResult> for RunResult {
             new_scripts: to_new_scripts,
             write_data: to_write_data,
             read_data,
+            logs,
         }
     }
 }

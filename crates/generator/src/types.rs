@@ -1,9 +1,40 @@
 use gw_common::H256;
-use gw_types::packed::{StartChallenge, StartChallengeWitness};
+use gw_types::{
+    bytes::Bytes,
+    packed::{self, StartChallenge, StartChallengeWitness},
+    prelude::*,
+};
 use std::{
     collections::HashMap,
     fmt::{self, Display},
 };
+
+#[derive(Debug, PartialEq, Clone, Eq, Default)]
+pub struct LogItem {
+    pub account_id: u32,
+    pub data: Vec<u8>,
+}
+
+impl From<LogItem> for packed::LogItem {
+    fn from(item: LogItem) -> packed::LogItem {
+        let LogItem { account_id, data } = item;
+        packed::LogItem::new_builder()
+            .account_id(account_id.pack())
+            .data(Bytes::from(data).pack())
+            .build()
+    }
+}
+
+impl From<packed::LogItem> for LogItem {
+    fn from(data: packed::LogItem) -> LogItem {
+        let account_id: u32 = data.account_id().unpack();
+        let data: Bytes = data.data().unpack();
+        LogItem {
+            account_id: account_id,
+            data: data.as_ref().to_vec(),
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Clone, Eq, Default)]
 pub struct RunResult {
@@ -15,6 +46,8 @@ pub struct RunResult {
     pub write_data: HashMap<H256, Vec<u8>>,
     // data hash -> data full size
     pub read_data: HashMap<H256, usize>,
+    // account id -> log data
+    pub logs: Vec<LogItem>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

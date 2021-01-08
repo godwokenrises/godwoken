@@ -85,6 +85,14 @@ impl TxPool {
                     .collect::<Vec<_>>()
                     .pack(),
             )
+            .logs(
+                run_result
+                    .logs
+                    .iter()
+                    .map(|item| item.clone().into())
+                    .collect::<Vec<_>>()
+                    .pack(),
+            )
             .build();
         self.queue.push((tx, receipt));
         Ok(run_result)
