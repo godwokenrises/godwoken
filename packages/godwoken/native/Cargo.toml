@@ -21,6 +21,7 @@ gw-common = { path = "../../../crates/common" }
 gw-generator = { path = "../../../crates/generator" }
 gw-types = { path = "../../../crates/types" }
 gw-config = { path = "../../../crates/config" }
+gw-db = { path = "../../../crates/db" }
 gw-store = { path = "../../../crates/store" }
 gw-jsonrpc-types= { path = "../../../crates/jsonrpc-types" }
 anyhow = "1.0"

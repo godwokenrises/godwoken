@@ -70,8 +70,7 @@ export type Status = "Running" | "Halting";
 
 export interface Config {
   chain: ChainConfig;
-  consensus: ConsensusConfig;
-  rpc: RPC;
+  store: StoreConfig;
   genesis: GenesisConfig;
   aggregator?: AggregatorConfig;
 }
@@ -80,12 +79,8 @@ export interface ChainConfig {
   rollup_type_script: Script;
 }
 
-export interface ConsensusConfig {
-  aggregator_id: HexNumber;
-}
-
-export interface RPC {
-  listen: string;
+export interface StoreConfig {
+  path: string;
 }
 
 export interface GenesisConfig {
@@ -94,10 +89,7 @@ export interface GenesisConfig {
 
 export interface AggregatorConfig {
   account_id: HexNumber;
-  signer: SignerConfig;
 }
-
-export interface SignerConfig {}
 
 export interface RunResult {
   read_values: Record<Hash, Hash>;

@@ -374,15 +374,15 @@ const run = async () => {
       type: "genesis",
       headerInfo: new Reader(packedHeaderInfo).serializeJson(),
     },
-    aggregatorConfig: undefined as any,
+    consensusConfig: undefined as any,
   };
   if (poaConfig) {
-    runnerConfig.aggregatorConfig = {
+    runnerConfig.consensusConfig = {
       type: "poa",
       config: poaConfig,
     };
   } else {
-    runnerConfig.aggregatorConfig = { type: "always_success" };
+    runnerConfig.consensusConfig = { type: "always_success" };
   }
 
   writeFileSync(

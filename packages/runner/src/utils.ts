@@ -43,9 +43,11 @@ export interface GenesisStoreConfig {
   headerInfo: HexString;
 }
 
-export type StoreConfig = GenesisStoreConfig;
+export interface RPCConfig {
+  listen: string;
+}
 
-export interface AlwaysSuccessAggregatorConfig {
+export interface AlwaysSuccessConsensusConfig {
   type: "always_success";
 }
 
@@ -54,13 +56,14 @@ export interface PoAConfig {
   config: poaConfigModule.Config;
 }
 
-export type AggregatorConfig = AlwaysSuccessAggregatorConfig | PoAConfig;
+export type ConsensusConfig = AlwaysSuccessConsensusConfig | PoAConfig;
 
 export interface RunnerConfig {
   deploymentConfig: DeploymentConfig;
   godwokenConfig: Config;
-  storeConfig: StoreConfig;
-  aggregatorConfig: AggregatorConfig;
+  rpc: RPCConfig;
+  genesisConfig: GenesisStoreConfig;
+  consensusConfig: ConsensusConfig;
 }
 
 export async function scanDepositionCellsInCommittedL2Block(

@@ -6,6 +6,7 @@ use gw_chain::{
 };
 use gw_common::{state::State, H256};
 use gw_config::{ChainConfig, Config, GenesisConfig};
+use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::{Backend, BackendManage},
@@ -65,7 +66,12 @@ declare_types! {
             let js_header_info = cx.argument::<JsArrayBuffer>(1)?;
             let js_header_info_slice = cx.borrow(&js_header_info, |data| { data.as_slice::<u8>() });
             let header_info = packed::HeaderInfo::from_slice(js_header_info_slice).expect("Constructing header info");
-            let store = Store::open_tmp().expect("open store");
+            let db_config = DBConfig {
+                path: config.store.path.clone(),
+                ..Default::default()
+            };
+            let db = RocksDB::open(&db_config, COLUMNS);
+            let store = Store::new(db);
             store.init_genesis(&config.genesis, header_info).expect("Initializing store");
             let generator = Arc::new(build_generator(&config.chain));
             let tx_pool = {

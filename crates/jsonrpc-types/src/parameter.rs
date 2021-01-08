@@ -5,7 +5,7 @@ use gw_chain::{chain, next_block_context};
 use gw_types::{core, packed, prelude::*};
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use crate::godwoken::{CancelChallenge, ChallengeContext, TxReceipt};
 
@@ -305,8 +305,7 @@ impl From<core::Status> for Status {
 #[serde(rename_all = "snake_case")]
 pub struct Config {
     pub chain: ChainConfig,
-    pub consensus: ConsensusConfig,
-    pub rpc: RPC,
+    pub store: StoreConfig,
     pub genesis: GenesisConfig,
     pub aggregator: Option<AggregatorConfig>,
 }
@@ -315,8 +314,7 @@ impl From<Config> for gw_config::Config {
     fn from(json: Config) -> gw_config::Config {
         Self {
             chain: json.chain.into(),
-            consensus: json.consensus.into(),
-            rpc: json.rpc.into(),
+            store: json.store.into(),
             genesis: json.genesis.into(),
             aggregator: match json.aggregator {
                 Some(aggregator) => Some(aggregator.into()),
@@ -329,8 +327,7 @@ impl From<gw_config::Config> for Config {
     fn from(config: gw_config::Config) -> Config {
         Self {
             chain: config.chain.into(),
-            consensus: config.consensus.into(),
-            rpc: config.rpc.into(),
+            store: config.store.into(),
             genesis: config.genesis.into(),
             aggregator: match config.aggregator {
                 Some(aggregator) => Some(aggregator.into()),
@@ -344,14 +341,12 @@ impl From<gw_config::Config> for Config {
 #[serde(rename_all = "snake_case")]
 pub struct AggregatorConfig {
     pub account_id: Uint32,
-    pub signer: SignerConfig,
 }
 
 impl From<AggregatorConfig> for gw_config::AggregatorConfig {
     fn from(json: AggregatorConfig) -> gw_config::AggregatorConfig {
         Self {
             account_id: json.account_id.into(),
-            signer: json.signer.into(),
         }
     }
 }
@@ -359,43 +354,6 @@ impl From<gw_config::AggregatorConfig> for AggregatorConfig {
     fn from(aggregator_config: gw_config::AggregatorConfig) -> AggregatorConfig {
         Self {
             account_id: aggregator_config.account_id.into(),
-            signer: aggregator_config.signer.into(),
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct SignerConfig {}
-
-impl From<SignerConfig> for gw_config::SignerConfig {
-    fn from(_json: SignerConfig) -> gw_config::SignerConfig {
-        Self {}
-    }
-}
-impl From<gw_config::SignerConfig> for SignerConfig {
-    fn from(_signer_config: gw_config::SignerConfig) -> SignerConfig {
-        Self {}
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct ConsensusConfig {
-    pub aggregator_id: Uint32,
-}
-
-impl From<ConsensusConfig> for gw_config::ConsensusConfig {
-    fn from(json: ConsensusConfig) -> gw_config::ConsensusConfig {
-        Self {
-            aggregator_id: json.aggregator_id.into(),
-        }
-    }
-}
-impl From<gw_config::ConsensusConfig> for ConsensusConfig {
-    fn from(consensus_config: gw_config::ConsensusConfig) -> ConsensusConfig {
-        Self {
-            aggregator_id: consensus_config.aggregator_id.into(),
         }
     }
 }
@@ -424,6 +382,27 @@ impl From<gw_config::GenesisConfig> for GenesisConfig {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
+pub struct StoreConfig {
+    pub path: PathBuf,
+}
+
+impl From<StoreConfig> for gw_config::StoreConfig {
+    fn from(json: StoreConfig) -> gw_config::StoreConfig {
+        Self {
+            path: json.path.into(),
+        }
+    }
+}
+impl From<gw_config::StoreConfig> for StoreConfig {
+    fn from(config: gw_config::StoreConfig) -> StoreConfig {
+        Self {
+            path: config.path.into(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
 pub struct ChainConfig {
     pub rollup_type_script: JsonScript,
 }
@@ -440,25 +419,6 @@ impl From<gw_config::ChainConfig> for ChainConfig {
         Self {
             rollup_type_script: chain_config.rollup_type_script.into(),
         }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct RPC {
-    pub listen: String,
-}
-
-impl From<RPC> for gw_config::RPC {
-    fn from(json: RPC) -> gw_config::RPC {
-        Self {
-            listen: json.listen,
-        }
-    }
-}
-impl From<gw_config::RPC> for RPC {
-    fn from(rpc: gw_config::RPC) -> RPC {
-        Self { listen: rpc.listen }
     }
 }
 

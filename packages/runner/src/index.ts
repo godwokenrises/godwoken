@@ -33,21 +33,21 @@ const runnerConfig: RunnerConfig = deepFreeze(
   JSON.parse(readFileSync(program.configFile, "utf8"))
 );
 
-const rpc = new RPC(runnerConfig.godwokenConfig.rpc.listen);
+const rpc = new RPC(runnerConfig.rpc.listen);
 const knex = Knex({
   client: "postgresql",
   connection: program.sqlConnection,
 });
-const indexer = new Indexer(runnerConfig.godwokenConfig.rpc.listen, knex);
+const indexer = new Indexer(runnerConfig.rpc.listen, knex);
 indexer.startForever();
 
-if (runnerConfig.storeConfig.type !== "genesis") {
+if (runnerConfig.genesisConfig.type !== "genesis") {
   throw new Error("Only genesis store config is supported now!");
 }
 
 const chainService = new ChainService(
   runnerConfig.godwokenConfig,
-  runnerConfig.storeConfig.headerInfo
+  runnerConfig.genesisConfig.headerInfo
 );
 
 function defaultLogger(level: Level, message: string) {
