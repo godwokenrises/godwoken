@@ -5,6 +5,7 @@ import {
   values,
   Cell,
   CellDep,
+  DepType,
   Hash,
   HexNumber,
   HexString,
@@ -28,6 +29,7 @@ import {
   DeploymentConfig,
   schemas,
   types,
+  extensions,
 } from "@ckb-godwoken/base";
 import {
   DepositionEntry,
@@ -41,6 +43,7 @@ import { AlwaysSuccessGenerator } from "./locks";
 import { generator as poaGeneratorModule } from "clerkb-lumos-integrator";
 import * as secp256k1 from "secp256k1";
 import { exit } from "process";
+import { CanCastToArrayBuffer } from "@ckb-godwoken/base/schemas/godwoken";
 
 function isRollupTransction(
   tx: Transaction,
@@ -58,6 +61,19 @@ function isRollupTransction(
     }
   }
   return false;
+}
+
+function outPointsUnpacker(data: CanCastToArrayBuffer) {
+  const vec = new extensions.OutPointVec(data);
+  const results = [];
+  for (let i = 0; i < vec.length(); i++) {
+    const item = vec.indexAt(i);
+    results.push({
+      tx_hash: new Reader(item.getTxHash().raw()).serializeJson(),
+      index: "0x" + BigInt(item.getIndex().toLittleEndianUint32()).toString(16),
+    });
+  }
+  return results;
 }
 
 export class Runner {
@@ -315,10 +331,24 @@ export class Runner {
     const tx: Transaction = (
       await this.rpc.get_transaction(cell.out_point!.tx_hash)
     ).transaction;
+
+    const cellDeps = [];
     for (const cellDep of tx.cell_deps) {
       if (cellDep.dep_type === "dep_group") {
-        throw new Error("TODO: dep group support!");
+        const groupCell = await this.rpc.get_live_cell(cellDep.out_point, true);
+
+        for (const out_point of outPointsUnpacker(
+          new Reader(groupCell.cell.data.content).toArrayBuffer()
+        )) {
+          const dep_type: DepType = "code";
+          cellDeps.push({ dep_type, out_point });
+        }
+      } else {
+        cellDeps.push(cellDep);
       }
+    }
+
+    for (const cellDep of cellDeps) {
       const codeCell = await this.rpc.get_live_cell(cellDep.out_point, true);
       if (cell.cell_output.type!.hash_type == "data") {
         if (codeCell.cell.data.hash === cell.cell_output.type!.code_hash) {
@@ -522,7 +552,10 @@ export class Runner {
           const hash = await this.rpc.send_transaction(tx);
           this.logger("info", `Submitted l2 block in ${hash}`);
         } catch (e) {
-          this.logger("error", `Error submiting block: ${e}`);
+          this.logger(
+            "error",
+            `Error submiting block: ${e} transaction: ${tx}`
+          );
           this.lockGenerator!.cancelIssueBlock().catch((e) => {
             console.error(`Error cancelling block: ${e}`);
           });
