@@ -1,6 +1,6 @@
 use ckb_vm::Error as VMError;
 use gw_common::{error::Error as StateError, sparse_merkle_tree::error::Error as SMTError};
-use gw_types::{packed::StartChallenge, prelude::*};
+use gw_types::packed::StartChallenge;
 use thiserror::Error;
 
 /// Error
@@ -104,20 +104,12 @@ impl From<StateError> for TransactionError {
 }
 
 /// Transaction error with challenge context
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
 #[error("{error}")]
 pub struct TransactionErrorWithContext {
     pub context: StartChallenge,
     pub error: TransactionError,
 }
-
-impl PartialEq for TransactionErrorWithContext {
-    fn eq(&self, other: &Self) -> bool {
-        self.context.as_slice() == other.context.as_slice() && self.error == other.error
-    }
-}
-
-impl Eq for TransactionErrorWithContext {}
 
 impl TransactionErrorWithContext {
     pub fn new(context: StartChallenge, error: TransactionError) -> Self {

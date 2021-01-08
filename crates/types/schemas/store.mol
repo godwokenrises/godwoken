@@ -1,0 +1,32 @@
+import blockchain;
+
+struct NumberHash {
+    number:         Uint64,
+    block_hash:     Byte32,
+}
+
+array TransactionKey [byte; 36];
+
+struct TransactionInfo {
+    block_number:   Uint64,
+    key:            TransactionKey,
+}
+
+table TxReceipt {
+    tx_witness_hash: Byte32,
+    // hash(account_root|account_count)
+    compacted_post_account_root: Byte32,
+    read_data_hashes: Byte32Vec,
+}
+
+struct SMTBranchNode {
+    fork_height: byte,
+    key: Byte32,
+    node: Byte32,
+    sibling: Byte32,
+}
+
+struct SMTLeafNode {
+    key: Byte32,
+    value: Byte32,
+}

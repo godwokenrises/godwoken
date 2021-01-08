@@ -1,22 +1,17 @@
 use crate::next_block_context::NextBlockContext;
 use anyhow::{anyhow, Result};
-use gw_common::{
-    blake2b::new_blake2b,
-    smt::{Store, H256 as SMTH256},
-    state::State,
-    H256,
-};
+use gw_common::{blake2b::new_blake2b, state::State, H256};
 use gw_generator::{
     error::{LockAlgorithmError, ValidateError},
     traits::{CodeStore, StateExt},
-    Generator, RunResult, TxReceipt,
+    Generator, RunResult,
 };
 use gw_store::OverlayStore;
 use gw_types::{
-    packed::{BlockInfo, DepositionRequest, L2Block, L2Transaction, WithdrawalRequest},
+    packed::{BlockInfo, DepositionRequest, L2Block, L2Transaction, TxReceipt, WithdrawalRequest},
     prelude::*,
 };
-use std::{cmp::min, collections::HashSet};
+use std::{cmp::min, collections::HashSet, sync::Arc};
 
 /// MAX mem pool txs
 const MAX_IN_POOL_TXS: usize = 6000;
@@ -29,9 +24,9 @@ const MAX_PACKAGED_WITHDRAWAL: usize = 10;
 const MAX_DATA_BYTES_LIMIT: usize = 25_000;
 
 /// TODO remove txs from pool if a new block already contains txs
-pub struct TxPool<S> {
-    state: OverlayStore<S>,
-    generator: Generator,
+pub struct TxPool {
+    state: OverlayStore,
+    generator: Arc<Generator>,
     queue: Vec<(L2Transaction, TxReceipt)>,
     withdrawal_queue: Vec<WithdrawalRequest>,
     next_block_info: BlockInfo,
@@ -39,10 +34,10 @@ pub struct TxPool<S> {
     rollup_type_script_hash: H256,
 }
 
-impl<S: Store<SMTH256>> TxPool<S> {
+impl TxPool {
     pub fn create(
-        state: OverlayStore<S>,
-        generator: Generator,
+        state: OverlayStore,
+        generator: Arc<Generator>,
         tip: &L2Block,
         nb_ctx: NextBlockContext,
     ) -> Result<Self> {
@@ -63,7 +58,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
     }
 }
 
-impl<S: Store<SMTH256>> TxPool<S> {
+impl TxPool {
     /// Push a layer2 tx into pool
     pub fn push(&mut self, tx: L2Transaction) -> Result<RunResult> {
         if self.queue.len() >= MAX_IN_POOL_TXS {
@@ -77,13 +72,20 @@ impl<S: Store<SMTH256>> TxPool<S> {
         // 2. update state
         self.state.apply_run_result(&run_result)?;
         // 3. push tx to pool
-        let tx_witness_hash = tx.witness_hash().into();
+        let tx_witness_hash = tx.witness_hash();
         let compacted_post_account_root = self.state.calculate_compacted_account_root()?;
-        let receipt = TxReceipt {
-            tx_witness_hash,
-            compacted_post_account_root,
-            read_data_hashes: run_result.read_data.iter().map(|(hash, _)| *hash).collect(),
-        };
+        let receipt = TxReceipt::new_builder()
+            .tx_witness_hash(tx_witness_hash.pack())
+            .compacted_post_account_root(compacted_post_account_root.pack())
+            .read_data_hashes(
+                run_result
+                    .read_data
+                    .iter()
+                    .map(|(hash, _)| *hash)
+                    .collect::<Vec<_>>()
+                    .pack(),
+            )
+            .build();
         self.queue.push((tx, receipt));
         Ok(run_result)
     }
@@ -224,7 +226,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
     pub fn update_tip(
         &mut self,
         tip: &L2Block,
-        state: OverlayStore<S>,
+        state: OverlayStore,
         nb_ctx: NextBlockContext,
     ) -> Result<()> {
         self.state = state;
@@ -247,7 +249,7 @@ impl<S: Store<SMTH256>> TxPool<S> {
         let queue: Vec<_> = self.queue.drain(..).collect();
         for (tx, _receipt) in queue {
             if self.push(tx.clone()).is_err() {
-                let tx_hash: ckb_types::H256 = tx.hash().into();
+                let tx_hash: ckb_fixed_hash::H256 = tx.hash().into();
                 eprintln!("TxPool: drop tx {}", tx_hash);
             }
         }

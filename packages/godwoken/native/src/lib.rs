@@ -1,5 +1,4 @@
 use anyhow::Result;
-use ckb_types::prelude::Unpack as CkbUnpack;
 use gw_chain::{
     chain::{Chain, ProduceBlockParam, ProduceBlockResult, SyncEvent, SyncParam},
     next_block_context::NextBlockContext,
@@ -49,8 +48,7 @@ fn build_generator(chain_config: &ChainConfig) -> Generator {
     ]);
     // TODO: add a real signature verifying implementation later
     account_lock_manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
-    let rollup_type_script_hash: [u8; 32] =
-        chain_config.rollup_type_script.calc_script_hash().unpack();
+    let rollup_type_script_hash: [u8; 32] = chain_config.rollup_type_script.hash();
     Generator::new(
         backend_manage,
         account_lock_manage,
@@ -67,8 +65,9 @@ declare_types! {
             let js_header_info = cx.argument::<JsArrayBuffer>(1)?;
             let js_header_info_slice = cx.borrow(&js_header_info, |data| { data.as_slice::<u8>() });
             let header_info = packed::HeaderInfo::from_slice(js_header_info_slice).expect("Constructing header info");
-            let mut store = Store::default();
+            let store = Store::open_tmp().expect("open store");
             store.init_genesis(&config.genesis, header_info).expect("Initializing store");
+            let generator = Arc::new(build_generator(&config.chain));
             let tx_pool = {
                 let nb_ctx = NextBlockContext {
                     aggregator_id: 0u32,
@@ -76,12 +75,12 @@ declare_types! {
                 };
                 let tip = packed::L2Block::default();
                 let tx_pool = TxPool::create(
-                    store.new_overlay().expect("State new overlay"), build_generator(&config.chain),
+                    store.new_overlay().expect("State new overlay"), Arc::clone(&generator),
                     &tip, nb_ctx).expect("Creating TxPool");
                 Arc::new(Mutex::new(tx_pool))
             };
             let chain_result: Result<Chain> = Chain::create(
-                config.clone().chain, store, build_generator(&config.chain), Arc::clone(&tx_pool));
+                config.clone().chain, store, generator, Arc::clone(&tx_pool));
             match chain_result {
                 Ok(chain) => Ok(NativeChain {
                     config: config,
@@ -119,7 +118,7 @@ declare_types! {
             let produce_block_param: ProduceBlockParam = produce_block_param_jsonrpc.into();
             let produce_block_result: Result<ProduceBlockResult> =
                 cx.borrow_mut(&mut this, |data| {
-                    let mut chain = data.chain.write().unwrap();
+                    let chain = data.chain.write().unwrap();
                     let produce_block_result = chain.produce_block(produce_block_param);
                     produce_block_result
                 });
@@ -210,7 +209,9 @@ declare_types! {
             let sudt_id = cx.argument::<JsNumber>(1)?.value() as u32;
             let balance = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_sudt_balance(sudt_id, account_id)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_sudt_balance(sudt_id, account_id)
             });
             match balance {
                 Ok(value) => {
@@ -233,7 +234,9 @@ declare_types! {
              });
             let get_raw_result = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_value(account_id, &raw_key)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_value(account_id, &raw_key)
             });
             match get_raw_result {
                 Ok(value) => {
@@ -257,7 +260,9 @@ declare_types! {
              });
             let get_raw_result = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_account_id_by_script_hash(&raw_key)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_account_id_by_script_hash(&raw_key)
             });
             match get_raw_result {
                 Ok(Some(id)) => Ok(cx.number(id).upcast()),
@@ -271,7 +276,9 @@ declare_types! {
             let account_id = cx.argument::<JsNumber>(0)?.value() as u32;
             let nonce = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_nonce(account_id)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_nonce(account_id)
             });
             match nonce {
                 Ok(value) => Ok(cx.number(value).upcast()),
@@ -284,7 +291,9 @@ declare_types! {
             let account_id = cx.argument::<JsNumber>(0)?.value() as u32;
             let script_hash = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_script_hash(account_id)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_script_hash(account_id)
             });
             match script_hash {
                 Ok(value) => {
@@ -308,7 +317,9 @@ declare_types! {
              });
             let script = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_script(&raw_key)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_script(&raw_key)
             });
             match script {
                 Some(value) => {
@@ -331,7 +342,9 @@ declare_types! {
              });
             let data = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_data_hash(&raw_key)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_data_hash(&raw_key)
             });
             match data {
                 Ok(value) => Ok(cx.boolean(value).upcast()),
@@ -350,7 +363,9 @@ declare_types! {
              });
             let data = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                chain.store.get_data(&raw_key)
+                let db = chain.store.begin_transaction();
+                let tree = db.account_state_tree().unwrap();
+                tree.get_data(&raw_key)
             });
             match data {
                 Some(value) => {

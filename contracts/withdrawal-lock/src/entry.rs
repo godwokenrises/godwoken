@@ -77,7 +77,7 @@ pub fn main() -> Result<(), Error> {
         Some(global_state) => {
             // read merkle proof
             let reverted_block_root: [u8; 32] = global_state.reverted_block_root().unpack();
-            let block_hash = lock_args.withdrawal_block_hash().unpack();
+            let block_hash: H256 = lock_args.withdrawal_block_hash().unpack();
 
             match unlock_args.to_enum() {
                 UnlockWithdrawalUnion::UnlockWithdrawalViaRevert(unlock_args) => {
@@ -88,7 +88,7 @@ pub fn main() -> Result<(), Error> {
                     if !merkle_proof
                         .verify::<Blake2bHasher>(
                             &reverted_block_root.into(),
-                            vec![(block_hash.into(), H256::one())],
+                            vec![(block_hash, H256::one())],
                         )
                         .map_err(|_| Error::MerkleProof)?
                     {

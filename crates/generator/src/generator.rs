@@ -1,4 +1,4 @@
-use crate::{account_lock_manage::AccountLockManage, backend_manage::BackendManage, TxReceipt};
+use crate::{account_lock_manage::AccountLockManage, backend_manage::BackendManage};
 use crate::{
     backend_manage::Backend,
     error::{Error, TransactionError, TransactionErrorWithContext},
@@ -19,7 +19,7 @@ use gw_types::{
     core::ScriptHashType,
     packed::{
         BlockInfo, DepositionRequest, L2Block, RawL2Block, RawL2Transaction, StartChallenge,
-        WithdrawalRequest,
+        TxReceipt, WithdrawalRequest,
     },
     prelude::*,
 };
@@ -186,15 +186,18 @@ impl Generator {
             state.apply_run_result(&run_result)?;
 
             let compacted_post_account_root = state.calculate_compacted_account_root()?;
-            let tx_receipt = TxReceipt {
-                tx_witness_hash: tx.witness_hash().into(),
-                compacted_post_account_root: compacted_post_account_root.into(),
-                read_data_hashes: run_result
-                    .read_data
-                    .into_iter()
-                    .map(|(hash, _)| hash.into())
-                    .collect(),
-            };
+            let tx_receipt = TxReceipt::new_builder()
+                .tx_witness_hash(tx.witness_hash().pack())
+                .compacted_post_account_root(compacted_post_account_root.pack())
+                .read_data_hashes(
+                    run_result
+                        .read_data
+                        .into_iter()
+                        .map(|(hash, _)| hash.pack())
+                        .collect::<Vec<_>>()
+                        .pack(),
+                )
+                .build();
             receipts.push(tx_receipt);
         }
 

@@ -12,7 +12,7 @@ gw-config = { path = "../config" }
 gw-common = { path = "../common" }
 gw-generator = { path = "../generator" }
 gw-store = { path = "../store" }
-ckb-types = "0.37.0"
+ckb-fixed-hash = "0.37.0"
 anyhow = "1.0"
 thiserror = "1.0"
 lazy_static = "1.4"

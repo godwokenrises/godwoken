@@ -4,7 +4,7 @@
 use alloc::collections::BTreeMap;
 use gw_common::smt::Blake2bHasher;
 use gw_common::sparse_merkle_tree::{CompiledMerkleProof, H256};
-use gw_common::state::{Error as StateError, State};
+use gw_common::{error::Error as StateError, state::State};
 
 pub struct Context {
     pub number: u64,
@@ -17,7 +17,7 @@ pub struct Context {
 }
 
 impl State for Context {
-    fn get_raw(&self, raw_key: &[u8; 32]) -> Result<[u8; 32], StateError> {
+    fn get_raw(&self, raw_key: &H256) -> Result<H256, StateError> {
         let v = self
             .kv_pairs
             .get(&(*raw_key).into())
@@ -26,7 +26,7 @@ impl State for Context {
         Ok(v.into())
     }
 
-    fn update_raw(&mut self, key: [u8; 32], value: [u8; 32]) -> Result<(), StateError> {
+    fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
         self.kv_pairs.insert(key.into(), value.into());
         Ok(())
     }
@@ -40,7 +40,7 @@ impl State for Context {
         Ok(())
     }
 
-    fn calculate_root(&self) -> Result<[u8; 32], StateError> {
+    fn calculate_root(&self) -> Result<H256, StateError> {
         let root = self
             .kv_merkle_proof
             .compute_root::<Blake2bHasher>(self.kv_pairs.iter().map(|(k, v)| (*k, *v)).collect())

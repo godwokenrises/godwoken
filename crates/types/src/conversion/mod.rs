@@ -5,3 +5,5 @@ mod blockchain;
 mod ckb_h256;
 mod godwoken;
 mod primitive;
+mod smt_h256;
+mod store;
