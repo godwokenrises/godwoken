@@ -131,11 +131,17 @@ impl Store {
         let db = self.begin_transaction();
         Ok(db.get_block_hash_by_number(0)?.is_some())
     }
-    pub fn init_genesis(&self, config: &GenesisConfig, header: HeaderInfo) -> Result<()> {
+    pub fn init_genesis(
+        &self,
+        config: &GenesisConfig,
+        header: HeaderInfo,
+        chain_id: H256,
+    ) -> Result<()> {
         if self.has_genesis()? {
             panic!("The store is already initialized!");
         }
         let mut db = self.begin_transaction();
+        db.setup_chain_id(chain_id)?;
         let GenesisWithGlobalState {
             genesis,
             global_state,

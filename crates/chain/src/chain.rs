@@ -149,6 +149,11 @@ impl Chain {
     ) -> Result<Self> {
         let rollup_type_script: Script = config.rollup_type_script.clone().into();
         let rollup_type_script_hash = rollup_type_script.hash();
+        let chain_id: [u8; 32] = store.get_chain_id()?.into();
+        assert_eq!(
+            chain_id, rollup_type_script_hash,
+            "Database chain_id must equals to rollup_script_hash"
+        );
         let tip = store.get_tip_block()?;
         let last_synced = store
             .get_block_synced_header_info(&tip.hash().into())?

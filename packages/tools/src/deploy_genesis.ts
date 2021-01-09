@@ -375,7 +375,7 @@ const run = async () => {
       headerInfo: new Reader(packedHeaderInfo).serializeJson(),
     },
     rpc: {
-      "listen": "http://127.0.0.1:8114"
+      listen: "http://127.0.0.1:8114",
     },
     consensusConfig: undefined as any,
   };

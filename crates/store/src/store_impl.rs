@@ -8,7 +8,7 @@ use gw_db::{
     schema::{
         Col, COLUMNS, COLUMN_BLOCK, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_META,
         COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION, COLUMN_TRANSACTION_RECEIPT,
-        META_TIP_BLOCK_HASH_KEY,
+        META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
     },
     DBPinnableSlice, RocksDB,
 };
@@ -76,6 +76,16 @@ impl<'a> Store {
         let account_count = tree.get_account_count()?;
         let store = self.clone();
         Ok(OverlayStore::new(root, store, account_count))
+    }
+
+    pub fn get_chain_id(&self) -> Result<H256, Error> {
+        let slice = self
+            .get(COLUMN_META, META_CHAIN_ID_KEY)
+            .expect("must has chain_id");
+        debug_assert_eq!(slice.len(), 32);
+        let mut chain_id = [0u8; 32];
+        chain_id.copy_from_slice(&slice);
+        Ok(chain_id.into())
     }
 
     pub fn get_tip_block_hash(&self) -> Result<H256, Error> {

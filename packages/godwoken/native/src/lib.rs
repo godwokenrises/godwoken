@@ -63,6 +63,7 @@ declare_types! {
             let config_string = cx.argument::<JsString>(0)?.value();
             let jsonrpc_config: parameter::Config = serde_json::from_str(&config_string).expect("Constructing config from string");
             let config: Config = jsonrpc_config.into();
+            let rollup_script_hash = config.chain.rollup_type_script.hash();
             let js_header_info = cx.argument::<JsArrayBuffer>(1)?;
             let js_header_info_slice = cx.borrow(&js_header_info, |data| { data.as_slice::<u8>() });
             let header_info = packed::HeaderInfo::from_slice(js_header_info_slice).expect("Constructing header info");
@@ -73,7 +74,7 @@ declare_types! {
             let db = RocksDB::open(&db_config, COLUMNS);
             let store = Store::new(db);
             if !store.has_genesis().expect("check initialization") {
-                store.init_genesis(&config.genesis, header_info).expect("Initializing store");
+                store.init_genesis(&config.genesis, header_info, rollup_script_hash.into()).expect("Initializing store");
             }
             let generator = Arc::new(build_generator(&config.chain));
             let tx_pool = {
