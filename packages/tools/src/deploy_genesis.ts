@@ -370,19 +370,22 @@ const run = async () => {
   const runnerConfig = {
     deploymentConfig,
     godwokenConfig,
-    storeConfig: {
+    genesisConfig: {
       type: "genesis",
       headerInfo: new Reader(packedHeaderInfo).serializeJson(),
     },
-    aggregatorConfig: undefined as any,
+    rpc: {
+      listen: "http://127.0.0.1:8114",
+    },
+    consensusConfig: undefined as any,
   };
   if (poaConfig) {
-    runnerConfig.aggregatorConfig = {
+    runnerConfig.consensusConfig = {
       type: "poa",
       config: poaConfig,
     };
   } else {
-    runnerConfig.aggregatorConfig = { type: "always_success" };
+    runnerConfig.consensusConfig = { type: "always_success" };
   }
 
   writeFileSync(

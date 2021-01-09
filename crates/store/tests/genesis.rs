@@ -18,7 +18,9 @@ fn test_init_genesis() {
     assert_eq!(genesis_block_hash, GENESIS_BLOCK_HASH);
     let header_info = HeaderInfo::default();
     let store: Store = Store::open_tmp().unwrap();
-    store.init_genesis(&config, header_info).unwrap();
+    store
+        .init_genesis(&config, header_info, H256::zero())
+        .unwrap();
     let db = store.begin_transaction();
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());

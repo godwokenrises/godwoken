@@ -145,11 +145,8 @@ $ cat << EOF > godwoken_config.json
   "genesis": {
     "timestamp": "0x1234"
   },
-  "consensus": {
-    "aggregator_id": "0x0"
-  },
-  "rpc": {
-    "listen": "http://127.0.0.1:8114"
+  "store": {
+    "path": "chain-data"
   }
 }
 EOF

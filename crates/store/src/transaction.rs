@@ -16,7 +16,7 @@ use gw_db::schema::{
     COLUMN_BLOCK_SMT_LEAF, COLUMN_DATA, COLUMN_INDEX, COLUMN_META, COLUMN_SCRIPT,
     COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
     COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY,
-    META_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
+    META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
 };
 use gw_db::{
     error::Error, iter::DBIter, DBIterator, DBVector, IteratorMode, RocksDBTransaction,
@@ -135,6 +135,11 @@ impl StoreTransaction {
             .get_for_update(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &snapshot.inner)
             .expect("db operation should be ok")
             .map(|slice| packed::Byte32Reader::from_slice_should_be_ok(&slice.as_ref()).to_entity())
+    }
+
+    pub fn setup_chain_id(&self, chain_id: H256) -> Result<(), Error> {
+        self.insert_raw(COLUMN_META, META_CHAIN_ID_KEY, chain_id.as_slice())?;
+        Ok(())
     }
 
     pub fn get_block_smt_root(&self) -> Result<H256, Error> {

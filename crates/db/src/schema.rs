@@ -39,6 +39,8 @@ pub const COLUMN_DATA: Col = "15";
 /// Column block deposition requests
 pub const COLUMN_BLOCK_DEPOSITION_REQUESTS: Col = "16";
 
+/// chain id
+pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";
 /// META_TIP_BLOCK_HASH_KEY tracks the latest known best block hash
 pub const META_TIP_BLOCK_HASH_KEY: &[u8] = b"TIP_BLOCK_HASH";
 /// block SMT root

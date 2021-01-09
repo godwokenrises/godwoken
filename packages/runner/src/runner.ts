@@ -120,13 +120,13 @@ export class Runner {
     this.lastBlockNumber = lastSynced.getNumber().toLittleEndianBigUint64();
 
     if (!this._readOnlyMode()) {
-      if (config.aggregatorConfig.type === "poa") {
+      if (config.consensusConfig.type === "poa") {
         this.lockGenerator = new poaGeneratorModule.PoAGenerator(
           this._ckbAddress(),
           this.indexer,
           [config.deploymentConfig.poa_state_dep!],
           (message) => {
-            this.logger("debug", `[aggregator] ${message}`);
+            this.logger("debug", `[consensus] ${message}`);
           }
         );
       } else {

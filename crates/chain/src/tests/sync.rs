@@ -44,7 +44,7 @@ fn setup_chain(rollup_type_script: &Script) -> Chain {
         timestamp,
     };
     store
-        .init_genesis(&genesis_config, genesis_header_info)
+        .init_genesis(&genesis_config, genesis_header_info, rollup_script_hash)
         .unwrap();
     let tip = store.get_tip_block().unwrap();
     let tx_pool = TxPool::create(
