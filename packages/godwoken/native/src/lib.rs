@@ -72,7 +72,9 @@ declare_types! {
             };
             let db = RocksDB::open(&db_config, COLUMNS);
             let store = Store::new(db);
-            store.init_genesis(&config.genesis, header_info).expect("Initializing store");
+            if !store.has_genesis().expect("check initialization") {
+                store.init_genesis(&config.genesis, header_info).expect("Initializing store");
+            }
             let generator = Arc::new(build_generator(&config.chain));
             let tx_pool = {
                 let nb_ctx = NextBlockContext {

@@ -127,7 +127,14 @@ pub fn build_genesis_from_store(
 }
 
 impl Store {
+    pub fn has_genesis(&self) -> Result<bool> {
+        let db = self.begin_transaction();
+        Ok(db.get_block_hash_by_number(0)?.is_some())
+    }
     pub fn init_genesis(&self, config: &GenesisConfig, header: HeaderInfo) -> Result<()> {
+        if self.has_genesis()? {
+            panic!("The store is already initialized!");
+        }
         let mut db = self.begin_transaction();
         let GenesisWithGlobalState {
             genesis,
