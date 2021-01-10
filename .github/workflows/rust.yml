@@ -21,5 +21,12 @@ jobs:
       run: git submodule init && git submodule update -r
     - name: Compile C contracts
       run: cd c && make
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
     - name: Tests
       run: cargo test
