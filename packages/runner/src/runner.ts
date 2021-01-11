@@ -618,17 +618,16 @@ export class Runner {
     }
     this.logger(
       "debug",
-      `Withdrawal requests vector length: ${withdrawalRequestVec.length()}`
+      `Withdrawal requests entries: ${withdrawalRequestVec.length()}`
     );
     // add custodian lock dep
     txSkeleton = txSkeleton.update("cellDeps", (cellDeps) => {
       return cellDeps.push(this.config.deploymentConfig.custodian_lock_dep);
     });
-    // TODO collect all finalized and live custodian cells
     const validCustodianCells = await this._queryValidCustodianCells();
     if (validCustodianCells.length === 0) {
-      this.logger("error", "No valid custodian cells found!");
-      throw new Error("No valid custodian cells found!");
+      this.logger("debug", "No valid custodian cells found yet!");
+      throw new Error("No valid custodian cells found yet!");
     }
     const deposition_block_hash = validCustodianCells[0].block_hash!;
     const deposition_block_number = validCustodianCells[0].block_number!;
@@ -783,6 +782,10 @@ export class Runner {
         }
       }
       if (inputSudtAmountSum < targetSudtAmount) {
+        this.logger(
+          "debug",
+          `Target sudt amount: ${targetSudtAmount}, available sudt amount: ${inputSudtAmountSum}`
+        );
         throw new Error("Insufficient sudt amount in valid custodian cells");
       }
       // build sudt change custodian cell
@@ -813,88 +816,145 @@ export class Runner {
         return outputs.push(sudtChangeCustodian);
       });
     }
+    // CKB collected for sudtWithdrawalAssets happens to cover all the outputs cell's capacity
     if (
       BigInt(inputCkbCapacitySum) ===
       BigInt(ckbWithdrawalCapacity) +
         BigInt(outputCkbCapacitySumForSudtCustodianCells)
     ) {
-      // so lucky with it, just return
       return txSkeleton;
     }
-    // build ckb change custodian cell
-    const custodianLock: Script = {
-      code_hash: this.config.deploymentConfig.custodian_lock.code_hash,
-      hash_type: this.config.deploymentConfig.custodian_lock.hash_type,
-      args: this._packCustodianLockArgs(buildDefaultCustodianLockArgs()),
-    };
-    let ckbChangeCustodian: Cell = {
-      cell_output: {
-        lock: custodianLock,
-        type: undefined,
-        capacity: "0x0",
-      },
-      data: "0x",
-    };
-    const minimalCapacity = minimalCellCapacity(ckbChangeCustodian);
-    const changeCapacity =
-      BigInt(inputCkbCapacitySum) -
-      BigInt(ckbWithdrawalCapacity) -
-      BigInt(outputCkbCapacitySumForSudtCustodianCells);
-    if (BigInt(changeCapacity) >= BigInt(minimalCapacity)) {
-      // With enough input ckb capacity to build a minimal change cell
+    // Collect more CKB capacity
+    if (
+      BigInt(inputCkbCapacitySum) <
+      BigInt(ckbWithdrawalCapacity) +
+        BigInt(outputCkbCapacitySumForSudtCustodianCells)
+    ) {
+      for (const cell of validCustodianCells) {
+        if (!cell.cell_output.type) {
+          const key = getInputKey(cell);
+          if (previousInputs.has(key)) {
+            continue;
+          }
+          previousInputs.add(key);
+          const inputCkbCapacity = BigInt(cell.cell_output.capacity);
+          inputCkbCapacitySum += inputCkbCapacity;
+          txSkeleton = txSkeleton.update("inputs", (inputs) => {
+            return inputs.push(cell);
+          });
+          if (
+            BigInt(inputCkbCapacitySum) >=
+            BigInt(ckbWithdrawalCapacity) +
+              BigInt(outputCkbCapacitySumForSudtCustodianCells)
+          ) {
+            break;
+          }
+        }
+      }
+    }
+    if (
+      BigInt(inputCkbCapacitySum) ===
+      BigInt(ckbWithdrawalCapacity) +
+        BigInt(outputCkbCapacitySumForSudtCustodianCells)
+    ) {
+      // collect exact CKB capcity to cover all the outputs cells' Capacity
+      return txSkeleton;
+    } else if (
+      BigInt(inputCkbCapacitySum) <
+      BigInt(ckbWithdrawalCapacity) +
+        BigInt(outputCkbCapacitySumForSudtCustodianCells)
+    ) {
+      // If collected CKB capacity is less than outputs cells capacity, throw an error
+      this.logger(
+        "debug",
+        `Target CKB capacity: ${
+          BigInt(ckbWithdrawalCapacity) +
+          BigInt(outputCkbCapacitySumForSudtCustodianCells)
+        }, available CKB capacity: ${BigInt(inputCkbCapacitySum)}.`
+      );
+      throw new Error("Insufficient CKB capacity in valid custodian cells");
+    } else {
+      // As we collect more CKB capacity, so need to build Ckb change custodian cell
+      const custodianLock: Script = {
+        code_hash: this.config.deploymentConfig.custodian_lock.code_hash,
+        hash_type: this.config.deploymentConfig.custodian_lock.hash_type,
+        args: this._packCustodianLockArgs(buildDefaultCustodianLockArgs()),
+      };
+      let ckbChangeCustodian: Cell = {
+        cell_output: {
+          lock: custodianLock,
+          type: undefined,
+          capacity: "0x0",
+        },
+        data: "0x",
+      };
+      const minimalCapacity = minimalCellCapacity(ckbChangeCustodian);
+      const changeCapacity =
+        BigInt(inputCkbCapacitySum) -
+        BigInt(ckbWithdrawalCapacity) -
+        BigInt(outputCkbCapacitySumForSudtCustodianCells);
+      if (BigInt(changeCapacity) >= BigInt(minimalCapacity)) {
+        // With enough input ckb capacity to build a minimal change cell
+        ckbChangeCustodian.cell_output.capacity =
+          "0x" + changeCapacity.toString(16);
+        txSkeleton = txSkeleton.update("outputs", (outputs) => {
+          return outputs.push(ckbChangeCustodian);
+        });
+        return txSkeleton;
+      }
+      // Need collect some more ckb to build the change cell
+      for (const cell of validCustodianCells) {
+        if (!cell.cell_output.type) {
+          const key = getInputKey(cell);
+          if (previousInputs.has(key)) {
+            continue;
+          }
+          previousInputs.add(key);
+          const inputCkbCapacity = BigInt(cell.cell_output.capacity);
+          inputCkbCapacitySum += inputCkbCapacity;
+          txSkeleton = txSkeleton.update("inputs", (inputs) => {
+            return inputs.push(cell);
+          });
+          if (
+            BigInt(inputCkbCapacitySum) >=
+            BigInt(ckbWithdrawalCapacity) +
+              BigInt(outputCkbCapacitySumForSudtCustodianCells) +
+              BigInt(minimalCapacity)
+          ) {
+            break;
+          }
+        }
+      }
+      // 1. if someone chooses to withdraw SUDT, he/she must withdraw CKB of enough capacity to store the SUDTs.
+      // 2. Also, the left CKBs must be enough to hold a left-over custodian cell.
+      // otherwise the withdraw request should be reject.
+      if (
+        BigInt(inputCkbCapacitySum) <
+        BigInt(ckbWithdrawalCapacity) +
+          BigInt(outputCkbCapacitySumForSudtCustodianCells) +
+          BigInt(minimalCapacity)
+      ) {
+        this.logger(
+          "debug",
+          `Target CKB capacity: ${
+            BigInt(ckbWithdrawalCapacity) +
+            BigInt(outputCkbCapacitySumForSudtCustodianCells) +
+            BigInt(minimalCapacity)
+          }, available CKB capacity: ${BigInt(inputCkbCapacitySum)}.`
+        );
+        throw new Error("Insufficient CKB capacity in valid custodian cells");
+      }
+      const newChangeCapacity =
+        BigInt(inputCkbCapacitySum) -
+        BigInt(ckbWithdrawalCapacity) -
+        BigInt(outputCkbCapacitySumForSudtCustodianCells);
       ckbChangeCustodian.cell_output.capacity =
-        "0x" + changeCapacity.toString(16);
+        "0x" + newChangeCapacity.toString(16);
       txSkeleton = txSkeleton.update("outputs", (outputs) => {
         return outputs.push(ckbChangeCustodian);
       });
       return txSkeleton;
     }
-    // Gonna collect some more ckb to build the change cell
-    for (const cell of validCustodianCells) {
-      if (!cell.cell_output.type) {
-        const key = getInputKey(cell);
-        if (previousInputs.has(key)) {
-          continue;
-        }
-        previousInputs.add(key);
-        const inputCkbCapacity = BigInt(cell.cell_output.capacity);
-        inputCkbCapacitySum += inputCkbCapacity;
-        txSkeleton = txSkeleton.update("inputs", (inputs) => {
-          return inputs.push(cell);
-        });
-        if (
-          BigInt(inputCkbCapacitySum) >=
-          BigInt(ckbWithdrawalCapacity) +
-            BigInt(outputCkbCapacitySumForSudtCustodianCells) +
-            BigInt(minimalCapacity)
-        ) {
-          break;
-        }
-      }
-    }
-    // We explicitly throw an error here.
-    // checks should be make in Godwoken:
-    // 1. if someone chooses to withdraw SUDT, he/she must withdraw CKB of enough capacity to store the SUDTs.
-    // 2. Also, the left CKBs must be enough to hold a left-over custodian cell.
-    // otherwise the withdraw request should be reject.
-    if (
-      BigInt(inputCkbCapacitySum) <
-      BigInt(ckbWithdrawalCapacity) +
-        BigInt(outputCkbCapacitySumForSudtCustodianCells) +
-        BigInt(minimalCapacity)
-    ) {
-      throw new Error("Insufficient CKB capacity in valid custodian cells");
-    }
-    const newChangeCapacity =
-      BigInt(inputCkbCapacitySum) -
-      BigInt(ckbWithdrawalCapacity) -
-      BigInt(outputCkbCapacitySumForSudtCustodianCells);
-    ckbChangeCustodian.cell_output.capacity =
-      "0x" + newChangeCapacity.toString(16);
-    txSkeleton = txSkeleton.update("outputs", (outputs) => {
-      return outputs.push(ckbChangeCustodian);
-    });
-    return txSkeleton;
   }
 
   _buildWithdrawalLockArgs(
@@ -938,19 +998,15 @@ export class Runner {
       new schemas.GlobalState(new Reader(rollupCell.data).toArrayBuffer())
     );
     const cells = [];
-    this.logger(
-      "debug",
-      `GlobalState last_finalized_block_number: ${BigInt(
-        globalState.last_finalized_block_number
-      )}`
-    );
     for await (const cell of collector.collect()) {
       const custodianLockArgs = this._unpackCustodianLockArgs(
         cell.cell_output.lock.args
       );
       this.logger(
         "debug",
-        `CustodianLockArgs deposition_block_number: ${BigInt(
+        `GlobalState last_finalized_block_number: ${BigInt(
+          globalState.last_finalized_block_number
+        )}, custodianLockArgs deposition_block_number: ${BigInt(
           custodianLockArgs.deposition_block_number
         )}, deposition_block_hash: ${custodianLockArgs.deposition_block_hash}`
       );
