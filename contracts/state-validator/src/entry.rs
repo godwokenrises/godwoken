@@ -20,7 +20,6 @@ use gw_types::{
     prelude::{Reader as GodwokenTypesReader, Unpack as GodwokenTypesUnpack},
 };
 
-use ckb_lib_secp256k1::LibSecp256k1;
 use gw_common::{
     blake2b::new_blake2b,
     smt::Blake2bHasher,
