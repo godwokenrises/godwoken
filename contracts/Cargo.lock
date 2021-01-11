@@ -43,16 +43,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ckb-lib-secp256k1"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "469bec903024855bb72cfedb9972d446dc5bdfd952f9bac85c4b8725f002b022"
-dependencies = [
- "blake2b-rs",
- "ckb-std 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "ckb-standalone-types"
 version = "0.0.1-pre.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -60,17 +50,6 @@ checksum = "af2cdbdf65ee5b1da71504f5a03d6984bce77d0b4b46daff63f4ba4a3b0eef08"
 dependencies = [
  "cfg-if",
  "molecule",
-]
-
-[[package]]
-name = "ckb-std"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35e14bf64c694f078d6d33bad7e2b9a87d129d8b4e4c9a6cfc4364e2c6eddbd9"
-dependencies = [
- "buddy-alloc",
- "cc",
- "ckb-standalone-types",
 ]
 
 [[package]]
@@ -158,7 +137,6 @@ dependencies = [
 name = "state-validator"
 version = "0.1.0"
 dependencies = [
- "ckb-lib-secp256k1",
  "gw-common",
  "gw-types",
  "validator-utils",
@@ -168,7 +146,7 @@ dependencies = [
 name = "validator-utils"
 version = "0.1.0"
 dependencies = [
- "ckb-std 0.7.2 (git+https://github.com/nervosnetwork/ckb-std.git?branch=add-more-functions-on-since)",
+ "ckb-std",
  "gw-common",
  "gw-types",
 ]

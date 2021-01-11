@@ -9,4 +9,3 @@ edition = "2018"
 validator-utils = { path = "../validator-utils" }
 gw-types = { path = "../../crates/types", default-features = false }
 gw-common = { path = "../../crates/common", default-features = false }
-ckb-lib-secp256k1 = "0.1"
