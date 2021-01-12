@@ -80,6 +80,33 @@ pub struct L2TransactionView {
     pub inner: L2Transaction,
     pub hash: H256,
 }
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Hash, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct LogItem {
+    pub account_id: Uint32,
+    pub data: JsonBytes,
+}
+
+impl From<LogItem> for packed::LogItem {
+    fn from(json: LogItem) -> packed::LogItem {
+        let LogItem { account_id, data } = json;
+        packed::LogItem::new_builder()
+            .account_id(account_id.value().pack())
+            .data(data.into_bytes().pack())
+            .build()
+    }
+}
+
+impl From<packed::LogItem> for LogItem {
+    fn from(data: packed::LogItem) -> LogItem {
+        let account_id: u32 = data.account_id().unpack();
+        let data = JsonBytes::from_bytes(data.data().unpack());
+        LogItem {
+            account_id: Uint32::from(account_id),
+            data,
+        }
+    }
+}
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
@@ -87,6 +114,7 @@ pub struct TxReceipt {
     pub tx_witness_hash: H256,
     pub compacted_post_account_root: H256,
     pub read_data_hashes: Vec<H256>,
+    pub logs: Vec<LogItem>,
 }
 
 impl From<TxReceipt> for packed::TxReceipt {
@@ -95,6 +123,7 @@ impl From<TxReceipt> for packed::TxReceipt {
             tx_witness_hash,
             compacted_post_account_root,
             read_data_hashes,
+            logs,
         } = json;
         let tx_witness_hash: [u8; 32] = tx_witness_hash.into();
         let compacted_post_account_root: [u8; 32] = compacted_post_account_root.into();
@@ -105,10 +134,12 @@ impl From<TxReceipt> for packed::TxReceipt {
                 hash.pack()
             })
             .collect();
+        let logs: Vec<packed::LogItem> = logs.into_iter().map(|item| item.into()).collect();
         packed::TxReceipt::new_builder()
             .tx_witness_hash(tx_witness_hash.pack())
             .compacted_post_account_root(compacted_post_account_root.pack())
             .read_data_hashes(read_data_hashes.pack())
+            .logs(logs.pack())
             .build()
     }
 }
@@ -125,10 +156,12 @@ impl From<packed::TxReceipt> for TxReceipt {
                 hash.into()
             })
             .collect();
+        let logs: Vec<LogItem> = data.logs().into_iter().map(|item| item.into()).collect();
         TxReceipt {
             tx_witness_hash: tx_witness_hash.into(),
             compacted_post_account_root: compacted_post_account_root.into(),
             read_data_hashes,
+            logs,
         }
     }
 }

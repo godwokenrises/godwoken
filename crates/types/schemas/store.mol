@@ -12,11 +12,19 @@ struct TransactionInfo {
     key:            TransactionKey,
 }
 
+table LogItem {
+    account_id: Uint32,
+    data: Bytes,
+}
+
+vector LogItemVec <LogItem>;
+
 table TxReceipt {
     tx_witness_hash: Byte32,
     // hash(account_root|account_count)
     compacted_post_account_root: Byte32,
     read_data_hashes: Byte32Vec,
+    logs: LogItemVec,
 }
 
 struct SMTBranchNode {

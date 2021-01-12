@@ -7,7 +7,7 @@ use gw_types::{core, packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::godwoken::{CancelChallenge, ChallengeContext, TxReceipt};
+use crate::godwoken::{CancelChallenge, ChallengeContext, LogItem, TxReceipt};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
@@ -450,6 +450,7 @@ pub struct RunResult {
     pub new_scripts: HashMap<H256, JsonBytes>,
     pub write_data: HashMap<H256, JsonBytes>,
     pub read_data: HashMap<H256, Uint32>,
+    pub logs: Vec<LogItem>,
 }
 
 impl From<RunResult> for gw_generator::RunResult {
@@ -462,6 +463,7 @@ impl From<RunResult> for gw_generator::RunResult {
             new_scripts,
             write_data,
             read_data,
+            logs,
         } = json;
         let mut to_read_values: HashMap<gw_common::H256, gw_common::H256> = HashMap::new();
         for (k, v) in read_values.iter() {
@@ -491,6 +493,7 @@ impl From<RunResult> for gw_generator::RunResult {
                 (key, v as usize)
             })
             .collect();
+        let logs = logs.into_iter().map(|item| item.into()).collect();
         Self {
             read_values: to_read_values,
             write_values: to_write_values,
@@ -499,6 +502,7 @@ impl From<RunResult> for gw_generator::RunResult {
             new_scripts: to_new_scripts,
             write_data: to_write_data,
             read_data,
+            logs,
         }
     }
 }
@@ -513,6 +517,7 @@ impl From<gw_generator::RunResult> for RunResult {
             new_scripts,
             write_data,
             read_data,
+            logs,
         } = run_result;
         let mut to_read_values: HashMap<H256, H256> = HashMap::new();
         for (k, v) in read_values.iter() {
@@ -554,6 +559,7 @@ impl From<gw_generator::RunResult> for RunResult {
                 (key.into(), value.into())
             })
             .collect();
+        let logs = logs.into_iter().map(|item| item.into()).collect();
         Self {
             read_values: to_read_values,
             write_values: to_write_values,
@@ -562,6 +568,7 @@ impl From<gw_generator::RunResult> for RunResult {
             new_scripts: to_new_scripts,
             write_data: to_write_data,
             read_data,
+            logs,
         }
     }
 }

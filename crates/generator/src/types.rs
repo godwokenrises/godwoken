@@ -1,11 +1,11 @@
 use gw_common::H256;
-use gw_types::packed::{StartChallenge, StartChallengeWitness};
+use gw_types::packed::{self, StartChallenge, StartChallengeWitness};
 use std::{
     collections::HashMap,
     fmt::{self, Display},
 };
 
-#[derive(Debug, PartialEq, Clone, Eq, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct RunResult {
     pub read_values: HashMap<H256, H256>,
     pub write_values: HashMap<H256, H256>,
@@ -15,6 +15,8 @@ pub struct RunResult {
     pub write_data: HashMap<H256, Vec<u8>>,
     // data hash -> data full size
     pub read_data: HashMap<H256, usize>,
+    // log data
+    pub logs: Vec<packed::LogItem>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

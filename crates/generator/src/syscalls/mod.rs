@@ -16,7 +16,7 @@ use gw_common::{
 };
 use gw_types::{
     bytes::Bytes,
-    packed::{BlockInfo, RawL2Transaction, Script},
+    packed::{BlockInfo, LogItem, RawL2Transaction, Script},
     prelude::*,
 };
 use std::cmp;
@@ -38,6 +38,7 @@ const SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH: u64 = 4054;
 const SYS_LOAD_ACCOUNT_SCRIPT: u64 = 4055;
 const SYS_STORE_DATA: u64 = 4056;
 const SYS_LOAD_DATA: u64 = 4057;
+const SYS_LOG: u64 = 4061;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
@@ -321,6 +322,20 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                     .store_bytes(len_addr, &(new_len as u32).to_le_bytes())?;
                 self.result.read_data.insert(data_hash, data.len());
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_LOG => {
+                let account_id = machine.registers()[A0].to_u32();
+                let data_len = machine.registers()[A1].to_u32();
+                let data_addr = machine.registers()[A2].to_u64();
+
+                let data = load_bytes(machine, data_addr, data_len as usize)?;
+                self.result.logs.push(
+                    LogItem::new_builder()
+                        .account_id(account_id.pack())
+                        .data(Bytes::from(data).pack())
+                        .build(),
+                );
                 Ok(true)
             }
             DEBUG_PRINT_SYSCALL_NUMBER => {
