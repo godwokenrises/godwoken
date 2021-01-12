@@ -11272,8 +11272,8 @@ impl molecule::prelude::Builder for CancelChallengeBuilder {
     }
 }
 #[derive(Clone)]
-pub struct UnlockAccount(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for UnlockAccount {
+pub struct UnlockAccountWitness(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for UnlockAccountWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -11282,12 +11282,12 @@ impl ::core::fmt::LowerHex for UnlockAccount {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for UnlockAccount {
+impl ::core::fmt::Debug for UnlockAccountWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for UnlockAccount {
+impl ::core::fmt::Display for UnlockAccountWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "message", self.message())?;
@@ -11295,7 +11295,7 @@ impl ::core::fmt::Display for UnlockAccount {
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for UnlockAccount {
+impl ::core::default::Default for UnlockAccountWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -11303,10 +11303,10 @@ impl ::core::default::Default for UnlockAccount {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
-        UnlockAccount::new_unchecked(v.into())
+        UnlockAccountWitness::new_unchecked(v.into())
     }
 }
-impl UnlockAccount {
+impl UnlockAccountWitness {
     pub const TOTAL_SIZE: usize = 97;
     pub const FIELD_SIZES: [usize; 2] = [32, 65];
     pub const FIELD_COUNT: usize = 2;
@@ -11316,15 +11316,15 @@ impl UnlockAccount {
     pub fn signature(&self) -> Signature {
         Signature::new_unchecked(self.0.slice(32..97))
     }
-    pub fn as_reader<'r>(&'r self) -> UnlockAccountReader<'r> {
-        UnlockAccountReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> UnlockAccountWitnessReader<'r> {
+        UnlockAccountWitnessReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for UnlockAccount {
-    type Builder = UnlockAccountBuilder;
-    const NAME: &'static str = "UnlockAccount";
+impl molecule::prelude::Entity for UnlockAccountWitness {
+    type Builder = UnlockAccountWitnessBuilder;
+    const NAME: &'static str = "UnlockAccountWitness";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        UnlockAccount(data)
+        UnlockAccountWitness(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -11333,10 +11333,10 @@ impl molecule::prelude::Entity for UnlockAccount {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        UnlockAccountReader::from_slice(slice).map(|reader| reader.to_entity())
+        UnlockAccountWitnessReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        UnlockAccountReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        UnlockAccountWitnessReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -11348,8 +11348,8 @@ impl molecule::prelude::Entity for UnlockAccount {
     }
 }
 #[derive(Clone, Copy)]
-pub struct UnlockAccountReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for UnlockAccountReader<'r> {
+pub struct UnlockAccountWitnessReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for UnlockAccountWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -11358,12 +11358,12 @@ impl<'r> ::core::fmt::LowerHex for UnlockAccountReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for UnlockAccountReader<'r> {
+impl<'r> ::core::fmt::Debug for UnlockAccountWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for UnlockAccountReader<'r> {
+impl<'r> ::core::fmt::Display for UnlockAccountWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "message", self.message())?;
@@ -11371,7 +11371,7 @@ impl<'r> ::core::fmt::Display for UnlockAccountReader<'r> {
         write!(f, " }}")
     }
 }
-impl<'r> UnlockAccountReader<'r> {
+impl<'r> UnlockAccountWitnessReader<'r> {
     pub const TOTAL_SIZE: usize = 97;
     pub const FIELD_SIZES: [usize; 2] = [32, 65];
     pub const FIELD_COUNT: usize = 2;
@@ -11382,14 +11382,14 @@ impl<'r> UnlockAccountReader<'r> {
         SignatureReader::new_unchecked(&self.as_slice()[32..97])
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for UnlockAccountReader<'r> {
-    type Entity = UnlockAccount;
-    const NAME: &'static str = "UnlockAccountReader";
+impl<'r> molecule::prelude::Reader<'r> for UnlockAccountWitnessReader<'r> {
+    type Entity = UnlockAccountWitness;
+    const NAME: &'static str = "UnlockAccountWitnessReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        UnlockAccountReader(slice)
+        UnlockAccountWitnessReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -11404,11 +11404,11 @@ impl<'r> molecule::prelude::Reader<'r> for UnlockAccountReader<'r> {
     }
 }
 #[derive(Debug, Default)]
-pub struct UnlockAccountBuilder {
+pub struct UnlockAccountWitnessBuilder {
     pub(crate) message: Byte32,
     pub(crate) signature: Signature,
 }
-impl UnlockAccountBuilder {
+impl UnlockAccountWitnessBuilder {
     pub const TOTAL_SIZE: usize = 97;
     pub const FIELD_SIZES: [usize; 2] = [32, 65];
     pub const FIELD_COUNT: usize = 2;
@@ -11421,9 +11421,9 @@ impl UnlockAccountBuilder {
         self
     }
 }
-impl molecule::prelude::Builder for UnlockAccountBuilder {
-    type Entity = UnlockAccount;
-    const NAME: &'static str = "UnlockAccountBuilder";
+impl molecule::prelude::Builder for UnlockAccountWitnessBuilder {
+    type Entity = UnlockAccountWitness;
+    const NAME: &'static str = "UnlockAccountWitnessBuilder";
     fn expected_length(&self) -> usize {
         Self::TOTAL_SIZE
     }
@@ -11436,172 +11436,6 @@ impl molecule::prelude::Builder for UnlockAccountBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        UnlockAccount::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct HeaderInfo(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for HeaderInfo {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for HeaderInfo {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for HeaderInfo {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "number", self.number())?;
-        write!(f, ", {}: {}", "block_hash", self.block_hash())?;
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for HeaderInfo {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-        HeaderInfo::new_unchecked(v.into())
-    }
-}
-impl HeaderInfo {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [8, 32];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn number(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(0..8))
-    }
-    pub fn block_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(8..40))
-    }
-    pub fn as_reader<'r>(&'r self) -> HeaderInfoReader<'r> {
-        HeaderInfoReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for HeaderInfo {
-    type Builder = HeaderInfoBuilder;
-    const NAME: &'static str = "HeaderInfo";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        HeaderInfo(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        HeaderInfoReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        HeaderInfoReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .number(self.number())
-            .block_hash(self.block_hash())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct HeaderInfoReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for HeaderInfoReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for HeaderInfoReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for HeaderInfoReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "number", self.number())?;
-        write!(f, ", {}: {}", "block_hash", self.block_hash())?;
-        write!(f, " }}")
-    }
-}
-impl<'r> HeaderInfoReader<'r> {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [8, 32];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn number(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[0..8])
-    }
-    pub fn block_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[8..40])
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for HeaderInfoReader<'r> {
-    type Entity = HeaderInfo;
-    const NAME: &'static str = "HeaderInfoReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        HeaderInfoReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len != Self::TOTAL_SIZE {
-            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct HeaderInfoBuilder {
-    pub(crate) number: Uint64,
-    pub(crate) block_hash: Byte32,
-}
-impl HeaderInfoBuilder {
-    pub const TOTAL_SIZE: usize = 40;
-    pub const FIELD_SIZES: [usize; 2] = [8, 32];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn number(mut self, v: Uint64) -> Self {
-        self.number = v;
-        self
-    }
-    pub fn block_hash(mut self, v: Byte32) -> Self {
-        self.block_hash = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for HeaderInfoBuilder {
-    type Entity = HeaderInfo;
-    const NAME: &'static str = "HeaderInfoBuilder";
-    fn expected_length(&self) -> usize {
-        Self::TOTAL_SIZE
-    }
-    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        writer.write_all(self.number.as_slice())?;
-        writer.write_all(self.block_hash.as_slice())?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        HeaderInfo::new_unchecked(inner.into())
+        UnlockAccountWitness::new_unchecked(inner.into())
     }
 }

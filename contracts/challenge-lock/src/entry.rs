@@ -28,7 +28,7 @@ use gw_common::{
 use gw_types::{
     packed::{
         CancelChallenge, CancelChallengeReader, StartChallenge, StartChallengeReader,
-        UnlockAccount, UnlockAccountReader,
+        UnlockAccountWitness, UnlockAccountWitnessReader,
     },
     prelude::*,
 };
@@ -164,11 +164,11 @@ fn verify_account_unlock(account_script_hash: &H256, expected_message: &H256) ->
             .to_opt()
             .ok_or(Error::OwnerCellNotFound)?
             .unpack();
-    let unlock_account_args = match UnlockAccountReader::verify(&unlock_account_witness_args, false)
-    {
-        Ok(_) => UnlockAccount::new_unchecked(unlock_account_witness_args),
-        Err(_) => return Err(Error::OwnerCellNotFound),
-    };
+    let unlock_account_args =
+        match UnlockAccountWitnessReader::verify(&unlock_account_witness_args, false) {
+            Ok(_) => UnlockAccountWitness::new_unchecked(unlock_account_witness_args),
+            Err(_) => return Err(Error::OwnerCellNotFound),
+        };
     let message: [u8; 32] = unlock_account_args.message().unpack();
     if &H256::from(message) != expected_message {
         return Err(Error::OwnerCellNotFound);

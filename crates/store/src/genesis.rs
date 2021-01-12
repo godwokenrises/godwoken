@@ -7,7 +7,7 @@ use gw_common::{
     CKB_SUDT_SCRIPT_ARGS, CKB_SUDT_SCRIPT_HASH,
 };
 use gw_config::GenesisConfig;
-use gw_generator::{backend_manage::META_CONTRACT_VALIDATOR_CODE_HASH, traits::StateExt};
+use gw_generator::{builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH, traits::StateExt};
 use gw_types::{
     core::Status,
     packed::{

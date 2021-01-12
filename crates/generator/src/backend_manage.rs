@@ -1,34 +1,11 @@
-use gw_common::{blake2b::new_blake2b, H256};
+use crate::builtin_scripts::{
+    META_CONTRACT_GENERATOR, META_CONTRACT_VALIDATOR, META_CONTRACT_VALIDATOR_CODE_HASH,
+    SUDT_GENERATOR, SUDT_VALIDATOR, SUDT_VALIDATOR_CODE_HASH,
+};
+use crate::code_hash;
+use gw_common::H256;
 use gw_types::bytes::Bytes;
-use lazy_static::lazy_static;
 use std::collections::HashMap;
-
-lazy_static! {
-    static ref SUDT_GENERATOR: Bytes = include_bytes!("../../../c/build/sudt-generator")
-        .to_vec()
-        .into();
-    // TODO FIXME implement validator
-    static ref SUDT_VALIDATOR: Bytes = include_bytes!("../../../c/build/sudt-validator")
-        .to_vec()
-        .into();
-    pub static ref SUDT_VALIDATOR_CODE_HASH: H256 = code_hash(&SUDT_VALIDATOR);
-    static ref META_CONTRACT_GENERATOR: Bytes = include_bytes!("../../../c/build/meta-contract-generator")
-        .to_vec()
-        .into();
-    // TODO FIXME implement validator
-    static ref META_CONTRACT_VALIDATOR: Bytes = include_bytes!("../../../c/build/meta-contract-validator")
-        .to_vec()
-        .into();
-    pub static ref META_CONTRACT_VALIDATOR_CODE_HASH: H256 = code_hash(&META_CONTRACT_VALIDATOR);
-}
-
-fn code_hash(data: &[u8]) -> H256 {
-    let mut hasher = new_blake2b();
-    hasher.update(data);
-    let mut code_hash = [0u8; 32];
-    hasher.finalize(&mut code_hash);
-    code_hash.into()
-}
 
 #[derive(Clone)]
 pub struct Backend {

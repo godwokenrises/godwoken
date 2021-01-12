@@ -27,7 +27,9 @@ jobs:
     - name: Check contracts format
       run: cd contracts && cargo fmt -- --check
     - name: Init submodules
-      run: git submodule init && git submodule update -r
+      run: git submodule init && git submodule update -r && cd c/deps/ckb-miscellaneous-scripts/ && git submodule init && git submodule update -r
+    - name: Compile C contracts dependencies
+      run: cd c/deps/ckb-miscellaneous-scripts && make all-via-docker
     - name: Compile C contracts
       run: cd c && make
     - name: Compile Rust contracts
