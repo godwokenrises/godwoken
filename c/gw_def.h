@@ -21,6 +21,11 @@
 /* 2048 * (32 + 32 + 8) = 147456 Byte (~144KB)*/
 #define MAX_KV_STATE_CAPACITY 2048
 
+/* Limitations */
+#define GW_MAX_KV_PAIRS 1024
+#define GW_SCRIPT_SIZE 128
+#define GW_MAX_WITNESS_SIZE (300 * 1024)
+#define GW_MAX_CODE_SIZE (512 * 1024)
 
 /* Godwoken context */
 typedef struct {

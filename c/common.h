@@ -1,33 +1,11 @@
 #ifndef GW_COMMON_H_
 #define GW_COMMON_H_
 
-/* Common parameters */
-#define MAX_PAIRS 1024
-#define SCRIPT_SIZE 128
-#define WITNESS_SIZE (300 * 1024)
-#define CODE_SIZE (512 * 1024)
-
-/* Errors */
-#define GW_ERROR_NOT_FOUND 42
-#define GW_ERROR_INVALID_DATA 43
-#define GW_ERROR_INSUFFICIENT_CAPACITY 44
-#define GW_ERROR_INVALID_CONTEXT 45
-#define GW_ERROR_DYNAMIC_LINKING 46
-#define GW_ERROR_MISMATCH_CHANGE_SET 47
-#define GW_ERROR_MISMATCH_RETURN_DATA 48
-/*Merkle Errors*/
-#define GW_ERROR_INVALID_PROOF_LENGTH 60
-#define GW_ERROR_INVALID_PROOF 61
-#define GW_ERROR_INVALID_STACK 62
-#define GW_ERROR_INVALID_SIBLING 63
-/* COMMON contract errors */
-#define ERROR_INVALID_DATA 10
-#define ERROR_UNKNOWN_MSG 11
-
 #include "blake2b.h"
 #include "blockchain.h"
 #include "godwoken.h"
 #include "gw_def.h"
+#include "gw_errors.h"
 #include "stddef.h"
 
 typedef unsigned __int128 uint128_t;

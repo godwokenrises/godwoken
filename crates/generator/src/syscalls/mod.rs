@@ -44,7 +44,7 @@ const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
 /* Syscall errors */
 pub(crate) const SUCCESS: u8 = 0;
-pub(crate) const ERROR_DUPLICATED_SCRIPT_HASH: u8 = std::u8::MAX;
+pub(crate) const ERROR_DUPLICATED_SCRIPT_HASH: u8 = std::i8::MAX as u8;
 
 pub(crate) struct L2Syscalls<'a, S> {
     pub(crate) state: &'a S,
