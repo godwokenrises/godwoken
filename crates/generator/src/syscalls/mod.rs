@@ -22,7 +22,8 @@ use gw_types::{
 use std::cmp;
 
 /* Constants */
-const MAX_SET_RETURN_DATA_SIZE: u64 = 1024;
+// 24KB is max ethereum contract code size
+const MAX_SET_RETURN_DATA_SIZE: u64 = 1024 * 24;
 
 /* Syscall numbers */
 const SYS_STORE: u64 = 3051;
