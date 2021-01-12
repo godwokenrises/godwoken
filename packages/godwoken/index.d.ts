@@ -91,6 +91,11 @@ export interface AggregatorConfig {
   account_id: HexNumber;
 }
 
+export interface LogItem {
+  account_id: HexNumber;
+  data: HexString;
+}
+
 export interface RunResult {
   read_values: Record<Hash, Hash>;
   write_values: Record<Hash, Hash>;
@@ -98,6 +103,7 @@ export interface RunResult {
   account_count?: HexNumber;
   new_scripts: Record<Hash, HexString>;
   new_data: Record<Hash, HexString>;
+  logs: LogItem[];
 }
 
 export interface GenesisWithGlobalState {

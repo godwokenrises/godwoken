@@ -197,6 +197,14 @@ impl Generator {
                         .collect::<Vec<_>>()
                         .pack(),
                 )
+                .logs(
+                    run_result
+                        .logs
+                        .into_iter()
+                        .map(|item| item.into())
+                        .collect::<Vec<_>>()
+                        .pack(),
+                )
                 .build();
             receipts.push(tx_receipt);
         }
