@@ -440,26 +440,6 @@ impl From<chain::ProduceBlockResult> for ProduceBlockResult {
     }
 }
 
-impl From<LogItem> for gw_generator::LogItem {
-    fn from(json: LogItem) -> gw_generator::LogItem {
-        let LogItem { account_id, data } = json;
-        gw_generator::LogItem {
-            account_id: account_id.value(),
-            data: data.as_bytes().to_vec(),
-        }
-    }
-}
-
-impl From<gw_generator::LogItem> for LogItem {
-    fn from(item: gw_generator::LogItem) -> LogItem {
-        let gw_generator::LogItem { account_id, data } = item;
-        LogItem {
-            account_id: Uint32::from(account_id),
-            data: JsonBytes::from_vec(data),
-        }
-    }
-}
-
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct RunResult {

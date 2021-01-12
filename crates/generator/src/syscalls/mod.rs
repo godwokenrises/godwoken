@@ -1,5 +1,5 @@
 use crate::traits::CodeStore;
-use crate::types::{LogItem, RunResult};
+use crate::types::RunResult;
 use ckb_vm::{
     memory::Memory,
     registers::{A0, A1, A2, A3, A7},
@@ -16,7 +16,7 @@ use gw_common::{
 };
 use gw_types::{
     bytes::Bytes,
-    packed::{BlockInfo, RawL2Transaction, Script},
+    packed::{BlockInfo, LogItem, RawL2Transaction, Script},
     prelude::*,
 };
 use std::cmp;
@@ -329,10 +329,12 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 let data_addr = machine.registers()[A2].to_u64();
 
                 let data = load_bytes(machine, data_addr, data_len as usize)?;
-                self.result.logs.push(LogItem {
-                    account_id,
-                    data: data.as_slice().to_vec(),
-                });
+                self.result.logs.push(
+                    LogItem::new_builder()
+                        .account_id(account_id.pack())
+                        .data(Bytes::from(data).pack())
+                        .build(),
+                );
                 Ok(true)
             }
             DEBUG_PRINT_SYSCALL_NUMBER => {
