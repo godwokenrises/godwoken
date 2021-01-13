@@ -1,7 +1,8 @@
 use super::new_block_info;
 use crate::{
     account_lock_manage::AccountLockManage,
-    backend_manage::{BackendManage, META_CONTRACT_VALIDATOR_CODE_HASH},
+    backend_manage::BackendManage,
+    builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH,
     dummy_state::DummyState,
     error::TransactionError,
     syscalls::ERROR_DUPLICATED_SCRIPT_HASH,

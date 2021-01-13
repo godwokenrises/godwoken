@@ -1,7 +1,7 @@
 use super::new_block_info;
 use crate::{account_lock_manage::AccountLockManage, Generator};
 use crate::{
-    backend_manage::{BackendManage, SUDT_VALIDATOR_CODE_HASH},
+    backend_manage::BackendManage, builtin_scripts::SUDT_VALIDATOR_CODE_HASH,
     dummy_state::DummyState,
 };
 use crate::{

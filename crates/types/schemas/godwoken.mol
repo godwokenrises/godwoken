@@ -247,14 +247,8 @@ table CancelChallenge {
 // --- end of challenge ---
 
 // --- unlock account ---
-struct UnlockAccount {
+struct UnlockAccountWitness {
     message: Byte32,
     signature: Signature,
 }
 // --- end of unlock account ---
-
-// header info
-struct HeaderInfo {
-    number: Uint64,
-    block_hash: Byte32,
-}

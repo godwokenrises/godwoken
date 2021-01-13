@@ -19,6 +19,12 @@ table LogItem {
 
 vector LogItemVec <LogItem>;
 
+// header info
+struct HeaderInfo {
+    number: Uint64,
+    block_hash: Byte32,
+}
+
 table TxReceipt {
     tx_witness_hash: Byte32,
     // hash(account_root|account_count)
