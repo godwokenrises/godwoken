@@ -21,6 +21,7 @@ pub enum Error {
     AmountOverflow,
     InvalidTxs,
     Aggregator,
+    InvalidWithdrawal,
 }
 
 impl From<SysError> for Error {

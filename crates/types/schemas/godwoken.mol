@@ -148,11 +148,7 @@ table UnlockCustodianViaRevert {
 // --- withdrawal lock ---
 // a rollup_type_hash exists before this args, to make args friendly to prefix search
 struct WithdrawalLockArgs {
-    // the original deposition info
-    // used for helping programs generate reverted custodian cell
-    deposition_block_hash: Byte32,
-    deposition_block_number: Uint64,
-    // the original custodian lock hash
+    account_script_hash: Byte32,
     withdrawal_block_hash: Byte32,
     withdrawal_block_number: Uint64,
     // buyer can pay sell_amount token to unlock
@@ -252,6 +248,19 @@ struct UnlockAccountWitness {
     signature: Signature,
 }
 // --- end of unlock account ---
+
+// --- Rollup ---
+table RollupChallenge {}
+table RollupRevert {}
+union RollupAction {
+    // submit layer2 block
+    L2Block,
+    // change rollup status to halting
+    RollupChallenge,
+    // revert layer2 blocks and change status to running
+    RollupRevert,
+}
+// --- end of Rollup ---
 
 // header info
 struct HeaderInfo {

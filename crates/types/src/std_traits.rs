@@ -20,4 +20,5 @@ impl_std_eq!(StartChallengeWitness);
 impl_std_eq!(HeaderInfo);
 impl_std_eq!(Transaction);
 impl_std_eq!(DepositionRequest);
+impl_std_eq!(DepositionLockArgs);
 impl_std_eq!(GlobalState);

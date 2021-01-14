@@ -35,6 +35,9 @@ use gw_types::{
     prelude::*,
 };
 
+const FINALIZED_BLOCK_NUMBER: u64 = 0;
+const FINALIZED_BLOCK_HASH: [u8; 32] = [0u8; 32];
+
 /// args: rollup_type_hash | withdrawal lock args
 fn parse_lock_args(
     script: &ckb_types::packed::Script,
@@ -116,12 +119,9 @@ pub fn main() -> Result<(), Error> {
                         custodian_lock_args.deposition_block_hash().unpack();
                     let custodian_deposition_block_number: u64 =
                         custodian_lock_args.deposition_block_number().unpack();
-                    let deposition_block_hash: [u8; 32] =
-                        lock_args.deposition_block_hash().unpack();
-                    let deposition_block_number: u64 = lock_args.deposition_block_number().unpack();
                     if custodian_code_hash != CUSTODIAN_LOCK_CODE_HASH
-                        || custodian_deposition_block_hash != deposition_block_hash
-                        || custodian_deposition_block_number != deposition_block_number
+                        || custodian_deposition_block_hash != FINALIZED_BLOCK_HASH
+                        || custodian_deposition_block_number != FINALIZED_BLOCK_NUMBER
                     {
                         return Err(Error::InvalidOutput);
                     }

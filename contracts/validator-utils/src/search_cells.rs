@@ -9,6 +9,7 @@ use gw_types::{
     packed::{GlobalState, GlobalStateReader},
     prelude::*,
 };
+use alloc::vec::Vec;
 
 use crate::error::Error;
 
@@ -32,6 +33,21 @@ pub fn search_rollup_state(
         Ok(()) => Ok(Some(GlobalState::new_unchecked(data.into()))),
         Err(_) => Err(SysError::Encoding),
     }
+}
+
+pub fn search_lock_hashes(
+    owner_lock_hash: &[u8; 32],
+    source: Source,
+) -> Vec<usize> {
+    QueryIter::new(load_cell_lock_hash, source)
+        .enumerate()
+        .filter_map(|(i, lock_hash)| {
+            if &lock_hash == owner_lock_hash {
+                Some(i)
+            } else {
+                None
+            }
+        }).collect()
 }
 
 pub fn search_lock_hash(owner_lock_hash: &[u8; 32], source: Source) -> Option<usize> {

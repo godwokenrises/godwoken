@@ -7339,14 +7339,8 @@ impl ::core::fmt::Display for WithdrawalLockArgs {
         write!(
             f,
             "{}: {}",
-            "deposition_block_hash",
-            self.deposition_block_hash()
-        )?;
-        write!(
-            f,
-            ", {}: {}",
-            "deposition_block_number",
-            self.deposition_block_number()
+            "account_script_hash",
+            self.account_script_hash()
         )?;
         write!(
             f,
@@ -7377,41 +7371,38 @@ impl ::core::default::Default for WithdrawalLockArgs {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         WithdrawalLockArgs::new_unchecked(v.into())
     }
 }
 impl WithdrawalLockArgs {
-    pub const TOTAL_SIZE: usize = 200;
-    pub const FIELD_SIZES: [usize; 9] = [32, 8, 32, 8, 32, 16, 8, 32, 32];
-    pub const FIELD_COUNT: usize = 9;
-    pub fn deposition_block_hash(&self) -> Byte32 {
+    pub const TOTAL_SIZE: usize = 192;
+    pub const FIELD_SIZES: [usize; 8] = [32, 32, 8, 32, 16, 8, 32, 32];
+    pub const FIELD_COUNT: usize = 8;
+    pub fn account_script_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
-    pub fn deposition_block_number(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(32..40))
-    }
     pub fn withdrawal_block_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(40..72))
+        Byte32::new_unchecked(self.0.slice(32..64))
     }
     pub fn withdrawal_block_number(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(72..80))
+        Uint64::new_unchecked(self.0.slice(64..72))
     }
     pub fn sudt_script_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(80..112))
+        Byte32::new_unchecked(self.0.slice(72..104))
     }
     pub fn sell_amount(&self) -> Uint128 {
-        Uint128::new_unchecked(self.0.slice(112..128))
+        Uint128::new_unchecked(self.0.slice(104..120))
     }
     pub fn sell_capacity(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(128..136))
+        Uint64::new_unchecked(self.0.slice(120..128))
     }
     pub fn owner_lock_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(136..168))
+        Byte32::new_unchecked(self.0.slice(128..160))
     }
     pub fn payment_lock_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(168..200))
+        Byte32::new_unchecked(self.0.slice(160..192))
     }
     pub fn as_reader<'r>(&'r self) -> WithdrawalLockArgsReader<'r> {
         WithdrawalLockArgsReader::new_unchecked(self.as_slice())
@@ -7440,8 +7431,7 @@ impl molecule::prelude::Entity for WithdrawalLockArgs {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .deposition_block_hash(self.deposition_block_hash())
-            .deposition_block_number(self.deposition_block_number())
+            .account_script_hash(self.account_script_hash())
             .withdrawal_block_hash(self.withdrawal_block_hash())
             .withdrawal_block_number(self.withdrawal_block_number())
             .sudt_script_hash(self.sudt_script_hash())
@@ -7473,14 +7463,8 @@ impl<'r> ::core::fmt::Display for WithdrawalLockArgsReader<'r> {
         write!(
             f,
             "{}: {}",
-            "deposition_block_hash",
-            self.deposition_block_hash()
-        )?;
-        write!(
-            f,
-            ", {}: {}",
-            "deposition_block_number",
-            self.deposition_block_number()
+            "account_script_hash",
+            self.account_script_hash()
         )?;
         write!(
             f,
@@ -7503,35 +7487,32 @@ impl<'r> ::core::fmt::Display for WithdrawalLockArgsReader<'r> {
     }
 }
 impl<'r> WithdrawalLockArgsReader<'r> {
-    pub const TOTAL_SIZE: usize = 200;
-    pub const FIELD_SIZES: [usize; 9] = [32, 8, 32, 8, 32, 16, 8, 32, 32];
-    pub const FIELD_COUNT: usize = 9;
-    pub fn deposition_block_hash(&self) -> Byte32Reader<'r> {
+    pub const TOTAL_SIZE: usize = 192;
+    pub const FIELD_SIZES: [usize; 8] = [32, 32, 8, 32, 16, 8, 32, 32];
+    pub const FIELD_COUNT: usize = 8;
+    pub fn account_script_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
-    pub fn deposition_block_number(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[32..40])
-    }
     pub fn withdrawal_block_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[40..72])
+        Byte32Reader::new_unchecked(&self.as_slice()[32..64])
     }
     pub fn withdrawal_block_number(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[72..80])
+        Uint64Reader::new_unchecked(&self.as_slice()[64..72])
     }
     pub fn sudt_script_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[80..112])
+        Byte32Reader::new_unchecked(&self.as_slice()[72..104])
     }
     pub fn sell_amount(&self) -> Uint128Reader<'r> {
-        Uint128Reader::new_unchecked(&self.as_slice()[112..128])
+        Uint128Reader::new_unchecked(&self.as_slice()[104..120])
     }
     pub fn sell_capacity(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[128..136])
+        Uint64Reader::new_unchecked(&self.as_slice()[120..128])
     }
     pub fn owner_lock_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[136..168])
+        Byte32Reader::new_unchecked(&self.as_slice()[128..160])
     }
     pub fn payment_lock_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[168..200])
+        Byte32Reader::new_unchecked(&self.as_slice()[160..192])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for WithdrawalLockArgsReader<'r> {
@@ -7557,8 +7538,7 @@ impl<'r> molecule::prelude::Reader<'r> for WithdrawalLockArgsReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct WithdrawalLockArgsBuilder {
-    pub(crate) deposition_block_hash: Byte32,
-    pub(crate) deposition_block_number: Uint64,
+    pub(crate) account_script_hash: Byte32,
     pub(crate) withdrawal_block_hash: Byte32,
     pub(crate) withdrawal_block_number: Uint64,
     pub(crate) sudt_script_hash: Byte32,
@@ -7568,15 +7548,11 @@ pub struct WithdrawalLockArgsBuilder {
     pub(crate) payment_lock_hash: Byte32,
 }
 impl WithdrawalLockArgsBuilder {
-    pub const TOTAL_SIZE: usize = 200;
-    pub const FIELD_SIZES: [usize; 9] = [32, 8, 32, 8, 32, 16, 8, 32, 32];
-    pub const FIELD_COUNT: usize = 9;
-    pub fn deposition_block_hash(mut self, v: Byte32) -> Self {
-        self.deposition_block_hash = v;
-        self
-    }
-    pub fn deposition_block_number(mut self, v: Uint64) -> Self {
-        self.deposition_block_number = v;
+    pub const TOTAL_SIZE: usize = 192;
+    pub const FIELD_SIZES: [usize; 8] = [32, 32, 8, 32, 16, 8, 32, 32];
+    pub const FIELD_COUNT: usize = 8;
+    pub fn account_script_hash(mut self, v: Byte32) -> Self {
+        self.account_script_hash = v;
         self
     }
     pub fn withdrawal_block_hash(mut self, v: Byte32) -> Self {
@@ -7615,8 +7591,7 @@ impl molecule::prelude::Builder for WithdrawalLockArgsBuilder {
         Self::TOTAL_SIZE
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        writer.write_all(self.deposition_block_hash.as_slice())?;
-        writer.write_all(self.deposition_block_number.as_slice())?;
+        writer.write_all(self.account_script_hash.as_slice())?;
         writer.write_all(self.withdrawal_block_hash.as_slice())?;
         writer.write_all(self.withdrawal_block_number.as_slice())?;
         writer.write_all(self.sudt_script_hash.as_slice())?;
@@ -11440,6 +11415,696 @@ impl molecule::prelude::Builder for UnlockAccountWitnessBuilder {
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
         UnlockAccountWitness::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct RollupChallenge(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for RollupChallenge {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for RollupChallenge {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for RollupChallenge {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ".. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for RollupChallenge {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![4, 0, 0, 0];
+        RollupChallenge::new_unchecked(v.into())
+    }
+}
+impl RollupChallenge {
+    pub const FIELD_COUNT: usize = 0;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn as_reader<'r>(&'r self) -> RollupChallengeReader<'r> {
+        RollupChallengeReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for RollupChallenge {
+    type Builder = RollupChallengeBuilder;
+    const NAME: &'static str = "RollupChallenge";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        RollupChallenge(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RollupChallengeReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RollupChallengeReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+    }
+}
+#[derive(Clone, Copy)]
+pub struct RollupChallengeReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for RollupChallengeReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for RollupChallengeReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for RollupChallengeReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ".. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> RollupChallengeReader<'r> {
+    pub const FIELD_COUNT: usize = 0;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for RollupChallengeReader<'r> {
+    type Entity = RollupChallenge;
+    const NAME: &'static str = "RollupChallengeReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        RollupChallengeReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len > molecule::NUMBER_SIZE && !compatible {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, !0);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct RollupChallengeBuilder {}
+impl RollupChallengeBuilder {
+    pub const FIELD_COUNT: usize = 0;
+}
+impl molecule::prelude::Builder for RollupChallengeBuilder {
+    type Entity = RollupChallenge;
+    const NAME: &'static str = "RollupChallengeBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(&molecule::pack_number(
+            molecule::NUMBER_SIZE as molecule::Number,
+        ))?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        RollupChallenge::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct RollupRevert(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for RollupRevert {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for RollupRevert {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for RollupRevert {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ".. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for RollupRevert {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![4, 0, 0, 0];
+        RollupRevert::new_unchecked(v.into())
+    }
+}
+impl RollupRevert {
+    pub const FIELD_COUNT: usize = 0;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn as_reader<'r>(&'r self) -> RollupRevertReader<'r> {
+        RollupRevertReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for RollupRevert {
+    type Builder = RollupRevertBuilder;
+    const NAME: &'static str = "RollupRevert";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        RollupRevert(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RollupRevertReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RollupRevertReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+    }
+}
+#[derive(Clone, Copy)]
+pub struct RollupRevertReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for RollupRevertReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for RollupRevertReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for RollupRevertReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ".. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> RollupRevertReader<'r> {
+    pub const FIELD_COUNT: usize = 0;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for RollupRevertReader<'r> {
+    type Entity = RollupRevert;
+    const NAME: &'static str = "RollupRevertReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        RollupRevertReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len > molecule::NUMBER_SIZE && !compatible {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, !0);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct RollupRevertBuilder {}
+impl RollupRevertBuilder {
+    pub const FIELD_COUNT: usize = 0;
+}
+impl molecule::prelude::Builder for RollupRevertBuilder {
+    type Entity = RollupRevert;
+    const NAME: &'static str = "RollupRevertBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(&molecule::pack_number(
+            molecule::NUMBER_SIZE as molecule::Number,
+        ))?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        RollupRevert::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct RollupAction(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for RollupAction {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for RollupAction {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for RollupAction {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}(", Self::NAME)?;
+        self.to_enum().display_inner(f)?;
+        write!(f, ")")
+    }
+}
+impl ::core::default::Default for RollupAction {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 76, 1, 0, 0, 28, 0, 0, 0, 56, 1, 0, 0, 60, 1, 0, 0, 64, 1, 0, 0, 68, 1, 0,
+            0, 72, 1, 0, 0, 28, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116,
+            0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0, 196, 0, 0, 0, 252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        RollupAction::new_unchecked(v.into())
+    }
+}
+impl RollupAction {
+    pub const ITEMS_COUNT: usize = 3;
+    pub fn item_id(&self) -> molecule::Number {
+        molecule::unpack_number(self.as_slice())
+    }
+    pub fn to_enum(&self) -> RollupActionUnion {
+        let inner = self.0.slice(molecule::NUMBER_SIZE..);
+        match self.item_id() {
+            0 => L2Block::new_unchecked(inner).into(),
+            1 => RollupChallenge::new_unchecked(inner).into(),
+            2 => RollupRevert::new_unchecked(inner).into(),
+            _ => panic!("{}: invalid data", Self::NAME),
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> RollupActionReader<'r> {
+        RollupActionReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for RollupAction {
+    type Builder = RollupActionBuilder;
+    const NAME: &'static str = "RollupAction";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        RollupAction(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RollupActionReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RollupActionReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().set(self.to_enum())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct RollupActionReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for RollupActionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for RollupActionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for RollupActionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}(", Self::NAME)?;
+        self.to_enum().display_inner(f)?;
+        write!(f, ")")
+    }
+}
+impl<'r> RollupActionReader<'r> {
+    pub const ITEMS_COUNT: usize = 3;
+    pub fn item_id(&self) -> molecule::Number {
+        molecule::unpack_number(self.as_slice())
+    }
+    pub fn to_enum(&self) -> RollupActionUnionReader<'r> {
+        let inner = &self.as_slice()[molecule::NUMBER_SIZE..];
+        match self.item_id() {
+            0 => L2BlockReader::new_unchecked(inner).into(),
+            1 => RollupChallengeReader::new_unchecked(inner).into(),
+            2 => RollupRevertReader::new_unchecked(inner).into(),
+            _ => panic!("{}: invalid data", Self::NAME),
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for RollupActionReader<'r> {
+    type Entity = RollupAction;
+    const NAME: &'static str = "RollupActionReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        RollupActionReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let item_id = molecule::unpack_number(slice);
+        let inner_slice = &slice[molecule::NUMBER_SIZE..];
+        match item_id {
+            0 => L2BlockReader::verify(inner_slice, compatible),
+            1 => RollupChallengeReader::verify(inner_slice, compatible),
+            2 => RollupRevertReader::verify(inner_slice, compatible),
+            _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
+        }?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct RollupActionBuilder(pub(crate) RollupActionUnion);
+impl RollupActionBuilder {
+    pub const ITEMS_COUNT: usize = 3;
+    pub fn set<I>(mut self, v: I) -> Self
+    where
+        I: ::core::convert::Into<RollupActionUnion>,
+    {
+        self.0 = v.into();
+        self
+    }
+}
+impl molecule::prelude::Builder for RollupActionBuilder {
+    type Entity = RollupAction;
+    const NAME: &'static str = "RollupActionBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE + self.0.as_slice().len()
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(&molecule::pack_number(self.0.item_id()))?;
+        writer.write_all(self.0.as_slice())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        RollupAction::new_unchecked(inner.into())
+    }
+}
+#[derive(Debug, Clone)]
+pub enum RollupActionUnion {
+    L2Block(L2Block),
+    RollupChallenge(RollupChallenge),
+    RollupRevert(RollupRevert),
+}
+#[derive(Debug, Clone, Copy)]
+pub enum RollupActionUnionReader<'r> {
+    L2Block(L2BlockReader<'r>),
+    RollupChallenge(RollupChallengeReader<'r>),
+    RollupRevert(RollupRevertReader<'r>),
+}
+impl ::core::default::Default for RollupActionUnion {
+    fn default() -> Self {
+        RollupActionUnion::L2Block(::core::default::Default::default())
+    }
+}
+impl ::core::fmt::Display for RollupActionUnion {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            RollupActionUnion::L2Block(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, L2Block::NAME, item)
+            }
+            RollupActionUnion::RollupChallenge(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, RollupChallenge::NAME, item)
+            }
+            RollupActionUnion::RollupRevert(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, RollupRevert::NAME, item)
+            }
+        }
+    }
+}
+impl<'r> ::core::fmt::Display for RollupActionUnionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            RollupActionUnionReader::L2Block(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, L2Block::NAME, item)
+            }
+            RollupActionUnionReader::RollupChallenge(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, RollupChallenge::NAME, item)
+            }
+            RollupActionUnionReader::RollupRevert(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, RollupRevert::NAME, item)
+            }
+        }
+    }
+}
+impl RollupActionUnion {
+    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            RollupActionUnion::L2Block(ref item) => write!(f, "{}", item),
+            RollupActionUnion::RollupChallenge(ref item) => write!(f, "{}", item),
+            RollupActionUnion::RollupRevert(ref item) => write!(f, "{}", item),
+        }
+    }
+}
+impl<'r> RollupActionUnionReader<'r> {
+    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            RollupActionUnionReader::L2Block(ref item) => write!(f, "{}", item),
+            RollupActionUnionReader::RollupChallenge(ref item) => write!(f, "{}", item),
+            RollupActionUnionReader::RollupRevert(ref item) => write!(f, "{}", item),
+        }
+    }
+}
+impl ::core::convert::From<L2Block> for RollupActionUnion {
+    fn from(item: L2Block) -> Self {
+        RollupActionUnion::L2Block(item)
+    }
+}
+impl ::core::convert::From<RollupChallenge> for RollupActionUnion {
+    fn from(item: RollupChallenge) -> Self {
+        RollupActionUnion::RollupChallenge(item)
+    }
+}
+impl ::core::convert::From<RollupRevert> for RollupActionUnion {
+    fn from(item: RollupRevert) -> Self {
+        RollupActionUnion::RollupRevert(item)
+    }
+}
+impl<'r> ::core::convert::From<L2BlockReader<'r>> for RollupActionUnionReader<'r> {
+    fn from(item: L2BlockReader<'r>) -> Self {
+        RollupActionUnionReader::L2Block(item)
+    }
+}
+impl<'r> ::core::convert::From<RollupChallengeReader<'r>> for RollupActionUnionReader<'r> {
+    fn from(item: RollupChallengeReader<'r>) -> Self {
+        RollupActionUnionReader::RollupChallenge(item)
+    }
+}
+impl<'r> ::core::convert::From<RollupRevertReader<'r>> for RollupActionUnionReader<'r> {
+    fn from(item: RollupRevertReader<'r>) -> Self {
+        RollupActionUnionReader::RollupRevert(item)
+    }
+}
+impl RollupActionUnion {
+    pub const NAME: &'static str = "RollupActionUnion";
+    pub fn as_bytes(&self) -> molecule::bytes::Bytes {
+        match self {
+            RollupActionUnion::L2Block(item) => item.as_bytes(),
+            RollupActionUnion::RollupChallenge(item) => item.as_bytes(),
+            RollupActionUnion::RollupRevert(item) => item.as_bytes(),
+        }
+    }
+    pub fn as_slice(&self) -> &[u8] {
+        match self {
+            RollupActionUnion::L2Block(item) => item.as_slice(),
+            RollupActionUnion::RollupChallenge(item) => item.as_slice(),
+            RollupActionUnion::RollupRevert(item) => item.as_slice(),
+        }
+    }
+    pub fn item_id(&self) -> molecule::Number {
+        match self {
+            RollupActionUnion::L2Block(_) => 0,
+            RollupActionUnion::RollupChallenge(_) => 1,
+            RollupActionUnion::RollupRevert(_) => 2,
+        }
+    }
+    pub fn item_name(&self) -> &str {
+        match self {
+            RollupActionUnion::L2Block(_) => "L2Block",
+            RollupActionUnion::RollupChallenge(_) => "RollupChallenge",
+            RollupActionUnion::RollupRevert(_) => "RollupRevert",
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> RollupActionUnionReader<'r> {
+        match self {
+            RollupActionUnion::L2Block(item) => item.as_reader().into(),
+            RollupActionUnion::RollupChallenge(item) => item.as_reader().into(),
+            RollupActionUnion::RollupRevert(item) => item.as_reader().into(),
+        }
+    }
+}
+impl<'r> RollupActionUnionReader<'r> {
+    pub const NAME: &'r str = "RollupActionUnionReader";
+    pub fn as_slice(&self) -> &'r [u8] {
+        match self {
+            RollupActionUnionReader::L2Block(item) => item.as_slice(),
+            RollupActionUnionReader::RollupChallenge(item) => item.as_slice(),
+            RollupActionUnionReader::RollupRevert(item) => item.as_slice(),
+        }
+    }
+    pub fn item_id(&self) -> molecule::Number {
+        match self {
+            RollupActionUnionReader::L2Block(_) => 0,
+            RollupActionUnionReader::RollupChallenge(_) => 1,
+            RollupActionUnionReader::RollupRevert(_) => 2,
+        }
+    }
+    pub fn item_name(&self) -> &str {
+        match self {
+            RollupActionUnionReader::L2Block(_) => "L2Block",
+            RollupActionUnionReader::RollupChallenge(_) => "RollupChallenge",
+            RollupActionUnionReader::RollupRevert(_) => "RollupRevert",
+        }
     }
 }
 #[derive(Clone)]

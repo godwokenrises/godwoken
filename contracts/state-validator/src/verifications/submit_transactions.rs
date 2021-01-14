@@ -1,10 +1,10 @@
-use crate::context::Context;
+use crate::types::BlockContext;
 use crate::error::Error;
 use gw_common::{blake2b::new_blake2b, state::State, merkle_utils::calculate_merkle_root};
 use gw_types::{packed::L2Block, prelude::*};
 
 /// Handle SubmitTransactions
-pub fn handle(context: &mut Context, block: &L2Block) -> Result<(), Error> {
+pub fn verify(context: &mut Context, block: &L2Block) -> Result<(), Error> {
     // Verify tx_witness_root
 
     let submit_transactions = match block.raw().submit_transactions().to_opt() {

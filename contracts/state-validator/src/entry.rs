@@ -4,19 +4,25 @@ use core::result::Result;
 
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use alloc::{collections::BTreeMap, vec};
+use alloc::{collections::BTreeMap, vec, vec::Vec};
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
-use crate::ckb_std::{
-    ckb_constants::Source,
-    ckb_types::{bytes::Bytes, prelude::*},
-    dynamic_loading::CKBDLContext,
-    high_level::{load_cell_data, load_script_hash, load_witness_args},
+use crate::{
+    ckb_std::{
+        ckb_constants::Source,
+        ckb_types::{bytes::Bytes, prelude::*},
+        dynamic_loading::CKBDLContext,
+        high_level::{load_cell_data, load_script_hash, load_witness_args},
+    },
+    verifications,
 };
 
 use gw_types::{
-    packed::{GlobalState, GlobalStateReader, L2Block, L2BlockReader, RawL2Block},
+    packed::{
+        GlobalState, GlobalStateReader, L2Block, L2BlockReader, RawL2Block, RollupAction,
+        RollupActionReader, RollupActionUnion,
+    },
     prelude::{Reader as GodwokenTypesReader, Unpack as GodwokenTypesUnpack},
 };
 
@@ -25,24 +31,25 @@ use gw_common::{
     smt::Blake2bHasher,
     sparse_merkle_tree::{CompiledMerkleProof, H256},
     state::State,
+    FINALIZE_BLOCKS,
 };
 
 // use crate::actions;
 // use crate::consensus::verify_aggregator;
-use crate::context::Context;
 use crate::error::Error;
+use crate::types::BlockContext;
 
 // TODO 1. consider contract on creation
 // TODO 2. make sure we only have 1 contract cell
-fn parse_l2block() -> Result<L2Block, Error> {
+fn parse_rollup_action() -> Result<RollupAction, Error> {
     let witness_args = load_witness_args(0, Source::GroupOutput)?;
     let output_type: Bytes = witness_args
         .output_type()
         .to_opt()
         .ok_or_else(|| Error::Encoding)?
         .unpack();
-    match L2BlockReader::verify(&output_type, false) {
-        Ok(_) => Ok(L2Block::new_unchecked(output_type)),
+    match RollupActionReader::verify(&output_type, false) {
+        Ok(_) => Ok(RollupAction::new_unchecked(output_type)),
         Err(_) => Err(Error::Encoding),
     }
 }
@@ -83,11 +90,11 @@ fn parse_global_state(source: Source) -> Result<GlobalState, Error> {
 //     Ok(())
 // }
 
-fn verify_l2block(
+fn load_l2block_context(
     l2block: &L2Block,
     prev_global_state: &GlobalState,
     post_global_state: &GlobalState,
-) -> Result<Context, Error> {
+) -> Result<BlockContext, Error> {
     let raw_block = l2block.raw();
 
     // Check pre block merkle proof
@@ -167,8 +174,10 @@ fn verify_l2block(
     let account_count: u32 = prev_global_state.account().count().unpack();
     let rollup_type_hash = load_script_hash()?;
     let aggregator_id: u32 = raw_block.block_producer_id().unpack();
-    let context = Context {
+    let finalized_number = number.saturating_sub(FINALIZE_BLOCKS);
+    let context = BlockContext {
         number,
+        finalized_number,
         aggregator_id,
         kv_pairs,
         kv_merkle_proof,
@@ -184,20 +193,24 @@ fn verify_l2block(
 }
 
 pub fn main() -> Result<(), Error> {
-    // // Initialize CKBDLContext
-    // let mut context = unsafe{ CKBDLContext::<[u8; 128 * 1024]>::new() };
-    // let lib_secp256k1 = LibSecp256k1::load(&mut context);
     // basic verification
     let prev_global_state = parse_global_state(Source::GroupInput)?;
     let post_global_state = parse_global_state(Source::GroupOutput)?;
-    let l2block = parse_l2block()?;
-    let mut context = verify_l2block(&l2block, &prev_global_state, &post_global_state)?;
-    // // check signature
-    // verify_block_signature(&context, &lib_secp256k1, &l2block)?;
+    let action = parse_rollup_action()?;
+    match action.to_enum() {
+        RollupActionUnion::L2Block(l2block) => {
+            let mut context =
+                load_l2block_context(&l2block, &prev_global_state, &post_global_state)?;
+            // // check signature
+            // verify_block_signature(&context, &lib_secp256k1, &l2block)?;
 
-    // // handle state transitions
-    // actions::submit_transactions::handle(&mut context, &l2block)?;
-    // actions::join::handle(&mut context, &l2block)?;
+            // handle state transitions
+            // verifications::submit_transactions::verify(&mut context, &l2block)?;
+        }
+        _ => {
+            panic!("unknown rollup action");
+        }
+    }
 
     Ok(())
 }
