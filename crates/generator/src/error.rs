@@ -54,6 +54,10 @@ pub enum ValidateError {
     InsufficientCapacity { expected: u64, actual: u64 },
     #[error("Invalid SUDT operation")]
     InvalidSUDTOperation,
+    #[error("Unknown SUDT")]
+    UnknownSUDT,
+    #[error("Unknown account")]
+    UnknownAccount,
 }
 
 impl From<ValidateError> for Error {
