@@ -1,5 +1,5 @@
 use crate::{
-    account_lock_manage::AccountLockManage, backend_manage::BackendManage,
+    account_lock_manage::AccountLockManage, backend_manage::BackendManage, error::WithdrawalError,
     sudt::build_l2_sudt_script,
 };
 use crate::{
@@ -96,7 +96,7 @@ impl Generator {
         let lock_algo = self
             .account_lock_manage
             .get_lock_algorithm(&lock_code_hash.into())
-            .ok_or(ValidateError::UnknownAccountLockScript)?;
+            .ok_or(LockAlgorithmError::UnknownAccountLock)?;
 
         let mut hasher = new_blake2b();
         hasher.update(self.rollup_type_script_hash.as_slice());
@@ -118,7 +118,11 @@ impl Generator {
             .get_account_id_by_script_hash(&account_script_hash.into())?
             .ok_or(ValidateError::UnknownAccount)?; // find Simple UDT account
 
-        // check balance
+        // check CKB balance
+        let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, id)?;
+        if capacity as u128 > ckb_balance {
+            return Err(WithdrawalError::Overdraft.into());
+        }
         let l2_sudt_script_hash = build_l2_sudt_script(sudt_script_hash).hash();
         let sudt_id = state
             .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
@@ -127,18 +131,18 @@ impl Generator {
             // check SUDT balance
             let balance = state.get_sudt_balance(sudt_id, id)?;
             if amount > balance {
-                return Err(ValidateError::InvalidWithdrawal.into());
+                return Err(WithdrawalError::Overdraft.into());
             }
         } else if amount != 0 {
             // user can't withdrawal CKB token via SUDT fields
-            return Err(ValidateError::InvalidWithdrawal.into());
+            return Err(WithdrawalError::WithdrawFakedCKB.into());
         }
 
         // check nonce
         let expected_nonce = state.get_nonce(id)?;
         let actual_nonce: u32 = raw.nonce().unpack();
         if actual_nonce != expected_nonce {
-            return Err(ValidateError::InvalidWithdrawalNonce {
+            return Err(WithdrawalError::InvalidNonce {
                 expected: expected_nonce,
                 actual: actual_nonce,
             }

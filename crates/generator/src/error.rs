@@ -4,7 +4,7 @@ use gw_types::packed::StartChallenge;
 use thiserror::Error;
 
 /// Error
-#[derive(Error, Debug, Clone)]
+#[derive(Error, PartialEq, Eq, Debug, Clone)]
 pub enum Error {
     #[error("Transaction error {0}")]
     Transaction(TransactionErrorWithContext),
@@ -12,6 +12,12 @@ pub enum Error {
     State(StateError),
     #[error("Validate error {0:?}")]
     Validate(ValidateError),
+    #[error("Unlock error {0}")]
+    Unlock(LockAlgorithmError),
+    #[error("Deposition error {0}")]
+    Deposition(DepositionError),
+    #[error("Withdrawal error {0}")]
+    Withdrawal(WithdrawalError),
 }
 
 impl From<StateError> for Error {
@@ -26,30 +32,46 @@ pub enum LockAlgorithmError {
     InvalidLockArgs,
     #[error("Invalid signature")]
     InvalidSignature,
-}
-
-impl From<LockAlgorithmError> for ValidateError {
-    fn from(err: LockAlgorithmError) -> Self {
-        ValidateError::Unlock(err)
-    }
+    #[error("Unknown account lock")]
+    UnknownAccountLock,
 }
 
 impl From<LockAlgorithmError> for Error {
     fn from(err: LockAlgorithmError) -> Self {
-        ValidateError::Unlock(err).into()
+        Error::Unlock(err)
+    }
+}
+
+#[derive(Error, Debug, PartialEq, Clone, Eq)]
+pub enum DepositionError {
+    #[error("Deposit Faked CKB")]
+    DepositFakedCKB,
+}
+
+impl From<DepositionError> for Error {
+    fn from(err: DepositionError) -> Self {
+        Error::Deposition(err)
+    }
+}
+
+#[derive(Error, Debug, PartialEq, Clone, Eq)]
+pub enum WithdrawalError {
+    #[error("Over withdrawal")]
+    Overdraft,
+    #[error("Invalid withdrawal nonce expected {expected} actual {actual}")]
+    InvalidNonce { expected: u32, actual: u32 },
+    #[error("Withdrawal Faked CKB")]
+    WithdrawFakedCKB,
+}
+
+impl From<WithdrawalError> for Error {
+    fn from(err: WithdrawalError) -> Self {
+        Error::Withdrawal(err)
     }
 }
 
 #[derive(Error, Debug, PartialEq, Clone, Eq)]
 pub enum ValidateError {
-    #[error("Invalid withdrawal request")]
-    InvalidWithdrawal,
-    #[error("Invalid withdrawal nonce expected {expected} actual {actual}")]
-    InvalidWithdrawalNonce { expected: u32, actual: u32 },
-    #[error("Unknown account lock script")]
-    UnknownAccountLockScript,
-    #[error("Unlock error {0}")]
-    Unlock(LockAlgorithmError),
     #[error("Insufficient capacity expected {expected} actual {actual}")]
     InsufficientCapacity { expected: u64, actual: u64 },
     #[error("Invalid SUDT operation")]
@@ -58,6 +80,8 @@ pub enum ValidateError {
     UnknownSUDT,
     #[error("Unknown account")]
     UnknownAccount,
+    #[error("Nonce Overflow")]
+    NonceOverflow,
 }
 
 impl From<ValidateError> for Error {

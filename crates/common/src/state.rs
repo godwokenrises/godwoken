@@ -79,10 +79,7 @@ pub trait State {
     fn create_account(&mut self, script_hash: H256) -> Result<u32, Error> {
         let id = self.get_account_count()?;
         // nonce
-        self.update_raw(
-            build_account_field_key(id, GW_ACCOUNT_NONCE).into(),
-            H256::zero(),
-        )?;
+        self.set_nonce(id, 0)?;
         // script hash
         self.update_raw(
             build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH).into(),
@@ -97,13 +94,23 @@ pub trait State {
         self.set_account_count(id + 1)?;
         Ok(id)
     }
+
     fn get_script_hash(&self, id: u32) -> Result<H256, Error> {
         let value = self.get_raw(&build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH).into())?;
         Ok(value.into())
     }
+
     fn get_nonce(&self, id: u32) -> Result<u32, Error> {
         let value = self.get_raw(&build_account_field_key(id, GW_ACCOUNT_NONCE).into())?;
         Ok(value.to_u32())
+    }
+
+    fn set_nonce(&mut self, id: u32, nonce: u32) -> Result<(), Error> {
+        self.update_raw(
+            build_account_field_key(id, GW_ACCOUNT_NONCE).into(),
+            H256::from_u32(nonce),
+        )?;
+        Ok(())
     }
 
     fn get_account_id_by_script_hash(&self, script_hash: &H256) -> Result<Option<u32>, Error> {
