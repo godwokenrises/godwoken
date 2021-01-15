@@ -7,12 +7,14 @@ use core::panic;
 use gw_common::builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH;
 use gw_common::state::State;
 use gw_common::{CodeStore, H256};
+use gw_store::Store;
 use gw_types::{
     packed::{BlockInfo, CreateAccount, MetaContractArgs, RawL2Transaction, Script},
     prelude::*,
 };
 
 fn run_contract<S: State + CodeStore>(
+    store: &Store,
     tree: &mut S,
     from_id: u32,
     to_id: u32,
@@ -27,13 +29,14 @@ fn run_contract<S: State + CodeStore>(
     let backend_manage = BackendManage::default();
     let account_lock_manage = AccountLockManage::default();
     let generator = Generator::new(backend_manage, account_lock_manage, Default::default());
-    let run_result = generator.execute(tree, block_info, &raw_tx)?;
+    let run_result = generator.execute(store, tree, block_info, &raw_tx)?;
     tree.apply_run_result(&run_result).expect("update state");
     Ok(run_result.return_data)
 }
 
 #[test]
 fn test_meta_contract() {
+    let store = Store::open_tmp().unwrap();
     let mut tree = DummyState::default();
     // init accounts
     let meta_contract_id = tree
@@ -69,8 +72,8 @@ fn test_meta_contract() {
                 .build(),
         )
         .build();
-    let return_data =
-        run_contract(&mut tree, a_id, meta_contract_id, args, &block_info).expect("execute");
+    let return_data = run_contract(&store, &mut tree, a_id, meta_contract_id, args, &block_info)
+        .expect("execute");
     let account_id = {
         let mut buf = [0u8; 4];
         buf.copy_from_slice(&return_data);
@@ -89,6 +92,7 @@ fn test_meta_contract() {
 
 #[test]
 fn test_duplicated_script_hash() {
+    let store = Store::open_tmp().unwrap();
     let mut tree = DummyState::default();
     // init accounts
     let meta_contract_id = tree
@@ -130,7 +134,8 @@ fn test_duplicated_script_hash() {
                 .build(),
         )
         .build();
-    let err = run_contract(&mut tree, a_id, meta_contract_id, args, &block_info).unwrap_err();
+    let err =
+        run_contract(&store, &mut tree, a_id, meta_contract_id, args, &block_info).unwrap_err();
     let err_code = match err {
         TransactionError::InvalidExitCode(code) => code,
         err => panic!("unexpected {:?}", err),

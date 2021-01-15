@@ -468,7 +468,10 @@ impl Chain {
         };
         let mut tree = db.account_state_tree()?;
         // process transactions
-        let result = match self.generator.apply_state_transition(&mut tree, args) {
+        let result = match self
+            .generator
+            .apply_state_transition(&self.store, &mut tree, args)
+        {
             Ok(result) => result,
             Err(err) => {
                 // handle tx error

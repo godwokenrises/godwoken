@@ -27,6 +27,7 @@
 #define GW_SYS_LOAD_ACCOUNT_SCRIPT 4055
 #define GW_SYS_STORE_DATA 4056
 #define GW_SYS_LOAD_DATA 4057
+#define GW_SYS_GET_BLOCK_HASH 4058
 #define GW_SYS_LOG 4061
 
 #define MAX_BUF_SIZE 65536
@@ -129,6 +130,10 @@ int _sys_load_block_info(void *addr, uint64_t *len) {
   return ret;
 }
 
+int sys_get_block_hash(gw_context_t *ctx, uint64_t number, uint8_t block_hash[32]) {
+  return syscall(GW_SYS_GET_BLOCK_HASH, number, block_hash, 0, 0, 0, 0);
+}
+
 int sys_create(gw_context_t *ctx, uint8_t *script, uint32_t script_len,
                uint32_t *account_id) {
   return syscall(GW_SYS_CREATE, script, script_len, account_id, 0, 0, 0);
@@ -153,6 +158,7 @@ int gw_context_init(gw_context_t *ctx) {
   ctx->sys_get_account_script = sys_get_account_script;
   ctx->sys_store_data = sys_store_data;
   ctx->sys_load_data = sys_load_data;
+  ctx->sys_get_block_hash = sys_get_block_hash;
   ctx->sys_log = sys_log;
 
   /* initialize context */
