@@ -14,7 +14,7 @@ use gw_common::{
     error::Error as StateError,
     h256_ext::H256Ext,
     state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
-    H256
+    H256,
 };
 use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
