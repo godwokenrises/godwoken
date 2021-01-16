@@ -336,6 +336,7 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                         .data(Bytes::from(data).pack())
                         .build(),
                 );
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
             DEBUG_PRINT_SYSCALL_NUMBER => {
