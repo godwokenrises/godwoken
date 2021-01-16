@@ -1,17 +1,12 @@
 use super::new_block_info;
 use crate::{
-    account_lock_manage::AccountLockManage,
-    backend_manage::BackendManage,
-    builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH,
-    dummy_state::DummyState,
-    error::TransactionError,
-    syscalls::ERROR_DUPLICATED_SCRIPT_HASH,
-    traits::{CodeStore, StateExt},
-    Generator,
+    account_lock_manage::AccountLockManage, backend_manage::BackendManage, dummy_state::DummyState,
+    error::TransactionError, syscalls::ERROR_DUPLICATED_SCRIPT_HASH, traits::StateExt, Generator,
 };
 use core::panic;
+use gw_common::builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH;
 use gw_common::state::State;
-use gw_common::H256;
+use gw_common::{CodeStore, H256};
 use gw_types::{
     packed::{BlockInfo, CreateAccount, MetaContractArgs, RawL2Transaction, Script},
     prelude::*,

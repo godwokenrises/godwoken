@@ -1,7 +1,8 @@
+use crate::genesis::{build_genesis, init_genesis};
+use gw_common::CodeStore;
 use gw_common::{sparse_merkle_tree::H256, state::State};
 use gw_config::GenesisConfig;
-use gw_generator::traits::CodeStore;
-use gw_store::{genesis::build_genesis, Store};
+use gw_store::Store;
 use gw_types::{core::ScriptHashType, packed::HeaderInfo, prelude::*};
 use std::convert::TryInto;
 
@@ -18,9 +19,7 @@ fn test_init_genesis() {
     assert_eq!(genesis_block_hash, GENESIS_BLOCK_HASH);
     let header_info = HeaderInfo::default();
     let store: Store = Store::open_tmp().unwrap();
-    store
-        .init_genesis(&config, header_info, H256::zero())
-        .unwrap();
+    init_genesis(&store, &config, header_info, H256::zero()).unwrap();
     let db = store.begin_transaction();
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());
