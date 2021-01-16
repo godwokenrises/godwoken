@@ -218,8 +218,8 @@ declare_types! {
             let sudt_id = cx.argument::<JsNumber>(1)?.value() as u32;
             let balance = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let db = chain.store.begin_transaction();
-                let tree = db.account_state_tree().unwrap();
+                let tx_pool = chain.tx_pool.lock();
+                let tree = tx_pool.state();
                 tree.get_sudt_balance(sudt_id, account_id)
             });
             match balance {
@@ -243,8 +243,8 @@ declare_types! {
              });
             let get_raw_result = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let db = chain.store.begin_transaction();
-                let tree = db.account_state_tree().unwrap();
+                let tx_pool = chain.tx_pool.lock();
+                let tree = tx_pool.state();
                 tree.get_value(account_id, &raw_key)
             });
             match get_raw_result {
@@ -269,8 +269,8 @@ declare_types! {
              });
             let get_raw_result = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let db = chain.store.begin_transaction();
-                let tree = db.account_state_tree().unwrap();
+                let tx_pool = chain.tx_pool.lock();
+                let tree = tx_pool.state();
                 tree.get_account_id_by_script_hash(&raw_key)
             });
             match get_raw_result {
@@ -285,8 +285,8 @@ declare_types! {
             let account_id = cx.argument::<JsNumber>(0)?.value() as u32;
             let nonce = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let db = chain.store.begin_transaction();
-                let tree = db.account_state_tree().unwrap();
+                let tx_pool = chain.tx_pool.lock();
+                let tree = tx_pool.state();
                 tree.get_nonce(account_id)
             });
             match nonce {
@@ -300,8 +300,8 @@ declare_types! {
             let account_id = cx.argument::<JsNumber>(0)?.value() as u32;
             let script_hash = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let db = chain.store.begin_transaction();
-                let tree = db.account_state_tree().unwrap();
+                let tx_pool = chain.tx_pool.lock();
+                let tree = tx_pool.state();
                 tree.get_script_hash(account_id)
             });
             match script_hash {
@@ -326,8 +326,8 @@ declare_types! {
              });
             let script = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let db = chain.store.begin_transaction();
-                let tree = db.account_state_tree().unwrap();
+                let tx_pool = chain.tx_pool.lock();
+                let tree = tx_pool.state();
                 tree.get_script(&raw_key)
             });
             match script {
@@ -351,8 +351,8 @@ declare_types! {
              });
             let data = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let db = chain.store.begin_transaction();
-                let tree = db.account_state_tree().unwrap();
+                let tx_pool = chain.tx_pool.lock();
+                let tree = tx_pool.state();
                 tree.get_data_hash(&raw_key)
             });
             match data {
@@ -372,8 +372,8 @@ declare_types! {
              });
             let data = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let db = chain.store.begin_transaction();
-                let tree = db.account_state_tree().unwrap();
+                let tx_pool = chain.tx_pool.lock();
+                let tree = tx_pool.state();
                 tree.get_data(&raw_key)
             });
             match data {

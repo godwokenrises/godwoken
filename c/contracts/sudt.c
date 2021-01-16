@@ -15,7 +15,7 @@
  *
  * # Mint & Burn
  *
- * To join a Rollup, users deposite SUDT assets on layer1;
+ * To join a Rollup, users deposit SUDT assets on layer1;
  * then Rollup aggregators take the layer1 assets and mint new SUDT coins on
  * layer2 according to the deposited assets.
  * (Aggregator find a corresponded layer2 SUDT contract by searching

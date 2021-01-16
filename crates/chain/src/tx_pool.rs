@@ -2,7 +2,7 @@ use crate::next_block_context::NextBlockContext;
 use anyhow::{anyhow, Result};
 use gw_common::{blake2b::new_blake2b, state::State, H256};
 use gw_generator::{
-    error::{LockAlgorithmError, ValidateError},
+    error::LockAlgorithmError,
     traits::{CodeStore, StateExt},
     Generator, RunResult,
 };
@@ -59,6 +59,10 @@ impl TxPool {
 }
 
 impl TxPool {
+    pub fn state(&self) -> &OverlayStore {
+        &self.state
+    }
+
     /// Push a layer2 tx into pool
     pub fn push(&mut self, tx: L2Transaction) -> Result<RunResult> {
         if self.queue.len() >= MAX_IN_POOL_TXS {
@@ -181,7 +185,7 @@ impl TxPool {
             .generator
             .account_lock_manage()
             .get_lock_algorithm(&lock_code_hash.into())
-            .ok_or(ValidateError::UnknownAccountLockScript)?;
+            .ok_or(LockAlgorithmError::UnknownAccountLock)?;
         let valid_signature =
             lock_algo.verify_signature(script.args().unpack(), tx.signature(), message.into())?;
         if !valid_signature {
@@ -208,7 +212,21 @@ impl TxPool {
             .collect();
         // TODO make sure the remain capacity is enough to pay custodian cell
         // apply withdrawal request to the state
-        self.state.apply_withdrawal_requests(&withdrawal_requests)?;
+        let withdrawal_requests = withdrawal_requests
+            .into_iter()
+            .filter(
+                |request| match self.state.apply_withdrawal_request(request) {
+                    Ok(_) => true,
+                    Err(err) => {
+                        eprintln!("failed to apply withdrawal: {}", err);
+                        if let Err(err) = self.push_withdrawal_request(request.clone()) {
+                            eprintln!("failed to re-push withdrawal into pool: {}", err);
+                        }
+                        false
+                    }
+                },
+            )
+            .collect();
         // apply deposition request to the state
         self.state.apply_deposition_requests(&deposition_requests)?;
         let post_account_state = get_account_state(&self.state)?;
