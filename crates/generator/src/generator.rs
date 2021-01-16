@@ -1,15 +1,11 @@
 use crate::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, error::WithdrawalError,
-    sudt::build_l2_sudt_script,
 };
 use crate::{
     backend_manage::Backend,
     error::{Error, TransactionError, TransactionErrorWithContext},
 };
-use crate::{
-    error::LockAlgorithmError,
-    traits::{CodeStore, StateExt},
-};
+use crate::{error::LockAlgorithmError, traits::StateExt};
 use crate::{error::ValidateError, syscalls::L2Syscalls, types::RunResult};
 use gw_common::{
     blake2b::new_blake2b,
@@ -17,7 +13,8 @@ use gw_common::{
     error::Error as StateError,
     h256_ext::H256Ext,
     state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
-    H256,
+    sudt::build_l2_sudt_script,
+    CodeStore, H256,
 };
 use gw_types::{
     core::ScriptHashType,

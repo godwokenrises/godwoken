@@ -842,6 +842,8 @@ version = "0.1.0"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
+ "gw-types",
+ "lazy_static",
  "sparse-merkle-tree",
  "thiserror",
 ]
@@ -879,6 +881,8 @@ dependencies = [
  "ckb-types",
  "ckb-vm 0.19.1",
  "gw-common",
+ "gw-config",
+ "gw-store",
  "gw-types",
  "hex",
  "lazy_static",
@@ -920,7 +924,6 @@ dependencies = [
  "gw-common",
  "gw-config",
  "gw-db",
- "gw-generator",
  "gw-types",
  "parking_lot",
  "thiserror",

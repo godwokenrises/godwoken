@@ -1,4 +1,5 @@
 use crate::db_utils::build_transaction_key;
+use gw_common::CodeStore;
 use gw_common::{
     error::Error as StateError,
     smt::SMT,
@@ -22,7 +23,6 @@ use gw_db::{
     error::Error, iter::DBIter, DBIterator, DBVector, IteratorMode, RocksDBTransaction,
     RocksDBTransactionSnapshot,
 };
-use gw_generator::traits::CodeStore;
 use gw_types::{bytes::Bytes, packed, prelude::*};
 
 pub struct SMTStoreTransaction<'a> {

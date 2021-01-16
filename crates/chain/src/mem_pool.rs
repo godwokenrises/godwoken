@@ -1,11 +1,7 @@
 use crate::next_block_context::NextBlockContext;
 use anyhow::{anyhow, Result};
-use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_generator::{
-    error::LockAlgorithmError,
-    traits::{CodeStore, StateExt},
-    Generator, RunResult,
-};
+use gw_common::{blake2b::new_blake2b, state::State, CodeStore, H256};
+use gw_generator::{error::LockAlgorithmError, traits::StateExt, Generator, RunResult};
 use gw_store::OverlayStore;
 use gw_types::{
     packed::{BlockInfo, DepositionRequest, L2Block, L2Transaction, TxReceipt, WithdrawalRequest},

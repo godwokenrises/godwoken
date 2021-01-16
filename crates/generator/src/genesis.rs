@@ -1,13 +1,14 @@
-use crate::{transaction::StoreTransaction, Store};
+use crate::traits::StateExt;
 use anyhow::Result;
 use gw_common::{
+    builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH,
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     smt::{default_store::DefaultStore, H256, SMT},
     state::State,
     CKB_SUDT_SCRIPT_ARGS, CKB_SUDT_SCRIPT_HASH,
 };
 use gw_config::GenesisConfig;
-use gw_generator::{builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH, traits::StateExt};
+use gw_store::{transaction::StoreTransaction, Store};
 use gw_types::{
     core::Status,
     packed::{
@@ -57,7 +58,7 @@ pub fn build_genesis_from_store(
     );
 
     // setup CKB simple UDT contract
-    let ckb_sudt_script = gw_generator::sudt::build_l2_sudt_script(CKB_SUDT_SCRIPT_ARGS.into());
+    let ckb_sudt_script = gw_common::sudt::build_l2_sudt_script(CKB_SUDT_SCRIPT_ARGS.into());
     assert_eq!(
         ckb_sudt_script.hash(),
         CKB_SUDT_SCRIPT_HASH,
@@ -126,35 +127,29 @@ pub fn build_genesis_from_store(
     })
 }
 
-impl Store {
-    pub fn has_genesis(&self) -> Result<bool> {
-        let db = self.begin_transaction();
-        Ok(db.get_block_hash_by_number(0)?.is_some())
+pub fn init_genesis(
+    store: &Store,
+    config: &GenesisConfig,
+    header: HeaderInfo,
+    chain_id: H256,
+) -> Result<()> {
+    if store.has_genesis()? {
+        panic!("The store is already initialized!");
     }
-    pub fn init_genesis(
-        &self,
-        config: &GenesisConfig,
-        header: HeaderInfo,
-        chain_id: H256,
-    ) -> Result<()> {
-        if self.has_genesis()? {
-            panic!("The store is already initialized!");
-        }
-        let mut db = self.begin_transaction();
-        db.setup_chain_id(chain_id)?;
-        let GenesisWithGlobalState {
-            genesis,
-            global_state,
-        } = build_genesis_from_store(&mut db, config)?;
-        db.insert_block(
-            genesis.clone(),
-            header,
-            global_state,
-            Vec::new(),
-            Vec::new(),
-        )?;
-        db.attach_block(genesis)?;
-        db.commit()?;
-        Ok(())
-    }
+    let mut db = store.begin_transaction();
+    db.setup_chain_id(chain_id)?;
+    let GenesisWithGlobalState {
+        genesis,
+        global_state,
+    } = build_genesis_from_store(&mut db, config)?;
+    db.insert_block(
+        genesis.clone(),
+        header,
+        global_state,
+        Vec::new(),
+        Vec::new(),
+    )?;
+    db.attach_block(genesis)?;
+    db.commit()?;
+    Ok(())
 }

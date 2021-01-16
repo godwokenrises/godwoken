@@ -1,17 +1,21 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod builtin_scripts;
 pub mod builtins;
 pub mod error;
 pub mod h256_ext;
 pub mod merkle_utils;
 pub mod smt;
 pub mod state;
+pub mod sudt;
+pub mod traits;
 
 // re-exports
 
 pub use gw_hash::blake2b;
 pub use h256_ext::H256;
 pub use sparse_merkle_tree;
+pub use traits::CodeStore;
 
 /// Common constants
 
@@ -35,4 +39,12 @@ cfg_if::cfg_if! {
         extern crate alloc;
         use alloc::vec;
     }
+}
+
+pub fn code_hash(data: &[u8]) -> crate::H256 {
+    let mut hasher = crate::blake2b::new_blake2b();
+    hasher.update(data);
+    let mut code_hash = [0u8; 32];
+    hasher.finalize(&mut code_hash);
+    code_hash.into()
 }

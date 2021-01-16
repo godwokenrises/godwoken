@@ -13,8 +13,8 @@ use gw_common::{
         H256,
     },
     state::State,
+    CodeStore,
 };
-use gw_generator::traits::CodeStore;
 use gw_types::{bytes::Bytes, packed::Script};
 use std::collections::{HashMap, HashSet};
 

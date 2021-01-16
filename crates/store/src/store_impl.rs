@@ -68,6 +68,11 @@ impl<'a> Store {
         Ok(())
     }
 
+    pub fn has_genesis(&self) -> Result<bool> {
+        let db = self.begin_transaction();
+        Ok(db.get_block_hash_by_number(0)?.is_some())
+    }
+
     /// TODO use RocksDB snapshot
     pub fn new_overlay(&self) -> Result<OverlayStore> {
         let db = self.begin_transaction();

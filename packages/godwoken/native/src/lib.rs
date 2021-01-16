@@ -4,17 +4,17 @@ use gw_chain::{
     mem_pool::{MemPool, PackageParam},
     next_block_context::NextBlockContext,
 };
-use gw_common::{state::State, H256};
+use gw_common::{state::State, CodeStore, H256};
 use gw_config::{ChainConfig, Config, GenesisConfig};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::{Backend, BackendManage},
-    traits::CodeStore,
+    genesis::{build_genesis, init_genesis},
     Generator,
 };
 use gw_jsonrpc_types::{blockchain, genesis, parameter};
-use gw_store::{genesis::build_genesis, Store};
+use gw_store::Store;
 use gw_types::{bytes::Bytes, core::Status, packed, prelude::*};
 use neon::prelude::*;
 use parking_lot::Mutex;
@@ -74,7 +74,7 @@ declare_types! {
             let db = RocksDB::open(&db_config, COLUMNS);
             let store = Store::new(db);
             if !store.has_genesis().expect("check initialization") {
-                store.init_genesis(&config.genesis, header_info, rollup_script_hash.into()).expect("Initializing store");
+                init_genesis(&store, &config.genesis, header_info, rollup_script_hash.into()).expect("Initializing store");
             }
             let generator = Arc::new(build_generator(&config.chain));
             let mem_pool = {

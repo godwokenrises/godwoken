@@ -406,7 +406,7 @@ impl Chain {
         // reset account SMT to genesis
         // TODO use version based storage
         db.clear_account_state_tree()?;
-        gw_store::genesis::build_genesis_from_store(
+        gw_generator::genesis::build_genesis_from_store(
             db,
             &GenesisConfig {
                 timestamp: genesis.raw().timestamp().unpack(),

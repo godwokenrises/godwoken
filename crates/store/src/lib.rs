@@ -1,5 +1,4 @@
 mod db_utils;
-pub mod genesis;
 mod overlay;
 mod snapshot;
 mod store_impl;
