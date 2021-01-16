@@ -31,6 +31,7 @@ typedef struct gw_context_t {
   /* layer2 syscalls */
   gw_load_fn sys_load;
   gw_load_nonce_fn sys_load_nonce;
+  gw_increase_nonce_fn sys_increase_nonce;
   gw_store_fn sys_store;
   gw_set_program_return_data_fn sys_set_program_return_data;
   gw_create_fn sys_create;
@@ -82,6 +83,35 @@ int sys_load_nonce(gw_context_t *ctx, uint32_t account_id,
   uint8_t key[32];
   gw_build_nonce_key(account_id, key);
   return gw_state_fetch(&ctx->kv_state, key, value);
+}
+
+int sys_increase_nonce(gw_context_t *ctx, uint32_t account_id, uint32_t *new_nonce) {
+  uint8_t old_nonce_value[GW_VALUE_BYTES];
+  memset(old_nonce_value, 0, GW_VALUE_BYTES);
+  int ret = sys_load_nonce(ctx, account_id, old_nonce_value);
+  if (ret != 0) {
+    return ret;
+  }
+  for (size_t i = 4; i < GW_VALUE_BYTES; i++) {
+    if(old_nonce_value[i] != 0){
+      return GW_ERROR_INVALID_DATA;
+    }
+  }
+  uint32_t next_nonce = *((uint32_t *)old_nonce_value) + 1;
+
+  uint8_t nonce_key[GW_KEY_BYTES];
+  uint8_t nonce_value[GW_VALUE_BYTES];
+  memset(nonce_value, 0, GW_VALUE_BYTES);
+  gw_build_nonce_key(account_id, nonce_key);
+  memcpy(nonce_value, (uint8_t *)(&next_nonce), 4);
+  ret = gw_state_insert(&ctx->kv_state, nonce_key, nonce_value);
+  if (ret != 0) {
+    return ret;
+  }
+  if (new_nonce != NULL) {
+    *new_nonce = next_nonce;
+  }
+  return 0;
 }
 
 /* set call return data */
@@ -457,6 +487,7 @@ int gw_context_init(gw_context_t *ctx) {
   /* setup syscalls */
   ctx->sys_load = sys_load;
   ctx->sys_load_nonce = sys_load_nonce;
+  ctx->sys_increase_nonce = sys_increase_nonce;
   ctx->sys_store = sys_store;
   ctx->sys_set_program_return_data = sys_set_program_return_data;
   ctx->sys_create = sys_create;

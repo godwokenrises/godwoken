@@ -95,6 +95,18 @@ typedef int (*gw_load_fn)(struct gw_context_t *ctx,
 typedef int (*gw_load_nonce_fn)(struct gw_context_t *ctx,
                                 uint32_t account_id,
                                 uint8_t value[GW_VALUE_BYTES]);
+/**
+ * Increase the nonce of account by 1
+ *
+ * @param ctx         The godwoken context
+ * @param account_id  The account to increase nonce
+ * @param new_nonce   The pointer to new nonce (can be NULL)
+ * @return            The status code, 0 is success
+ */
+typedef int (*gw_increase_nonce_fn)(struct gw_context_t *ctx,
+                                    uint32_t account_id,
+                                    uint32_t *new_nonce);
+
 
 /**
  * Store key,value pair to current account's storage
