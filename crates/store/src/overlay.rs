@@ -1,7 +1,7 @@
 //! Provide overlay store feature
 //! Overlay store can be abandoned or commited.
 
-use crate::Store;
+use crate::{CodeStore, Store};
 use anyhow::Result;
 use gw_common::{
     error::Error,
@@ -13,7 +13,6 @@ use gw_common::{
         H256,
     },
     state::State,
-    CodeStore,
 };
 use gw_types::{bytes::Bytes, packed::Script};
 use std::collections::{HashMap, HashSet};

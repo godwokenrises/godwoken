@@ -1,11 +1,11 @@
 use super::new_block_info;
 use crate::{account_lock_manage::AccountLockManage, Generator};
 use crate::{backend_manage::BackendManage, dummy_state::DummyState};
-use crate::{error::TransactionError, traits::StateExt};
+use crate::{builtin_scripts::SUDT_VALIDATOR_CODE_HASH, error::TransactionError, traits::StateExt};
 use core::panic;
 use gw_common::state::State;
-use gw_common::{builtin_scripts::SUDT_VALIDATOR_CODE_HASH, h256_ext::H256Ext, CodeStore, H256};
-use gw_store::Store;
+use gw_common::{h256_ext::H256Ext, H256};
+use gw_store::{CodeStore, Store};
 use gw_types::{
     packed::{BlockInfo, RawL2Transaction, SUDTArgs, SUDTQuery, SUDTTransfer, Script},
     prelude::*,

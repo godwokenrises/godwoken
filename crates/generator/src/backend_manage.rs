@@ -1,8 +1,8 @@
-use gw_common::builtin_scripts::{
+use crate::builtin_scripts::{
     META_CONTRACT_GENERATOR, META_CONTRACT_VALIDATOR, META_CONTRACT_VALIDATOR_CODE_HASH,
     SUDT_GENERATOR, SUDT_VALIDATOR, SUDT_VALIDATOR_CODE_HASH,
 };
-use gw_common::code_hash;
+use crate::code_hash;
 use gw_common::H256;
 use gw_types::bytes::Bytes;
 use std::collections::HashMap;

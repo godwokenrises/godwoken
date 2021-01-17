@@ -842,8 +842,6 @@ version = "0.1.0"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
- "gw-types",
- "lazy_static",
  "sparse-merkle-tree",
  "thiserror",
 ]

@@ -4,7 +4,7 @@ use gw_chain::{
     mem_pool::{MemPool, PackageParam},
     next_block_context::NextBlockContext,
 };
-use gw_common::{state::State, CodeStore, H256};
+use gw_common::{state::State, H256};
 use gw_config::{ChainConfig, Config, GenesisConfig};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
 use gw_generator::{
@@ -14,7 +14,7 @@ use gw_generator::{
     Generator,
 };
 use gw_jsonrpc_types::{blockchain, genesis, parameter};
-use gw_store::Store;
+use gw_store::{CodeStore, Store};
 use gw_types::{bytes::Bytes, core::Status, packed, prelude::*};
 use neon::prelude::*;
 use parking_lot::Mutex;

@@ -1,10 +1,11 @@
 use crate::error::{DepositionError, Error, ValidateError, WithdrawalError};
+use crate::sudt::build_l2_sudt_script;
 use crate::types::RunResult;
-use gw_common::sudt::build_l2_sudt_script;
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, merkle_utils::calculate_compacted_account_root, state::State,
-    CodeStore, CKB_SUDT_SCRIPT_ARGS, H256,
+    CKB_SUDT_SCRIPT_ARGS, H256,
 };
+use gw_store::CodeStore;
 use gw_types::{
     bytes::Bytes,
     packed::{DepositionRequest, Script, WithdrawalRequest},

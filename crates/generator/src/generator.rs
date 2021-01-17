@@ -4,6 +4,7 @@ use crate::{
 use crate::{
     backend_manage::Backend,
     error::{Error, TransactionError, TransactionErrorWithContext},
+    sudt::build_l2_sudt_script,
 };
 use crate::{error::LockAlgorithmError, traits::StateExt};
 use crate::{error::ValidateError, syscalls::L2Syscalls, types::RunResult};
@@ -13,10 +14,9 @@ use gw_common::{
     error::Error as StateError,
     h256_ext::H256Ext,
     state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
-    sudt::build_l2_sudt_script,
-    CodeStore, H256,
+    H256,
 };
-use gw_store::Store;
+use gw_store::{CodeStore, Store};
 use gw_types::{
     core::ScriptHashType,
     packed::{

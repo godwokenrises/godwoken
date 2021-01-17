@@ -10,9 +10,7 @@ edition = "2018"
 cfg-if = "0.1"
 sparse-merkle-tree = { version = "0.3.1-pre", default-features = false }
 gw-hash = { path = "../hash" }
-gw-types = { path = "../types" }
 thiserror = { version = "1.0", optional = true }
-lazy_static = "1.4"
 
 [features]
 default = ["std"]

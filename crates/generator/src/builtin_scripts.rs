@@ -1,5 +1,5 @@
 use crate::code_hash;
-use crate::H256;
+use gw_common::H256;
 use gw_types::bytes::Bytes;
 use lazy_static::lazy_static;
 

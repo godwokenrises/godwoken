@@ -1,4 +1,4 @@
-use crate::H256;
+use gw_common::H256;
 use gw_types::{bytes::Bytes, packed::Script};
 
 pub trait CodeStore {

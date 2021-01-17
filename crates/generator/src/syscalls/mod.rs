@@ -11,9 +11,9 @@ use gw_common::{
         build_account_field_key, build_script_hash_to_account_id_key, State, GW_ACCOUNT_NONCE,
         GW_ACCOUNT_SCRIPT_HASH,
     },
-    CodeStore, H256,
+    H256,
 };
-use gw_store::Store;
+use gw_store::{CodeStore, Store};
 use gw_types::{
     bytes::Bytes,
     packed::{BlockInfo, LogItem, RawL2Transaction, Script},

@@ -1,5 +1,5 @@
 use crate::db_utils::build_transaction_key;
-use gw_common::CodeStore;
+use crate::CodeStore;
 use gw_common::{
     error::Error as StateError,
     smt::SMT,

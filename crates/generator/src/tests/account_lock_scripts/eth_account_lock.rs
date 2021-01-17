@@ -1,5 +1,6 @@
 use super::*;
 use crate::account_lock_manage::{secp256k1::Secp256k1Eth, LockAlgorithm};
+use crate::builtin_scripts::ETH_ACCOUNT_LOCK;
 use ckb_crypto::secp::{Generator, Privkey, Pubkey};
 use ckb_error::assert_error_eq;
 use ckb_script::{ScriptError, TransactionScriptsVerifier};
@@ -12,7 +13,6 @@ use ckb_types::{
     packed::{CellDep, CellInput, CellOutput, OutPoint, Script, WitnessArgs},
     prelude::*,
 };
-use gw_common::builtin_scripts::ETH_ACCOUNT_LOCK;
 use gw_types::packed::UnlockAccountWitness;
 use rand::{thread_rng, Rng};
 use sha3::{Digest, Keccak256};
