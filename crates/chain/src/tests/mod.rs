@@ -3,8 +3,8 @@ mod sync;
 
 use crate::{
     chain::{Chain, ProduceBlockResult},
-    next_block_context::NextBlockContext,
     mem_pool::MemPool,
+    next_block_context::NextBlockContext,
 };
 use gw_config::{ChainConfig, GenesisConfig};
 use gw_generator::{

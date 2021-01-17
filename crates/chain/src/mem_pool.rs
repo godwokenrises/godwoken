@@ -195,11 +195,13 @@ impl MemPool {
     }
 
     /// Package
-    /// this method return a tx pool package contains txs and withdrawal requests,
+    /// this method return a mem pool package contains txs and withdrawal requests,
     /// and remove these from the pool
-    pub fn package(&mut self, deposition_requests: &[DepositionRequest]) -> Result<MemPoolPackage> {
+    pub fn package(&mut self, param: PackageParam) -> Result<MemPoolPackage> {
         let txs_limit = min(MAX_PACKAGED_TXS, self.queue.len());
-        let tx_receipts = self.queue.iter().take(txs_limit).cloned().collect();
+        let tx_iter = self.queue.iter().take(txs_limit);
+        let txs = tx_iter.clone().map(|(tx, _)| tx).cloned().collect();
+        let tx_receipts = tx_iter.map(|(_, receipt)| receipt).cloned().collect();
         // reset overlay, we need to record deposition / withdrawal touched keys to generate proof for state
         self.state.overlay_store_mut().clear_touched_keys();
         // fetch withdrawal request and rerun verifier, drop invalid requests
@@ -210,6 +212,7 @@ impl MemPool {
             .take(withdrawal_limit)
             .cloned()
             .collect();
+        let mut total_withdrawal_capacity = 0u128;
         // TODO make sure the remain capacity is enough to pay custodian cell
         // apply withdrawal request to the state
         let withdrawal_requests = withdrawal_requests
@@ -226,9 +229,28 @@ impl MemPool {
                     }
                 },
             )
+            .take_while(|request| {
+                let withdrawal_capacity: u64 = request.raw().capacity().unpack();
+                let new_total_withdrwal_capacity =
+                    match total_withdrawal_capacity.checked_add(withdrawal_capacity as u128) {
+                        Some(capacity) => capacity,
+                        None => {
+                            eprintln!("withdrawal capacity overflow {}", request);
+                            return false;
+                        }
+                    };
+                // skip package withdrwal if overdraft the Rollup capacity
+                if new_total_withdrwal_capacity > param.max_withdrawal_capacity {
+                    eprintln!("withdrawal capacity overdraft new_total_withdrawal_capacity: {}, max_withdrawal_capacity: {}", new_total_withdrwal_capacity, param.max_withdrawal_capacity);
+                    return false;
+                }
+                total_withdrawal_capacity = new_total_withdrwal_capacity;
+                true
+            })
             .collect();
         // apply deposition request to the state
-        self.state.apply_deposition_requests(&deposition_requests)?;
+        self.state
+            .apply_deposition_requests(&param.deposition_requests)?;
         let post_account_state = get_account_state(&self.state)?;
         let touched_keys = self
             .state
@@ -239,10 +261,12 @@ impl MemPool {
             .collect();
         let pkg = MemPoolPackage {
             touched_keys,
+            txs,
             tx_receipts,
             prev_account_state: self.next_prev_account_state.clone(),
             post_account_state,
             withdrawal_requests,
+            total_withdrawal_capacity,
         };
         Ok(pkg)
     }
@@ -311,11 +335,19 @@ pub struct MerkleState {
     pub count: u32,
 }
 
+/// PackageParam
+pub struct PackageParam {
+    pub deposition_requests: Vec<DepositionRequest>,
+    pub max_withdrawal_capacity: u128,
+}
+
 /// MemPoolPackage
 /// a layer2 block can be generated from a package
 pub struct MemPoolPackage {
+    /// txs
+    pub txs: Vec<L2Transaction>,
     /// tx receipts
-    pub tx_receipts: Vec<(L2Transaction, TxReceipt)>,
+    pub tx_receipts: Vec<TxReceipt>,
     /// txs touched keys, both reads and writes
     pub touched_keys: HashSet<H256>,
     /// state of last block
@@ -324,4 +356,6 @@ pub struct MemPoolPackage {
     pub post_account_state: MerkleState,
     /// withdrawal requests
     pub withdrawal_requests: Vec<WithdrawalRequest>,
+    /// total withdrawal capacity
+    pub total_withdrawal_capacity: u128,
 }

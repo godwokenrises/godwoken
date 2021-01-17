@@ -448,12 +448,15 @@ export class Runner {
         );
         const param = {
           aggregator_id: "0x0",
+        };
+        const packageParam = {
           deposition_requests: depositionRequests,
+          max_withdrawal_capacity: "0x5af3107a4000", // 10000_00000000 shannons
         };
         const {
           block: packedl2Block,
           global_state,
-        } = await this.chainService.produceBlock(param);
+        } = await this.chainService.produceBlock(param, packageParam);
         const cell = await this._queryLiveRollupCell();
 
         let txSkeleton = TransactionSkeleton({ cellProvider: this.indexer });

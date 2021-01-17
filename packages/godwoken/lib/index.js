@@ -19,9 +19,10 @@ class ChainService {
     return JSON.parse(syncEventString);
   }
 
-  async produceBlock(produceBlockParam) {
+  async produceBlock(produceBlockParam, packageParam) {
     const produceBlockResult = this.nativeChain.produceBlock(
-      JSON.stringify(produceBlockParam)
+      JSON.stringify(produceBlockParam),
+      JSON.stringify(packageParam)
     );
     return JSON.parse(produceBlockResult);
   }

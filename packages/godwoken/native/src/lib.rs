@@ -1,8 +1,8 @@
 use anyhow::Result;
 use gw_chain::{
     chain::{Chain, ProduceBlockParam, ProduceBlockResult, SyncEvent, SyncParam},
+    mem_pool::{MemPool, PackageParam},
     next_block_context::NextBlockContext,
-    mem_pool::MemPool,
 };
 use gw_common::{state::State, H256};
 use gw_config::{ChainConfig, Config, GenesisConfig};
@@ -125,15 +125,20 @@ declare_types! {
             let produce_block_param_string = cx.argument::<JsString>(0)?.value();
             let produce_block_param_jsonrpc: parameter::ProduceBlockParam = serde_json::from_str(&produce_block_param_string).expect("Constructing ProduceBlockParam from string");
             let produce_block_param: ProduceBlockParam = produce_block_param_jsonrpc.into();
+            let package_param_string = cx.argument::<JsString>(1)?.value();
+            let package_param_jsonrpc: parameter::PackageParam = serde_json::from_str(&package_param_string).expect("Constructing PackageParam from string");
+            let package_param: PackageParam = package_param_jsonrpc.into();
             let produce_block_result: Result<ProduceBlockResult> =
                 cx.borrow_mut(&mut this, |data| {
                     let chain = data.chain.write().unwrap();
-                    let produce_block_result = chain.produce_block(produce_block_param);
+                    let mut mem_pool = chain.mem_pool.lock();
+                    let mem_pool_package = mem_pool.package(package_param)?;
+                    let produce_block_result = chain.produce_block(produce_block_param, mem_pool_package);
                     produce_block_result
                 });
             match produce_block_result {
                 Ok(produce_block_result) => {
-                    let produce_block_result_jsonrpc: parameter::ProduceBlockResult= produce_block_result.into();
+                    let produce_block_result_jsonrpc: parameter::ProduceBlockResult = produce_block_result.into();
                     let produce_block_result_string = serde_json::to_string(&produce_block_result_jsonrpc).expect("Serializing L2BlockWithState");
                     Ok(cx.string(produce_block_result_string).upcast())
                 }

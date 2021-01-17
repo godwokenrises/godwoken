@@ -1,5 +1,5 @@
-use crate::next_block_context::NextBlockContext;
 use crate::mem_pool::MemPool;
+use crate::{mem_pool::MemPoolPackage, next_block_context::NextBlockContext};
 use anyhow::{anyhow, Result};
 use gw_common::{
     h256_ext::H256Ext, merkle_utils::calculate_merkle_root, smt::Blake2bHasher, sparse_merkle_tree,
@@ -32,8 +32,6 @@ use std::{convert::TryFrom, sync::Arc};
 pub struct ProduceBlockParam {
     /// aggregator of this block
     pub aggregator_id: u32,
-    /// tx pool package
-    pub deposition_requests: Vec<DepositionRequest>,
 }
 
 /// sync params
@@ -355,7 +353,7 @@ impl Chain {
             }
         }
         db.commit()?;
-        // update tx pool state
+        // update mem pool state
         let overlay_state = self.store.new_overlay()?;
         self.mem_pool.lock().update_tip(
             &self.local_state.tip,
@@ -514,32 +512,32 @@ impl Chain {
     ///
     /// This function should be called in the turn that the current aggregator to produce the next block,
     /// otherwise the produced block may invalided by the state-validator contract.
-    pub fn produce_block(&self, param: ProduceBlockParam) -> Result<ProduceBlockResult> {
-        let ProduceBlockParam {
-            aggregator_id,
-            deposition_requests,
-        } = param;
+    pub fn produce_block(
+        &self,
+        param: ProduceBlockParam,
+        mem_pool_package: MemPoolPackage,
+    ) -> Result<ProduceBlockResult> {
+        let ProduceBlockParam { aggregator_id } = param;
 
-        let tx_pool_pkg = self.mem_pool.lock().package(&deposition_requests)?;
-        // take txs from tx pool
+        // take txs from mem pool
         // produce block
         let parent_number: u64 = self.local_state.tip.raw().number().unpack();
         let number = parent_number + 1;
         let timestamp: u64 = unixtime()?;
         let submit_txs = {
             let tx_witness_root = calculate_merkle_root(
-                tx_pool_pkg
+                mem_pool_package
                     .tx_receipts
                     .iter()
-                    .map(|(_tx, tx_receipt)| tx_receipt.tx_witness_hash().unpack())
+                    .map(|tx_receipt| tx_receipt.tx_witness_hash().unpack())
                     .collect(),
             )
             .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
-            let tx_count = tx_pool_pkg.tx_receipts.len() as u32;
-            let compacted_post_root_list: Vec<[u8; 32]> = tx_pool_pkg
+            let tx_count = mem_pool_package.tx_receipts.len() as u32;
+            let compacted_post_root_list: Vec<[u8; 32]> = mem_pool_package
                 .tx_receipts
                 .iter()
-                .map(|(_tx, tx_receipt)| tx_receipt.compacted_post_account_root().unpack())
+                .map(|tx_receipt| tx_receipt.compacted_post_account_root().unpack())
                 .collect();
             SubmitTransactions::new_builder()
                 .tx_witness_root(tx_witness_root.pack())
@@ -548,7 +546,7 @@ impl Chain {
                 .build()
         };
         let withdrawal_requests_root = calculate_merkle_root(
-            tx_pool_pkg
+            mem_pool_package
                 .withdrawal_requests
                 .iter()
                 .map(|request| request.raw().hash())
@@ -556,12 +554,12 @@ impl Chain {
         )
         .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
         let prev_account = AccountMerkleState::new_builder()
-            .merkle_root(tx_pool_pkg.prev_account_state.root.pack())
-            .count(tx_pool_pkg.prev_account_state.count.pack())
+            .merkle_root(mem_pool_package.prev_account_state.root.pack())
+            .count(mem_pool_package.prev_account_state.count.pack())
             .build();
         let post_account = AccountMerkleState::new_builder()
-            .merkle_root(tx_pool_pkg.post_account_state.root.pack())
-            .count(tx_pool_pkg.post_account_state.count.pack())
+            .merkle_root(mem_pool_package.post_account_state.root.pack())
+            .count(mem_pool_package.post_account_state.count.pack())
             .build();
         let raw_block = RawL2Block::new_builder()
             .number(number.pack())
@@ -575,7 +573,7 @@ impl Chain {
         let db = self.store.begin_transaction();
         let account_state_tree = db.account_state_tree()?;
         // generate block fields from current state
-        let kv_state: Vec<(H256, H256)> = tx_pool_pkg
+        let kv_state: Vec<(H256, H256)> = mem_pool_package
             .touched_keys
             .iter()
             .map(|k| {
@@ -605,11 +603,7 @@ impl Chain {
                 .compile(kv_state)?
                 .0
         };
-        let txs: Vec<_> = tx_pool_pkg
-            .tx_receipts
-            .into_iter()
-            .map(|(tx, _)| tx)
-            .collect();
+        let txs: Vec<_> = mem_pool_package.txs.clone();
         let block_smt = db.block_smt()?;
         let block_proof = block_smt
             .merkle_proof(vec![H256::from_u64(number)])
@@ -620,7 +614,7 @@ impl Chain {
             .kv_state(packed_kv_state)
             .kv_state_proof(proof.pack())
             .transactions(txs.pack())
-            .withdrawal_requests(tx_pool_pkg.withdrawal_requests.pack())
+            .withdrawal_requests(mem_pool_package.withdrawal_requests.pack())
             .block_proof(block_proof.0.pack())
             .build();
         let post_block = {

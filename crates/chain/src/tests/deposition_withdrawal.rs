@@ -17,6 +17,7 @@ use crate::{
         Chain, L1Action, L1ActionContext, ProduceBlockParam, ProduceBlockResult, SyncEvent,
         SyncParam,
     },
+    mem_pool::PackageParam,
     next_block_context::NextBlockContext,
 };
 
@@ -65,10 +66,12 @@ fn deposite_to_chain(
         .amount(amount.pack())
         .script(user_script)
         .build()];
-    let block_result = chain.produce_block(ProduceBlockParam {
-        aggregator_id,
+    let mem_pool_package = chain.mem_pool.lock().package(PackageParam {
         deposition_requests: deposition_requests.clone(),
+        max_withdrawal_capacity: std::u128::MAX,
     })?;
+    let block_result =
+        chain.produce_block(ProduceBlockParam { aggregator_id }, mem_pool_package)?;
     // deposit
     apply_block_result(
         chain,
@@ -102,12 +105,18 @@ fn withdrawal_from_chain(
             .build();
         WithdrawalRequest::new_builder().raw(raw).build()
     };
-    chain.mem_pool.lock().push_withdrawal_request(withdrawal)?;
+    let mem_pool_package = {
+        let mut mem_pool = chain.mem_pool.lock();
+        mem_pool.push_withdrawal_request(withdrawal)?;
+        mem_pool
+            .package(PackageParam {
+                deposition_requests: Vec::new(),
+                max_withdrawal_capacity: std::u128::MAX,
+            })
+            .unwrap()
+    };
     let block_result = chain
-        .produce_block(ProduceBlockParam {
-            aggregator_id,
-            deposition_requests: Vec::new(),
-        })
+        .produce_block(ProduceBlockParam { aggregator_id }, mem_pool_package)
         .unwrap();
     // deposit
     apply_block_result(
