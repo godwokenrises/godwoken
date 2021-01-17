@@ -2,7 +2,7 @@ use anyhow::Result;
 use gw_chain::{
     chain::{Chain, ProduceBlockParam, ProduceBlockResult, SyncEvent, SyncParam},
     next_block_context::NextBlockContext,
-    tx_pool::TxPool,
+    mem_pool::MemPool,
 };
 use gw_common::{state::State, H256};
 use gw_config::{ChainConfig, Config, GenesisConfig};
@@ -77,19 +77,19 @@ declare_types! {
                 store.init_genesis(&config.genesis, header_info, rollup_script_hash.into()).expect("Initializing store");
             }
             let generator = Arc::new(build_generator(&config.chain));
-            let tx_pool = {
+            let mem_pool = {
                 let nb_ctx = NextBlockContext {
                     aggregator_id: 0u32,
                     timestamp: 0u64,
                 };
                 let tip = packed::L2Block::default();
-                let tx_pool = TxPool::create(
+                let mem_pool = MemPool::create(
                     store.new_overlay().expect("State new overlay"), Arc::clone(&generator),
-                    &tip, nb_ctx).expect("Creating TxPool");
-                Arc::new(Mutex::new(tx_pool))
+                    &tip, nb_ctx).expect("Creating MemPool");
+                Arc::new(Mutex::new(mem_pool))
             };
             let chain_result: Result<Chain> = Chain::create(
-                config.clone().chain, store, generator, Arc::clone(&tx_pool));
+                config.clone().chain, store, generator, Arc::clone(&mem_pool));
             match chain_result {
                 Ok(chain) => Ok(NativeChain {
                     config: config,
@@ -148,7 +148,7 @@ declare_types! {
             let l2_transaction = packed::L2Transaction::from_slice(l2_transaction_slice).expect("Build packed::L2Transaction from slice");
             let run_result: Result<gw_generator::RunResult > =
                 cx.borrow(&this, |data| {
-                    data.chain.write().unwrap().tx_pool.lock().execute(l2_transaction)
+                    data.chain.write().unwrap().mem_pool.lock().execute(l2_transaction)
                 });
             match run_result {
                 Ok(run_result) => {
@@ -168,7 +168,7 @@ declare_types! {
             let run_result: Result<gw_generator::RunResult > =
                 cx.borrow(&this, |data| {
                     let chain = data.chain.write().unwrap();
-                    let run_result = chain.tx_pool.lock().push(l2_transaction);
+                    let run_result = chain.mem_pool.lock().push(l2_transaction);
                     run_result
                 });
             match run_result {
@@ -190,7 +190,7 @@ declare_types! {
             let run_result: Result<()> =
                 cx.borrow(&this, |data| {
                     let chain = data.chain.write().unwrap();
-                    let result = chain.tx_pool.lock().push_withdrawal_request(withdrawal_request);
+                    let result = chain.mem_pool.lock().push_withdrawal_request(withdrawal_request);
                     result
                 });
             match run_result {
@@ -218,8 +218,8 @@ declare_types! {
             let sudt_id = cx.argument::<JsNumber>(1)?.value() as u32;
             let balance = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let tx_pool = chain.tx_pool.lock();
-                let tree = tx_pool.state();
+                let mem_pool = chain.mem_pool.lock();
+                let tree = mem_pool.state();
                 tree.get_sudt_balance(sudt_id, account_id)
             });
             match balance {
@@ -243,8 +243,8 @@ declare_types! {
              });
             let get_raw_result = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let tx_pool = chain.tx_pool.lock();
-                let tree = tx_pool.state();
+                let mem_pool = chain.mem_pool.lock();
+                let tree = mem_pool.state();
                 tree.get_value(account_id, &raw_key)
             });
             match get_raw_result {
@@ -269,8 +269,8 @@ declare_types! {
              });
             let get_raw_result = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let tx_pool = chain.tx_pool.lock();
-                let tree = tx_pool.state();
+                let mem_pool = chain.mem_pool.lock();
+                let tree = mem_pool.state();
                 tree.get_account_id_by_script_hash(&raw_key)
             });
             match get_raw_result {
@@ -285,8 +285,8 @@ declare_types! {
             let account_id = cx.argument::<JsNumber>(0)?.value() as u32;
             let nonce = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let tx_pool = chain.tx_pool.lock();
-                let tree = tx_pool.state();
+                let mem_pool = chain.mem_pool.lock();
+                let tree = mem_pool.state();
                 tree.get_nonce(account_id)
             });
             match nonce {
@@ -300,8 +300,8 @@ declare_types! {
             let account_id = cx.argument::<JsNumber>(0)?.value() as u32;
             let script_hash = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let tx_pool = chain.tx_pool.lock();
-                let tree = tx_pool.state();
+                let mem_pool = chain.mem_pool.lock();
+                let tree = mem_pool.state();
                 tree.get_script_hash(account_id)
             });
             match script_hash {
@@ -326,8 +326,8 @@ declare_types! {
              });
             let script = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let tx_pool = chain.tx_pool.lock();
-                let tree = tx_pool.state();
+                let mem_pool = chain.mem_pool.lock();
+                let tree = mem_pool.state();
                 tree.get_script(&raw_key)
             });
             match script {
@@ -351,8 +351,8 @@ declare_types! {
              });
             let data = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let tx_pool = chain.tx_pool.lock();
-                let tree = tx_pool.state();
+                let mem_pool = chain.mem_pool.lock();
+                let tree = mem_pool.state();
                 tree.get_data_hash(&raw_key)
             });
             match data {
@@ -372,8 +372,8 @@ declare_types! {
              });
             let data = cx.borrow(&this, |data| {
                 let chain = data.chain.read().unwrap();
-                let tx_pool = chain.tx_pool.lock();
-                let tree = tx_pool.state();
+                let mem_pool = chain.mem_pool.lock();
+                let tree = mem_pool.state();
                 tree.get_data(&raw_key)
             });
             match data {

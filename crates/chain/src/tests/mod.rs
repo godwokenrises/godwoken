@@ -4,7 +4,7 @@ mod sync;
 use crate::{
     chain::{Chain, ProduceBlockResult},
     next_block_context::NextBlockContext,
-    tx_pool::TxPool,
+    mem_pool::MemPool,
 };
 use gw_config::{ChainConfig, GenesisConfig};
 use gw_generator::{
@@ -51,14 +51,14 @@ pub fn setup_chain(rollup_type_script: &Script) -> Chain {
         .init_genesis(&genesis_config, genesis_header_info, rollup_script_hash)
         .unwrap();
     let tip = store.get_tip_block().unwrap();
-    let tx_pool = TxPool::create(
+    let mem_pool = MemPool::create(
         store.new_overlay().unwrap(),
         Arc::clone(&generator),
         &tip,
         nb_ctx,
     )
     .unwrap();
-    Chain::create(config, store, generator, Arc::new(Mutex::new(tx_pool))).unwrap()
+    Chain::create(config, store, generator, Arc::new(Mutex::new(mem_pool))).unwrap()
 }
 
 fn build_sync_tx(rollup_cell: CellOutput, produce_block_result: ProduceBlockResult) -> Transaction {

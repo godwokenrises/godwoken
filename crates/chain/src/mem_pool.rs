@@ -24,7 +24,7 @@ const MAX_PACKAGED_WITHDRAWAL: usize = 10;
 const MAX_DATA_BYTES_LIMIT: usize = 25_000;
 
 /// TODO remove txs from pool if a new block already contains txs
-pub struct TxPool {
+pub struct MemPool {
     state: OverlayStore,
     generator: Arc<Generator>,
     queue: Vec<(L2Transaction, TxReceipt)>,
@@ -34,7 +34,7 @@ pub struct TxPool {
     rollup_type_script_hash: H256,
 }
 
-impl TxPool {
+impl MemPool {
     pub fn create(
         state: OverlayStore,
         generator: Arc<Generator>,
@@ -46,7 +46,7 @@ impl TxPool {
         let next_prev_account_state = get_account_state(&state)?;
         let next_block_info = gen_next_block_info(tip, nb_ctx)?;
         let rollup_type_script_hash = generator.rollup_type_script_hash.into();
-        Ok(TxPool {
+        Ok(MemPool {
             state,
             generator,
             queue,
@@ -58,7 +58,7 @@ impl TxPool {
     }
 }
 
-impl TxPool {
+impl MemPool {
     pub fn state(&self) -> &OverlayStore {
         &self.state
     }
@@ -197,7 +197,7 @@ impl TxPool {
     /// Package
     /// this method return a tx pool package contains txs and withdrawal requests,
     /// and remove these from the pool
-    pub fn package(&mut self, deposition_requests: &[DepositionRequest]) -> Result<TxPoolPackage> {
+    pub fn package(&mut self, deposition_requests: &[DepositionRequest]) -> Result<MemPoolPackage> {
         let txs_limit = min(MAX_PACKAGED_TXS, self.queue.len());
         let tx_receipts = self.queue.iter().take(txs_limit).cloned().collect();
         // reset overlay, we need to record deposition / withdrawal touched keys to generate proof for state
@@ -237,7 +237,7 @@ impl TxPool {
             .into_iter()
             .map(|k| (*k).into())
             .collect();
-        let pkg = TxPoolPackage {
+        let pkg = MemPoolPackage {
             touched_keys,
             tx_receipts,
             prev_account_state: self.next_prev_account_state.clone(),
@@ -248,7 +248,7 @@ impl TxPool {
     }
 
     /// Update tip and state
-    /// this method reset tip and tx_pool states
+    /// this method reset tip and mem_pool states
     pub fn update_tip(
         &mut self,
         tip: &L2Block,
@@ -276,13 +276,13 @@ impl TxPool {
         for (tx, _receipt) in queue {
             if self.push(tx.clone()).is_err() {
                 let tx_hash: ckb_fixed_hash::H256 = tx.hash().into();
-                eprintln!("TxPool: drop tx {}", tx_hash);
+                eprintln!("MemPool: drop tx {}", tx_hash);
             }
         }
         let withdrawal_queue: Vec<_> = self.withdrawal_queue.drain(..).collect();
         for request in withdrawal_queue {
             if self.push_withdrawal_request(request.clone()).is_err() {
-                eprintln!("TxPool: drop withdrawal {:?}", request);
+                eprintln!("MemPool: drop withdrawal {:?}", request);
             }
         }
         Ok(())
@@ -311,9 +311,9 @@ pub struct MerkleState {
     pub count: u32,
 }
 
-/// TxPoolPackage
+/// MemPoolPackage
 /// a layer2 block can be generated from a package
-pub struct TxPoolPackage {
+pub struct MemPoolPackage {
     /// tx receipts
     pub tx_receipts: Vec<(L2Transaction, TxReceipt)>,
     /// txs touched keys, both reads and writes

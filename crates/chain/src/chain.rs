@@ -1,5 +1,5 @@
 use crate::next_block_context::NextBlockContext;
-use crate::tx_pool::TxPool;
+use crate::mem_pool::MemPool;
 use anyhow::{anyhow, Result};
 use gw_common::{
     h256_ext::H256Ext, merkle_utils::calculate_merkle_root, smt::Blake2bHasher, sparse_merkle_tree,
@@ -137,7 +137,7 @@ pub struct Chain {
     pub bad_block_context: Option<StartChallenge>,
     pub local_state: LocalState,
     pub generator: Arc<Generator>,
-    pub tx_pool: Arc<Mutex<TxPool>>,
+    pub mem_pool: Arc<Mutex<MemPool>>,
 }
 
 impl Chain {
@@ -145,7 +145,7 @@ impl Chain {
         config: ChainConfig,
         store: Store,
         generator: Arc<Generator>,
-        tx_pool: Arc<Mutex<TxPool>>,
+        mem_pool: Arc<Mutex<MemPool>>,
     ) -> Result<Self> {
         let rollup_type_script: Script = config.rollup_type_script.clone().into();
         let rollup_type_script_hash = rollup_type_script.hash();
@@ -171,7 +171,7 @@ impl Chain {
             bad_block_context: None,
             local_state,
             generator,
-            tx_pool,
+            mem_pool: mem_pool,
             rollup_type_script_hash,
         })
     }
@@ -357,7 +357,7 @@ impl Chain {
         db.commit()?;
         // update tx pool state
         let overlay_state = self.store.new_overlay()?;
-        self.tx_pool.lock().update_tip(
+        self.mem_pool.lock().update_tip(
             &self.local_state.tip,
             overlay_state,
             param.next_block_context,
@@ -520,7 +520,7 @@ impl Chain {
             deposition_requests,
         } = param;
 
-        let tx_pool_pkg = self.tx_pool.lock().package(&deposition_requests)?;
+        let tx_pool_pkg = self.mem_pool.lock().package(&deposition_requests)?;
         // take txs from tx pool
         // produce block
         let parent_number: u64 = self.local_state.tip.raw().number().unpack();

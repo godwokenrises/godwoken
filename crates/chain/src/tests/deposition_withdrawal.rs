@@ -102,7 +102,7 @@ fn withdrawal_from_chain(
             .build();
         WithdrawalRequest::new_builder().raw(raw).build()
     };
-    chain.tx_pool.lock().push_withdrawal_request(withdrawal)?;
+    chain.mem_pool.lock().push_withdrawal_request(withdrawal)?;
     let block_result = chain
         .produce_block(ProduceBlockParam {
             aggregator_id,
@@ -165,8 +165,8 @@ fn test_deposition_and_withdrawal() {
     };
     // check tx pool state
     {
-        let tx_pool = chain.tx_pool.lock();
-        let state = tx_pool.state();
+        let mem_pool = chain.mem_pool.lock();
+        let state = mem_pool.state();
         assert_eq!(
             state
                 .get_account_id_by_script_hash(&user_script_hash.into())
@@ -202,8 +202,8 @@ fn test_deposition_and_withdrawal() {
     assert_eq!(nonce, 1);
     // check tx pool state
     {
-        let tx_pool = chain.tx_pool.lock();
-        let state = tx_pool.state();
+        let mem_pool = chain.mem_pool.lock();
+        let state = mem_pool.state();
         assert_eq!(
             state
                 .get_account_id_by_script_hash(&user_script_hash.into())
