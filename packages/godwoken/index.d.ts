@@ -37,7 +37,11 @@ export interface Revert {
 
 export interface ProduceBlockParam {
   aggregator_id: HexNumber;
+}
+
+export interface PackageParam {
   deposition_requests: HexString[]; // gw_types::packed::DepositionRequest[]
+  max_withdrawal_capacity: HexNumber;
 }
 
 export interface ProduceBlockResult {
@@ -119,7 +123,8 @@ export class ChainService {
   constructor(config: Config, headerInfo: HexString);
   sync(syncParam: SyncParam): Promise<SyncEvent>;
   produceBlock(
-    produceBlockParam: ProduceBlockParam
+    produceBlockParam: ProduceBlockParam,
+    packageParam: PackageParam
   ): Promise<ProduceBlockResult>;
   submitL2Transaction(l2Transaction: HexString): Promise<RunResult>;
   submitWithdrawalRequest(withdrawalRequest: HexString): Promise<void>;

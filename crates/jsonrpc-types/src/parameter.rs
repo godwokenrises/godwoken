@@ -1,6 +1,6 @@
 use crate::blockchain::Script as JsonScript;
 use ckb_fixed_hash::H256;
-use ckb_jsonrpc_types::{JsonBytes, Uint32, Uint64};
+use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
 use gw_chain::{chain, next_block_context};
 use gw_types::{core, packed, prelude::*};
 
@@ -228,45 +228,171 @@ impl From<chain::SyncEvent> for SyncEvent {
         }
     }
 }
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct MerkleState {
+    pub root: H256,
+    pub count: Uint32,
+}
+
+impl From<gw_chain::mem_pool::MerkleState> for MerkleState {
+    fn from(merkle_state: gw_chain::mem_pool::MerkleState) -> MerkleState {
+        let root: [u8; 32] = merkle_state.root.into();
+        MerkleState {
+            root: root.into(),
+            count: merkle_state.count.into(),
+        }
+    }
+}
+
+impl From<MerkleState> for gw_chain::mem_pool::MerkleState {
+    fn from(merkle_state: MerkleState) -> gw_chain::mem_pool::MerkleState {
+        let root: [u8; 32] = merkle_state.root.into();
+        gw_chain::mem_pool::MerkleState {
+            root: root.into(),
+            count: merkle_state.count.into(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct PackageParam {
+    pub deposition_requests: Vec<JsonBytes>,
+    pub max_withdrawal_capacity: Uint128,
+}
+
+impl From<gw_chain::mem_pool::PackageParam> for PackageParam {
+    fn from(param: gw_chain::mem_pool::PackageParam) -> PackageParam {
+        PackageParam {
+            deposition_requests: param
+                .deposition_requests
+                .into_iter()
+                .map(|t| JsonBytes::from_bytes(t.as_bytes()))
+                .collect(),
+            max_withdrawal_capacity: param.max_withdrawal_capacity.into(),
+        }
+    }
+}
+
+impl From<PackageParam> for gw_chain::mem_pool::PackageParam {
+    fn from(param: PackageParam) -> gw_chain::mem_pool::PackageParam {
+        gw_chain::mem_pool::PackageParam {
+            deposition_requests: param
+                .deposition_requests
+                .into_iter()
+                .map(|t| gw_types::packed::DepositionRequest::new_unchecked(t.into_bytes()))
+                .collect(),
+            max_withdrawal_capacity: param.max_withdrawal_capacity.into(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct MemPoolPackage {
+    pub txs: Vec<JsonBytes>,
+    /// tx receipts
+    pub tx_receipts: Vec<JsonBytes>,
+    /// txs touched keys, both reads and writes
+    pub touched_keys: Vec<H256>,
+    /// state of last block
+    pub prev_account_state: MerkleState,
+    /// state after handling depositin requests
+    pub post_account_state: MerkleState,
+    /// withdrawal requests
+    pub withdrawal_requests: Vec<JsonBytes>,
+    /// total withdrawal capacity
+    pub total_withdrawal_capacity: Uint128,
+}
+
+impl From<gw_chain::mem_pool::MemPoolPackage> for MemPoolPackage {
+    fn from(pkg: gw_chain::mem_pool::MemPoolPackage) -> MemPoolPackage {
+        MemPoolPackage {
+            txs: pkg
+                .txs
+                .into_iter()
+                .map(|t| JsonBytes::from_bytes(t.as_bytes()))
+                .collect(),
+            tx_receipts: pkg
+                .tx_receipts
+                .into_iter()
+                .map(|t| JsonBytes::from_bytes(t.as_bytes()))
+                .collect(),
+            touched_keys: pkg
+                .touched_keys
+                .into_iter()
+                .map(|k| {
+                    let key: [u8; 32] = k.into();
+                    key.into()
+                })
+                .collect(),
+            prev_account_state: pkg.prev_account_state.into(),
+            post_account_state: pkg.post_account_state.into(),
+            withdrawal_requests: pkg
+                .withdrawal_requests
+                .into_iter()
+                .map(|t| JsonBytes::from_bytes(t.as_bytes()))
+                .collect(),
+            total_withdrawal_capacity: pkg.total_withdrawal_capacity.into(),
+        }
+    }
+}
+
+impl From<MemPoolPackage> for gw_chain::mem_pool::MemPoolPackage {
+    fn from(pkg: MemPoolPackage) -> gw_chain::mem_pool::MemPoolPackage {
+        gw_chain::mem_pool::MemPoolPackage {
+            txs: pkg
+                .txs
+                .into_iter()
+                .map(|t| gw_types::packed::L2Transaction::new_unchecked(t.into_bytes()))
+                .collect(),
+            tx_receipts: pkg
+                .tx_receipts
+                .into_iter()
+                .map(|t| gw_types::packed::TxReceipt::new_unchecked(t.into_bytes()))
+                .collect(),
+            touched_keys: pkg
+                .touched_keys
+                .into_iter()
+                .map(|k| {
+                    let key: [u8; 32] = k.into();
+                    key.into()
+                })
+                .collect(),
+            prev_account_state: pkg.prev_account_state.into(),
+            post_account_state: pkg.post_account_state.into(),
+            withdrawal_requests: pkg
+                .withdrawal_requests
+                .into_iter()
+                .map(|t| gw_types::packed::WithdrawalRequest::new_unchecked(t.into_bytes()))
+                .collect(),
+            total_withdrawal_capacity: pkg.total_withdrawal_capacity.into(),
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ProduceBlockParam {
     /// aggregator of this block
     pub aggregator_id: Uint32,
-    pub deposition_requests: Vec<JsonBytes>,
 }
 
 impl From<ProduceBlockParam> for chain::ProduceBlockParam {
     fn from(json: ProduceBlockParam) -> chain::ProduceBlockParam {
-        let ProduceBlockParam {
-            aggregator_id,
-            deposition_requests,
-        } = json;
+        let ProduceBlockParam { aggregator_id } = json;
         Self {
             aggregator_id: aggregator_id.into(),
-            deposition_requests: deposition_requests
-                .into_iter()
-                .map(|d| {
-                    let d_bytes = d.into_bytes();
-                    packed::DepositionRequest::from_slice(d_bytes.as_ref())
-                        .expect("Build packed::DepositionRequest from slice")
-                })
-                .collect(),
         }
     }
 }
 impl From<chain::ProduceBlockParam> for ProduceBlockParam {
     fn from(json: chain::ProduceBlockParam) -> ProduceBlockParam {
-        let chain::ProduceBlockParam {
-            aggregator_id,
-            deposition_requests,
-        } = json;
+        let chain::ProduceBlockParam { aggregator_id } = json;
         Self {
             aggregator_id: aggregator_id.into(),
-            deposition_requests: deposition_requests
-                .into_iter()
-                .map(|d| JsonBytes::from_bytes(d.as_bytes()))
-                .collect(),
         }
     }
 }

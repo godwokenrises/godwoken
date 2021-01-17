@@ -1,6 +1,7 @@
 use super::{build_sync_tx, setup_chain};
 use crate::{
     chain::{L1Action, L1ActionContext, ProduceBlockParam, RevertedL1Action, SyncEvent, SyncParam},
+    mem_pool::PackageParam,
     next_block_context::NextBlockContext,
 };
 use gw_common::{state::State, H256};
@@ -26,11 +27,13 @@ fn test_sync_a_block() {
         .capacity(100u64.pack())
         .script(user_script)
         .build();
-    let param = ProduceBlockParam {
-        aggregator_id,
+    let package_param = PackageParam {
         deposition_requests: vec![deposition.clone()],
+        max_withdrawal_capacity: std::u128::MAX,
     };
-    let block_result = chain.produce_block(param).unwrap();
+    let mem_pool_package = chain.mem_pool.lock().package(package_param).unwrap();
+    let param = ProduceBlockParam { aggregator_id };
+    let block_result = chain.produce_block(param, mem_pool_package).unwrap();
     assert_eq!(
         {
             let tip_block_number: u64 = chain
@@ -89,12 +92,14 @@ fn test_layer1_fork() {
             .capacity(120u64.pack())
             .script(charlie_script)
             .build();
-        let param = ProduceBlockParam {
-            aggregator_id,
-            deposition_requests: vec![deposition.clone()],
-        };
         let chain = setup_chain(&rollup_type_script);
-        let block_result = chain.produce_block(param).unwrap();
+        let package_param = PackageParam {
+            deposition_requests: vec![deposition.clone()],
+            max_withdrawal_capacity: std::u128::MAX,
+        };
+        let mem_pool_package = chain.mem_pool.lock().package(package_param).unwrap();
+        let param = ProduceBlockParam { aggregator_id };
+        let block_result = chain.produce_block(param, mem_pool_package).unwrap();
 
         L1Action {
             context: L1ActionContext::SubmitTxs {
@@ -110,11 +115,13 @@ fn test_layer1_fork() {
         .capacity(100u64.pack())
         .script(alice_script)
         .build();
-    let param = ProduceBlockParam {
-        aggregator_id,
+    let package_param = PackageParam {
         deposition_requests: vec![deposition.clone()],
+        max_withdrawal_capacity: std::u128::MAX,
     };
-    let block_result = chain.produce_block(param).unwrap();
+    let mem_pool_package = chain.mem_pool.lock().package(package_param).unwrap();
+    let param = ProduceBlockParam { aggregator_id };
+    let block_result = chain.produce_block(param, mem_pool_package).unwrap();
     let action1 = L1Action {
         context: L1ActionContext::SubmitTxs {
             deposition_requests: vec![deposition.clone()],
@@ -135,11 +142,13 @@ fn test_layer1_fork() {
         .capacity(500u64.pack())
         .script(bob_script)
         .build();
-    let param = ProduceBlockParam {
-        aggregator_id,
+    let package_param = PackageParam {
         deposition_requests: vec![deposition.clone()],
+        max_withdrawal_capacity: std::u128::MAX,
     };
-    let block_result = chain.produce_block(param).unwrap();
+    let mem_pool_package = chain.mem_pool.lock().package(package_param).unwrap();
+    let param = ProduceBlockParam { aggregator_id };
+    let block_result = chain.produce_block(param, mem_pool_package).unwrap();
     let action2 = L1Action {
         context: L1ActionContext::SubmitTxs {
             deposition_requests: vec![deposition],
