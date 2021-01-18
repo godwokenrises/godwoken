@@ -62,6 +62,8 @@ pub enum WithdrawalError {
     InvalidNonce { expected: u32, actual: u32 },
     #[error("Withdrawal Faked CKB")]
     WithdrawFakedCKB,
+    #[error("Non positive sudt amount")]
+    NonPositiveSudtAmount,
 }
 
 impl From<WithdrawalError> for Error {

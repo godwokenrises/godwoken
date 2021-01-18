@@ -127,6 +127,9 @@ impl Generator {
             .ok_or(ValidateError::UnknownSUDT)?;
         if sudt_id != CKB_SUDT_ACCOUNT_ID {
             // check SUDT balance
+            if amount <= 0 {
+                return Err(WithdrawalError::NonPositiveSudtAmount.into());
+            }
             let balance = state.get_sudt_balance(sudt_id, id)?;
             if amount > balance {
                 return Err(WithdrawalError::Overdraft.into());
