@@ -630,10 +630,6 @@ impl Chain {
         };
         // reverted_block_root: Byte32,
         let last_finalized_block_number = number.saturating_sub(FINALIZE_BLOCKS);
-        println!(
-            "GlobalState last_finalized_block_number: {}",
-            last_finalized_block_number
-        );
         let global_state = GlobalState::new_builder()
             .account(post_account)
             .block(post_block)

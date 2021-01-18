@@ -478,7 +478,7 @@ export class Runner {
         };
         const packageParam = {
           deposition_requests: depositionRequests,
-          max_withdrawal_capacity: "0x5af3107a4000", // 10000_00000000 shannons
+          max_withdrawal_capacity: await this._getTotalFinalizedCustodianCellCapacity(),
         };
         const {
           block: packedl2Block,
@@ -1002,14 +1002,14 @@ export class Runner {
       const custodianLockArgs = this._unpackCustodianLockArgs(
         cell.cell_output.lock.args
       );
-      this.logger(
-        "debug",
-        `GlobalState last_finalized_block_number: ${BigInt(
-          globalState.last_finalized_block_number
-        )}, custodianLockArgs deposition_block_number: ${BigInt(
-          custodianLockArgs.deposition_block_number
-        )}, deposition_block_hash: ${custodianLockArgs.deposition_block_hash}`
-      );
+      // this.logger(
+      //   "debug",
+      //   `GlobalState last_finalized_block_number: ${BigInt(
+      //     globalState.last_finalized_block_number
+      //   )}, custodianLockArgs deposition_block_number: ${BigInt(
+      //     custodianLockArgs.deposition_block_number
+      //   )}, deposition_block_hash: ${custodianLockArgs.deposition_block_hash}`
+      // );
       if (
         BigInt(custodianLockArgs.deposition_block_number) <=
         BigInt(globalState.last_finalized_block_number)
@@ -1018,6 +1018,15 @@ export class Runner {
       }
     }
     return cells;
+  }
+
+  async _getTotalFinalizedCustodianCellCapacity(): Promise<HexNumber> {
+    const cells = await this._queryValidCustodianCells();
+    let capacity = 0n;
+    for (const cell of cells) {
+      capacity += BigInt(cell.cell_output.capacity);
+    }
+    return "0x" + capacity.toString(16);
   }
 
   _custodianCellQueryOptions(): QueryOptions {
