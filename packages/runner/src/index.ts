@@ -11,6 +11,22 @@ import { Level, RunnerConfig } from "./utils";
 import { readFileSync } from "fs";
 import Knex from "knex";
 import deepFreeze from "deep-freeze-strict";
+import * as Sentry from "@sentry/node";
+import * as dotenv from "dotenv";
+import {version} from '../package.json';
+
+dotenv.config();
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  release: version,
+  tracesSampleRate: 1.0,
+});
+
+console.log("dsn:", process.env.SENTRY_DSN);
+console.log("version:", version);
+console.log("npm version:", process.env.npm_package_version);
+Sentry.captureMessage("Test Message");
 
 const program = new Command();
 // TODO: private key should come from an environment variable or config file,
