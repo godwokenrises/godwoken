@@ -797,6 +797,7 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-store",
+ "gw-traits",
  "gw-types",
  "neon",
  "neon-build",
@@ -829,6 +830,7 @@ dependencies = [
  "gw-config",
  "gw-generator",
  "gw-store",
+ "gw-traits",
  "gw-types",
  "lazy_static",
  "parking_lot",
@@ -879,6 +881,9 @@ dependencies = [
  "ckb-types",
  "ckb-vm 0.19.1",
  "gw-common",
+ "gw-config",
+ "gw-store",
+ "gw-traits",
  "gw-types",
  "hex",
  "lazy_static",
@@ -920,10 +925,19 @@ dependencies = [
  "gw-common",
  "gw-config",
  "gw-db",
- "gw-generator",
+ "gw-traits",
  "gw-types",
  "parking_lot",
  "thiserror",
+]
+
+[[package]]
+name = "gw-traits"
+version = "0.1.0"
+dependencies = [
+ "gw-common",
+ "gw-db",
+ "gw-types",
 ]
 
 [[package]]

@@ -7,12 +7,14 @@ pub mod builtin_scripts;
 pub mod dummy_state;
 pub mod error;
 pub mod generator;
+pub mod genesis;
 pub mod sudt;
 pub mod syscalls;
-#[cfg(test)]
-mod tests;
 pub mod traits;
 mod types;
+
+#[cfg(test)]
+mod tests;
 
 // re-exports
 pub use error::Error;

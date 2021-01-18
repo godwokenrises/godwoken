@@ -1,16 +1,12 @@
 use super::new_block_info;
 use crate::{account_lock_manage::AccountLockManage, Generator};
-use crate::{
-    backend_manage::BackendManage, builtin_scripts::SUDT_VALIDATOR_CODE_HASH,
-    dummy_state::DummyState,
-};
-use crate::{
-    error::TransactionError,
-    traits::{CodeStore, StateExt},
-};
+use crate::{backend_manage::BackendManage, dummy_state::DummyState};
+use crate::{builtin_scripts::SUDT_VALIDATOR_CODE_HASH, error::TransactionError, traits::StateExt};
 use core::panic;
 use gw_common::state::State;
 use gw_common::{h256_ext::H256Ext, H256};
+use gw_store::{transaction::StoreTransaction, Store};
+use gw_traits::CodeStore;
 use gw_types::{
     packed::{BlockInfo, RawL2Transaction, SUDTArgs, SUDTQuery, SUDTTransfer, Script},
     prelude::*,
@@ -19,6 +15,7 @@ use gw_types::{
 const ERROR_INSUFFICIENT_BALANCE: i8 = 12i8;
 
 fn run_contract<S: State + CodeStore>(
+    db: &StoreTransaction,
     tree: &mut S,
     from_id: u32,
     to_id: u32,
@@ -33,13 +30,15 @@ fn run_contract<S: State + CodeStore>(
     let backend_manage = BackendManage::default();
     let account_lock_manage = AccountLockManage::default();
     let generator = Generator::new(backend_manage, account_lock_manage, Default::default());
-    let run_result = generator.execute(tree, block_info, &raw_tx)?;
+    let run_result = generator.execute(db, tree, block_info, &raw_tx)?;
     tree.apply_run_result(&run_result).expect("update state");
     Ok(run_result.return_data)
 }
 
 #[test]
 fn test_sudt() {
+    let store = Store::open_tmp().unwrap();
+    let db = store.begin_transaction();
     let mut tree = DummyState::default();
     let init_a_balance: u128 = 10000;
 
@@ -92,7 +91,7 @@ fn test_sudt() {
             .set(SUDTQuery::new_builder().account_id(a_id.pack()).build())
             .build();
         let return_data =
-            run_contract(&mut tree, a_id, sudt_id, args, &block_info).expect("execute");
+            run_contract(&db, &mut tree, a_id, sudt_id, args, &block_info).expect("execute");
         let balance = {
             let mut buf = [0u8; 16];
             buf.copy_from_slice(&return_data);
@@ -104,7 +103,7 @@ fn test_sudt() {
             .set(SUDTQuery::new_builder().account_id(b_id.pack()).build())
             .build();
         let return_data =
-            run_contract(&mut tree, a_id, sudt_id, args, &block_info).expect("execute");
+            run_contract(&db, &mut tree, a_id, sudt_id, args, &block_info).expect("execute");
         let balance = {
             let mut buf = [0u8; 16];
             buf.copy_from_slice(&return_data);
@@ -127,7 +126,7 @@ fn test_sudt() {
             )
             .build();
         let return_data =
-            run_contract(&mut tree, a_id, sudt_id, args, &block_info).expect("execute");
+            run_contract(&db, &mut tree, a_id, sudt_id, args, &block_info).expect("execute");
         assert!(return_data.is_empty());
 
         {
@@ -135,7 +134,7 @@ fn test_sudt() {
                 .set(SUDTQuery::new_builder().account_id(a_id.pack()).build())
                 .build();
             let return_data =
-                run_contract(&mut tree, a_id, sudt_id, args, &block_info).expect("execute");
+                run_contract(&db, &mut tree, a_id, sudt_id, args, &block_info).expect("execute");
             let balance = {
                 let mut buf = [0u8; 16];
                 buf.copy_from_slice(&return_data);
@@ -147,7 +146,7 @@ fn test_sudt() {
                 .set(SUDTQuery::new_builder().account_id(b_id.pack()).build())
                 .build();
             let return_data =
-                run_contract(&mut tree, a_id, sudt_id, args, &block_info).expect("execute");
+                run_contract(&db, &mut tree, a_id, sudt_id, args, &block_info).expect("execute");
             let balance = {
                 let mut buf = [0u8; 16];
                 buf.copy_from_slice(&return_data);
@@ -163,7 +162,7 @@ fn test_sudt() {
                 )
                 .build();
             let return_data =
-                run_contract(&mut tree, a_id, sudt_id, args, &block_info).expect("execute");
+                run_contract(&db, &mut tree, a_id, sudt_id, args, &block_info).expect("execute");
             let balance = {
                 let mut buf = [0u8; 16];
                 buf.copy_from_slice(&return_data);
@@ -176,6 +175,8 @@ fn test_sudt() {
 
 #[test]
 fn test_insufficient_balance() {
+    let store = Store::open_tmp().unwrap();
+    let db = store.begin_transaction();
     let mut tree = DummyState::default();
     let init_a_balance: u128 = 10000;
 
@@ -226,7 +227,7 @@ fn test_insufficient_balance() {
                     .build(),
             )
             .build();
-        let err = run_contract(&mut tree, a_id, sudt_id, args, &block_info).expect_err("err");
+        let err = run_contract(&db, &mut tree, a_id, sudt_id, args, &block_info).expect_err("err");
         let err_code = match err {
             TransactionError::InvalidExitCode(code) => code,
             err => panic!("unexpected {:?}", err),

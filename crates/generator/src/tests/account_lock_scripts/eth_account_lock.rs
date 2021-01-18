@@ -1,8 +1,6 @@
 use super::*;
-use crate::{
-    account_lock_manage::{secp256k1::Secp256k1Eth, LockAlgorithm},
-    builtin_scripts::ETH_ACCOUNT_LOCK,
-};
+use crate::account_lock_manage::{secp256k1::Secp256k1Eth, LockAlgorithm};
+use crate::builtin_scripts::ETH_ACCOUNT_LOCK;
 use ckb_crypto::secp::{Generator, Privkey, Pubkey};
 use ckb_error::assert_error_eq;
 use ckb_script::{ScriptError, TransactionScriptsVerifier};

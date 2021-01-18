@@ -12,6 +12,7 @@ use gw_db::{
     },
     DBPinnableSlice, RocksDB,
 };
+use gw_traits::ChainStore;
 use gw_types::{
     packed::{self, GlobalState, HeaderInfo, L2Block, L2Transaction},
     prelude::*,
@@ -66,6 +67,11 @@ impl<'a> Store {
             return Err(Error::Store);
         }
         Ok(())
+    }
+
+    pub fn has_genesis(&self) -> Result<bool> {
+        let db = self.begin_transaction();
+        Ok(db.get_block_hash_by_number(0)?.is_some())
     }
 
     /// TODO use RocksDB snapshot

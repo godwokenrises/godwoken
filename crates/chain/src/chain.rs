@@ -10,6 +10,7 @@ use gw_generator::{
     generator::StateTransitionArgs, ChallengeContext, Error as GeneratorError, Generator,
 };
 use gw_store::{transaction::StoreTransaction, Store};
+use gw_traits::ChainStore;
 use gw_types::{
     bytes::Bytes,
     core::Status,
@@ -406,7 +407,7 @@ impl Chain {
         // reset account SMT to genesis
         // TODO use version based storage
         db.clear_account_state_tree()?;
-        gw_store::genesis::build_genesis_from_store(
+        gw_generator::genesis::build_genesis_from_store(
             db,
             &GenesisConfig {
                 timestamp: genesis.raw().timestamp().unpack(),
@@ -468,7 +469,7 @@ impl Chain {
         };
         let mut tree = db.account_state_tree()?;
         // process transactions
-        let result = match self.generator.apply_state_transition(&mut tree, args) {
+        let result = match self.generator.apply_state_transition(db, &mut tree, args) {
             Ok(result) => result,
             Err(err) => {
                 // handle tx error

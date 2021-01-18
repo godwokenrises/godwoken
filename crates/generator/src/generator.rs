@@ -1,15 +1,12 @@
 use crate::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, error::WithdrawalError,
-    sudt::build_l2_sudt_script,
 };
 use crate::{
     backend_manage::Backend,
     error::{Error, TransactionError, TransactionErrorWithContext},
+    sudt::build_l2_sudt_script,
 };
-use crate::{
-    error::LockAlgorithmError,
-    traits::{CodeStore, StateExt},
-};
+use crate::{error::LockAlgorithmError, traits::StateExt};
 use crate::{error::ValidateError, syscalls::L2Syscalls, types::RunResult};
 use gw_common::{
     blake2b::new_blake2b,
@@ -19,6 +16,7 @@ use gw_common::{
     state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
     H256,
 };
+use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     core::ScriptHashType,
     packed::{
@@ -156,8 +154,9 @@ impl Generator {
     /// Notice:
     /// This function do not verify the block and transactions signature.
     /// The caller is supposed to do the verification.
-    pub fn apply_state_transition<S: State + CodeStore>(
+    pub fn apply_state_transition<S: State + CodeStore, C: ChainStore>(
         &self,
+        chain: &C,
         state: &mut S,
         args: StateTransitionArgs,
     ) -> Result<StateTransitionResult, Error> {
@@ -189,7 +188,7 @@ impl Generator {
             }
             // build call context
             // NOTICE users only allowed to send HandleMessage CallType txs
-            let run_result = match self.execute(state, &block_info, &raw_tx) {
+            let run_result = match self.execute(chain, state, &block_info, &raw_tx) {
                 Ok(run_result) => run_result,
                 Err(err) => {
                     return Err(TransactionErrorWithContext::new(
@@ -251,8 +250,9 @@ impl Generator {
     }
 
     /// execute a layer2 tx
-    pub fn execute<S: State + CodeStore>(
+    pub fn execute<S: State + CodeStore, C: ChainStore>(
         &self,
+        chain: &C,
         state: &S,
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
@@ -262,6 +262,7 @@ impl Generator {
             let core_machine = Box::<AsmCoreMachine>::default();
             let machine_builder =
                 DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls {
+                    chain,
                     state,
                     block_info: block_info,
                     raw_tx,

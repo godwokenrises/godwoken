@@ -14,7 +14,7 @@ use gw_common::{
     },
     state::State,
 };
-use gw_generator::traits::CodeStore;
+use gw_traits::{ChainStore, CodeStore};
 use gw_types::{bytes::Bytes, packed::Script};
 use std::collections::{HashMap, HashSet};
 
@@ -96,6 +96,14 @@ impl CodeStore for OverlayStore {
                 tree.get_data(data_hash)
             }
         }
+    }
+}
+
+impl ChainStore for OverlayStore {
+    fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, gw_db::error::Error> {
+        self.store
+            .begin_transaction()
+            .get_block_hash_by_number(number)
     }
 }
 

@@ -7,6 +7,7 @@ use crate::{
     Generator,
 };
 use gw_common::H256;
+use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     packed::{RawL2Transaction, Script},
@@ -15,6 +16,8 @@ use gw_types::{
 
 #[test]
 fn test_example_sum() {
+    let store = Store::open_tmp().unwrap();
+    let db = store.begin_transaction();
     let mut tree = DummyState::default();
     let from_id: u32 = 2;
     let init_value: u64 = 0;
@@ -49,7 +52,7 @@ fn test_example_sum() {
                 .args(Bytes::from(add_value.to_le_bytes().to_vec()).pack())
                 .build();
             let run_result = generator
-                .execute(&tree, &block_info, &raw_tx)
+                .execute(&db, &tree, &block_info, &raw_tx)
                 .expect("construct");
             let return_value = {
                 let mut buf = [0u8; 8];

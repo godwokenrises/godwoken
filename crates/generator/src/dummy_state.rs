@@ -1,9 +1,9 @@
-use crate::traits::CodeStore;
 use gw_common::{
     error::Error,
     smt::{default_store::DefaultStore, H256, SMT},
     state::State,
 };
+use gw_traits::CodeStore;
 use gw_types::{bytes::Bytes, packed::Script};
 use std::collections::HashMap;
 

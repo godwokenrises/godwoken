@@ -1,6 +1,6 @@
 use crate::parameter::GenesisConfig;
 use ckb_jsonrpc_types::JsonBytes;
-use gw_store::genesis;
+use gw_generator::genesis;
 use gw_types::{packed, prelude::*};
 use serde::{Deserialize, Serialize};
 

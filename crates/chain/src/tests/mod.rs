@@ -10,6 +10,7 @@ use gw_config::{ChainConfig, GenesisConfig};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
+    genesis::init_genesis,
     Generator,
 };
 use gw_store::Store;
@@ -47,9 +48,13 @@ pub fn setup_chain(rollup_type_script: &Script) -> Chain {
         aggregator_id,
         timestamp,
     };
-    store
-        .init_genesis(&genesis_config, genesis_header_info, rollup_script_hash)
-        .unwrap();
+    init_genesis(
+        &store,
+        &genesis_config,
+        genesis_header_info,
+        rollup_script_hash,
+    )
+    .unwrap();
     let tip = store.get_tip_block().unwrap();
     let mem_pool = MemPool::create(
         store.new_overlay().unwrap(),

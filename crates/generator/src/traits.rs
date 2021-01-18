@@ -5,18 +5,12 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, merkle_utils::calculate_compacted_account_root, state::State,
     CKB_SUDT_SCRIPT_ARGS, H256,
 };
+use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     packed::{DepositionRequest, Script, WithdrawalRequest},
     prelude::*,
 };
-
-pub trait CodeStore {
-    fn insert_script(&mut self, script_hash: H256, script: Script);
-    fn get_script(&self, script_hash: &H256) -> Option<Script>;
-    fn insert_data(&mut self, data_hash: H256, code: Bytes);
-    fn get_data(&self, data_hash: &H256) -> Option<Bytes>;
-}
 
 pub trait StateExt {
     fn create_account_from_script(&mut self, script: Script) -> Result<u32, Error>;
