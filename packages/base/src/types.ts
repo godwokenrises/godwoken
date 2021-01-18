@@ -120,6 +120,41 @@ export function DenormalizeDepositionLockArgs(
   };
 }
 
+export function DenormalizeRawWithdrawalRequest(
+  rawWithdrawalRequest: schemas.RawWithdrawalRequest
+) {
+  return {
+    nonce:
+      "0x" +
+      rawWithdrawalRequest.getNonce().toLittleEndianUint32().toString(16),
+    capacity:
+      "0x" +
+      rawWithdrawalRequest.getCapacity().toLittleEndianBigUint64().toString(16),
+    amount: new Reader(rawWithdrawalRequest.getAmount().raw()).serializeJson(),
+    sudt_script_hash: new Reader(
+      rawWithdrawalRequest.getSudtScriptHash().raw()
+    ).serializeJson(),
+    account_script_hash: new Reader(
+      rawWithdrawalRequest.getAccountScriptHash().raw()
+    ).serializeJson(),
+    sell_amount: new Reader(
+      rawWithdrawalRequest.getSellAmount().raw()
+    ).serializeJson(),
+    sell_capacity:
+      "0x" +
+      rawWithdrawalRequest
+        .getSellCapacity()
+        .toLittleEndianBigUint64()
+        .toString(16),
+    owner_lock_hash: new Reader(
+      rawWithdrawalRequest.getOwnerLockHash().raw()
+    ).serializeJson(),
+    payment_lock_hash: new Reader(
+      rawWithdrawalRequest.getPaymentLockHash().raw()
+    ).serializeJson(),
+  };
+}
+
 export function NormalizeDepositionLockArgs(
   depositionLockArgs: object,
   { debugPath = "deposition_lock_args" } = {}
@@ -146,4 +181,73 @@ export function NormalizeCustodianLockArgs(
     deposition_block_hash: normalizeRawData(32),
     deposition_block_number: normalizeHexNumber(8),
   });
+}
+
+export function NormalizeWithdrawalLockArgs(
+  args: object,
+  { debugPath = "withdrawal_lock_args" } = {}
+) {
+  return normalizeObject(debugPath, args, {
+    deposition_block_hash: normalizeRawData(32),
+    deposition_block_number: normalizeHexNumber(8),
+    withdrawal_block_hash: normalizeRawData(32),
+    withdrawal_block_number: normalizeHexNumber(8),
+    sudt_script_hash: normalizeRawData(32),
+    sell_capacity: normalizeHexNumber(8),
+    sell_amount: normalizeHexNumber(16),
+    owner_lock_hash: normalizeRawData(32),
+    payment_lock_hash: normalizeRawData(32),
+  });
+}
+
+export function DenormalizeCustodianLockArgs(
+  custodianLockArgs: schemas.CustodianLockArgs
+) {
+  return {
+    deposition_lock_args: DenormalizeDepositionLockArgs(
+      custodianLockArgs.getDepositionLockArgs()
+    ),
+    deposition_block_hash: new Reader(
+      custodianLockArgs.getDepositionBlockHash().raw()
+    ).serializeJson(),
+    deposition_block_number:
+      "0x" +
+      custodianLockArgs
+        .getDepositionBlockNumber()
+        .toLittleEndianBigUint64()
+        .toString(16),
+  };
+}
+
+export function DenormalizeAccountMerkleState(
+  account: schemas.AccountMerkleState
+) {
+  return {
+    merkle_root: new Reader(account.getMerkleRoot().raw()).serializeJson(),
+    count: "0x" + account.getCount().toLittleEndianUint32().toString(16),
+  };
+}
+
+export function DenormalizeBlockMerkleState(block: schemas.BlockMerkleState) {
+  return {
+    merkle_root: new Reader(block.getMerkleRoot().raw()).serializeJson(),
+    count: "0x" + block.getCount().toLittleEndianBigUint64().toString(16),
+  };
+}
+
+export function DenormalizeGlobalState(globalState: schemas.GlobalState) {
+  return {
+    account: DenormalizeAccountMerkleState(globalState.getAccount()),
+    block: DenormalizeBlockMerkleState(globalState.getBlock()),
+    reverted_block_root: new Reader(
+      globalState.getRevertedBlockRoot().raw()
+    ).serializeJson(),
+    last_finalized_block_number:
+      "0x" +
+      globalState
+        .getLastFinalizedBlockNumber()
+        .toLittleEndianBigUint64()
+        .toString(16),
+    status: globalState.getStatus(),
+  };
 }
