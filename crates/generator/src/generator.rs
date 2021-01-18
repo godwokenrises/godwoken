@@ -129,7 +129,7 @@ impl Generator {
             // check SUDT balance
             // user can't withdrawal 0 SUDT when non-CKB sudt_id exists
             if amount == 0 {
-                return Err(WithdrawalError::NonPositiveSudtAmount.into());
+                return Err(WithdrawalError::NonPositiveSUDTAmount.into());
             }
             let balance = state.get_sudt_balance(sudt_id, id)?;
             if amount > balance {

@@ -63,7 +63,7 @@ pub enum WithdrawalError {
     #[error("Withdrawal Faked CKB")]
     WithdrawFakedCKB,
     #[error("Non positive sudt amount")]
-    NonPositiveSudtAmount,
+    NonPositiveSUDTAmount,
 }
 
 impl From<WithdrawalError> for Error {

@@ -1002,14 +1002,16 @@ export class Runner {
       const custodianLockArgs = this._unpackCustodianLockArgs(
         cell.cell_output.lock.args
       );
-      // this.logger(
-      //   "debug",
-      //   `GlobalState last_finalized_block_number: ${BigInt(
-      //     globalState.last_finalized_block_number
-      //   )}, custodianLockArgs deposition_block_number: ${BigInt(
-      //     custodianLockArgs.deposition_block_number
-      //   )}, deposition_block_hash: ${custodianLockArgs.deposition_block_hash}`
-      // );
+      //console.log(cell);
+      //console.log(custodianLockArgs);
+      //this.logger(
+      //  "debug",
+      //  `GlobalState last_finalized_block_number: ${BigInt(
+      //    globalState.last_finalized_block_number
+      //  )}, custodianLockArgs deposition_block_number: ${BigInt(
+      //    custodianLockArgs.deposition_block_number
+      //  )}, deposition_block_hash: ${custodianLockArgs.deposition_block_hash}`
+      //);
       if (
         BigInt(custodianLockArgs.deposition_block_number) <=
         BigInt(globalState.last_finalized_block_number)
