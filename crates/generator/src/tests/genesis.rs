@@ -1,8 +1,8 @@
 use crate::genesis::{build_genesis, init_genesis};
 use gw_common::{sparse_merkle_tree::H256, state::State};
 use gw_config::GenesisConfig;
-use gw_store::CodeStore;
 use gw_store::Store;
+use gw_traits::CodeStore;
 use gw_types::{core::ScriptHashType, packed::HeaderInfo, prelude::*};
 use std::convert::TryInto;
 

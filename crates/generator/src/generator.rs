@@ -16,7 +16,7 @@ use gw_common::{
     state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
     H256,
 };
-use gw_store::{transaction::StoreTransaction, CodeStore};
+use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     core::ScriptHashType,
     packed::{
@@ -154,9 +154,9 @@ impl Generator {
     /// Notice:
     /// This function do not verify the block and transactions signature.
     /// The caller is supposed to do the verification.
-    pub fn apply_state_transition<S: State + CodeStore>(
+    pub fn apply_state_transition<S: State + CodeStore, C: ChainStore>(
         &self,
-        db: &StoreTransaction,
+        chain: &C,
         state: &mut S,
         args: StateTransitionArgs,
     ) -> Result<StateTransitionResult, Error> {
@@ -188,7 +188,7 @@ impl Generator {
             }
             // build call context
             // NOTICE users only allowed to send HandleMessage CallType txs
-            let run_result = match self.execute(db, state, &block_info, &raw_tx) {
+            let run_result = match self.execute(chain, state, &block_info, &raw_tx) {
                 Ok(run_result) => run_result,
                 Err(err) => {
                     return Err(TransactionErrorWithContext::new(
@@ -250,9 +250,9 @@ impl Generator {
     }
 
     /// execute a layer2 tx
-    pub fn execute<S: State + CodeStore>(
+    pub fn execute<S: State + CodeStore, C: ChainStore>(
         &self,
-        db: &StoreTransaction,
+        chain: &C,
         state: &S,
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
@@ -262,7 +262,7 @@ impl Generator {
             let core_machine = Box::<AsmCoreMachine>::default();
             let machine_builder =
                 DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls {
-                    db,
+                    chain,
                     state,
                     block_info: block_info,
                     raw_tx,

@@ -1,5 +1,4 @@
 use crate::db_utils::build_transaction_key;
-use crate::CodeStore;
 use gw_common::{
     error::Error as StateError,
     smt::SMT,
@@ -23,6 +22,7 @@ use gw_db::{
     error::Error, iter::DBIter, DBIterator, DBVector, IteratorMode, RocksDBTransaction,
     RocksDBTransactionSnapshot,
 };
+use gw_traits::{ChainStore, CodeStore};
 use gw_types::{bytes::Bytes, packed, prelude::*};
 
 pub struct SMTStoreTransaction<'a> {
@@ -355,18 +355,6 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, Error> {
-        let block_number: packed::Uint64 = number.pack();
-        match self.get(COLUMN_INDEX, block_number.as_slice()) {
-            Some(slice) => Ok(Some(
-                packed::Byte32Reader::from_slice_should_be_ok(&slice.as_ref())
-                    .to_entity()
-                    .unpack(),
-            )),
-            None => Ok(None),
-        }
-    }
-
     pub fn detach_block(&self, block: &packed::L2Block) -> Result<(), Error> {
         for tx in block.transactions().into_iter() {
             let tx_hash = tx.hash();
@@ -396,6 +384,20 @@ impl StoreTransaction {
             parent_block_hash.as_slice(),
         )?;
         Ok(())
+    }
+}
+
+impl ChainStore for StoreTransaction {
+    fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, Error> {
+        let block_number: packed::Uint64 = number.pack();
+        match self.get(COLUMN_INDEX, block_number.as_slice()) {
+            Some(slice) => Ok(Some(
+                packed::Byte32Reader::from_slice_should_be_ok(&slice.as_ref())
+                    .to_entity()
+                    .unpack(),
+            )),
+            None => Ok(None),
+        }
     }
 }
 

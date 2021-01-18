@@ -5,7 +5,7 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID, merkle_utils::calculate_compacted_account_root, state::State,
     CKB_SUDT_SCRIPT_ARGS, H256,
 };
-use gw_store::CodeStore;
+use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     packed::{DepositionRequest, Script, WithdrawalRequest},

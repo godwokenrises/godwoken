@@ -14,7 +14,8 @@ use gw_generator::{
     Generator,
 };
 use gw_jsonrpc_types::{blockchain, genesis, parameter};
-use gw_store::{CodeStore, Store};
+use gw_store::Store;
+use gw_traits::CodeStore;
 use gw_types::{bytes::Bytes, core::Status, packed, prelude::*};
 use neon::prelude::*;
 use parking_lot::Mutex;
@@ -84,7 +85,6 @@ declare_types! {
                 };
                 let tip = packed::L2Block::default();
                 let mem_pool = MemPool::create(
-                    store.clone(),
                     store.new_overlay().expect("State new overlay"), Arc::clone(&generator),
                     &tip, nb_ctx).expect("Creating MemPool");
                 Arc::new(Mutex::new(mem_pool))

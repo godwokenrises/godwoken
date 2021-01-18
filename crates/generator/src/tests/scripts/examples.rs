@@ -17,6 +17,7 @@ use gw_types::{
 #[test]
 fn test_example_sum() {
     let store = Store::open_tmp().unwrap();
+    let db = store.begin_transaction();
     let mut tree = DummyState::default();
     let from_id: u32 = 2;
     let init_value: u64 = 0;
@@ -51,7 +52,7 @@ fn test_example_sum() {
                 .args(Bytes::from(add_value.to_le_bytes().to_vec()).pack())
                 .build();
             let run_result = generator
-                .execute(&store.begin_transaction(), &tree, &block_info, &raw_tx)
+                .execute(&db, &tree, &block_info, &raw_tx)
                 .expect("construct");
             let return_value = {
                 let mut buf = [0u8; 8];

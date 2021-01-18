@@ -11,6 +11,7 @@ gw-types = { path = "../types" }
 gw-common = { path = "../common" }
 gw-config = { path = "../config" }
 gw-store = { path = "../store" }
+gw-traits = { path = "../traits" }
 anyhow = "1.0"
 blake2b-rs = "0.2"
 ckb-vm = { git = "https://github.com/nervosnetwork/ckb-vm.git", tag = "0.19.1", features = ["detect-asm"] }

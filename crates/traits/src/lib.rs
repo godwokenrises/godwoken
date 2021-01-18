@@ -7,3 +7,7 @@ pub trait CodeStore {
     fn insert_data(&mut self, data_hash: H256, code: Bytes);
     fn get_data(&self, data_hash: &H256) -> Option<Bytes>;
 }
+
+pub trait ChainStore {
+    fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, gw_db::error::Error>;
+}

@@ -3,7 +3,7 @@ use anyhow::{anyhow, Result};
 use gw_common::{blake2b::new_blake2b, state::State, H256};
 use gw_generator::{error::LockAlgorithmError, traits::StateExt, Generator, RunResult};
 use gw_store::OverlayStore;
-use gw_store::{CodeStore, Store};
+use gw_traits::CodeStore;
 use gw_types::{
     packed::{BlockInfo, DepositionRequest, L2Block, L2Transaction, TxReceipt, WithdrawalRequest},
     prelude::*,
@@ -22,7 +22,6 @@ const MAX_DATA_BYTES_LIMIT: usize = 25_000;
 
 /// TODO remove txs from pool if a new block already contains txs
 pub struct MemPool {
-    store: Store,
     state: OverlayStore,
     generator: Arc<Generator>,
     queue: Vec<(L2Transaction, TxReceipt)>,
@@ -34,7 +33,6 @@ pub struct MemPool {
 
 impl MemPool {
     pub fn create(
-        store: Store,
         state: OverlayStore,
         generator: Arc<Generator>,
         tip: &L2Block,
@@ -46,7 +44,6 @@ impl MemPool {
         let next_block_info = gen_next_block_info(tip, nb_ctx)?;
         let rollup_type_script_hash = generator.rollup_type_script_hash.into();
         Ok(MemPool {
-            store,
             state,
             generator,
             queue,
@@ -108,12 +105,9 @@ impl MemPool {
         self.verify_tx(&tx)?;
         // 2. execute contract
         let raw_tx = tx.raw();
-        let run_result = self.generator.execute(
-            &self.store.begin_transaction(),
-            &self.state,
-            &self.next_block_info,
-            &raw_tx,
-        )?;
+        let run_result =
+            self.generator
+                .execute(&self.state, &self.state, &self.next_block_info, &raw_tx)?;
         let write_data_bytes: usize = run_result.write_data.values().map(|data| data.len()).sum();
         if write_data_bytes > MAX_DATA_BYTES_LIMIT {
             return Err(anyhow!(

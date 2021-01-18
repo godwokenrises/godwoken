@@ -10,6 +10,7 @@ use gw_generator::{
     generator::StateTransitionArgs, ChallengeContext, Error as GeneratorError, Generator,
 };
 use gw_store::{transaction::StoreTransaction, Store};
+use gw_traits::ChainStore;
 use gw_types::{
     bytes::Bytes,
     core::Status,
@@ -468,11 +469,7 @@ impl Chain {
         };
         let mut tree = db.account_state_tree()?;
         // process transactions
-        let result = match self.generator.apply_state_transition(
-            &self.store.begin_transaction(),
-            &mut tree,
-            args,
-        ) {
+        let result = match self.generator.apply_state_transition(db, &mut tree, args) {
             Ok(result) => result,
             Err(err) => {
                 // handle tx error

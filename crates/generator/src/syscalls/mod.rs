@@ -13,7 +13,7 @@ use gw_common::{
     },
     H256,
 };
-use gw_store::{transaction::StoreTransaction, CodeStore};
+use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     bytes::Bytes,
     packed::{BlockInfo, LogItem, RawL2Transaction, Script},
@@ -47,8 +47,8 @@ const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 pub(crate) const SUCCESS: u8 = 0;
 pub(crate) const ERROR_DUPLICATED_SCRIPT_HASH: u8 = std::i8::MAX as u8;
 
-pub(crate) struct L2Syscalls<'a, S> {
-    pub(crate) db: &'a StoreTransaction,
+pub(crate) struct L2Syscalls<'a, S, C> {
+    pub(crate) chain: &'a C,
     pub(crate) state: &'a S,
     pub(crate) block_info: &'a BlockInfo,
     pub(crate) raw_tx: &'a RawL2Transaction,
@@ -112,7 +112,7 @@ pub fn store_data<Mac: SupportMachine>(machine: &mut Mac, data: &[u8]) -> Result
     Ok(real_size)
 }
 
-impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
+impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S, C> {
     fn initialize(&mut self, _machine: &mut Mac) -> Result<(), VMError> {
         Ok(())
     }
@@ -330,13 +330,14 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
                 let number = machine.registers()[A0].to_u64();
                 let block_hash_addr = machine.registers()[A1].to_u64();
 
-                let block_hash_opt = self.db.get_block_hash_by_number(number).map_err(|err| {
-                    eprintln!(
-                        "syscall error: get block hash by number: {}, error: {:?}",
-                        number, err
-                    );
-                    VMError::Unexpected
-                })?;
+                let block_hash_opt =
+                    self.chain.get_block_hash_by_number(number).map_err(|err| {
+                        eprintln!(
+                            "syscall error: get block hash by number: {}, error: {:?}",
+                            number, err
+                        );
+                        VMError::Unexpected
+                    })?;
                 if let Some(hash) = block_hash_opt {
                     machine
                         .memory_mut()
@@ -372,7 +373,7 @@ impl<'a, S: State, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S> {
     }
 }
 
-impl<'a, S: State> L2Syscalls<'a, S> {
+impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
     fn get_raw(&mut self, key: &H256) -> Result<H256, VMError> {
         let value = match self.result.write_values.get(&key) {
             Some(value) => *value,

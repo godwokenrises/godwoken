@@ -12,6 +12,7 @@ use gw_db::{
     },
     DBPinnableSlice, RocksDB,
 };
+use gw_traits::ChainStore;
 use gw_types::{
     packed::{self, GlobalState, HeaderInfo, L2Block, L2Transaction},
     prelude::*,
