@@ -29,7 +29,7 @@ fn run_contract<S: State + CodeStore>(
     let backend_manage = BackendManage::default();
     let account_lock_manage = AccountLockManage::default();
     let generator = Generator::new(backend_manage, account_lock_manage, Default::default());
-    let run_result = generator.execute(store, tree, block_info, &raw_tx)?;
+    let run_result = generator.execute(&store.begin_transaction(), tree, block_info, &raw_tx)?;
     tree.apply_run_result(&run_result).expect("update state");
     Ok(run_result.return_data)
 }

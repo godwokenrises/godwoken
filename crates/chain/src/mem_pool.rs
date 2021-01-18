@@ -108,9 +108,12 @@ impl MemPool {
         self.verify_tx(&tx)?;
         // 2. execute contract
         let raw_tx = tx.raw();
-        let run_result =
-            self.generator
-                .execute(&self.store, &self.state, &self.next_block_info, &raw_tx)?;
+        let run_result = self.generator.execute(
+            &self.store.begin_transaction(),
+            &self.state,
+            &self.next_block_info,
+            &raw_tx,
+        )?;
         let write_data_bytes: usize = run_result.write_data.values().map(|data| data.len()).sum();
         if write_data_bytes > MAX_DATA_BYTES_LIMIT {
             return Err(anyhow!(

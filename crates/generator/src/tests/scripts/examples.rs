@@ -51,7 +51,7 @@ fn test_example_sum() {
                 .args(Bytes::from(add_value.to_le_bytes().to_vec()).pack())
                 .build();
             let run_result = generator
-                .execute(&store, &tree, &block_info, &raw_tx)
+                .execute(&store.begin_transaction(), &tree, &block_info, &raw_tx)
                 .expect("construct");
             let return_value = {
                 let mut buf = [0u8; 8];
