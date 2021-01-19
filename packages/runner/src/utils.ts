@@ -18,7 +18,6 @@ import { config as poaConfigModule } from "clerkb-lumos-integrator";
 
 const { DenormalizeScript } = denormalizers;
 const { readBigUInt128LE } = utils;
-import * as Sentry from "@sentry/node";
 
 export type Level = "debug" | "info" | "warn" | "error";
 export type Logger = (level: Level, message: string) => void;
@@ -57,6 +56,10 @@ export interface PoAConfig {
   config: poaConfigModule.Config;
 }
 
+export interface SentryConfig {
+  dsn: string;
+  tracesSampleRate: number;
+}
 export type ConsensusConfig = AlwaysSuccessConsensusConfig | PoAConfig;
 
 export interface RunnerConfig {
@@ -65,6 +68,7 @@ export interface RunnerConfig {
   rpc: RPCConfig;
   genesisConfig: GenesisStoreConfig;
   consensusConfig: ConsensusConfig;
+  sentryConfig: SentryConfig;
 }
 
 export async function scanDepositionCellsInCommittedL2Block(

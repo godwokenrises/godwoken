@@ -12,16 +12,7 @@ import { readFileSync } from "fs";
 import Knex from "knex";
 import deepFreeze from "deep-freeze-strict";
 import * as Sentry from "@sentry/node";
-import * as dotenv from "dotenv";
 import { version } from "../package.json";
-
-dotenv.config();
-
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  release: version,
-  tracesSampleRate: 1.0,
-});
 
 const program = new Command();
 // TODO: private key should come from an environment variable or config file,
@@ -43,6 +34,12 @@ initializeConfig();
 const runnerConfig: RunnerConfig = deepFreeze(
   JSON.parse(readFileSync(program.configFile, "utf8"))
 );
+
+Sentry.init({
+  dsn: runnerConfig.sentryConfig.dsn,
+  release: version,
+  tracesSampleRate: runnerConfig.sentryConfig.tracesSampleRate,
+});
 
 const rpc = new RPC(runnerConfig.rpc.listen);
 const knex = Knex({
