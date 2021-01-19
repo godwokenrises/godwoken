@@ -62,6 +62,9 @@ const chainService = new ChainService(
 );
 
 function defaultLogger(level: Level, message: string) {
+  if (level === "error") {
+    Sentry.captureMessage(message, Sentry.Severity.fromString(level));
+  }
   console.log(`[${new Date().toISOString()}] [${level}] ${message}`);
 }
 

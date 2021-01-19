@@ -18,6 +18,7 @@ import { config as poaConfigModule } from "clerkb-lumos-integrator";
 
 const { DenormalizeScript } = denormalizers;
 const { readBigUInt128LE } = utils;
+import * as Sentry from "@sentry/node";
 
 export type Level = "debug" | "info" | "warn" | "error";
 export type Logger = (level: Level, message: string) => void;
