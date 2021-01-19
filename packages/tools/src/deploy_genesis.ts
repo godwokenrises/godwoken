@@ -367,6 +367,10 @@ const run = async () => {
   godwokenConfig.chain = {
     rollup_type_script: typeScript,
   };
+  const sentryConfig = {
+    dsn: "", // default dsn is empty string
+    tracesSampleRate: 1.0,
+  };
   const runnerConfig = {
     deploymentConfig,
     godwokenConfig,
@@ -378,6 +382,7 @@ const run = async () => {
       listen: "http://127.0.0.1:8114",
     },
     consensusConfig: undefined as any,
+    sentryConfig,
   };
   if (poaConfig) {
     runnerConfig.consensusConfig = {
