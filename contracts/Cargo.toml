@@ -6,6 +6,7 @@ members = [
     "challenge-lock",
     "stake-lock",
     "state-validator",
+    "dummy-state-validator",
     "validator-utils",
 ]
 

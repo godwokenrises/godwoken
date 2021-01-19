@@ -9,6 +9,10 @@ name = "state-validator"
 template_type = "Rust"
 
 [[contracts]]
+name = "dummy-state-validator"
+template_type = "Rust"
+
+[[contracts]]
 name = "deposition-lock"
 template_type = "Rust"
 
