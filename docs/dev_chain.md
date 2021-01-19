@@ -159,6 +159,21 @@ $ yarn workspace @ckb-godwoken/tools tsc
 $ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/tools/lib/deploy_genesis.js --private-key <private key used to create genesis block> -d $TOP/deployment-results.json -c $TOP/godwoken_config.json -o $TOP/runner_config.json -s "postgresql://user:password@127.0.0.1:5432/lumos"
 ```
 
+## Add Sentry Support
+
+By adding `sentryConfig` to `$TOP/runner_config.json`, you can upload error logs to your sentry service: 
+```
+{
+  ...
+  "sentryConfig": {
+    "dsn": ${your_dsn},
+    "tracesSampleRate": 1
+  }
+}
+```
+Find `your_dsn` via this [guide](https://docs.sentry.io/product/sentry-basics/dsn-explainer/). 
+
+You can also leave it unchanged if you don't need sentry support.
 ## Start Godwoken
 
 ```bash

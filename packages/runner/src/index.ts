@@ -11,6 +11,7 @@ import { Level, RunnerConfig } from "./utils";
 import { readFileSync } from "fs";
 import Knex from "knex";
 import deepFreeze from "deep-freeze-strict";
+import * as Sentry from "@sentry/node";
 
 const program = new Command();
 // TODO: private key should come from an environment variable or config file,
@@ -29,9 +30,17 @@ program
 program.parse(argv);
 
 initializeConfig();
+
 const runnerConfig: RunnerConfig = deepFreeze(
   JSON.parse(readFileSync(program.configFile, "utf8"))
 );
+
+Sentry.init({
+  dsn: runnerConfig.sentryConfig?.dsn,
+  // TODO replace it with project version
+  release: "0.1.0",
+  tracesSampleRate: runnerConfig.sentryConfig?.tracesSampleRate,
+});
 
 const rpc = new RPC(runnerConfig.rpc.listen);
 const knex = Knex({
@@ -51,6 +60,9 @@ const chainService = new ChainService(
 );
 
 function defaultLogger(level: Level, message: string) {
+  if (level === "error") {
+    Sentry.captureMessage(message, Sentry.Severity.fromString(level));
+  }
   console.log(`[${new Date().toISOString()}] [${level}] ${message}`);
 }
 

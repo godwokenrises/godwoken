@@ -56,6 +56,10 @@ export interface PoAConfig {
   config: poaConfigModule.Config;
 }
 
+export interface SentryConfig {
+  dsn: string;
+  tracesSampleRate: number;
+}
 export type ConsensusConfig = AlwaysSuccessConsensusConfig | PoAConfig;
 
 export interface RunnerConfig {
@@ -64,6 +68,7 @@ export interface RunnerConfig {
   rpc: RPCConfig;
   genesisConfig: GenesisStoreConfig;
   consensusConfig: ConsensusConfig;
+  sentryConfig?: SentryConfig;
 }
 
 export async function scanDepositionCellsInCommittedL2Block(

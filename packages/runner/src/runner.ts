@@ -96,23 +96,6 @@ function buildDefaultCustodianLockArgs() {
     deposition_block_number: "0x0",
   };
 }
-function extractSudtTypeScriptFromScriptHash(
-  validCustodianCells: Cell[],
-  sudtScriptHash: Hash
-): Script {
-  for (const cell of validCustodianCells) {
-    if (
-      cell.cell_output.type &&
-      utils.computeScriptHash(cell.cell_output.type) === sudtScriptHash
-    ) {
-      return cell.cell_output.type;
-    }
-  }
-  throw new Error(
-    "Cannot find sudt type script in validCustodianCells, sudtScriptHash: " +
-      sudtScriptHash
-  );
-}
 
 export class Runner {
   rpc: RPC;
@@ -398,7 +381,9 @@ export class Runner {
         }
       }
     }
-    throw new Error(`Cannot find cell dep for ${cell.cell_output.type!}`);
+    const errMsg = `Cannot find cell dep for ${cell.cell_output.type!}`;
+    this.logger("error", errMsg);
+    throw new Error(errMsg);
   }
 
   async _queryLiveRollupCell(): Promise<Cell> {
@@ -408,7 +393,9 @@ export class Runner {
       results.push(cell);
     }
     if (results.length !== 1) {
-      throw new Error(`Invalid number of rollup cells: ${results.length}`);
+      const errMsg = `Invalid number of rollup cells: ${results.length}`;
+      this.logger("error", errMsg);
+      throw new Error(errMsg);
     }
     return results[0];
   }
@@ -626,8 +613,9 @@ export class Runner {
     });
     const validCustodianCells = await this._queryValidCustodianCells();
     if (validCustodianCells.length === 0) {
-      this.logger("debug", "No valid custodian cells found yet!");
-      throw new Error("No valid custodian cells found yet!");
+      const errMsg = "No valid custodian cells found yet!";
+      this.logger("error", errMsg);
+      throw new Error(errMsg);
     }
     const deposition_block_hash = validCustodianCells[0].block_hash!;
     const deposition_block_number = validCustodianCells[0].block_number!;
@@ -662,7 +650,7 @@ export class Runner {
         sudtScriptHash !=
         "0x0000000000000000000000000000000000000000000000000000000000000000"
       ) {
-        sudtType = extractSudtTypeScriptFromScriptHash(
+        sudtType = this._extractSudtTypeScriptFromScriptHash(
           validCustodianCells,
           sudtScriptHash
         );
@@ -713,9 +701,11 @@ export class Runner {
       const minimalCapacity = minimalCellCapacity(withdrawalOutput);
       // Withdraw sudt only or ckb with capacity less than minimal capacity is not support so far.
       if (BigInt(withdrawalCapacity) < BigInt(minimalCapacity)) {
-        throw new Error(
-          "Try to withdraw capacity less than minimalCellCapacity"
-        );
+        const errMsg = `Try to withdraw capacity less than minimalCellCapacity, withdrawal capacity: ${BigInt(
+          withdrawalCapacity
+        )}, minimalCapacity: ${BigInt(minimalCapacity)}`;
+        this.logger("error", errMsg);
+        throw new Error(errMsg);
       }
       txSkeleton = txSkeleton.update("outputs", (outputs) => {
         return outputs.push(withdrawalOutput);
@@ -782,11 +772,10 @@ export class Runner {
         }
       }
       if (inputSudtAmountSum < targetSudtAmount) {
-        this.logger(
-          "debug",
-          `Target sudt amount: ${targetSudtAmount}, available sudt amount: ${inputSudtAmountSum}`
-        );
-        throw new Error("Insufficient sudt amount in valid custodian cells");
+        const errMsg = `Insufficient sudt amount in valid custodian cells, 
+          Target sudt amount: ${targetSudtAmount}, available sudt amount: ${inputSudtAmountSum}`;
+        this.logger("error", errMsg);
+        throw new Error(errMsg);
       }
       // build sudt change custodian cell
       const custodianLock: Script = {
@@ -794,7 +783,7 @@ export class Runner {
         hash_type: this.config.deploymentConfig.custodian_lock.hash_type,
         args: this._packCustodianLockArgs(buildDefaultCustodianLockArgs()),
       };
-      const sudtType = extractSudtTypeScriptFromScriptHash(
+      const sudtType = this._extractSudtTypeScriptFromScriptHash(
         validCustodianCells,
         sudtScriptHash
       );
@@ -865,14 +854,13 @@ export class Runner {
         BigInt(outputCkbCapacitySumForSudtCustodianCells)
     ) {
       // If collected CKB capacity is less than outputs cells capacity, throw an error
-      this.logger(
-        "debug",
-        `Target CKB capacity: ${
+      const errMsg = `Insufficient CKB capacity in valid custodian cells,
+        Target CKB capacity: ${
           BigInt(ckbWithdrawalCapacity) +
           BigInt(outputCkbCapacitySumForSudtCustodianCells)
-        }, available CKB capacity: ${BigInt(inputCkbCapacitySum)}.`
-      );
-      throw new Error("Insufficient CKB capacity in valid custodian cells");
+        }, available CKB capacity: ${BigInt(inputCkbCapacitySum)}.`;
+      this.logger("error", errMsg);
+      throw new Error(errMsg);
     } else {
       // As we collect more CKB capacity, so need to build Ckb change custodian cell
       const custodianLock: Script = {
@@ -934,15 +922,13 @@ export class Runner {
           BigInt(outputCkbCapacitySumForSudtCustodianCells) +
           BigInt(minimalCapacity)
       ) {
-        this.logger(
-          "debug",
-          `Target CKB capacity: ${
-            BigInt(ckbWithdrawalCapacity) +
-            BigInt(outputCkbCapacitySumForSudtCustodianCells) +
-            BigInt(minimalCapacity)
-          }, available CKB capacity: ${BigInt(inputCkbCapacitySum)}.`
-        );
-        throw new Error("Insufficient CKB capacity in valid custodian cells");
+        const errMsg = `Insufficient CKB capacity in valid custodian cells, Target CKB capacity: ${
+          BigInt(ckbWithdrawalCapacity) +
+          BigInt(outputCkbCapacitySumForSudtCustodianCells) +
+          BigInt(minimalCapacity)
+        }, available CKB capacity: ${BigInt(inputCkbCapacitySum)}.`;
+        this.logger("error", errMsg);
+        throw new Error(errMsg);
       }
       const newChangeCapacity =
         BigInt(inputCkbCapacitySum) -
@@ -1076,5 +1062,23 @@ export class Runner {
     return types.DenormalizeCustodianLockArgs(
       new schemas.CustodianLockArgs(custodianLockArgsBuffer.buffer)
     );
+  }
+
+  _extractSudtTypeScriptFromScriptHash(
+    validCustodianCells: Cell[],
+    sudtScriptHash: Hash
+  ): Script {
+    for (const cell of validCustodianCells) {
+      if (
+        cell.cell_output.type &&
+        utils.computeScriptHash(cell.cell_output.type) === sudtScriptHash
+      ) {
+        return cell.cell_output.type;
+      }
+    }
+    const errMsg = `Cannot find sudt type script in validCustodianCells, sudtScriptHash: 
+      ${sudtScriptHash}`;
+    this.logger("error", errMsg);
+    throw new Error(errMsg);
   }
 }
