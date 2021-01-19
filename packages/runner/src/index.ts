@@ -12,7 +12,6 @@ import { readFileSync } from "fs";
 import Knex from "knex";
 import deepFreeze from "deep-freeze-strict";
 import * as Sentry from "@sentry/node";
-import { version } from "../package.json";
 
 const program = new Command();
 // TODO: private key should come from an environment variable or config file,
@@ -37,7 +36,8 @@ const runnerConfig: RunnerConfig = deepFreeze(
 
 Sentry.init({
   dsn: runnerConfig.sentryConfig.dsn,
-  release: version,
+  // TODO replace it with project version
+  release: "0.1.0",
   tracesSampleRate: runnerConfig.sentryConfig.tracesSampleRate,
 });
 
