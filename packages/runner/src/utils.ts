@@ -68,7 +68,7 @@ export interface RunnerConfig {
   rpc: RPCConfig;
   genesisConfig: GenesisStoreConfig;
   consensusConfig: ConsensusConfig;
-  sentryConfig: SentryConfig;
+  sentryConfig?: SentryConfig;
 }
 
 export async function scanDepositionCellsInCommittedL2Block(

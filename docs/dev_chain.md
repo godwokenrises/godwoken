@@ -161,17 +161,19 @@ $ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/tools/lib/deploy_genesi
 
 ## Add Sentry Support
 
-The default sentry config in `$TOP/runner_config.json`: 
+By adding `sentryConfig` to `$TOP/runner_config.json`, you can upload error logs to your sentry service: 
 ```
 {
   ...
-  sentryConfig: {
-    dsn: "",
-    tracesSampleRate: 1
+  "sentryConfig": {
+    "dsn": ${your_dsn},
+    "tracesSampleRate": 1
   }
 }
 ```
-replace the `dsn` with your actual [dsn](https://docs.sentry.io/product/sentry-basics/dsn-explainer/), or leave it unchanged if you don't need sentry support.
+Find `your_dsn` via this [guide](https://docs.sentry.io/product/sentry-basics/dsn-explainer/). 
+
+You can also leave it unchanged if you don't need sentry support.
 ## Start Godwoken
 
 ```bash

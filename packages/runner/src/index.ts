@@ -30,15 +30,16 @@ program
 program.parse(argv);
 
 initializeConfig();
+
 const runnerConfig: RunnerConfig = deepFreeze(
   JSON.parse(readFileSync(program.configFile, "utf8"))
 );
 
 Sentry.init({
-  dsn: runnerConfig.sentryConfig.dsn,
+  dsn: runnerConfig.sentryConfig?.dsn,
   // TODO replace it with project version
   release: "0.1.0",
-  tracesSampleRate: runnerConfig.sentryConfig.tracesSampleRate,
+  tracesSampleRate: runnerConfig.sentryConfig?.tracesSampleRate,
 });
 
 const rpc = new RPC(runnerConfig.rpc.listen);
