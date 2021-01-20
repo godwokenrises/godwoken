@@ -399,6 +399,17 @@ impl ChainStore for StoreTransaction {
             None => Ok(None),
         }
     }
+
+    fn get_block_number_by_hash(&self, block_hash: &H256) -> Result<Option<u64>, Error> {
+        match self.get(COLUMN_INDEX, block_hash.as_slice()) {
+            Some(slice) => Ok(Some(
+                packed::Uint64Reader::from_slice_should_be_ok(&slice.as_ref())
+                    .to_entity()
+                    .unpack(),
+            )),
+            None => Ok(None),
+        }
+    }
 }
 
 pub struct StateTree<'a> {

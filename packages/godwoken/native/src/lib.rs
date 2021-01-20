@@ -15,7 +15,7 @@ use gw_generator::{
 };
 use gw_jsonrpc_types::{blockchain, genesis, parameter};
 use gw_store::Store;
-use gw_traits::CodeStore;
+use gw_traits::{ChainStore, CodeStore};
 use gw_types::{bytes::Bytes, core::Status, packed, prelude::*};
 use neon::prelude::*;
 use parking_lot::Mutex;
@@ -222,6 +222,25 @@ declare_types! {
                 });
             let js_value = cx.string(format!("{:#x}", header_info));
             Ok(js_value.upcast())
+        }
+
+        method getTipBlockNumber(mut cx) {
+            let this = cx.this();
+            let tip_number = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                let db = chain.store.begin_transaction();
+                let block_hash = db.get_tip_block_hash().map_err(|err| err.to_string())?;
+                db.get_block_number_by_hash(&block_hash)
+                    .map_err(|err| err.to_string())?
+                    .ok_or_else(|| format!("Can not get block number by tip block hash"))
+            });
+            match tip_number {
+                Ok(value) => {
+                    let js_value = cx.string(format!("{:#x}", value));
+                    Ok(js_value.upcast())
+                },
+                Err(e) => cx.throw_error(format!("GetTipBlockNumber failed: {:?}", e))
+            }
         }
 
         method getBalance(mut cx) {

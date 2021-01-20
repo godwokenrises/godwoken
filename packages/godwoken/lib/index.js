@@ -46,6 +46,10 @@ class ChainService {
     );
   }
 
+  async getTipBlockNumber() {
+    return this.nativeChain.getTipBlockNumber();
+  }
+
   async getBalance(accountId, sudtId) {
     return this.nativeChain.getBalance(accountId, sudtId);
   }

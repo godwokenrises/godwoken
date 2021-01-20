@@ -105,6 +105,11 @@ impl ChainStore for OverlayStore {
             .begin_transaction()
             .get_block_hash_by_number(number)
     }
+    fn get_block_number_by_hash(&self, hash: &H256) -> Result<Option<u64>, gw_db::error::Error> {
+        self.store
+            .begin_transaction()
+            .get_block_number_by_hash(hash)
+    }
 }
 
 pub struct OverlaySMTStore {

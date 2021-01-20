@@ -129,6 +129,7 @@ export class ChainService {
   submitL2Transaction(l2Transaction: HexString): Promise<RunResult>;
   submitWithdrawalRequest(withdrawalRequest: HexString): Promise<void>;
   execute(l2Transaction: HexString): Promise<RunResult>;
+  getTipBlockNumber(): Promise<HexNumber>;
   getBalance(accountId: number, sudtId: number): Promise<HexNumber>;
   getStorageAt(accountId: number, rawKey: Hash): Promise<Hash>;
   getAccountIdByScriptHash(hash: Hash): Promise<number | undefined>;

@@ -29,6 +29,7 @@ export class JsonrpcServer {
     this.chainService = chainService;
     let methods = {
       gw_executeL2Tranaction: this.wrapWithLogger(this.executeL2Transaction),
+      gw_getTipBlockNumber: this.wrapWithLogger(this.getTipBlockNumber),
       gw_getBalance: this.wrapWithLogger(this.getBalance),
       gw_getStorageAt: this.wrapWithLogger(this.getStorageAt),
       gw_getAccountIdByScriptHash: this.wrapWithLogger(
@@ -88,6 +89,13 @@ export class JsonrpcServer {
     }
     await this.chainService.submitWithdrawalRequest(args[0]);
     return "OK";
+  }
+
+  async getTipBlockNumber(args: any) {
+    if (!!args) {
+      return this._invalidArgumentError();
+    }
+    return await this.chainService.getTipBlockNumber();
   }
 
   async getBalance(args: any) {

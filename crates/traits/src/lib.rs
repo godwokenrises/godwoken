@@ -10,4 +10,8 @@ pub trait CodeStore {
 
 pub trait ChainStore {
     fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, gw_db::error::Error>;
+    fn get_block_number_by_hash(
+        &self,
+        block_hash: &H256,
+    ) -> Result<Option<u64>, gw_db::error::Error>;
 }
