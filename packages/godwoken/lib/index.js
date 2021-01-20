@@ -50,6 +50,34 @@ class ChainService {
     return this.nativeChain.getTipBlockNumber();
   }
 
+  async getBlockHashByNumber(block_number) {
+    return this.nativeChain.getBlockHashByNumber(block_number);
+  }
+
+  async getBlockByNumber(block_number) {
+    const result = this.nativeChain.getBlockByNumber(block_number);
+    if (result) {
+      return JSON.parse(result);
+    }
+    return undefined;
+  }
+
+  async getBlock(block_hash) {
+    const result = this.nativeChain.getBlock(new Reader(block_hash).toArrayBuffer());
+    if (result) {
+      return JSON.parse(result);
+    }
+    return undefined;
+  }
+
+  async getTransaction(tx_hash) {
+    const result = this.nativeChain.getTransaction(new Reader(tx_hash).toArrayBuffer());
+    if (result) {
+      return JSON.parse(result);
+    }
+    return undefined;
+  }
+
   async getBalance(accountId, sudtId) {
     return this.nativeChain.getBalance(accountId, sudtId);
   }
