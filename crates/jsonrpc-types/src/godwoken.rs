@@ -80,6 +80,15 @@ pub struct L2TransactionView {
     pub inner: L2Transaction,
     pub hash: H256,
 }
+
+impl From<packed::L2Transaction> for L2TransactionView {
+    fn from(l2_tx: packed::L2Transaction) -> L2TransactionView {
+        let hash = H256::from(l2_tx.raw().hash());
+        let inner = L2Transaction::from(l2_tx);
+        L2TransactionView { inner, hash }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Hash, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct LogItem {
@@ -434,6 +443,42 @@ impl From<packed::RawL2Block> for RawL2Block {
             post_account: raw_l2_block.post_account().into(),
             submit_transactions: raw_l2_block.submit_transactions().into(),
             withdrawal_requests_root: raw_l2_block.withdrawal_requests_root().unpack(),
+        }
+    }
+}
+
+#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct L2BlockView {
+    pub raw: RawL2Block,
+    pub signature: Byte65,
+    pub kv_state: Vec<KVPair>,
+    pub kv_state_proof: JsonBytes,
+    pub transactions: Vec<L2TransactionView>,
+    pub block_proof: JsonBytes,
+    pub withdrawal_requests: Vec<WithdrawalRequest>,
+    pub hash: H256,
+}
+
+impl From<packed::L2Block> for L2BlockView {
+    fn from(l2_block: packed::L2Block) -> L2BlockView {
+        Self {
+            hash: H256::from(l2_block.raw().hash()),
+            raw: l2_block.raw().into(),
+            signature: l2_block.signature().into(),
+            kv_state: l2_block.kv_state().into_iter().map(|k| k.into()).collect(),
+            kv_state_proof: JsonBytes::from_bytes(l2_block.kv_state_proof().unpack()),
+            transactions: l2_block
+                .transactions()
+                .into_iter()
+                .map(|t| t.into())
+                .collect(),
+            block_proof: JsonBytes::from_bytes(l2_block.block_proof().unpack()),
+            withdrawal_requests: l2_block
+                .withdrawal_requests()
+                .into_iter()
+                .map(|w| w.into())
+                .collect(),
         }
     }
 }

@@ -30,6 +30,9 @@ export class JsonrpcServer {
     let methods = {
       gw_executeL2Tranaction: this.wrapWithLogger(this.executeL2Transaction),
       gw_getTipBlockNumber: this.wrapWithLogger(this.getTipBlockNumber),
+      gw_getBlockByNumber: this.wrapWithLogger(this.getBlockByNumber),
+      gw_getBlock: this.wrapWithLogger(this.getBlock),
+      gw_getTransaction: this.wrapWithLogger(this.getTransaction),
       gw_getBalance: this.wrapWithLogger(this.getBalance),
       gw_getStorageAt: this.wrapWithLogger(this.getStorageAt),
       gw_getAccountIdByScriptHash: this.wrapWithLogger(
@@ -96,6 +99,27 @@ export class JsonrpcServer {
       return this._invalidArgumentError();
     }
     return await this.chainService.getTipBlockNumber();
+  }
+
+  async getBlockByNumber(args: any) {
+    if (args.length !== 1 || typeof args[0] !== "number") {
+      return this._invalidArgumentError();
+    }
+    return await this.chainService.getBlockByNumber(args[0]);
+  }
+
+  async getBlock(args: any) {
+    if (args.length !== 1 || !isHash(args[0])) {
+      return this._invalidArgumentError();
+    }
+    return await this.chainService.getBlock(args[0]);
+  }
+
+  async getTransaction(args: any) {
+    if (args.length !== 1 || !isHash(args[0])) {
+      return this._invalidArgumentError();
+    }
+    return await this.chainService.getTransaction(args[0]);
   }
 
   async getBalance(args: any) {

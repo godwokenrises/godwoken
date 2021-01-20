@@ -13,7 +13,7 @@ use gw_generator::{
     genesis::{build_genesis, init_genesis},
     Generator,
 };
-use gw_jsonrpc_types::{blockchain, genesis, parameter};
+use gw_jsonrpc_types::{blockchain, genesis, godwoken, parameter};
 use gw_store::Store;
 use gw_traits::{ChainStore, CodeStore};
 use gw_types::{bytes::Bytes, core::Status, packed, prelude::*};
@@ -230,7 +230,7 @@ declare_types! {
                 let chain = data.chain.read().unwrap();
                 let db = chain.store.begin_transaction();
                 let block_hash = db.get_tip_block_hash().map_err(|err| err.to_string())?;
-                db.get_block_number_by_hash(&block_hash)
+                db.get_block_number(&block_hash)
                     .map_err(|err| err.to_string())?
                     .ok_or_else(|| format!("Can not get block number by tip block hash"))
             });
@@ -240,6 +240,75 @@ declare_types! {
                     Ok(js_value.upcast())
                 },
                 Err(e) => cx.throw_error(format!("GetTipBlockNumber failed: {:?}", e))
+            }
+        }
+
+        method getBlockByNumber(mut cx) {
+            let this = cx.this();
+            let block_number = cx.argument::<JsNumber>(0)?.value() as u64;
+            let block = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                let db = chain.store.begin_transaction();
+                db.get_block_by_number(block_number)
+            });
+            match block {
+                Ok(Some(l2_block)) => {
+                    let l2_block_view = godwoken::L2BlockView::from(l2_block);
+                    let l2_block_string = cx.string(serde_json::to_string(&l2_block_view).unwrap());
+                    Ok(l2_block_string.upcast())
+                },
+                Ok(None) => cx.throw_error(String::from("GetBlockByNumber failed: not found")),
+                Err(e) => cx.throw_error(format!("GetBlockByNumber failed: {:?}", e))
+            }
+        }
+
+        method getBlock(mut cx) {
+            let this = cx.this();
+            let js_block_hash = cx.argument::<JsArrayBuffer>(0)?;
+            let block_hash: H256 = cx.borrow(&js_block_hash, |data| {
+                let data_slice = data.as_slice();
+                let mut buf = [0u8; 32];
+                buf.copy_from_slice(&data_slice[0..32]);
+                H256::from(buf)
+            });
+            let block = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                let db = chain.store.begin_transaction();
+                db.get_block(&block_hash)
+            });
+            match block {
+                Ok(Some(l2_block)) => {
+                    let l2_block_view = godwoken::L2BlockView::from(l2_block);
+                    let l2_block_string = cx.string(serde_json::to_string(&l2_block_view).unwrap());
+                    Ok(l2_block_string.upcast())
+                },
+                Ok(None) => cx.throw_error(String::from("GetBlock failed: not found")),
+                Err(e) => cx.throw_error(format!("GetBlock failed: {:?}", e))
+            }
+        }
+
+        method getTransaction(mut cx) {
+            let this = cx.this();
+            let js_tx_hash = cx.argument::<JsArrayBuffer>(0)?;
+            let tx_hash: H256 = cx.borrow(&js_tx_hash, |data| {
+                let data_slice = data.as_slice();
+                let mut buf = [0u8; 32];
+                buf.copy_from_slice(&data_slice[0..32]);
+                H256::from(buf)
+            });
+            let tx = cx.borrow(&this, |data| {
+                let chain = data.chain.read().unwrap();
+                let db = chain.store.begin_transaction();
+                db.get_transaction(&tx_hash)
+            });
+            match tx {
+                Ok(Some(l2_tx)) => {
+                    let l2_tx_view = godwoken::L2TransactionView::from(l2_tx);
+                    let l2_tx_string = cx.string(serde_json::to_string(&l2_tx_view).unwrap());
+                    Ok(l2_tx_string.upcast())
+                },
+                Ok(None) => cx.throw_error(String::from("GetTransaction failed: not found")),
+                Err(e) => cx.throw_error(format!("GetTransaction failed: {:?}", e))
             }
         }
 
@@ -418,12 +487,13 @@ declare_types! {
 
         method tip(mut cx) {
             let this = cx.this();
-            let l2_block: packed::L2Block=
+            let l2_block: packed::L2Block =
                 cx.borrow(&this, |data| {
                     let chain = data.chain.read().unwrap();
                     chain.local_state.tip().clone()
                 });
-            let l2_block_string = cx.string(format!("{:#x}", l2_block));
+            let l2_block_view = godwoken::L2BlockView::from(l2_block);
+            let l2_block_string = cx.string(serde_json::to_string(&l2_block_view).unwrap());
             Ok(l2_block_string.upcast())
         }
 
