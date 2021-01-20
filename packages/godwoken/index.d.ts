@@ -211,6 +211,7 @@ export class ChainService {
   submitWithdrawalRequest(withdrawalRequest: HexString): Promise<void>;
   execute(l2Transaction: HexString): Promise<RunResult>;
   getTipBlockNumber(): Promise<HexNumber>;
+  getBlockHashByNumber(block_number: number): Promise<Hash>;
   getBlockByNumber(block_number: number): Promise<L2BlockView>;
   getBlock(block_hash: Hash): Promise<L2BlockView>;
   getTransaction(tx_hash: Hash): Promise<L2TransactionView>;
