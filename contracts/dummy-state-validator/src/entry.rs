@@ -105,12 +105,14 @@ fn verify_l2block(
         })
         .collect();
     let prev_account_root: [u8; 32] = prev_global_state.account().merkle_root().unpack();
-    if !kv_merkle_proof
-        .verify::<Blake2bHasher>(
-            &prev_account_root.into(),
-            kv_pairs.iter().map(|(k, v)| (*k, *v)).collect(),
-        )
-        .map_err(|_| Error::MerkleProof)?
+    let is_blank_kv = kv_merkle_proof.0.len() == 0 && kv_pairs.is_empty();
+    if !is_blank_kv
+        && !kv_merkle_proof
+            .verify::<Blake2bHasher>(
+                &prev_account_root.into(),
+                kv_pairs.iter().map(|(k, v)| (*k, *v)).collect(),
+            )
+            .map_err(|_| Error::MerkleProof)?
     {
         return Err(Error::MerkleProof);
     }
@@ -139,9 +141,6 @@ fn verify_l2block(
         rollup_type_hash,
         block_hash,
     };
-
-    // // Verify aggregator
-    // verify_aggregator(&context)?;
 
     Ok(context)
 }

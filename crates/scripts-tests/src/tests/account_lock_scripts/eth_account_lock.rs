@@ -1,18 +1,16 @@
 use super::*;
-use gw_generator::account_lock_manage::{secp256k1::Secp256k1Eth, LockAlgorithm};
-use gw_generator::builtin_scripts::ETH_ACCOUNT_LOCK;
+use crate::tests::utils::layer1::*;
 use ckb_crypto::secp::{Generator, Privkey, Pubkey};
 use ckb_error::assert_error_eq;
 use ckb_script::{ScriptError, TransactionScriptsVerifier};
 use ckb_types::{
     bytes::Bytes,
-    core::{
-        cell::{CellMetaBuilder, ResolvedTransaction},
-        Capacity, DepType, ScriptHashType, TransactionBuilder, TransactionView,
-    },
+    core::{Capacity, DepType, ScriptHashType, TransactionBuilder, TransactionView},
     packed::{CellDep, CellInput, CellOutput, OutPoint, Script, WitnessArgs},
     prelude::*,
 };
+use gw_generator::account_lock_manage::{secp256k1::Secp256k1Eth, LockAlgorithm};
+use gw_generator::builtin_scripts::ETH_ACCOUNT_LOCK;
 use gw_types::packed::UnlockAccountWitness;
 use rand::{thread_rng, Rng};
 use sha3::{Digest, Keccak256};
@@ -126,39 +124,6 @@ fn sign_message(key: &Privkey, message: [u8; 32]) -> gw_types::packed::Signature
     let mut signature = [0u8; 65];
     signature.copy_from_slice(&sig.serialize());
     signature.pack()
-}
-
-fn build_resolved_tx(data_loader: &DummyDataLoader, tx: &TransactionView) -> ResolvedTransaction {
-    let resolved_cell_deps = tx
-        .cell_deps()
-        .into_iter()
-        .map(|dep| {
-            let deps_out_point = dep.clone();
-            let (dep_output, dep_data) =
-                data_loader.cells.get(&deps_out_point.out_point()).unwrap();
-            CellMetaBuilder::from_cell_output(dep_output.to_owned(), dep_data.to_owned())
-                .out_point(deps_out_point.out_point().clone())
-                .build()
-        })
-        .collect();
-
-    let mut resolved_inputs = Vec::new();
-    for i in 0..tx.inputs().len() {
-        let previous_out_point = tx.inputs().get(i).unwrap().previous_output();
-        let (input_output, input_data) = data_loader.cells.get(&previous_out_point).unwrap();
-        resolved_inputs.push(
-            CellMetaBuilder::from_cell_output(input_output.to_owned(), input_data.to_owned())
-                .out_point(previous_out_point)
-                .build(),
-        );
-    }
-
-    ResolvedTransaction {
-        transaction: tx.clone(),
-        resolved_cell_deps,
-        resolved_inputs,
-        resolved_dep_groups: vec![],
-    }
 }
 
 pub fn sha3_pubkey_hash(pubkey: &Pubkey) -> Bytes {

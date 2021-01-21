@@ -1,9 +1,11 @@
 use super::new_block_info;
-use gw_generator::{account_lock_manage::AccountLockManage, Generator};
-use gw_generator::{backend_manage::BackendManage, dummy_state::DummyState};
-use gw_generator::{builtin_scripts::SUDT_VALIDATOR_CODE_HASH, error::TransactionError, traits::StateExt};
 use gw_common::state::State;
 use gw_common::{h256_ext::H256Ext, H256};
+use gw_generator::{account_lock_manage::AccountLockManage, Generator};
+use gw_generator::{backend_manage::BackendManage, dummy_state::DummyState};
+use gw_generator::{
+    builtin_scripts::SUDT_VALIDATOR_CODE_HASH, error::TransactionError, traits::StateExt,
+};
 use gw_store::{transaction::StoreTransaction, Store};
 use gw_traits::CodeStore;
 use gw_types::{

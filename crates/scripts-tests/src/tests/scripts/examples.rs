@@ -1,4 +1,5 @@
 use super::{new_block_info, SUM_PROGRAM, SUM_PROGRAM_CODE_HASH};
+use gw_common::H256;
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::{Backend, BackendManage},
@@ -6,7 +7,6 @@ use gw_generator::{
     traits::StateExt,
     Generator,
 };
-use gw_common::H256;
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,

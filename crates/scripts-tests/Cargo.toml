@@ -13,6 +13,8 @@ gw-config = { path = "../config" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
 gw-generator = { path = "../generator" }
+gw-chain = { path = "../chain" }
+parking_lot = "0.11"
 anyhow = "1.0"
 blake2b-rs = "0.2"
 ckb-vm = { git = "https://github.com/nervosnetwork/ckb-vm.git", tag = "0.19.1", features = ["detect-asm"] }
@@ -20,8 +22,6 @@ thiserror = "1.0"
 lazy_static = "1.4"
 secp256k1 = { version = "0.20", features = ["recovery"] }
 sha3 = "0.9.1"
-
-[dev-dependencies]
 hex = "0.4.2"
 ckb-script = "0.37.0"
 ckb-types = "0.37.0"
