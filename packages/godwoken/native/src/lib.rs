@@ -252,10 +252,11 @@ declare_types! {
                 db.get_block_hash_by_number(block_number)
             });
             match block_hash {
-                Ok(Some(hash)) => {
-                    let hash = ckb_fixed_hash::H256::from(Into::<[u8; 32]>::into(hash));
-                    let hash_string = cx.string(serde_json::to_string(&hash).unwrap());
-                    Ok(hash_string.upcast())
+                Ok(Some(value)) => {
+                    let array: [u8; 32]= value.into();
+                    let value =  packed::Byte32::from_slice(&array[0..32]).expect("Build packed::Byte32 from slice");
+                    let js_value = cx.string(format!("{:#x}", value));
+                    Ok(js_value.upcast())
                 },
                 Ok(None) => cx.throw_error(String::from("GetBlockHashByNumber failed: not found")),
                 Err(e) => cx.throw_error(format!("GetBlockHashByNumber failed: {:?}", e))

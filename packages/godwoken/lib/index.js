@@ -63,7 +63,9 @@ class ChainService {
   }
 
   async getBlock(block_hash) {
-    const result = this.nativeChain.getBlock(new Reader(block_hash).toArrayBuffer());
+    const result = this.nativeChain.getBlock(
+      new Reader(block_hash).toArrayBuffer()
+    );
     if (result) {
       return JSON.parse(result);
     }
@@ -71,7 +73,9 @@ class ChainService {
   }
 
   async getTransaction(tx_hash) {
-    const result = this.nativeChain.getTransaction(new Reader(tx_hash).toArrayBuffer());
+    const result = this.nativeChain.getTransaction(
+      new Reader(tx_hash).toArrayBuffer()
+    );
     if (result) {
       return JSON.parse(result);
     }

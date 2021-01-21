@@ -789,7 +789,6 @@ name = "godwoken-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ckb-fixed-hash",
  "godwoken-polyjuice",
  "gw-chain",
  "gw-common",
