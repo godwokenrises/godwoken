@@ -1,5 +1,5 @@
 use super::{new_block_info, SUM_PROGRAM, SUM_PROGRAM_CODE_HASH};
-use crate::{
+use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::{Backend, BackendManage},
     dummy_state::DummyState,
