@@ -1,18 +1,19 @@
 [workspace]
 members = [
-    "custodian-lock",
-    "deposition-lock",
-    "withdrawal-lock",
-    "challenge-lock",
-    "stake-lock",
-    "state-validator",
-    "dummy-state-validator",
-    "validator-utils",
+  "custodian-lock",
+  "deposition-lock",
+  "withdrawal-lock",
+  "challenge-lock",
+  "stake-lock",
+  "state-validator",
+  "dummy-state-validator",
+  "validator-utils",
+  "always-success",
 ]
 
 [profile.release]
-overflow-checks = true
-opt-level = 's'
-lto = true
 codegen-units = 1
+lto = true
+opt-level = 's'
+overflow-checks = true
 panic = 'abort'

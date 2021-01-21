@@ -1,12 +1,12 @@
 use super::new_block_info;
-use crate::builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH;
-use crate::{
-    account_lock_manage::AccountLockManage, backend_manage::BackendManage, dummy_state::DummyState,
-    error::TransactionError, syscalls::ERROR_DUPLICATED_SCRIPT_HASH, traits::StateExt, Generator,
-};
 use core::panic;
 use gw_common::state::State;
 use gw_common::H256;
+use gw_generator::builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH;
+use gw_generator::{
+    account_lock_manage::AccountLockManage, backend_manage::BackendManage, dummy_state::DummyState,
+    error::TransactionError, syscalls::ERROR_DUPLICATED_SCRIPT_HASH, traits::StateExt, Generator,
+};
 use gw_store::{transaction::StoreTransaction, Store};
 use gw_traits::CodeStore;
 use gw_types::{
