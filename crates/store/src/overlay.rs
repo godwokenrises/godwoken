@@ -14,8 +14,12 @@ use gw_common::{
     },
     state::State,
 };
+use gw_db::error::Error as DBError;
 use gw_traits::{ChainStore, CodeStore};
-use gw_types::{bytes::Bytes, packed::Script};
+use gw_types::{
+    bytes::Bytes,
+    packed::{self, Script},
+};
 use std::collections::{HashMap, HashSet};
 
 pub struct OverlayStore {
@@ -100,10 +104,22 @@ impl CodeStore for OverlayStore {
 }
 
 impl ChainStore for OverlayStore {
-    fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, gw_db::error::Error> {
+    fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, DBError> {
         self.store
             .begin_transaction()
             .get_block_hash_by_number(number)
+    }
+    fn get_block_number(&self, hash: &H256) -> Result<Option<u64>, DBError> {
+        self.store.begin_transaction().get_block_number(hash)
+    }
+    fn get_block_by_number(&self, number: u64) -> Result<Option<packed::L2Block>, DBError> {
+        self.store.begin_transaction().get_block_by_number(number)
+    }
+    fn get_block(&self, block_hash: &H256) -> Result<Option<packed::L2Block>, DBError> {
+        self.store.begin_transaction().get_block(block_hash)
+    }
+    fn get_transaction(&self, tx_hash: &H256) -> Result<Option<packed::L2Transaction>, DBError> {
+        self.store.begin_transaction().get_transaction(tx_hash)
     }
 }
 

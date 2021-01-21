@@ -115,6 +115,87 @@ export interface GenesisWithGlobalState {
   global_state: HexString; // gw_types::packed::GlobalState
 }
 
+export interface RawWithdrawalRequest {
+  nonce: HexNumber;
+  // CKB amount
+  capacity: HexNumber;
+  // SUDT amount
+  amount: HexNumber;
+  sudt_script_hash: Hash;
+  // layer2 account_script_hash
+  account_script_hash: Hash;
+  // buyer can pay sell_amount and sell_capacity to unlock
+  sell_amount: HexNumber;
+  sell_capacity: HexNumber;
+  // layer1 lock to withdraw after challenge period
+  owner_lock_hash: Hash;
+  // layer1 lock to receive the payment, must exists on the chain
+  payment_lock_hash: Hash;
+}
+export interface WithdrawalRequest {
+  raw: RawWithdrawalRequest;
+  signature: HexString;
+}
+export interface KVPair {
+  k: Hash;
+  v: Hash;
+}
+export interface RawL2Transaction {
+  from_id: HexNumber;
+  to_id: HexNumber;
+  nonce: HexNumber;
+  args: HexString;
+}
+export interface L2Transaction {
+  raw: RawL2Transaction;
+  signature: HexString;
+}
+export interface L2TransactionView {
+  hash: Hash;
+  raw: RawL2Transaction;
+  signature: HexString;
+}
+export interface SubmitTransactions {
+  tx_witness_root: HexString;
+  tx_count: HexNumber;
+  // hash(account_root | account_count) before each transaction
+  compacted_post_root_list: Hash[];
+}
+export interface AccountMerkleState {
+  merkle_root: Hash;
+  count: HexNumber;
+}
+export interface RawL2Block {
+  number: HexNumber;
+  aggregator_id: HexNumber;
+  stake_cell_owner_lock_hash: Hash;
+  timestamp: HexNumber;
+  prev_account: AccountMerkleState;
+  post_account: AccountMerkleState;
+  submit_transactions: SubmitTransactions;
+  withdrawal_requests_root: Hash;
+}
+
+export interface L2Block {
+  raw: RawL2Block;
+  signature: HexString;
+  kv_state: KVPair[];
+  kv_state_proof: HexString;
+  transactions: L2Transaction[];
+  block_proof: HexString;
+  withdrawal_requests: WithdrawalRequest[];
+}
+export interface L2BlockView {
+  hash: Hash;
+  raw: RawL2Block;
+  signature: HexString;
+  kv_state: KVPair[];
+  kv_state_proof: HexString;
+  transactions: L2TransactionView[];
+  block_proof: HexString;
+  withdrawal_requests: WithdrawalRequest[];
+}
+
 export function buildGenesisBlock(
   config: GenesisConfig
 ): Promise<GenesisWithGlobalState>;
@@ -129,6 +210,11 @@ export class ChainService {
   submitL2Transaction(l2Transaction: HexString): Promise<RunResult>;
   submitWithdrawalRequest(withdrawalRequest: HexString): Promise<void>;
   execute(l2Transaction: HexString): Promise<RunResult>;
+  getTipBlockNumber(): Promise<HexNumber>;
+  getBlockHashByNumber(block_number: number): Promise<Hash>;
+  getBlockByNumber(block_number: number): Promise<L2BlockView>;
+  getBlock(block_hash: Hash): Promise<L2BlockView>;
+  getTransaction(tx_hash: Hash): Promise<L2TransactionView>;
   getBalance(accountId: number, sudtId: number): Promise<HexNumber>;
   getStorageAt(accountId: number, rawKey: Hash): Promise<Hash>;
   getAccountIdByScriptHash(hash: Hash): Promise<number | undefined>;
@@ -137,7 +223,7 @@ export class ChainService {
   getScript(scriptHash: Hash): Promise<Script | undefined>;
   getDataHash(dataHash: Hash): Promise<boolean>;
   getData(dataHash: Hash): Promise<HexString | undefined>;
-  tip(): HexString; // gw_bytes::packed::L2Block
+  tip(): L2BlockView; // gw_bytes::packed::L2Block
   lastSynced(): HexString; // gw_bytes::packed::HeaderInfo
   status(): Status;
   config(): Config;

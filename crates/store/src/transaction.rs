@@ -217,15 +217,6 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn get_block(&self, block_hash: &H256) -> Result<Option<packed::L2Block>, Error> {
-        match self.get(COLUMN_BLOCK, block_hash.as_slice()) {
-            Some(slice) => Ok(Some(
-                packed::L2BlockReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
-            )),
-            None => Ok(None),
-        }
-    }
-
     pub fn get_tip_block_hash(&self) -> Result<H256, Error> {
         let slice = self
             .get(COLUMN_META, META_TIP_BLOCK_HASH_KEY)
@@ -397,6 +388,55 @@ impl ChainStore for StoreTransaction {
                     .unpack(),
             )),
             None => Ok(None),
+        }
+    }
+
+    fn get_block_number(&self, block_hash: &H256) -> Result<Option<u64>, Error> {
+        match self.get(COLUMN_INDEX, block_hash.as_slice()) {
+            Some(slice) => Ok(Some(
+                packed::Uint64Reader::from_slice_should_be_ok(&slice.as_ref())
+                    .to_entity()
+                    .unpack(),
+            )),
+            None => Ok(None),
+        }
+    }
+
+    fn get_block_by_number(&self, number: u64) -> Result<Option<packed::L2Block>, Error> {
+        if let Some(block_hash) = self.get_block_hash_by_number(number)? {
+            self.get_block(&block_hash)
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn get_block(&self, block_hash: &H256) -> Result<Option<packed::L2Block>, Error> {
+        match self.get(COLUMN_BLOCK, block_hash.as_slice()) {
+            Some(slice) => Ok(Some(
+                packed::L2BlockReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+            )),
+            None => Ok(None),
+        }
+    }
+
+    fn get_transaction(&self, tx_hash: &H256) -> Result<Option<packed::L2Transaction>, Error> {
+        if let Some(slice) = self.get(COLUMN_TRANSACTION_INFO, tx_hash.as_slice()) {
+            let info =
+                packed::TransactionInfoReader::from_slice_should_be_ok(&slice.as_ref()).to_entity();
+            let tx_key = info.key();
+            let mut block_hash_bytes = [0u8; 32];
+            let mut index_bytes = [0u8; 4];
+            block_hash_bytes.copy_from_slice(&tx_key.as_slice()[..32]);
+            index_bytes.copy_from_slice(&tx_key.as_slice()[32..36]);
+            let block_hash = H256::from(block_hash_bytes);
+            let index = u32::from_le_bytes(index_bytes);
+            if let Some(block) = self.get_block(&block_hash)? {
+                Ok(block.transactions().get(index as usize))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
         }
     }
 }
