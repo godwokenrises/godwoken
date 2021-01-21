@@ -2,8 +2,7 @@ import { Command } from "commander";
 import { argv, exit } from "process";
 import { RPC } from "ckb-js-toolkit";
 import { Indexer } from "@ckb-lumos/sql-indexer";
-import { Config, ChainService } from "@ckb-godwoken/godwoken";
-import { DeploymentConfig } from "@ckb-godwoken/base";
+import { ChainService } from "@ckb-godwoken/godwoken";
 import { initializeConfig } from "@ckb-lumos/config-manager";
 import { JsonrpcServer } from "./jsonrpc_server";
 import { Runner } from "./runner";
@@ -12,6 +11,7 @@ import { readFileSync } from "fs";
 import Knex from "knex";
 import deepFreeze from "deep-freeze-strict";
 import * as Sentry from "@sentry/node";
+const { version } = require("../package.json");
 
 const program = new Command();
 // TODO: private key should come from an environment variable or config file,
@@ -37,8 +37,7 @@ const runnerConfig: RunnerConfig = deepFreeze(
 
 Sentry.init({
   dsn: runnerConfig.sentryConfig?.dsn,
-  // TODO replace it with project version
-  release: "0.1.0",
+  release: version,
   tracesSampleRate: runnerConfig.sentryConfig?.tracesSampleRate,
 });
 
