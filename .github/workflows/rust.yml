@@ -32,8 +32,6 @@ jobs:
       run: cd c/deps/ckb-miscellaneous-scripts && make all-via-docker
     - name: Compile C contracts
       run: cd c && make
-    - name: Compile Rust contracts
-      run: cd c && make
     - uses: actions/cache@v2
       id: fetch-capsule-cache
       with:
