@@ -18,12 +18,14 @@ export interface DeploymentConfig {
   withdrawal_lock: Script;
   state_validator_lock: Script;
   state_validator_type: Script;
+  stake_lock: Script;
 
   deposition_lock_dep: CellDep;
   custodian_lock_dep: CellDep;
   withdrawal_lock_dep: CellDep;
   state_validator_lock_dep: CellDep;
   state_validator_type_dep: CellDep;
+  stake_lock_dep: CellDep;
 
   poa_state?: Script;
   poa_state_dep?: CellDep;

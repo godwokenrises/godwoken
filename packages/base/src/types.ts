@@ -200,6 +200,16 @@ export function NormalizeWithdrawalLockArgs(
   });
 }
 
+export function NormalizeStakeLockArgs(
+  args: object,
+  { debugPath = "stake_lock_args" } = {}
+) {
+  return normalizeObject(debugPath, args, {
+    stake_block_number: normalizeHexNumber(8),
+    owner_lock_hash: normalizeRawData(32),
+  });
+}
+
 export function DenormalizeCustodianLockArgs(
   custodianLockArgs: schemas.CustodianLockArgs
 ) {
