@@ -8,7 +8,6 @@ use gw_common::{error::Error as StateError, state::State};
 
 pub struct Context {
     pub number: u64,
-    pub aggregator_id: u32,
     pub kv_pairs: BTreeMap<H256, H256>,
     pub kv_merkle_proof: CompiledMerkleProof,
     pub account_count: u32,

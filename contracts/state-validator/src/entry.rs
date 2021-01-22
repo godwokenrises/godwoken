@@ -5,6 +5,11 @@ use core::result::Result;
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
 use alloc::{collections::BTreeMap, vec, vec::Vec};
+use validator_utils::{
+    ckb_std::high_level::{load_cell_capacity, load_cell_data_hash},
+    search_cells::search_rollup_config_cell,
+    signature::check_input_account_lock,
+};
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
@@ -21,7 +26,7 @@ use crate::{
 use gw_types::{
     packed::{
         GlobalState, GlobalStateReader, L2Block, L2BlockReader, RawL2Block, RollupAction,
-        RollupActionReader, RollupActionUnion,
+        RollupActionReader, RollupActionUnion, RollupConfig, RollupConfigReader,
     },
     prelude::{Reader as GodwokenTypesReader, Unpack as GodwokenTypesUnpack},
 };
@@ -34,8 +39,7 @@ use gw_common::{
     FINALIZE_BLOCKS,
 };
 
-// use crate::actions;
-// use crate::consensus::verify_aggregator;
+use crate::consensus::verify_block_producer;
 use crate::error::Error;
 use crate::types::BlockContext;
 
@@ -62,39 +66,21 @@ fn parse_global_state(source: Source) -> Result<GlobalState, Error> {
     }
 }
 
-// fn verify_block_signature(
-//     context: &Context,
-//     lib_secp256k1: &LibSecp256k1,
-//     l2block: &L2Block,
-// ) -> Result<(), Error> {
-//     let pubkey_hash = context
-//         .get_pubkey_hash(context.aggregator_id)?;
-//     let message = &context.block_hash;
-//     let signature: [u8; 65] = l2block.signature().unpack();
-//     let prefilled_data = lib_secp256k1
-//         .load_prefilled_data()
-//         .map_err(|_err| Error::Secp256k1)?;
-//     let pubkey = lib_secp256k1
-//         .recover_pubkey(&prefilled_data, &signature, message)
-//         .map_err(|_err| Error::Secp256k1)?;
-//     let actual_pubkey_hash = {
-//         let mut pubkey_hash = [0u8; 32];
-//         let mut hasher = new_blake2b();
-//         hasher.update(pubkey.as_slice());
-//         hasher.finalize(&mut pubkey_hash);
-//         pubkey_hash
-//     };
-//     if pubkey_hash != actual_pubkey_hash[..20] {
-//         return Err(Error::WrongSignature);
-//     }
-//     Ok(())
-// }
+fn load_rollup_config(rollup_config_hash: &[u8; 32]) -> Result<RollupConfig, Error> {
+    let index = search_rollup_config_cell(rollup_config_hash).ok_or(Error::IndexOutOfBound)?;
+    let data = load_cell_data(index, Source::CellDep)?;
+    match RollupConfigReader::verify(&data, false) {
+        Ok(_) => Ok(RollupConfig::new_unchecked(data.into())),
+        Err(_) => return Err(Error::Encoding),
+    }
+}
 
 fn load_l2block_context(
     l2block: &L2Block,
     prev_global_state: &GlobalState,
     post_global_state: &GlobalState,
 ) -> Result<BlockContext, Error> {
+    // TODO verify parent block hash
     let raw_block = l2block.raw();
 
     // Check pre block merkle proof
@@ -173,12 +159,10 @@ fn load_l2block_context(
     // Generate context
     let account_count: u32 = prev_global_state.account().count().unpack();
     let rollup_type_hash = load_script_hash()?;
-    let aggregator_id: u32 = raw_block.block_producer_id().unpack();
     let finalized_number = number.saturating_sub(FINALIZE_BLOCKS);
     let context = BlockContext {
         number,
         finalized_number,
-        aggregator_id,
         kv_pairs,
         kv_merkle_proof,
         account_count,
@@ -186,23 +170,39 @@ fn load_l2block_context(
         block_hash,
     };
 
-    // // Verify aggregator
-    // verify_aggregator(&context)?;
-
     Ok(context)
 }
 
+/// return true if we are in the initialization, otherwise return false
+fn check_initialization() -> Result<bool, Error> {
+    if load_cell_capacity(0, Source::GroupInput).is_ok() {
+        return Ok(false);
+    }
+    // no input Rollup cell, which represents we are in the initialization
+    let post_global_state = parse_global_state(Source::GroupOutput)?;
+    // check config cell
+    let _rollup_config = load_rollup_config(&post_global_state.rollup_config_hash().unpack())?;
+    Ok(true)
+}
+
 pub fn main() -> Result<(), Error> {
+    // return success if we are in the initialization
+    if check_initialization()? {
+        return Ok(());
+    }
     // basic verification
     let prev_global_state = parse_global_state(Source::GroupInput)?;
     let post_global_state = parse_global_state(Source::GroupOutput)?;
     let action = parse_rollup_action()?;
     match action.to_enum() {
         RollupActionUnion::L2Block(l2block) => {
+            let rollup_config =
+                load_rollup_config(&prev_global_state.rollup_config_hash().unpack())?;
             let mut context =
                 load_l2block_context(&l2block, &prev_global_state, &post_global_state)?;
-            // // check signature
-            // verify_block_signature(&context, &lib_secp256k1, &l2block)?;
+            // Verify block producer
+            verify_block_producer(&rollup_config, &context, &l2block)?;
+            verifications::layer1_cells::verify(&rollup_config, &mut context, &l2block)?;
 
             // handle state transitions
             // verifications::submit_transactions::verify(&mut context, &l2block)?;
@@ -211,6 +211,7 @@ pub fn main() -> Result<(), Error> {
             panic!("unknown rollup action");
         }
     }
+    // TODO verify GlobalState
 
     Ok(())
 }

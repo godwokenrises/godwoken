@@ -1935,7 +1935,8 @@ impl ::core::fmt::Debug for GlobalState {
 impl ::core::fmt::Display for GlobalState {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "account", self.account())?;
+        write!(f, "{}: {}", "rollup_config_hash", self.rollup_config_hash())?;
+        write!(f, ", {}: {}", "account", self.account())?;
         write!(f, ", {}: {}", "block", self.block())?;
         write!(
             f,
@@ -1960,29 +1961,33 @@ impl ::core::default::Default for GlobalState {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0,
         ];
         GlobalState::new_unchecked(v.into())
     }
 }
 impl GlobalState {
-    pub const TOTAL_SIZE: usize = 117;
-    pub const FIELD_SIZES: [usize; 5] = [36, 40, 32, 8, 1];
-    pub const FIELD_COUNT: usize = 5;
+    pub const TOTAL_SIZE: usize = 149;
+    pub const FIELD_SIZES: [usize; 6] = [32, 36, 40, 32, 8, 1];
+    pub const FIELD_COUNT: usize = 6;
+    pub fn rollup_config_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(0..32))
+    }
     pub fn account(&self) -> AccountMerkleState {
-        AccountMerkleState::new_unchecked(self.0.slice(0..36))
+        AccountMerkleState::new_unchecked(self.0.slice(32..68))
     }
     pub fn block(&self) -> BlockMerkleState {
-        BlockMerkleState::new_unchecked(self.0.slice(36..76))
+        BlockMerkleState::new_unchecked(self.0.slice(68..108))
     }
     pub fn reverted_block_root(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(76..108))
+        Byte32::new_unchecked(self.0.slice(108..140))
     }
     pub fn last_finalized_block_number(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(108..116))
+        Uint64::new_unchecked(self.0.slice(140..148))
     }
     pub fn status(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(116..117))
+        Byte::new_unchecked(self.0.slice(148..149))
     }
     pub fn as_reader<'r>(&'r self) -> GlobalStateReader<'r> {
         GlobalStateReader::new_unchecked(self.as_slice())
@@ -2011,6 +2016,7 @@ impl molecule::prelude::Entity for GlobalState {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
+            .rollup_config_hash(self.rollup_config_hash())
             .account(self.account())
             .block(self.block())
             .reverted_block_root(self.reverted_block_root())
@@ -2037,7 +2043,8 @@ impl<'r> ::core::fmt::Debug for GlobalStateReader<'r> {
 impl<'r> ::core::fmt::Display for GlobalStateReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "account", self.account())?;
+        write!(f, "{}: {}", "rollup_config_hash", self.rollup_config_hash())?;
+        write!(f, ", {}: {}", "account", self.account())?;
         write!(f, ", {}: {}", "block", self.block())?;
         write!(
             f,
@@ -2056,23 +2063,26 @@ impl<'r> ::core::fmt::Display for GlobalStateReader<'r> {
     }
 }
 impl<'r> GlobalStateReader<'r> {
-    pub const TOTAL_SIZE: usize = 117;
-    pub const FIELD_SIZES: [usize; 5] = [36, 40, 32, 8, 1];
-    pub const FIELD_COUNT: usize = 5;
+    pub const TOTAL_SIZE: usize = 149;
+    pub const FIELD_SIZES: [usize; 6] = [32, 36, 40, 32, 8, 1];
+    pub const FIELD_COUNT: usize = 6;
+    pub fn rollup_config_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
+    }
     pub fn account(&self) -> AccountMerkleStateReader<'r> {
-        AccountMerkleStateReader::new_unchecked(&self.as_slice()[0..36])
+        AccountMerkleStateReader::new_unchecked(&self.as_slice()[32..68])
     }
     pub fn block(&self) -> BlockMerkleStateReader<'r> {
-        BlockMerkleStateReader::new_unchecked(&self.as_slice()[36..76])
+        BlockMerkleStateReader::new_unchecked(&self.as_slice()[68..108])
     }
     pub fn reverted_block_root(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[76..108])
+        Byte32Reader::new_unchecked(&self.as_slice()[108..140])
     }
     pub fn last_finalized_block_number(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[108..116])
+        Uint64Reader::new_unchecked(&self.as_slice()[140..148])
     }
     pub fn status(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[116..117])
+        ByteReader::new_unchecked(&self.as_slice()[148..149])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for GlobalStateReader<'r> {
@@ -2098,6 +2108,7 @@ impl<'r> molecule::prelude::Reader<'r> for GlobalStateReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct GlobalStateBuilder {
+    pub(crate) rollup_config_hash: Byte32,
     pub(crate) account: AccountMerkleState,
     pub(crate) block: BlockMerkleState,
     pub(crate) reverted_block_root: Byte32,
@@ -2105,9 +2116,13 @@ pub struct GlobalStateBuilder {
     pub(crate) status: Byte,
 }
 impl GlobalStateBuilder {
-    pub const TOTAL_SIZE: usize = 117;
-    pub const FIELD_SIZES: [usize; 5] = [36, 40, 32, 8, 1];
-    pub const FIELD_COUNT: usize = 5;
+    pub const TOTAL_SIZE: usize = 149;
+    pub const FIELD_SIZES: [usize; 6] = [32, 36, 40, 32, 8, 1];
+    pub const FIELD_COUNT: usize = 6;
+    pub fn rollup_config_hash(mut self, v: Byte32) -> Self {
+        self.rollup_config_hash = v;
+        self
+    }
     pub fn account(mut self, v: AccountMerkleState) -> Self {
         self.account = v;
         self
@@ -2136,6 +2151,7 @@ impl molecule::prelude::Builder for GlobalStateBuilder {
         Self::TOTAL_SIZE
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(self.rollup_config_hash.as_slice())?;
         writer.write_all(self.account.as_slice())?;
         writer.write_all(self.block.as_slice())?;
         writer.write_all(self.reverted_block_root.as_slice())?;
@@ -2148,6 +2164,277 @@ impl molecule::prelude::Builder for GlobalStateBuilder {
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
         GlobalState::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct RollupConfig(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for RollupConfig {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for RollupConfig {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for RollupConfig {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "l1_sudt_type_hash", self.l1_sudt_type_hash())?;
+        write!(
+            f,
+            ", {}: {}",
+            "custodian_type_hash",
+            self.custodian_type_hash()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "deposition_type_hash",
+            self.deposition_type_hash()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "withdrawal_type_hash",
+            self.withdrawal_type_hash()
+        )?;
+        write!(f, ", {}: {}", "stake_type_hash", self.stake_type_hash())?;
+        write!(
+            f,
+            ", {}: {}",
+            "l2_sudt_validator_type_hash",
+            self.l2_sudt_validator_type_hash()
+        )?;
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for RollupConfig {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        RollupConfig::new_unchecked(v.into())
+    }
+}
+impl RollupConfig {
+    pub const TOTAL_SIZE: usize = 192;
+    pub const FIELD_SIZES: [usize; 6] = [32, 32, 32, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 6;
+    pub fn l1_sudt_type_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(0..32))
+    }
+    pub fn custodian_type_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(32..64))
+    }
+    pub fn deposition_type_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(64..96))
+    }
+    pub fn withdrawal_type_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(96..128))
+    }
+    pub fn stake_type_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(128..160))
+    }
+    pub fn l2_sudt_validator_type_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(160..192))
+    }
+    pub fn as_reader<'r>(&'r self) -> RollupConfigReader<'r> {
+        RollupConfigReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for RollupConfig {
+    type Builder = RollupConfigBuilder;
+    const NAME: &'static str = "RollupConfig";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        RollupConfig(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RollupConfigReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RollupConfigReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .l1_sudt_type_hash(self.l1_sudt_type_hash())
+            .custodian_type_hash(self.custodian_type_hash())
+            .deposition_type_hash(self.deposition_type_hash())
+            .withdrawal_type_hash(self.withdrawal_type_hash())
+            .stake_type_hash(self.stake_type_hash())
+            .l2_sudt_validator_type_hash(self.l2_sudt_validator_type_hash())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct RollupConfigReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for RollupConfigReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for RollupConfigReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for RollupConfigReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "l1_sudt_type_hash", self.l1_sudt_type_hash())?;
+        write!(
+            f,
+            ", {}: {}",
+            "custodian_type_hash",
+            self.custodian_type_hash()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "deposition_type_hash",
+            self.deposition_type_hash()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "withdrawal_type_hash",
+            self.withdrawal_type_hash()
+        )?;
+        write!(f, ", {}: {}", "stake_type_hash", self.stake_type_hash())?;
+        write!(
+            f,
+            ", {}: {}",
+            "l2_sudt_validator_type_hash",
+            self.l2_sudt_validator_type_hash()
+        )?;
+        write!(f, " }}")
+    }
+}
+impl<'r> RollupConfigReader<'r> {
+    pub const TOTAL_SIZE: usize = 192;
+    pub const FIELD_SIZES: [usize; 6] = [32, 32, 32, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 6;
+    pub fn l1_sudt_type_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
+    }
+    pub fn custodian_type_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[32..64])
+    }
+    pub fn deposition_type_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[64..96])
+    }
+    pub fn withdrawal_type_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[96..128])
+    }
+    pub fn stake_type_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[128..160])
+    }
+    pub fn l2_sudt_validator_type_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[160..192])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for RollupConfigReader<'r> {
+    type Entity = RollupConfig;
+    const NAME: &'static str = "RollupConfigReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        RollupConfigReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct RollupConfigBuilder {
+    pub(crate) l1_sudt_type_hash: Byte32,
+    pub(crate) custodian_type_hash: Byte32,
+    pub(crate) deposition_type_hash: Byte32,
+    pub(crate) withdrawal_type_hash: Byte32,
+    pub(crate) stake_type_hash: Byte32,
+    pub(crate) l2_sudt_validator_type_hash: Byte32,
+}
+impl RollupConfigBuilder {
+    pub const TOTAL_SIZE: usize = 192;
+    pub const FIELD_SIZES: [usize; 6] = [32, 32, 32, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 6;
+    pub fn l1_sudt_type_hash(mut self, v: Byte32) -> Self {
+        self.l1_sudt_type_hash = v;
+        self
+    }
+    pub fn custodian_type_hash(mut self, v: Byte32) -> Self {
+        self.custodian_type_hash = v;
+        self
+    }
+    pub fn deposition_type_hash(mut self, v: Byte32) -> Self {
+        self.deposition_type_hash = v;
+        self
+    }
+    pub fn withdrawal_type_hash(mut self, v: Byte32) -> Self {
+        self.withdrawal_type_hash = v;
+        self
+    }
+    pub fn stake_type_hash(mut self, v: Byte32) -> Self {
+        self.stake_type_hash = v;
+        self
+    }
+    pub fn l2_sudt_validator_type_hash(mut self, v: Byte32) -> Self {
+        self.l2_sudt_validator_type_hash = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for RollupConfigBuilder {
+    type Entity = RollupConfig;
+    const NAME: &'static str = "RollupConfigBuilder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(self.l1_sudt_type_hash.as_slice())?;
+        writer.write_all(self.custodian_type_hash.as_slice())?;
+        writer.write_all(self.deposition_type_hash.as_slice())?;
+        writer.write_all(self.withdrawal_type_hash.as_slice())?;
+        writer.write_all(self.stake_type_hash.as_slice())?;
+        writer.write_all(self.l2_sudt_validator_type_hash.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        RollupConfig::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]

@@ -5,7 +5,7 @@ use alloc::{collections::BTreeMap, vec::Vec};
 use gw_common::smt::Blake2bHasher;
 use gw_common::sparse_merkle_tree::{CompiledMerkleProof, H256};
 use gw_common::{error::Error as StateError, state::State};
-use gw_types::packed::{CustodianLockArgs, DepositionLockArgs, WithdrawalLockArgs};
+use gw_types::packed::{CustodianLockArgs, DepositionLockArgs, StakeLockArgs, WithdrawalLockArgs};
 
 #[derive(Clone)]
 pub struct DepositionRequest {
@@ -43,6 +43,12 @@ pub struct CustodianCell {
     pub value: CellValue,
 }
 
+pub struct StakeCell {
+    pub index: usize,
+    pub args: StakeLockArgs,
+    pub value: CellValue,
+}
+
 #[derive(Clone)]
 pub struct WithdrawalRequest {
     pub nonce: u32,
@@ -60,7 +66,6 @@ pub struct BlockContext {
     pub number: u64,
     pub finalized_number: u64,
     pub block_hash: [u8; 32],
-    pub aggregator_id: u32,
     pub rollup_type_hash: [u8; 32],
     pub kv_pairs: BTreeMap<H256, H256>,
     pub kv_merkle_proof: CompiledMerkleProof,

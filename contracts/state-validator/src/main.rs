@@ -12,10 +12,11 @@
 
 // define modules
 mod verifications;
-// mod consensus;
+mod consensus;
 mod entry;
 mod error;
 mod types;
+mod cells;
 
 use ckb_std::default_alloc;
 pub use validator_utils::ckb_std;

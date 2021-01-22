@@ -1,7 +1,9 @@
+use alloc::vec::Vec;
 use ckb_std::{
     ckb_constants::Source,
     high_level::{
-        load_cell_capacity, load_cell_data, load_cell_lock_hash, load_cell_type_hash, QueryIter,
+        load_cell_capacity, load_cell_data, load_cell_data_hash, load_cell_lock_hash,
+        load_cell_type_hash, QueryIter,
     },
     syscalls::SysError,
 };
@@ -9,13 +11,17 @@ use gw_types::{
     packed::{GlobalState, GlobalStateReader},
     prelude::*,
 };
-use alloc::vec::Vec;
 
 use crate::error::Error;
 
 pub fn search_rollup_cell(rollup_type_hash: &[u8; 32]) -> Option<usize> {
     QueryIter::new(load_cell_type_hash, Source::Input)
         .position(|type_hash| type_hash.as_ref() == Some(rollup_type_hash))
+}
+
+pub fn search_rollup_config_cell(rollup_config_hash: &[u8; 32]) -> Option<usize> {
+    QueryIter::new(load_cell_data_hash, Source::CellDep)
+        .position(|data_hash| data_hash.as_ref() == rollup_config_hash)
 }
 
 pub fn search_rollup_state(
@@ -35,10 +41,7 @@ pub fn search_rollup_state(
     }
 }
 
-pub fn search_lock_hashes(
-    owner_lock_hash: &[u8; 32],
-    source: Source,
-) -> Vec<usize> {
+pub fn search_lock_hashes(owner_lock_hash: &[u8; 32], source: Source) -> Vec<usize> {
     QueryIter::new(load_cell_lock_hash, source)
         .enumerate()
         .filter_map(|(i, lock_hash)| {
@@ -47,7 +50,8 @@ pub fn search_lock_hashes(
             } else {
                 None
             }
-        }).collect()
+        })
+        .collect()
 }
 
 pub fn search_lock_hash(owner_lock_hash: &[u8; 32], source: Source) -> Option<usize> {

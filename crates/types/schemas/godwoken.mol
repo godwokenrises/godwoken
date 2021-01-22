@@ -16,12 +16,22 @@ struct AccountMerkleState {
 }
 
 struct GlobalState {
+    rollup_config_hash: Byte32,
     account: AccountMerkleState,
     block: BlockMerkleState,
     reverted_block_root: Byte32,
     last_finalized_block_number: Uint64,
     // 0: running, 1: halting
     status: byte,
+}
+
+struct RollupConfig {
+    l1_sudt_type_hash: Byte32,
+    custodian_type_hash: Byte32,
+    deposition_type_hash: Byte32,
+    withdrawal_type_hash: Byte32,
+    stake_type_hash: Byte32,
+    l2_sudt_validator_type_hash: Byte32,
 }
 
 table RawL2Transaction {

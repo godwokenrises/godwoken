@@ -20,7 +20,7 @@ pub enum Error {
     DepositionValue, // incorrect deposition value
     AmountOverflow,
     InvalidTxs,
-    Aggregator,
+    Stake,
     InvalidWithdrawal,
 }
 

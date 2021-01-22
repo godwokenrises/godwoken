@@ -21,6 +21,7 @@ pub enum Error {
     InsufficientAmount,
     SMTKeyMissing,
     InvalidStakeCellUnlock,
+    InvalidAccountLockCell,
 }
 
 impl From<SysError> for Error {

@@ -131,10 +131,8 @@ fn verify_l2block(
     // Generate context
     let account_count: u32 = prev_global_state.account().count().unpack();
     let rollup_type_hash = load_script_hash()?;
-    let aggregator_id: u32 = raw_block.block_producer_id().unpack();
     let context = Context {
         number,
-        aggregator_id,
         kv_pairs,
         kv_merkle_proof,
         account_count,
