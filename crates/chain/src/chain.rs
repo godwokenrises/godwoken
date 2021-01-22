@@ -32,7 +32,7 @@ use std::{convert::TryFrom, sync::Arc};
 /// Produce block param
 pub struct ProduceBlockParam {
     /// aggregator of this block
-    pub aggregator_id: u32,
+    pub block_producer_id: u32,
 }
 
 /// sync params
@@ -453,13 +453,15 @@ impl Chain {
         deposition_requests: Vec<DepositionRequest>,
     ) -> Result<Option<ChallengeContext>> {
         let tip_number: u64 = self.local_state.tip.raw().number().unpack();
+        let tip_block_hash = self.local_state.tip.raw().hash();
         assert_eq!(
             {
                 let number: u64 = l2block.raw().number().unpack();
-                number
+                let parent_block_hash: [u8; 32] = l2block.raw().parent_block_hash().unpack();
+                (number, parent_block_hash)
             },
-            tip_number + 1,
-            "new l2block number must be the successor of the tip"
+            (tip_number + 1, tip_block_hash),
+            "new l2block must be the successor of the tip"
         );
 
         // process l2block
@@ -518,11 +520,12 @@ impl Chain {
         param: ProduceBlockParam,
         mem_pool_package: MemPoolPackage,
     ) -> Result<ProduceBlockResult> {
-        let ProduceBlockParam { aggregator_id } = param;
+        let ProduceBlockParam { block_producer_id } = param;
 
         // take txs from mem pool
         // produce block
         let parent_number: u64 = self.local_state.tip.raw().number().unpack();
+        let parent_block_hash = self.local_state.tip.hash();
         let number = parent_number + 1;
         let timestamp: u64 = unixtime()?;
         let submit_txs = {
@@ -564,8 +567,9 @@ impl Chain {
             .build();
         let raw_block = RawL2Block::new_builder()
             .number(number.pack())
-            .aggregator_id(aggregator_id.pack())
+            .block_producer_id(block_producer_id.pack())
             .timestamp(timestamp.pack())
+            .parent_block_hash(parent_block_hash.pack())
             .post_account(post_account.clone())
             .prev_account(prev_account)
             .withdrawal_requests_root(withdrawal_requests_root.pack())

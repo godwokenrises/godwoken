@@ -38,7 +38,7 @@ typedef struct {
 typedef struct {
   uint64_t number;
   uint64_t timestamp;
-  uint32_t aggregator_id;
+  uint32_t block_producer_id;
 } gw_block_info_t;
 
 struct gw_context_t;

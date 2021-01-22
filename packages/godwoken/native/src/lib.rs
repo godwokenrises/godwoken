@@ -82,7 +82,7 @@ declare_types! {
             let generator = Arc::new(build_generator(&config.chain));
             let mem_pool = {
                 let nb_ctx = NextBlockContext {
-                    aggregator_id: 0u32,
+                    block_producer_id: 0u32,
                     timestamp: 0u64,
                 };
                 let tip = packed::L2Block::default();

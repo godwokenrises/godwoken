@@ -82,7 +82,8 @@ pub fn build_genesis_from_store(
 
     let raw_genesis = RawL2Block::new_builder()
         .number(0u64.pack())
-        .aggregator_id(0u32.pack())
+        .block_producer_id(0u32.pack())
+        .parent_block_hash([0u8; 32].pack())
         .timestamp(config.timestamp.pack())
         .post_account(post_account.clone())
         .build();

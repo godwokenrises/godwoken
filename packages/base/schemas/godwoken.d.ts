@@ -100,7 +100,8 @@ export class RawL2Block {
   constructor(reader: CanCastToArrayBuffer, options?: CreateOptions);
   validate(compatible?: boolean): void;
   getNumber(): Uint64;
-  getAggregatorId(): Uint32;
+  getBlockProducerId(): Uint32;
+  getParentBlockHash(): Byte32;
   getStakeCellOwnerLockHash(): Byte32;
   getTimestamp(): Uint64;
   getPrevAccount(): AccountMerkleState;
@@ -114,7 +115,6 @@ export class L2Block {
   constructor(reader: CanCastToArrayBuffer, options?: CreateOptions);
   validate(compatible?: boolean): void;
   getRaw(): RawL2Block;
-  getSignature(): Signature;
   getKvState(): KVPairVec;
   getKvStateProof(): Bytes;
   getTransactions(): L2TransactionVec;

@@ -50,10 +50,10 @@ pub fn setup_chain(rollup_type_script: &gw_types::packed::Script) -> Chain {
         account_lock_manage,
         rollup_script_hash,
     ));
-    let aggregator_id = 0;
+    let block_producer_id = 0;
     let timestamp = 0;
     let nb_ctx = NextBlockContext {
-        aggregator_id,
+        block_producer_id,
         timestamp,
     };
     init_genesis(
@@ -157,7 +157,9 @@ fn test_state_validator() {
         };
         chain.mem_pool.lock().package(param).unwrap()
     };
-    let param = ProduceBlockParam { aggregator_id: 0 };
+    let param = ProduceBlockParam {
+        block_producer_id: 0,
+    };
     let block_result = chain.produce_block(param, mem_pool_package).unwrap();
     // verify submit block
     let rollup_cell_data = block_result.global_state.as_bytes();

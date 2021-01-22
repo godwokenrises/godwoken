@@ -24,7 +24,7 @@ program
   )
   .option(
     "-p, --private-key <privateKey>",
-    "aggregator private key to use, when omitted, readOnly mode will be used"
+    "block_producer private key to use, when omitted, readOnly mode will be used"
   )
   .option("-l, --listen <listen>", "JSONRPC listen path", "8119");
 program.parse(argv);

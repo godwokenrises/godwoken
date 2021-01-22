@@ -29,9 +29,9 @@ lazy_static! {
     };
 }
 
-pub fn new_block_info(aggregator_id: u32, number: u64, timestamp: u64) -> BlockInfo {
+pub fn new_block_info(block_producer_id: u32, number: u64, timestamp: u64) -> BlockInfo {
     BlockInfo::new_builder()
-        .aggregator_id(aggregator_id.pack())
+        .block_producer_id(block_producer_id.pack())
         .number(number.pack())
         .timestamp(timestamp.pack())
         .build()

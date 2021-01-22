@@ -359,11 +359,11 @@ int _load_cancel_challenge_witness(gw_context_t *ctx) {
   mol_seg_t number_seg = MolReader_RawL2Block_get_number(&raw_l2block_seg);
   mol_seg_t timestamp_seg =
       MolReader_RawL2Block_get_timestamp(&raw_l2block_seg);
-  mol_seg_t aggregator_id_seg =
-      MolReader_RawL2Block_get_aggregator_id(&raw_l2block_seg);
+  mol_seg_t block_producer_id_seg =
+      MolReader_RawL2Block_get_block_producer_id(&raw_l2block_seg);
   block_info->number = *((uint32_t *)number_seg.ptr);
   block_info->timestamp = *((uint32_t *)timestamp_seg.ptr);
-  block_info->aggregator_id = *((uint32_t *)aggregator_id_seg.ptr);
+  block_info->block_producer_id = *((uint32_t *)block_producer_id_seg.ptr);
 
   /* load kv state */
   mol_seg_t kv_state_seg =

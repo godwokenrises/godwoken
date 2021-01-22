@@ -40,7 +40,8 @@ vector L2TransactionVec <L2Transaction>;
 
 table RawL2Block {
     number: Uint64,
-    aggregator_id: Uint32,
+    block_producer_id: Uint32,
+    parent_block_hash: Byte32,
     stake_cell_owner_lock_hash: Byte32,
     timestamp: Uint64,
     prev_account: AccountMerkleState,
@@ -51,7 +52,6 @@ table RawL2Block {
 
 table L2Block {
     raw: RawL2Block,
-    signature: Signature,
     kv_state: KVPairVec,
     kv_state_proof: Bytes,
     transactions: L2TransactionVec,
@@ -111,7 +111,7 @@ table KVPair { k: Byte32, v: Byte32, }
 vector KVPairVec <KVPair>;
 
 struct BlockInfo {
-    aggregator_id: Uint32,
+    block_producer_id: Uint32,
     number: Uint64,
     timestamp: Uint64,
 }
@@ -252,3 +252,9 @@ struct UnlockAccountWitness {
     signature: Signature,
 }
 // --- end of unlock account ---
+
+// header info
+struct HeaderInfo {
+    number: Uint64,
+    block_hash: Byte32,
+}
