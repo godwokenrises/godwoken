@@ -68,7 +68,7 @@ fn test_sudt() {
                 .build(),
         )
         .expect("create account");
-    let aggregator_id = tree
+    let block_producer_id = tree
         .create_account_from_script(
             Script::new_builder()
                 .code_hash([0u8; 32].pack())
@@ -76,7 +76,7 @@ fn test_sudt() {
                 .build(),
         )
         .expect("create account");
-    let block_info = new_block_info(aggregator_id, 1, 0);
+    let block_info = new_block_info(block_producer_id, 1, 0);
 
     // init balance for a
     tree.update_value(
@@ -158,7 +158,7 @@ fn test_sudt() {
             let args = SUDTArgs::new_builder()
                 .set(
                     SUDTQuery::new_builder()
-                        .account_id(aggregator_id.pack())
+                        .account_id(block_producer_id.pack())
                         .build(),
                 )
                 .build();

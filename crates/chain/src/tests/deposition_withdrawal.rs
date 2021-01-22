@@ -49,7 +49,7 @@ fn apply_block_result(
 
 fn deposite_to_chain(
     chain: &mut Chain,
-    aggregator_id: u32,
+    block_producer_id: u32,
     rollup_cell: CellOutput,
     user_script: Script,
     capacity: u64,
@@ -57,7 +57,7 @@ fn deposite_to_chain(
     amount: u128,
 ) -> Result<()> {
     let nb_ctx = NextBlockContext {
-        aggregator_id: 0,
+        block_producer_id: 0,
         timestamp: 1000,
     };
     let deposition_requests = vec![DepositionRequest::new_builder()
@@ -71,7 +71,7 @@ fn deposite_to_chain(
         max_withdrawal_capacity: std::u128::MAX,
     })?;
     let block_result =
-        chain.produce_block(ProduceBlockParam { aggregator_id }, mem_pool_package)?;
+        chain.produce_block(ProduceBlockParam { block_producer_id }, mem_pool_package)?;
     // deposit
     apply_block_result(
         chain,
@@ -85,7 +85,7 @@ fn deposite_to_chain(
 
 fn withdrawal_from_chain(
     chain: &mut Chain,
-    aggregator_id: u32,
+    block_producer_id: u32,
     rollup_cell: CellOutput,
     user_script_hash: H256,
     capacity: u64,
@@ -93,7 +93,7 @@ fn withdrawal_from_chain(
     amount: u128,
 ) -> Result<()> {
     let nb_ctx = NextBlockContext {
-        aggregator_id: 0,
+        block_producer_id: 0,
         timestamp: 1000,
     };
     let withdrawal = {
@@ -116,7 +116,7 @@ fn withdrawal_from_chain(
             .unwrap()
     };
     let block_result = chain
-        .produce_block(ProduceBlockParam { aggregator_id }, mem_pool_package)
+        .produce_block(ProduceBlockParam { block_producer_id }, mem_pool_package)
         .unwrap();
     // deposit
     apply_block_result(
@@ -133,7 +133,7 @@ fn withdrawal_from_chain(
 fn test_deposition_and_withdrawal() {
     let rollup_type_script = Script::default();
     let mut chain = setup_chain(&rollup_type_script);
-    let aggregator_id = 0;
+    let block_producer_id = 0;
     let capacity = 500_00000000;
     let user_script = Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.pack())
@@ -146,7 +146,7 @@ fn test_deposition_and_withdrawal() {
     // deposit
     deposite_to_chain(
         &mut chain,
-        aggregator_id,
+        block_producer_id,
         rollup_cell.clone(),
         user_script,
         capacity,
@@ -194,7 +194,7 @@ fn test_deposition_and_withdrawal() {
     let withdraw_capacity = 200_00000000u64;
     withdrawal_from_chain(
         &mut chain,
-        aggregator_id,
+        block_producer_id,
         rollup_cell,
         user_script_hash.into(),
         withdraw_capacity,
@@ -234,7 +234,7 @@ fn test_deposition_and_withdrawal() {
 fn test_overdraft() {
     let rollup_type_script = Script::default();
     let mut chain = setup_chain(&rollup_type_script);
-    let aggregator_id = 0;
+    let block_producer_id = 0;
     let capacity = 500_00000000;
     let user_script = Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.pack())
@@ -247,7 +247,7 @@ fn test_overdraft() {
     // deposit
     deposite_to_chain(
         &mut chain,
-        aggregator_id,
+        block_producer_id,
         rollup_cell.clone(),
         user_script,
         capacity,
@@ -259,7 +259,7 @@ fn test_overdraft() {
     let withdraw_capacity = 600_00000000u64;
     let err = withdrawal_from_chain(
         &mut chain,
-        aggregator_id,
+        block_producer_id,
         rollup_cell,
         user_script_hash.into(),
         withdraw_capacity,
@@ -275,7 +275,7 @@ fn test_overdraft() {
 fn test_deposit_faked_ckb() {
     let rollup_type_script = Script::default();
     let mut chain = setup_chain(&rollup_type_script);
-    let aggregator_id = 0;
+    let block_producer_id = 0;
     let capacity = 500_00000000;
     let user_script = Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.pack())
@@ -287,7 +287,7 @@ fn test_deposit_faked_ckb() {
     // deposit
     let err = deposite_to_chain(
         &mut chain,
-        aggregator_id,
+        block_producer_id,
         rollup_cell.clone(),
         user_script,
         capacity,

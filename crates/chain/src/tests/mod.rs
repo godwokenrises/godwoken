@@ -42,10 +42,10 @@ pub fn setup_chain(rollup_type_script: &Script) -> Chain {
         account_lock_manage,
         rollup_script_hash,
     ));
-    let aggregator_id = 0;
+    let block_producer_id = 0;
     let timestamp = 0;
     let nb_ctx = NextBlockContext {
-        aggregator_id,
+        block_producer_id,
         timestamp,
     };
     init_genesis(

@@ -101,18 +101,18 @@ impl From<RevertedL1Action> for chain::RevertedL1Action {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct NextBlockContext {
-    pub aggregator_id: Uint32,
+    pub block_producer_id: Uint32,
     pub timestamp: Uint64,
 }
 
 impl From<NextBlockContext> for next_block_context::NextBlockContext {
     fn from(json: NextBlockContext) -> next_block_context::NextBlockContext {
         let NextBlockContext {
-            aggregator_id,
+            block_producer_id,
             timestamp,
         } = json;
         Self {
-            aggregator_id: aggregator_id.into(),
+            block_producer_id: block_producer_id.into(),
             timestamp: timestamp.into(),
         }
     }
@@ -376,23 +376,23 @@ impl From<MemPoolPackage> for gw_chain::mem_pool::MemPoolPackage {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ProduceBlockParam {
-    /// aggregator of this block
-    pub aggregator_id: Uint32,
+    /// block_producer of this block
+    pub block_producer_id: Uint32,
 }
 
 impl From<ProduceBlockParam> for chain::ProduceBlockParam {
     fn from(json: ProduceBlockParam) -> chain::ProduceBlockParam {
-        let ProduceBlockParam { aggregator_id } = json;
+        let ProduceBlockParam { block_producer_id } = json;
         Self {
-            aggregator_id: aggregator_id.into(),
+            block_producer_id: block_producer_id.into(),
         }
     }
 }
 impl From<chain::ProduceBlockParam> for ProduceBlockParam {
     fn from(json: chain::ProduceBlockParam) -> ProduceBlockParam {
-        let chain::ProduceBlockParam { aggregator_id } = json;
+        let chain::ProduceBlockParam { block_producer_id } = json;
         Self {
-            aggregator_id: aggregator_id.into(),
+            block_producer_id: block_producer_id.into(),
         }
     }
 }
@@ -433,7 +433,7 @@ pub struct Config {
     pub chain: ChainConfig,
     pub store: StoreConfig,
     pub genesis: GenesisConfig,
-    pub aggregator: Option<AggregatorConfig>,
+    pub block_producer: Option<BlockProducerConfig>,
 }
 
 impl From<Config> for gw_config::Config {
@@ -442,8 +442,8 @@ impl From<Config> for gw_config::Config {
             chain: json.chain.into(),
             store: json.store.into(),
             genesis: json.genesis.into(),
-            aggregator: match json.aggregator {
-                Some(aggregator) => Some(aggregator.into()),
+            block_producer: match json.block_producer {
+                Some(block_producer) => Some(block_producer.into()),
                 None => None,
             },
         }
@@ -455,8 +455,8 @@ impl From<gw_config::Config> for Config {
             chain: config.chain.into(),
             store: config.store.into(),
             genesis: config.genesis.into(),
-            aggregator: match config.aggregator {
-                Some(aggregator) => Some(aggregator.into()),
+            block_producer: match config.block_producer {
+                Some(block_producer) => Some(block_producer.into()),
                 None => None,
             },
         }
@@ -465,21 +465,21 @@ impl From<gw_config::Config> for Config {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
-pub struct AggregatorConfig {
+pub struct BlockProducerConfig {
     pub account_id: Uint32,
 }
 
-impl From<AggregatorConfig> for gw_config::AggregatorConfig {
-    fn from(json: AggregatorConfig) -> gw_config::AggregatorConfig {
+impl From<BlockProducerConfig> for gw_config::BlockProducerConfig {
+    fn from(json: BlockProducerConfig) -> gw_config::BlockProducerConfig {
         Self {
             account_id: json.account_id.into(),
         }
     }
 }
-impl From<gw_config::AggregatorConfig> for AggregatorConfig {
-    fn from(aggregator_config: gw_config::AggregatorConfig) -> AggregatorConfig {
+impl From<gw_config::BlockProducerConfig> for BlockProducerConfig {
+    fn from(block_producer_config: gw_config::BlockProducerConfig) -> BlockProducerConfig {
         Self {
-            account_id: aggregator_config.account_id.into(),
+            account_id: block_producer_config.account_id.into(),
         }
     }
 }

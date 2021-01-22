@@ -326,7 +326,6 @@ impl From<packed::CancelChallenge> for CancelChallenge {
 #[serde(rename_all = "snake_case")]
 pub struct L2Block {
     pub raw: RawL2Block,
-    pub signature: Byte65,
     pub kv_state: Vec<KVPair>,
     pub kv_state_proof: JsonBytes,
     pub transactions: Vec<L2Transaction>,
@@ -338,7 +337,6 @@ impl From<L2Block> for packed::L2Block {
     fn from(json: L2Block) -> packed::L2Block {
         let L2Block {
             raw,
-            signature,
             kv_state,
             kv_state_proof,
             transactions,
@@ -359,7 +357,6 @@ impl From<L2Block> for packed::L2Block {
             .build();
         packed::L2Block::new_builder()
             .raw(raw.into())
-            .signature(signature.into())
             .kv_state(packed_kv_state)
             .kv_state_proof(kv_state_proof.into_bytes().pack())
             .transactions(packed_transactions)
@@ -373,7 +370,6 @@ impl From<packed::L2Block> for L2Block {
     fn from(l2_block: packed::L2Block) -> L2Block {
         Self {
             raw: l2_block.raw().into(),
-            signature: l2_block.signature().into(),
             kv_state: l2_block.kv_state().into_iter().map(|k| k.into()).collect(),
             kv_state_proof: JsonBytes::from_bytes(l2_block.kv_state_proof().unpack()),
             transactions: l2_block
@@ -395,7 +391,8 @@ impl From<packed::L2Block> for L2Block {
 #[serde(rename_all = "snake_case")]
 pub struct RawL2Block {
     pub number: Uint64,
-    pub aggregator_id: Uint32,
+    pub parent_block_hash: H256,
+    pub block_producer_id: Uint32,
     pub stake_cell_owner_lock_hash: H256,
     pub timestamp: Uint64,
     pub prev_account: AccountMerkleState,
@@ -408,7 +405,8 @@ impl From<RawL2Block> for packed::RawL2Block {
     fn from(json: RawL2Block) -> packed::RawL2Block {
         let RawL2Block {
             number,
-            aggregator_id,
+            parent_block_hash,
+            block_producer_id,
             stake_cell_owner_lock_hash,
             timestamp,
             prev_account,
@@ -418,7 +416,8 @@ impl From<RawL2Block> for packed::RawL2Block {
         } = json;
         packed::RawL2Block::new_builder()
             .number(u64::from(number).pack())
-            .aggregator_id(u32::from(aggregator_id).pack())
+            .parent_block_hash(parent_block_hash.pack())
+            .block_producer_id(u32::from(block_producer_id).pack())
             .stake_cell_owner_lock_hash(stake_cell_owner_lock_hash.pack())
             .timestamp(u64::from(timestamp).pack())
             .prev_account(prev_account.into())
@@ -432,11 +431,12 @@ impl From<RawL2Block> for packed::RawL2Block {
 impl From<packed::RawL2Block> for RawL2Block {
     fn from(raw_l2_block: packed::RawL2Block) -> RawL2Block {
         let number: u64 = raw_l2_block.number().unpack();
-        let aggregator_id: u32 = raw_l2_block.aggregator_id().unpack();
+        let block_producer_id: u32 = raw_l2_block.block_producer_id().unpack();
         let timestamp: u64 = raw_l2_block.timestamp().unpack();
         Self {
             number: number.into(),
-            aggregator_id: aggregator_id.into(),
+            parent_block_hash: raw_l2_block.parent_block_hash().unpack(),
+            block_producer_id: block_producer_id.into(),
             stake_cell_owner_lock_hash: raw_l2_block.stake_cell_owner_lock_hash().unpack(),
             timestamp: timestamp.into(),
             prev_account: raw_l2_block.prev_account().into(),
@@ -451,7 +451,6 @@ impl From<packed::RawL2Block> for RawL2Block {
 #[serde(rename_all = "snake_case")]
 pub struct L2BlockView {
     pub raw: RawL2Block,
-    pub signature: Byte65,
     pub kv_state: Vec<KVPair>,
     pub kv_state_proof: JsonBytes,
     pub transactions: Vec<L2TransactionView>,
@@ -465,7 +464,6 @@ impl From<packed::L2Block> for L2BlockView {
         Self {
             hash: H256::from(l2_block.raw().hash()),
             raw: l2_block.raw().into(),
-            signature: l2_block.signature().into(),
             kv_state: l2_block.kv_state().into_iter().map(|k| k.into()).collect(),
             kv_state_proof: JsonBytes::from_bytes(l2_block.kv_state_proof().unpack()),
             transactions: l2_block

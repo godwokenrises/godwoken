@@ -6,11 +6,11 @@ pub struct Config {
     pub chain: ChainConfig,
     pub store: StoreConfig,
     pub genesis: GenesisConfig,
-    pub aggregator: Option<AggregatorConfig>,
+    pub block_producer: Option<BlockProducerConfig>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct AggregatorConfig {
+pub struct BlockProducerConfig {
     pub account_id: u32,
 }
 

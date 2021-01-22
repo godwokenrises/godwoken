@@ -236,7 +236,7 @@ export class Runner {
       updates: [update],
       // TODO: figure out next block context values
       next_block_context: {
-        aggregator_id: "0x0",
+        block_producer_id: "0x0",
         timestamp: "0x" + (BigInt(Date.now()) / 1000n).toString(16),
       },
     };
@@ -461,7 +461,7 @@ export class Runner {
           ({ packedRequest }) => packedRequest
         );
         const param = {
-          aggregator_id: "0x0",
+          block_producer_id: "0x0",
         };
         const packageParam = {
           deposition_requests: depositionRequests,

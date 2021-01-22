@@ -12,7 +12,7 @@ export interface L1Action {
 }
 
 export interface NextBlockContext {
-  aggregator_id: HexNumber;
+  block_producer_id: HexNumber;
   timestamp: HexNumber;
 }
 
@@ -36,7 +36,7 @@ export interface Revert {
 }
 
 export interface ProduceBlockParam {
-  aggregator_id: HexNumber;
+  block_producer_id: HexNumber;
 }
 
 export interface PackageParam {
@@ -76,7 +76,7 @@ export interface Config {
   chain: ChainConfig;
   store: StoreConfig;
   genesis: GenesisConfig;
-  aggregator?: AggregatorConfig;
+  block_producer?: BlockProducerConfig;
 }
 
 export interface ChainConfig {
@@ -91,7 +91,7 @@ export interface GenesisConfig {
   timestamp: HexNumber;
 }
 
-export interface AggregatorConfig {
+export interface BlockProducerConfig {
   account_id: HexNumber;
 }
 
@@ -167,7 +167,8 @@ export interface AccountMerkleState {
 }
 export interface RawL2Block {
   number: HexNumber;
-  aggregator_id: HexNumber;
+  parent_block_hash: Hash;
+  block_producer_id: HexNumber;
   stake_cell_owner_lock_hash: Hash;
   timestamp: HexNumber;
   prev_account: AccountMerkleState;

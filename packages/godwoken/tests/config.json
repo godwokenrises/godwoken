@@ -9,7 +9,7 @@
         "genesis_block_hash": "0xace5ea83c478bb866edf122ff862085789158f5cbff155b7bb5f13058555b708"
     },
     "consensus": {
-        "aggregator_id": 1
+        "block_producer_id": 1
     }, 
     "genesis": {
         "initial_aggregator_pubkey_hash": "0x19c5d58c535273452ac60f9d37831601adcf12b8",

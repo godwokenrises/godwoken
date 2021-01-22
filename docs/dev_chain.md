@@ -180,5 +180,5 @@ You can also leave it unchanged if you don't need sentry support.
 $ cd $TOP/godwoken
 $ yarn workspace @ckb-godwoken/base tsc
 $ yarn workspace @ckb-godwoken/runner tsc
-$ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/runner/lib/index.js --private-key <private key for aggregator> -c $TOP/runner_config.json -s "postgresql://user:password@127.0.0.1:5432/lumos"
+$ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/runner/lib/index.js --private-key <private key for block_producer> -c $TOP/runner_config.json -s "postgresql://user:password@127.0.0.1:5432/lumos"
 ```

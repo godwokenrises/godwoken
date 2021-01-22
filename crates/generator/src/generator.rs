@@ -304,7 +304,7 @@ impl Generator {
 
 fn get_block_info(l2block: &RawL2Block) -> BlockInfo {
     BlockInfo::new_builder()
-        .aggregator_id(l2block.aggregator_id())
+        .block_producer_id(l2block.block_producer_id())
         .number(l2block.number())
         .timestamp(l2block.timestamp())
         .build()

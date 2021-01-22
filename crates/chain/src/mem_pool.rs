@@ -319,7 +319,7 @@ fn get_account_state<S: State>(state: &S) -> Result<MerkleState> {
 fn gen_next_block_info(tip: &L2Block, nb_ctx: NextBlockContext) -> Result<BlockInfo> {
     let parent_number: u64 = tip.raw().number().unpack();
     let block_info = BlockInfo::new_builder()
-        .aggregator_id(nb_ctx.aggregator_id.pack())
+        .block_producer_id(nb_ctx.block_producer_id.pack())
         .number((parent_number + 1).pack())
         .timestamp(nb_ctx.timestamp.pack())
         .build();

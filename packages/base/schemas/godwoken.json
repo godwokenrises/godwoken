@@ -129,8 +129,12 @@
           "type": "Uint64"
         },
         {
-          "name": "aggregator_id",
+          "name": "block_producer_id",
           "type": "Uint32"
+        },
+        {
+          "name": "parent_block_hash",
+          "type": "Byte32"
         },
         {
           "name": "stake_cell_owner_lock_hash",
@@ -165,10 +169,6 @@
         {
           "name": "raw",
           "type": "RawL2Block"
-        },
-        {
-          "name": "signature",
-          "type": "Signature"
         },
         {
           "name": "kv_state",
@@ -213,6 +213,11 @@
           "type": "Script"
         }
       ]
+    },
+    {
+      "type": "dynvec",
+      "name": "DepositionRequestVec",
+      "item": "DepositionRequest"
     },
     {
       "type": "struct",
@@ -317,7 +322,7 @@
       "name": "BlockInfo",
       "fields": [
         {
-          "name": "aggregator_id",
+          "name": "block_producer_id",
           "type": "Uint32"
         },
         {
@@ -605,7 +610,7 @@
     },
     {
       "type": "struct",
-      "name": "UnlockAccount",
+      "name": "UnlockAccountWitness",
       "fields": [
         {
           "name": "message",

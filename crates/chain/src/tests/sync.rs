@@ -15,10 +15,10 @@ fn test_sync_a_block() {
     let rollup_type_script = Script::default();
     let mut chain = setup_chain(&rollup_type_script);
 
-    let aggregator_id = 0;
+    let block_producer_id = 0;
     let timestamp = 1000;
     let nb_ctx = NextBlockContext {
-        aggregator_id,
+        block_producer_id,
         timestamp,
     };
 
@@ -32,7 +32,7 @@ fn test_sync_a_block() {
         max_withdrawal_capacity: std::u128::MAX,
     };
     let mem_pool_package = chain.mem_pool.lock().package(package_param).unwrap();
-    let param = ProduceBlockParam { aggregator_id };
+    let param = ProduceBlockParam { block_producer_id };
     let block_result = chain.produce_block(param, mem_pool_package).unwrap();
     assert_eq!(
         {
@@ -77,10 +77,10 @@ fn test_layer1_fork() {
         .type_(Some(rollup_type_script.clone()).pack())
         .build();
 
-    let aggregator_id = 0;
+    let block_producer_id = 0;
     let timestamp = 1000;
     let nb_ctx = NextBlockContext {
-        aggregator_id,
+        block_producer_id,
         timestamp,
     };
 
@@ -98,7 +98,7 @@ fn test_layer1_fork() {
             max_withdrawal_capacity: std::u128::MAX,
         };
         let mem_pool_package = chain.mem_pool.lock().package(package_param).unwrap();
-        let param = ProduceBlockParam { aggregator_id };
+        let param = ProduceBlockParam { block_producer_id };
         let block_result = chain.produce_block(param, mem_pool_package).unwrap();
 
         L1Action {
@@ -120,7 +120,7 @@ fn test_layer1_fork() {
         max_withdrawal_capacity: std::u128::MAX,
     };
     let mem_pool_package = chain.mem_pool.lock().package(package_param).unwrap();
-    let param = ProduceBlockParam { aggregator_id };
+    let param = ProduceBlockParam { block_producer_id };
     let block_result = chain.produce_block(param, mem_pool_package).unwrap();
     let action1 = L1Action {
         context: L1ActionContext::SubmitTxs {
@@ -147,7 +147,7 @@ fn test_layer1_fork() {
         max_withdrawal_capacity: std::u128::MAX,
     };
     let mem_pool_package = chain.mem_pool.lock().package(package_param).unwrap();
-    let param = ProduceBlockParam { aggregator_id };
+    let param = ProduceBlockParam { block_producer_id };
     let block_result = chain.produce_block(param, mem_pool_package).unwrap();
     let action2 = L1Action {
         context: L1ActionContext::SubmitTxs {

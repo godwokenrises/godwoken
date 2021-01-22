@@ -86,10 +86,10 @@ int gw_parse_block_info(gw_block_info_t *block_info, mol_seg_t *src) {
   }
   mol_seg_t number_seg = MolReader_BlockInfo_get_number(src);
   mol_seg_t timestamp_seg = MolReader_BlockInfo_get_timestamp(src);
-  mol_seg_t aggregator_id_seg = MolReader_BlockInfo_get_aggregator_id(src);
+  mol_seg_t block_producer_id_seg = MolReader_BlockInfo_get_block_producer_id(src);
   block_info->number = *(uint64_t *)number_seg.ptr;
   block_info->timestamp = *(uint64_t *)timestamp_seg.ptr;
-  block_info->aggregator_id = *(uint32_t *)aggregator_id_seg.ptr;
+  block_info->block_producer_id = *(uint32_t *)block_producer_id_seg.ptr;
   return 0;
 }
 
