@@ -168,6 +168,12 @@ $ cd $TOP/godwoken
 $ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/runner/lib/stake.js --private-key <private key for aggregator> -f $TOP/runner_config.json --capacity 1000 -s "postgresql://user:password@127.0.0.1:5432/lumos"
 ```
 
+And unstake to withdraw fund after `finalized block number`:
+```
+$ cd $TOP/godwoken
+$ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/runner/lib/unstake.js --private-key <private key for aggregator> -f $TOP/runner_config.json -s "postgresql://user:password@127.0.0.1:5432/lumos"
+```
+
 ## Add Sentry Support
 
 By adding `sentryConfig` to `$TOP/runner_config.json`, you can upload error logs to your sentry service: 

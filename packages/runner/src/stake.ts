@@ -11,6 +11,7 @@ import {
   TransactionSkeleton,
   scriptToAddress,
   sealTransaction,
+  createTransactionFromSkeleton,
 } from "@ckb-lumos/helpers";
 import { Cell, HashType, HexString, core, utils } from "@ckb-lumos/base";
 import { common } from "@ckb-lumos/common-scripts";
@@ -123,6 +124,9 @@ const run = async () => {
     txSkeleton,
     [address],
     BigInt(1000)
+  );
+  console.log(
+    JSON.stringify(createTransactionFromSkeleton(txSkeleton), null, 2)
   );
   txSkeleton = common.prepareSigningEntries(txSkeleton);
 
