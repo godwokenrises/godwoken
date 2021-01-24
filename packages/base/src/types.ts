@@ -261,3 +261,17 @@ export function DenormalizeGlobalState(globalState: schemas.GlobalState) {
     status: globalState.getStatus(),
   };
 }
+
+export function DenormalizeStakeLockArgs(stakeLockArgs: schemas.StakeLockArgs) {
+  return {
+    stake_block_number:
+      "0x" +
+      stakeLockArgs
+        .getStakeBlockNumber()
+        .toLittleEndianBigUint64()
+        .toString(16),
+    owner_lock_hash: new Reader(
+      stakeLockArgs.getOwnerLockHash().raw()
+    ).serializeJson(),
+  };
+}
