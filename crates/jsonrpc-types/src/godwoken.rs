@@ -177,29 +177,29 @@ impl From<packed::TxReceipt> for TxReceipt {
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
-pub struct StartChallenge {
+pub struct ChallengeTarget {
     pub block_hash: H256, // hash of challenged block
     pub tx_index: Uint32, // challenge tx
 }
 
-impl From<StartChallenge> for packed::StartChallenge {
-    fn from(json: StartChallenge) -> packed::StartChallenge {
-        let StartChallenge {
+impl From<ChallengeTarget> for packed::ChallengeTarget {
+    fn from(json: ChallengeTarget) -> packed::ChallengeTarget {
+        let ChallengeTarget {
             block_hash,
             tx_index,
         } = json;
-        packed::StartChallenge::new_builder()
+        packed::ChallengeTarget::new_builder()
             .block_hash(block_hash.pack())
             .tx_index(u32::from(tx_index).pack())
             .build()
     }
 }
 
-impl From<packed::StartChallenge> for StartChallenge {
-    fn from(start_challenge: packed::StartChallenge) -> StartChallenge {
-        let tx_index: u32 = start_challenge.tx_index().unpack();
+impl From<packed::ChallengeTarget> for ChallengeTarget {
+    fn from(challenge_target: packed::ChallengeTarget) -> ChallengeTarget {
+        let tx_index: u32 = challenge_target.tx_index().unpack();
         Self {
-            block_hash: start_challenge.block_hash().unpack(),
+            block_hash: challenge_target.block_hash().unpack(),
             tx_index: Uint32::from(tx_index),
         }
     }
@@ -207,27 +207,27 @@ impl From<packed::StartChallenge> for StartChallenge {
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
-pub struct StartChallengeWitness {
+pub struct ChallengeWitness {
     pub raw_l2block: RawL2Block,
     pub block_proof: JsonBytes, // block proof
 }
 
-impl From<StartChallengeWitness> for packed::StartChallengeWitness {
-    fn from(json: StartChallengeWitness) -> packed::StartChallengeWitness {
-        let StartChallengeWitness {
+impl From<ChallengeWitness> for packed::ChallengeWitness {
+    fn from(json: ChallengeWitness) -> packed::ChallengeWitness {
+        let ChallengeWitness {
             raw_l2block,
             block_proof,
         } = json;
         let raw_l2block: packed::RawL2Block = raw_l2block.into();
-        packed::StartChallengeWitness::new_builder()
+        packed::ChallengeWitness::new_builder()
             .raw_l2block(raw_l2block)
             .block_proof(block_proof.into_bytes().pack())
             .build()
     }
 }
 
-impl From<packed::StartChallengeWitness> for StartChallengeWitness {
-    fn from(data: packed::StartChallengeWitness) -> StartChallengeWitness {
+impl From<packed::ChallengeWitness> for ChallengeWitness {
+    fn from(data: packed::ChallengeWitness) -> ChallengeWitness {
         let raw_l2block: RawL2Block = data.raw_l2block().into();
         let block_proof = JsonBytes::from_bytes(data.block_proof().unpack());
         Self {
@@ -240,25 +240,25 @@ impl From<packed::StartChallengeWitness> for StartChallengeWitness {
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct ChallengeContext {
-    pub args: StartChallenge,
-    pub witness: StartChallengeWitness,
+    pub target: ChallengeTarget,
+    pub witness: ChallengeWitness,
 }
 
 impl From<ChallengeContext> for gw_generator::ChallengeContext {
     fn from(json: ChallengeContext) -> gw_generator::ChallengeContext {
-        let ChallengeContext { args, witness } = json;
-        let args: packed::StartChallenge = args.into();
-        let witness: packed::StartChallengeWitness = witness.into();
-        gw_generator::ChallengeContext { args, witness }
+        let ChallengeContext { target, witness } = json;
+        let target: packed::ChallengeTarget = target.into();
+        let witness: packed::ChallengeWitness = witness.into();
+        gw_generator::ChallengeContext { target, witness }
     }
 }
 
 impl From<gw_generator::ChallengeContext> for ChallengeContext {
     fn from(data: gw_generator::ChallengeContext) -> ChallengeContext {
-        let gw_generator::ChallengeContext { args, witness } = data;
-        let args: StartChallenge = args.into();
-        let witness: StartChallengeWitness = witness.into();
-        Self { args, witness }
+        let gw_generator::ChallengeContext { target, witness } = data;
+        let target: ChallengeTarget = target.into();
+        let witness: ChallengeWitness = witness.into();
+        Self { target, witness }
     }
 }
 

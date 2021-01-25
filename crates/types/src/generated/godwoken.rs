@@ -2204,6 +2204,12 @@ impl ::core::fmt::Display for RollupConfig {
             "withdrawal_type_hash",
             self.withdrawal_type_hash()
         )?;
+        write!(
+            f,
+            ", {}: {}",
+            "challenge_type_hash",
+            self.challenge_type_hash()
+        )?;
         write!(f, ", {}: {}", "stake_type_hash", self.stake_type_hash())?;
         write!(
             f,
@@ -2223,15 +2229,16 @@ impl ::core::default::Default for RollupConfig {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RollupConfig::new_unchecked(v.into())
     }
 }
 impl RollupConfig {
-    pub const TOTAL_SIZE: usize = 192;
-    pub const FIELD_SIZES: [usize; 6] = [32, 32, 32, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 6;
+    pub const TOTAL_SIZE: usize = 224;
+    pub const FIELD_SIZES: [usize; 7] = [32, 32, 32, 32, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 7;
     pub fn l1_sudt_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
@@ -2244,11 +2251,14 @@ impl RollupConfig {
     pub fn withdrawal_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(96..128))
     }
-    pub fn stake_type_hash(&self) -> Byte32 {
+    pub fn challenge_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(128..160))
     }
-    pub fn l2_sudt_validator_type_hash(&self) -> Byte32 {
+    pub fn stake_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(160..192))
+    }
+    pub fn l2_sudt_validator_type_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(192..224))
     }
     pub fn as_reader<'r>(&'r self) -> RollupConfigReader<'r> {
         RollupConfigReader::new_unchecked(self.as_slice())
@@ -2281,6 +2291,7 @@ impl molecule::prelude::Entity for RollupConfig {
             .custodian_type_hash(self.custodian_type_hash())
             .deposition_type_hash(self.deposition_type_hash())
             .withdrawal_type_hash(self.withdrawal_type_hash())
+            .challenge_type_hash(self.challenge_type_hash())
             .stake_type_hash(self.stake_type_hash())
             .l2_sudt_validator_type_hash(self.l2_sudt_validator_type_hash())
     }
@@ -2323,6 +2334,12 @@ impl<'r> ::core::fmt::Display for RollupConfigReader<'r> {
             "withdrawal_type_hash",
             self.withdrawal_type_hash()
         )?;
+        write!(
+            f,
+            ", {}: {}",
+            "challenge_type_hash",
+            self.challenge_type_hash()
+        )?;
         write!(f, ", {}: {}", "stake_type_hash", self.stake_type_hash())?;
         write!(
             f,
@@ -2334,9 +2351,9 @@ impl<'r> ::core::fmt::Display for RollupConfigReader<'r> {
     }
 }
 impl<'r> RollupConfigReader<'r> {
-    pub const TOTAL_SIZE: usize = 192;
-    pub const FIELD_SIZES: [usize; 6] = [32, 32, 32, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 6;
+    pub const TOTAL_SIZE: usize = 224;
+    pub const FIELD_SIZES: [usize; 7] = [32, 32, 32, 32, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 7;
     pub fn l1_sudt_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
@@ -2349,11 +2366,14 @@ impl<'r> RollupConfigReader<'r> {
     pub fn withdrawal_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[96..128])
     }
-    pub fn stake_type_hash(&self) -> Byte32Reader<'r> {
+    pub fn challenge_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[128..160])
     }
-    pub fn l2_sudt_validator_type_hash(&self) -> Byte32Reader<'r> {
+    pub fn stake_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[160..192])
+    }
+    pub fn l2_sudt_validator_type_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[192..224])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for RollupConfigReader<'r> {
@@ -2383,13 +2403,14 @@ pub struct RollupConfigBuilder {
     pub(crate) custodian_type_hash: Byte32,
     pub(crate) deposition_type_hash: Byte32,
     pub(crate) withdrawal_type_hash: Byte32,
+    pub(crate) challenge_type_hash: Byte32,
     pub(crate) stake_type_hash: Byte32,
     pub(crate) l2_sudt_validator_type_hash: Byte32,
 }
 impl RollupConfigBuilder {
-    pub const TOTAL_SIZE: usize = 192;
-    pub const FIELD_SIZES: [usize; 6] = [32, 32, 32, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 6;
+    pub const TOTAL_SIZE: usize = 224;
+    pub const FIELD_SIZES: [usize; 7] = [32, 32, 32, 32, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 7;
     pub fn l1_sudt_type_hash(mut self, v: Byte32) -> Self {
         self.l1_sudt_type_hash = v;
         self
@@ -2404,6 +2425,10 @@ impl RollupConfigBuilder {
     }
     pub fn withdrawal_type_hash(mut self, v: Byte32) -> Self {
         self.withdrawal_type_hash = v;
+        self
+    }
+    pub fn challenge_type_hash(mut self, v: Byte32) -> Self {
+        self.challenge_type_hash = v;
         self
     }
     pub fn stake_type_hash(mut self, v: Byte32) -> Self {
@@ -2426,6 +2451,7 @@ impl molecule::prelude::Builder for RollupConfigBuilder {
         writer.write_all(self.custodian_type_hash.as_slice())?;
         writer.write_all(self.deposition_type_hash.as_slice())?;
         writer.write_all(self.withdrawal_type_hash.as_slice())?;
+        writer.write_all(self.challenge_type_hash.as_slice())?;
         writer.write_all(self.stake_type_hash.as_slice())?;
         writer.write_all(self.l2_sudt_validator_type_hash.as_slice())?;
         Ok(())
@@ -10325,8 +10351,8 @@ impl molecule::prelude::Builder for SUDTTransferBuilder {
     }
 }
 #[derive(Clone)]
-pub struct StartChallenge(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for StartChallenge {
+pub struct ChallengeTarget(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for ChallengeTarget {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -10335,12 +10361,12 @@ impl ::core::fmt::LowerHex for StartChallenge {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for StartChallenge {
+impl ::core::fmt::Debug for ChallengeTarget {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for StartChallenge {
+impl ::core::fmt::Display for ChallengeTarget {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "block_hash", self.block_hash())?;
@@ -10348,16 +10374,16 @@ impl ::core::fmt::Display for StartChallenge {
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for StartChallenge {
+impl ::core::default::Default for ChallengeTarget {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0,
         ];
-        StartChallenge::new_unchecked(v.into())
+        ChallengeTarget::new_unchecked(v.into())
     }
 }
-impl StartChallenge {
+impl ChallengeTarget {
     pub const TOTAL_SIZE: usize = 36;
     pub const FIELD_SIZES: [usize; 2] = [32, 4];
     pub const FIELD_COUNT: usize = 2;
@@ -10367,15 +10393,15 @@ impl StartChallenge {
     pub fn tx_index(&self) -> Uint32 {
         Uint32::new_unchecked(self.0.slice(32..36))
     }
-    pub fn as_reader<'r>(&'r self) -> StartChallengeReader<'r> {
-        StartChallengeReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> ChallengeTargetReader<'r> {
+        ChallengeTargetReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for StartChallenge {
-    type Builder = StartChallengeBuilder;
-    const NAME: &'static str = "StartChallenge";
+impl molecule::prelude::Entity for ChallengeTarget {
+    type Builder = ChallengeTargetBuilder;
+    const NAME: &'static str = "ChallengeTarget";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        StartChallenge(data)
+        ChallengeTarget(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -10384,10 +10410,10 @@ impl molecule::prelude::Entity for StartChallenge {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        StartChallengeReader::from_slice(slice).map(|reader| reader.to_entity())
+        ChallengeTargetReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        StartChallengeReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        ChallengeTargetReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -10399,8 +10425,8 @@ impl molecule::prelude::Entity for StartChallenge {
     }
 }
 #[derive(Clone, Copy)]
-pub struct StartChallengeReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for StartChallengeReader<'r> {
+pub struct ChallengeTargetReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for ChallengeTargetReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -10409,12 +10435,12 @@ impl<'r> ::core::fmt::LowerHex for StartChallengeReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for StartChallengeReader<'r> {
+impl<'r> ::core::fmt::Debug for ChallengeTargetReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for StartChallengeReader<'r> {
+impl<'r> ::core::fmt::Display for ChallengeTargetReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "block_hash", self.block_hash())?;
@@ -10422,7 +10448,7 @@ impl<'r> ::core::fmt::Display for StartChallengeReader<'r> {
         write!(f, " }}")
     }
 }
-impl<'r> StartChallengeReader<'r> {
+impl<'r> ChallengeTargetReader<'r> {
     pub const TOTAL_SIZE: usize = 36;
     pub const FIELD_SIZES: [usize; 2] = [32, 4];
     pub const FIELD_COUNT: usize = 2;
@@ -10433,14 +10459,14 @@ impl<'r> StartChallengeReader<'r> {
         Uint32Reader::new_unchecked(&self.as_slice()[32..36])
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for StartChallengeReader<'r> {
-    type Entity = StartChallenge;
-    const NAME: &'static str = "StartChallengeReader";
+impl<'r> molecule::prelude::Reader<'r> for ChallengeTargetReader<'r> {
+    type Entity = ChallengeTarget;
+    const NAME: &'static str = "ChallengeTargetReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        StartChallengeReader(slice)
+        ChallengeTargetReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -10455,11 +10481,11 @@ impl<'r> molecule::prelude::Reader<'r> for StartChallengeReader<'r> {
     }
 }
 #[derive(Debug, Default)]
-pub struct StartChallengeBuilder {
+pub struct ChallengeTargetBuilder {
     pub(crate) block_hash: Byte32,
     pub(crate) tx_index: Uint32,
 }
-impl StartChallengeBuilder {
+impl ChallengeTargetBuilder {
     pub const TOTAL_SIZE: usize = 36;
     pub const FIELD_SIZES: [usize; 2] = [32, 4];
     pub const FIELD_COUNT: usize = 2;
@@ -10472,9 +10498,9 @@ impl StartChallengeBuilder {
         self
     }
 }
-impl molecule::prelude::Builder for StartChallengeBuilder {
-    type Entity = StartChallenge;
-    const NAME: &'static str = "StartChallengeBuilder";
+impl molecule::prelude::Builder for ChallengeTargetBuilder {
+    type Entity = ChallengeTarget;
+    const NAME: &'static str = "ChallengeTargetBuilder";
     fn expected_length(&self) -> usize {
         Self::TOTAL_SIZE
     }
@@ -10487,12 +10513,12 @@ impl molecule::prelude::Builder for StartChallengeBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        StartChallenge::new_unchecked(inner.into())
+        ChallengeTarget::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
-pub struct StartChallengeWitness(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for StartChallengeWitness {
+pub struct ChallengeLockArgs(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for ChallengeLockArgs {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -10501,12 +10527,291 @@ impl ::core::fmt::LowerHex for StartChallengeWitness {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for StartChallengeWitness {
+impl ::core::fmt::Debug for ChallengeLockArgs {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for StartChallengeWitness {
+impl ::core::fmt::Display for ChallengeLockArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "target", self.target())?;
+        write!(
+            f,
+            ", {}: {}",
+            "rewards_receiver_lock",
+            self.rewards_receiver_lock()
+        )?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for ChallengeLockArgs {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            101, 0, 0, 0, 12, 0, 0, 0, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0,
+            48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        ChallengeLockArgs::new_unchecked(v.into())
+    }
+}
+impl ChallengeLockArgs {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn target(&self) -> ChallengeTarget {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        ChallengeTarget::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn rewards_receiver_lock(&self) -> Script {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            Script::new_unchecked(self.0.slice(start..end))
+        } else {
+            Script::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> ChallengeLockArgsReader<'r> {
+        ChallengeLockArgsReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for ChallengeLockArgs {
+    type Builder = ChallengeLockArgsBuilder;
+    const NAME: &'static str = "ChallengeLockArgs";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        ChallengeLockArgs(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        ChallengeLockArgsReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        ChallengeLockArgsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .target(self.target())
+            .rewards_receiver_lock(self.rewards_receiver_lock())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct ChallengeLockArgsReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for ChallengeLockArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for ChallengeLockArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for ChallengeLockArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "target", self.target())?;
+        write!(
+            f,
+            ", {}: {}",
+            "rewards_receiver_lock",
+            self.rewards_receiver_lock()
+        )?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> ChallengeLockArgsReader<'r> {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn target(&self) -> ChallengeTargetReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        ChallengeTargetReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn rewards_receiver_lock(&self) -> ScriptReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            ScriptReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            ScriptReader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for ChallengeLockArgsReader<'r> {
+    type Entity = ChallengeLockArgs;
+    const NAME: &'static str = "ChallengeLockArgsReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        ChallengeLockArgsReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        let field_count = offset_first / 4 - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
+        if slice_len < header_size {
+            return ve!(Self, HeaderIsBroken, header_size, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
+            .chunks(molecule::NUMBER_SIZE)
+            .take(field_count)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        ChallengeTargetReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        ScriptReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct ChallengeLockArgsBuilder {
+    pub(crate) target: ChallengeTarget,
+    pub(crate) rewards_receiver_lock: Script,
+}
+impl ChallengeLockArgsBuilder {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn target(mut self, v: ChallengeTarget) -> Self {
+        self.target = v;
+        self
+    }
+    pub fn rewards_receiver_lock(mut self, v: Script) -> Self {
+        self.rewards_receiver_lock = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for ChallengeLockArgsBuilder {
+    type Entity = ChallengeLockArgs;
+    const NAME: &'static str = "ChallengeLockArgsBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.target.as_slice().len()
+            + self.rewards_receiver_lock.as_slice().len()
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.target.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.rewards_receiver_lock.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.target.as_slice())?;
+        writer.write_all(self.rewards_receiver_lock.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        ChallengeLockArgs::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct ChallengeWitness(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for ChallengeWitness {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for ChallengeWitness {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for ChallengeWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "raw_l2block", self.raw_l2block())?;
@@ -10518,7 +10823,7 @@ impl ::core::fmt::Display for StartChallengeWitness {
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for StartChallengeWitness {
+impl ::core::default::Default for ChallengeWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             44, 1, 0, 0, 12, 0, 0, 0, 40, 1, 0, 0, 28, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0,
@@ -10533,10 +10838,10 @@ impl ::core::default::Default for StartChallengeWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
-        StartChallengeWitness::new_unchecked(v.into())
+        ChallengeWitness::new_unchecked(v.into())
     }
 }
-impl StartChallengeWitness {
+impl ChallengeWitness {
     pub const FIELD_COUNT: usize = 2;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
@@ -10570,15 +10875,15 @@ impl StartChallengeWitness {
             Bytes::new_unchecked(self.0.slice(start..))
         }
     }
-    pub fn as_reader<'r>(&'r self) -> StartChallengeWitnessReader<'r> {
-        StartChallengeWitnessReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> ChallengeWitnessReader<'r> {
+        ChallengeWitnessReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for StartChallengeWitness {
-    type Builder = StartChallengeWitnessBuilder;
-    const NAME: &'static str = "StartChallengeWitness";
+impl molecule::prelude::Entity for ChallengeWitness {
+    type Builder = ChallengeWitnessBuilder;
+    const NAME: &'static str = "ChallengeWitness";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        StartChallengeWitness(data)
+        ChallengeWitness(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -10587,10 +10892,10 @@ impl molecule::prelude::Entity for StartChallengeWitness {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        StartChallengeWitnessReader::from_slice(slice).map(|reader| reader.to_entity())
+        ChallengeWitnessReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        StartChallengeWitnessReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        ChallengeWitnessReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -10602,8 +10907,8 @@ impl molecule::prelude::Entity for StartChallengeWitness {
     }
 }
 #[derive(Clone, Copy)]
-pub struct StartChallengeWitnessReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for StartChallengeWitnessReader<'r> {
+pub struct ChallengeWitnessReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for ChallengeWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -10612,12 +10917,12 @@ impl<'r> ::core::fmt::LowerHex for StartChallengeWitnessReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for StartChallengeWitnessReader<'r> {
+impl<'r> ::core::fmt::Debug for ChallengeWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for StartChallengeWitnessReader<'r> {
+impl<'r> ::core::fmt::Display for ChallengeWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "raw_l2block", self.raw_l2block())?;
@@ -10629,7 +10934,7 @@ impl<'r> ::core::fmt::Display for StartChallengeWitnessReader<'r> {
         write!(f, " }}")
     }
 }
-impl<'r> StartChallengeWitnessReader<'r> {
+impl<'r> ChallengeWitnessReader<'r> {
     pub const FIELD_COUNT: usize = 2;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
@@ -10664,14 +10969,14 @@ impl<'r> StartChallengeWitnessReader<'r> {
         }
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for StartChallengeWitnessReader<'r> {
-    type Entity = StartChallengeWitness;
-    const NAME: &'static str = "StartChallengeWitnessReader";
+impl<'r> molecule::prelude::Reader<'r> for ChallengeWitnessReader<'r> {
+    type Entity = ChallengeWitness;
+    const NAME: &'static str = "ChallengeWitnessReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        StartChallengeWitnessReader(slice)
+        ChallengeWitnessReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -10721,11 +11026,11 @@ impl<'r> molecule::prelude::Reader<'r> for StartChallengeWitnessReader<'r> {
     }
 }
 #[derive(Debug, Default)]
-pub struct StartChallengeWitnessBuilder {
+pub struct ChallengeWitnessBuilder {
     pub(crate) raw_l2block: RawL2Block,
     pub(crate) block_proof: Bytes,
 }
-impl StartChallengeWitnessBuilder {
+impl ChallengeWitnessBuilder {
     pub const FIELD_COUNT: usize = 2;
     pub fn raw_l2block(mut self, v: RawL2Block) -> Self {
         self.raw_l2block = v;
@@ -10736,9 +11041,9 @@ impl StartChallengeWitnessBuilder {
         self
     }
 }
-impl molecule::prelude::Builder for StartChallengeWitnessBuilder {
-    type Entity = StartChallengeWitness;
-    const NAME: &'static str = "StartChallengeWitnessBuilder";
+impl molecule::prelude::Builder for ChallengeWitnessBuilder {
+    type Entity = ChallengeWitness;
+    const NAME: &'static str = "ChallengeWitnessBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.raw_l2block.as_slice().len()
@@ -10763,7 +11068,7 @@ impl molecule::prelude::Builder for StartChallengeWitnessBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        StartChallengeWitness::new_unchecked(inner.into())
+        ChallengeWitness::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -11705,8 +12010,8 @@ impl molecule::prelude::Builder for UnlockAccountWitnessBuilder {
     }
 }
 #[derive(Clone)]
-pub struct RollupChallenge(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for RollupChallenge {
+pub struct RollupEnterChallenge(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for RollupEnterChallenge {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -11715,12 +12020,12 @@ impl ::core::fmt::LowerHex for RollupChallenge {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for RollupChallenge {
+impl ::core::fmt::Debug for RollupEnterChallenge {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for RollupChallenge {
+impl ::core::fmt::Display for RollupEnterChallenge {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         let extra_count = self.count_extra_fields();
@@ -11730,13 +12035,13 @@ impl ::core::fmt::Display for RollupChallenge {
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for RollupChallenge {
+impl ::core::default::Default for RollupEnterChallenge {
     fn default() -> Self {
         let v: Vec<u8> = vec![4, 0, 0, 0];
-        RollupChallenge::new_unchecked(v.into())
+        RollupEnterChallenge::new_unchecked(v.into())
     }
 }
-impl RollupChallenge {
+impl RollupEnterChallenge {
     pub const FIELD_COUNT: usize = 0;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
@@ -11754,15 +12059,15 @@ impl RollupChallenge {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn as_reader<'r>(&'r self) -> RollupChallengeReader<'r> {
-        RollupChallengeReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> RollupEnterChallengeReader<'r> {
+        RollupEnterChallengeReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for RollupChallenge {
-    type Builder = RollupChallengeBuilder;
-    const NAME: &'static str = "RollupChallenge";
+impl molecule::prelude::Entity for RollupEnterChallenge {
+    type Builder = RollupEnterChallengeBuilder;
+    const NAME: &'static str = "RollupEnterChallenge";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        RollupChallenge(data)
+        RollupEnterChallenge(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -11771,10 +12076,10 @@ impl molecule::prelude::Entity for RollupChallenge {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        RollupChallengeReader::from_slice(slice).map(|reader| reader.to_entity())
+        RollupEnterChallengeReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        RollupChallengeReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        RollupEnterChallengeReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -11784,8 +12089,8 @@ impl molecule::prelude::Entity for RollupChallenge {
     }
 }
 #[derive(Clone, Copy)]
-pub struct RollupChallengeReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for RollupChallengeReader<'r> {
+pub struct RollupEnterChallengeReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for RollupEnterChallengeReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -11794,12 +12099,12 @@ impl<'r> ::core::fmt::LowerHex for RollupChallengeReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for RollupChallengeReader<'r> {
+impl<'r> ::core::fmt::Debug for RollupEnterChallengeReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for RollupChallengeReader<'r> {
+impl<'r> ::core::fmt::Display for RollupEnterChallengeReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         let extra_count = self.count_extra_fields();
@@ -11809,7 +12114,7 @@ impl<'r> ::core::fmt::Display for RollupChallengeReader<'r> {
         write!(f, " }}")
     }
 }
-impl<'r> RollupChallengeReader<'r> {
+impl<'r> RollupEnterChallengeReader<'r> {
     pub const FIELD_COUNT: usize = 0;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
@@ -11828,14 +12133,14 @@ impl<'r> RollupChallengeReader<'r> {
         Self::FIELD_COUNT != self.field_count()
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for RollupChallengeReader<'r> {
-    type Entity = RollupChallenge;
-    const NAME: &'static str = "RollupChallengeReader";
+impl<'r> molecule::prelude::Reader<'r> for RollupEnterChallengeReader<'r> {
+    type Entity = RollupEnterChallenge;
+    const NAME: &'static str = "RollupEnterChallengeReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        RollupChallengeReader(slice)
+        RollupEnterChallengeReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -11857,13 +12162,13 @@ impl<'r> molecule::prelude::Reader<'r> for RollupChallengeReader<'r> {
     }
 }
 #[derive(Debug, Default)]
-pub struct RollupChallengeBuilder {}
-impl RollupChallengeBuilder {
+pub struct RollupEnterChallengeBuilder {}
+impl RollupEnterChallengeBuilder {
     pub const FIELD_COUNT: usize = 0;
 }
-impl molecule::prelude::Builder for RollupChallengeBuilder {
-    type Entity = RollupChallenge;
-    const NAME: &'static str = "RollupChallengeBuilder";
+impl molecule::prelude::Builder for RollupEnterChallengeBuilder {
+    type Entity = RollupEnterChallenge;
+    const NAME: &'static str = "RollupEnterChallengeBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE
     }
@@ -11877,7 +12182,183 @@ impl molecule::prelude::Builder for RollupChallengeBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        RollupChallenge::new_unchecked(inner.into())
+        RollupEnterChallenge::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct RollupCancelChallenge(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for RollupCancelChallenge {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for RollupCancelChallenge {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for RollupCancelChallenge {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ".. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for RollupCancelChallenge {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![4, 0, 0, 0];
+        RollupCancelChallenge::new_unchecked(v.into())
+    }
+}
+impl RollupCancelChallenge {
+    pub const FIELD_COUNT: usize = 0;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn as_reader<'r>(&'r self) -> RollupCancelChallengeReader<'r> {
+        RollupCancelChallengeReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for RollupCancelChallenge {
+    type Builder = RollupCancelChallengeBuilder;
+    const NAME: &'static str = "RollupCancelChallenge";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        RollupCancelChallenge(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RollupCancelChallengeReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RollupCancelChallengeReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+    }
+}
+#[derive(Clone, Copy)]
+pub struct RollupCancelChallengeReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for RollupCancelChallengeReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for RollupCancelChallengeReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for RollupCancelChallengeReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ".. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> RollupCancelChallengeReader<'r> {
+    pub const FIELD_COUNT: usize = 0;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for RollupCancelChallengeReader<'r> {
+    type Entity = RollupCancelChallenge;
+    const NAME: &'static str = "RollupCancelChallengeReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        RollupCancelChallengeReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len > molecule::NUMBER_SIZE && !compatible {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, !0);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct RollupCancelChallengeBuilder {}
+impl RollupCancelChallengeBuilder {
+    pub const FIELD_COUNT: usize = 0;
+}
+impl molecule::prelude::Builder for RollupCancelChallengeBuilder {
+    type Entity = RollupCancelChallenge;
+    const NAME: &'static str = "RollupCancelChallengeBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(&molecule::pack_number(
+            molecule::NUMBER_SIZE as molecule::Number,
+        ))?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        RollupCancelChallenge::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -12099,7 +12580,7 @@ impl ::core::default::Default for RollupAction {
     }
 }
 impl RollupAction {
-    pub const ITEMS_COUNT: usize = 3;
+    pub const ITEMS_COUNT: usize = 4;
     pub fn item_id(&self) -> molecule::Number {
         molecule::unpack_number(self.as_slice())
     }
@@ -12107,8 +12588,9 @@ impl RollupAction {
         let inner = self.0.slice(molecule::NUMBER_SIZE..);
         match self.item_id() {
             0 => L2Block::new_unchecked(inner).into(),
-            1 => RollupChallenge::new_unchecked(inner).into(),
-            2 => RollupRevert::new_unchecked(inner).into(),
+            1 => RollupEnterChallenge::new_unchecked(inner).into(),
+            2 => RollupCancelChallenge::new_unchecked(inner).into(),
+            3 => RollupRevert::new_unchecked(inner).into(),
             _ => panic!("{}: invalid data", Self::NAME),
         }
     }
@@ -12165,7 +12647,7 @@ impl<'r> ::core::fmt::Display for RollupActionReader<'r> {
     }
 }
 impl<'r> RollupActionReader<'r> {
-    pub const ITEMS_COUNT: usize = 3;
+    pub const ITEMS_COUNT: usize = 4;
     pub fn item_id(&self) -> molecule::Number {
         molecule::unpack_number(self.as_slice())
     }
@@ -12173,8 +12655,9 @@ impl<'r> RollupActionReader<'r> {
         let inner = &self.as_slice()[molecule::NUMBER_SIZE..];
         match self.item_id() {
             0 => L2BlockReader::new_unchecked(inner).into(),
-            1 => RollupChallengeReader::new_unchecked(inner).into(),
-            2 => RollupRevertReader::new_unchecked(inner).into(),
+            1 => RollupEnterChallengeReader::new_unchecked(inner).into(),
+            2 => RollupCancelChallengeReader::new_unchecked(inner).into(),
+            3 => RollupRevertReader::new_unchecked(inner).into(),
             _ => panic!("{}: invalid data", Self::NAME),
         }
     }
@@ -12201,8 +12684,9 @@ impl<'r> molecule::prelude::Reader<'r> for RollupActionReader<'r> {
         let inner_slice = &slice[molecule::NUMBER_SIZE..];
         match item_id {
             0 => L2BlockReader::verify(inner_slice, compatible),
-            1 => RollupChallengeReader::verify(inner_slice, compatible),
-            2 => RollupRevertReader::verify(inner_slice, compatible),
+            1 => RollupEnterChallengeReader::verify(inner_slice, compatible),
+            2 => RollupCancelChallengeReader::verify(inner_slice, compatible),
+            3 => RollupRevertReader::verify(inner_slice, compatible),
             _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
         }?;
         Ok(())
@@ -12211,7 +12695,7 @@ impl<'r> molecule::prelude::Reader<'r> for RollupActionReader<'r> {
 #[derive(Debug, Default)]
 pub struct RollupActionBuilder(pub(crate) RollupActionUnion);
 impl RollupActionBuilder {
-    pub const ITEMS_COUNT: usize = 3;
+    pub const ITEMS_COUNT: usize = 4;
     pub fn set<I>(mut self, v: I) -> Self
     where
         I: ::core::convert::Into<RollupActionUnion>,
@@ -12240,13 +12724,15 @@ impl molecule::prelude::Builder for RollupActionBuilder {
 #[derive(Debug, Clone)]
 pub enum RollupActionUnion {
     L2Block(L2Block),
-    RollupChallenge(RollupChallenge),
+    RollupEnterChallenge(RollupEnterChallenge),
+    RollupCancelChallenge(RollupCancelChallenge),
     RollupRevert(RollupRevert),
 }
 #[derive(Debug, Clone, Copy)]
 pub enum RollupActionUnionReader<'r> {
     L2Block(L2BlockReader<'r>),
-    RollupChallenge(RollupChallengeReader<'r>),
+    RollupEnterChallenge(RollupEnterChallengeReader<'r>),
+    RollupCancelChallenge(RollupCancelChallengeReader<'r>),
     RollupRevert(RollupRevertReader<'r>),
 }
 impl ::core::default::Default for RollupActionUnion {
@@ -12260,9 +12746,20 @@ impl ::core::fmt::Display for RollupActionUnion {
             RollupActionUnion::L2Block(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, L2Block::NAME, item)
             }
-            RollupActionUnion::RollupChallenge(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, RollupChallenge::NAME, item)
-            }
+            RollupActionUnion::RollupEnterChallenge(ref item) => write!(
+                f,
+                "{}::{}({})",
+                Self::NAME,
+                RollupEnterChallenge::NAME,
+                item
+            ),
+            RollupActionUnion::RollupCancelChallenge(ref item) => write!(
+                f,
+                "{}::{}({})",
+                Self::NAME,
+                RollupCancelChallenge::NAME,
+                item
+            ),
             RollupActionUnion::RollupRevert(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, RollupRevert::NAME, item)
             }
@@ -12275,9 +12772,20 @@ impl<'r> ::core::fmt::Display for RollupActionUnionReader<'r> {
             RollupActionUnionReader::L2Block(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, L2Block::NAME, item)
             }
-            RollupActionUnionReader::RollupChallenge(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, RollupChallenge::NAME, item)
-            }
+            RollupActionUnionReader::RollupEnterChallenge(ref item) => write!(
+                f,
+                "{}::{}({})",
+                Self::NAME,
+                RollupEnterChallenge::NAME,
+                item
+            ),
+            RollupActionUnionReader::RollupCancelChallenge(ref item) => write!(
+                f,
+                "{}::{}({})",
+                Self::NAME,
+                RollupCancelChallenge::NAME,
+                item
+            ),
             RollupActionUnionReader::RollupRevert(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, RollupRevert::NAME, item)
             }
@@ -12288,7 +12796,8 @@ impl RollupActionUnion {
     pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
             RollupActionUnion::L2Block(ref item) => write!(f, "{}", item),
-            RollupActionUnion::RollupChallenge(ref item) => write!(f, "{}", item),
+            RollupActionUnion::RollupEnterChallenge(ref item) => write!(f, "{}", item),
+            RollupActionUnion::RollupCancelChallenge(ref item) => write!(f, "{}", item),
             RollupActionUnion::RollupRevert(ref item) => write!(f, "{}", item),
         }
     }
@@ -12297,7 +12806,8 @@ impl<'r> RollupActionUnionReader<'r> {
     pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
             RollupActionUnionReader::L2Block(ref item) => write!(f, "{}", item),
-            RollupActionUnionReader::RollupChallenge(ref item) => write!(f, "{}", item),
+            RollupActionUnionReader::RollupEnterChallenge(ref item) => write!(f, "{}", item),
+            RollupActionUnionReader::RollupCancelChallenge(ref item) => write!(f, "{}", item),
             RollupActionUnionReader::RollupRevert(ref item) => write!(f, "{}", item),
         }
     }
@@ -12307,9 +12817,14 @@ impl ::core::convert::From<L2Block> for RollupActionUnion {
         RollupActionUnion::L2Block(item)
     }
 }
-impl ::core::convert::From<RollupChallenge> for RollupActionUnion {
-    fn from(item: RollupChallenge) -> Self {
-        RollupActionUnion::RollupChallenge(item)
+impl ::core::convert::From<RollupEnterChallenge> for RollupActionUnion {
+    fn from(item: RollupEnterChallenge) -> Self {
+        RollupActionUnion::RollupEnterChallenge(item)
+    }
+}
+impl ::core::convert::From<RollupCancelChallenge> for RollupActionUnion {
+    fn from(item: RollupCancelChallenge) -> Self {
+        RollupActionUnion::RollupCancelChallenge(item)
     }
 }
 impl ::core::convert::From<RollupRevert> for RollupActionUnion {
@@ -12322,9 +12837,14 @@ impl<'r> ::core::convert::From<L2BlockReader<'r>> for RollupActionUnionReader<'r
         RollupActionUnionReader::L2Block(item)
     }
 }
-impl<'r> ::core::convert::From<RollupChallengeReader<'r>> for RollupActionUnionReader<'r> {
-    fn from(item: RollupChallengeReader<'r>) -> Self {
-        RollupActionUnionReader::RollupChallenge(item)
+impl<'r> ::core::convert::From<RollupEnterChallengeReader<'r>> for RollupActionUnionReader<'r> {
+    fn from(item: RollupEnterChallengeReader<'r>) -> Self {
+        RollupActionUnionReader::RollupEnterChallenge(item)
+    }
+}
+impl<'r> ::core::convert::From<RollupCancelChallengeReader<'r>> for RollupActionUnionReader<'r> {
+    fn from(item: RollupCancelChallengeReader<'r>) -> Self {
+        RollupActionUnionReader::RollupCancelChallenge(item)
     }
 }
 impl<'r> ::core::convert::From<RollupRevertReader<'r>> for RollupActionUnionReader<'r> {
@@ -12337,35 +12857,40 @@ impl RollupActionUnion {
     pub fn as_bytes(&self) -> molecule::bytes::Bytes {
         match self {
             RollupActionUnion::L2Block(item) => item.as_bytes(),
-            RollupActionUnion::RollupChallenge(item) => item.as_bytes(),
+            RollupActionUnion::RollupEnterChallenge(item) => item.as_bytes(),
+            RollupActionUnion::RollupCancelChallenge(item) => item.as_bytes(),
             RollupActionUnion::RollupRevert(item) => item.as_bytes(),
         }
     }
     pub fn as_slice(&self) -> &[u8] {
         match self {
             RollupActionUnion::L2Block(item) => item.as_slice(),
-            RollupActionUnion::RollupChallenge(item) => item.as_slice(),
+            RollupActionUnion::RollupEnterChallenge(item) => item.as_slice(),
+            RollupActionUnion::RollupCancelChallenge(item) => item.as_slice(),
             RollupActionUnion::RollupRevert(item) => item.as_slice(),
         }
     }
     pub fn item_id(&self) -> molecule::Number {
         match self {
             RollupActionUnion::L2Block(_) => 0,
-            RollupActionUnion::RollupChallenge(_) => 1,
-            RollupActionUnion::RollupRevert(_) => 2,
+            RollupActionUnion::RollupEnterChallenge(_) => 1,
+            RollupActionUnion::RollupCancelChallenge(_) => 2,
+            RollupActionUnion::RollupRevert(_) => 3,
         }
     }
     pub fn item_name(&self) -> &str {
         match self {
             RollupActionUnion::L2Block(_) => "L2Block",
-            RollupActionUnion::RollupChallenge(_) => "RollupChallenge",
+            RollupActionUnion::RollupEnterChallenge(_) => "RollupEnterChallenge",
+            RollupActionUnion::RollupCancelChallenge(_) => "RollupCancelChallenge",
             RollupActionUnion::RollupRevert(_) => "RollupRevert",
         }
     }
     pub fn as_reader<'r>(&'r self) -> RollupActionUnionReader<'r> {
         match self {
             RollupActionUnion::L2Block(item) => item.as_reader().into(),
-            RollupActionUnion::RollupChallenge(item) => item.as_reader().into(),
+            RollupActionUnion::RollupEnterChallenge(item) => item.as_reader().into(),
+            RollupActionUnion::RollupCancelChallenge(item) => item.as_reader().into(),
             RollupActionUnion::RollupRevert(item) => item.as_reader().into(),
         }
     }
@@ -12375,21 +12900,24 @@ impl<'r> RollupActionUnionReader<'r> {
     pub fn as_slice(&self) -> &'r [u8] {
         match self {
             RollupActionUnionReader::L2Block(item) => item.as_slice(),
-            RollupActionUnionReader::RollupChallenge(item) => item.as_slice(),
+            RollupActionUnionReader::RollupEnterChallenge(item) => item.as_slice(),
+            RollupActionUnionReader::RollupCancelChallenge(item) => item.as_slice(),
             RollupActionUnionReader::RollupRevert(item) => item.as_slice(),
         }
     }
     pub fn item_id(&self) -> molecule::Number {
         match self {
             RollupActionUnionReader::L2Block(_) => 0,
-            RollupActionUnionReader::RollupChallenge(_) => 1,
-            RollupActionUnionReader::RollupRevert(_) => 2,
+            RollupActionUnionReader::RollupEnterChallenge(_) => 1,
+            RollupActionUnionReader::RollupCancelChallenge(_) => 2,
+            RollupActionUnionReader::RollupRevert(_) => 3,
         }
     }
     pub fn item_name(&self) -> &str {
         match self {
             RollupActionUnionReader::L2Block(_) => "L2Block",
-            RollupActionUnionReader::RollupChallenge(_) => "RollupChallenge",
+            RollupActionUnionReader::RollupEnterChallenge(_) => "RollupEnterChallenge",
+            RollupActionUnionReader::RollupCancelChallenge(_) => "RollupCancelChallenge",
             RollupActionUnionReader::RollupRevert(_) => "RollupRevert",
         }
     }

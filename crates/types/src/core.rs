@@ -33,6 +33,12 @@ pub enum Status {
     Halting = 1,
 }
 
+impl Into<u8> for Status {
+    fn into(self: Status) -> u8 {
+        self as u8
+    }
+}
+
 impl TryFrom<u8> for Status {
     type Error = u8;
     fn try_from(value: u8) -> Result<Self, Self::Error> {

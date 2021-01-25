@@ -1,5 +1,5 @@
 use gw_common::H256;
-use gw_types::packed::{self, StartChallenge, StartChallengeWitness};
+use gw_types::packed::{self, ChallengeTarget, ChallengeWitness};
 use std::{
     collections::HashMap,
     fmt::{self, Display},
@@ -21,12 +21,12 @@ pub struct RunResult {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ChallengeContext {
-    pub args: StartChallenge,
-    pub witness: StartChallengeWitness,
+    pub target: ChallengeTarget,
+    pub witness: ChallengeWitness,
 }
 
 impl Display for ChallengeContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{{args: {}, witness: {}}}", self.args, self.witness)
+        write!(f, "{{target: {}, witness: {}}}", self.target, self.witness)
     }
 }

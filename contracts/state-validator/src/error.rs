@@ -22,6 +22,8 @@ pub enum Error {
     InvalidTxs,
     Stake,
     InvalidWithdrawal,
+    InvalidStatus,
+    Challenge,
 }
 
 impl From<SysError> for Error {

@@ -15,10 +15,9 @@ use gw_types::{
     bytes::Bytes,
     core::Status,
     packed::{
-        AccountMerkleState, BlockMerkleState, CancelChallenge, DepositionRequest, GlobalState,
-        HeaderInfo, L2Block, L2BlockReader, RawL2Block, Script, StartChallenge,
-        StartChallengeWitness, SubmitTransactions, Transaction, TxReceipt, WitnessArgs,
-        WitnessArgsReader,
+        AccountMerkleState, BlockMerkleState, CancelChallenge, ChallengeTarget, ChallengeWitness,
+        DepositionRequest, GlobalState, HeaderInfo, L2Block, L2BlockReader, RawL2Block, Script,
+        SubmitTransactions, Transaction, TxReceipt, WitnessArgs, WitnessArgsReader,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -51,13 +50,13 @@ pub enum L1ActionContext {
         deposition_requests: Vec<DepositionRequest>,
     },
     Challenge {
-        context: StartChallenge,
+        context: ChallengeTarget,
     },
     CancelChallenge {
         context: CancelChallenge,
     },
     Revert {
-        context: StartChallenge,
+        context: ChallengeTarget,
     },
 }
 
@@ -133,7 +132,7 @@ impl LocalState {
 pub struct Chain {
     pub rollup_type_script_hash: [u8; 32],
     pub store: Store,
-    pub bad_block_context: Option<StartChallenge>,
+    pub bad_block_context: Option<ChallengeTarget>,
     pub local_state: LocalState,
     pub generator: Arc<Generator>,
     pub mem_pool: Arc<Mutex<MemPool>>,
@@ -224,7 +223,7 @@ impl Chain {
                     deposition_requests,
                 )? {
                     // stop syncing and return event
-                    self.bad_block_context = Some(challenge_context.args.clone());
+                    self.bad_block_context = Some(challenge_context.target.clone());
                     SyncEvent::BadBlock(challenge_context)
                 } else {
                     SyncEvent::Success
@@ -437,7 +436,7 @@ impl Chain {
                 deposition_requests,
             )? {
                 // stop syncing and return event
-                self.bad_block_context = Some(challenge_context.args.clone());
+                self.bad_block_context = Some(challenge_context.target.clone());
                 return Ok(SyncEvent::BadBlock(challenge_context));
             }
         }
@@ -483,15 +482,15 @@ impl Chain {
                             .block_smt()?
                             .merkle_proof(vec![l2block.smt_key().into()])?
                             .compile(vec![(l2block.smt_key().into(), block_hash.into())])?;
-                        let witness = StartChallengeWitness::new_builder()
+                        let witness = ChallengeWitness::new_builder()
                             .raw_l2block(l2block.raw())
                             .block_proof(block_proof.0.pack())
                             .build();
-                        let challenge_context = ChallengeContext {
-                            args: err.context,
+                        let context = ChallengeContext {
+                            target: err.context,
                             witness,
                         };
-                        return Ok(Some(challenge_context));
+                        return Ok(Some(context));
                     }
                     err => return Err(err.into()),
                 }

@@ -20,7 +20,7 @@ use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     core::ScriptHashType,
     packed::{
-        BlockInfo, DepositionRequest, L2Block, RawL2Block, RawL2Transaction, StartChallenge,
+        BlockInfo, ChallengeTarget, DepositionRequest, L2Block, RawL2Block, RawL2Transaction,
         TxReceipt, WithdrawalRequest,
     },
     prelude::*,
@@ -182,7 +182,7 @@ impl Generator {
             let actual_nonce: u32 = raw_tx.nonce().unpack();
             if actual_nonce != expected_nonce {
                 return Err(TransactionErrorWithContext::new(
-                    build_challenge_context(tx_index as u32, block_hash),
+                    build_challenge_target(tx_index as u32, block_hash.into()),
                     TransactionError::Nonce {
                         expected: expected_nonce,
                         actual: actual_nonce,
@@ -196,7 +196,7 @@ impl Generator {
                 Ok(run_result) => run_result,
                 Err(err) => {
                     return Err(TransactionErrorWithContext::new(
-                        build_challenge_context(tx_index as u32, block_hash),
+                        build_challenge_target(tx_index as u32, block_hash.into()),
                         err,
                     )
                     .into());
@@ -310,9 +310,9 @@ fn get_block_info(l2block: &RawL2Block) -> BlockInfo {
         .build()
 }
 
-fn build_challenge_context(tx_index: u32, block_hash: [u8; 32]) -> StartChallenge {
-    StartChallenge::new_builder()
-        .tx_index(tx_index.pack())
+fn build_challenge_target(tx_index: u32, block_hash: H256) -> ChallengeTarget {
+    ChallengeTarget::new_builder()
         .block_hash(block_hash.pack())
+        .tx_index(tx_index.pack())
         .build()
 }

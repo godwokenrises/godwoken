@@ -1,5 +1,7 @@
 use crate::{error::Error, search_cells::search_lock_hashes};
-use ckb_std::{ckb_constants::Source, ckb_types::prelude::Unpack as CKBUnpack, high_level::load_witness_args};
+use ckb_std::{
+    ckb_constants::Source, ckb_types::prelude::Unpack as CKBUnpack, high_level::load_witness_args,
+};
 use gw_common::H256;
 use gw_types::{
     bytes::Bytes,

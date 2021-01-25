@@ -30,6 +30,7 @@ struct RollupConfig {
     custodian_type_hash: Byte32,
     deposition_type_hash: Byte32,
     withdrawal_type_hash: Byte32,
+    challenge_type_hash: Byte32,
     stake_type_hash: Byte32,
     l2_sudt_validator_type_hash: Byte32,
 }
@@ -224,15 +225,21 @@ struct SUDTTransfer {
 // --- end of layer2 SUDT ---
 
 // --- challenge ---
-// start a challenge
+
+struct ChallengeTarget {
+    block_hash: Byte32,
+    tx_index: Uint32,
+}
+
 // a rollup_type_hash exists before this args, to make args friendly to prefix search
-struct StartChallenge {
-    block_hash: Byte32, // hash of challenged block
-    tx_index: Uint32, // challenge tx
+table ChallengeLockArgs {
+    target: ChallengeTarget,
+    // layer1 lock to receive the rewards
+    rewards_receiver_lock: Script,
 }
 
 // witness to prove the validity of challenge
-table StartChallengeWitness {
+table ChallengeWitness {
     raw_l2block: RawL2Block,
     block_proof: Bytes, // block proof
 }
@@ -260,13 +267,16 @@ struct UnlockAccountWitness {
 // --- end of unlock account ---
 
 // --- Rollup ---
-table RollupChallenge {}
+table RollupEnterChallenge {}
+table RollupCancelChallenge {}
 table RollupRevert {}
 union RollupAction {
     // submit layer2 block
     L2Block,
     // change rollup status to halting
-    RollupChallenge,
+    RollupEnterChallenge,
+    // change rollup status to running
+    RollupCancelChallenge,
     // revert layer2 blocks and change status to running
     RollupRevert,
 }

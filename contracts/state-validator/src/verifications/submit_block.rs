@@ -6,7 +6,7 @@ use core::{
 
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use alloc::{collections::BTreeMap, vec::Vec};
+use alloc::{collections::BTreeMap, vec, vec::Vec};
 use validator_utils::{
     ckb_std::high_level::load_witness_args,
     search_cells::{search_lock_hash, search_lock_hashes},
@@ -15,140 +15,46 @@ use validator_utils::{
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
-use crate::{cells::fetch_capacity_and_sudt_value, ckb_std::{
+use crate::{
+    cells::{
+        build_l2_sudt_script, collect_custodian_locks, collect_deposition_locks,
+        collect_withdrawal_locks, fetch_capacity_and_sudt_value, find_stake_cell,
+    },
+    ckb_std::{
         ckb_constants::Source,
         ckb_types::prelude::Unpack as CKBUnpack,
         high_level::{
             load_cell_capacity, load_cell_data, load_cell_lock, load_cell_type,
             load_cell_type_hash, QueryIter,
         },
-    }, types::{CellValue, CustodianCell, DepositionRequestCell, WithdrawalCell}};
+    },
+    types::{CellValue, CustodianCell, DepositionRequestCell, WithdrawalCell},
+};
 
+use super::check_status;
 use crate::error::Error;
 use crate::types::BlockContext;
 
 use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID, error::Error as StateError, state::State, CKB_SUDT_SCRIPT_ARGS,
-    H256, ROLLUP_LOCK_CODE_HASH,
+    builtins::CKB_SUDT_ACCOUNT_ID,
+    error::Error as StateError,
+    merkle_utils::calculate_merkle_root,
+    smt::{Blake2bHasher, CompiledMerkleProof},
+    state::State,
+    CKB_SUDT_SCRIPT_ARGS, FINALIZE_BLOCKS, H256, ROLLUP_LOCK_CODE_HASH,
 };
 use gw_types::{
     bytes::Bytes,
-    core::ScriptHashType,
+    core::{ScriptHashType, Status},
     packed::{
-        Block, CustodianLockArgs, CustodianLockArgsReader, DepositionLockArgs,
-        DepositionLockArgsReader, L2Block, RollupActionUnion, RollupActionUnionReader,
-        RollupConfig, Script, UnlockAccountWitness, UnlockAccountWitnessReader, WithdrawalLockArgs,
-        WithdrawalLockArgsReader, WithdrawalRequest,
+        AccountMerkleState, Block, CustodianLockArgs, CustodianLockArgsReader, DepositionLockArgs,
+        DepositionLockArgsReader, GlobalState, L2Block, RawL2Block, RawL2BlockReader,
+        RollupActionUnion, RollupActionUnionReader, RollupConfig, Script, UnlockAccountWitness,
+        UnlockAccountWitnessReader, WithdrawalLockArgs, WithdrawalLockArgsReader,
+        WithdrawalRequest,
     },
     prelude::*,
 };
-
-pub fn build_l2_sudt_script(config: &RollupConfig, l1_sudt_script_hash: [u8; 32]) -> Script {
-    let args = Bytes::from(l1_sudt_script_hash.to_vec());
-    Script::new_builder()
-        .args(args.pack())
-        .code_hash(config.l2_sudt_validator_type_hash())
-        .hash_type(ScriptHashType::Type.into())
-        .build()
-}
-
-fn collect_withdrawal_locks(
-    rollup_type_hash: &[u8; 32],
-    config: &RollupConfig,
-    source: Source,
-) -> Result<Vec<WithdrawalCell>, Error> {
-    QueryIter::new(load_cell_lock, source)
-        .enumerate()
-        .filter_map(|(index, lock)| {
-            let is_withdrawal_lock = &lock.args().as_slice()[..32] == rollup_type_hash
-                && lock.code_hash().as_slice() == config.withdrawal_type_hash().as_slice()
-                && lock.hash_type() == ScriptHashType::Type.into();
-            if !is_withdrawal_lock {
-                return None;
-            }
-            let raw_args = lock.args().as_slice()[32..].to_vec();
-            let args = match WithdrawalLockArgsReader::verify(&raw_args, false) {
-                Ok(_) => WithdrawalLockArgs::new_unchecked(raw_args.into()),
-                Err(_) => {
-                    return Some(Err(Error::Encoding));
-                }
-            };
-            let value = match fetch_capacity_and_sudt_value(config, index, Source::Output) {
-                Ok(value) => value,
-                Err(err) => return Some(Err(err)),
-            };
-            Some(Ok(WithdrawalCell { index, args, value }))
-        })
-        .collect::<Result<_, Error>>()
-}
-
-fn collect_custodian_locks(
-    rollup_type_hash: &[u8; 32],
-    config: &RollupConfig,
-    source: Source,
-) -> Result<Vec<CustodianCell>, Error> {
-    QueryIter::new(load_cell_lock, source)
-        .enumerate()
-        .filter_map(|(index, lock)| {
-            let is_lock = &lock.args().as_slice()[..32] == rollup_type_hash
-                && lock.code_hash().as_slice() == config.custodian_type_hash().as_slice()
-                && lock.hash_type() == ScriptHashType::Type.into();
-            if !is_lock {
-                return None;
-            }
-            let raw_args = lock.args().as_slice()[32..].to_vec();
-            let args = match CustodianLockArgsReader::verify(&raw_args, false) {
-                Ok(_) => CustodianLockArgs::new_unchecked(raw_args.into()),
-                Err(_) => {
-                    return Some(Err(Error::Encoding));
-                }
-            };
-            let value = match fetch_capacity_and_sudt_value(config, index, Source::Input) {
-                Ok(value) => value,
-                Err(err) => return Some(Err(err)),
-            };
-            let cell = CustodianCell { index, args, value };
-            Some(Ok(cell))
-        })
-        .collect::<Result<_, Error>>()
-}
-
-fn collect_deposition_locks(
-    rollup_type_hash: &[u8; 32],
-    config: &RollupConfig,
-    source: Source,
-) -> Result<Vec<DepositionRequestCell>, Error> {
-    QueryIter::new(load_cell_lock, source)
-        .enumerate()
-        .filter_map(|(index, lock)| {
-            let is_lock = &lock.args().as_slice()[..32] == rollup_type_hash
-                && lock.code_hash().as_slice() == config.deposition_type_hash().as_slice()
-                && lock.hash_type() == ScriptHashType::Type.into();
-            if !is_lock {
-                return None;
-            }
-            let raw_args = lock.args().as_slice()[32..].to_vec();
-            let args = match DepositionLockArgsReader::verify(&raw_args, false) {
-                Ok(_) => DepositionLockArgs::new_unchecked(raw_args.into()),
-                Err(_) => {
-                    return Some(Err(Error::Encoding));
-                }
-            };
-            let account_script_hash = args.layer2_lock().hash().into();
-            let value = match fetch_capacity_and_sudt_value(config, index, Source::Input) {
-                Ok(value) => value,
-                Err(err) => return Some(Err(err)),
-            };
-            let cell = DepositionRequestCell {
-                index,
-                args,
-                value,
-                account_script_hash,
-            };
-            Some(Ok(cell))
-        })
-        .collect::<Result<_, Error>>()
-}
 
 fn check_withdrawal_cells(
     context: &mut BlockContext,
@@ -186,7 +92,8 @@ fn check_withdrawal_cells(
         };
         // check that there is an input to unlock account
         let message = withdrawal_request.raw().hash().into();
-        check_input_account_lock(cell_account_script_hash.into(), message).map_err(|_|crate::error::Error::InvalidWithdrawal)?;
+        check_input_account_lock(cell_account_script_hash.into(), message)
+            .map_err(|_| crate::error::Error::InvalidWithdrawal)?;
     }
     // Some withdrawal requests hasn't has a corresponded withdrawal cell
     if !withdrawal_requests.is_empty() {
@@ -395,23 +302,227 @@ fn burn_layer2_sudt(
     Ok(())
 }
 
-/// Verify Deposition & Withdrawal
-pub fn verify(
+fn load_l2block_context(
+    l2block: &L2Block,
+    rollup_type_hash: [u8; 32],
+    prev_global_state: &GlobalState,
+    post_global_state: &GlobalState,
+) -> Result<BlockContext, Error> {
+    // TODO verify parent block hash
+    let raw_block = l2block.raw();
+
+    // Check pre block merkle proof
+    let number: u64 = raw_block.number().unpack();
+    if number != prev_global_state.block().count().unpack() {
+        return Err(Error::PrevGlobalState);
+    }
+
+    let block_smt_key = RawL2Block::compute_smt_key(number);
+    let block_proof: Bytes = l2block.block_proof().unpack();
+    let block_merkle_proof = CompiledMerkleProof(block_proof.to_vec());
+    let prev_block_root: [u8; 32] = prev_global_state.block().merkle_root().unpack();
+    if !block_merkle_proof
+        .verify::<Blake2bHasher>(
+            &prev_block_root.into(),
+            vec![(block_smt_key.into(), H256::zero())],
+        )
+        .map_err(|_| Error::MerkleProof)?
+    {
+        return Err(Error::MerkleProof);
+    }
+
+    // Check post block merkle proof
+    if number + 1 != post_global_state.block().count().unpack() {
+        return Err(Error::PrevGlobalState);
+    }
+
+    let post_block_root: [u8; 32] = post_global_state.block().merkle_root().unpack();
+    let block_hash = raw_block.hash();
+    if !block_merkle_proof
+        .verify::<Blake2bHasher>(
+            &post_block_root.into(),
+            vec![(block_smt_key.into(), block_hash.into())],
+        )
+        .map_err(|_| Error::MerkleProof)?
+    {
+        return Err(Error::MerkleProof);
+    }
+
+    // Check pre account merkle proof
+    let kv_state_proof: Bytes = l2block.kv_state_proof().unpack();
+    let kv_merkle_proof = CompiledMerkleProof(kv_state_proof.to_vec());
+    let kv_pairs: BTreeMap<_, _> = l2block
+        .kv_state()
+        .into_iter()
+        .map(|kv| {
+            let k: [u8; 32] = kv.k().unpack();
+            let v: [u8; 32] = kv.v().unpack();
+            (k.into(), v.into())
+        })
+        .collect();
+    let prev_account_root: [u8; 32] = prev_global_state.account().merkle_root().unpack();
+    let is_blank_kv = kv_merkle_proof.0.len() == 0 && kv_pairs.is_empty();
+    if !is_blank_kv
+        && !kv_merkle_proof
+            .verify::<Blake2bHasher>(
+                &prev_account_root.into(),
+                kv_pairs.iter().map(|(k, v)| (*k, *v)).collect(),
+            )
+            .map_err(|_| Error::MerkleProof)?
+    {
+        return Err(Error::MerkleProof);
+    }
+
+    // Check prev account state
+    if raw_block.prev_account().as_slice() != prev_global_state.account().as_slice() {
+        return Err(Error::PrevGlobalState);
+    }
+
+    // Check post account state
+    // Note: Because of the optimistic mechanism, we do not need to verify post account merkle root
+    if raw_block.post_account().as_slice() != post_global_state.account().as_slice() {
+        return Err(Error::PostGlobalState);
+    }
+
+    // Generate context
+    let account_count: u32 = prev_global_state.account().count().unpack();
+    let finalized_number = number.saturating_sub(FINALIZE_BLOCKS);
+    let context = BlockContext {
+        number,
+        finalized_number,
+        kv_pairs,
+        kv_merkle_proof,
+        account_count,
+        rollup_type_hash,
+        block_hash,
+    };
+
+    Ok(context)
+}
+
+fn verify_block_producer(
     config: &RollupConfig,
-    context: &mut BlockContext,
+    context: &BlockContext,
     block: &L2Block,
 ) -> Result<(), Error> {
+    const REQUIRED_CAPACITY: u64 = 500_00000000u64;
+    let raw_block = block.raw();
+    let owner_lock_hash = raw_block.stake_cell_owner_lock_hash();
+    let stake_cell = find_stake_cell(
+        &context.rollup_type_hash,
+        config,
+        Source::Input,
+        Some(&owner_lock_hash),
+    )?
+    .ok_or(Error::Stake)?;
+    // check stake cell capacity
+    if stake_cell.value.capacity < REQUIRED_CAPACITY {
+        return Err(Error::Stake);
+    }
+    // expected output stake args
+    let expected_stake_lock_args = stake_cell
+        .args
+        .as_builder()
+        .stake_block_number(raw_block.number())
+        .build();
+    let output_stake_cell = find_stake_cell(
+        &context.rollup_type_hash,
+        config,
+        Source::Output,
+        Some(&owner_lock_hash),
+    )?
+    .ok_or(Error::Stake)?;
+    if expected_stake_lock_args != output_stake_cell.args
+        || stake_cell.value != output_stake_cell.value
+    {
+        return Err(Error::Stake);
+    }
+
+    Ok(())
+}
+
+fn check_block_transactions(context: &mut BlockContext, block: &L2Block) -> Result<(), Error> {
+    // check tx_witness_root
+    let submit_transactions = block.raw().submit_transactions();
+    let tx_witness_root: [u8; 32] = submit_transactions.tx_witness_root().unpack();
+    let tx_count: u32 = submit_transactions.tx_count().unpack();
+    let compacted_post_root_list = submit_transactions.compacted_post_root_list();
+
+    if tx_count != compacted_post_root_list.item_count() as u32 {
+        return Err(Error::InvalidTxs);
+    }
+
+    let leaves = block
+        .transactions()
+        .into_iter()
+        .map(|tx| tx.hash())
+        .collect();
+    let merkle_root: [u8; 32] = calculate_merkle_root(leaves)?;
+    if tx_witness_root != merkle_root {
+        return Err(Error::InvalidTxs);
+    }
+
+    Ok(())
+}
+
+/// Verify Deposition & Withdrawal
+pub fn verify(
+    rollup_type_hash: [u8; 32],
+    config: &RollupConfig,
+    block: &L2Block,
+    prev_global_state: &GlobalState,
+    post_global_state: &GlobalState,
+) -> Result<(), Error> {
+    check_status(&prev_global_state, Status::Running)?;
+    let mut context = load_l2block_context(
+        block,
+        rollup_type_hash,
+        prev_global_state,
+        post_global_state,
+    )?;
+    // Verify block producer
+    verify_block_producer(config, &context, block)?;
     // Mint token: deposition requests -> layer2 SUDT
-    mint_layer2_sudt(config, context)?;
+    mint_layer2_sudt(config, &mut context)?;
     // build withdrawl_cells
-    let withdrawal_cells =
+    let withdrawal_cells: Vec<_> =
         collect_withdrawal_locks(&context.rollup_type_hash, config, Source::Output)?;
     // Withdrawal token: Layer2 SUDT -> withdrawals
-    burn_layer2_sudt(config, context, &withdrawal_cells)?;
+    burn_layer2_sudt(config, &mut context, &withdrawal_cells)?;
     // Check new cells and reverted cells
     let withdrawal_requests = block.withdrawal_requests().into_iter().collect();
-    check_withdrawal_cells(context, withdrawal_requests, &withdrawal_cells)?;
-    check_input_custodian_cells(config, context, withdrawal_cells)?;
-    check_output_custodian_cells(config, context)?;
+    check_withdrawal_cells(&mut context, withdrawal_requests, &withdrawal_cells)?;
+    check_input_custodian_cells(config, &mut context, withdrawal_cells)?;
+    check_output_custodian_cells(config, &mut context)?;
+    // Check transactions
+    check_block_transactions(&mut context, block)?;
+
+    // Verify Post state
+    let actual_post_global_state = {
+        let root = context.calculate_root()?;
+        let count = context.get_account_count()?;
+        // calculate new account merkle state from block_context
+        let account_merkle_state = AccountMerkleState::new_builder()
+            .merkle_root(root.pack())
+            .count(count.pack())
+            .build();
+        // we have verified the post block merkle state
+        let block_merkle_state = post_global_state.block();
+        // last finalized block number
+        let last_finalized_block_number = context.finalized_number;
+
+        prev_global_state
+            .clone()
+            .as_builder()
+            .account(account_merkle_state)
+            .block(block_merkle_state)
+            .last_finalized_block_number(last_finalized_block_number.pack())
+            .build()
+    };
+
+    if &actual_post_global_state != post_global_state {
+        return Err(Error::PostGlobalState);
+    }
+
     Ok(())
 }

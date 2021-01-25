@@ -11,12 +11,11 @@
 #![feature(panic_info_message)]
 
 // define modules
-mod verifications;
-mod consensus;
+mod cells;
 mod entry;
 mod error;
 mod types;
-mod cells;
+mod verifications;
 
 use ckb_std::default_alloc;
 pub use validator_utils::ckb_std;

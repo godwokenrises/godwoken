@@ -161,12 +161,12 @@ impl From<L1ActionContext> for chain::L1ActionContext {
                     .collect(),
             },
             L1ActionContext::Challenge {
-                context: start_challenge,
+                context: challenge_target,
             } => {
-                let start_challenge_bytes = start_challenge.into_bytes();
+                let challenge_target_bytes = challenge_target.into_bytes();
                 chain::L1ActionContext::Challenge {
-                    context: packed::StartChallenge::from_slice(start_challenge_bytes.as_ref())
-                        .expect("Build packed::StartChallenge from slice"),
+                    context: packed::ChallengeTarget::from_slice(challenge_target_bytes.as_ref())
+                        .expect("Build packed::ChallengeTarget from slice"),
                 }
             }
             L1ActionContext::CancelChallenge {
@@ -179,12 +179,12 @@ impl From<L1ActionContext> for chain::L1ActionContext {
                 }
             }
             L1ActionContext::Revert {
-                context: start_challenge,
+                context: challenge_target,
             } => {
-                let start_challenge_bytes = start_challenge.into_bytes();
+                let challenge_target_bytes = challenge_target.into_bytes();
                 chain::L1ActionContext::Revert {
-                    context: packed::StartChallenge::from_slice(start_challenge_bytes.as_ref())
-                        .expect("Build packed::StartChallenge from slice"),
+                    context: packed::ChallengeTarget::from_slice(challenge_target_bytes.as_ref())
+                        .expect("Build packed::ChallengeTarget from slice"),
                 }
             }
         }
