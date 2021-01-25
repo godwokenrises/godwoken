@@ -16,13 +16,14 @@ BUILDER_DOCKER := nervos/ckb-riscv-gnu-toolchain@sha256:aae8a3f79705f67d505d1f1d
 GENERATORS := build/meta-contract-generator build/sudt-generator build/examples/sum-generator
 VALIDATORS := build/meta-contract-validator build/sudt-validator build/examples/sum-validator
 ACCOUNT_LOCKS := build/account_locks/eth-account-lock
+SECP256K1_HELPER := deps/ckb-miscellaneous-scripts/build/secp256k1_data_info.h
 
 BINS := $(GENERATORS) $(VALIDATORS) $(ACCOUNT_LOCKS)
 
-all-via-docker: generate-protocol
+all-via-docker: generate-protocol $(SECP256K1_HELPER)
 	docker run --rm -v `pwd`:/code -w /code ${BUILDER_DOCKER} bash -c "make all"
 
-debug-all-via-docker: generate-protocol
+debug-all-via-docker: generate-protocol $(SECP256K1_HELPER)
 	docker run --rm -v `pwd`:/code -w /code ${BUILDER_DOCKER} bash -c "make debug-all"
 
 all: $(BINS)
@@ -32,6 +33,10 @@ clean:
 
 debug-all: CFLAGS += -DCKB_C_STDLIB_PRINTF 
 debug-all: all
+
+# secp256k1_helper.h
+$(SECP256K1_HELPER):
+	cd deps/ckb-miscellaneous-scripts && git submodule init && git submodule update -r && make all-via-docker
 
 build/meta-contract-generator: contracts/meta_contract.c gw_def.h generator_utils.h
 	$(CC) $(CFLAGS) -DGW_GENERATOR $(LDFLAGS) -o $@ $<
