@@ -32,6 +32,7 @@ struct RollupConfig {
     withdrawal_type_hash: Byte32,
     challenge_type_hash: Byte32,
     stake_type_hash: Byte32,
+    burn_type_hash: Byte32,
     l2_sudt_validator_type_hash: Byte32,
 }
 
@@ -269,7 +270,11 @@ struct UnlockAccountWitness {
 // --- Rollup ---
 table RollupEnterChallenge {}
 table RollupCancelChallenge {}
-table RollupRevert {}
+table RollupRevert {
+    target_block: RawL2Block,
+    block_proof: Bytes,
+    reverted_block_proof: Bytes,
+}
 union RollupAction {
     // submit layer2 block
     L2Block,

@@ -2211,6 +2211,7 @@ impl ::core::fmt::Display for RollupConfig {
             self.challenge_type_hash()
         )?;
         write!(f, ", {}: {}", "stake_type_hash", self.stake_type_hash())?;
+        write!(f, ", {}: {}", "burn_type_hash", self.burn_type_hash())?;
         write!(
             f,
             ", {}: {}",
@@ -2230,15 +2231,16 @@ impl ::core::default::Default for RollupConfig {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RollupConfig::new_unchecked(v.into())
     }
 }
 impl RollupConfig {
-    pub const TOTAL_SIZE: usize = 224;
-    pub const FIELD_SIZES: [usize; 7] = [32, 32, 32, 32, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 7;
+    pub const TOTAL_SIZE: usize = 256;
+    pub const FIELD_SIZES: [usize; 8] = [32, 32, 32, 32, 32, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 8;
     pub fn l1_sudt_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
@@ -2257,8 +2259,11 @@ impl RollupConfig {
     pub fn stake_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(160..192))
     }
-    pub fn l2_sudt_validator_type_hash(&self) -> Byte32 {
+    pub fn burn_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(192..224))
+    }
+    pub fn l2_sudt_validator_type_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(224..256))
     }
     pub fn as_reader<'r>(&'r self) -> RollupConfigReader<'r> {
         RollupConfigReader::new_unchecked(self.as_slice())
@@ -2293,6 +2298,7 @@ impl molecule::prelude::Entity for RollupConfig {
             .withdrawal_type_hash(self.withdrawal_type_hash())
             .challenge_type_hash(self.challenge_type_hash())
             .stake_type_hash(self.stake_type_hash())
+            .burn_type_hash(self.burn_type_hash())
             .l2_sudt_validator_type_hash(self.l2_sudt_validator_type_hash())
     }
 }
@@ -2341,6 +2347,7 @@ impl<'r> ::core::fmt::Display for RollupConfigReader<'r> {
             self.challenge_type_hash()
         )?;
         write!(f, ", {}: {}", "stake_type_hash", self.stake_type_hash())?;
+        write!(f, ", {}: {}", "burn_type_hash", self.burn_type_hash())?;
         write!(
             f,
             ", {}: {}",
@@ -2351,9 +2358,9 @@ impl<'r> ::core::fmt::Display for RollupConfigReader<'r> {
     }
 }
 impl<'r> RollupConfigReader<'r> {
-    pub const TOTAL_SIZE: usize = 224;
-    pub const FIELD_SIZES: [usize; 7] = [32, 32, 32, 32, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 7;
+    pub const TOTAL_SIZE: usize = 256;
+    pub const FIELD_SIZES: [usize; 8] = [32, 32, 32, 32, 32, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 8;
     pub fn l1_sudt_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
@@ -2372,8 +2379,11 @@ impl<'r> RollupConfigReader<'r> {
     pub fn stake_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[160..192])
     }
-    pub fn l2_sudt_validator_type_hash(&self) -> Byte32Reader<'r> {
+    pub fn burn_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[192..224])
+    }
+    pub fn l2_sudt_validator_type_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[224..256])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for RollupConfigReader<'r> {
@@ -2405,12 +2415,13 @@ pub struct RollupConfigBuilder {
     pub(crate) withdrawal_type_hash: Byte32,
     pub(crate) challenge_type_hash: Byte32,
     pub(crate) stake_type_hash: Byte32,
+    pub(crate) burn_type_hash: Byte32,
     pub(crate) l2_sudt_validator_type_hash: Byte32,
 }
 impl RollupConfigBuilder {
-    pub const TOTAL_SIZE: usize = 224;
-    pub const FIELD_SIZES: [usize; 7] = [32, 32, 32, 32, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 7;
+    pub const TOTAL_SIZE: usize = 256;
+    pub const FIELD_SIZES: [usize; 8] = [32, 32, 32, 32, 32, 32, 32, 32];
+    pub const FIELD_COUNT: usize = 8;
     pub fn l1_sudt_type_hash(mut self, v: Byte32) -> Self {
         self.l1_sudt_type_hash = v;
         self
@@ -2435,6 +2446,10 @@ impl RollupConfigBuilder {
         self.stake_type_hash = v;
         self
     }
+    pub fn burn_type_hash(mut self, v: Byte32) -> Self {
+        self.burn_type_hash = v;
+        self
+    }
     pub fn l2_sudt_validator_type_hash(mut self, v: Byte32) -> Self {
         self.l2_sudt_validator_type_hash = v;
         self
@@ -2453,6 +2468,7 @@ impl molecule::prelude::Builder for RollupConfigBuilder {
         writer.write_all(self.withdrawal_type_hash.as_slice())?;
         writer.write_all(self.challenge_type_hash.as_slice())?;
         writer.write_all(self.stake_type_hash.as_slice())?;
+        writer.write_all(self.burn_type_hash.as_slice())?;
         writer.write_all(self.l2_sudt_validator_type_hash.as_slice())?;
         Ok(())
     }
@@ -12380,21 +12396,41 @@ impl ::core::fmt::Debug for RollupRevert {
 impl ::core::fmt::Display for RollupRevert {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "target_block", self.target_block())?;
+        write!(f, ", {}: {}", "block_proof", self.block_proof())?;
+        write!(
+            f,
+            ", {}: {}",
+            "reverted_block_proof",
+            self.reverted_block_proof()
+        )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
-            write!(f, ".. ({} fields)", extra_count)?;
+            write!(f, ", .. ({} fields)", extra_count)?;
         }
         write!(f, " }}")
     }
 }
 impl ::core::default::Default for RollupRevert {
     fn default() -> Self {
-        let v: Vec<u8> = vec![4, 0, 0, 0];
+        let v: Vec<u8> = vec![
+            52, 1, 0, 0, 16, 0, 0, 0, 44, 1, 0, 0, 48, 1, 0, 0, 28, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0,
+            0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0, 196, 0, 0, 0,
+            252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0,
+            52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
         RollupRevert::new_unchecked(v.into())
     }
 }
 impl RollupRevert {
-    pub const FIELD_COUNT: usize = 0;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -12410,6 +12446,28 @@ impl RollupRevert {
     }
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn target_block(&self) -> RawL2Block {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        RawL2Block::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn block_proof(&self) -> Bytes {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Bytes::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn reverted_block_proof(&self) -> Bytes {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            Bytes::new_unchecked(self.0.slice(start..end))
+        } else {
+            Bytes::new_unchecked(self.0.slice(start..))
+        }
     }
     pub fn as_reader<'r>(&'r self) -> RollupRevertReader<'r> {
         RollupRevertReader::new_unchecked(self.as_slice())
@@ -12438,6 +12496,9 @@ impl molecule::prelude::Entity for RollupRevert {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
+            .target_block(self.target_block())
+            .block_proof(self.block_proof())
+            .reverted_block_proof(self.reverted_block_proof())
     }
 }
 #[derive(Clone, Copy)]
@@ -12459,15 +12520,23 @@ impl<'r> ::core::fmt::Debug for RollupRevertReader<'r> {
 impl<'r> ::core::fmt::Display for RollupRevertReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "target_block", self.target_block())?;
+        write!(f, ", {}: {}", "block_proof", self.block_proof())?;
+        write!(
+            f,
+            ", {}: {}",
+            "reverted_block_proof",
+            self.reverted_block_proof()
+        )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
-            write!(f, ".. ({} fields)", extra_count)?;
+            write!(f, ", .. ({} fields)", extra_count)?;
         }
         write!(f, " }}")
     }
 }
 impl<'r> RollupRevertReader<'r> {
-    pub const FIELD_COUNT: usize = 0;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -12483,6 +12552,28 @@ impl<'r> RollupRevertReader<'r> {
     }
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn target_block(&self) -> RawL2BlockReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        RawL2BlockReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn block_proof(&self) -> BytesReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        BytesReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn reverted_block_proof(&self) -> BytesReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            BytesReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            BytesReader::new_unchecked(&self.as_slice()[start..])
+        }
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for RollupRevertReader<'r> {
@@ -12507,27 +12598,87 @@ impl<'r> molecule::prelude::Reader<'r> for RollupRevertReader<'r> {
         if slice_len != total_size {
             return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
         }
-        if slice_len > molecule::NUMBER_SIZE && !compatible {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, !0);
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
         }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        let field_count = offset_first / 4 - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
+        if slice_len < header_size {
+            return ve!(Self, HeaderIsBroken, header_size, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
+            .chunks(molecule::NUMBER_SIZE)
+            .take(field_count)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        RawL2BlockReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        BytesReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        BytesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
-pub struct RollupRevertBuilder {}
+pub struct RollupRevertBuilder {
+    pub(crate) target_block: RawL2Block,
+    pub(crate) block_proof: Bytes,
+    pub(crate) reverted_block_proof: Bytes,
+}
 impl RollupRevertBuilder {
-    pub const FIELD_COUNT: usize = 0;
+    pub const FIELD_COUNT: usize = 3;
+    pub fn target_block(mut self, v: RawL2Block) -> Self {
+        self.target_block = v;
+        self
+    }
+    pub fn block_proof(mut self, v: Bytes) -> Self {
+        self.block_proof = v;
+        self
+    }
+    pub fn reverted_block_proof(mut self, v: Bytes) -> Self {
+        self.reverted_block_proof = v;
+        self
+    }
 }
 impl molecule::prelude::Builder for RollupRevertBuilder {
     type Entity = RollupRevert;
     const NAME: &'static str = "RollupRevertBuilder";
     fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.target_block.as_slice().len()
+            + self.block_proof.as_slice().len()
+            + self.reverted_block_proof.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        writer.write_all(&molecule::pack_number(
-            molecule::NUMBER_SIZE as molecule::Number,
-        ))?;
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.target_block.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.block_proof.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.reverted_block_proof.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.target_block.as_slice())?;
+        writer.write_all(self.block_proof.as_slice())?;
+        writer.write_all(self.reverted_block_proof.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

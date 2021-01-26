@@ -2,19 +2,22 @@
 
 use crate::{
     ckb_std::ckb_types::prelude::{Entity as CKBEntity, Unpack as CKBUnpack},
-    types::{CustodianCell, DepositionRequestCell, StakeCell, WithdrawalCell, WithdrawalRequest},
+    types::{
+        BurnCell, ChallengeCell, CustodianCell, DepositionRequestCell, StakeCell, WithdrawalCell,
+        WithdrawalRequest,
+    },
 };
 use crate::{error::Error, types::CellValue};
 use alloc::vec::Vec;
-use gw_common::H256;
+use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     packed::{
-        Byte32, CustodianLockArgs, CustodianLockArgsReader, DepositionLockArgs,
-        DepositionLockArgsReader, GlobalState, GlobalStateReader, RollupAction, RollupActionReader,
-        RollupConfig, RollupConfigReader, Script, StakeLockArgs, StakeLockArgsReader,
-        WithdrawalLockArgs, WithdrawalLockArgsReader,
+        Byte32, ChallengeLockArgs, ChallengeLockArgsReader, CustodianLockArgs,
+        CustodianLockArgsReader, DepositionLockArgs, DepositionLockArgsReader, GlobalState,
+        GlobalStateReader, RollupAction, RollupActionReader, RollupConfig, RollupConfigReader,
+        Script, StakeLockArgs, StakeLockArgsReader, WithdrawalLockArgs, WithdrawalLockArgsReader,
     },
     prelude::*,
 };
@@ -150,6 +153,10 @@ pub fn find_stake_cell(
                 Ok(value) => value,
                 Err(err) => return Some(Err(err)),
             };
+            // we only accept CKB as staking assets for now
+            if value.sudt_script_hash != CKB_SUDT_SCRIPT_ARGS.into() || value.amount != 0 {
+                return Some(Err(Error::Stake));
+            }
             let cell = StakeCell { index, args, value };
             Some(Ok(cell))
         })
@@ -166,7 +173,7 @@ pub fn find_challenge_cell(
     rollup_type_hash: &[u8; 32],
     config: &RollupConfig,
     source: Source,
-) -> Result<Option<usize>, Error> {
+) -> Result<Option<ChallengeCell>, Error> {
     let iter = QueryIter::new(load_cell_lock, source)
         .enumerate()
         .filter_map(|(index, lock)| {
@@ -176,24 +183,32 @@ pub fn find_challenge_cell(
             if !is_lock {
                 return None;
             }
-            match load_cell_type_hash(index, source) {
-                Err(err) => return Some(Err(err)),
-                Ok(Some(_)) => {
-                    // request cell must has no type script
-                    return None;
+            let raw_args = lock.args().as_slice()[32..].to_vec();
+            let args = match ChallengeLockArgsReader::verify(&raw_args, false) {
+                Ok(_) => ChallengeLockArgs::new_unchecked(raw_args.into()),
+                Err(_) => {
+                    return Some(Err(Error::Encoding));
                 }
-                Ok(None) => {}
+            };
+            let value = match fetch_capacity_and_sudt_value(config, index, source) {
+                Ok(value) => value,
+                Err(err) => {
+                    return Some(Err(err));
+                }
+            };
+            if value.sudt_script_hash != CKB_SUDT_SCRIPT_ARGS.into() || value.amount != 0 {
+                return None;
             }
-            Some(Ok(index))
+            let cell = ChallengeCell { index, args, value };
+            Some(Ok(cell))
         })
         .take(2);
     // reject if found multiple stake cells
-    let mut indexes = iter.collect::<Result<Vec<_>, SysError>>()?;
-    if indexes.len() > 1 {
+    let mut cells = iter.collect::<Result<Vec<_>, Error>>()?;
+    if cells.len() > 1 {
         return Err(Error::Challenge);
     }
-    let index = indexes.pop();
-    Ok(index)
+    Ok(cells.pop())
 }
 
 pub fn build_l2_sudt_script(config: &RollupConfig, l1_sudt_script_hash: [u8; 32]) -> Script {
@@ -298,6 +313,31 @@ pub fn collect_deposition_locks(
                 value,
                 account_script_hash,
             };
+            Some(Ok(cell))
+        })
+        .collect::<Result<_, Error>>()
+}
+
+pub fn collect_burn_cells(
+    rollup_type_hash: &[u8; 32],
+    config: &RollupConfig,
+    source: Source,
+) -> Result<Vec<BurnCell>, Error> {
+    QueryIter::new(load_cell_lock, source)
+        .enumerate()
+        .filter_map(|(index, lock)| {
+            let is_lock = &lock.args().as_slice()[..32] == rollup_type_hash
+                && lock.code_hash().as_slice() == config.burn_type_hash().as_slice()
+                && lock.hash_type() == ScriptHashType::Type.into();
+            if !is_lock {
+                return None;
+            }
+            let raw_args = lock.args().as_slice()[32..].to_vec();
+            let value = match fetch_capacity_and_sudt_value(config, index, Source::Input) {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let cell = BurnCell { index, value };
             Some(Ok(cell))
         })
         .collect::<Result<_, Error>>()
