@@ -164,6 +164,8 @@ const run = async () => {
   if (!program.owenrLockHash) {
     ownerLockHash = publicKeyHashToLockHash(publicKeyHash);
   }
+  console.log(`RollupTypeHash: ${getRollupTypeHash(runnerConfig)}`);
+  console.log(`OwnerLockHash: ${ownerLockHash}`);
   const rpc = new RPC(runnerConfig.rpc.listen);
   const knex = Knex({
     client: "postgresql",
@@ -209,6 +211,7 @@ const run = async () => {
     runnerConfig
   );
   txSkeleton = txSkeleton.update("inputs", (inputs) => inputs.push(stakeCell));
+  txSkeleton = txSkeleton.update("witnesses", (witnesses) => witnesses.push("0x"));
 
   // Add output cells
   const capacityMinusFee =
