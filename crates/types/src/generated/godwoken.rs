@@ -3883,6 +3883,343 @@ impl molecule::prelude::Builder for RawL2BlockBuilder {
     }
 }
 #[derive(Clone)]
+pub struct RawL2BlockVec(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for RawL2BlockVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for RawL2BlockVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for RawL2BlockVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl ::core::default::Default for RawL2BlockVec {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![4, 0, 0, 0];
+        RawL2BlockVec::new_unchecked(v.into())
+    }
+}
+impl RawL2BlockVec {
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn item_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<RawL2Block> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> RawL2Block {
+        let slice = self.as_slice();
+        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
+        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
+        if idx == self.len() - 1 {
+            RawL2Block::new_unchecked(self.0.slice(start..))
+        } else {
+            let end_idx = start_idx + molecule::NUMBER_SIZE;
+            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
+            RawL2Block::new_unchecked(self.0.slice(start..end))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> RawL2BlockVecReader<'r> {
+        RawL2BlockVecReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for RawL2BlockVec {
+    type Builder = RawL2BlockVecBuilder;
+    const NAME: &'static str = "RawL2BlockVec";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        RawL2BlockVec(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RawL2BlockVecReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RawL2BlockVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().extend(self.into_iter())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct RawL2BlockVecReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for RawL2BlockVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for RawL2BlockVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for RawL2BlockVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl<'r> RawL2BlockVecReader<'r> {
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn item_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<RawL2BlockReader<'r>> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> RawL2BlockReader<'r> {
+        let slice = self.as_slice();
+        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
+        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
+        if idx == self.len() - 1 {
+            RawL2BlockReader::new_unchecked(&self.as_slice()[start..])
+        } else {
+            let end_idx = start_idx + molecule::NUMBER_SIZE;
+            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
+            RawL2BlockReader::new_unchecked(&self.as_slice()[start..end])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for RawL2BlockVecReader<'r> {
+    type Entity = RawL2BlockVec;
+    const NAME: &'static str = "RawL2BlockVecReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        RawL2BlockVecReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(
+                Self,
+                TotalSizeNotMatch,
+                molecule::NUMBER_SIZE * 2,
+                slice_len
+            );
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        let item_count = offset_first / 4 - 1;
+        let header_size = molecule::NUMBER_SIZE * (item_count + 1);
+        if slice_len < header_size {
+            return ve!(Self, HeaderIsBroken, header_size, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
+            .chunks(molecule::NUMBER_SIZE)
+            .take(item_count)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        for pair in offsets.windows(2) {
+            let start = pair[0];
+            let end = pair[1];
+            RawL2BlockReader::verify(&slice[start..end], compatible)?;
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct RawL2BlockVecBuilder(pub(crate) Vec<RawL2Block>);
+impl RawL2BlockVecBuilder {
+    pub fn set(mut self, v: Vec<RawL2Block>) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn push(mut self, v: RawL2Block) -> Self {
+        self.0.push(v);
+        self
+    }
+    pub fn extend<T: ::core::iter::IntoIterator<Item = RawL2Block>>(mut self, iter: T) -> Self {
+        for elem in iter {
+            self.0.push(elem);
+        }
+        self
+    }
+}
+impl molecule::prelude::Builder for RawL2BlockVecBuilder {
+    type Entity = RawL2BlockVec;
+    const NAME: &'static str = "RawL2BlockVecBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (self.0.len() + 1)
+            + self
+                .0
+                .iter()
+                .map(|inner| inner.as_slice().len())
+                .sum::<usize>()
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        let item_count = self.0.len();
+        if item_count == 0 {
+            writer.write_all(&molecule::pack_number(
+                molecule::NUMBER_SIZE as molecule::Number,
+            ))?;
+        } else {
+            let (total_size, offsets) = self.0.iter().fold(
+                (
+                    molecule::NUMBER_SIZE * (item_count + 1),
+                    Vec::with_capacity(item_count),
+                ),
+                |(start, mut offsets), inner| {
+                    offsets.push(start);
+                    (start + inner.as_slice().len(), offsets)
+                },
+            );
+            writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+            for offset in offsets.into_iter() {
+                writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+            }
+            for inner in self.0.iter() {
+                writer.write_all(inner.as_slice())?;
+            }
+        }
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        RawL2BlockVec::new_unchecked(inner.into())
+    }
+}
+pub struct RawL2BlockVecIterator(RawL2BlockVec, usize, usize);
+impl ::core::iter::Iterator for RawL2BlockVecIterator {
+    type Item = RawL2Block;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl ::core::iter::ExactSizeIterator for RawL2BlockVecIterator {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+impl ::core::iter::IntoIterator for RawL2BlockVec {
+    type Item = RawL2Block;
+    type IntoIter = RawL2BlockVecIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        let len = self.len();
+        RawL2BlockVecIterator(self, 0, len)
+    }
+}
+impl<'r> RawL2BlockVecReader<'r> {
+    pub fn iter<'t>(&'t self) -> RawL2BlockVecReaderIterator<'t, 'r> {
+        RawL2BlockVecReaderIterator(&self, 0, self.len())
+    }
+}
+pub struct RawL2BlockVecReaderIterator<'t, 'r>(&'t RawL2BlockVecReader<'r>, usize, usize);
+impl<'t: 'r, 'r> ::core::iter::Iterator for RawL2BlockVecReaderIterator<'t, 'r> {
+    type Item = RawL2BlockReader<'t>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for RawL2BlockVecReaderIterator<'t, 'r> {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+#[derive(Clone)]
 pub struct L2Block(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for L2Block {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -12396,7 +12733,7 @@ impl ::core::fmt::Debug for RollupRevert {
 impl ::core::fmt::Display for RollupRevert {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "target_block", self.target_block())?;
+        write!(f, "{}: {}", "reverted_blocks", self.reverted_blocks())?;
         write!(f, ", {}: {}", "block_proof", self.block_proof())?;
         write!(
             f,
@@ -12414,17 +12751,7 @@ impl ::core::fmt::Display for RollupRevert {
 impl ::core::default::Default for RollupRevert {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            52, 1, 0, 0, 16, 0, 0, 0, 44, 1, 0, 0, 48, 1, 0, 0, 28, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0,
-            0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0, 196, 0, 0, 0,
-            252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0,
-            52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            28, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RollupRevert::new_unchecked(v.into())
     }
@@ -12447,11 +12774,11 @@ impl RollupRevert {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn target_block(&self) -> RawL2Block {
+    pub fn reverted_blocks(&self) -> RawL2BlockVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        RawL2Block::new_unchecked(self.0.slice(start..end))
+        RawL2BlockVec::new_unchecked(self.0.slice(start..end))
     }
     pub fn block_proof(&self) -> Bytes {
         let slice = self.as_slice();
@@ -12496,7 +12823,7 @@ impl molecule::prelude::Entity for RollupRevert {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .target_block(self.target_block())
+            .reverted_blocks(self.reverted_blocks())
             .block_proof(self.block_proof())
             .reverted_block_proof(self.reverted_block_proof())
     }
@@ -12520,7 +12847,7 @@ impl<'r> ::core::fmt::Debug for RollupRevertReader<'r> {
 impl<'r> ::core::fmt::Display for RollupRevertReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "target_block", self.target_block())?;
+        write!(f, "{}: {}", "reverted_blocks", self.reverted_blocks())?;
         write!(f, ", {}: {}", "block_proof", self.block_proof())?;
         write!(
             f,
@@ -12553,11 +12880,11 @@ impl<'r> RollupRevertReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn target_block(&self) -> RawL2BlockReader<'r> {
+    pub fn reverted_blocks(&self) -> RawL2BlockVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        RawL2BlockReader::new_unchecked(&self.as_slice()[start..end])
+        RawL2BlockVecReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn block_proof(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
@@ -12627,7 +12954,7 @@ impl<'r> molecule::prelude::Reader<'r> for RollupRevertReader<'r> {
         if offsets.windows(2).any(|i| i[0] > i[1]) {
             return ve!(Self, OffsetsNotMatch);
         }
-        RawL2BlockReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        RawL2BlockVecReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         BytesReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         BytesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
@@ -12635,14 +12962,14 @@ impl<'r> molecule::prelude::Reader<'r> for RollupRevertReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct RollupRevertBuilder {
-    pub(crate) target_block: RawL2Block,
+    pub(crate) reverted_blocks: RawL2BlockVec,
     pub(crate) block_proof: Bytes,
     pub(crate) reverted_block_proof: Bytes,
 }
 impl RollupRevertBuilder {
     pub const FIELD_COUNT: usize = 3;
-    pub fn target_block(mut self, v: RawL2Block) -> Self {
-        self.target_block = v;
+    pub fn reverted_blocks(mut self, v: RawL2BlockVec) -> Self {
+        self.reverted_blocks = v;
         self
     }
     pub fn block_proof(mut self, v: Bytes) -> Self {
@@ -12659,7 +12986,7 @@ impl molecule::prelude::Builder for RollupRevertBuilder {
     const NAME: &'static str = "RollupRevertBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.target_block.as_slice().len()
+            + self.reverted_blocks.as_slice().len()
             + self.block_proof.as_slice().len()
             + self.reverted_block_proof.as_slice().len()
     }
@@ -12667,7 +12994,7 @@ impl molecule::prelude::Builder for RollupRevertBuilder {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
-        total_size += self.target_block.as_slice().len();
+        total_size += self.reverted_blocks.as_slice().len();
         offsets.push(total_size);
         total_size += self.block_proof.as_slice().len();
         offsets.push(total_size);
@@ -12676,7 +13003,7 @@ impl molecule::prelude::Builder for RollupRevertBuilder {
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.target_block.as_slice())?;
+        writer.write_all(self.reverted_blocks.as_slice())?;
         writer.write_all(self.block_proof.as_slice())?;
         writer.write_all(self.reverted_block_proof.as_slice())?;
         Ok(())

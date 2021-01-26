@@ -18,7 +18,8 @@ use validator_utils::{
 use crate::{
     cells::{
         build_l2_sudt_script, collect_custodian_locks, collect_deposition_locks,
-        collect_withdrawal_locks, fetch_capacity_and_sudt_value, find_stake_cell,
+        collect_withdrawal_locks, fetch_capacity_and_sudt_value, find_challenge_cell,
+        find_stake_cell,
     },
     ckb_std::{
         ckb_constants::Source,
@@ -489,11 +490,17 @@ pub fn verify(
         collect_withdrawal_locks(&context.rollup_type_hash, config, Source::Output)?;
     // Withdrawal token: Layer2 SUDT -> withdrawals
     burn_layer2_sudt(config, &mut context, &withdrawal_cells)?;
-    // Check new cells and reverted cells
+    // Check new cells and reverted cells: deposition / withdrawal / custodian
     let withdrawal_requests = block.withdrawal_requests().into_iter().collect();
     check_withdrawal_cells(&mut context, withdrawal_requests, &withdrawal_cells)?;
     check_input_custodian_cells(config, &mut context, withdrawal_cells)?;
     check_output_custodian_cells(config, &mut context)?;
+    // Ensure no challenge cells in submitting block transaction
+    if find_challenge_cell(&rollup_type_hash, config, Source::Input)?.is_some()
+        || find_challenge_cell(&rollup_type_hash, config, Source::Output)?.is_some()
+    {
+        return Err(Error::Challenge);
+    }
     // Check transactions
     check_block_transactions(&mut context, block)?;
 

@@ -62,6 +62,8 @@ table RawL2Block {
     withdrawal_requests_root: Byte32,
 }
 
+vector RawL2BlockVec <RawL2Block>;
+
 table L2Block {
     raw: RawL2Block,
     kv_state: KVPairVec,
@@ -271,7 +273,7 @@ struct UnlockAccountWitness {
 table RollupEnterChallenge {}
 table RollupCancelChallenge {}
 table RollupRevert {
-    target_block: RawL2Block,
+    reverted_blocks: RawL2BlockVec, // sorted by block number
     block_proof: Bytes,
     reverted_block_proof: Bytes,
 }

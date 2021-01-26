@@ -10,7 +10,6 @@ use validator_utils::{
     search_cells::search_rollup_config_cell,
     signature::check_input_account_lock,
 };
-use verifications::challenge::{verify_cancel_challenge, verify_revert};
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
@@ -99,7 +98,7 @@ pub fn main() -> Result<(), Error> {
         }
         RollupActionUnion::RollupRevert(args) => {
             // verify revert
-            verifications::challenge::verify_revert(
+            verifications::revert::verify(
                 rollup_type_hash,
                 &rollup_config,
                 &prev_global_state,
