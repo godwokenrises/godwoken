@@ -94,7 +94,8 @@ const run = async () => {
 
   let txSkeleton = TransactionSkeleton({ cellProvider: indexer });
 
-  console.log(ownerLockHash);
+  console.log(`RollupTypeHash: ${getRollupTypeHash(runnerConfig)}`);
+  console.log(`OwnerLockHash: ${ownerLockHash}`);
   // Add stake cell
   const stakeLockArgs = {
     owner_lock_hash: ownerLockHash,
@@ -124,9 +125,6 @@ const run = async () => {
     txSkeleton,
     [address],
     BigInt(1000)
-  );
-  console.log(
-    JSON.stringify(createTransactionFromSkeleton(txSkeleton), null, 2)
   );
   txSkeleton = common.prepareSigningEntries(txSkeleton);
 
