@@ -241,7 +241,7 @@ Godwoken actually has 2 kinds of accounts:
 
 Ethereum developers would recognize that this design resembles a lot like EOA vs contract account in Ethereum, which is true since Godwoken is inspired from Ethereum here.
 
-While a typical user account provides ownership for a user, contract account, on the other hand, provides a storage space for an on-chain smart contract. Similar to the way that a user account is created from a general lock script with a user's public key hash, a smart contract for a contract account is created from a **backend** with some special script args. The smart contract is also represented using the unified [Script](https://github.com/nervosnetwork/godwoken/blob/v0.1.0/crates/types/schemas/godwoken.mol#L27-L37) data structure in the Nervos ecosystem: the combination of `code_hash` and `hash_type` in a script identifies the backend, while `args` provide contract account specific arguments.
+While a typical user account is a balance owned by a user, contract account, on the other hand, provides a storage for an on-chain smart contract. Similar to the way that a user account is created from a general lock script with a user's public key hash, a smart contract for a contract account is created from a **backend** with some special script args. The smart contract is also represented using the unified [Script](https://github.com/nervosnetwork/godwoken/blob/v0.1.0/crates/types/schemas/godwoken.mol#L27-L37) data structure in the Nervos ecosystem: the combination of `code_hash` and `hash_type` in a script identifies the backend, while `args` provide contract account specific arguments.
 
 With enough background, the rule for executing backends can be introduced:
 
