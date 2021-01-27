@@ -117,15 +117,11 @@ fn parse_stake_lock_args(index: usize, source: Source) -> Result<StakeLockArgs, 
     }
 }
 
-/// Find stake cell
-/// this function raises error if found more than 1 stake cells
-/// or if found a stake cell that doesn't matched the owner_lock_hash
-pub fn find_stake_cell(
+pub fn collect_stake_cells(
     rollup_type_hash: &[u8; 32],
     config: &RollupConfig,
     source: Source,
-    owner_lock_hash: Option<&Byte32>,
-) -> Result<Option<StakeCell>, Error> {
+) -> Result<Vec<StakeCell>, Error> {
     let iter = QueryIter::new(load_cell_lock, source)
         .enumerate()
         .filter_map(|(index, lock)| {
@@ -142,13 +138,6 @@ pub fn find_stake_cell(
                     return Some(Err(Error::Encoding));
                 }
             };
-            // we only accept stake cells that match the owner_lock_hash
-            match owner_lock_hash {
-                Some(owner_lock_hash) if &args.owner_lock_hash() != owner_lock_hash => {
-                    return Some(Err(Error::Stake));
-                }
-                _ => {}
-            }
             let value = match fetch_capacity_and_sudt_value(config, index, Source::Input) {
                 Ok(value) => value,
                 Err(err) => return Some(Err(err)),
@@ -159,14 +148,30 @@ pub fn find_stake_cell(
             }
             let cell = StakeCell { index, args, value };
             Some(Ok(cell))
-        })
-        .take(2);
+        });
     // reject if found multiple stake cells
-    let mut cells = iter.collect::<Result<Vec<_>, Error>>()?;
-    if cells.len() > 1 {
+    let cells = iter.collect::<Result<Vec<_>, Error>>()?;
+    Ok(cells)
+}
+
+/// Find one stake cell
+/// this function ensure we have only 1 stake cell in the source
+/// and the cell's owner_lock_hash must matches the owner_lock_hash arg
+pub fn find_one_stake_cell(
+    rollup_type_hash: &[u8; 32],
+    config: &RollupConfig,
+    source: Source,
+    owner_lock_hash: &Byte32,
+) -> Result<StakeCell, Error> {
+    let mut cells = collect_stake_cells(rollup_type_hash, config, source)?;
+    // this function guratee only one cell in the source
+    if cells.len() != 1 {
         return Err(Error::Stake);
     }
-    Ok(cells.pop())
+    if &cells[0].args.owner_lock_hash() != owner_lock_hash {
+        return Err(Error::Stake);
+    }
+    Ok(cells.remove(0))
 }
 
 pub fn find_challenge_cell(

@@ -19,7 +19,7 @@ use crate::{
     cells::{
         build_l2_sudt_script, collect_custodian_locks, collect_deposition_locks,
         collect_withdrawal_locks, fetch_capacity_and_sudt_value, find_challenge_cell,
-        find_stake_cell,
+        find_one_stake_cell,
     },
     ckb_std::{
         ckb_constants::Source,
@@ -409,13 +409,12 @@ fn verify_block_producer(
     const REQUIRED_CAPACITY: u64 = 500_00000000u64;
     let raw_block = block.raw();
     let owner_lock_hash = raw_block.stake_cell_owner_lock_hash();
-    let stake_cell = find_stake_cell(
+    let stake_cell = find_one_stake_cell(
         &context.rollup_type_hash,
         config,
         Source::Input,
-        Some(&owner_lock_hash),
-    )?
-    .ok_or(Error::Stake)?;
+        &owner_lock_hash,
+    )?;
     // check stake cell capacity
     if stake_cell.value.capacity < REQUIRED_CAPACITY {
         return Err(Error::Stake);
@@ -426,13 +425,12 @@ fn verify_block_producer(
         .as_builder()
         .stake_block_number(raw_block.number())
         .build();
-    let output_stake_cell = find_stake_cell(
+    let output_stake_cell = find_one_stake_cell(
         &context.rollup_type_hash,
         config,
         Source::Output,
-        Some(&owner_lock_hash),
-    )?
-    .ok_or(Error::Stake)?;
+        &owner_lock_hash,
+    )?;
     if expected_stake_lock_args != output_stake_cell.args
         || stake_cell.value != output_stake_cell.value
     {

@@ -1,3 +1,5 @@
+use core::cmp::Ordering;
+
 use crate::{packed, prelude::*};
 
 macro_rules! impl_std_eq {
@@ -12,7 +14,26 @@ macro_rules! impl_std_eq {
     };
 }
 
+macro_rules! impl_std_ord {
+    ($struct:ident) => {
+        impl PartialOrd for packed::$struct {
+            #[inline]
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        impl Ord for packed::$struct {
+            #[inline]
+            fn cmp(&self, other: &Self) -> Ordering {
+                self.as_slice().cmp(other.as_slice())
+            }
+        }
+    };
+}
+
 impl_std_eq!(Byte32);
+impl_std_ord!(Byte32);
 impl_std_eq!(Script);
 impl_std_eq!(CancelChallenge);
 impl_std_eq!(TxReceipt);

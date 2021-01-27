@@ -17,20 +17,23 @@ use validator_utils::{
         high_level::load_input_since,
         since::{LockValue, Since},
     },
-    search_cells::search_lock_hash,
+    search_cells::{search_lock_hash, search_lock_hashes},
 };
 
-use super::{check_rollup_lock_cells, check_status};
+use super::{check_rollup_lock_cells, check_rollup_lock_cells_except_stake, check_status};
 use crate::{
     cells::{
-        collect_burn_cells, collect_custodian_locks, collect_deposition_locks,
+        collect_burn_cells, collect_custodian_locks, collect_deposition_locks, collect_stake_cells,
         collect_withdrawal_locks, fetch_capacity_and_sudt_value, find_challenge_cell,
-        find_stake_cell,
     },
     error::Error,
     types::{ChallengeCell, StakeCell},
 };
-use alloc::{vec, vec::Vec};
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    vec,
+    vec::Vec,
+};
 use core::{convert::TryInto, num};
 
 /// Check challenge cell is maturity(on the layer1)
@@ -73,6 +76,18 @@ fn check_challenge_cell(
     if &challenge_block_hash != revert_target_block_hash {
         return Err(Error::Challenge);
     }
+    Ok(())
+}
+
+/// Check rewards
+fn check_rewards(
+    rollup_type_hash: &[u8; 32],
+    config: &RollupConfig,
+    reverted_blocks: &[RawL2Block],
+    challenge_cell: &ChallengeCell,
+) -> Result<(), Error> {
+    const REWARDS_RATE: u64 = 50;
+
     // challenge cell should be send back to the challenger
     let receiver_cell_value = {
         let reward_receiver_lock_hash = challenge_cell.args.rewards_receiver_lock().hash();
@@ -80,8 +95,54 @@ fn check_challenge_cell(
             search_lock_hash(&reward_receiver_lock_hash, Source::Output).ok_or(Error::Challenge)?;
         fetch_capacity_and_sudt_value(config, index, Source::Output)?
     };
-    if receiver_cell_value.capacity < challenge_cell.value.capacity {
+    let reverted_stake_set: BTreeSet<_> = reverted_blocks
+        .iter()
+        .map(|b| b.stake_cell_owner_lock_hash())
+        .collect();
+
+    // ensure all input stake cells are belongs to reverted blocks
+    let stake_cells = collect_stake_cells(rollup_type_hash, config, Source::Input)?;
+    if !stake_cells
+        .iter()
+        .all(|cell| reverted_stake_set.contains(&cell.args.owner_lock_hash()))
+    {
         return Err(Error::Challenge);
+    }
+
+    // calcuate rewards assets & burn assets
+    let total_stake_capacity: u128 = stake_cells
+        .iter()
+        .map(|cell| cell.value.capacity as u128)
+        .sum();
+    let expected_reward_capacity = total_stake_capacity.saturating_mul(REWARDS_RATE.into()) / 100;
+    let expected_burn_capacity = total_stake_capacity.saturating_sub(expected_reward_capacity);
+    // collect rewards receiver cells capacity
+    let received_capacity: u128 = {
+        let rewards_receiver_lock_hash = challenge_cell.args.rewards_receiver_lock().hash();
+        search_lock_hashes(&rewards_receiver_lock_hash, Source::Output)
+            .into_iter()
+            .map(|index| {
+                fetch_capacity_and_sudt_value(config, index, Source::Output)
+                    .map(|value| value.capacity.into())
+            })
+            .collect::<Result<Vec<u128>, Error>>()?
+            .into_iter()
+            .sum()
+    };
+    // make sure rewards are sent to the challenger
+    if received_capacity
+        < expected_reward_capacity.saturating_add(challenge_cell.value.capacity.into())
+    {
+        return Err(Error::InvalidStatus);
+    }
+    // check burned assets
+    let burned_cells = collect_burn_cells(rollup_type_hash, config, Source::Output)?;
+    let burned_capacity: u128 = burned_cells
+        .into_iter()
+        .map(|c| c.value.capacity as u128)
+        .sum();
+    if burned_capacity < expected_burn_capacity {
+        return Err(Error::InvalidStatus);
     }
     Ok(())
 }
@@ -217,7 +278,11 @@ pub fn verify(
     // check rollup lock cells,
     // we do not handle the reverting of lock cells in here,
     // instead we handle them in the submitting layer2 block action
-    check_rollup_lock_cells(&rollup_type_hash, config)?;
+    check_rollup_lock_cells_except_stake(&rollup_type_hash, config)?;
+    // do not accept stake cells in the output
+    if !collect_stake_cells(&rollup_type_hash, config, Source::Output)?.is_empty() {
+        return Err(Error::Stake);
+    }
     // load reverted blocks
     let reverted_blocks: Vec<_> = revert_args.reverted_blocks().into_iter().collect();
     // check challenge cells
@@ -229,6 +294,7 @@ pub fn verify(
         &challenge_cell,
         &reverted_blocks[0].hash().into(),
     )?;
+    check_rewards(&rollup_type_hash, config, &reverted_blocks, &challenge_cell)?;
     let reverted_global_state = check_reverted_blocks(
         &reverted_blocks,
         &revert_args,

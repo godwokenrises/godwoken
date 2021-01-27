@@ -24,7 +24,6 @@ use crate::{
     cells::{
         collect_burn_cells, collect_custodian_locks, collect_deposition_locks,
         collect_withdrawal_locks, fetch_capacity_and_sudt_value, find_challenge_cell,
-        find_stake_cell,
     },
     error::Error,
     types::{ChallengeCell, StakeCell},
