@@ -128,7 +128,7 @@ The `args` part uses a [custom serialization format](https://github.com/nervosne
 
 * `to_id` in `args` is also set to the smart contract account ID to be called.
 * `value` in `args` contains any pETH sent to the smart contract.
-* `data` in `args` contains [Ethereum ABI compatible data payload](https://github.com/ethereumbook/ethereumbook/blob/develop/07smart-contracts-solidity.asciidoc#the-ethereum-contract-abi) used to invoke the smart contract.
+* `data` in `args` contains [Ethereum ABI compatible data payload](https://github.com/ethereumbook/ethereumbook/blob/develop/06transactions.asciidoc#transmitting-a-data-payload-to-an-eoa-or-contract) used to invoke the smart contract.
 
 To make an analogy:
 
