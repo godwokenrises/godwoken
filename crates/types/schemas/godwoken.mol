@@ -26,14 +26,14 @@ struct GlobalState {
 }
 
 struct RollupConfig {
-    l1_sudt_type_hash: Byte32,
-    custodian_type_hash: Byte32,
-    deposition_type_hash: Byte32,
-    withdrawal_type_hash: Byte32,
-    challenge_type_hash: Byte32,
-    stake_type_hash: Byte32,
-    burn_type_hash: Byte32,
-    l2_sudt_validator_type_hash: Byte32,
+    l1_sudt_script_type_hash: Byte32,
+    custodian_script_type_hash: Byte32,
+    deposition_script_type_hash: Byte32,
+    withdrawal_script_type_hash: Byte32,
+    challenge_script_type_hash: Byte32,
+    stake_script_type_hash: Byte32,
+    l2_sudt_validator_script_type_hash: Byte32,
+    burn_lock_hash: Byte32,
 }
 
 table RawL2Transaction {

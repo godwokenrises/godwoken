@@ -25,8 +25,8 @@ use validator_utils::{
     ckb_std::{
         ckb_constants::Source,
         high_level::{
-            load_cell_capacity, load_cell_data, load_cell_lock, load_cell_type,
-            load_cell_type_hash, load_witness_args, QueryIter,
+            load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash,
+            load_cell_type, load_cell_type_hash, load_witness_args, QueryIter,
         },
         syscalls::SysError,
     },
@@ -41,7 +41,7 @@ fn fetch_sudt_script_hash(
     match load_cell_type(index, source)? {
         Some(type_) => {
             if type_.hash_type() == ScriptHashType::Type.into()
-                && type_.code_hash().as_slice() == config.l1_sudt_type_hash().as_slice()
+                && type_.code_hash().as_slice() == config.l1_sudt_script_type_hash().as_slice()
             {
                 return Ok(load_cell_type_hash(index, source)?);
             }
@@ -126,7 +126,7 @@ pub fn collect_stake_cells(
         .enumerate()
         .filter_map(|(index, lock)| {
             let is_lock = &lock.args().as_slice()[..32] == rollup_type_hash
-                && lock.code_hash().as_slice() == config.stake_type_hash().as_slice()
+                && lock.code_hash().as_slice() == config.stake_script_type_hash().as_slice()
                 && lock.hash_type() == ScriptHashType::Type.into();
             if !is_lock {
                 return None;
@@ -183,7 +183,7 @@ pub fn find_challenge_cell(
         .enumerate()
         .filter_map(|(index, lock)| {
             let is_lock = &lock.args().as_slice()[..32] == rollup_type_hash
-                && lock.code_hash().as_slice() == config.challenge_type_hash().as_slice()
+                && lock.code_hash().as_slice() == config.challenge_script_type_hash().as_slice()
                 && lock.hash_type() == ScriptHashType::Type.into();
             if !is_lock {
                 return None;
@@ -220,7 +220,7 @@ pub fn build_l2_sudt_script(config: &RollupConfig, l1_sudt_script_hash: [u8; 32]
     let args = Bytes::from(l1_sudt_script_hash.to_vec());
     Script::new_builder()
         .args(args.pack())
-        .code_hash(config.l2_sudt_validator_type_hash())
+        .code_hash(config.l2_sudt_validator_script_type_hash())
         .hash_type(ScriptHashType::Type.into())
         .build()
 }
@@ -234,7 +234,7 @@ pub fn collect_withdrawal_locks(
         .enumerate()
         .filter_map(|(index, lock)| {
             let is_withdrawal_lock = &lock.args().as_slice()[..32] == rollup_type_hash
-                && lock.code_hash().as_slice() == config.withdrawal_type_hash().as_slice()
+                && lock.code_hash().as_slice() == config.withdrawal_script_type_hash().as_slice()
                 && lock.hash_type() == ScriptHashType::Type.into();
             if !is_withdrawal_lock {
                 return None;
@@ -264,7 +264,7 @@ pub fn collect_custodian_locks(
         .enumerate()
         .filter_map(|(index, lock)| {
             let is_lock = &lock.args().as_slice()[..32] == rollup_type_hash
-                && lock.code_hash().as_slice() == config.custodian_type_hash().as_slice()
+                && lock.code_hash().as_slice() == config.custodian_script_type_hash().as_slice()
                 && lock.hash_type() == ScriptHashType::Type.into();
             if !is_lock {
                 return None;
@@ -295,7 +295,7 @@ pub fn collect_deposition_locks(
         .enumerate()
         .filter_map(|(index, lock)| {
             let is_lock = &lock.args().as_slice()[..32] == rollup_type_hash
-                && lock.code_hash().as_slice() == config.deposition_type_hash().as_slice()
+                && lock.code_hash().as_slice() == config.deposition_script_type_hash().as_slice()
                 && lock.hash_type() == ScriptHashType::Type.into();
             if !is_lock {
                 return None;
@@ -328,16 +328,13 @@ pub fn collect_burn_cells(
     config: &RollupConfig,
     source: Source,
 ) -> Result<Vec<BurnCell>, Error> {
-    QueryIter::new(load_cell_lock, source)
+    QueryIter::new(load_cell_lock_hash, source)
         .enumerate()
-        .filter_map(|(index, lock)| {
-            let is_lock = &lock.args().as_slice()[..32] == rollup_type_hash
-                && lock.code_hash().as_slice() == config.burn_type_hash().as_slice()
-                && lock.hash_type() == ScriptHashType::Type.into();
+        .filter_map(|(index, lock_hash)| {
+            let is_lock = &lock_hash == config.burn_lock_hash().as_slice();
             if !is_lock {
                 return None;
             }
-            let raw_args = lock.args().as_slice()[32..].to_vec();
             let value = match fetch_capacity_and_sudt_value(config, index, Source::Input) {
                 Ok(value) => value,
                 Err(err) => return Some(Err(err)),

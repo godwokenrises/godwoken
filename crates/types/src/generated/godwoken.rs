@@ -2185,39 +2185,49 @@ impl ::core::fmt::Debug for RollupConfig {
 impl ::core::fmt::Display for RollupConfig {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "l1_sudt_type_hash", self.l1_sudt_type_hash())?;
         write!(
             f,
-            ", {}: {}",
-            "custodian_type_hash",
-            self.custodian_type_hash()
+            "{}: {}",
+            "l1_sudt_script_type_hash",
+            self.l1_sudt_script_type_hash()
         )?;
         write!(
             f,
             ", {}: {}",
-            "deposition_type_hash",
-            self.deposition_type_hash()
+            "custodian_script_type_hash",
+            self.custodian_script_type_hash()
         )?;
         write!(
             f,
             ", {}: {}",
-            "withdrawal_type_hash",
-            self.withdrawal_type_hash()
+            "deposition_script_type_hash",
+            self.deposition_script_type_hash()
         )?;
         write!(
             f,
             ", {}: {}",
-            "challenge_type_hash",
-            self.challenge_type_hash()
+            "withdrawal_script_type_hash",
+            self.withdrawal_script_type_hash()
         )?;
-        write!(f, ", {}: {}", "stake_type_hash", self.stake_type_hash())?;
-        write!(f, ", {}: {}", "burn_type_hash", self.burn_type_hash())?;
         write!(
             f,
             ", {}: {}",
-            "l2_sudt_validator_type_hash",
-            self.l2_sudt_validator_type_hash()
+            "challenge_script_type_hash",
+            self.challenge_script_type_hash()
         )?;
+        write!(
+            f,
+            ", {}: {}",
+            "stake_script_type_hash",
+            self.stake_script_type_hash()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "l2_sudt_validator_script_type_hash",
+            self.l2_sudt_validator_script_type_hash()
+        )?;
+        write!(f, ", {}: {}", "burn_lock_hash", self.burn_lock_hash())?;
         write!(f, " }}")
     }
 }
@@ -2241,28 +2251,28 @@ impl RollupConfig {
     pub const TOTAL_SIZE: usize = 256;
     pub const FIELD_SIZES: [usize; 8] = [32, 32, 32, 32, 32, 32, 32, 32];
     pub const FIELD_COUNT: usize = 8;
-    pub fn l1_sudt_type_hash(&self) -> Byte32 {
+    pub fn l1_sudt_script_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
-    pub fn custodian_type_hash(&self) -> Byte32 {
+    pub fn custodian_script_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(32..64))
     }
-    pub fn deposition_type_hash(&self) -> Byte32 {
+    pub fn deposition_script_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(64..96))
     }
-    pub fn withdrawal_type_hash(&self) -> Byte32 {
+    pub fn withdrawal_script_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(96..128))
     }
-    pub fn challenge_type_hash(&self) -> Byte32 {
+    pub fn challenge_script_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(128..160))
     }
-    pub fn stake_type_hash(&self) -> Byte32 {
+    pub fn stake_script_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(160..192))
     }
-    pub fn burn_type_hash(&self) -> Byte32 {
+    pub fn l2_sudt_validator_script_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(192..224))
     }
-    pub fn l2_sudt_validator_type_hash(&self) -> Byte32 {
+    pub fn burn_lock_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(224..256))
     }
     pub fn as_reader<'r>(&'r self) -> RollupConfigReader<'r> {
@@ -2292,14 +2302,14 @@ impl molecule::prelude::Entity for RollupConfig {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .l1_sudt_type_hash(self.l1_sudt_type_hash())
-            .custodian_type_hash(self.custodian_type_hash())
-            .deposition_type_hash(self.deposition_type_hash())
-            .withdrawal_type_hash(self.withdrawal_type_hash())
-            .challenge_type_hash(self.challenge_type_hash())
-            .stake_type_hash(self.stake_type_hash())
-            .burn_type_hash(self.burn_type_hash())
-            .l2_sudt_validator_type_hash(self.l2_sudt_validator_type_hash())
+            .l1_sudt_script_type_hash(self.l1_sudt_script_type_hash())
+            .custodian_script_type_hash(self.custodian_script_type_hash())
+            .deposition_script_type_hash(self.deposition_script_type_hash())
+            .withdrawal_script_type_hash(self.withdrawal_script_type_hash())
+            .challenge_script_type_hash(self.challenge_script_type_hash())
+            .stake_script_type_hash(self.stake_script_type_hash())
+            .l2_sudt_validator_script_type_hash(self.l2_sudt_validator_script_type_hash())
+            .burn_lock_hash(self.burn_lock_hash())
     }
 }
 #[derive(Clone, Copy)]
@@ -2321,39 +2331,49 @@ impl<'r> ::core::fmt::Debug for RollupConfigReader<'r> {
 impl<'r> ::core::fmt::Display for RollupConfigReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "l1_sudt_type_hash", self.l1_sudt_type_hash())?;
         write!(
             f,
-            ", {}: {}",
-            "custodian_type_hash",
-            self.custodian_type_hash()
+            "{}: {}",
+            "l1_sudt_script_type_hash",
+            self.l1_sudt_script_type_hash()
         )?;
         write!(
             f,
             ", {}: {}",
-            "deposition_type_hash",
-            self.deposition_type_hash()
+            "custodian_script_type_hash",
+            self.custodian_script_type_hash()
         )?;
         write!(
             f,
             ", {}: {}",
-            "withdrawal_type_hash",
-            self.withdrawal_type_hash()
+            "deposition_script_type_hash",
+            self.deposition_script_type_hash()
         )?;
         write!(
             f,
             ", {}: {}",
-            "challenge_type_hash",
-            self.challenge_type_hash()
+            "withdrawal_script_type_hash",
+            self.withdrawal_script_type_hash()
         )?;
-        write!(f, ", {}: {}", "stake_type_hash", self.stake_type_hash())?;
-        write!(f, ", {}: {}", "burn_type_hash", self.burn_type_hash())?;
         write!(
             f,
             ", {}: {}",
-            "l2_sudt_validator_type_hash",
-            self.l2_sudt_validator_type_hash()
+            "challenge_script_type_hash",
+            self.challenge_script_type_hash()
         )?;
+        write!(
+            f,
+            ", {}: {}",
+            "stake_script_type_hash",
+            self.stake_script_type_hash()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "l2_sudt_validator_script_type_hash",
+            self.l2_sudt_validator_script_type_hash()
+        )?;
+        write!(f, ", {}: {}", "burn_lock_hash", self.burn_lock_hash())?;
         write!(f, " }}")
     }
 }
@@ -2361,28 +2381,28 @@ impl<'r> RollupConfigReader<'r> {
     pub const TOTAL_SIZE: usize = 256;
     pub const FIELD_SIZES: [usize; 8] = [32, 32, 32, 32, 32, 32, 32, 32];
     pub const FIELD_COUNT: usize = 8;
-    pub fn l1_sudt_type_hash(&self) -> Byte32Reader<'r> {
+    pub fn l1_sudt_script_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
-    pub fn custodian_type_hash(&self) -> Byte32Reader<'r> {
+    pub fn custodian_script_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[32..64])
     }
-    pub fn deposition_type_hash(&self) -> Byte32Reader<'r> {
+    pub fn deposition_script_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[64..96])
     }
-    pub fn withdrawal_type_hash(&self) -> Byte32Reader<'r> {
+    pub fn withdrawal_script_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[96..128])
     }
-    pub fn challenge_type_hash(&self) -> Byte32Reader<'r> {
+    pub fn challenge_script_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[128..160])
     }
-    pub fn stake_type_hash(&self) -> Byte32Reader<'r> {
+    pub fn stake_script_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[160..192])
     }
-    pub fn burn_type_hash(&self) -> Byte32Reader<'r> {
+    pub fn l2_sudt_validator_script_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[192..224])
     }
-    pub fn l2_sudt_validator_type_hash(&self) -> Byte32Reader<'r> {
+    pub fn burn_lock_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[224..256])
     }
 }
@@ -2409,49 +2429,49 @@ impl<'r> molecule::prelude::Reader<'r> for RollupConfigReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct RollupConfigBuilder {
-    pub(crate) l1_sudt_type_hash: Byte32,
-    pub(crate) custodian_type_hash: Byte32,
-    pub(crate) deposition_type_hash: Byte32,
-    pub(crate) withdrawal_type_hash: Byte32,
-    pub(crate) challenge_type_hash: Byte32,
-    pub(crate) stake_type_hash: Byte32,
-    pub(crate) burn_type_hash: Byte32,
-    pub(crate) l2_sudt_validator_type_hash: Byte32,
+    pub(crate) l1_sudt_script_type_hash: Byte32,
+    pub(crate) custodian_script_type_hash: Byte32,
+    pub(crate) deposition_script_type_hash: Byte32,
+    pub(crate) withdrawal_script_type_hash: Byte32,
+    pub(crate) challenge_script_type_hash: Byte32,
+    pub(crate) stake_script_type_hash: Byte32,
+    pub(crate) l2_sudt_validator_script_type_hash: Byte32,
+    pub(crate) burn_lock_hash: Byte32,
 }
 impl RollupConfigBuilder {
     pub const TOTAL_SIZE: usize = 256;
     pub const FIELD_SIZES: [usize; 8] = [32, 32, 32, 32, 32, 32, 32, 32];
     pub const FIELD_COUNT: usize = 8;
-    pub fn l1_sudt_type_hash(mut self, v: Byte32) -> Self {
-        self.l1_sudt_type_hash = v;
+    pub fn l1_sudt_script_type_hash(mut self, v: Byte32) -> Self {
+        self.l1_sudt_script_type_hash = v;
         self
     }
-    pub fn custodian_type_hash(mut self, v: Byte32) -> Self {
-        self.custodian_type_hash = v;
+    pub fn custodian_script_type_hash(mut self, v: Byte32) -> Self {
+        self.custodian_script_type_hash = v;
         self
     }
-    pub fn deposition_type_hash(mut self, v: Byte32) -> Self {
-        self.deposition_type_hash = v;
+    pub fn deposition_script_type_hash(mut self, v: Byte32) -> Self {
+        self.deposition_script_type_hash = v;
         self
     }
-    pub fn withdrawal_type_hash(mut self, v: Byte32) -> Self {
-        self.withdrawal_type_hash = v;
+    pub fn withdrawal_script_type_hash(mut self, v: Byte32) -> Self {
+        self.withdrawal_script_type_hash = v;
         self
     }
-    pub fn challenge_type_hash(mut self, v: Byte32) -> Self {
-        self.challenge_type_hash = v;
+    pub fn challenge_script_type_hash(mut self, v: Byte32) -> Self {
+        self.challenge_script_type_hash = v;
         self
     }
-    pub fn stake_type_hash(mut self, v: Byte32) -> Self {
-        self.stake_type_hash = v;
+    pub fn stake_script_type_hash(mut self, v: Byte32) -> Self {
+        self.stake_script_type_hash = v;
         self
     }
-    pub fn burn_type_hash(mut self, v: Byte32) -> Self {
-        self.burn_type_hash = v;
+    pub fn l2_sudt_validator_script_type_hash(mut self, v: Byte32) -> Self {
+        self.l2_sudt_validator_script_type_hash = v;
         self
     }
-    pub fn l2_sudt_validator_type_hash(mut self, v: Byte32) -> Self {
-        self.l2_sudt_validator_type_hash = v;
+    pub fn burn_lock_hash(mut self, v: Byte32) -> Self {
+        self.burn_lock_hash = v;
         self
     }
 }
@@ -2462,14 +2482,14 @@ impl molecule::prelude::Builder for RollupConfigBuilder {
         Self::TOTAL_SIZE
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        writer.write_all(self.l1_sudt_type_hash.as_slice())?;
-        writer.write_all(self.custodian_type_hash.as_slice())?;
-        writer.write_all(self.deposition_type_hash.as_slice())?;
-        writer.write_all(self.withdrawal_type_hash.as_slice())?;
-        writer.write_all(self.challenge_type_hash.as_slice())?;
-        writer.write_all(self.stake_type_hash.as_slice())?;
-        writer.write_all(self.burn_type_hash.as_slice())?;
-        writer.write_all(self.l2_sudt_validator_type_hash.as_slice())?;
+        writer.write_all(self.l1_sudt_script_type_hash.as_slice())?;
+        writer.write_all(self.custodian_script_type_hash.as_slice())?;
+        writer.write_all(self.deposition_script_type_hash.as_slice())?;
+        writer.write_all(self.withdrawal_script_type_hash.as_slice())?;
+        writer.write_all(self.challenge_script_type_hash.as_slice())?;
+        writer.write_all(self.stake_script_type_hash.as_slice())?;
+        writer.write_all(self.l2_sudt_validator_script_type_hash.as_slice())?;
+        writer.write_all(self.burn_lock_hash.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
