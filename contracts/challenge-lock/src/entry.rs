@@ -20,13 +20,20 @@ use validator_utils::{
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use gw_common::{
+    blake2b::new_blake2b,
     h256_ext::H256Ext,
     merkle_utils::calculate_compacted_account_root,
     smt::{Blake2bHasher, CompiledMerkleProof},
     state::State,
     H256,
 };
-use gw_types::{packed::{CancelChallenge, CancelChallengeReader, ChallengeLockArgs, ChallengeLockArgsReader, RollupActionUnion, RollupCancelChallenge, RollupConfig}, prelude::*};
+use gw_types::{
+    packed::{
+        CancelChallenge, CancelChallengeReader, ChallengeLockArgs, ChallengeLockArgsReader,
+        RollupActionUnion, RollupCancelChallenge, RollupConfig,
+    },
+    prelude::*,
+};
 
 /// args: rollup_type_hash | start challenge
 fn parse_lock_args() -> Result<([u8; 32], ChallengeLockArgs), Error> {
@@ -88,7 +95,6 @@ pub fn main() -> Result<(), Error> {
     // verify tx signature
     let tx = unlock_args.l2tx();
     let raw_tx = tx.raw();
-    let tx_hash = raw_tx.hash();
     let account_count: u32 = unlock_args.account_count().unpack();
     let kv_state = KVState::new(
         unlock_args.kv_state(),
@@ -98,7 +104,20 @@ pub fn main() -> Result<(), Error> {
     let sender_script_hash = kv_state
         .get_script_hash(raw_tx.from_id().unpack())
         .map_err(|_| Error::SMTKeyMissing)?;
-    check_input_account_lock(sender_script_hash, tx_hash.into())?;
+    let receiver_script_hash = kv_state
+        .get_script_hash(raw_tx.to_id().unpack())
+        .map_err(|_| Error::SMTKeyMissing)?;
+    let message = {
+        let mut hasher = new_blake2b();
+        hasher.update(&rollup_script_hash);
+        hasher.update(&sender_script_hash.as_slice());
+        hasher.update(&receiver_script_hash.as_slice());
+        hasher.update(raw_tx.as_slice());
+        let mut message = [0u8; 32];
+        hasher.finalize(&mut message);
+        message
+    };
+    check_input_account_lock(sender_script_hash, message.into())?;
 
     // verify backend script is in the input
     let script_hash = kv_state
