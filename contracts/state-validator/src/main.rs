@@ -12,7 +12,6 @@
 // define modules
 mod cells;
 mod entry;
-mod error;
 mod types;
 mod verifications;
 

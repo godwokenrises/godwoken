@@ -5,10 +5,7 @@ use gw_common::{
 };
 use gw_types::{
     core::Status,
-    packed::{
-        BlockMerkleState, Byte32, ChallengeTarget, GlobalState, RawL2Block, RollupConfig,
-        RollupRevert, Script,
-    },
+    packed::{BlockMerkleState, Byte32, GlobalState, RawL2Block, RollupConfig, RollupRevert},
     prelude::*,
 };
 use validator_utils::{
@@ -17,24 +14,18 @@ use validator_utils::{
         high_level::load_input_since,
         since::{LockValue, Since},
     },
-    search_cells::{search_lock_hash, search_lock_hashes},
+    search_cells::search_lock_hashes,
 };
 
-use super::{check_rollup_lock_cells, check_rollup_lock_cells_except_stake, check_status};
+use super::{check_rollup_lock_cells_except_stake, check_status};
 use crate::{
     cells::{
-        collect_burn_cells, collect_custodian_locks, collect_deposition_locks, collect_stake_cells,
-        collect_withdrawal_locks, fetch_capacity_and_sudt_value, find_challenge_cell,
+        collect_burn_cells, collect_stake_cells, fetch_capacity_and_sudt_value, find_challenge_cell,
     },
-    error::Error,
-    types::{ChallengeCell, StakeCell},
+    types::ChallengeCell,
 };
-use alloc::{
-    collections::{BTreeMap, BTreeSet},
-    vec,
-    vec::Vec,
-};
-use core::{convert::TryInto, num};
+use alloc::{collections::BTreeSet, vec::Vec};
+use validator_utils::error::Error;
 
 /// Check challenge cell is maturity(on the layer1)
 fn check_challenge_maturity(
@@ -68,15 +59,32 @@ fn check_challenge_cell(
     let has_output_challenge =
         find_challenge_cell(&rollup_type_hash, config, Source::Output)?.is_some();
     if has_output_challenge {
-        return Err(Error::Challenge);
+        return Err(Error::InvalidChallengeCell);
     }
     // check challenge target
     let challenge_target = challenge_cell.args.target();
     let challenge_block_hash: H256 = challenge_target.block_hash().unpack();
     if &challenge_block_hash != revert_target_block_hash {
-        return Err(Error::Challenge);
+        return Err(Error::InvalidChallengeCell);
     }
     Ok(())
+}
+
+pub fn get_receiver_cells_capacity(
+    config: &RollupConfig,
+    lock_hash: &[u8; 32],
+    source: Source,
+) -> Result<u128, Error> {
+    let capacity = search_lock_hashes(lock_hash, source)
+        .into_iter()
+        .map(|index| {
+            fetch_capacity_and_sudt_value(config, index, Source::Output)
+                .map(|value| value.capacity.into())
+        })
+        .collect::<Result<Vec<u128>, Error>>()?
+        .into_iter()
+        .sum();
+    Ok(capacity)
 }
 
 /// Check rewards
@@ -88,13 +96,6 @@ fn check_rewards(
 ) -> Result<(), Error> {
     const REWARDS_RATE: u64 = 50;
 
-    // challenge cell should be send back to the challenger
-    let receiver_cell_value = {
-        let reward_receiver_lock_hash = challenge_cell.args.rewards_receiver_lock().hash();
-        let index =
-            search_lock_hash(&reward_receiver_lock_hash, Source::Output).ok_or(Error::Challenge)?;
-        fetch_capacity_and_sudt_value(config, index, Source::Output)?
-    };
     let reverted_stake_set: BTreeSet<_> = reverted_blocks
         .iter()
         .map(|b| b.stake_cell_owner_lock_hash())
@@ -106,7 +107,7 @@ fn check_rewards(
         .iter()
         .all(|cell| reverted_stake_set.contains(&cell.args.owner_lock_hash()))
     {
-        return Err(Error::Challenge);
+        return Err(Error::InvalidStakeCell);
     }
 
     // calcuate rewards assets & burn assets
@@ -119,28 +120,30 @@ fn check_rewards(
     // collect rewards receiver cells capacity
     let received_capacity: u128 = {
         let rewards_receiver_lock_hash = challenge_cell.args.rewards_receiver_lock().hash();
-        search_lock_hashes(&rewards_receiver_lock_hash, Source::Output)
-            .into_iter()
-            .map(|index| {
-                fetch_capacity_and_sudt_value(config, index, Source::Output)
-                    .map(|value| value.capacity.into())
-            })
-            .collect::<Result<Vec<u128>, Error>>()?
-            .into_iter()
-            .sum()
+        let input_capacity =
+            get_receiver_cells_capacity(config, &rewards_receiver_lock_hash, Source::Input)?;
+        let output_capacity =
+            get_receiver_cells_capacity(config, &rewards_receiver_lock_hash, Source::Output)?;
+        output_capacity.saturating_sub(input_capacity)
     };
     // make sure rewards are sent to the challenger
     if received_capacity
         < expected_reward_capacity.saturating_add(challenge_cell.value.capacity.into())
     {
-        return Err(Error::InvalidStatus);
+        return Err(Error::InvalidChallengeReward);
     }
     // check burned assets
-    let burned_cells = collect_burn_cells(rollup_type_hash, config, Source::Output)?;
-    let burned_capacity: u128 = burned_cells
-        .into_iter()
-        .map(|c| c.value.capacity as u128)
-        .sum();
+    let burned_capacity: u128 = {
+        let input_burned_capacity: u128 = collect_burn_cells(config, Source::Input)?
+            .into_iter()
+            .map(|c| c.value.capacity as u128)
+            .sum();
+        let output_burned_capacity: u128 = collect_burn_cells(config, Source::Output)?
+            .into_iter()
+            .map(|c| c.value.capacity as u128)
+            .sum();
+        output_burned_capacity.saturating_sub(input_burned_capacity)
+    };
     if burned_capacity < expected_burn_capacity {
         return Err(Error::InvalidStatus);
     }
@@ -154,7 +157,7 @@ fn check_reverted_blocks(
     post_global_state: &GlobalState,
 ) -> Result<GlobalState, Error> {
     if reverted_blocks.is_empty() {
-        return Err(Error::Challenge);
+        return Err(Error::InvalidRevertedBlocks);
     }
     let reverted_block_hashes: Vec<H256> =
         reverted_blocks.iter().map(|b| b.hash().into()).collect();
@@ -169,11 +172,11 @@ fn check_reverted_blocks(
         for b in reverted_blocks[1..].iter() {
             let hash = b.parent_block_hash();
             if hash != prev_hash {
-                return Err(Error::Challenge);
+                return Err(Error::InvalidRevertedBlocks);
             }
             let number: u64 = b.number().unpack();
             if number != prev_number + 1 {
-                return Err(Error::Challenge);
+                return Err(Error::InvalidRevertedBlocks);
             }
             prev_hash = hash;
             prev_number = number;
@@ -182,7 +185,7 @@ fn check_reverted_blocks(
         // must revert from current point to the tip block
         let tip_number: u64 = prev_global_state.block().count().unpack();
         if prev_number != tip_number {
-            return Err(Error::Challenge);
+            return Err(Error::InvalidRevertedBlocks);
         }
     }
     // prove the target block exists in the main chain
@@ -197,7 +200,7 @@ fn check_reverted_blocks(
             .verify::<Blake2bHasher>(&prev_global_state.block().merkle_root().unpack(), leaves)?
     };
     if !is_main_chain_block {
-        return Err(Error::Challenge);
+        return Err(Error::InvalidRevertedBlocks);
     }
     // prove the target block isn't in the prev reverted block root
     let reverted_block_merkle_proof =
@@ -212,7 +215,7 @@ fn check_reverted_blocks(
             .verify::<Blake2bHasher>(&prev_global_state.reverted_block_root().unpack(), leaves)?
     };
     if is_reverted_block_prev {
-        return Err(Error::Challenge);
+        return Err(Error::InvalidRevertedBlocks);
     }
     // prove the target block in the post reverted block root
     let is_reverted_block_post = {
@@ -225,7 +228,7 @@ fn check_reverted_blocks(
             .verify::<Blake2bHasher>(&post_global_state.reverted_block_root().unpack(), leaves)?
     };
     if !is_reverted_block_post {
-        return Err(Error::Challenge);
+        return Err(Error::InvalidRevertedBlocks);
     }
     let reverted_block_root = post_global_state.reverted_block_root();
     // calculate the prev block merkle state (delete reverted block hashes)
@@ -243,6 +246,7 @@ fn check_reverted_blocks(
             .build()
     };
     let account_merkle_state = reverted_blocks[0].prev_account();
+    let tip_block_hash = reverted_blocks[0].parent_block_hash();
     let last_finalized_block_number = {
         let number: u64 = reverted_blocks[0].number().unpack();
         number.saturating_sub(1).saturating_sub(FINALIZE_BLOCKS)
@@ -255,6 +259,7 @@ fn check_reverted_blocks(
             .as_builder()
             .account(account_merkle_state)
             .block(block_merkle_state)
+            .tip_block_hash(tip_block_hash)
             .last_finalized_block_number(last_finalized_block_number.pack())
             .reverted_block_root(reverted_block_root)
             .status(status.into())
@@ -281,13 +286,13 @@ pub fn verify(
     check_rollup_lock_cells_except_stake(&rollup_type_hash, config)?;
     // do not accept stake cells in the output
     if !collect_stake_cells(&rollup_type_hash, config, Source::Output)?.is_empty() {
-        return Err(Error::Stake);
+        return Err(Error::InvalidStakeCell);
     }
     // load reverted blocks
     let reverted_blocks: Vec<_> = revert_args.reverted_blocks().into_iter().collect();
     // check challenge cells
-    let challenge_cell =
-        find_challenge_cell(&rollup_type_hash, config, Source::Input)?.ok_or(Error::Challenge)?;
+    let challenge_cell = find_challenge_cell(&rollup_type_hash, config, Source::Input)?
+        .ok_or(Error::InvalidChallengeCell)?;
     check_challenge_cell(
         &rollup_type_hash,
         config,
@@ -302,7 +307,7 @@ pub fn verify(
         post_global_state,
     )?;
     if post_global_state != &reverted_global_state {
-        return Err(Error::PostGlobalState);
+        return Err(Error::InvalidPostGlobalState);
     }
     Ok(())
 }

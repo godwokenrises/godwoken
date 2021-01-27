@@ -1,48 +1,21 @@
 // Import from `core` instead of from `std` since we are in no-std mode
-use core::mem::size_of_val;
 use core::result::Result;
 
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use alloc::{collections::BTreeMap, vec, vec::Vec};
-use validator_utils::{
-    ckb_std::high_level::{load_cell_capacity, load_cell_data_hash},
-    search_cells::{parse_rollup_action, search_rollup_config_cell},
-    signature::check_input_account_lock,
-};
+use validator_utils::{ckb_std::high_level::load_cell_capacity, search_cells::parse_rollup_action};
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use crate::{
     cells::{load_rollup_config, parse_global_state},
-    ckb_std::{
-        ckb_constants::Source,
-        ckb_types::{bytes::Bytes, prelude::*},
-        dynamic_loading::CKBDLContext,
-        high_level::{load_cell_data, load_script_hash, load_witness_args},
-    },
+    ckb_std::{ckb_constants::Source, high_level::load_script_hash},
     verifications,
 };
 
-use gw_types::{
-    core::Status,
-    packed::{
-        GlobalState, GlobalStateReader, L2Block, L2BlockReader, RawL2Block, RollupAction,
-        RollupActionReader, RollupActionUnion, RollupConfig, RollupConfigReader, RollupRevert,
-    },
-    prelude::{Reader as GodwokenTypesReader, Unpack as GodwokenTypesUnpack},
-};
+use gw_types::{packed::RollupActionUnion, prelude::*};
 
-use gw_common::{
-    blake2b::new_blake2b,
-    smt::Blake2bHasher,
-    sparse_merkle_tree::{CompiledMerkleProof, H256},
-    state::State,
-    FINALIZE_BLOCKS,
-};
-
-use crate::error::Error;
-use crate::types::BlockContext;
+use validator_utils::error::Error;
 
 /// return true if we are in the initialization, otherwise return false
 fn check_initialization() -> Result<bool, Error> {
@@ -66,7 +39,7 @@ pub fn main() -> Result<(), Error> {
     let post_global_state = parse_global_state(Source::GroupOutput)?;
     let rollup_config = load_rollup_config(&prev_global_state.rollup_config_hash().unpack())?;
     let rollup_type_hash = load_script_hash()?;
-    let action = parse_rollup_action(0, Source::GroupOutput).map_err(|_| Error::Encoding)?;
+    let action = parse_rollup_action(0, Source::GroupOutput)?;
     match action.to_enum() {
         RollupActionUnion::L2Block(l2block) => {
             // verify submit block
@@ -105,9 +78,6 @@ pub fn main() -> Result<(), Error> {
                 &post_global_state,
                 args,
             )?;
-        }
-        _ => {
-            panic!("unknown rollup action");
         }
     }
 

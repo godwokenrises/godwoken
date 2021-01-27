@@ -1,13 +1,12 @@
 //! Cells operations
 
+use crate::types::CellValue;
 use crate::{
-    ckb_std::ckb_types::prelude::{Entity as CKBEntity, Unpack as CKBUnpack},
+    ckb_std::ckb_types::prelude::Entity as CKBEntity,
     types::{
         BurnCell, ChallengeCell, CustodianCell, DepositionRequestCell, StakeCell, WithdrawalCell,
-        WithdrawalRequest,
     },
 };
-use crate::{error::Error, types::CellValue};
 use alloc::vec::Vec;
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_types::{
@@ -16,8 +15,8 @@ use gw_types::{
     packed::{
         Byte32, ChallengeLockArgs, ChallengeLockArgsReader, CustodianLockArgs,
         CustodianLockArgsReader, DepositionLockArgs, DepositionLockArgsReader, GlobalState,
-        GlobalStateReader, RollupAction, RollupActionReader, RollupConfig, RollupConfigReader,
-        Script, StakeLockArgs, StakeLockArgsReader, WithdrawalLockArgs, WithdrawalLockArgsReader,
+        GlobalStateReader, RollupConfig, RollupConfigReader, Script, StakeLockArgs,
+        StakeLockArgsReader, WithdrawalLockArgs, WithdrawalLockArgsReader,
     },
     prelude::*,
 };
@@ -26,10 +25,10 @@ use validator_utils::{
         ckb_constants::Source,
         high_level::{
             load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash,
-            load_cell_type, load_cell_type_hash, load_witness_args, QueryIter,
+            load_cell_type, load_cell_type_hash, QueryIter,
         },
-        syscalls::SysError,
     },
+    error::Error,
     search_cells::search_rollup_config_cell,
 };
 
@@ -45,7 +44,7 @@ fn fetch_sudt_script_hash(
             {
                 return Ok(load_cell_type_hash(index, source)?);
             }
-            Err(Error::SUDT)
+            Err(Error::InvalidSUDTCell)
         }
         None => Ok(None),
     }
@@ -96,14 +95,6 @@ pub fn load_rollup_config(rollup_config_hash: &[u8; 32]) -> Result<RollupConfig,
     }
 }
 
-fn parse_stake_lock_args(index: usize, source: Source) -> Result<StakeLockArgs, Error> {
-    let data = load_cell_data(index, source)?;
-    match StakeLockArgsReader::verify(&data, false) {
-        Ok(_) => Ok(StakeLockArgs::new_unchecked(data.into())),
-        Err(_) => Err(Error::Encoding),
-    }
-}
-
 pub fn collect_stake_cells(
     rollup_type_hash: &[u8; 32],
     config: &RollupConfig,
@@ -131,7 +122,7 @@ pub fn collect_stake_cells(
             };
             // we only accept CKB as staking assets for now
             if value.sudt_script_hash != CKB_SUDT_SCRIPT_ARGS.into() || value.amount != 0 {
-                return Some(Err(Error::Stake));
+                return Some(Err(Error::InvalidStakeCell));
             }
             let cell = StakeCell { index, args, value };
             Some(Ok(cell))
@@ -153,10 +144,10 @@ pub fn find_one_stake_cell(
     let mut cells = collect_stake_cells(rollup_type_hash, config, source)?;
     // this function guratee only one cell in the source
     if cells.len() != 1 {
-        return Err(Error::Stake);
+        return Err(Error::InvalidStakeCell);
     }
     if &cells[0].args.owner_lock_hash() != owner_lock_hash {
-        return Err(Error::Stake);
+        return Err(Error::InvalidStakeCell);
     }
     Ok(cells.remove(0))
 }
@@ -198,7 +189,7 @@ pub fn find_challenge_cell(
     // reject if found multiple stake cells
     let mut cells = iter.collect::<Result<Vec<_>, Error>>()?;
     if cells.len() > 1 {
-        return Err(Error::Challenge);
+        return Err(Error::InvalidChallengeCell);
     }
     Ok(cells.pop())
 }
@@ -310,11 +301,7 @@ pub fn collect_deposition_locks(
         .collect::<Result<_, Error>>()
 }
 
-pub fn collect_burn_cells(
-    rollup_type_hash: &[u8; 32],
-    config: &RollupConfig,
-    source: Source,
-) -> Result<Vec<BurnCell>, Error> {
+pub fn collect_burn_cells(config: &RollupConfig, source: Source) -> Result<Vec<BurnCell>, Error> {
     QueryIter::new(load_cell_lock_hash, source)
         .enumerate()
         .filter_map(|(index, lock_hash)| {

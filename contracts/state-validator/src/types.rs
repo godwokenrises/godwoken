@@ -1,7 +1,7 @@
 //! state context
 //! supports read / write to global state
 
-use alloc::{collections::BTreeMap, vec::Vec};
+use alloc::collections::BTreeMap;
 use gw_common::smt::Blake2bHasher;
 use gw_common::sparse_merkle_tree::{CompiledMerkleProof, H256};
 use gw_common::{error::Error as StateError, state::State};

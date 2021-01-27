@@ -99,7 +99,7 @@ pub fn fetch_token_amount(
         let capacity = load_cell_capacity(i, source)?;
         total_capacity = total_capacity
             .checked_add(capacity as u128)
-            .ok_or(Error::OverflowAmount)?;
+            .ok_or(Error::AmountOverflow)?;
         let amount = match load_cell_type_hash(i, source)? {
             Some(type_hash) if &TokenType::SUDT(type_hash) == token_type => {
                 let data = load_cell_data(i, source)?;
@@ -111,7 +111,7 @@ pub fn fetch_token_amount(
         };
         total_token_amount = total_token_amount
             .checked_add(amount)
-            .ok_or(Error::OverflowAmount)?;
+            .ok_or(Error::AmountOverflow)?;
     }
     Ok(CellTokenAmount {
         total_token_amount,

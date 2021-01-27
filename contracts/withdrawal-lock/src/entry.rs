@@ -187,11 +187,11 @@ pub fn main() -> Result<(), Error> {
             let expected_output_amount = input_token
                 .total_token_amount
                 .checked_add(sell_amount)
-                .ok_or(Error::OverflowAmount)?;
+                .ok_or(Error::AmountOverflow)?;
             let expected_output_capacity = input_token
                 .total_capacity
                 .checked_add(sell_capacity as u128)
-                .ok_or(Error::OverflowAmount)?;
+                .ok_or(Error::AmountOverflow)?;
             if output_token.total_token_amount < expected_output_amount
                 || output_token.total_capacity < expected_output_capacity
             {

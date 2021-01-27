@@ -1,40 +1,25 @@
 // Import from `core` instead of from `std` since we are in no-std mode
-use core::{
-    cell::{Cell, UnsafeCell},
-    result::Result,
-};
+use core::result::Result;
 
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
 use alloc::{collections::BTreeMap, vec, vec::Vec};
-use validator_utils::{
-    ckb_std::high_level::load_witness_args,
-    search_cells::{search_lock_hash, search_lock_hashes},
-    signature::check_input_account_lock,
-};
+use validator_utils::signature::check_input_account_lock;
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use crate::{
     cells::{
         build_l2_sudt_script, collect_custodian_locks, collect_deposition_locks,
-        collect_withdrawal_locks, fetch_capacity_and_sudt_value, find_challenge_cell,
-        find_one_stake_cell,
+        collect_withdrawal_locks, find_challenge_cell, find_one_stake_cell,
     },
-    ckb_std::{
-        ckb_constants::Source,
-        ckb_types::prelude::Unpack as CKBUnpack,
-        high_level::{
-            load_cell_capacity, load_cell_data, load_cell_lock, load_cell_type,
-            load_cell_type_hash, QueryIter,
-        },
-    },
-    types::{CellValue, CustodianCell, DepositionRequestCell, WithdrawalCell},
+    ckb_std::ckb_constants::Source,
+    types::WithdrawalCell,
 };
 
 use super::check_status;
-use crate::error::Error;
 use crate::types::BlockContext;
+use validator_utils::error::Error;
 
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
@@ -42,17 +27,13 @@ use gw_common::{
     merkle_utils::calculate_merkle_root,
     smt::{Blake2bHasher, CompiledMerkleProof},
     state::State,
-    CKB_SUDT_SCRIPT_ARGS, FINALIZE_BLOCKS, H256, ROLLUP_LOCK_CODE_HASH,
+    CKB_SUDT_SCRIPT_ARGS, FINALIZE_BLOCKS, H256,
 };
 use gw_types::{
     bytes::Bytes,
-    core::{ScriptHashType, Status},
+    core::Status,
     packed::{
-        AccountMerkleState, Block, CustodianLockArgs, CustodianLockArgsReader, DepositionLockArgs,
-        DepositionLockArgsReader, GlobalState, L2Block, RawL2Block, RawL2BlockReader,
-        RollupActionUnion, RollupActionUnionReader, RollupConfig, Script, UnlockAccountWitness,
-        UnlockAccountWitnessReader, WithdrawalLockArgs, WithdrawalLockArgsReader,
-        WithdrawalRequest,
+        AccountMerkleState, GlobalState, L2Block, RawL2Block, RollupConfig, WithdrawalRequest,
     },
     prelude::*,
 };
@@ -69,7 +50,7 @@ fn check_withdrawal_cells(
         if withdrawal_block_hash != context.block_hash
             || cell.args.withdrawal_block_number().unpack() != context.number
         {
-            return Err(Error::InvalidWithdrawal);
+            return Err(Error::InvalidWithdrawalCell);
         }
 
         let cell_account_script_hash: H256 = cell.args.account_script_hash().unpack();
@@ -88,17 +69,17 @@ fn check_withdrawal_cells(
         }) {
             Some(index) => withdrawal_requests.remove(index),
             None => {
-                return Err(Error::InvalidWithdrawal);
+                return Err(Error::InvalidWithdrawalCell);
             }
         };
         // check that there is an input to unlock account
         let message = withdrawal_request.raw().hash().into();
         check_input_account_lock(cell_account_script_hash.into(), message)
-            .map_err(|_| crate::error::Error::InvalidWithdrawal)?;
+            .map_err(|_| Error::InvalidWithdrawalCell)?;
     }
     // Some withdrawal requests hasn't has a corresponded withdrawal cell
     if !withdrawal_requests.is_empty() {
-        return Err(Error::InvalidWithdrawal);
+        return Err(Error::InvalidWithdrawalCell);
     }
     Ok(())
 }
@@ -150,7 +131,7 @@ fn check_input_custodian_cells(
         }
         // failed to check the equality
         if !withdrawal_assets.values().all(|&v| v == 0) {
-            return Err(Error::InvalidWithdrawal);
+            return Err(Error::InvalidWithdrawalCell);
         }
     }
 
@@ -164,11 +145,11 @@ fn check_input_custodian_cells(
                 custodian_cell.args.deposition_lock_args() == cell.args
                     && custodian_cell.value == cell.value
             })
-            .ok_or(Error::InvalidWithdrawal)?;
+            .ok_or(Error::InvalidWithdrawalCell)?;
         reverted_deposition_cells.remove(index);
     }
     if !reverted_deposition_cells.is_empty() {
-        return Err(Error::InvalidWithdrawal);
+        return Err(Error::InvalidWithdrawalCell);
     }
     Ok(())
 }
@@ -195,11 +176,11 @@ fn check_output_custodian_cells(
                 custodian_cell.args.deposition_lock_args() == cell.args
                     && custodian_cell.value == cell.value
             })
-            .ok_or(Error::InvalidWithdrawal)?;
+            .ok_or(Error::InvalidCustodianCell)?;
         deposition_cells.remove(index);
     }
     if !deposition_cells.is_empty() {
-        return Err(Error::InvalidWithdrawal);
+        return Err(Error::InvalidDepositCell);
     }
     // check reverted withdrawals == finalized custodian cells
     {
@@ -236,7 +217,7 @@ fn check_output_custodian_cells(
         }
         // check the equality
         if !reverted_withdrawal_assets.values().all(|&v| v == 0) {
-            return Err(Error::InvalidWithdrawal);
+            return Err(Error::InvalidWithdrawalCell);
         }
     }
     Ok(())
@@ -256,7 +237,7 @@ fn mint_layer2_sudt(config: &RollupConfig, context: &mut BlockContext) -> Result
         if request.value.sudt_script_hash.as_slice() == &CKB_SUDT_SCRIPT_ARGS {
             if request.value.amount != 0 {
                 // SUDT amount must equals to zero if sudt script hash is equals to CKB_SUDT_SCRIPT_ARGS
-                return Err(Error::SUDT);
+                return Err(Error::InvalidDepositCell);
             }
             continue;
         }
@@ -269,7 +250,7 @@ fn mint_layer2_sudt(config: &RollupConfig, context: &mut BlockContext) -> Result
         };
         // prevent fake CKB SUDT, the caller should filter these invalid depositions
         if sudt_id == CKB_SUDT_ACCOUNT_ID {
-            return Err(Error::SUDT);
+            return Err(Error::InvalidDepositCell);
         }
         // mint SUDT
         context.mint_sudt(sudt_id, id, request.value.amount)?;
@@ -309,13 +290,17 @@ fn load_l2block_context(
     prev_global_state: &GlobalState,
     post_global_state: &GlobalState,
 ) -> Result<BlockContext, Error> {
-    // TODO verify parent block hash
     let raw_block = l2block.raw();
 
     // Check pre block merkle proof
     let number: u64 = raw_block.number().unpack();
     if number != prev_global_state.block().count().unpack() {
-        return Err(Error::PrevGlobalState);
+        return Err(Error::InvalidBlock);
+    }
+
+    // verify parent block hash
+    if raw_block.parent_block_hash() != prev_global_state.tip_block_hash() {
+        return Err(Error::InvalidBlock);
     }
 
     let block_smt_key = RawL2Block::compute_smt_key(number);
@@ -334,7 +319,7 @@ fn load_l2block_context(
 
     // Check post block merkle proof
     if number + 1 != post_global_state.block().count().unpack() {
-        return Err(Error::PrevGlobalState);
+        return Err(Error::InvalidBlock);
     }
 
     let post_block_root: [u8; 32] = post_global_state.block().merkle_root().unpack();
@@ -376,13 +361,13 @@ fn load_l2block_context(
 
     // Check prev account state
     if raw_block.prev_account().as_slice() != prev_global_state.account().as_slice() {
-        return Err(Error::PrevGlobalState);
+        return Err(Error::InvalidBlock);
     }
 
     // Check post account state
     // Note: Because of the optimistic mechanism, we do not need to verify post account merkle root
     if raw_block.post_account().as_slice() != post_global_state.account().as_slice() {
-        return Err(Error::PostGlobalState);
+        return Err(Error::InvalidPostGlobalState);
     }
 
     // Generate context
@@ -417,7 +402,7 @@ fn verify_block_producer(
     )?;
     // check stake cell capacity
     if stake_cell.value.capacity < REQUIRED_CAPACITY {
-        return Err(Error::Stake);
+        return Err(Error::InvalidStakeCell);
     }
     // expected output stake args
     let expected_stake_lock_args = stake_cell
@@ -434,13 +419,13 @@ fn verify_block_producer(
     if expected_stake_lock_args != output_stake_cell.args
         || stake_cell.value != output_stake_cell.value
     {
-        return Err(Error::Stake);
+        return Err(Error::InvalidStakeCell);
     }
 
     Ok(())
 }
 
-fn check_block_transactions(context: &mut BlockContext, block: &L2Block) -> Result<(), Error> {
+fn check_block_transactions(_context: &mut BlockContext, block: &L2Block) -> Result<(), Error> {
     // check tx_witness_root
     let submit_transactions = block.raw().submit_transactions();
     let tx_witness_root: [u8; 32] = submit_transactions.tx_witness_root().unpack();
@@ -448,7 +433,7 @@ fn check_block_transactions(context: &mut BlockContext, block: &L2Block) -> Resu
     let compacted_post_root_list = submit_transactions.compacted_post_root_list();
 
     if tx_count != compacted_post_root_list.item_count() as u32 {
-        return Err(Error::InvalidTxs);
+        return Err(Error::InvalidTxsState);
     }
 
     let leaves = block
@@ -458,7 +443,7 @@ fn check_block_transactions(context: &mut BlockContext, block: &L2Block) -> Resu
         .collect();
     let merkle_root: [u8; 32] = calculate_merkle_root(leaves)?;
     if tx_witness_root != merkle_root {
-        return Err(Error::InvalidTxs);
+        return Err(Error::MerkleProof);
     }
 
     Ok(())
@@ -497,7 +482,7 @@ pub fn verify(
     if find_challenge_cell(&rollup_type_hash, config, Source::Input)?.is_some()
         || find_challenge_cell(&rollup_type_hash, config, Source::Output)?.is_some()
     {
-        return Err(Error::Challenge);
+        return Err(Error::InvalidChallengeCell);
     }
     // Check transactions
     check_block_transactions(&mut context, block)?;
@@ -521,12 +506,13 @@ pub fn verify(
             .as_builder()
             .account(account_merkle_state)
             .block(block_merkle_state)
+            .tip_block_hash(context.block_hash.pack())
             .last_finalized_block_number(last_finalized_block_number.pack())
             .build()
     };
 
     if &actual_post_global_state != post_global_state {
-        return Err(Error::PostGlobalState);
+        return Err(Error::InvalidPostGlobalState);
     }
 
     Ok(())

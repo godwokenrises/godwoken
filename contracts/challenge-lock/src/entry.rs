@@ -8,8 +8,7 @@ use validator_utils::{
     ckb_std::{
         ckb_constants::Source,
         ckb_types::{bytes::Bytes, prelude::Unpack as CKBUnpack},
-        high_level::{load_input_since, load_script, load_witness_args},
-        since::{LockValue, Since},
+        high_level::{load_script, load_witness_args},
     },
     error::Error,
     kv_state::KVState,
@@ -30,7 +29,7 @@ use gw_common::{
 use gw_types::{
     packed::{
         CancelChallenge, CancelChallengeReader, ChallengeLockArgs, ChallengeLockArgsReader,
-        RollupActionUnion, RollupCancelChallenge, RollupConfig,
+        RollupActionUnion,
     },
     prelude::*,
 };
