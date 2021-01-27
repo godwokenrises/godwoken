@@ -232,7 +232,7 @@ There is one quirk to the above flow here: recall that current Godwoken uses opt
 
 ### Backend
 
-With signature validated, another problem arises: how does Godwoken compute the next on-chain state? **Backends** in Godwoken handles this task.
+With signature verified, another problem arises: how does Godwoken compute the next on-layer2-chain state? **Backends** in Godwoken handles this task.
 
 Godwoken actually has 2 kinds of accounts:
 
