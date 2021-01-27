@@ -61,7 +61,7 @@ State validator type script is the backbone of Godwoken, it ensures all the secu
 
 ## Storage
 
-Godwoken provides account model to Nervos CKB:
+Godwoken provides an account model to Nervos CKB:
 
 * A giant 256-bit keyspace storage is provided to applications running on Godwoken.
 * Conceptually, Godwoken provides a sequential model: each layer 2 transaction is applied to the Godwoken storage in sequence. Smart contracts in layer 2 transactions are free to read from and write into the storage space.
