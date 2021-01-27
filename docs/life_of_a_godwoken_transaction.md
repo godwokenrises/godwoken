@@ -63,7 +63,7 @@ State validator type script is the backbone of Godwoken, it ensures all the secu
 
 Godwoken provides an account model to Nervos CKB:
 
-* A giant 256-bit keyspace storage is provided to applications running on Godwoken.
+* A 256-bit key-value storage is provided to applications running on Godwoken.
 * Conceptually, Godwoken provides a sequential model: each layer 2 transaction is applied to the Godwoken storage in sequence. Smart contracts in layer 2 transactions are free to read from and write into the storage space.
 
 One might wonder where all the data are stored given constant storage requirement in the above transactions. Godwoken leverages [Sparse Merkle Tree](https://medium.com/@kelvinfichter/whats-a-sparse-merkle-tree-acda70aeb837) to build the storage space. Only the root hash of the Sparse Merkle Tree(SMT) is kept in the rollup cell. State validator validates that the sparse merkle tree is correctly updated in each layer 2 block. We actually took a step further here, and build an optimized SMT, which can save a lot of space and calculation for CKB's use case. Please refer to [here](https://github.com/jjyr/sparse-merkle-tree) for more details.
@@ -74,7 +74,7 @@ Godwoken by design, only defines a generic rollup framework. Both optimistic rol
 
 ![Godwoken Architecture](./images/godwoken.png)
 
-* Individual parties, named *aggregators* can collect layer 2 Godwoken transactions(more details on layer 2 transactions will be explained below), then pack them into layer 2 blocks, and submit them to CKB. Due to the nature of optimistic rollup, aggregators will need to stake a certain amount of CKB in order to submit a layer 2 block.
+* Individual parties, named *aggregators* can collect layer 2 Godwoken transactions(more details on layer 2 transactions will be explained below), then pack them into layer 2 blocks, and submit them to CKB. Aggregators will need to stake a certain amount of CKB in order to submit a layer 2 block.
 * Each layer 2 block submitted to the chain is first marked as **unfinalized**. An unfinalized layer 2 block might be challenged by others(named **challengers**), if the layer 2 block appears malicious.
    + A challenger starts a challenge request by marking one layer 2 transaction in the layer 2 block as invalid. Some CKB will need to be staked in order to create a challenge. Once a challenge request is included in CKB, the challenge phase is started.
    + In a challenge phase(details will be explained below), the original aggregator submitting the block will need to prove that the marked layer 2 transaction is indeed correct. The aggregator can do this by submitting a cancel challenge request, which executes the marked layer 2 transaction on chain. CKB only accepts valid transaction on chain, which means the layer 2 transaction must succeed for the cancel challenge request to be committed on chain. In a cancel challenge request, aggregator can claim staked tokens from the challenger.
@@ -116,7 +116,7 @@ In this sections we will explain all the actions one can perform on Godwoken, to
 
 ## Deposit
 
-To use Godwoken, one must first deposit some tokens(either CKB or sUDTs) from layer 1 to layer 2. This is named as a **deposit** action. A deposit action is represented as a layer 1 CKB transaction, it must create a special output cell named a **deposition cell**. [Here](https://explorer.nervos.org/aggron/transaction/0x09334d0ab2bf84714f0e51715bb7251a4887aa3066ef5ad0770bd463297c1194) is an example of a deposit action. This transaction deposits 10000 CKB to Godwoken. What is relavant here, is the lock script of output cell #0:
+To use Godwoken, one must first deposit some tokens(either CKB or sUDTs) from layer 1 to layer 2. This is named as a **deposit** action. A deposit action is represented as a layer 1 CKB transaction, it must create a special output cell named a **deposit cell**. [Here](https://explorer.nervos.org/aggron/transaction/0x09334d0ab2bf84714f0e51715bb7251a4887aa3066ef5ad0770bd463297c1194) is an example of a deposit action. This transaction deposits 10000 CKB to Godwoken. What is relavant here, is the lock script of output cell #0:
 
 ```
 {
@@ -142,9 +142,9 @@ This data structure contains 2 parts of information:
 * `layer2_lock` specifies the lock script to use, when Godwoken transfers the tokens to layer 2.
 * `owner_lock_hash` and `cancel_timeout` provide a way to redeem the token in the case Godwoken ignores this request(e.g., when the network becomes bloated). `cancel_timeout` specifies a timeout parameter in CKB's [since](https://github.com/nervosnetwork/rfcs/blob/master/rfcs/0017-tx-valid-since/0017-tx-valid-since.md) format. When the timeout has reached, the user can create another request to cancel the deposit action, and redeem his/her tokens for other use. `owner_lock_hash` is used to provide the token owner's identity in case of a cancel deposit action.
 
-Godwoken will periodically collect all live deposition cells, and include them in layer 2 blocks. Each deposition cell will be transformed to **custodian cell** by Godwoken, correspondingly, Godwoken will create(if one does not exist) a layer 2 account based on the `layer2_lock` used in `DepositionLockArgs`, then put the newly deposited tokens inside this account.
+Godwoken will periodically collect all live deposit cells, and include them in layer 2 blocks. Each deposit cell will be transformed to **custodian cell** by Godwoken, correspondingly, Godwoken will create(if one does not exist) a layer 2 account based on the `layer2_lock` used in `DepositionLockArgs`, then put the newly deposited tokens inside this account.
 
-Custodian cells contain all the tokens that are managed internally in Godwoken. This [transaction](https://explorer.nervos.org/aggron/transaction/0x05fb7fb33b092272a4e259688e21bd1c78320bda641b062a755af9ec2849223c) contains a custodian cell in its output cell #2. Like a deposition cell, a custodian cell is represented by its lock script:
+Custodian cells contain all the tokens that are managed internally in Godwoken. This [transaction](https://explorer.nervos.org/aggron/transaction/0x05fb7fb33b092272a4e259688e21bd1c78320bda641b062a755af9ec2849223c) contains a custodian cell in its output cell #2. Like a deposit cell, a custodian cell is represented by its lock script:
 
 ```
 {
@@ -154,7 +154,7 @@ Custodian cells contain all the tokens that are managed internally in Godwoken. 
 }
 ```
 
-Like deposition cells, custodian cells have pre-determined `code_hash` and `hash_type` based on Godwoken deployments. The first 32 bytes in `args` contain the rollup type hash as well. What's different here, is that [CustodianLockArgs](https://github.com/nervosnetwork/godwoken/blob/v0.1.0/crates/types/schemas/godwoken.mol#L131) is used instead to fill the remaining part of `args`:
+Like deposit cells, custodian cells have pre-determined `code_hash` and `hash_type` based on Godwoken deployments. The first 32 bytes in `args` contain the rollup type hash as well. What's different here, is that [CustodianLockArgs](https://github.com/nervosnetwork/godwoken/blob/v0.1.0/crates/types/schemas/godwoken.mol#L131) is used instead to fill the remaining part of `args`:
 
 ```
 table CustodianLockArgs {
@@ -166,7 +166,7 @@ table CustodianLockArgs {
 }
 ```
 
-As noted, custodian cell contains the original deposition information, as well the layer 2 block info in which the original deposition cell is processed.
+As noted, custodian cell contains the original deposition information, as well the layer 2 block info in which the original deposit cell is processed.
 
 **TODO**: cancel deposit action with examples.
 
@@ -198,7 +198,7 @@ While all operations on layer 2 Godwoken can be represented as a `L2Transaction`
 
 ### Account Lock
 
-Account lock controls how a signature for a layer 2 transaction is validated. Recall that a deposition cell actually includes a layer 2 lock script in its `DepositionLockArgs`:
+Account lock controls how a signature for a layer 2 transaction is validated. Recall that a deposit cell actually includes a layer 2 lock script in its `DepositionLockArgs`:
 
 ```
 table DepositionLockArgs {
@@ -263,7 +263,7 @@ This way we can correlate layer 1 sUDT type script, with its corresponding layer
 
 The layer 2 sUDT backend provides [ERC20](https://eips.ethereum.org/EIPS/eip-20) compatible interface, even though you are not using Solidity and EVM, a similar API will be available for you to use.
 
-Notice sUDT contract account is typically created by Godwoken automatically when processing deposition cells. One don't typically create new contract account using sUDT as backend script.
+Notice sUDT contract account is typically created by Godwoken automatically when processing deposit cells. One don't typically create new contract account using sUDT as backend script.
 
 An implementation for the layer 2 sUDT backend can be found [here](https://github.com/nervosnetwork/godwoken/blob/v0.1.0/c/contracts/sudt.c).
 
