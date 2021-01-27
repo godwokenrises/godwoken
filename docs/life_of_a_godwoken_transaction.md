@@ -87,9 +87,9 @@ In this design, an aggregator bears liquidity costs for staking CKBs, as well as
 
 ## PoA Deployments
 
-Godwoken is designed based on the assumption that anyone shall be able to issue layer 2 blocks. However, in reality, this might not be feasible for different cases: a public layer 2 blockchain will have additional requirements, that blocks must only be issued at certain intervals to prevent congestions; a private layer 2 blockchain might be only issued by certain parties.
+Godwoken is designed based on the assumption that anyone shall be able to propose layer 2 blocks. However, in reality, this might not be feasible for different cases: a public layer 2 blockchain will have additional requirements, that blocks must only be proposed at certain intervals to prevent congestions; a private layer 2 blockchain might be only proposed by certain parties.
 
-This is the reason why Godwoken only uses the type script in a rollup cell. The lock script is thus left to each individual Godwoken deployments, so they can determine the best solution for themselves. Requirements for some might be obstacles for others. As a starting point, and an inspiration for more solutions, a [Proof-of-Authority](https://en.wikipedia.org/wiki/Proof_of_authority) lock script is [provided](https://github.com/xxuejie/clerkb) in current Godwoken deployment. The PoA lock script works as follows:
+This is the reason why Godwoken only uses the type script in a rollup cell. The lock script is thus left to individual Godwoken deployments, so they can determine the best solution for themselves. Requirements for some might be obstacles for others. As a starting point, and an inspiration for more solutions, a [Proof-of-Authority](https://en.wikipedia.org/wiki/Proof_of_authority) lock script is [provided](https://github.com/xxuejie/clerkb) in current Godwoken deployment. The PoA lock script works as follows:
 
 * An existing cell is setup as `PoASetup` cell. See output cell #1 in this [transaction](https://explorer.nervos.org/aggron/transaction/0xf9e630d22d1377b872628a02d352f4ecd8d5b1ee690783017b0194cbc2f57124) for an example, the cell data part for this output cell is as follows:
 
@@ -98,7 +98,7 @@ This is the reason why Godwoken only uses the type script in a rollup cell. The 
     ```
 
     This contains the [PoASetup](https://github.com/xxuejie/clerkb/blob/f5455b1bbc3155fdd0e4dd96cf0667cc22098a8b/src/config.ts#L7) data structure in a [customized](https://github.com/xxuejie/clerkb/blob/f5455b1bbc3155fdd0e4dd96cf0667cc22098a8b/src/config.ts#L68) serialization format.
-* Apart from aggregator identities, a PoASetup data structure also contains information defining **round internal**. Each aggregator gets its round internal in terms. In a round interval, an aggregator can submit up to a pre-defined number of new layer 2 blocks. A round internal is either determined by on-chain timestamps, or block numbers.
+* Apart from aggregator identities, a PoASetup data structure also contains information defining **round interval**. Each aggregator gets its round interval in terms. In a round interval, an aggregator can submit up to a pre-defined number of new layer 2 blocks. A round interval is either determined by on-chain timestamps, or block numbers.
     In the above example, the PoASetup includes 2 aggregators, each aggregator gets a round interval of 90 seconds, where it can issue at most one layer 2 block.
 * In an actual transaction unlocking the PoA guarded cell, a different cell named `PoAData` cell must also be updated with PoA information. In the current Godwoken deployment, each transaction contains such `PoAData` cell, an example can be found in output cell #1 of this Godwoken [transaction](https://explorer.nervos.org/aggron/transaction/0x51bee60d0e68bf3735dbaf7ffeea44727cd2112058a22b5a3e259810ce01a0de). The data part for this output cell is:
 
@@ -106,9 +106,9 @@ This is the reason why Godwoken only uses the type script in a rollup cell. The 
     0xa3860e6000000000a3860e6000000000000000000000
     ````
 
-    This contains the [PoAData](https://github.com/xxuejie/clerkb/blob/f5455b1bbc3155fdd0e4dd96cf0667cc22098a8b/src/config.ts#L16) data structure in a [customized](https://github.com/xxuejie/clerkb/blob/f5455b1bbc3155fdd0e4dd96cf0667cc22098a8b/src/config.ts#L120) serialization format. The PoA lock script uses PoAData cell to update round internal information, such as starting point of current round interval, and progress in current round interval.
+    This contains the [PoAData](https://github.com/xxuejie/clerkb/blob/f5455b1bbc3155fdd0e4dd96cf0667cc22098a8b/src/config.ts#L16) data structure in a [customized](https://github.com/xxuejie/clerkb/blob/f5455b1bbc3155fdd0e4dd96cf0667cc22098a8b/src/config.ts#L120) serialization format. The PoA lock script uses PoAData cell to update round interval information, such as the starting point and progress of current round interval.
 * The identity of each aggregator is proved using the same [owner lock technique](https://github.com/nervosnetwork/rfcs/blob/master/rfcs/0025-simple-udt/0025-simple-udt.md#owner-lock-script) as used in sUDT: the aggregator include a special input cell in the current transaction, the input cell's lock script hash must match the identity included in the PoASetup cell.
-* The aggregators can also start a vote to update the contents in the PoASetup cell. For example, when an aggregator behaves badly, either by not issuing blocks, or issuing too many invalid blocks, the other aggregators can start a vote to upgrade the PoASetup cell, hence removing the misbehaved aggregator. Another example here, is that in the event of congested network, aggregators can vote to alter the round intervals for better performance.
+* The aggregators can also start a vote to update the contents in the PoASetup cell. For example, when an aggregator behaves badly, either by not issuing blocks, or issuing too many invalid blocks, the other aggregators can start a vote to upgrade the PoASetup cell, hence removing the misbehaved aggregator. Another example is that in the event of congested network, aggregators can vote to alter the round intervals for better performance.
 
 # Actions
 
@@ -126,7 +126,7 @@ To use Godwoken, one must first deposit some tokens(either CKB or sUDTs) from la
 }
 ```
 
-`code_hash` and `hash_type` used here is pre-determined by each Godwoken deployment. `args` here contains 2 parts: the first 32 bytes of `args`, contain the **rollup type hash** of the current Godwoken deployment(remember we mentioned earlier, that rollup type hash works like a chain ID?). The remaining part, is the [DepositionLockArgs](https://github.com/nervosnetwork/godwoken/blob/v0.1.0/crates/types/schemas/godwoken.mol#L121) data structure, serialized in molecule format:
+`code_hash` and `hash_type` is pre-determined by each Godwoken deployment. `args` contains 2 parts: the first 32 bytes of `args`, contain the **rollup type hash** of the current Godwoken deployment(remember we mentioned earlier, that rollup type hash works like a chain ID?). The second part, is the [DepositionLockArgs](https://github.com/nervosnetwork/godwoken/blob/v0.1.0/crates/types/schemas/godwoken.mol#L121) data structure, serialized in molecule format:
 
 ```
 table DepositionLockArgs {
@@ -221,7 +221,7 @@ This provides some handy consequences for us:
 
 Now we can have some harmony here: a user can pick any lock script to use in layer 2, while still minimizing layer 2 transaction size. The advantage here, is that we can preserve the same flexibility in layer 1 CKB as well in layer 2 Godwoken: one can freely pick any lock script to use.
 
-This actually have greater usage here: some of you might already know that we build godwoken together with polyjuice, our Ethereum compatible solution. Naturally, we have an Ethereum compatible lock, that enables you to use [Metamask](https://metamask.io/) together with polyjuice. But the story does not stop here: with a different layer 2 lock that implements, for example, EOS signature validation logic, an EOS wallet can also be empowered to call Ethereum dapps with polyjuice. The whole interoperability power of Nervos CKB, is perserved in Godwoken as well.
+This actually have greater usage here: some of you might already know that we build godwoken together with polyjuice, our Ethereum compatible solution. Naturally, we have an Ethereum compatible lock, that enables you to use [Metamask](https://metamask.io/) together with polyjuice. But the story does not stop here: with a different layer 2 lock that implements, for example, EOS signature validation logic, an EOS wallet can also be empowered to call Ethereum dapps with polyjuice. The whole interoperability power of Nervos CKB, is preserved in Godwoken as well.
 
 Now we can derive the signature validation rule for a layer 2 Godwoken transaction:
 
@@ -243,7 +243,7 @@ Ethereum developers would recognize that this design resembles a lot like EOA vs
 
 While a typical user account is a balance owned by a user, contract account, on the other hand, provides a storage for an on-chain smart contract. Similar to the way that a user account is created from a general lock script with a user's public key hash, a smart contract for a contract account is created from a **backend** with some special script args. The smart contract is also represented using the unified [Script](https://github.com/nervosnetwork/godwoken/blob/v0.1.0/crates/types/schemas/godwoken.mol#L27-L37) data structure in the Nervos ecosystem: the combination of `code_hash` and `hash_type` in a script identifies the backend, while `args` provide contract account specific arguments.
 
-With enough background, the rule for executing backends can be introduced:
+Given the above background, the rule for executing backends can be introduced:
 
 * Using `to_id` in the layer 2 transaction, Godwoken locates the corresponding backend script
 * The backend script is executed to calculate the state after applying current transaction.
