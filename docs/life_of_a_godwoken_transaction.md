@@ -83,7 +83,7 @@ Godwoken by design, only defines a generic rollup framework. Both optimistic rol
 
 Note this is slightly different from a typical optimistic rollup: here a transaction is executed, only to prove the transaction is valid, while a timeout indicates challenge success in this case.
 
-In this design, an aggregator offers liquidity costs for staking CKBs used in submitting layer 2 block, as well as layer 1 transaction fees used in the layer 1 transactions containing layer 2 block. In exchange, the aggregator can charge layer 2 transaction fees from layer 2 users. As explained below, layer 2 transaction fees can be paid either in CKB or in any kind of [sUDT](https://github.com/nervosnetwork/rfcs/blob/master/rfcs/0025-simple-udt/0025-simple-udt.md). In fact, Godwoken treat CKB and sUDTs as exactly the same thing in layer 2.
+In this design, an aggregator bears liquidity costs for staking CKBs, as well as layer 1 transaction fees for the layer 1 transactions containing layer 2 block. In exchange, the aggregator can charge layer 2 transaction fees from layer 2 users. As explained below, layer 2 transaction fees can be paid either in CKB or in any kind of [sUDT](https://github.com/nervosnetwork/rfcs/blob/master/rfcs/0025-simple-udt/0025-simple-udt.md). In fact, Godwoken treat CKB and sUDTs as exactly the same thing in layer 2.
 
 ## PoA Deployments
 
