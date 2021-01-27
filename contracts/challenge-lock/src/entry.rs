@@ -13,7 +13,7 @@ use validator_utils::{
     },
     error::Error,
     kv_state::KVState,
-    search_cells::{search_lock_hash, search_rollup_cell},
+    search_cells::{parse_rollup_action, search_lock_hash, search_rollup_cell},
     signature::check_input_account_lock,
 };
 
@@ -26,12 +26,7 @@ use gw_common::{
     state::State,
     H256,
 };
-use gw_types::{
-    packed::{CancelChallenge, CancelChallengeReader, ChallengeLockArgs, ChallengeLockArgsReader},
-    prelude::*,
-};
-
-const CHALLENGE_PERIOD: u64 = 10000;
+use gw_types::{packed::{CancelChallenge, CancelChallengeReader, ChallengeLockArgs, ChallengeLockArgsReader, RollupActionUnion, RollupCancelChallenge, RollupConfig}, prelude::*};
 
 /// args: rollup_type_hash | start challenge
 fn parse_lock_args() -> Result<([u8; 32], ChallengeLockArgs), Error> {
@@ -57,7 +52,7 @@ fn parse_lock_args() -> Result<([u8; 32], ChallengeLockArgs), Error> {
 ///
 /// unlock paths:
 /// * challenge success unlock
-///   * the cell is generated at least CHALLENGE_PERIOD blocks
+///   * the cell is generated at least CHALLENGE_MUTURATY blocks
 /// * cancel challenge unlock
 ///   * a cancel challenge tx is sent to consume this cell
 ///   * a backend verifier cell in the inputs
@@ -65,20 +60,18 @@ fn parse_lock_args() -> Result<([u8; 32], ChallengeLockArgs), Error> {
 pub fn main() -> Result<(), Error> {
     let (rollup_script_hash, lock_args) = parse_lock_args()?;
     // check rollup cell
-    if search_rollup_cell(&rollup_script_hash).is_none() {
-        return Err(Error::RollupCellNotFound);
-    }
-
-    // unlock via challenge success
-    let since = Since::new(load_input_since(0, Source::GroupInput)?);
-    match since.extract_lock_value() {
-        Some(LockValue::BlockNumber(n)) => {
-            if since.is_relative() && n > CHALLENGE_PERIOD {
-                return Ok(());
-            }
+    let index =
+        search_rollup_cell(&rollup_script_hash, Source::Output).ok_or(Error::RollupCellNotFound)?;
+    let action = parse_rollup_action(index, Source::Output)?;
+    match action.to_enum() {
+        RollupActionUnion::RollupEnterChallenge(_) | RollupActionUnion::RollupRevert(_) => {
+            // state-validator will do the verification
+            return Ok(());
         }
-
-        _ => {}
+        RollupActionUnion::RollupCancelChallenge(_) => {}
+        _ => {
+            return Err(Error::InvalidArgs);
+        }
     }
 
     // unlock via cancel challenge
@@ -107,11 +100,12 @@ pub fn main() -> Result<(), Error> {
         .map_err(|_| Error::SMTKeyMissing)?;
     check_input_account_lock(sender_script_hash, tx_hash.into())?;
 
-    // verify cancel challenge backend verifier
+    // verify backend script is in the input
     let script_hash = kv_state
         .get_script_hash(raw_tx.to_id().unpack())
         .map_err(|_| Error::SMTKeyMissing)?;
-    if search_lock_hash(&script_hash.into(), Source::GroupInput).is_none() {
+    // the backend will do the post state verification
+    if search_lock_hash(&script_hash.into(), Source::Input).is_none() {
         return Err(Error::InvalidOutput);
     }
 

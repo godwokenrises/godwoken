@@ -79,19 +79,6 @@ pub fn fetch_capacity_and_sudt_value(
     Ok(value)
 }
 
-pub fn parse_rollup_action() -> Result<RollupAction, Error> {
-    let witness_args = load_witness_args(0, Source::GroupOutput)?;
-    let output_type: Bytes = witness_args
-        .output_type()
-        .to_opt()
-        .ok_or_else(|| Error::Encoding)?
-        .unpack();
-    match RollupActionReader::verify(&output_type, false) {
-        Ok(_) => Ok(RollupAction::new_unchecked(output_type)),
-        Err(_) => Err(Error::Encoding),
-    }
-}
-
 pub fn parse_global_state(source: Source) -> Result<GlobalState, Error> {
     let data = load_cell_data(0, source)?;
     match GlobalStateReader::verify(&data, false) {

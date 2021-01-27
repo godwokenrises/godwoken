@@ -7,14 +7,14 @@ use core::result::Result;
 use alloc::{collections::BTreeMap, vec, vec::Vec};
 use validator_utils::{
     ckb_std::high_level::{load_cell_capacity, load_cell_data_hash},
-    search_cells::search_rollup_config_cell,
+    search_cells::{parse_rollup_action, search_rollup_config_cell},
     signature::check_input_account_lock,
 };
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use crate::{
-    cells::{load_rollup_config, parse_global_state, parse_rollup_action},
+    cells::{load_rollup_config, parse_global_state},
     ckb_std::{
         ckb_constants::Source,
         ckb_types::{bytes::Bytes, prelude::*},
@@ -66,7 +66,7 @@ pub fn main() -> Result<(), Error> {
     let post_global_state = parse_global_state(Source::GroupOutput)?;
     let rollup_config = load_rollup_config(&prev_global_state.rollup_config_hash().unpack())?;
     let rollup_type_hash = load_script_hash()?;
-    let action = parse_rollup_action()?;
+    let action = parse_rollup_action(0, Source::GroupOutput).map_err(|_| Error::Encoding)?;
     match action.to_enum() {
         RollupActionUnion::L2Block(l2block) => {
             // verify submit block

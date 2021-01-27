@@ -57,7 +57,7 @@ pub fn main() -> Result<(), Error> {
     let (rollup_type_hash, lock_args) = parse_lock_args()?;
     // try unlock by Rollup
     // return success if rollup cell in the inputs, the following verification will be handled by rollup state validator.
-    if search_rollup_cell(&rollup_type_hash).is_some() {
+    if search_rollup_cell(&rollup_type_hash, Source::Input).is_some() {
         return Ok(());
     }
 
