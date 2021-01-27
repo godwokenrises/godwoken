@@ -29,15 +29,14 @@ use validator_utils::error::Error;
 
 /// Check challenge cell is maturity(on the layer1)
 fn check_challenge_maturity(
-    _config: &RollupConfig,
+    config: &RollupConfig,
     challenge_cell: &ChallengeCell,
 ) -> Result<(), Error> {
-    const CHALLENGE_MATURITY_BLOCKS: u64 = 10000;
-
+    let challenge_maturity_blocks: u64 = config.challenge_maturity_blocks().unpack();
     let since = Since::new(load_input_since(challenge_cell.index, Source::Input)?);
     match since.extract_lock_value() {
         Some(LockValue::BlockNumber(n)) => {
-            if since.is_relative() && n > CHALLENGE_MATURITY_BLOCKS {
+            if since.is_relative() && n >= challenge_maturity_blocks {
                 return Ok(());
             }
         }
@@ -94,8 +93,6 @@ fn check_rewards(
     reverted_blocks: &[RawL2Block],
     challenge_cell: &ChallengeCell,
 ) -> Result<(), Error> {
-    const REWARDS_RATE: u64 = 50;
-
     let reverted_stake_set: BTreeSet<_> = reverted_blocks
         .iter()
         .map(|b| b.stake_cell_owner_lock_hash())
@@ -115,7 +112,9 @@ fn check_rewards(
         .iter()
         .map(|cell| cell.value.capacity as u128)
         .sum();
-    let expected_reward_capacity = total_stake_capacity.saturating_mul(REWARDS_RATE.into()) / 100;
+    let reward_burn_rate: u8 = config.reward_burn_rate().into();
+    let expected_reward_capacity =
+        total_stake_capacity.saturating_mul(reward_burn_rate.into()) / 100;
     let expected_burn_capacity = total_stake_capacity.saturating_sub(expected_reward_capacity);
     // collect rewards receiver cells capacity
     let received_capacity: u128 = {

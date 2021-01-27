@@ -391,7 +391,6 @@ fn verify_block_producer(
     context: &BlockContext,
     block: &L2Block,
 ) -> Result<(), Error> {
-    const REQUIRED_CAPACITY: u64 = 500_00000000u64;
     let raw_block = block.raw();
     let owner_lock_hash = raw_block.stake_cell_owner_lock_hash();
     let stake_cell = find_one_stake_cell(
@@ -401,7 +400,7 @@ fn verify_block_producer(
         &owner_lock_hash,
     )?;
     // check stake cell capacity
-    if stake_cell.value.capacity < REQUIRED_CAPACITY {
+    if stake_cell.value.capacity < config.required_staking_capacity().unpack() {
         return Err(Error::InvalidStakeCell);
     }
     // expected output stake args

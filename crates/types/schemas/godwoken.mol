@@ -35,6 +35,9 @@ struct RollupConfig {
     stake_script_type_hash: Byte32,
     l2_sudt_validator_script_type_hash: Byte32,
     burn_lock_hash: Byte32,
+    required_staking_capacity: Uint64,
+    challenge_maturity_blocks: Uint64,
+    reward_burn_rate: byte, // * reward_burn_rate / 100
 }
 
 table RawL2Transaction {

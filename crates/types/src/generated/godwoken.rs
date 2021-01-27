@@ -2244,6 +2244,19 @@ impl ::core::fmt::Display for RollupConfig {
             self.l2_sudt_validator_script_type_hash()
         )?;
         write!(f, ", {}: {}", "burn_lock_hash", self.burn_lock_hash())?;
+        write!(
+            f,
+            ", {}: {}",
+            "required_staking_capacity",
+            self.required_staking_capacity()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "challenge_maturity_blocks",
+            self.challenge_maturity_blocks()
+        )?;
+        write!(f, ", {}: {}", "reward_burn_rate", self.reward_burn_rate())?;
         write!(f, " }}")
     }
 }
@@ -2258,15 +2271,16 @@ impl ::core::default::Default for RollupConfig {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RollupConfig::new_unchecked(v.into())
     }
 }
 impl RollupConfig {
-    pub const TOTAL_SIZE: usize = 256;
-    pub const FIELD_SIZES: [usize; 8] = [32, 32, 32, 32, 32, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 8;
+    pub const TOTAL_SIZE: usize = 273;
+    pub const FIELD_SIZES: [usize; 11] = [32, 32, 32, 32, 32, 32, 32, 32, 8, 8, 1];
+    pub const FIELD_COUNT: usize = 11;
     pub fn l1_sudt_script_type_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
@@ -2290,6 +2304,15 @@ impl RollupConfig {
     }
     pub fn burn_lock_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(224..256))
+    }
+    pub fn required_staking_capacity(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(256..264))
+    }
+    pub fn challenge_maturity_blocks(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(264..272))
+    }
+    pub fn reward_burn_rate(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(272..273))
     }
     pub fn as_reader<'r>(&'r self) -> RollupConfigReader<'r> {
         RollupConfigReader::new_unchecked(self.as_slice())
@@ -2326,6 +2349,9 @@ impl molecule::prelude::Entity for RollupConfig {
             .stake_script_type_hash(self.stake_script_type_hash())
             .l2_sudt_validator_script_type_hash(self.l2_sudt_validator_script_type_hash())
             .burn_lock_hash(self.burn_lock_hash())
+            .required_staking_capacity(self.required_staking_capacity())
+            .challenge_maturity_blocks(self.challenge_maturity_blocks())
+            .reward_burn_rate(self.reward_burn_rate())
     }
 }
 #[derive(Clone, Copy)]
@@ -2390,13 +2416,26 @@ impl<'r> ::core::fmt::Display for RollupConfigReader<'r> {
             self.l2_sudt_validator_script_type_hash()
         )?;
         write!(f, ", {}: {}", "burn_lock_hash", self.burn_lock_hash())?;
+        write!(
+            f,
+            ", {}: {}",
+            "required_staking_capacity",
+            self.required_staking_capacity()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "challenge_maturity_blocks",
+            self.challenge_maturity_blocks()
+        )?;
+        write!(f, ", {}: {}", "reward_burn_rate", self.reward_burn_rate())?;
         write!(f, " }}")
     }
 }
 impl<'r> RollupConfigReader<'r> {
-    pub const TOTAL_SIZE: usize = 256;
-    pub const FIELD_SIZES: [usize; 8] = [32, 32, 32, 32, 32, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 8;
+    pub const TOTAL_SIZE: usize = 273;
+    pub const FIELD_SIZES: [usize; 11] = [32, 32, 32, 32, 32, 32, 32, 32, 8, 8, 1];
+    pub const FIELD_COUNT: usize = 11;
     pub fn l1_sudt_script_type_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
@@ -2420,6 +2459,15 @@ impl<'r> RollupConfigReader<'r> {
     }
     pub fn burn_lock_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[224..256])
+    }
+    pub fn required_staking_capacity(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[256..264])
+    }
+    pub fn challenge_maturity_blocks(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[264..272])
+    }
+    pub fn reward_burn_rate(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[272..273])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for RollupConfigReader<'r> {
@@ -2453,11 +2501,14 @@ pub struct RollupConfigBuilder {
     pub(crate) stake_script_type_hash: Byte32,
     pub(crate) l2_sudt_validator_script_type_hash: Byte32,
     pub(crate) burn_lock_hash: Byte32,
+    pub(crate) required_staking_capacity: Uint64,
+    pub(crate) challenge_maturity_blocks: Uint64,
+    pub(crate) reward_burn_rate: Byte,
 }
 impl RollupConfigBuilder {
-    pub const TOTAL_SIZE: usize = 256;
-    pub const FIELD_SIZES: [usize; 8] = [32, 32, 32, 32, 32, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 8;
+    pub const TOTAL_SIZE: usize = 273;
+    pub const FIELD_SIZES: [usize; 11] = [32, 32, 32, 32, 32, 32, 32, 32, 8, 8, 1];
+    pub const FIELD_COUNT: usize = 11;
     pub fn l1_sudt_script_type_hash(mut self, v: Byte32) -> Self {
         self.l1_sudt_script_type_hash = v;
         self
@@ -2490,6 +2541,18 @@ impl RollupConfigBuilder {
         self.burn_lock_hash = v;
         self
     }
+    pub fn required_staking_capacity(mut self, v: Uint64) -> Self {
+        self.required_staking_capacity = v;
+        self
+    }
+    pub fn challenge_maturity_blocks(mut self, v: Uint64) -> Self {
+        self.challenge_maturity_blocks = v;
+        self
+    }
+    pub fn reward_burn_rate(mut self, v: Byte) -> Self {
+        self.reward_burn_rate = v;
+        self
+    }
 }
 impl molecule::prelude::Builder for RollupConfigBuilder {
     type Entity = RollupConfig;
@@ -2506,6 +2569,9 @@ impl molecule::prelude::Builder for RollupConfigBuilder {
         writer.write_all(self.stake_script_type_hash.as_slice())?;
         writer.write_all(self.l2_sudt_validator_script_type_hash.as_slice())?;
         writer.write_all(self.burn_lock_hash.as_slice())?;
+        writer.write_all(self.required_staking_capacity.as_slice())?;
+        writer.write_all(self.challenge_maturity_blocks.as_slice())?;
+        writer.write_all(self.reward_burn_rate.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
