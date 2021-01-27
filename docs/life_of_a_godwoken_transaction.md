@@ -321,7 +321,7 @@ struct WithdrawalRequest {
 
 Please refer to [this file](https://github.com/nervosnetwork/godwoken/blob/v0.1.0/crates/types/schemas/godwoken.mol#L71-L94) for a more complete definition and related types.
 
-A `WithdrawalRequest` uses `account_script_hash` as a key to locate the account lock, perform the same signature verification flow as layer 2 transaction. Withdraw action can be used to withdraw CKB and a layer 1 sUDT type simutaneously. Due to CKB's cell model limitation, Godwoken requires each withdraw request to withdraw at least 400 CKB.
+A `WithdrawalRequest` uses `account_script_hash` as a key to locate the account lock, perform the same signature verification flow as layer 2 transaction. Withdraw action can be used to withdraw CKB and a layer 1 sUDT type simutaneously. Due to the constraint of CKB's cell model, currently Godwoken requires each withdraw request to withdraw at least 400 CKBytes as an expedient.
 
 You might notice more fields are included in `WithdrawalRequest`, those are used to fulfill a special feature of Godwoken: selling of withdrawed tokens. This is explained in the next section.
 
