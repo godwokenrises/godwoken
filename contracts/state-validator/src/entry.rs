@@ -41,14 +41,21 @@ pub fn main() -> Result<(), Error> {
     let rollup_type_hash = load_script_hash()?;
     let action = parse_rollup_action(0, Source::GroupOutput)?;
     match action.to_enum() {
-        RollupActionUnion::L2Block(l2block) => {
+        RollupActionUnion::RollupSubmitBlock(args) => {
             // verify submit block
             verifications::submit_block::verify(
                 rollup_type_hash,
                 &rollup_config,
-                &l2block,
+                &args.block(),
                 &prev_global_state,
                 &post_global_state,
+            )?;
+            // merkle verify reverted_block_hashes,
+            // other rollup locks will check reverted blocks by compare block hash with this field
+            verifications::submit_block::verify_reverted_block_hashes(
+                args.reverted_block_hashes().unpack(),
+                args.reverted_block_proof().unpack(),
+                &prev_global_state,
             )?;
         }
         RollupActionUnion::RollupEnterChallenge(_args) => {

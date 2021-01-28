@@ -24,6 +24,7 @@ use validator_utils::error::Error;
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     error::Error as StateError,
+    h256_ext::H256Ext,
     merkle_utils::calculate_merkle_root,
     smt::{Blake2bHasher, CompiledMerkleProof},
     state::State,
@@ -514,5 +515,24 @@ pub fn verify(
         return Err(Error::InvalidPostGlobalState);
     }
 
+    Ok(())
+}
+
+// Verify reverted_block_root
+pub fn verify_reverted_block_hashes(
+    reverted_block_hashes: Vec<H256>,
+    reverted_block_proof: Bytes,
+    prev_global_state: &GlobalState,
+) -> Result<(), Error> {
+    let reverted_block_root = prev_global_state.reverted_block_root().unpack();
+    let merkle_proof = CompiledMerkleProof(reverted_block_proof.into());
+    let leaves = reverted_block_hashes
+        .into_iter()
+        .map(|k| (k, H256::one()))
+        .collect();
+    let valid = merkle_proof.verify::<Blake2bHasher>(&reverted_block_root, leaves)?;
+    if !valid {
+        return Err(Error::MerkleProof);
+    }
     Ok(())
 }

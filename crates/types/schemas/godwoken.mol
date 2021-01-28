@@ -156,8 +156,7 @@ table CustodianLockArgs {
     deposition_block_number: Uint64,
 }
 
-table UnlockCustodianViaRevert {
-    block_proof: Bytes,
+struct UnlockCustodianViaRevertWitness {
     deposition_lock_hash: Byte32,
 }
 
@@ -179,16 +178,14 @@ struct WithdrawalLockArgs {
     payment_lock_hash: Byte32,
 }
 
-union UnlockWithdrawal {
+union UnlockWithdrawalWitness {
     UnlockWithdrawalViaFinalize,
     UnlockWithdrawalViaRevert,
     UnlockWithdrawalViaTrade,
 }
 table UnlockWithdrawalViaFinalize {
-    block_proof: Bytes,
 }
-table UnlockWithdrawalViaRevert {
-    block_proof: Bytes,
+struct UnlockWithdrawalViaRevert {
     custodian_lock_hash: Byte32,
 }
 table UnlockWithdrawalViaTrade {
@@ -274,6 +271,11 @@ struct UnlockAccountWitness {
 // --- end of unlock account ---
 
 // --- Rollup ---
+table RollupSubmitBlock {
+    block: L2Block,
+    reverted_block_hashes: Byte32Vec,
+    reverted_block_proof: Bytes,
+}
 table RollupEnterChallenge {}
 table RollupCancelChallenge {}
 table RollupRevert {
@@ -283,7 +285,7 @@ table RollupRevert {
 }
 union RollupAction {
     // submit layer2 block
-    L2Block,
+    RollupSubmitBlock,
     // change rollup status to halting
     RollupEnterChallenge,
     // change rollup status to running

@@ -7808,8 +7808,8 @@ impl molecule::prelude::Builder for CustodianLockArgsBuilder {
     }
 }
 #[derive(Clone)]
-pub struct UnlockCustodianViaRevert(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for UnlockCustodianViaRevert {
+pub struct UnlockCustodianViaRevertWitness(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for UnlockCustodianViaRevertWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -7818,80 +7818,48 @@ impl ::core::fmt::LowerHex for UnlockCustodianViaRevert {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for UnlockCustodianViaRevert {
+impl ::core::fmt::Debug for UnlockCustodianViaRevertWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for UnlockCustodianViaRevert {
+impl ::core::fmt::Display for UnlockCustodianViaRevertWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_proof", self.block_proof())?;
         write!(
             f,
-            ", {}: {}",
+            "{}: {}",
             "deposition_lock_hash",
             self.deposition_lock_hash()
         )?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for UnlockCustodianViaRevert {
+impl ::core::default::Default for UnlockCustodianViaRevertWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            48, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
         ];
-        UnlockCustodianViaRevert::new_unchecked(v.into())
+        UnlockCustodianViaRevertWitness::new_unchecked(v.into())
     }
 }
-impl UnlockCustodianViaRevert {
-    pub const FIELD_COUNT: usize = 2;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn block_proof(&self) -> Bytes {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        Bytes::new_unchecked(self.0.slice(start..end))
-    }
+impl UnlockCustodianViaRevertWitness {
+    pub const TOTAL_SIZE: usize = 32;
+    pub const FIELD_SIZES: [usize; 1] = [32];
+    pub const FIELD_COUNT: usize = 1;
     pub fn deposition_lock_hash(&self) -> Byte32 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
-            Byte32::new_unchecked(self.0.slice(start..end))
-        } else {
-            Byte32::new_unchecked(self.0.slice(start..))
-        }
+        Byte32::new_unchecked(self.0.slice(0..32))
     }
-    pub fn as_reader<'r>(&'r self) -> UnlockCustodianViaRevertReader<'r> {
-        UnlockCustodianViaRevertReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> UnlockCustodianViaRevertWitnessReader<'r> {
+        UnlockCustodianViaRevertWitnessReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for UnlockCustodianViaRevert {
-    type Builder = UnlockCustodianViaRevertBuilder;
-    const NAME: &'static str = "UnlockCustodianViaRevert";
+impl molecule::prelude::Entity for UnlockCustodianViaRevertWitness {
+    type Builder = UnlockCustodianViaRevertWitnessBuilder;
+    const NAME: &'static str = "UnlockCustodianViaRevertWitness";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        UnlockCustodianViaRevert(data)
+        UnlockCustodianViaRevertWitness(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -7900,24 +7868,22 @@ impl molecule::prelude::Entity for UnlockCustodianViaRevert {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        UnlockCustodianViaRevertReader::from_slice(slice).map(|reader| reader.to_entity())
+        UnlockCustodianViaRevertWitnessReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        UnlockCustodianViaRevertReader::from_compatible_slice(slice)
+        UnlockCustodianViaRevertWitnessReader::from_compatible_slice(slice)
             .map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .block_proof(self.block_proof())
-            .deposition_lock_hash(self.deposition_lock_hash())
+        Self::new_builder().deposition_lock_hash(self.deposition_lock_hash())
     }
 }
 #[derive(Clone, Copy)]
-pub struct UnlockCustodianViaRevertReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for UnlockCustodianViaRevertReader<'r> {
+pub struct UnlockCustodianViaRevertWitnessReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for UnlockCustodianViaRevertWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -7926,155 +7892,72 @@ impl<'r> ::core::fmt::LowerHex for UnlockCustodianViaRevertReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for UnlockCustodianViaRevertReader<'r> {
+impl<'r> ::core::fmt::Debug for UnlockCustodianViaRevertWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for UnlockCustodianViaRevertReader<'r> {
+impl<'r> ::core::fmt::Display for UnlockCustodianViaRevertWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_proof", self.block_proof())?;
         write!(
             f,
-            ", {}: {}",
+            "{}: {}",
             "deposition_lock_hash",
             self.deposition_lock_hash()
         )?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
         write!(f, " }}")
     }
 }
-impl<'r> UnlockCustodianViaRevertReader<'r> {
-    pub const FIELD_COUNT: usize = 2;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn block_proof(&self) -> BytesReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        BytesReader::new_unchecked(&self.as_slice()[start..end])
-    }
+impl<'r> UnlockCustodianViaRevertWitnessReader<'r> {
+    pub const TOTAL_SIZE: usize = 32;
+    pub const FIELD_SIZES: [usize; 1] = [32];
+    pub const FIELD_COUNT: usize = 1;
     pub fn deposition_lock_hash(&self) -> Byte32Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
-            Byte32Reader::new_unchecked(&self.as_slice()[start..end])
-        } else {
-            Byte32Reader::new_unchecked(&self.as_slice()[start..])
-        }
+        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for UnlockCustodianViaRevertReader<'r> {
-    type Entity = UnlockCustodianViaRevert;
-    const NAME: &'static str = "UnlockCustodianViaRevertReader";
+impl<'r> molecule::prelude::Reader<'r> for UnlockCustodianViaRevertWitnessReader<'r> {
+    type Entity = UnlockCustodianViaRevertWitness;
+    const NAME: &'static str = "UnlockCustodianViaRevertWitnessReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        UnlockCustodianViaRevertReader(slice)
+        UnlockCustodianViaRevertWitnessReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
     }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
         use molecule::verification_error as ve;
         let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
         }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        let field_count = offset_first / 4 - 1;
-        if field_count < Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        } else if !compatible && field_count > Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        };
-        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
-        if slice_len < header_size {
-            return ve!(Self, HeaderIsBroken, header_size, slice_len);
-        }
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
-            .chunks(molecule::NUMBER_SIZE)
-            .take(field_count)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        BytesReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        Byte32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
-pub struct UnlockCustodianViaRevertBuilder {
-    pub(crate) block_proof: Bytes,
+pub struct UnlockCustodianViaRevertWitnessBuilder {
     pub(crate) deposition_lock_hash: Byte32,
 }
-impl UnlockCustodianViaRevertBuilder {
-    pub const FIELD_COUNT: usize = 2;
-    pub fn block_proof(mut self, v: Bytes) -> Self {
-        self.block_proof = v;
-        self
-    }
+impl UnlockCustodianViaRevertWitnessBuilder {
+    pub const TOTAL_SIZE: usize = 32;
+    pub const FIELD_SIZES: [usize; 1] = [32];
+    pub const FIELD_COUNT: usize = 1;
     pub fn deposition_lock_hash(mut self, v: Byte32) -> Self {
         self.deposition_lock_hash = v;
         self
     }
 }
-impl molecule::prelude::Builder for UnlockCustodianViaRevertBuilder {
-    type Entity = UnlockCustodianViaRevert;
-    const NAME: &'static str = "UnlockCustodianViaRevertBuilder";
+impl molecule::prelude::Builder for UnlockCustodianViaRevertWitnessBuilder {
+    type Entity = UnlockCustodianViaRevertWitness;
+    const NAME: &'static str = "UnlockCustodianViaRevertWitnessBuilder";
     fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.block_proof.as_slice().len()
-            + self.deposition_lock_hash.as_slice().len()
+        Self::TOTAL_SIZE
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
-        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.block_proof.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.deposition_lock_hash.as_slice().len();
-        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-        for offset in offsets.into_iter() {
-            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-        }
-        writer.write_all(self.block_proof.as_slice())?;
         writer.write_all(self.deposition_lock_hash.as_slice())?;
         Ok(())
     }
@@ -8082,7 +7965,7 @@ impl molecule::prelude::Builder for UnlockCustodianViaRevertBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        UnlockCustodianViaRevert::new_unchecked(inner.into())
+        UnlockCustodianViaRevertWitness::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -8377,8 +8260,8 @@ impl molecule::prelude::Builder for WithdrawalLockArgsBuilder {
     }
 }
 #[derive(Clone)]
-pub struct UnlockWithdrawal(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for UnlockWithdrawal {
+pub struct UnlockWithdrawalWitness(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for UnlockWithdrawalWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -8387,30 +8270,30 @@ impl ::core::fmt::LowerHex for UnlockWithdrawal {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for UnlockWithdrawal {
+impl ::core::fmt::Debug for UnlockWithdrawalWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for UnlockWithdrawal {
+impl ::core::fmt::Display for UnlockWithdrawalWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}(", Self::NAME)?;
         self.to_enum().display_inner(f)?;
         write!(f, ")")
     }
 }
-impl ::core::default::Default for UnlockWithdrawal {
+impl ::core::default::Default for UnlockWithdrawalWitness {
     fn default() -> Self {
-        let v: Vec<u8> = vec![0, 0, 0, 0, 12, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0];
-        UnlockWithdrawal::new_unchecked(v.into())
+        let v: Vec<u8> = vec![0, 0, 0, 0, 4, 0, 0, 0];
+        UnlockWithdrawalWitness::new_unchecked(v.into())
     }
 }
-impl UnlockWithdrawal {
+impl UnlockWithdrawalWitness {
     pub const ITEMS_COUNT: usize = 3;
     pub fn item_id(&self) -> molecule::Number {
         molecule::unpack_number(self.as_slice())
     }
-    pub fn to_enum(&self) -> UnlockWithdrawalUnion {
+    pub fn to_enum(&self) -> UnlockWithdrawalWitnessUnion {
         let inner = self.0.slice(molecule::NUMBER_SIZE..);
         match self.item_id() {
             0 => UnlockWithdrawalViaFinalize::new_unchecked(inner).into(),
@@ -8419,15 +8302,15 @@ impl UnlockWithdrawal {
             _ => panic!("{}: invalid data", Self::NAME),
         }
     }
-    pub fn as_reader<'r>(&'r self) -> UnlockWithdrawalReader<'r> {
-        UnlockWithdrawalReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> UnlockWithdrawalWitnessReader<'r> {
+        UnlockWithdrawalWitnessReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for UnlockWithdrawal {
-    type Builder = UnlockWithdrawalBuilder;
-    const NAME: &'static str = "UnlockWithdrawal";
+impl molecule::prelude::Entity for UnlockWithdrawalWitness {
+    type Builder = UnlockWithdrawalWitnessBuilder;
+    const NAME: &'static str = "UnlockWithdrawalWitness";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        UnlockWithdrawal(data)
+        UnlockWithdrawalWitness(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -8436,10 +8319,10 @@ impl molecule::prelude::Entity for UnlockWithdrawal {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        UnlockWithdrawalReader::from_slice(slice).map(|reader| reader.to_entity())
+        UnlockWithdrawalWitnessReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        UnlockWithdrawalReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        UnlockWithdrawalWitnessReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -8449,8 +8332,8 @@ impl molecule::prelude::Entity for UnlockWithdrawal {
     }
 }
 #[derive(Clone, Copy)]
-pub struct UnlockWithdrawalReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for UnlockWithdrawalReader<'r> {
+pub struct UnlockWithdrawalWitnessReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for UnlockWithdrawalWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -8459,24 +8342,24 @@ impl<'r> ::core::fmt::LowerHex for UnlockWithdrawalReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for UnlockWithdrawalReader<'r> {
+impl<'r> ::core::fmt::Debug for UnlockWithdrawalWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for UnlockWithdrawalReader<'r> {
+impl<'r> ::core::fmt::Display for UnlockWithdrawalWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}(", Self::NAME)?;
         self.to_enum().display_inner(f)?;
         write!(f, ")")
     }
 }
-impl<'r> UnlockWithdrawalReader<'r> {
+impl<'r> UnlockWithdrawalWitnessReader<'r> {
     pub const ITEMS_COUNT: usize = 3;
     pub fn item_id(&self) -> molecule::Number {
         molecule::unpack_number(self.as_slice())
     }
-    pub fn to_enum(&self) -> UnlockWithdrawalUnionReader<'r> {
+    pub fn to_enum(&self) -> UnlockWithdrawalWitnessUnionReader<'r> {
         let inner = &self.as_slice()[molecule::NUMBER_SIZE..];
         match self.item_id() {
             0 => UnlockWithdrawalViaFinalizeReader::new_unchecked(inner).into(),
@@ -8486,14 +8369,14 @@ impl<'r> UnlockWithdrawalReader<'r> {
         }
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for UnlockWithdrawalReader<'r> {
-    type Entity = UnlockWithdrawal;
-    const NAME: &'static str = "UnlockWithdrawalReader";
+impl<'r> molecule::prelude::Reader<'r> for UnlockWithdrawalWitnessReader<'r> {
+    type Entity = UnlockWithdrawalWitness;
+    const NAME: &'static str = "UnlockWithdrawalWitnessReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        UnlockWithdrawalReader(slice)
+        UnlockWithdrawalWitnessReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -8516,20 +8399,20 @@ impl<'r> molecule::prelude::Reader<'r> for UnlockWithdrawalReader<'r> {
     }
 }
 #[derive(Debug, Default)]
-pub struct UnlockWithdrawalBuilder(pub(crate) UnlockWithdrawalUnion);
-impl UnlockWithdrawalBuilder {
+pub struct UnlockWithdrawalWitnessBuilder(pub(crate) UnlockWithdrawalWitnessUnion);
+impl UnlockWithdrawalWitnessBuilder {
     pub const ITEMS_COUNT: usize = 3;
     pub fn set<I>(mut self, v: I) -> Self
     where
-        I: ::core::convert::Into<UnlockWithdrawalUnion>,
+        I: ::core::convert::Into<UnlockWithdrawalWitnessUnion>,
     {
         self.0 = v.into();
         self
     }
 }
-impl molecule::prelude::Builder for UnlockWithdrawalBuilder {
-    type Entity = UnlockWithdrawal;
-    const NAME: &'static str = "UnlockWithdrawalBuilder";
+impl molecule::prelude::Builder for UnlockWithdrawalWitnessBuilder {
+    type Entity = UnlockWithdrawalWitness;
+    const NAME: &'static str = "UnlockWithdrawalWitnessBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE + self.0.as_slice().len()
     }
@@ -8541,44 +8424,46 @@ impl molecule::prelude::Builder for UnlockWithdrawalBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        UnlockWithdrawal::new_unchecked(inner.into())
+        UnlockWithdrawalWitness::new_unchecked(inner.into())
     }
 }
 #[derive(Debug, Clone)]
-pub enum UnlockWithdrawalUnion {
+pub enum UnlockWithdrawalWitnessUnion {
     UnlockWithdrawalViaFinalize(UnlockWithdrawalViaFinalize),
     UnlockWithdrawalViaRevert(UnlockWithdrawalViaRevert),
     UnlockWithdrawalViaTrade(UnlockWithdrawalViaTrade),
 }
 #[derive(Debug, Clone, Copy)]
-pub enum UnlockWithdrawalUnionReader<'r> {
+pub enum UnlockWithdrawalWitnessUnionReader<'r> {
     UnlockWithdrawalViaFinalize(UnlockWithdrawalViaFinalizeReader<'r>),
     UnlockWithdrawalViaRevert(UnlockWithdrawalViaRevertReader<'r>),
     UnlockWithdrawalViaTrade(UnlockWithdrawalViaTradeReader<'r>),
 }
-impl ::core::default::Default for UnlockWithdrawalUnion {
+impl ::core::default::Default for UnlockWithdrawalWitnessUnion {
     fn default() -> Self {
-        UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(::core::default::Default::default())
+        UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(
+            ::core::default::Default::default(),
+        )
     }
 }
-impl ::core::fmt::Display for UnlockWithdrawalUnion {
+impl ::core::fmt::Display for UnlockWithdrawalWitnessUnion {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
-            UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(ref item) => write!(
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(ref item) => write!(
                 f,
                 "{}::{}({})",
                 Self::NAME,
                 UnlockWithdrawalViaFinalize::NAME,
                 item
             ),
-            UnlockWithdrawalUnion::UnlockWithdrawalViaRevert(ref item) => write!(
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(ref item) => write!(
                 f,
                 "{}::{}({})",
                 Self::NAME,
                 UnlockWithdrawalViaRevert::NAME,
                 item
             ),
-            UnlockWithdrawalUnion::UnlockWithdrawalViaTrade(ref item) => write!(
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(ref item) => write!(
                 f,
                 "{}::{}({})",
                 Self::NAME,
@@ -8588,24 +8473,24 @@ impl ::core::fmt::Display for UnlockWithdrawalUnion {
         }
     }
 }
-impl<'r> ::core::fmt::Display for UnlockWithdrawalUnionReader<'r> {
+impl<'r> ::core::fmt::Display for UnlockWithdrawalWitnessUnionReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaFinalize(ref item) => write!(
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaFinalize(ref item) => write!(
                 f,
                 "{}::{}({})",
                 Self::NAME,
                 UnlockWithdrawalViaFinalize::NAME,
                 item
             ),
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaRevert(ref item) => write!(
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaRevert(ref item) => write!(
                 f,
                 "{}::{}({})",
                 Self::NAME,
                 UnlockWithdrawalViaRevert::NAME,
                 item
             ),
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaTrade(ref item) => write!(
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(ref item) => write!(
                 f,
                 "{}::{}({})",
                 Self::NAME,
@@ -8615,129 +8500,147 @@ impl<'r> ::core::fmt::Display for UnlockWithdrawalUnionReader<'r> {
         }
     }
 }
-impl UnlockWithdrawalUnion {
+impl UnlockWithdrawalWitnessUnion {
     pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
-            UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(ref item) => write!(f, "{}", item),
-            UnlockWithdrawalUnion::UnlockWithdrawalViaRevert(ref item) => write!(f, "{}", item),
-            UnlockWithdrawalUnion::UnlockWithdrawalViaTrade(ref item) => write!(f, "{}", item),
-        }
-    }
-}
-impl<'r> UnlockWithdrawalUnionReader<'r> {
-    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaFinalize(ref item) => {
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(ref item) => {
                 write!(f, "{}", item)
             }
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaRevert(ref item) => {
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(ref item) => {
                 write!(f, "{}", item)
             }
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaTrade(ref item) => {
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(ref item) => {
                 write!(f, "{}", item)
             }
         }
     }
 }
-impl ::core::convert::From<UnlockWithdrawalViaFinalize> for UnlockWithdrawalUnion {
+impl<'r> UnlockWithdrawalWitnessUnionReader<'r> {
+    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaFinalize(ref item) => {
+                write!(f, "{}", item)
+            }
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaRevert(ref item) => {
+                write!(f, "{}", item)
+            }
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(ref item) => {
+                write!(f, "{}", item)
+            }
+        }
+    }
+}
+impl ::core::convert::From<UnlockWithdrawalViaFinalize> for UnlockWithdrawalWitnessUnion {
     fn from(item: UnlockWithdrawalViaFinalize) -> Self {
-        UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(item)
+        UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(item)
     }
 }
-impl ::core::convert::From<UnlockWithdrawalViaRevert> for UnlockWithdrawalUnion {
+impl ::core::convert::From<UnlockWithdrawalViaRevert> for UnlockWithdrawalWitnessUnion {
     fn from(item: UnlockWithdrawalViaRevert) -> Self {
-        UnlockWithdrawalUnion::UnlockWithdrawalViaRevert(item)
+        UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(item)
     }
 }
-impl ::core::convert::From<UnlockWithdrawalViaTrade> for UnlockWithdrawalUnion {
+impl ::core::convert::From<UnlockWithdrawalViaTrade> for UnlockWithdrawalWitnessUnion {
     fn from(item: UnlockWithdrawalViaTrade) -> Self {
-        UnlockWithdrawalUnion::UnlockWithdrawalViaTrade(item)
+        UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(item)
     }
 }
 impl<'r> ::core::convert::From<UnlockWithdrawalViaFinalizeReader<'r>>
-    for UnlockWithdrawalUnionReader<'r>
+    for UnlockWithdrawalWitnessUnionReader<'r>
 {
     fn from(item: UnlockWithdrawalViaFinalizeReader<'r>) -> Self {
-        UnlockWithdrawalUnionReader::UnlockWithdrawalViaFinalize(item)
+        UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaFinalize(item)
     }
 }
 impl<'r> ::core::convert::From<UnlockWithdrawalViaRevertReader<'r>>
-    for UnlockWithdrawalUnionReader<'r>
+    for UnlockWithdrawalWitnessUnionReader<'r>
 {
     fn from(item: UnlockWithdrawalViaRevertReader<'r>) -> Self {
-        UnlockWithdrawalUnionReader::UnlockWithdrawalViaRevert(item)
+        UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaRevert(item)
     }
 }
 impl<'r> ::core::convert::From<UnlockWithdrawalViaTradeReader<'r>>
-    for UnlockWithdrawalUnionReader<'r>
+    for UnlockWithdrawalWitnessUnionReader<'r>
 {
     fn from(item: UnlockWithdrawalViaTradeReader<'r>) -> Self {
-        UnlockWithdrawalUnionReader::UnlockWithdrawalViaTrade(item)
+        UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(item)
     }
 }
-impl UnlockWithdrawalUnion {
-    pub const NAME: &'static str = "UnlockWithdrawalUnion";
+impl UnlockWithdrawalWitnessUnion {
+    pub const NAME: &'static str = "UnlockWithdrawalWitnessUnion";
     pub fn as_bytes(&self) -> molecule::bytes::Bytes {
         match self {
-            UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(item) => item.as_bytes(),
-            UnlockWithdrawalUnion::UnlockWithdrawalViaRevert(item) => item.as_bytes(),
-            UnlockWithdrawalUnion::UnlockWithdrawalViaTrade(item) => item.as_bytes(),
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(item) => item.as_bytes(),
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(item) => item.as_bytes(),
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(item) => item.as_bytes(),
         }
     }
     pub fn as_slice(&self) -> &[u8] {
         match self {
-            UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(item) => item.as_slice(),
-            UnlockWithdrawalUnion::UnlockWithdrawalViaRevert(item) => item.as_slice(),
-            UnlockWithdrawalUnion::UnlockWithdrawalViaTrade(item) => item.as_slice(),
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(item) => item.as_slice(),
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(item) => item.as_slice(),
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(item) => item.as_slice(),
         }
     }
     pub fn item_id(&self) -> molecule::Number {
         match self {
-            UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(_) => 0,
-            UnlockWithdrawalUnion::UnlockWithdrawalViaRevert(_) => 1,
-            UnlockWithdrawalUnion::UnlockWithdrawalViaTrade(_) => 2,
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(_) => 0,
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(_) => 1,
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(_) => 2,
         }
     }
     pub fn item_name(&self) -> &str {
         match self {
-            UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(_) => "UnlockWithdrawalViaFinalize",
-            UnlockWithdrawalUnion::UnlockWithdrawalViaRevert(_) => "UnlockWithdrawalViaRevert",
-            UnlockWithdrawalUnion::UnlockWithdrawalViaTrade(_) => "UnlockWithdrawalViaTrade",
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(_) => {
+                "UnlockWithdrawalViaFinalize"
+            }
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(_) => {
+                "UnlockWithdrawalViaRevert"
+            }
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(_) => "UnlockWithdrawalViaTrade",
         }
     }
-    pub fn as_reader<'r>(&'r self) -> UnlockWithdrawalUnionReader<'r> {
+    pub fn as_reader<'r>(&'r self) -> UnlockWithdrawalWitnessUnionReader<'r> {
         match self {
-            UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(item) => item.as_reader().into(),
-            UnlockWithdrawalUnion::UnlockWithdrawalViaRevert(item) => item.as_reader().into(),
-            UnlockWithdrawalUnion::UnlockWithdrawalViaTrade(item) => item.as_reader().into(),
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(item) => {
+                item.as_reader().into()
+            }
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(item) => {
+                item.as_reader().into()
+            }
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(item) => item.as_reader().into(),
         }
     }
 }
-impl<'r> UnlockWithdrawalUnionReader<'r> {
-    pub const NAME: &'r str = "UnlockWithdrawalUnionReader";
+impl<'r> UnlockWithdrawalWitnessUnionReader<'r> {
+    pub const NAME: &'r str = "UnlockWithdrawalWitnessUnionReader";
     pub fn as_slice(&self) -> &'r [u8] {
         match self {
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaFinalize(item) => item.as_slice(),
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaRevert(item) => item.as_slice(),
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaTrade(item) => item.as_slice(),
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaFinalize(item) => {
+                item.as_slice()
+            }
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaRevert(item) => item.as_slice(),
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(item) => item.as_slice(),
         }
     }
     pub fn item_id(&self) -> molecule::Number {
         match self {
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaFinalize(_) => 0,
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaRevert(_) => 1,
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaTrade(_) => 2,
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaFinalize(_) => 0,
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaRevert(_) => 1,
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(_) => 2,
         }
     }
     pub fn item_name(&self) -> &str {
         match self {
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaFinalize(_) => {
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaFinalize(_) => {
                 "UnlockWithdrawalViaFinalize"
             }
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaRevert(_) => {
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaRevert(_) => {
                 "UnlockWithdrawalViaRevert"
             }
-            UnlockWithdrawalUnionReader::UnlockWithdrawalViaTrade(_) => "UnlockWithdrawalViaTrade",
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(_) => {
+                "UnlockWithdrawalViaTrade"
+            }
         }
     }
 }
@@ -8760,22 +8663,21 @@ impl ::core::fmt::Debug for UnlockWithdrawalViaFinalize {
 impl ::core::fmt::Display for UnlockWithdrawalViaFinalize {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_proof", self.block_proof())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
+            write!(f, ".. ({} fields)", extra_count)?;
         }
         write!(f, " }}")
     }
 }
 impl ::core::default::Default for UnlockWithdrawalViaFinalize {
     fn default() -> Self {
-        let v: Vec<u8> = vec![12, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0];
+        let v: Vec<u8> = vec![4, 0, 0, 0];
         UnlockWithdrawalViaFinalize::new_unchecked(v.into())
     }
 }
 impl UnlockWithdrawalViaFinalize {
-    pub const FIELD_COUNT: usize = 1;
+    pub const FIELD_COUNT: usize = 0;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -8791,16 +8693,6 @@ impl UnlockWithdrawalViaFinalize {
     }
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn block_proof(&self) -> Bytes {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[8..]) as usize;
-            Bytes::new_unchecked(self.0.slice(start..end))
-        } else {
-            Bytes::new_unchecked(self.0.slice(start..))
-        }
     }
     pub fn as_reader<'r>(&'r self) -> UnlockWithdrawalViaFinalizeReader<'r> {
         UnlockWithdrawalViaFinalizeReader::new_unchecked(self.as_slice())
@@ -8829,7 +8721,7 @@ impl molecule::prelude::Entity for UnlockWithdrawalViaFinalize {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder().block_proof(self.block_proof())
+        Self::new_builder()
     }
 }
 #[derive(Clone, Copy)]
@@ -8851,16 +8743,15 @@ impl<'r> ::core::fmt::Debug for UnlockWithdrawalViaFinalizeReader<'r> {
 impl<'r> ::core::fmt::Display for UnlockWithdrawalViaFinalizeReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_proof", self.block_proof())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
+            write!(f, ".. ({} fields)", extra_count)?;
         }
         write!(f, " }}")
     }
 }
 impl<'r> UnlockWithdrawalViaFinalizeReader<'r> {
-    pub const FIELD_COUNT: usize = 1;
+    pub const FIELD_COUNT: usize = 0;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -8876,16 +8767,6 @@ impl<'r> UnlockWithdrawalViaFinalizeReader<'r> {
     }
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn block_proof(&self) -> BytesReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[8..]) as usize;
-            BytesReader::new_unchecked(&self.as_slice()[start..end])
-        } else {
-            BytesReader::new_unchecked(&self.as_slice()[start..])
-        }
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for UnlockWithdrawalViaFinalizeReader<'r> {
@@ -8910,66 +8791,27 @@ impl<'r> molecule::prelude::Reader<'r> for UnlockWithdrawalViaFinalizeReader<'r>
         if slice_len != total_size {
             return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
         }
-        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
-            return Ok(());
+        if slice_len > molecule::NUMBER_SIZE && !compatible {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, !0);
         }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        let field_count = offset_first / 4 - 1;
-        if field_count < Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        } else if !compatible && field_count > Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        };
-        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
-        if slice_len < header_size {
-            return ve!(Self, HeaderIsBroken, header_size, slice_len);
-        }
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
-            .chunks(molecule::NUMBER_SIZE)
-            .take(field_count)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        BytesReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
-pub struct UnlockWithdrawalViaFinalizeBuilder {
-    pub(crate) block_proof: Bytes,
-}
+pub struct UnlockWithdrawalViaFinalizeBuilder {}
 impl UnlockWithdrawalViaFinalizeBuilder {
-    pub const FIELD_COUNT: usize = 1;
-    pub fn block_proof(mut self, v: Bytes) -> Self {
-        self.block_proof = v;
-        self
-    }
+    pub const FIELD_COUNT: usize = 0;
 }
 impl molecule::prelude::Builder for UnlockWithdrawalViaFinalizeBuilder {
     type Entity = UnlockWithdrawalViaFinalize;
     const NAME: &'static str = "UnlockWithdrawalViaFinalizeBuilder";
     fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1) + self.block_proof.as_slice().len()
+        molecule::NUMBER_SIZE
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
-        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.block_proof.as_slice().len();
-        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-        for offset in offsets.into_iter() {
-            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-        }
-        writer.write_all(self.block_proof.as_slice())?;
+        writer.write_all(&molecule::pack_number(
+            molecule::NUMBER_SIZE as molecule::Number,
+        ))?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -8998,62 +8840,30 @@ impl ::core::fmt::Debug for UnlockWithdrawalViaRevert {
 impl ::core::fmt::Display for UnlockWithdrawalViaRevert {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_proof", self.block_proof())?;
         write!(
             f,
-            ", {}: {}",
+            "{}: {}",
             "custodian_lock_hash",
             self.custodian_lock_hash()
         )?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
         write!(f, " }}")
     }
 }
 impl ::core::default::Default for UnlockWithdrawalViaRevert {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            48, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
         ];
         UnlockWithdrawalViaRevert::new_unchecked(v.into())
     }
 }
 impl UnlockWithdrawalViaRevert {
-    pub const FIELD_COUNT: usize = 2;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn block_proof(&self) -> Bytes {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        Bytes::new_unchecked(self.0.slice(start..end))
-    }
+    pub const TOTAL_SIZE: usize = 32;
+    pub const FIELD_SIZES: [usize; 1] = [32];
+    pub const FIELD_COUNT: usize = 1;
     pub fn custodian_lock_hash(&self) -> Byte32 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
-            Byte32::new_unchecked(self.0.slice(start..end))
-        } else {
-            Byte32::new_unchecked(self.0.slice(start..))
-        }
+        Byte32::new_unchecked(self.0.slice(0..32))
     }
     pub fn as_reader<'r>(&'r self) -> UnlockWithdrawalViaRevertReader<'r> {
         UnlockWithdrawalViaRevertReader::new_unchecked(self.as_slice())
@@ -9082,9 +8892,7 @@ impl molecule::prelude::Entity for UnlockWithdrawalViaRevert {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .block_proof(self.block_proof())
-            .custodian_lock_hash(self.custodian_lock_hash())
+        Self::new_builder().custodian_lock_hash(self.custodian_lock_hash())
     }
 }
 #[derive(Clone, Copy)]
@@ -9106,53 +8914,21 @@ impl<'r> ::core::fmt::Debug for UnlockWithdrawalViaRevertReader<'r> {
 impl<'r> ::core::fmt::Display for UnlockWithdrawalViaRevertReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "block_proof", self.block_proof())?;
         write!(
             f,
-            ", {}: {}",
+            "{}: {}",
             "custodian_lock_hash",
             self.custodian_lock_hash()
         )?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
         write!(f, " }}")
     }
 }
 impl<'r> UnlockWithdrawalViaRevertReader<'r> {
-    pub const FIELD_COUNT: usize = 2;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn block_proof(&self) -> BytesReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        BytesReader::new_unchecked(&self.as_slice()[start..end])
-    }
+    pub const TOTAL_SIZE: usize = 32;
+    pub const FIELD_SIZES: [usize; 1] = [32];
+    pub const FIELD_COUNT: usize = 1;
     pub fn custodian_lock_hash(&self) -> Byte32Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
-            Byte32Reader::new_unchecked(&self.as_slice()[start..end])
-        } else {
-            Byte32Reader::new_unchecked(&self.as_slice()[start..])
-        }
+        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for UnlockWithdrawalViaRevertReader<'r> {
@@ -9167,61 +8943,23 @@ impl<'r> molecule::prelude::Reader<'r> for UnlockWithdrawalViaRevertReader<'r> {
     fn as_slice(&self) -> &'r [u8] {
         self.0
     }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
         use molecule::verification_error as ve;
         let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
         }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        let field_count = offset_first / 4 - 1;
-        if field_count < Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        } else if !compatible && field_count > Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        };
-        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
-        if slice_len < header_size {
-            return ve!(Self, HeaderIsBroken, header_size, slice_len);
-        }
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
-            .chunks(molecule::NUMBER_SIZE)
-            .take(field_count)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        BytesReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        Byte32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct UnlockWithdrawalViaRevertBuilder {
-    pub(crate) block_proof: Bytes,
     pub(crate) custodian_lock_hash: Byte32,
 }
 impl UnlockWithdrawalViaRevertBuilder {
-    pub const FIELD_COUNT: usize = 2;
-    pub fn block_proof(mut self, v: Bytes) -> Self {
-        self.block_proof = v;
-        self
-    }
+    pub const TOTAL_SIZE: usize = 32;
+    pub const FIELD_SIZES: [usize; 1] = [32];
+    pub const FIELD_COUNT: usize = 1;
     pub fn custodian_lock_hash(mut self, v: Byte32) -> Self {
         self.custodian_lock_hash = v;
         self
@@ -9231,22 +8969,9 @@ impl molecule::prelude::Builder for UnlockWithdrawalViaRevertBuilder {
     type Entity = UnlockWithdrawalViaRevert;
     const NAME: &'static str = "UnlockWithdrawalViaRevertBuilder";
     fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.block_proof.as_slice().len()
-            + self.custodian_lock_hash.as_slice().len()
+        Self::TOTAL_SIZE
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
-        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.block_proof.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.custodian_lock_hash.as_slice().len();
-        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-        for offset in offsets.into_iter() {
-            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-        }
-        writer.write_all(self.block_proof.as_slice())?;
         writer.write_all(self.custodian_lock_hash.as_slice())?;
         Ok(())
     }
@@ -12465,6 +12190,329 @@ impl molecule::prelude::Builder for UnlockAccountWitnessBuilder {
     }
 }
 #[derive(Clone)]
+pub struct RollupSubmitBlock(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for RollupSubmitBlock {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for RollupSubmitBlock {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for RollupSubmitBlock {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "block", self.block())?;
+        write!(
+            f,
+            ", {}: {}",
+            "reverted_block_hashes",
+            self.reverted_block_hashes()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "reverted_block_proof",
+            self.reverted_block_proof()
+        )?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for RollupSubmitBlock {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            100, 1, 0, 0, 16, 0, 0, 0, 92, 1, 0, 0, 96, 1, 0, 0, 76, 1, 0, 0, 28, 0, 0, 0, 56, 1,
+            0, 0, 60, 1, 0, 0, 64, 1, 0, 0, 68, 1, 0, 0, 72, 1, 0, 0, 28, 1, 0, 0, 40, 0, 0, 0, 48,
+            0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0, 196, 0, 0,
+            0, 252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0,
+            0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        RollupSubmitBlock::new_unchecked(v.into())
+    }
+}
+impl RollupSubmitBlock {
+    pub const FIELD_COUNT: usize = 3;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn block(&self) -> L2Block {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        L2Block::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn reverted_block_hashes(&self) -> Byte32Vec {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Byte32Vec::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn reverted_block_proof(&self) -> Bytes {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            Bytes::new_unchecked(self.0.slice(start..end))
+        } else {
+            Bytes::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> RollupSubmitBlockReader<'r> {
+        RollupSubmitBlockReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for RollupSubmitBlock {
+    type Builder = RollupSubmitBlockBuilder;
+    const NAME: &'static str = "RollupSubmitBlock";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        RollupSubmitBlock(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RollupSubmitBlockReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        RollupSubmitBlockReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .block(self.block())
+            .reverted_block_hashes(self.reverted_block_hashes())
+            .reverted_block_proof(self.reverted_block_proof())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct RollupSubmitBlockReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for RollupSubmitBlockReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for RollupSubmitBlockReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for RollupSubmitBlockReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "block", self.block())?;
+        write!(
+            f,
+            ", {}: {}",
+            "reverted_block_hashes",
+            self.reverted_block_hashes()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "reverted_block_proof",
+            self.reverted_block_proof()
+        )?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> RollupSubmitBlockReader<'r> {
+    pub const FIELD_COUNT: usize = 3;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn block(&self) -> L2BlockReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        L2BlockReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn reverted_block_hashes(&self) -> Byte32VecReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn reverted_block_proof(&self) -> BytesReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            BytesReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            BytesReader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for RollupSubmitBlockReader<'r> {
+    type Entity = RollupSubmitBlock;
+    const NAME: &'static str = "RollupSubmitBlockReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        RollupSubmitBlockReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        let field_count = offset_first / 4 - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
+        if slice_len < header_size {
+            return ve!(Self, HeaderIsBroken, header_size, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
+            .chunks(molecule::NUMBER_SIZE)
+            .take(field_count)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        L2BlockReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        Byte32VecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        BytesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct RollupSubmitBlockBuilder {
+    pub(crate) block: L2Block,
+    pub(crate) reverted_block_hashes: Byte32Vec,
+    pub(crate) reverted_block_proof: Bytes,
+}
+impl RollupSubmitBlockBuilder {
+    pub const FIELD_COUNT: usize = 3;
+    pub fn block(mut self, v: L2Block) -> Self {
+        self.block = v;
+        self
+    }
+    pub fn reverted_block_hashes(mut self, v: Byte32Vec) -> Self {
+        self.reverted_block_hashes = v;
+        self
+    }
+    pub fn reverted_block_proof(mut self, v: Bytes) -> Self {
+        self.reverted_block_proof = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for RollupSubmitBlockBuilder {
+    type Entity = RollupSubmitBlock;
+    const NAME: &'static str = "RollupSubmitBlockBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.block.as_slice().len()
+            + self.reverted_block_hashes.as_slice().len()
+            + self.reverted_block_proof.as_slice().len()
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.block.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.reverted_block_hashes.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.reverted_block_proof.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.block.as_slice())?;
+        writer.write_all(self.reverted_block_hashes.as_slice())?;
+        writer.write_all(self.reverted_block_proof.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        RollupSubmitBlock::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
 pub struct RollupEnterChallenge(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for RollupEnterChallenge {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -13143,18 +13191,19 @@ impl ::core::fmt::Display for RollupAction {
 impl ::core::default::Default for RollupAction {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            0, 0, 0, 0, 76, 1, 0, 0, 28, 0, 0, 0, 56, 1, 0, 0, 60, 1, 0, 0, 64, 1, 0, 0, 68, 1, 0,
-            0, 72, 1, 0, 0, 28, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116,
-            0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0, 196, 0, 0, 0, 252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 100, 1, 0, 0, 16, 0, 0, 0, 92, 1, 0, 0, 96, 1, 0, 0, 76, 1, 0, 0, 28, 0, 0,
+            0, 56, 1, 0, 0, 60, 1, 0, 0, 64, 1, 0, 0, 68, 1, 0, 0, 72, 1, 0, 0, 28, 1, 0, 0, 40, 0,
+            0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0,
+            196, 0, 0, 0, 252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0,
+            48, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0,
+            0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RollupAction::new_unchecked(v.into())
     }
@@ -13167,7 +13216,7 @@ impl RollupAction {
     pub fn to_enum(&self) -> RollupActionUnion {
         let inner = self.0.slice(molecule::NUMBER_SIZE..);
         match self.item_id() {
-            0 => L2Block::new_unchecked(inner).into(),
+            0 => RollupSubmitBlock::new_unchecked(inner).into(),
             1 => RollupEnterChallenge::new_unchecked(inner).into(),
             2 => RollupCancelChallenge::new_unchecked(inner).into(),
             3 => RollupRevert::new_unchecked(inner).into(),
@@ -13234,7 +13283,7 @@ impl<'r> RollupActionReader<'r> {
     pub fn to_enum(&self) -> RollupActionUnionReader<'r> {
         let inner = &self.as_slice()[molecule::NUMBER_SIZE..];
         match self.item_id() {
-            0 => L2BlockReader::new_unchecked(inner).into(),
+            0 => RollupSubmitBlockReader::new_unchecked(inner).into(),
             1 => RollupEnterChallengeReader::new_unchecked(inner).into(),
             2 => RollupCancelChallengeReader::new_unchecked(inner).into(),
             3 => RollupRevertReader::new_unchecked(inner).into(),
@@ -13263,7 +13312,7 @@ impl<'r> molecule::prelude::Reader<'r> for RollupActionReader<'r> {
         let item_id = molecule::unpack_number(slice);
         let inner_slice = &slice[molecule::NUMBER_SIZE..];
         match item_id {
-            0 => L2BlockReader::verify(inner_slice, compatible),
+            0 => RollupSubmitBlockReader::verify(inner_slice, compatible),
             1 => RollupEnterChallengeReader::verify(inner_slice, compatible),
             2 => RollupCancelChallengeReader::verify(inner_slice, compatible),
             3 => RollupRevertReader::verify(inner_slice, compatible),
@@ -13303,28 +13352,28 @@ impl molecule::prelude::Builder for RollupActionBuilder {
 }
 #[derive(Debug, Clone)]
 pub enum RollupActionUnion {
-    L2Block(L2Block),
+    RollupSubmitBlock(RollupSubmitBlock),
     RollupEnterChallenge(RollupEnterChallenge),
     RollupCancelChallenge(RollupCancelChallenge),
     RollupRevert(RollupRevert),
 }
 #[derive(Debug, Clone, Copy)]
 pub enum RollupActionUnionReader<'r> {
-    L2Block(L2BlockReader<'r>),
+    RollupSubmitBlock(RollupSubmitBlockReader<'r>),
     RollupEnterChallenge(RollupEnterChallengeReader<'r>),
     RollupCancelChallenge(RollupCancelChallengeReader<'r>),
     RollupRevert(RollupRevertReader<'r>),
 }
 impl ::core::default::Default for RollupActionUnion {
     fn default() -> Self {
-        RollupActionUnion::L2Block(::core::default::Default::default())
+        RollupActionUnion::RollupSubmitBlock(::core::default::Default::default())
     }
 }
 impl ::core::fmt::Display for RollupActionUnion {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
-            RollupActionUnion::L2Block(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, L2Block::NAME, item)
+            RollupActionUnion::RollupSubmitBlock(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, RollupSubmitBlock::NAME, item)
             }
             RollupActionUnion::RollupEnterChallenge(ref item) => write!(
                 f,
@@ -13349,8 +13398,8 @@ impl ::core::fmt::Display for RollupActionUnion {
 impl<'r> ::core::fmt::Display for RollupActionUnionReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
-            RollupActionUnionReader::L2Block(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, L2Block::NAME, item)
+            RollupActionUnionReader::RollupSubmitBlock(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, RollupSubmitBlock::NAME, item)
             }
             RollupActionUnionReader::RollupEnterChallenge(ref item) => write!(
                 f,
@@ -13375,7 +13424,7 @@ impl<'r> ::core::fmt::Display for RollupActionUnionReader<'r> {
 impl RollupActionUnion {
     pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
-            RollupActionUnion::L2Block(ref item) => write!(f, "{}", item),
+            RollupActionUnion::RollupSubmitBlock(ref item) => write!(f, "{}", item),
             RollupActionUnion::RollupEnterChallenge(ref item) => write!(f, "{}", item),
             RollupActionUnion::RollupCancelChallenge(ref item) => write!(f, "{}", item),
             RollupActionUnion::RollupRevert(ref item) => write!(f, "{}", item),
@@ -13385,16 +13434,16 @@ impl RollupActionUnion {
 impl<'r> RollupActionUnionReader<'r> {
     pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
-            RollupActionUnionReader::L2Block(ref item) => write!(f, "{}", item),
+            RollupActionUnionReader::RollupSubmitBlock(ref item) => write!(f, "{}", item),
             RollupActionUnionReader::RollupEnterChallenge(ref item) => write!(f, "{}", item),
             RollupActionUnionReader::RollupCancelChallenge(ref item) => write!(f, "{}", item),
             RollupActionUnionReader::RollupRevert(ref item) => write!(f, "{}", item),
         }
     }
 }
-impl ::core::convert::From<L2Block> for RollupActionUnion {
-    fn from(item: L2Block) -> Self {
-        RollupActionUnion::L2Block(item)
+impl ::core::convert::From<RollupSubmitBlock> for RollupActionUnion {
+    fn from(item: RollupSubmitBlock) -> Self {
+        RollupActionUnion::RollupSubmitBlock(item)
     }
 }
 impl ::core::convert::From<RollupEnterChallenge> for RollupActionUnion {
@@ -13412,9 +13461,9 @@ impl ::core::convert::From<RollupRevert> for RollupActionUnion {
         RollupActionUnion::RollupRevert(item)
     }
 }
-impl<'r> ::core::convert::From<L2BlockReader<'r>> for RollupActionUnionReader<'r> {
-    fn from(item: L2BlockReader<'r>) -> Self {
-        RollupActionUnionReader::L2Block(item)
+impl<'r> ::core::convert::From<RollupSubmitBlockReader<'r>> for RollupActionUnionReader<'r> {
+    fn from(item: RollupSubmitBlockReader<'r>) -> Self {
+        RollupActionUnionReader::RollupSubmitBlock(item)
     }
 }
 impl<'r> ::core::convert::From<RollupEnterChallengeReader<'r>> for RollupActionUnionReader<'r> {
@@ -13436,7 +13485,7 @@ impl RollupActionUnion {
     pub const NAME: &'static str = "RollupActionUnion";
     pub fn as_bytes(&self) -> molecule::bytes::Bytes {
         match self {
-            RollupActionUnion::L2Block(item) => item.as_bytes(),
+            RollupActionUnion::RollupSubmitBlock(item) => item.as_bytes(),
             RollupActionUnion::RollupEnterChallenge(item) => item.as_bytes(),
             RollupActionUnion::RollupCancelChallenge(item) => item.as_bytes(),
             RollupActionUnion::RollupRevert(item) => item.as_bytes(),
@@ -13444,7 +13493,7 @@ impl RollupActionUnion {
     }
     pub fn as_slice(&self) -> &[u8] {
         match self {
-            RollupActionUnion::L2Block(item) => item.as_slice(),
+            RollupActionUnion::RollupSubmitBlock(item) => item.as_slice(),
             RollupActionUnion::RollupEnterChallenge(item) => item.as_slice(),
             RollupActionUnion::RollupCancelChallenge(item) => item.as_slice(),
             RollupActionUnion::RollupRevert(item) => item.as_slice(),
@@ -13452,7 +13501,7 @@ impl RollupActionUnion {
     }
     pub fn item_id(&self) -> molecule::Number {
         match self {
-            RollupActionUnion::L2Block(_) => 0,
+            RollupActionUnion::RollupSubmitBlock(_) => 0,
             RollupActionUnion::RollupEnterChallenge(_) => 1,
             RollupActionUnion::RollupCancelChallenge(_) => 2,
             RollupActionUnion::RollupRevert(_) => 3,
@@ -13460,7 +13509,7 @@ impl RollupActionUnion {
     }
     pub fn item_name(&self) -> &str {
         match self {
-            RollupActionUnion::L2Block(_) => "L2Block",
+            RollupActionUnion::RollupSubmitBlock(_) => "RollupSubmitBlock",
             RollupActionUnion::RollupEnterChallenge(_) => "RollupEnterChallenge",
             RollupActionUnion::RollupCancelChallenge(_) => "RollupCancelChallenge",
             RollupActionUnion::RollupRevert(_) => "RollupRevert",
@@ -13468,7 +13517,7 @@ impl RollupActionUnion {
     }
     pub fn as_reader<'r>(&'r self) -> RollupActionUnionReader<'r> {
         match self {
-            RollupActionUnion::L2Block(item) => item.as_reader().into(),
+            RollupActionUnion::RollupSubmitBlock(item) => item.as_reader().into(),
             RollupActionUnion::RollupEnterChallenge(item) => item.as_reader().into(),
             RollupActionUnion::RollupCancelChallenge(item) => item.as_reader().into(),
             RollupActionUnion::RollupRevert(item) => item.as_reader().into(),
@@ -13479,7 +13528,7 @@ impl<'r> RollupActionUnionReader<'r> {
     pub const NAME: &'r str = "RollupActionUnionReader";
     pub fn as_slice(&self) -> &'r [u8] {
         match self {
-            RollupActionUnionReader::L2Block(item) => item.as_slice(),
+            RollupActionUnionReader::RollupSubmitBlock(item) => item.as_slice(),
             RollupActionUnionReader::RollupEnterChallenge(item) => item.as_slice(),
             RollupActionUnionReader::RollupCancelChallenge(item) => item.as_slice(),
             RollupActionUnionReader::RollupRevert(item) => item.as_slice(),
@@ -13487,7 +13536,7 @@ impl<'r> RollupActionUnionReader<'r> {
     }
     pub fn item_id(&self) -> molecule::Number {
         match self {
-            RollupActionUnionReader::L2Block(_) => 0,
+            RollupActionUnionReader::RollupSubmitBlock(_) => 0,
             RollupActionUnionReader::RollupEnterChallenge(_) => 1,
             RollupActionUnionReader::RollupCancelChallenge(_) => 2,
             RollupActionUnionReader::RollupRevert(_) => 3,
@@ -13495,7 +13544,7 @@ impl<'r> RollupActionUnionReader<'r> {
     }
     pub fn item_name(&self) -> &str {
         match self {
-            RollupActionUnionReader::L2Block(_) => "L2Block",
+            RollupActionUnionReader::RollupSubmitBlock(_) => "RollupSubmitBlock",
             RollupActionUnionReader::RollupEnterChallenge(_) => "RollupEnterChallenge",
             RollupActionUnionReader::RollupCancelChallenge(_) => "RollupCancelChallenge",
             RollupActionUnionReader::RollupRevert(_) => "RollupRevert",
