@@ -30,8 +30,6 @@
 #define GW_SYS_GET_BLOCK_HASH 4058
 #define GW_SYS_LOG 4061
 
-#define MAX_BUF_SIZE 65536
-
 typedef struct gw_context_t {
   /* verification context */
   gw_transaction_context_t transaction_context;
@@ -162,13 +160,13 @@ int gw_context_init(gw_context_t *ctx) {
   ctx->sys_log = sys_log;
 
   /* initialize context */
-  uint8_t buf[MAX_BUF_SIZE] = {0};
-  uint64_t len = MAX_BUF_SIZE;
+  uint8_t buf[GW_MAX_L2TX_SIZE] = {0};
+  uint64_t len = GW_MAX_L2TX_SIZE;
   int ret = _sys_load_l2transaction(buf, &len);
   if (ret != 0) {
     return ret;
   }
-  if (len > MAX_BUF_SIZE) {
+  if (len > GW_MAX_L2TX_SIZE) {
     return GW_ERROR_INVALID_DATA;
   }
 
@@ -181,12 +179,12 @@ int gw_context_init(gw_context_t *ctx) {
     return ret;
   }
 
-  len = MAX_BUF_SIZE;
+  len = GW_BLOCK_INFO_SIZE;
   ret = _sys_load_block_info(buf, &len);
   if (ret != 0) {
     return ret;
   }
-  if (len > MAX_BUF_SIZE) {
+  if (len > GW_BLOCK_INFO_SIZE) {
     return GW_ERROR_INVALID_DATA;
   }
 
