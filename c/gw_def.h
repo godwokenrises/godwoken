@@ -13,25 +13,26 @@
 #define GW_ACCOUNT_SCRIPT_HASH_TO_ID 3
 
 /* 24KB (ethereum max contract code size) */
-#define GW_MAX_RETURN_DATA_SIZE 24576
+#define GW_MAX_RETURN_DATA_SIZE (24 * 1024)
 /* 128KB */
-#define GW_MAX_ARGS_SIZE 131072
-/* Buffer to receive data */
-#define MAX_BUF_SIZE 65536
+#define GW_MAX_L2TX_ARGS_SIZE (128 * 1024)
+/* 128KB + 4KB */
+#define GW_MAX_L2TX_SIZE (132 * 1024)
 /* 2048 * (32 + 32 + 8) = 147456 Byte (~144KB)*/
-#define MAX_KV_STATE_CAPACITY 2048
+#define GW_MAX_KV_STATE_CAPACITY 2048
 
 /* Limitations */
 #define GW_MAX_KV_PAIRS 1024
 #define GW_SCRIPT_SIZE 128
+#define GW_BLOCK_INFO_SIZE 20
 #define GW_MAX_WITNESS_SIZE (300 * 1024)
-#define GW_MAX_CODE_SIZE (512 * 1024)
+#define GW_MAX_CODE_SIZE (64 * 1024)
 
 /* Godwoken context */
 typedef struct {
   uint32_t from_id;
   uint32_t to_id;
-  uint8_t args[GW_MAX_ARGS_SIZE];
+  uint8_t args[GW_MAX_L2TX_ARGS_SIZE];
   uint32_t args_len;
 } gw_transaction_context_t;
 
@@ -53,7 +54,6 @@ int gw_context_init(struct gw_context_t *ctx);
  */
 int gw_finalize(struct gw_context_t *ctx);
 
-
 /* layer2 syscalls */
 
 /**
@@ -66,10 +66,8 @@ int gw_finalize(struct gw_context_t *ctx);
  * @param account_id ID of new account
  * @return           The status code, 0 is success
  */
-typedef int (*gw_create_fn)(struct gw_context_t *ctx,
-                            uint8_t *script,
-                            uint32_t script_len,
-                            uint32_t *account_id);
+typedef int (*gw_create_fn)(struct gw_context_t *ctx, uint8_t *script,
+                            uint32_t script_len, uint32_t *account_id);
 
 /**
  * Load value by key from current contract account
@@ -80,8 +78,7 @@ typedef int (*gw_create_fn)(struct gw_context_t *ctx,
  * @param value  The pointer to save the value of the key (32 bytes)
  * @return       The status code, 0 is success
  */
-typedef int (*gw_load_fn)(struct gw_context_t *ctx,
-                          uint32_t account_id,
+typedef int (*gw_load_fn)(struct gw_context_t *ctx, uint32_t account_id,
                           const uint8_t key[GW_KEY_BYTES],
                           uint8_t value[GW_VALUE_BYTES]);
 /**
@@ -92,8 +89,7 @@ typedef int (*gw_load_fn)(struct gw_context_t *ctx,
  * @param value       The pointer to save the nonce value of the key (32 bytes)
  * @return            The status code, 0 is success
  */
-typedef int (*gw_load_nonce_fn)(struct gw_context_t *ctx,
-                                uint32_t account_id,
+typedef int (*gw_load_nonce_fn)(struct gw_context_t *ctx, uint32_t account_id,
                                 uint8_t value[GW_VALUE_BYTES]);
 
 /**
@@ -105,8 +101,7 @@ typedef int (*gw_load_nonce_fn)(struct gw_context_t *ctx,
  * @param value  The value
  * @return       The status code, 0 is success
  */
-typedef int (*gw_store_fn)(struct gw_context_t *ctx,
-                           uint32_t account_id,
+typedef int (*gw_store_fn)(struct gw_context_t *ctx, uint32_t account_id,
                            const uint8_t key[GW_KEY_BYTES],
                            const uint8_t value[GW_VALUE_BYTES]);
 
@@ -118,8 +113,7 @@ typedef int (*gw_store_fn)(struct gw_context_t *ctx,
  * @return       The status code, 0 is success
  */
 typedef int (*gw_set_program_return_data_fn)(struct gw_context_t *ctx,
-                                             uint8_t *data,
-                                             uint32_t len);
+                                             uint8_t *data, uint32_t len);
 
 /**
  * Get account id by account script_hash
@@ -154,17 +148,14 @@ typedef int (*gw_get_script_hash_by_account_id_fn)(struct gw_context_t *ctx,
  * @return           The status code, 0 is success
  */
 typedef int (*gw_get_account_nonce_fn)(struct gw_context_t *ctx,
-                                       uint32_t account_id,
-                                       uint32_t *nonce);
+                                       uint32_t account_id, uint32_t *nonce);
 
 /**
  * Get account script by account id
  */
 typedef int (*gw_get_account_script_fn)(struct gw_context_t *ctx,
-                                        uint32_t account_id,
-                                        uint32_t *len,
-                                        uint32_t offset,
-                                        uint8_t *script);
+                                        uint32_t account_id, uint32_t *len,
+                                        uint32_t offset, uint8_t *script);
 /**
  * Load data by data hash
  *
@@ -175,14 +166,10 @@ typedef int (*gw_get_account_script_fn)(struct gw_context_t *ctx,
  * @param data       The pointer of the data to save the result
  * @return           The status code, 0 is success
  */
-typedef int (*gw_load_data_fn)(struct gw_context_t *ctx,
-                               uint8_t data_hash[32],
-                               uint32_t *len,
-                               uint32_t offset,
-                               uint8_t *data);
+typedef int (*gw_load_data_fn)(struct gw_context_t *ctx, uint8_t data_hash[32],
+                               uint32_t *len, uint32_t offset, uint8_t *data);
 
-typedef int (*gw_store_data_fn)(struct gw_context_t *ctx,
-                                uint32_t data_len,
+typedef int (*gw_store_data_fn)(struct gw_context_t *ctx, uint32_t data_len,
                                 uint8_t *data);
 
 /**
@@ -193,8 +180,7 @@ typedef int (*gw_store_data_fn)(struct gw_context_t *ctx,
  * @param number     The number of the layer 2 block
  * @return           The status code, 0 is success
  */
-typedef int (*gw_get_block_hash_fn)(struct gw_context_t *ctx,
-                                    uint64_t number,
+typedef int (*gw_get_block_hash_fn)(struct gw_context_t *ctx, uint64_t number,
                                     uint8_t block_hash[32]);
 
 /**
@@ -206,9 +192,7 @@ typedef int (*gw_get_block_hash_fn)(struct gw_context_t *ctx,
  * @param data_length    The length of the log data
  * @return               The status code, 0 is success
  */
-typedef int (*gw_log_fn)(struct gw_context_t *ctx,
-                         uint32_t account_id,
-                         uint32_t data_length,
-                         const uint8_t *data);
+typedef int (*gw_log_fn)(struct gw_context_t *ctx, uint32_t account_id,
+                         uint32_t data_length, const uint8_t *data);
 
 #endif /* GW_DEF_H_ */

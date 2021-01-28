@@ -314,8 +314,8 @@ int _load_cancel_challenge_witness(gw_context_t *ctx) {
   }
 
   int ret;
-  uint8_t buf[MAX_BUF_SIZE];
-  uint64_t buf_len = MAX_BUF_SIZE;
+  uint8_t buf[GW_MAX_WITNESS_SIZE];
+  uint64_t buf_len = GW_MAX_WITNESS_SIZE;
   ret = ckb_load_witness(buf, &buf_len, 0, 0, CKB_SOURCE_GROUP_INPUT);
   if (ret != CKB_SUCCESS) {
     ckb_debug("load witness failed");
@@ -369,13 +369,13 @@ int _load_cancel_challenge_witness(gw_context_t *ctx) {
   mol_seg_t kv_state_seg =
       MolReader_CancelChallenge_get_kv_state(&cancel_challenge_seg);
   uint32_t kv_length = MolReader_KVPairVec_length(&kv_state_seg);
-  if (kv_length > MAX_KV_STATE_CAPACITY) {
+  if (kv_length > GW_MAX_KV_STATE_CAPACITY) {
     ckb_debug("too many key/value pair");
     return -1;
   }
   gw_pair_t *kv_pairs =
-      (gw_pair_t *)malloc(sizeof(gw_pair_t) * MAX_KV_STATE_CAPACITY);
-  gw_state_init(&ctx->kv_state, kv_pairs, MAX_KV_STATE_CAPACITY);
+      (gw_pair_t *)malloc(sizeof(gw_pair_t) * GW_MAX_KV_STATE_CAPACITY);
+  gw_state_init(&ctx->kv_state, kv_pairs, GW_MAX_KV_STATE_CAPACITY);
   for (uint32_t i = 0; i < kv_length; i++) {
     mol_seg_res_t seg_res = MolReader_KVPairVec_get(&kv_state_seg, i);
     uint8_t error_num = *(uint8_t *)(&seg_res);
