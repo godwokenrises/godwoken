@@ -1,15 +1,12 @@
 // Import from `core` instead of from `std` since we are in no-std mode
 use core::result::Result;
 
-use alloc::vec;
-use gw_common::{
-    h256_ext::H256Ext,
-    smt::{Blake2bHasher, CompiledMerkleProof},
-    DEPOSITION_LOCK_CODE_HASH, H256,
-};
 use validator_utils::{
     ckb_std::high_level::load_cell_lock,
-    search_cells::{search_lock_hash, search_rollup_state},
+    search_cells::{
+        load_rollup_config, parse_rollup_action, search_lock_hash, search_rollup_cell,
+        search_rollup_state,
+    },
 };
 
 // Import CKB syscalls and structures
@@ -19,9 +16,10 @@ use crate::ckb_std::{
     high_level::load_script, high_level::load_witness_args,
 };
 use gw_types::{
+    core::ScriptHashType,
     packed::{
-        CustodianLockArgs, CustodianLockArgsReader, UnlockCustodianViaRevert,
-        UnlockCustodianViaRevertReader,
+        CustodianLockArgs, CustodianLockArgsReader, RollupActionUnion,
+        UnlockCustodianViaRevertWitness, UnlockCustodianViaRevertWitnessReader,
     },
     prelude::*,
 };
@@ -64,19 +62,20 @@ pub fn main() -> Result<(), Error> {
         return Ok(());
     }
 
-    // otherwise, the submitter try to proof the deposition is reverted.
+    // otherwise, the submitter try to prove the deposit is reverted.
+    let config = load_rollup_config(&global_state.rollup_config_hash().unpack())?;
 
-    // read the proof
+    // read the args
     let witness_args = load_witness_args(0, Source::GroupInput)?;
     let data: Bytes = witness_args
         .lock()
         .to_opt()
-        .ok_or(Error::ProofNotFound)?
+        .ok_or(Error::InvalidArgs)?
         .unpack();
 
-    let unlock_args = match UnlockCustodianViaRevertReader::verify(&data, false) {
-        Ok(_) => UnlockCustodianViaRevert::new_unchecked(data),
-        Err(_) => return Err(Error::ProofNotFound),
+    let unlock_args = match UnlockCustodianViaRevertWitnessReader::verify(&data, false) {
+        Ok(_) => UnlockCustodianViaRevertWitness::new_unchecked(data),
+        Err(_) => return Err(Error::InvalidArgs),
     };
 
     // the reverted deposition cell must exists
@@ -84,24 +83,33 @@ pub fn main() -> Result<(), Error> {
         search_lock_hash(&unlock_args.deposition_lock_hash().unpack(), Source::Output)
             .ok_or(Error::InvalidOutput)?;
     let deposition_lock = load_cell_lock(deposition_cell_index, Source::Output)?;
-    let deposition_lock_code_hash = deposition_lock.code_hash().unpack();
-    if deposition_lock_code_hash != DEPOSITION_LOCK_CODE_HASH
+    if deposition_lock.code_hash().as_slice() != config.deposition_script_type_hash().as_slice()
+        || deposition_lock.hash_type() != ScriptHashType::Type.into()
         || deposition_lock.args().as_slice() != lock_args.deposition_lock_args().as_slice()
     {
         return Err(Error::InvalidOutput);
     }
 
-    // check reverted_blocks merkle proof
-    let reverted_block_root: [u8; 32] = global_state.reverted_block_root().unpack();
-    let block_hash: H256 = lock_args.deposition_block_hash().unpack();
+    // check deposition block is reverted
+    let deposition_block_hash = lock_args.deposition_block_hash();
+    let rollup_action = {
+        let index = search_rollup_cell(&rollup_type_hash, Source::Output)
+            .ok_or(Error::RollupCellNotFound)?;
+        parse_rollup_action(index, Source::Output)?
+    };
 
-    let merkle_proof = CompiledMerkleProof(unlock_args.block_proof().unpack());
-    if merkle_proof
-        .verify::<Blake2bHasher>(&reverted_block_root.into(), vec![(block_hash, H256::one())])
-        .map_err(|_err| Error::MerkleProof)?
-    {
-        Ok(())
-    } else {
-        Err(Error::MerkleProof)
+    match rollup_action.to_enum() {
+        RollupActionUnion::RollupSubmitBlock(args) => {
+            if args
+                .reverted_block_hashes()
+                .into_iter()
+                .find(|hash| hash == &deposition_block_hash)
+                .is_some()
+            {
+                return Ok(());
+            }
+            Err(Error::InvalidRevertedBlocks)
+        }
+        _ => Err(Error::InvalidRevertedBlocks),
     }
 }

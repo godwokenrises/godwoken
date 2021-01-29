@@ -63,7 +63,7 @@ pub fn main() -> Result<(), Error> {
     // Unlock by Rollup cell
     // check if rollup cell exists in the inputs, the following verification will be handled
     // by rollup state validator.
-    if search_rollup_cell(&rollup_type_hash).is_some() {
+    if search_rollup_cell(&rollup_type_hash, Source::Input).is_some() {
         return Ok(());
     }
 

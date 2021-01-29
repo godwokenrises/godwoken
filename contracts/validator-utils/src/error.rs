@@ -1,6 +1,7 @@
 //! godwoken validator errors
 
 use ckb_std::error::SysError;
+use gw_common::{error::Error as CommonError, smt::Error as SMTError};
 
 /// Error
 #[repr(i8)]
@@ -15,12 +16,26 @@ pub enum Error {
     InvalidOutput,
     OwnerCellNotFound,
     RollupCellNotFound,
+    RollupConfigNotFound,
     ProofNotFound,
     MerkleProof,
-    OverflowAmount,
+    AmountOverflow,
     InsufficientAmount,
     SMTKeyMissing,
+    InvalidTxsState,
+    InvalidBlock,
+    InvalidStatus,
     InvalidStakeCellUnlock,
+    InvalidAccountLockCell,
+    InvalidPostGlobalState,
+    InvalidChallengeCell,
+    InvalidStakeCell,
+    InvalidDepositCell,
+    InvalidWithdrawalCell,
+    InvalidCustodianCell,
+    InvalidRevertedBlocks,
+    InvalidChallengeReward,
+    InvalidSUDTCell,
 }
 
 impl From<SysError> for Error {
@@ -33,5 +48,22 @@ impl From<SysError> for Error {
             Encoding => Self::Encoding,
             Unknown(err_code) => panic!("unexpected sys error {}", err_code),
         }
+    }
+}
+
+impl From<CommonError> for Error {
+    fn from(err: CommonError) -> Self {
+        use CommonError::*;
+        match err {
+            SMT(_) | Store | MissingKey => Self::SMTKeyMissing,
+            MerkleProof => Self::MerkleProof,
+            AmountOverflow => Self::AmountOverflow,
+        }
+    }
+}
+
+impl From<SMTError> for Error {
+    fn from(_err: SMTError) -> Self {
+        Self::SMTKeyMissing
     }
 }

@@ -3,19 +3,19 @@ use core::result::Result;
 
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use alloc::vec;
-use gw_common::{
-    h256_ext::H256Ext,
-    smt::{Blake2bHasher, CompiledMerkleProof},
-    CUSTODIAN_LOCK_CODE_HASH, H256,
-};
-use gw_types::packed::{
-    CustodianLockArgs, CustodianLockArgsReader, UnlockWithdrawalUnion, WithdrawalLockArgs,
-    WithdrawalLockArgsReader,
+use gw_types::{
+    core::ScriptHashType,
+    packed::{
+        CustodianLockArgs, CustodianLockArgsReader, RollupActionUnion,
+        UnlockWithdrawalWitnessUnion, WithdrawalLockArgs, WithdrawalLockArgsReader,
+    },
 };
 use validator_utils::{
     ckb_std::high_level::load_cell_lock,
-    search_cells::{fetch_token_amount, search_lock_hash, search_rollup_state, TokenType},
+    search_cells::{
+        fetch_token_amount, load_rollup_config, parse_rollup_action, search_lock_hash,
+        search_rollup_cell, search_rollup_state, TokenType,
+    },
 };
 
 // Import CKB syscalls and structures
@@ -31,9 +31,12 @@ use crate::ckb_std::{
 
 use crate::error::Error;
 use gw_types::{
-    packed::{UnlockWithdrawal, UnlockWithdrawalReader},
+    packed::{UnlockWithdrawalWitness, UnlockWithdrawalWitnessReader},
     prelude::*,
 };
+
+const FINALIZED_BLOCK_NUMBER: u64 = 0;
+const FINALIZED_BLOCK_HASH: [u8; 32] = [0u8; 32];
 
 /// args: rollup_type_hash | withdrawal lock args
 fn parse_lock_args(
@@ -64,35 +67,41 @@ pub fn main() -> Result<(), Error> {
         let unlock_args: Bytes = witness_args
             .lock()
             .to_opt()
-            .ok_or(Error::ProofNotFound)?
+            .ok_or(Error::InvalidArgs)?
             .unpack();
-        match UnlockWithdrawalReader::verify(&unlock_args, false) {
-            Ok(()) => UnlockWithdrawal::new_unchecked(unlock_args),
+        match UnlockWithdrawalWitnessReader::verify(&unlock_args, false) {
+            Ok(()) => UnlockWithdrawalWitness::new_unchecked(unlock_args),
             Err(_) => return Err(Error::ProofNotFound),
         }
     };
 
     // read global state from rollup cell
-    match search_rollup_state(&rollup_type_hash, Source::CellDep)? {
+    match search_rollup_state(&rollup_type_hash, Source::Input)? {
         Some(global_state) => {
-            // read merkle proof
-            let reverted_block_root: [u8; 32] = global_state.reverted_block_root().unpack();
-            let block_hash: H256 = lock_args.withdrawal_block_hash().unpack();
+            let withdrawal_block_hash = lock_args.withdrawal_block_hash();
 
             match unlock_args.to_enum() {
-                UnlockWithdrawalUnion::UnlockWithdrawalViaRevert(unlock_args) => {
-                    // we can revert withdrawal at anytime even it is 'finalized'
-                    let merkle_proof = CompiledMerkleProof(unlock_args.block_proof().unpack());
-
-                    // merkle proof the block is reverted
-                    if !merkle_proof
-                        .verify::<Blake2bHasher>(
-                            &reverted_block_root.into(),
-                            vec![(block_hash, H256::one())],
-                        )
-                        .map_err(|_| Error::MerkleProof)?
-                    {
-                        return Err(Error::MerkleProof);
+                UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(unlock_args) => {
+                    // prove the block is reverted
+                    let rollup_action = {
+                        let index = search_rollup_cell(&rollup_type_hash, Source::Output)
+                            .ok_or(Error::RollupCellNotFound)?;
+                        parse_rollup_action(index, Source::Output)?
+                    };
+                    match rollup_action.to_enum() {
+                        RollupActionUnion::RollupSubmitBlock(args) => {
+                            if args
+                                .reverted_block_hashes()
+                                .into_iter()
+                                .find(|hash| hash == &withdrawal_block_hash)
+                                .is_none()
+                            {
+                                return Err(Error::InvalidRevertedBlocks);
+                            }
+                        }
+                        _ => {
+                            return Err(Error::InvalidRevertedBlocks);
+                        }
                     }
                     let custodian_lock_hash: [u8; 32] = unlock_args.custodian_lock_hash().unpack();
                     // check there are a reverted custodian lock in the output
@@ -111,17 +120,16 @@ pub fn main() -> Result<(), Error> {
                             Err(_) => return Err(Error::InvalidOutput),
                         }
                     };
-                    let custodian_code_hash: [u8; 32] = custodian_lock.code_hash().unpack();
                     let custodian_deposition_block_hash: [u8; 32] =
                         custodian_lock_args.deposition_block_hash().unpack();
                     let custodian_deposition_block_number: u64 =
                         custodian_lock_args.deposition_block_number().unpack();
-                    let deposition_block_hash: [u8; 32] =
-                        lock_args.deposition_block_hash().unpack();
-                    let deposition_block_number: u64 = lock_args.deposition_block_number().unpack();
-                    if custodian_code_hash != CUSTODIAN_LOCK_CODE_HASH
-                        || custodian_deposition_block_hash != deposition_block_hash
-                        || custodian_deposition_block_number != deposition_block_number
+                    let config = load_rollup_config(&global_state.rollup_config_hash().unpack())?;
+                    if custodian_lock.code_hash().as_slice()
+                        != config.custodian_script_type_hash().as_slice()
+                        || custodian_lock.hash_type() != ScriptHashType::Type.into()
+                        || custodian_deposition_block_hash != FINALIZED_BLOCK_HASH
+                        || custodian_deposition_block_number != FINALIZED_BLOCK_NUMBER
                     {
                         return Err(Error::InvalidOutput);
                     }
@@ -130,8 +138,7 @@ pub fn main() -> Result<(), Error> {
                     check_output_cell_has_same_content(custodian_cell_index)?;
                     Ok(())
                 }
-                UnlockWithdrawalUnion::UnlockWithdrawalViaFinalize(_unlock_args) => {
-                    // let merkle_proof = CompiledMerkleProof(unlock_args.block_proof().unpack());
+                UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(_unlock_args) => {
                     // check finality
                     let withdrawal_block_number: u64 = lock_args.withdrawal_block_number().unpack();
                     let last_finalized_block_number: u64 =
@@ -141,18 +148,6 @@ pub fn main() -> Result<(), Error> {
                         // not yet finalized
                         return Err(Error::InvalidArgs);
                     }
-
-                    // prove the block is not reverted
-                    // TODO: add this part back when revert flow is properly implemented.
-                    // if !merkle_proof
-                    //     .verify::<Blake2bHasher>(
-                    //         &reverted_block_root.into(),
-                    //         vec![(block_hash.into(), H256::zero())],
-                    //     )
-                    //     .map_err(|_| Error::MerkleProof)?
-                    // {
-                    //     return Err(Error::MerkleProof);
-                    // }
 
                     // withdrawal lock is finalized, unlock for owner
                     if search_lock_hash(&lock_args.owner_lock_hash().unpack(), Source::Input)
@@ -173,7 +168,7 @@ pub fn main() -> Result<(), Error> {
             // return success if tx has enough output send to owner
 
             let unlock_args = match unlock_args.to_enum() {
-                UnlockWithdrawalUnion::UnlockWithdrawalViaTrade(unlock_args) => unlock_args,
+                UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(unlock_args) => unlock_args,
                 _ => return Err(Error::InvalidArgs),
             };
             // make sure output >= input + sell_amount
@@ -187,11 +182,11 @@ pub fn main() -> Result<(), Error> {
             let expected_output_amount = input_token
                 .total_token_amount
                 .checked_add(sell_amount)
-                .ok_or(Error::OverflowAmount)?;
+                .ok_or(Error::AmountOverflow)?;
             let expected_output_capacity = input_token
                 .total_capacity
                 .checked_add(sell_capacity as u128)
-                .ok_or(Error::OverflowAmount)?;
+                .ok_or(Error::AmountOverflow)?;
             if output_token.total_token_amount < expected_output_amount
                 || output_token.total_capacity < expected_output_capacity
             {

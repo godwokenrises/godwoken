@@ -295,11 +295,22 @@ int _load_challenge_cell(gw_context_t *ctx) {
   mol_seg_t cell_seg;
   cell_seg.ptr = buf;
   cell_seg.size = buf_len;
-  if (MolReader_StartChallenge_verify(&cell_seg, false) != MOL_OK) {
-    ckb_debug("channel cell data is not StartChallenge format");
+  if (MolReader_ChallengeLockArgs_verify(&cell_seg, false) != MOL_OK) {
+    ckb_debug("challenge cell data is not ChallengeLockArgs format");
     return -1;
   }
-  mol_seg_t tx_index_seg = MolReader_StartChallenge_get_tx_index(&cell_seg);
+
+  mol_seg_t target_seg =
+      MolReader_ChallengeLockArgs_get_target(&cell_seg);
+  mol_seg_t target_type_seg =
+      MolReader_ChallengeTarget_get_target_type(&target_seg);
+  uint8_t target_type = *(uint8_t *)target_type_seg.ptr;
+  if (target_type != 0) {
+    ckb_debug("challenge target type is invalid");
+    return -1;
+  }
+  mol_seg_t tx_index_seg =
+      MolReader_ChallengeTarget_get_target_index(&target_seg);
   ctx->tx_index = *((uint32_t *)tx_index_seg.ptr);
   return 0;
 }
@@ -333,17 +344,18 @@ int _load_cancel_challenge_witness(gw_context_t *ctx) {
     ckb_debug("WitnessArgs has no input field");
     return -1;
   }
-  mol_seg_t cancel_challenge_seg = MolReader_Bytes_raw_bytes(&content_seg);
-  if (MolReader_CancelChallenge_verify(&cancel_challenge_seg, false) !=
-      MOL_OK) {
-    ckb_debug("input field is not CancelChallenge");
+  mol_seg_t verify_tx_witness_seg = MolReader_Bytes_raw_bytes(&content_seg);
+  if (MolReader_VerifyTransactionWitness_verify(&verify_tx_witness_seg,
+                                                false) != MOL_OK) {
+    ckb_debug("input field is not VerifyTransactionWitness");
     return -1;
   }
 
   mol_seg_t raw_l2block_seg =
-      MolReader_CancelChallenge_get_raw_l2block(&cancel_challenge_seg);
+      MolReader_VerifyTransactionWitness_get_raw_l2block(
+          &verify_tx_witness_seg);
   mol_seg_t l2tx_seg =
-      MolReader_CancelChallenge_get_l2tx(&cancel_challenge_seg);
+      MolReader_VerifyTransactionWitness_get_l2tx(&verify_tx_witness_seg);
   mol_seg_t raw_l2tx_seg = MolReader_L2Transaction_get_raw(&l2tx_seg);
 
   /* load transaction context */
@@ -367,7 +379,7 @@ int _load_cancel_challenge_witness(gw_context_t *ctx) {
 
   /* load kv state */
   mol_seg_t kv_state_seg =
-      MolReader_CancelChallenge_get_kv_state(&cancel_challenge_seg);
+      MolReader_VerifyTransactionWitness_get_kv_state(&verify_tx_witness_seg);
   uint32_t kv_length = MolReader_KVPairVec_length(&kv_state_seg);
   if (kv_length > GW_MAX_KV_STATE_CAPACITY) {
     ckb_debug("too many key/value pair");
@@ -389,7 +401,8 @@ int _load_cancel_challenge_witness(gw_context_t *ctx) {
   }
 
   mol_seg_t kv_state_proof_seg =
-      MolReader_CancelChallenge_get_kv_state_proof(&cancel_challenge_seg);
+      MolReader_VerifyTransactionWitness_get_kv_state_proof(
+          &verify_tx_witness_seg);
   ctx->kv_state_proof = (uint8_t *)malloc(kv_state_proof_seg.size);
   memcpy(ctx->kv_state_proof, kv_state_proof_seg.ptr, kv_state_proof_seg.size);
   ctx->kv_state_proof_size = (size_t)kv_state_proof_seg.size;
@@ -415,7 +428,7 @@ int _load_cancel_challenge_witness(gw_context_t *ctx) {
 
   /* load scripts */
   mol_seg_t scripts_seg =
-      MolReader_CancelChallenge_get_scripts(&cancel_challenge_seg);
+      MolReader_VerifyTransactionWitness_get_scripts(&verify_tx_witness_seg);
   uint32_t scripts_size = MolReader_ScriptVec_length(&scripts_seg);
   uint32_t max_scripts_size =
       scripts_size + (ctx->post_account.count - ctx->prev_account.count);
@@ -447,7 +460,8 @@ int _load_cancel_challenge_witness(gw_context_t *ctx) {
 
   /* load return data hash */
   mol_seg_t return_data_hash_seg =
-      MolReader_CancelChallenge_get_return_data_hash(&cancel_challenge_seg);
+      MolReader_VerifyTransactionWitness_get_return_data_hash(
+          &verify_tx_witness_seg);
   memcpy(ctx->return_data_hash, return_data_hash_seg.ptr, 32);
 
   return 0;

@@ -18,9 +18,9 @@ use gw_common::{
 };
 use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
-    core::ScriptHashType,
+    core::{ChallengeTargetType, ScriptHashType},
     packed::{
-        BlockInfo, DepositionRequest, L2Block, RawL2Block, RawL2Transaction, StartChallenge,
+        BlockInfo, ChallengeTarget, DepositionRequest, L2Block, RawL2Block, RawL2Transaction,
         TxReceipt, WithdrawalRequest,
     },
     prelude::*,
@@ -182,7 +182,11 @@ impl Generator {
             let actual_nonce: u32 = raw_tx.nonce().unpack();
             if actual_nonce != expected_nonce {
                 return Err(TransactionErrorWithContext::new(
-                    build_challenge_context(tx_index as u32, block_hash),
+                    build_challenge_target(
+                        block_hash.into(),
+                        ChallengeTargetType::Transaction,
+                        tx_index as u32,
+                    ),
                     TransactionError::Nonce {
                         expected: expected_nonce,
                         actual: actual_nonce,
@@ -196,7 +200,11 @@ impl Generator {
                 Ok(run_result) => run_result,
                 Err(err) => {
                     return Err(TransactionErrorWithContext::new(
-                        build_challenge_context(tx_index as u32, block_hash),
+                        build_challenge_target(
+                            block_hash.into(),
+                            ChallengeTargetType::Transaction,
+                            tx_index as u32,
+                        ),
                         err,
                     )
                     .into());
@@ -310,9 +318,15 @@ fn get_block_info(l2block: &RawL2Block) -> BlockInfo {
         .build()
 }
 
-fn build_challenge_context(tx_index: u32, block_hash: [u8; 32]) -> StartChallenge {
-    StartChallenge::new_builder()
-        .tx_index(tx_index.pack())
+fn build_challenge_target(
+    block_hash: H256,
+    target_type: ChallengeTargetType,
+    target_index: u32,
+) -> ChallengeTarget {
+    let target_type: u8 = target_type.into();
+    ChallengeTarget::new_builder()
         .block_hash(block_hash.pack())
+        .target_index(target_index.pack())
+        .target_type(target_type.into())
         .build()
 }

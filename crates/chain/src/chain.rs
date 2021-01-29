@@ -3,7 +3,7 @@ use crate::{mem_pool::MemPoolPackage, next_block_context::NextBlockContext};
 use anyhow::{anyhow, Result};
 use gw_common::{
     h256_ext::H256Ext, merkle_utils::calculate_merkle_root, smt::Blake2bHasher, sparse_merkle_tree,
-    state::State, FINALIZE_BLOCKS, H256,
+    state::State, H256,
 };
 use gw_config::{ChainConfig, GenesisConfig};
 use gw_generator::{
@@ -15,10 +15,9 @@ use gw_types::{
     bytes::Bytes,
     core::Status,
     packed::{
-        AccountMerkleState, BlockMerkleState, CancelChallenge, DepositionRequest, GlobalState,
-        HeaderInfo, L2Block, L2BlockReader, RawL2Block, Script, StartChallenge,
-        StartChallengeWitness, SubmitTransactions, Transaction, TxReceipt, WitnessArgs,
-        WitnessArgsReader,
+        AccountMerkleState, BlockMerkleState, ChallengeTarget, ChallengeWitness, DepositionRequest,
+        GlobalState, HeaderInfo, L2Block, L2BlockReader, RawL2Block, Script, SubmitTransactions,
+        Transaction, TxReceipt, VerifyTransactionWitness, WitnessArgs, WitnessArgsReader,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -51,13 +50,13 @@ pub enum L1ActionContext {
         deposition_requests: Vec<DepositionRequest>,
     },
     Challenge {
-        context: StartChallenge,
+        context: ChallengeTarget,
     },
     CancelChallenge {
-        context: CancelChallenge,
+        context: VerifyTransactionWitness,
     },
     Revert {
-        context: StartChallenge,
+        context: ChallengeTarget,
     },
 }
 
@@ -95,7 +94,7 @@ pub enum SyncEvent {
     BadBlock(ChallengeContext),
     // found a invalid challenge
     BadChallenge {
-        witness: CancelChallenge,
+        witness: VerifyTransactionWitness,
         tx_receipt: TxReceipt,
     },
     // the rollup is in a challenge
@@ -133,7 +132,7 @@ impl LocalState {
 pub struct Chain {
     pub rollup_type_script_hash: [u8; 32],
     pub store: Store,
-    pub bad_block_context: Option<StartChallenge>,
+    pub bad_block_context: Option<ChallengeTarget>,
     pub local_state: LocalState,
     pub generator: Arc<Generator>,
     pub mem_pool: Arc<Mutex<MemPool>>,
@@ -224,7 +223,7 @@ impl Chain {
                     deposition_requests,
                 )? {
                     // stop syncing and return event
-                    self.bad_block_context = Some(challenge_context.args.clone());
+                    self.bad_block_context = Some(challenge_context.target.clone());
                     SyncEvent::BadBlock(challenge_context)
                 } else {
                     SyncEvent::Success
@@ -244,7 +243,7 @@ impl Chain {
                     // now, either we haven't found a bad block or the challenge is challenge a validate block
                     // in both cases the challenge is bad
                     // TODO: implement this
-                    let _witness = CancelChallenge::default();
+                    let _witness = VerifyTransactionWitness::default();
                     let _tx_receipt = unimplemented!();
                     // SyncEvent::BadChallenge {
                     //     witness,
@@ -437,7 +436,7 @@ impl Chain {
                 deposition_requests,
             )? {
                 // stop syncing and return event
-                self.bad_block_context = Some(challenge_context.args.clone());
+                self.bad_block_context = Some(challenge_context.target.clone());
                 return Ok(SyncEvent::BadBlock(challenge_context));
             }
         }
@@ -483,15 +482,15 @@ impl Chain {
                             .block_smt()?
                             .merkle_proof(vec![l2block.smt_key().into()])?
                             .compile(vec![(l2block.smt_key().into(), block_hash.into())])?;
-                        let witness = StartChallengeWitness::new_builder()
+                        let witness = ChallengeWitness::new_builder()
                             .raw_l2block(l2block.raw())
                             .block_proof(block_proof.0.pack())
                             .build();
-                        let challenge_context = ChallengeContext {
-                            args: err.context,
+                        let context = ChallengeContext {
+                            target: err.context,
                             witness,
                         };
-                        return Ok(Some(challenge_context));
+                        return Ok(Some(context));
                     }
                     err => return Err(err.into()),
                 }
@@ -633,6 +632,8 @@ impl Chain {
                 .build()
         };
         // reverted_block_root: Byte32,
+        // TODO Read it from RollupConfig
+        const FINALIZE_BLOCKS: u64 = 10;
         let last_finalized_block_number = number.saturating_sub(FINALIZE_BLOCKS);
         let global_state = GlobalState::new_builder()
             .account(post_account)

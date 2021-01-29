@@ -33,12 +33,43 @@ pub enum Status {
     Halting = 1,
 }
 
+impl Into<u8> for Status {
+    fn into(self: Status) -> u8 {
+        self as u8
+    }
+}
+
 impl TryFrom<u8> for Status {
     type Error = u8;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Status::Running),
             1 => Ok(Status::Halting),
+            n => return Err(n),
+        }
+    }
+}
+
+/// Challenge target type
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[repr(u8)]
+pub enum ChallengeTargetType {
+    Transaction = 0,
+    Withdrawal = 1,
+}
+
+impl Into<u8> for ChallengeTargetType {
+    fn into(self: ChallengeTargetType) -> u8 {
+        self as u8
+    }
+}
+
+impl TryFrom<u8> for ChallengeTargetType {
+    type Error = u8;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(ChallengeTargetType::Transaction),
+            1 => Ok(ChallengeTargetType::Withdrawal),
             n => return Err(n),
         }
     }

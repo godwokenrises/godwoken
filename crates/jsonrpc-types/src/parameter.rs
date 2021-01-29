@@ -7,7 +7,7 @@ use gw_types::{core, packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::godwoken::{CancelChallenge, ChallengeContext, LogItem, TxReceipt};
+use crate::godwoken::{ChallengeContext, LogItem, TxReceipt, VerifyTransactionWitness};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
@@ -161,30 +161,29 @@ impl From<L1ActionContext> for chain::L1ActionContext {
                     .collect(),
             },
             L1ActionContext::Challenge {
-                context: start_challenge,
+                context: challenge_target,
             } => {
-                let start_challenge_bytes = start_challenge.into_bytes();
+                let challenge_target_bytes = challenge_target.into_bytes();
                 chain::L1ActionContext::Challenge {
-                    context: packed::StartChallenge::from_slice(start_challenge_bytes.as_ref())
-                        .expect("Build packed::StartChallenge from slice"),
+                    context: packed::ChallengeTarget::from_slice(challenge_target_bytes.as_ref())
+                        .expect("Build packed::ChallengeTarget from slice"),
                 }
             }
-            L1ActionContext::CancelChallenge {
-                context: cancel_challenge,
-            } => {
-                let cancel_challenge_bytes = cancel_challenge.into_bytes();
+            L1ActionContext::CancelChallenge { context } => {
                 chain::L1ActionContext::CancelChallenge {
-                    context: packed::CancelChallenge::from_slice(cancel_challenge_bytes.as_ref())
-                        .expect("Build packed::CancelChallenge from slice"),
+                    context: packed::VerifyTransactionWitness::from_slice(
+                        context.into_bytes().as_ref(),
+                    )
+                    .expect("Build packed::VerifyTransactionWitness from slice"),
                 }
             }
             L1ActionContext::Revert {
-                context: start_challenge,
+                context: challenge_target,
             } => {
-                let start_challenge_bytes = start_challenge.into_bytes();
+                let challenge_target_bytes = challenge_target.into_bytes();
                 chain::L1ActionContext::Revert {
-                    context: packed::StartChallenge::from_slice(start_challenge_bytes.as_ref())
-                        .expect("Build packed::StartChallenge from slice"),
+                    context: packed::ChallengeTarget::from_slice(challenge_target_bytes.as_ref())
+                        .expect("Build packed::ChallengeTarget from slice"),
                 }
             }
         }
@@ -203,7 +202,7 @@ pub enum SyncEvent {
     },
     // found a invalid challenge
     BadChallenge {
-        witness: CancelChallenge,
+        witness: VerifyTransactionWitness,
         tx_receipt: TxReceipt,
     },
     // the rollup is in a challenge
