@@ -16,6 +16,7 @@ pub enum Error {
     InvalidOutput,
     OwnerCellNotFound,
     RollupCellNotFound,
+    RollupConfigNotFound,
     ProofNotFound,
     MerkleProof,
     AmountOverflow,

@@ -3,12 +3,15 @@ use core::result::Result;
 
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use validator_utils::{ckb_std::high_level::load_cell_capacity, search_cells::parse_rollup_action};
+use validator_utils::{
+    ckb_std::high_level::load_cell_capacity,
+    search_cells::{load_rollup_config, parse_rollup_action},
+};
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use crate::{
-    cells::{load_rollup_config, parse_global_state},
+    cells::parse_global_state,
     ckb_std::{ckb_constants::Source, high_level::load_script_hash},
     verifications,
 };
@@ -24,7 +27,7 @@ fn check_initialization() -> Result<bool, Error> {
     }
     // no input Rollup cell, which represents we are in the initialization
     let post_global_state = parse_global_state(Source::GroupOutput)?;
-    // check config cell
+    // check config cell exists
     let _rollup_config = load_rollup_config(&post_global_state.rollup_config_hash().unpack())?;
     Ok(true)
 }

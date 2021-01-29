@@ -28,7 +28,7 @@ use gw_common::{
     merkle_utils::calculate_merkle_root,
     smt::{Blake2bHasher, CompiledMerkleProof},
     state::State,
-    CKB_SUDT_SCRIPT_ARGS, FINALIZE_BLOCKS, H256,
+    CKB_SUDT_SCRIPT_ARGS, H256,
 };
 use gw_types::{
     bytes::Bytes,
@@ -286,8 +286,9 @@ fn burn_layer2_sudt(
 }
 
 fn load_l2block_context(
-    l2block: &L2Block,
     rollup_type_hash: [u8; 32],
+    config: &RollupConfig,
+    l2block: &L2Block,
     prev_global_state: &GlobalState,
     post_global_state: &GlobalState,
 ) -> Result<BlockContext, Error> {
@@ -373,7 +374,7 @@ fn load_l2block_context(
 
     // Generate context
     let account_count: u32 = prev_global_state.account().count().unpack();
-    let finalized_number = number.saturating_sub(FINALIZE_BLOCKS);
+    let finalized_number = number.saturating_sub(config.finality_blocks().unpack());
     let context = BlockContext {
         number,
         finalized_number,
@@ -459,8 +460,9 @@ pub fn verify(
 ) -> Result<(), Error> {
     check_status(&prev_global_state, Status::Running)?;
     let mut context = load_l2block_context(
-        block,
         rollup_type_hash,
+        config,
+        block,
         prev_global_state,
         post_global_state,
     )?;

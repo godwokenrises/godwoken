@@ -15,8 +15,8 @@ use gw_types::{
     packed::{
         Byte32, ChallengeLockArgs, ChallengeLockArgsReader, CustodianLockArgs,
         CustodianLockArgsReader, DepositionLockArgs, DepositionLockArgsReader, GlobalState,
-        GlobalStateReader, RollupConfig, RollupConfigReader, Script, StakeLockArgs,
-        StakeLockArgsReader, WithdrawalLockArgs, WithdrawalLockArgsReader,
+        GlobalStateReader, RollupConfig, Script, StakeLockArgs, StakeLockArgsReader,
+        WithdrawalLockArgs, WithdrawalLockArgsReader,
     },
     prelude::*,
 };
@@ -29,7 +29,6 @@ use validator_utils::{
         },
     },
     error::Error,
-    search_cells::search_rollup_config_cell,
 };
 
 fn fetch_sudt_script_hash(
@@ -83,15 +82,6 @@ pub fn parse_global_state(source: Source) -> Result<GlobalState, Error> {
     match GlobalStateReader::verify(&data, false) {
         Ok(_) => Ok(GlobalState::new_unchecked(data.into())),
         Err(_) => Err(Error::Encoding),
-    }
-}
-
-pub fn load_rollup_config(rollup_config_hash: &[u8; 32]) -> Result<RollupConfig, Error> {
-    let index = search_rollup_config_cell(rollup_config_hash).ok_or(Error::IndexOutOfBound)?;
-    let data = load_cell_data(index, Source::CellDep)?;
-    match RollupConfigReader::verify(&data, false) {
-        Ok(_) => Ok(RollupConfig::new_unchecked(data.into())),
-        Err(_) => return Err(Error::Encoding),
     }
 }
 

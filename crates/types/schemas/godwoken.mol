@@ -37,6 +37,7 @@ struct RollupConfig {
     burn_lock_hash: Byte32,
     required_staking_capacity: Uint64,
     challenge_maturity_blocks: Uint64,
+    finality_blocks: Uint64,
     reward_burn_rate: byte, // * reward_burn_rate / 100
 }
 

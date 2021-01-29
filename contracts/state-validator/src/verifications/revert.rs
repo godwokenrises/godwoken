@@ -1,7 +1,7 @@
 use gw_common::{
     h256_ext::H256Ext,
     smt::{Blake2bHasher, CompiledMerkleProof},
-    FINALIZE_BLOCKS, H256,
+    H256,
 };
 use gw_types::{
     core::Status,
@@ -150,6 +150,7 @@ fn check_rewards(
 }
 
 fn check_reverted_blocks(
+    config: &RollupConfig,
     reverted_blocks: &[RawL2Block],
     revert_args: &RollupRevert,
     prev_global_state: &GlobalState,
@@ -248,7 +249,9 @@ fn check_reverted_blocks(
     let tip_block_hash = reverted_blocks[0].parent_block_hash();
     let last_finalized_block_number = {
         let number: u64 = reverted_blocks[0].number().unpack();
-        number.saturating_sub(1).saturating_sub(FINALIZE_BLOCKS)
+        number
+            .saturating_sub(1)
+            .saturating_sub(config.finality_blocks().unpack())
     };
     // check post global state
     let reverted_post_global_state = {
@@ -300,6 +303,7 @@ pub fn verify(
     )?;
     check_rewards(&rollup_type_hash, config, &reverted_blocks, &challenge_cell)?;
     let reverted_global_state = check_reverted_blocks(
+        config,
         &reverted_blocks,
         &revert_args,
         prev_global_state,

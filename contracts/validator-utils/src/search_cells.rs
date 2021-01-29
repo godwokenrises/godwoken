@@ -9,7 +9,10 @@ use ckb_std::{
 };
 use gw_types::{
     bytes::Bytes,
-    packed::{GlobalState, GlobalStateReader, RollupAction, RollupActionReader},
+    packed::{
+        GlobalState, GlobalStateReader, RollupAction, RollupActionReader, RollupConfig,
+        RollupConfigReader,
+    },
     prelude::*,
 };
 
@@ -23,6 +26,15 @@ pub fn search_rollup_cell(rollup_type_hash: &[u8; 32], source: Source) -> Option
 pub fn search_rollup_config_cell(rollup_config_hash: &[u8; 32]) -> Option<usize> {
     QueryIter::new(load_cell_data_hash, Source::CellDep)
         .position(|data_hash| data_hash.as_ref() == rollup_config_hash)
+}
+
+pub fn load_rollup_config(rollup_config_hash: &[u8; 32]) -> Result<RollupConfig, Error> {
+    let index = search_rollup_config_cell(rollup_config_hash).ok_or(Error::RollupConfigNotFound)?;
+    let data = load_cell_data(index, Source::CellDep)?;
+    match RollupConfigReader::verify(&data, false) {
+        Ok(_) => Ok(RollupConfig::new_unchecked(data.into())),
+        Err(_) => return Err(Error::Encoding),
+    }
 }
 
 pub fn search_rollup_state(

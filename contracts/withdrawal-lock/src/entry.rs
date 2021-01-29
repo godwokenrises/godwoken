@@ -3,16 +3,18 @@ use core::result::Result;
 
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use gw_common::CUSTODIAN_LOCK_CODE_HASH;
-use gw_types::packed::{
-    CustodianLockArgs, CustodianLockArgsReader, RollupActionUnion, UnlockWithdrawalWitnessUnion,
-    WithdrawalLockArgs, WithdrawalLockArgsReader,
+use gw_types::{
+    core::ScriptHashType,
+    packed::{
+        CustodianLockArgs, CustodianLockArgsReader, RollupActionUnion,
+        UnlockWithdrawalWitnessUnion, WithdrawalLockArgs, WithdrawalLockArgsReader,
+    },
 };
 use validator_utils::{
     ckb_std::high_level::load_cell_lock,
     search_cells::{
-        fetch_token_amount, parse_rollup_action, search_lock_hash, search_rollup_cell,
-        search_rollup_state, TokenType,
+        fetch_token_amount, load_rollup_config, parse_rollup_action, search_lock_hash,
+        search_rollup_cell, search_rollup_state, TokenType,
     },
 };
 
@@ -118,12 +120,14 @@ pub fn main() -> Result<(), Error> {
                             Err(_) => return Err(Error::InvalidOutput),
                         }
                     };
-                    let custodian_code_hash: [u8; 32] = custodian_lock.code_hash().unpack();
                     let custodian_deposition_block_hash: [u8; 32] =
                         custodian_lock_args.deposition_block_hash().unpack();
                     let custodian_deposition_block_number: u64 =
                         custodian_lock_args.deposition_block_number().unpack();
-                    if custodian_code_hash != CUSTODIAN_LOCK_CODE_HASH
+                    let config = load_rollup_config(&global_state.rollup_config_hash().unpack())?;
+                    if custodian_lock.code_hash().as_slice()
+                        != config.custodian_script_type_hash().as_slice()
+                        || custodian_lock.hash_type() != ScriptHashType::Type.into()
                         || custodian_deposition_block_hash != FINALIZED_BLOCK_HASH
                         || custodian_deposition_block_number != FINALIZED_BLOCK_NUMBER
                     {

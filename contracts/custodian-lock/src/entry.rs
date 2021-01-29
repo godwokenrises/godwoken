@@ -1,11 +1,11 @@
 // Import from `core` instead of from `std` since we are in no-std mode
 use core::result::Result;
 
-use gw_common::DEPOSITION_LOCK_CODE_HASH;
 use validator_utils::{
     ckb_std::high_level::load_cell_lock,
     search_cells::{
-        parse_rollup_action, search_lock_hash, search_rollup_cell, search_rollup_state,
+        load_rollup_config, parse_rollup_action, search_lock_hash, search_rollup_cell,
+        search_rollup_state,
     },
 };
 
@@ -16,6 +16,7 @@ use crate::ckb_std::{
     high_level::load_script, high_level::load_witness_args,
 };
 use gw_types::{
+    core::ScriptHashType,
     packed::{
         CustodianLockArgs, CustodianLockArgsReader, RollupActionUnion,
         UnlockCustodianViaRevertWitness, UnlockCustodianViaRevertWitnessReader,
@@ -62,6 +63,7 @@ pub fn main() -> Result<(), Error> {
     }
 
     // otherwise, the submitter try to prove the deposit is reverted.
+    let config = load_rollup_config(&global_state.rollup_config_hash().unpack())?;
 
     // read the args
     let witness_args = load_witness_args(0, Source::GroupInput)?;
@@ -81,8 +83,8 @@ pub fn main() -> Result<(), Error> {
         search_lock_hash(&unlock_args.deposition_lock_hash().unpack(), Source::Output)
             .ok_or(Error::InvalidOutput)?;
     let deposition_lock = load_cell_lock(deposition_cell_index, Source::Output)?;
-    let deposition_lock_code_hash = deposition_lock.code_hash().unpack();
-    if deposition_lock_code_hash != DEPOSITION_LOCK_CODE_HASH
+    if deposition_lock.code_hash().as_slice() != config.deposition_script_type_hash().as_slice()
+        || deposition_lock.hash_type() != ScriptHashType::Type.into()
         || deposition_lock.args().as_slice() != lock_args.deposition_lock_args().as_slice()
     {
         return Err(Error::InvalidOutput);
