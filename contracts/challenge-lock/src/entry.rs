@@ -1,5 +1,5 @@
 // Import from `core` instead of from `std` since we are in no-std mode
-use core::result::Result;
+use core::{convert::TryInto, result::Result};
 
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
@@ -27,9 +27,10 @@ use gw_common::{
     H256,
 };
 use gw_types::{
+    core::ChallengeTargetType,
     packed::{
-        CancelChallenge, CancelChallengeReader, ChallengeLockArgs, ChallengeLockArgsReader,
-        RollupActionUnion,
+        ChallengeLockArgs, ChallengeLockArgsReader, RollupActionUnion, VerifyTransactionWitness,
+        VerifyTransactionWitnessReader, VerifyWithdrawalWitness, VerifyWithdrawalWitnessReader,
     },
     prelude::*,
 };
@@ -53,44 +54,24 @@ fn parse_lock_args() -> Result<([u8; 32], ChallengeLockArgs), Error> {
     }
 }
 
-/// args:
-/// * rollup_script_hash | ChallengeLockArgs
+/// Verify transaction
 ///
-/// unlock paths:
-/// * challenge success unlock
-///   * the cell is generated at least CHALLENGE_MUTURATY blocks
-/// * cancel challenge unlock
-///   * a cancel challenge tx is sent to consume this cell
-///   * a backend verifier cell in the inputs
-///   * the verification context of backend verifier is correct
-pub fn main() -> Result<(), Error> {
-    let (rollup_script_hash, lock_args) = parse_lock_args()?;
-    // check rollup cell
-    let index =
-        search_rollup_cell(&rollup_script_hash, Source::Output).ok_or(Error::RollupCellNotFound)?;
-    let action = parse_rollup_action(index, Source::Output)?;
-    match action.to_enum() {
-        RollupActionUnion::RollupEnterChallenge(_) | RollupActionUnion::RollupRevert(_) => {
-            // state-validator will do the verification
-            return Ok(());
-        }
-        RollupActionUnion::RollupCancelChallenge(_) => {}
-        _ => {
-            return Err(Error::InvalidArgs);
-        }
-    }
-
-    // unlock via cancel challenge
+/// 1. check the signature of tx
+/// 2. check the verifier backend script exists
+/// 3. do other merkle proof verification
+fn verify_transaction(
+    rollup_script_hash: &[u8; 32],
+    lock_args: &ChallengeLockArgs,
+) -> Result<(), Error> {
     let witness_args: Bytes = load_witness_args(0, Source::GroupInput)?
         .lock()
         .to_opt()
         .ok_or(Error::InvalidArgs)?
         .unpack();
-    let unlock_args = match CancelChallengeReader::verify(&witness_args, false) {
-        Ok(_) => CancelChallenge::new_unchecked(witness_args),
+    let unlock_args = match VerifyTransactionWitnessReader::verify(&witness_args, false) {
+        Ok(_) => VerifyTransactionWitness::new_unchecked(witness_args),
         Err(_) => return Err(Error::InvalidArgs),
     };
-
     // verify tx signature
     let tx = unlock_args.l2tx();
     let raw_tx = tx.raw();
@@ -108,7 +89,7 @@ pub fn main() -> Result<(), Error> {
         .map_err(|_| Error::SMTKeyMissing)?;
     let message = {
         let mut hasher = new_blake2b();
-        hasher.update(&rollup_script_hash);
+        hasher.update(rollup_script_hash);
         hasher.update(&sender_script_hash.as_slice());
         hasher.update(&receiver_script_hash.as_slice());
         hasher.update(raw_tx.as_slice());
@@ -135,7 +116,7 @@ pub fn main() -> Result<(), Error> {
 
     // verify tx
     let tx_witness_root: [u8; 32] = raw_block.submit_transactions().tx_witness_root().unpack();
-    let tx_index: u32 = lock_args.target().tx_index().unpack();
+    let tx_index: u32 = lock_args.target().target_index().unpack();
     let tx_witness_hash: [u8; 32] = tx.witness_hash();
     let valid = CompiledMerkleProof(unlock_args.tx_proof().unpack())
         .verify::<Blake2bHasher>(
@@ -159,6 +140,105 @@ pub fn main() -> Result<(), Error> {
         calculate_compacted_account_root(&state_root.into(), account_count);
     if prev_compacted_root != calculated_compacted_root {
         return Err(Error::MerkleProof);
+    }
+    Ok(())
+}
+
+/// Verify withdrawal signature
+fn verify_withdrawal(
+    rollup_script_hash: &[u8; 32],
+    lock_args: &ChallengeLockArgs,
+) -> Result<(), Error> {
+    let witness_args: Bytes = load_witness_args(0, Source::GroupInput)?
+        .lock()
+        .to_opt()
+        .ok_or(Error::InvalidArgs)?
+        .unpack();
+    let unlock_args = match VerifyWithdrawalWitnessReader::verify(&witness_args, false) {
+        Ok(_) => VerifyWithdrawalWitness::new_unchecked(witness_args),
+        Err(_) => return Err(Error::InvalidArgs),
+    };
+    // verify withdrawal signature
+    let withdrawal = unlock_args.withdrawal_request();
+    let raw_withdrawal = withdrawal.raw();
+    let sender_script_hash = raw_withdrawal.account_script_hash().unpack();
+    let message = {
+        let mut hasher = new_blake2b();
+        hasher.update(rollup_script_hash);
+        hasher.update(raw_withdrawal.as_slice());
+        let mut message = [0u8; 32];
+        hasher.finalize(&mut message);
+        message
+    };
+    check_input_account_lock(sender_script_hash, message.into())?;
+
+    // verify block hash
+    let raw_block = unlock_args.raw_l2block();
+    if &raw_block.hash() != lock_args.target().block_hash().as_slice() {
+        return Err(Error::InvalidOutput);
+    }
+
+    // verify witness root
+    let withdrawal_requests_root: [u8; 32] = raw_block.withdrawal_requests_root().unpack();
+    let withdrawal_index: u32 = lock_args.target().target_index().unpack();
+    let withdrawal_witness_hash: [u8; 32] = withdrawal.witness_hash();
+    let valid = CompiledMerkleProof(unlock_args.withdrawal_proof().unpack())
+        .verify::<Blake2bHasher>(
+            &withdrawal_requests_root.into(),
+            vec![(
+                H256::from_u32(withdrawal_index),
+                withdrawal_witness_hash.into(),
+            )],
+        )
+        .map_err(|_| Error::MerkleProof)?;
+    if !valid {
+        return Err(Error::MerkleProof);
+    }
+
+    Ok(())
+}
+
+/// args:
+/// * rollup_script_hash | ChallengeLockArgs
+///
+/// unlock paths:
+/// * challenge success
+///   * after CHALLENGE_MATURITY_BLOCKS, the submitter can cancel challenge and resume Rollup to running status
+/// * cancel challenge by execute verification
+///   * during Rollup halting and submitter can do verification on-chain and cancel the challenge
+///   * the verificaiton tx must has a backend verifier cell in the inputs
+///   * the verification tx must provides verification context
+pub fn main() -> Result<(), Error> {
+    let (rollup_script_hash, lock_args) = parse_lock_args()?;
+    // check rollup cell
+    let index =
+        search_rollup_cell(&rollup_script_hash, Source::Output).ok_or(Error::RollupCellNotFound)?;
+    let action = parse_rollup_action(index, Source::Output)?;
+    match action.to_enum() {
+        RollupActionUnion::RollupEnterChallenge(_) | RollupActionUnion::RollupRevert(_) => {
+            // state-validator will do the verification
+            return Ok(());
+        }
+        RollupActionUnion::RollupCancelChallenge(_) => {}
+        _ => {
+            return Err(Error::InvalidArgs);
+        }
+    }
+
+    // unlock via cancel challenge
+    let challenge_target = lock_args.target();
+    let target_type: ChallengeTargetType = {
+        let target_type: u8 = challenge_target.target_type().into();
+        target_type.try_into().map_err(|_| Error::InvalidArgs)?
+    };
+
+    match target_type {
+        ChallengeTargetType::Transaction => {
+            verify_transaction(&rollup_script_hash, &lock_args)?;
+        }
+        ChallengeTargetType::Withdrawal => {
+            verify_withdrawal(&rollup_script_hash, &lock_args)?;
+        }
     }
 
     Ok(())

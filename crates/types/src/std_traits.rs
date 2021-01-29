@@ -35,7 +35,6 @@ macro_rules! impl_std_ord {
 impl_std_eq!(Byte32);
 impl_std_ord!(Byte32);
 impl_std_eq!(Script);
-impl_std_eq!(CancelChallenge);
 impl_std_eq!(TxReceipt);
 impl_std_eq!(ChallengeLockArgs);
 impl_std_eq!(ChallengeWitness);
@@ -46,3 +45,4 @@ impl_std_eq!(DepositionRequest);
 impl_std_eq!(DepositionLockArgs);
 impl_std_eq!(GlobalState);
 impl_std_eq!(StakeLockArgs);
+impl_std_eq!(VerifyTransactionWitness);

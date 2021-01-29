@@ -4,7 +4,6 @@ use core::result::Result;
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
 use alloc::{collections::BTreeMap, vec, vec::Vec};
-use validator_utils::signature::check_input_account_lock;
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
@@ -56,7 +55,7 @@ fn check_withdrawal_cells(
 
         let cell_account_script_hash: H256 = cell.args.account_script_hash().unpack();
         // check that there is a corresponded withdrawal request
-        let withdrawal_request = match withdrawal_requests.iter().position(|request| {
+        match withdrawal_requests.iter().position(|request| {
             let raw = request.raw();
             let account_script_hash: H256 = raw.account_script_hash().unpack();
             let sudt_script_hash: H256 = raw.sudt_script_hash().unpack();
@@ -68,15 +67,13 @@ fn check_withdrawal_cells(
                 && amount == cell.value.amount
                 && capacity == cell.value.capacity
         }) {
-            Some(index) => withdrawal_requests.remove(index),
+            Some(index) => {
+                withdrawal_requests.remove(index);
+            }
             None => {
                 return Err(Error::InvalidWithdrawalCell);
             }
-        };
-        // check that there is an input to unlock account
-        let message = withdrawal_request.raw().hash().into();
-        check_input_account_lock(cell_account_script_hash.into(), message)
-            .map_err(|_| Error::InvalidWithdrawalCell)?;
+        }
     }
     // Some withdrawal requests hasn't has a corresponded withdrawal cell
     if !withdrawal_requests.is_empty() {

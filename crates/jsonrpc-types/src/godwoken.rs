@@ -2,8 +2,10 @@ use crate::blockchain::Script;
 use crate::fixed_bytes::Byte65;
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
+use failure::{err_msg, Error as FailureError};
 use gw_types::{bytes::Bytes, packed, prelude::*};
 use serde::{Deserialize, Serialize};
+use std::convert::{TryFrom, TryInto};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
@@ -175,32 +177,70 @@ impl From<packed::TxReceipt> for TxReceipt {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum ChallengeTargetType {
+    Transaction,
+    Withdrawal,
+}
+
+impl Default for ChallengeTargetType {
+    fn default() -> Self {
+        Self::Transaction
+    }
+}
+
+impl From<ChallengeTargetType> for packed::Byte {
+    fn from(json: ChallengeTargetType) -> packed::Byte {
+        match json {
+            ChallengeTargetType::Transaction => packed::Byte::new(0),
+            ChallengeTargetType::Withdrawal => packed::Byte::new(1),
+        }
+    }
+}
+impl TryFrom<packed::Byte> for ChallengeTargetType {
+    type Error = FailureError;
+
+    fn try_from(v: packed::Byte) -> Result<ChallengeTargetType, Self::Error> {
+        match u8::from(v) {
+            0 => Ok(ChallengeTargetType::Transaction),
+            1 => Ok(ChallengeTargetType::Withdrawal),
+            _ => Err(err_msg(format!("Invalid challenge target type {}", v))),
+        }
+    }
+}
+
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct ChallengeTarget {
-    pub block_hash: H256, // hash of challenged block
-    pub tx_index: Uint32, // challenge tx
+    pub block_hash: H256,                 // hash of challenged block
+    pub target_index: Uint32,             // target index
+    pub target_type: ChallengeTargetType, // target type
 }
 
 impl From<ChallengeTarget> for packed::ChallengeTarget {
     fn from(json: ChallengeTarget) -> packed::ChallengeTarget {
         let ChallengeTarget {
             block_hash,
-            tx_index,
+            target_index,
+            target_type,
         } = json;
         packed::ChallengeTarget::new_builder()
             .block_hash(block_hash.pack())
-            .tx_index(u32::from(tx_index).pack())
+            .target_index(u32::from(target_index).pack())
+            .target_type(target_type.into())
             .build()
     }
 }
 
 impl From<packed::ChallengeTarget> for ChallengeTarget {
     fn from(challenge_target: packed::ChallengeTarget) -> ChallengeTarget {
-        let tx_index: u32 = challenge_target.tx_index().unpack();
+        let target_index: u32 = challenge_target.target_index().unpack();
+        let target_type: packed::Byte = challenge_target.target_type().into();
         Self {
             block_hash: challenge_target.block_hash().unpack(),
-            tx_index: Uint32::from(tx_index),
+            target_index: Uint32::from(target_index),
+            target_type: target_type.try_into().expect("invalid target type"),
         }
     }
 }
@@ -264,7 +304,7 @@ impl From<gw_generator::ChallengeContext> for ChallengeContext {
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
-pub struct CancelChallenge {
+pub struct VerifyTransactionWitness {
     pub raw_l2block: RawL2Block,
     pub l2tx: L2Transaction,
     pub kv_state: Vec<KVPair>,
@@ -274,9 +314,9 @@ pub struct CancelChallenge {
     pub tx_proof: JsonBytes,
 }
 
-impl From<CancelChallenge> for packed::CancelChallenge {
-    fn from(json: CancelChallenge) -> packed::CancelChallenge {
-        let CancelChallenge {
+impl From<VerifyTransactionWitness> for packed::VerifyTransactionWitness {
+    fn from(json: VerifyTransactionWitness) -> packed::VerifyTransactionWitness {
+        let VerifyTransactionWitness {
             raw_l2block,
             l2tx,
             kv_state,
@@ -290,7 +330,7 @@ impl From<CancelChallenge> for packed::CancelChallenge {
         let script_vec: Vec<packed::Script> = scripts.into_iter().map(|s| s.into()).collect();
         let packed_script_vec = packed::ScriptVec::new_builder().set(script_vec).build();
 
-        packed::CancelChallenge::new_builder()
+        packed::VerifyTransactionWitness::new_builder()
             .raw_l2block(raw_l2block.into())
             .l2tx(l2tx.into())
             .kv_state(packed_kv_state_vec)
@@ -302,12 +342,12 @@ impl From<CancelChallenge> for packed::CancelChallenge {
     }
 }
 
-impl From<packed::CancelChallenge> for CancelChallenge {
-    fn from(data: packed::CancelChallenge) -> CancelChallenge {
+impl From<packed::VerifyTransactionWitness> for VerifyTransactionWitness {
+    fn from(data: packed::VerifyTransactionWitness) -> VerifyTransactionWitness {
         let kv_state: Vec<KVPair> = data.kv_state().into_iter().map(|k| k.into()).collect();
         let scripts: Vec<Script> = data.scripts().into_iter().map(|s| s.into()).collect();
 
-        CancelChallenge {
+        VerifyTransactionWitness {
             raw_l2block: data.raw_l2block().into(),
             l2tx: data.l2tx().into(),
             kv_state,

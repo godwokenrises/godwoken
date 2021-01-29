@@ -233,7 +233,10 @@ struct SUDTTransfer {
 
 struct ChallengeTarget {
     block_hash: Byte32,
-    tx_index: Uint32,
+    // index of the challenge target
+    target_index: Uint32,
+    // 0: tx, 1: withdrawal
+    target_type: byte,
 }
 
 // a rollup_type_hash exists before this args, to make args friendly to prefix search
@@ -252,7 +255,7 @@ table ChallengeWitness {
 vector ScriptVec<Script>;
 
 // witness to cancel a challenge by execute the transaction
-table CancelChallenge {
+table VerifyTransactionWitness {
     raw_l2block: RawL2Block,
     l2tx: L2Transaction,
     tx_proof: Bytes,
@@ -262,6 +265,13 @@ table CancelChallenge {
     return_data_hash: Byte32,
     account_count: Uint32,
 }
+
+table VerifyWithdrawalWitness {
+    raw_l2block: RawL2Block,
+    withdrawal_request: WithdrawalRequest,
+    withdrawal_proof: Bytes,
+}
+
 // --- end of challenge ---
 
 // --- unlock account ---

@@ -15,9 +15,9 @@ use gw_types::{
     bytes::Bytes,
     core::Status,
     packed::{
-        AccountMerkleState, BlockMerkleState, CancelChallenge, ChallengeTarget, ChallengeWitness,
-        DepositionRequest, GlobalState, HeaderInfo, L2Block, L2BlockReader, RawL2Block, Script,
-        SubmitTransactions, Transaction, TxReceipt, WitnessArgs, WitnessArgsReader,
+        AccountMerkleState, BlockMerkleState, ChallengeTarget, ChallengeWitness, DepositionRequest,
+        GlobalState, HeaderInfo, L2Block, L2BlockReader, RawL2Block, Script, SubmitTransactions,
+        Transaction, TxReceipt, VerifyTransactionWitness, WitnessArgs, WitnessArgsReader,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -53,7 +53,7 @@ pub enum L1ActionContext {
         context: ChallengeTarget,
     },
     CancelChallenge {
-        context: CancelChallenge,
+        context: VerifyTransactionWitness,
     },
     Revert {
         context: ChallengeTarget,
@@ -94,7 +94,7 @@ pub enum SyncEvent {
     BadBlock(ChallengeContext),
     // found a invalid challenge
     BadChallenge {
-        witness: CancelChallenge,
+        witness: VerifyTransactionWitness,
         tx_receipt: TxReceipt,
     },
     // the rollup is in a challenge
@@ -243,7 +243,7 @@ impl Chain {
                     // now, either we haven't found a bad block or the challenge is challenge a validate block
                     // in both cases the challenge is bad
                     // TODO: implement this
-                    let _witness = CancelChallenge::default();
+                    let _witness = VerifyTransactionWitness::default();
                     let _tx_receipt = unimplemented!();
                     // SyncEvent::BadChallenge {
                     //     witness,
