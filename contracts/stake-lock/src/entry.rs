@@ -10,6 +10,7 @@ use core::result::Result;
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use crate::ckb_std::{
+    debug,
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::Unpack as CKBTypeUnpack},
     high_level::load_script,
@@ -45,9 +46,11 @@ fn parse_lock_args() -> Result<([u8; 32], StakeLockArgs), Error> {
 pub fn main() -> Result<(), Error> {
     let (rollup_type_hash, lock_args) = parse_lock_args()?;
 
+    debug!("rollup_type_hash: {:?}",rollup_type_hash);
     // Unlock by User
     // read global state from rollup cell in deps
     if let Some(global_state) = search_rollup_state(&rollup_type_hash, Source::CellDep)? {
+        debug!("global_state: {}", global_state);
         let stake_block_number: u64 = lock_args.stake_block_number().unpack();
         let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();
 

@@ -151,6 +151,8 @@ function packStakeLockArgs(
   const array = new Uint8Array(buffer);
   array.set(new Uint8Array(new Reader(rollupTypeHash).toArrayBuffer()), 0);
   array.set(new Uint8Array(packedWithdrawalLockArgs), 32);
+  console.log(buffer);
+  console.log(array);
   return new Reader(buffer).serializeJson();
 }
 
