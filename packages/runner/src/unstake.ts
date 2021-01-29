@@ -135,11 +135,21 @@ async function queryValidSecp256k1Cell(
     type: "empty",
   };
   const cellCollector = indexer.collector(queryOptions);
-  console.log(queryOptions);
   for await (const cell of cellCollector.collect()) {
     return cell;
   }
   throw new Error("No valid output cell matches the ownerLockHash");
+}
+
+async function queryValidRollupCell(indexer: Indexer): Promise<Cell> {
+  const queryOptions: QueryOptions = {
+    type: runnerConfig.godwokenConfig.chain.rollup_type_script,
+  };
+  const cellCollector = indexer.collector(queryOptions);
+  for await (const cell of cellCollector.collect()) {
+    return cell;
+  }
+  throw new Error("No valid rollup cell found!");
 }
 
 function buildSecp256k1WitnessArgsPlaceHolder(): HexString {
@@ -182,9 +192,14 @@ const run = async () => {
   txSkeleton = txSkeleton.update("cellDeps", (cellDeps) =>
     cellDeps.push(runnerConfig.deploymentConfig.stake_lock_dep)
   );
-  // Add rollup cell dep
+  // Add rollup cell dep(not state validator dep)
+  const rollupCell: Cell = await queryValidRollupCell(indexer);
+  const rollupCellDep: CellDep = {
+    out_point: rollupCell.out_point!,
+    dep_type: "code",
+  };
   txSkeleton = txSkeleton.update("cellDeps", (cellDeps) =>
-    cellDeps.push(runnerConfig.deploymentConfig.state_validator_type_dep)
+    cellDeps.push(rollupCellDep)
   );
   // Add secp256k1 cell dep
   const secp256k1CellDep: CellDep = {
@@ -211,7 +226,9 @@ const run = async () => {
     runnerConfig
   );
   txSkeleton = txSkeleton.update("inputs", (inputs) => inputs.push(stakeCell));
-  txSkeleton = txSkeleton.update("witnesses", (witnesses) => witnesses.push("0x"));
+  txSkeleton = txSkeleton.update("witnesses", (witnesses) =>
+    witnesses.push("0x")
+  );
 
   // Add output cells
   const capacityMinusFee =
