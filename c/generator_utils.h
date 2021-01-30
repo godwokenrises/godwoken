@@ -50,9 +50,8 @@ typedef struct gw_context_t {
   gw_log_fn sys_log;
 } gw_context_t;
 
-
-int sys_load(gw_context_t *ctx, uint32_t account_id, const uint8_t key[GW_KEY_BYTES],
-             uint8_t value[GW_VALUE_BYTES]) {
+int sys_load(gw_context_t *ctx, uint32_t account_id,
+             const uint8_t key[GW_KEY_BYTES], uint8_t value[GW_VALUE_BYTES]) {
   gw_context_t *gw_ctx = (gw_context_t *)ctx;
   if (gw_ctx == NULL) {
     return GW_ERROR_INVALID_CONTEXT;
@@ -61,7 +60,8 @@ int sys_load(gw_context_t *ctx, uint32_t account_id, const uint8_t key[GW_KEY_BY
   gw_build_account_key(account_id, key, raw_key);
   return syscall(GW_SYS_LOAD, raw_key, value, 0, 0, 0, 0);
 }
-int sys_store(gw_context_t *ctx, uint32_t account_id, const uint8_t key[GW_KEY_BYTES],
+int sys_store(gw_context_t *ctx, uint32_t account_id,
+              const uint8_t key[GW_KEY_BYTES],
               const uint8_t value[GW_VALUE_BYTES]) {
   gw_context_t *gw_ctx = (gw_context_t *)ctx;
   if (gw_ctx == NULL) {
@@ -72,19 +72,22 @@ int sys_store(gw_context_t *ctx, uint32_t account_id, const uint8_t key[GW_KEY_B
   return syscall(GW_SYS_STORE, raw_key, value, 0, 0, 0, 0);
 }
 
-int sys_load_nonce(gw_context_t *ctx, uint32_t account_id, uint8_t value[GW_VALUE_BYTES]) {
+int sys_load_nonce(gw_context_t *ctx, uint32_t account_id,
+                   uint8_t value[GW_VALUE_BYTES]) {
   uint8_t key[32];
   gw_build_nonce_key(account_id, key);
   return syscall(GW_SYS_LOAD, key, value, 0, 0, 0, 0);
 }
 
 /* set call return data */
-int sys_set_program_return_data(gw_context_t *ctx, uint8_t *data, uint32_t len) {
+int sys_set_program_return_data(gw_context_t *ctx, uint8_t *data,
+                                uint32_t len) {
   return syscall(GW_SYS_SET_RETURN_DATA, data, len, 0, 0, 0, 0);
 }
 
 /* Get account id by account script_hash */
-int sys_get_account_id_by_script_hash(gw_context_t *ctx, uint8_t script_hash[32],
+int sys_get_account_id_by_script_hash(gw_context_t *ctx,
+                                      uint8_t script_hash[32],
                                       uint32_t *account_id) {
   return syscall(GW_SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH, script_hash, account_id,
                  0, 0, 0, 0);
@@ -98,19 +101,18 @@ int sys_get_script_hash_by_account_id(gw_context_t *ctx, uint32_t account_id,
 }
 
 /* Get account script by account id */
-int sys_get_account_script(gw_context_t *ctx, uint32_t account_id, uint32_t *len,
-                         uint32_t offset, uint8_t *script) {
-  return syscall(GW_SYS_LOAD_ACCOUNT_SCRIPT, account_id, len, offset, script, 0, 0);
+int sys_get_account_script(gw_context_t *ctx, uint32_t account_id,
+                           uint32_t *len, uint32_t offset, uint8_t *script) {
+  return syscall(GW_SYS_LOAD_ACCOUNT_SCRIPT, account_id, len, offset, script, 0,
+                 0);
 }
 /* Store data by data hash */
-int sys_store_data(gw_context_t *ctx,
-                 uint32_t data_len,
-                 uint8_t *data) {
+int sys_store_data(gw_context_t *ctx, uint32_t data_len, uint8_t *data) {
   return syscall(GW_SYS_STORE_DATA, data_len, data, 0, 0, 0, 0);
 }
 /* Load data by data hash */
-int sys_load_data(gw_context_t *ctx, uint8_t data_hash[32],
-                 uint32_t *len, uint32_t offset, uint8_t *data) {
+int sys_load_data(gw_context_t *ctx, uint8_t data_hash[32], uint32_t *len,
+                  uint32_t offset, uint8_t *data) {
   return syscall(GW_SYS_LOAD_DATA, data_hash, len, offset, data, 0, 0);
 }
 
@@ -128,7 +130,8 @@ int _sys_load_block_info(void *addr, uint64_t *len) {
   return ret;
 }
 
-int sys_get_block_hash(gw_context_t *ctx, uint64_t number, uint8_t block_hash[32]) {
+int sys_get_block_hash(gw_context_t *ctx, uint64_t number,
+                       uint8_t block_hash[32]) {
   return syscall(GW_SYS_GET_BLOCK_HASH, number, block_hash, 0, 0, 0, 0);
 }
 
@@ -149,10 +152,8 @@ int gw_context_init(gw_context_t *ctx) {
   ctx->sys_store = sys_store;
   ctx->sys_set_program_return_data = sys_set_program_return_data;
   ctx->sys_create = sys_create;
-  ctx->sys_get_account_id_by_script_hash =
-      sys_get_account_id_by_script_hash;
-  ctx->sys_get_script_hash_by_account_id =
-      sys_get_script_hash_by_account_id;
+  ctx->sys_get_account_id_by_script_hash = sys_get_account_id_by_script_hash;
+  ctx->sys_get_script_hash_by_account_id = sys_get_script_hash_by_account_id;
   ctx->sys_get_account_script = sys_get_account_script;
   ctx->sys_store_data = sys_store_data;
   ctx->sys_load_data = sys_load_data;
@@ -160,9 +161,9 @@ int gw_context_init(gw_context_t *ctx) {
   ctx->sys_log = sys_log;
 
   /* initialize context */
-  uint8_t buf[GW_MAX_L2TX_SIZE] = {0};
+  uint8_t tx_buf[GW_MAX_L2TX_SIZE] = {0};
   uint64_t len = GW_MAX_L2TX_SIZE;
-  int ret = _sys_load_l2transaction(buf, &len);
+  int ret = _sys_load_l2transaction(tx_buf, &len);
   if (ret != 0) {
     return ret;
   }
@@ -171,7 +172,7 @@ int gw_context_init(gw_context_t *ctx) {
   }
 
   mol_seg_t l2transaction_seg;
-  l2transaction_seg.ptr = buf;
+  l2transaction_seg.ptr = tx_buf;
   l2transaction_seg.size = len;
   ret = gw_parse_transaction_context(&ctx->transaction_context,
                                      &l2transaction_seg);
@@ -179,17 +180,15 @@ int gw_context_init(gw_context_t *ctx) {
     return ret;
   }
 
-  len = GW_BLOCK_INFO_SIZE;
-  ret = _sys_load_block_info(buf, &len);
+  uint8_t block_info_buf[sizeof(MolDefault_BlockInfo)] = {0};
+  len = sizeof(block_info_buf);
+  ret = _sys_load_block_info(block_info_buf, &len);
   if (ret != 0) {
     return ret;
   }
-  if (len > GW_BLOCK_INFO_SIZE) {
-    return GW_ERROR_INVALID_DATA;
-  }
 
   mol_seg_t block_info_seg;
-  block_info_seg.ptr = buf;
+  block_info_seg.ptr = block_info_buf;
   block_info_seg.size = len;
   ret = gw_parse_block_info(&ctx->block_info, &block_info_seg);
   if (ret != 0) {
