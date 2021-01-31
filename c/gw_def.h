@@ -23,8 +23,7 @@
 
 /* Limitations */
 #define GW_MAX_KV_PAIRS 1024
-#define GW_SCRIPT_SIZE 128
-#define GW_BLOCK_INFO_SIZE 20
+#define GW_MAX_SCRIPT_SIZE 128
 #define GW_MAX_WITNESS_SIZE (300 * 1024)
 #define GW_MAX_CODE_SIZE (64 * 1024)
 
