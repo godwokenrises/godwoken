@@ -808,9 +808,9 @@ dependencies = [
 
 [[package]]
 name = "godwoken-polyjuice"
-version = "0.0.6"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a17ceff13e16f2bcd7eb40bb2f1e3ef7d1483ddef9217bf38ab2bf00b2ce6f6"
+checksum = "70763fd4bb7b8e190b27b2cbeb0b08f25eeada3034f05bb5eda35ca4b76fc56c"
 dependencies = [
  "blake2b-rs 0.1.5",
  "faster-hex 0.4.1",
