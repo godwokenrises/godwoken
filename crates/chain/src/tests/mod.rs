@@ -15,7 +15,9 @@ use gw_generator::{
 };
 use gw_store::Store;
 use gw_types::{
-    packed::{CellOutput, HeaderInfo, RawTransaction, Script, Transaction, WitnessArgs},
+    packed::{
+        CellOutput, HeaderInfo, RawTransaction, RollupConfig, Script, Transaction, WitnessArgs,
+    },
     prelude::*,
 };
 use parking_lot::Mutex;
@@ -33,8 +35,10 @@ pub fn setup_chain(rollup_type_script: &Script) -> Chain {
         ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.into(),
         Box::new(AlwaysSuccess),
     );
+    let rollup_config = RollupConfig::default();
     let config = ChainConfig {
         rollup_type_script: rollup_type_script.clone(),
+        rollup_config: rollup_config.clone(),
     };
     let rollup_script_hash = config.rollup_type_script.hash().into();
     let generator = Arc::new(Generator::new(
@@ -51,6 +55,7 @@ pub fn setup_chain(rollup_type_script: &Script) -> Chain {
     init_genesis(
         &store,
         &genesis_config,
+        &rollup_config,
         genesis_header_info,
         rollup_script_hash,
     )

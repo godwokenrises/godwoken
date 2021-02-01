@@ -2,7 +2,7 @@
 
 use crate::types::CellValue;
 use crate::{
-    ckb_std::ckb_types::prelude::Entity as CKBEntity,
+    ckb_std::ckb_types::prelude::{Entity as CKBEntity, Unpack as CKBUnpack},
     types::{
         BurnCell, ChallengeCell, CustodianCell, DepositionRequestCell, StakeCell, WithdrawalCell,
     },
@@ -86,20 +86,22 @@ pub fn parse_global_state(source: Source) -> Result<GlobalState, Error> {
 }
 
 pub fn collect_stake_cells(
-    rollup_type_hash: &[u8; 32],
+    rollup_type_hash: &H256,
     config: &RollupConfig,
     source: Source,
 ) -> Result<Vec<StakeCell>, Error> {
     let iter = QueryIter::new(load_cell_lock, source)
         .enumerate()
         .filter_map(|(index, lock)| {
-            let is_lock = &lock.args().as_slice()[..32] == rollup_type_hash
+            let lock_args: Bytes = lock.args().unpack();
+            let is_lock = lock_args.len() >= 32
+                && &lock_args[..32] == rollup_type_hash.as_slice()
                 && lock.code_hash().as_slice() == config.stake_script_type_hash().as_slice()
                 && lock.hash_type() == ScriptHashType::Type.into();
             if !is_lock {
                 return None;
             }
-            let raw_args = lock.args().as_slice()[32..].to_vec();
+            let raw_args = lock_args[32..].to_vec();
             let args = match StakeLockArgsReader::verify(&raw_args, false) {
                 Ok(_) => StakeLockArgs::new_unchecked(raw_args.into()),
                 Err(_) => {
@@ -126,7 +128,7 @@ pub fn collect_stake_cells(
 /// this function ensure we have only 1 stake cell in the source
 /// and the cell's owner_lock_hash must matches the owner_lock_hash arg
 pub fn find_one_stake_cell(
-    rollup_type_hash: &[u8; 32],
+    rollup_type_hash: &H256,
     config: &RollupConfig,
     source: Source,
     owner_lock_hash: &Byte32,
@@ -143,20 +145,22 @@ pub fn find_one_stake_cell(
 }
 
 pub fn find_challenge_cell(
-    rollup_type_hash: &[u8; 32],
+    rollup_type_hash: &H256,
     config: &RollupConfig,
     source: Source,
 ) -> Result<Option<ChallengeCell>, Error> {
     let iter = QueryIter::new(load_cell_lock, source)
         .enumerate()
         .filter_map(|(index, lock)| {
-            let is_lock = &lock.args().as_slice()[..32] == rollup_type_hash
+            let lock_args: Bytes = lock.args().unpack();
+            let is_lock = lock_args.len() >= 32
+                && &lock_args[..32] == rollup_type_hash.as_slice()
                 && lock.code_hash().as_slice() == config.challenge_script_type_hash().as_slice()
                 && lock.hash_type() == ScriptHashType::Type.into();
             if !is_lock {
                 return None;
             }
-            let raw_args = lock.args().as_slice()[32..].to_vec();
+            let raw_args = lock_args[32..].to_vec();
             let args = match ChallengeLockArgsReader::verify(&raw_args, false) {
                 Ok(_) => ChallengeLockArgs::new_unchecked(raw_args.into()),
                 Err(_) => {
@@ -194,20 +198,22 @@ pub fn build_l2_sudt_script(config: &RollupConfig, l1_sudt_script_hash: [u8; 32]
 }
 
 pub fn collect_withdrawal_locks(
-    rollup_type_hash: &[u8; 32],
+    rollup_type_hash: &H256,
     config: &RollupConfig,
     source: Source,
 ) -> Result<Vec<WithdrawalCell>, Error> {
     QueryIter::new(load_cell_lock, source)
         .enumerate()
         .filter_map(|(index, lock)| {
-            let is_withdrawal_lock = &lock.args().as_slice()[..32] == rollup_type_hash
+            let lock_args: Bytes = lock.args().unpack();
+            let is_withdrawal_lock = lock_args.len() > 32
+                && &lock_args[..32] == rollup_type_hash.as_slice()
                 && lock.code_hash().as_slice() == config.withdrawal_script_type_hash().as_slice()
                 && lock.hash_type() == ScriptHashType::Type.into();
             if !is_withdrawal_lock {
                 return None;
             }
-            let raw_args = lock.args().as_slice()[32..].to_vec();
+            let raw_args = lock_args[32..].to_vec();
             let args = match WithdrawalLockArgsReader::verify(&raw_args, false) {
                 Ok(_) => WithdrawalLockArgs::new_unchecked(raw_args.into()),
                 Err(_) => {
@@ -224,20 +230,22 @@ pub fn collect_withdrawal_locks(
 }
 
 pub fn collect_custodian_locks(
-    rollup_type_hash: &[u8; 32],
+    rollup_type_hash: &H256,
     config: &RollupConfig,
     source: Source,
 ) -> Result<Vec<CustodianCell>, Error> {
     QueryIter::new(load_cell_lock, source)
         .enumerate()
         .filter_map(|(index, lock)| {
-            let is_lock = &lock.args().as_slice()[..32] == rollup_type_hash
+            let lock_args: Bytes = lock.args().unpack();
+            let is_lock = lock_args.len() > 32
+                && &lock_args[..32] == rollup_type_hash.as_slice()
                 && lock.code_hash().as_slice() == config.custodian_script_type_hash().as_slice()
                 && lock.hash_type() == ScriptHashType::Type.into();
             if !is_lock {
                 return None;
             }
-            let raw_args = lock.args().as_slice()[32..].to_vec();
+            let raw_args = lock_args[32..].to_vec();
             let args = match CustodianLockArgsReader::verify(&raw_args, false) {
                 Ok(_) => CustodianLockArgs::new_unchecked(raw_args.into()),
                 Err(_) => {
@@ -255,20 +263,22 @@ pub fn collect_custodian_locks(
 }
 
 pub fn collect_deposition_locks(
-    rollup_type_hash: &[u8; 32],
+    rollup_type_hash: &H256,
     config: &RollupConfig,
     source: Source,
 ) -> Result<Vec<DepositionRequestCell>, Error> {
     QueryIter::new(load_cell_lock, source)
         .enumerate()
         .filter_map(|(index, lock)| {
-            let is_lock = &lock.args().as_slice()[..32] == rollup_type_hash
+            let lock_args: Bytes = lock.args().unpack();
+            let is_lock = lock_args.len() > 32
+                && &lock_args[..32] == rollup_type_hash.as_slice()
                 && lock.code_hash().as_slice() == config.deposition_script_type_hash().as_slice()
                 && lock.hash_type() == ScriptHashType::Type.into();
             if !is_lock {
                 return None;
             }
-            let raw_args = lock.args().as_slice()[32..].to_vec();
+            let raw_args = lock_args[32..].to_vec();
             let args = match DepositionLockArgsReader::verify(&raw_args, false) {
                 Ok(_) => DepositionLockArgs::new_unchecked(raw_args.into()),
                 Err(_) => {

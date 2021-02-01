@@ -1,4 +1,4 @@
-use crate::blockchain::Script as JsonScript;
+use crate::{blockchain::Script as JsonScript, godwoken::RollupConfig};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
 use gw_chain::{chain, next_block_context};
@@ -530,12 +530,14 @@ impl From<gw_config::StoreConfig> for StoreConfig {
 #[serde(rename_all = "snake_case")]
 pub struct ChainConfig {
     pub rollup_type_script: JsonScript,
+    pub rollup_config: RollupConfig,
 }
 
 impl From<ChainConfig> for gw_config::ChainConfig {
     fn from(json: ChainConfig) -> gw_config::ChainConfig {
         Self {
             rollup_type_script: json.rollup_type_script.into(),
+            rollup_config: json.rollup_config.into(),
         }
     }
 }
@@ -543,6 +545,7 @@ impl From<gw_config::ChainConfig> for ChainConfig {
     fn from(chain_config: gw_config::ChainConfig) -> ChainConfig {
         Self {
             rollup_type_script: chain_config.rollup_type_script.into(),
+            rollup_config: chain_config.rollup_config.into(),
         }
     }
 }

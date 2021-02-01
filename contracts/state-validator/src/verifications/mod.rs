@@ -1,3 +1,4 @@
+use gw_common::H256;
 use gw_types::{
     core::Status,
     packed::{GlobalState, RollupConfig},
@@ -15,7 +16,7 @@ pub mod submit_block;
 
 /// this function ensure transaction doesn't contains any deposition / withdrawal / custodian
 pub fn check_rollup_lock_cells_except_stake(
-    rollup_type_hash: &[u8; 32],
+    rollup_type_hash: &H256,
     config: &RollupConfig,
 ) -> Result<(), Error> {
     if !collect_deposition_locks(rollup_type_hash, config, Source::Input)?.is_empty() {
@@ -41,7 +42,7 @@ pub fn check_rollup_lock_cells_except_stake(
 
 /// this function ensure transaction doesn't contains any deposition / withdrawal / custodian / stake cells
 pub fn check_rollup_lock_cells(
-    rollup_type_hash: &[u8; 32],
+    rollup_type_hash: &H256,
     config: &RollupConfig,
 ) -> Result<(), Error> {
     check_rollup_lock_cells_except_stake(rollup_type_hash, config)?;

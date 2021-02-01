@@ -18,6 +18,7 @@ use gw_store::Store;
 use gw_traits::{ChainStore, CodeStore};
 use gw_types::{bytes::Bytes, core::Status, packed, prelude::*};
 use neon::prelude::*;
+use packed::RollupConfig;
 use parking_lot::Mutex;
 use std::sync::{Arc, RwLock};
 
@@ -77,7 +78,7 @@ declare_types! {
             let db = RocksDB::open(&db_config, COLUMNS);
             let store = Store::new(db);
             if !store.has_genesis().expect("check initialization") {
-                init_genesis(&store, &config.genesis, header_info, rollup_script_hash.into()).expect("Initializing store");
+                init_genesis(&store, &config.genesis, &config.chain.rollup_config, header_info, rollup_script_hash.into()).expect("Initializing store");
             }
             let generator = Arc::new(build_generator(&config.chain));
             let mem_pool = {
@@ -535,8 +536,12 @@ pub fn build_genesis_block(mut cx: FunctionContext) -> JsResult<JsString> {
     let genesis_config = cx.argument::<JsString>(0)?.value();
     let genesis_config: parameter::GenesisConfig =
         serde_json::from_str(&genesis_config).expect("Parse genesis config");
+    let rollup_config = cx.argument::<JsString>(0)?.value();
+    let rollup_config: godwoken::RollupConfig =
+        serde_json::from_str(&rollup_config).expect("Parse rollup config");
     let genesis_config: GenesisConfig = genesis_config.into();
-    let genesis_state = build_genesis(&genesis_config).expect("build genesis");
+    let rollup_config: RollupConfig = rollup_config.into();
+    let genesis_state = build_genesis(&genesis_config, &rollup_config).expect("build genesis");
     let genesis_state: genesis::GenesisWithGlobalState = genesis_state.into();
     let genesis_state_string =
         serde_json::to_string(&genesis_state).expect("serialize genesis config");

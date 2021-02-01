@@ -1,3 +1,4 @@
+use gw_common::H256;
 use gw_types::{
     core::Status,
     packed::{GlobalState, RollupConfig},
@@ -9,7 +10,7 @@ use super::{check_rollup_lock_cells, check_status};
 use crate::cells::find_challenge_cell;
 
 pub fn verify_enter_challenge(
-    rollup_type_hash: [u8; 32],
+    rollup_type_hash: H256,
     config: &RollupConfig,
     prev_global_state: &GlobalState,
     post_global_state: &GlobalState,
@@ -41,7 +42,7 @@ pub fn verify_enter_challenge(
 }
 
 pub fn verify_cancel_challenge(
-    rollup_type_hash: [u8; 32],
+    rollup_type_hash: H256,
     config: &RollupConfig,
     prev_global_state: &GlobalState,
     post_global_state: &GlobalState,

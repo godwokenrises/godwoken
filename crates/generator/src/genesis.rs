@@ -1,6 +1,7 @@
 use crate::{builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH, traits::StateExt};
 use anyhow::Result;
 use gw_common::{
+    blake2b::new_blake2b,
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
     smt::{default_store::DefaultStore, H256, SMT},
     state::State,
@@ -11,16 +12,20 @@ use gw_store::{transaction::StoreTransaction, Store};
 use gw_types::{
     core::Status,
     packed::{
-        AccountMerkleState, BlockMerkleState, GlobalState, HeaderInfo, L2Block, RawL2Block, Script,
+        AccountMerkleState, BlockMerkleState, GlobalState, HeaderInfo, L2Block, RawL2Block,
+        RollupConfig, Script,
     },
     prelude::*,
 };
 
 /// Build genesis block
-pub fn build_genesis(config: &GenesisConfig) -> Result<GenesisWithGlobalState> {
+pub fn build_genesis(
+    config: &GenesisConfig,
+    rollup_config: &RollupConfig,
+) -> Result<GenesisWithGlobalState> {
     let store = Store::open_tmp()?;
     let mut db = store.begin_transaction();
-    build_genesis_from_store(&mut db, config)
+    build_genesis_from_store(&mut db, config, rollup_config)
 }
 
 pub struct GenesisWithGlobalState {
@@ -33,6 +38,7 @@ pub struct GenesisWithGlobalState {
 pub fn build_genesis_from_store(
     db: &StoreTransaction,
     config: &GenesisConfig,
+    rollup_config: &RollupConfig,
 ) -> Result<GenesisWithGlobalState> {
     // initialize store
     db.set_account_smt_root(H256::zero())?;
@@ -109,10 +115,19 @@ pub fn build_genesis_from_store(
             })
             .count(1u64.pack())
             .build();
+        let rollup_config_hash = {
+            let mut hasher = new_blake2b();
+            hasher.update(rollup_config.as_slice());
+            let mut hash = [0u8; 32];
+            hasher.finalize(&mut hash);
+            hash
+        };
         GlobalState::new_builder()
             .account(post_account)
             .block(post_block)
             .status((Status::Running as u8).into())
+            .rollup_config_hash(rollup_config_hash.pack())
+            .tip_block_hash(genesis.hash().pack())
             .build()
     };
     db.set_block_smt_root(global_state.block().merkle_root().unpack())?;
@@ -125,6 +140,7 @@ pub fn build_genesis_from_store(
 pub fn init_genesis(
     store: &Store,
     config: &GenesisConfig,
+    rollup_config: &RollupConfig,
     header: HeaderInfo,
     chain_id: H256,
 ) -> Result<()> {
@@ -136,7 +152,7 @@ pub fn init_genesis(
     let GenesisWithGlobalState {
         genesis,
         global_state,
-    } = build_genesis_from_store(&mut db, config)?;
+    } = build_genesis_from_store(&mut db, config, rollup_config)?;
     db.insert_block(
         genesis.clone(),
         header,

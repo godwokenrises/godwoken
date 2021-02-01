@@ -1,4 +1,4 @@
-use gw_types::packed::Script;
+use gw_types::packed::{RollupConfig, Script};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -22,6 +22,7 @@ pub struct GenesisConfig {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChainConfig {
     pub rollup_type_script: Script,
+    pub rollup_config: RollupConfig,
 }
 
 #[derive(Clone, Debug, PartialEq)]

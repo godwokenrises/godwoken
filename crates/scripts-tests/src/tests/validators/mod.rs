@@ -6,7 +6,7 @@ use std::{fs, io::Read, path::PathBuf};
 mod state_validator;
 
 const SCRIPT_DIR: &'static str = "../../build/debug";
-const STATE_VALIDATOR: &'static str = "dummy-state-validator";
+const STATE_VALIDATOR: &'static str = "state-validator";
 
 lazy_static! {
     pub static ref STATE_VALIDATOR_PROGRAM: Bytes = {

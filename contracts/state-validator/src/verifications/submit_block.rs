@@ -46,7 +46,7 @@ fn check_withdrawal_cells(
     // iter outputs withdrawal cells, check each cell has a corresponded withdrawal request
     for cell in withdrawal_cells {
         // check withdrawal cell block info
-        let withdrawal_block_hash: [u8; 32] = cell.args.withdrawal_block_hash().unpack();
+        let withdrawal_block_hash: H256 = cell.args.withdrawal_block_hash().unpack();
         if withdrawal_block_hash != context.block_hash
             || cell.args.withdrawal_block_number().unpack() != context.number
         {
@@ -283,7 +283,7 @@ fn burn_layer2_sudt(
 }
 
 fn load_l2block_context(
-    rollup_type_hash: [u8; 32],
+    rollup_type_hash: H256,
     config: &RollupConfig,
     l2block: &L2Block,
     prev_global_state: &GlobalState,
@@ -322,11 +322,11 @@ fn load_l2block_context(
     }
 
     let post_block_root: [u8; 32] = post_global_state.block().merkle_root().unpack();
-    let block_hash = raw_block.hash();
+    let block_hash: H256 = raw_block.hash().into();
     if !block_merkle_proof
         .verify::<Blake2bHasher>(
             &post_block_root.into(),
-            vec![(block_smt_key.into(), block_hash.into())],
+            vec![(block_smt_key.into(), block_hash.clone())],
         )
         .map_err(|_| Error::MerkleProof)?
     {
@@ -371,6 +371,7 @@ fn load_l2block_context(
 
     // Generate context
     let account_count: u32 = prev_global_state.account().count().unpack();
+    let prev_account_root = prev_global_state.account().merkle_root().unpack();
     let finalized_number = number.saturating_sub(config.finality_blocks().unpack());
     let context = BlockContext {
         number,
@@ -380,6 +381,7 @@ fn load_l2block_context(
         account_count,
         rollup_type_hash,
         block_hash,
+        prev_account_root,
     };
 
     Ok(context)
@@ -449,7 +451,7 @@ fn check_block_transactions(_context: &mut BlockContext, block: &L2Block) -> Res
 
 /// Verify Deposition & Withdrawal
 pub fn verify(
-    rollup_type_hash: [u8; 32],
+    rollup_type_hash: H256,
     config: &RollupConfig,
     block: &L2Block,
     prev_global_state: &GlobalState,
@@ -483,6 +485,7 @@ pub fn verify(
     {
         return Err(Error::InvalidChallengeCell);
     }
+
     // Check transactions
     check_block_transactions(&mut context, block)?;
 
@@ -525,10 +528,13 @@ pub fn verify_reverted_block_hashes(
 ) -> Result<(), Error> {
     let reverted_block_root = prev_global_state.reverted_block_root().unpack();
     let merkle_proof = CompiledMerkleProof(reverted_block_proof.into());
-    let leaves = reverted_block_hashes
+    let leaves: Vec<_> = reverted_block_hashes
         .into_iter()
         .map(|k| (k, H256::one()))
         .collect();
+    if leaves.is_empty() && merkle_proof.0.is_empty() {
+        return Ok(());
+    }
     let valid = merkle_proof.verify::<Blake2bHasher>(&reverted_block_root, leaves)?;
     if !valid {
         return Err(Error::MerkleProof);
