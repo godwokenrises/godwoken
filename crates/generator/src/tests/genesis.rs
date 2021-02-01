@@ -3,7 +3,11 @@ use gw_common::{sparse_merkle_tree::H256, state::State};
 use gw_config::GenesisConfig;
 use gw_store::Store;
 use gw_traits::CodeStore;
-use gw_types::{core::ScriptHashType, packed::HeaderInfo, prelude::*};
+use gw_types::{
+    core::ScriptHashType,
+    packed::{HeaderInfo, RollupConfig},
+    prelude::*,
+};
 use std::convert::TryInto;
 
 const GENESIS_BLOCK_HASH: [u8; 32] = [
@@ -14,12 +18,13 @@ const GENESIS_BLOCK_HASH: [u8; 32] = [
 #[test]
 fn test_init_genesis() {
     let config = GenesisConfig { timestamp: 42 };
-    let genesis = build_genesis(&config).unwrap();
+    let rollup_config = RollupConfig::default();
+    let genesis = build_genesis(&config, &rollup_config).unwrap();
     let genesis_block_hash: [u8; 32] = genesis.genesis.hash();
     assert_eq!(genesis_block_hash, GENESIS_BLOCK_HASH);
     let header_info = HeaderInfo::default();
     let store: Store = Store::open_tmp().unwrap();
-    init_genesis(&store, &config, header_info, H256::zero()).unwrap();
+    init_genesis(&store, &config, &rollup_config, header_info, H256::zero()).unwrap();
     let db = store.begin_transaction();
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());

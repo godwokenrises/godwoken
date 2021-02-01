@@ -16,8 +16,9 @@ use gw_types::{
     core::Status,
     packed::{
         AccountMerkleState, BlockMerkleState, ChallengeTarget, ChallengeWitness, DepositionRequest,
-        GlobalState, HeaderInfo, L2Block, L2BlockReader, RawL2Block, Script, SubmitTransactions,
-        Transaction, TxReceipt, VerifyTransactionWitness, WitnessArgs, WitnessArgsReader,
+        GlobalState, HeaderInfo, L2Block, L2BlockReader, RawL2Block, RollupConfig,
+        SubmitTransactions, Transaction, TxReceipt, VerifyTransactionWitness, WitnessArgs,
+        WitnessArgsReader,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -131,6 +132,8 @@ impl LocalState {
 
 pub struct Chain {
     pub rollup_type_script_hash: [u8; 32],
+    pub rollup_config_hash: [u8; 32],
+    pub rollup_config: RollupConfig,
     pub store: Store,
     pub bad_block_context: Option<ChallengeTarget>,
     pub local_state: LocalState,
@@ -145,7 +148,10 @@ impl Chain {
         generator: Arc<Generator>,
         mem_pool: Arc<Mutex<MemPool>>,
     ) -> Result<Self> {
-        let rollup_type_script: Script = config.rollup_type_script.clone().into();
+        let ChainConfig {
+            rollup_type_script,
+            rollup_config,
+        } = config;
         let rollup_type_script_hash = rollup_type_script.hash();
         let chain_id: [u8; 32] = store.get_chain_id()?.into();
         assert_eq!(
@@ -164,6 +170,7 @@ impl Chain {
             last_synced,
             last_global_state,
         };
+        let rollup_config_hash = rollup_config.hash();
         Ok(Chain {
             store,
             bad_block_context: None,
@@ -171,6 +178,8 @@ impl Chain {
             generator,
             mem_pool: mem_pool,
             rollup_type_script_hash,
+            rollup_config_hash,
+            rollup_config,
         })
     }
 
@@ -181,6 +190,14 @@ impl Chain {
 
     pub fn store(&self) -> &Store {
         &self.store
+    }
+
+    pub fn rollup_config(&self) -> &RollupConfig {
+        &self.rollup_config
+    }
+
+    pub fn rollup_config_hash(&self) -> &[u8; 32] {
+        &self.rollup_config_hash
     }
 
     /// update a layer1 action
@@ -411,6 +428,7 @@ impl Chain {
             &GenesisConfig {
                 timestamp: genesis.raw().timestamp().unpack(),
             },
+            self.rollup_config(),
         )?;
         // replay blocks
         for number in 1..tip_number {
@@ -523,9 +541,9 @@ impl Chain {
 
         // take txs from mem pool
         // produce block
-        let parent_number: u64 = self.local_state.tip.raw().number().unpack();
-        let parent_block_hash = self.local_state.tip.hash();
-        let number = parent_number + 1;
+        let tip_block_number: u64 = self.local_state.tip.raw().number().unpack();
+        let tip_block_hash = self.local_state.tip.hash();
+        let number = tip_block_number + 1;
         let timestamp: u64 = unixtime()?;
         let submit_txs = {
             let tx_witness_root = calculate_merkle_root(
@@ -568,7 +586,7 @@ impl Chain {
             .number(number.pack())
             .block_producer_id(block_producer_id.pack())
             .timestamp(timestamp.pack())
-            .parent_block_hash(parent_block_hash.pack())
+            .parent_block_hash(tip_block_hash.pack())
             .post_account(post_account.clone())
             .prev_account(prev_account)
             .withdrawal_requests_root(withdrawal_requests_root.pack())
@@ -631,14 +649,14 @@ impl Chain {
                 .count(block_count.pack())
                 .build()
         };
-        // reverted_block_root: Byte32,
-        // TODO Read it from RollupConfig
-        const FINALIZE_BLOCKS: u64 = 10;
-        let last_finalized_block_number = number.saturating_sub(FINALIZE_BLOCKS);
+        let last_finalized_block_number =
+            number.saturating_sub(self.rollup_config().finality_blocks().unpack());
         let global_state = GlobalState::new_builder()
             .account(post_account)
             .block(post_block)
+            .tip_block_hash(block.hash().pack())
             .last_finalized_block_number(last_finalized_block_number.pack())
+            .rollup_config_hash(self.rollup_config_hash().pack())
             .status((Status::Running as u8).into())
             .build();
         Ok(ProduceBlockResult {

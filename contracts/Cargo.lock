@@ -99,15 +99,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dummy-state-validator"
-version = "0.1.0"
-dependencies = [
- "gw-common",
- "gw-types",
- "validator-utils",
-]
-
-[[package]]
 name = "gw-common"
 version = "0.1.0"
 dependencies = [

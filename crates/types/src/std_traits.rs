@@ -44,5 +44,6 @@ impl_std_eq!(Transaction);
 impl_std_eq!(DepositionRequest);
 impl_std_eq!(DepositionLockArgs);
 impl_std_eq!(GlobalState);
+impl_std_eq!(RollupConfig);
 impl_std_eq!(StakeLockArgs);
 impl_std_eq!(VerifyTransactionWitness);

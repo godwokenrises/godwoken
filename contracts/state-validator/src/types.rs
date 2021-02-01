@@ -78,11 +78,12 @@ pub struct WithdrawalRequest {
 pub struct BlockContext {
     pub number: u64,
     pub finalized_number: u64,
-    pub block_hash: [u8; 32],
-    pub rollup_type_hash: [u8; 32],
+    pub block_hash: H256,
+    pub rollup_type_hash: H256,
     pub kv_pairs: BTreeMap<H256, H256>,
     pub kv_merkle_proof: CompiledMerkleProof,
     pub account_count: u32,
+    pub prev_account_root: H256,
 }
 
 impl State for BlockContext {
@@ -110,6 +111,9 @@ impl State for BlockContext {
     }
 
     fn calculate_root(&self) -> Result<H256, StateError> {
+        if self.kv_pairs.is_empty() && self.kv_merkle_proof.0.is_empty() {
+            return Ok(self.prev_account_root.into());
+        }
         let root = self
             .kv_merkle_proof
             .compute_root::<Blake2bHasher>(self.kv_pairs.iter().map(|(k, v)| (*k, *v)).collect())

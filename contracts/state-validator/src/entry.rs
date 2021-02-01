@@ -41,7 +41,7 @@ pub fn main() -> Result<(), Error> {
     let prev_global_state = parse_global_state(Source::GroupInput)?;
     let post_global_state = parse_global_state(Source::GroupOutput)?;
     let rollup_config = load_rollup_config(&prev_global_state.rollup_config_hash().unpack())?;
-    let rollup_type_hash = load_script_hash()?;
+    let rollup_type_hash = load_script_hash()?.into();
     let action = parse_rollup_action(0, Source::GroupOutput)?;
     match action.to_enum() {
         RollupActionUnion::RollupSubmitBlock(args) => {

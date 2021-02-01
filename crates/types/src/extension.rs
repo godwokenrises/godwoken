@@ -59,6 +59,7 @@ impl packed::L2Block {
     }
 }
 
+impl_hash!(RollupConfig);
 impl_hash!(Script);
 impl_hash!(RawL2Block);
 impl_hash!(RawL2Transaction);

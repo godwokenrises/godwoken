@@ -1,8 +1,13 @@
 const { Reader } = require("ckb-js-toolkit");
 var addon = require("../native");
 
-function buildGenesisBlock(config) {
-  return JSON.parse(addon.buildGenesisBlock(JSON.stringify(config)));
+function buildGenesisBlock(config, rollup_config) {
+  return JSON.parse(
+    addon.buildGenesisBlock(
+      JSON.stringify(config),
+      JSON.stringify(rollup_config)
+    )
+  );
 }
 
 class ChainService {

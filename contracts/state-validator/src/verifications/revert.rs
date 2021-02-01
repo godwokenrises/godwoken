@@ -47,7 +47,7 @@ fn check_challenge_maturity(
 }
 
 fn check_challenge_cell(
-    rollup_type_hash: &[u8; 32],
+    rollup_type_hash: &H256,
     config: &RollupConfig,
     challenge_cell: &ChallengeCell,
     revert_target_block_hash: &H256,
@@ -88,7 +88,7 @@ pub fn get_receiver_cells_capacity(
 
 /// Check rewards
 fn check_rewards(
-    rollup_type_hash: &[u8; 32],
+    rollup_type_hash: &H256,
     config: &RollupConfig,
     reverted_blocks: &[RawL2Block],
     challenge_cell: &ChallengeCell,
@@ -275,7 +275,7 @@ fn check_reverted_blocks(
 /// 2. check reverted block root
 /// 3. check other lock cells
 pub fn verify(
-    rollup_type_hash: [u8; 32],
+    rollup_type_hash: H256,
     config: &RollupConfig,
     prev_global_state: &GlobalState,
     post_global_state: &GlobalState,

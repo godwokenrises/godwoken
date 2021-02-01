@@ -838,3 +838,81 @@ impl From<HeaderInfo> for packed::HeaderInfo {
             .build()
     }
 }
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct RollupConfig {
+    pub l1_sudt_script_type_hash: H256,
+    pub custodian_script_type_hash: H256,
+    pub deposition_script_type_hash: H256,
+    pub withdrawal_script_type_hash: H256,
+    pub challenge_script_type_hash: H256,
+    pub stake_script_type_hash: H256,
+    pub l2_sudt_validator_script_type_hash: H256,
+    pub burn_lock_hash: H256,
+    pub required_staking_capacity: Uint64,
+    pub challenge_maturity_blocks: Uint64,
+    pub finality_blocks: Uint64,
+    pub reward_burn_rate: Uint32, // * reward_burn_rate / 100
+}
+
+impl From<RollupConfig> for packed::RollupConfig {
+    fn from(json: RollupConfig) -> packed::RollupConfig {
+        let RollupConfig {
+            l1_sudt_script_type_hash,
+            custodian_script_type_hash,
+            deposition_script_type_hash,
+            withdrawal_script_type_hash,
+            challenge_script_type_hash,
+            stake_script_type_hash,
+            l2_sudt_validator_script_type_hash,
+            burn_lock_hash,
+            required_staking_capacity,
+            challenge_maturity_blocks,
+            finality_blocks,
+            reward_burn_rate, // * reward_burn_rate / 100
+        } = json;
+        let required_staking_capacity: u64 = required_staking_capacity.into();
+        let challenge_maturity_blocks: u64 = challenge_maturity_blocks.into();
+        let finality_blocks: u64 = finality_blocks.into();
+        let reward_burn_rate: u32 = reward_burn_rate.into();
+        let reward_burn_rate: u8 = reward_burn_rate.try_into().expect("reward burn rate");
+        packed::RollupConfig::new_builder()
+            .l1_sudt_script_type_hash(l1_sudt_script_type_hash.pack())
+            .custodian_script_type_hash(custodian_script_type_hash.pack())
+            .deposition_script_type_hash(deposition_script_type_hash.pack())
+            .withdrawal_script_type_hash(withdrawal_script_type_hash.pack())
+            .challenge_script_type_hash(challenge_script_type_hash.pack())
+            .stake_script_type_hash(stake_script_type_hash.pack())
+            .l2_sudt_validator_script_type_hash(l2_sudt_validator_script_type_hash.pack())
+            .burn_lock_hash(burn_lock_hash.pack())
+            .required_staking_capacity(required_staking_capacity.pack())
+            .challenge_maturity_blocks(challenge_maturity_blocks.pack())
+            .finality_blocks(finality_blocks.pack())
+            .reward_burn_rate(reward_burn_rate.into())
+            .build()
+    }
+}
+
+impl From<packed::RollupConfig> for RollupConfig {
+    fn from(data: packed::RollupConfig) -> RollupConfig {
+        let required_staking_capacity: u64 = data.required_staking_capacity().unpack();
+        let challenge_maturity_blocks: u64 = data.challenge_maturity_blocks().unpack();
+        let finality_blocks: u64 = data.finality_blocks().unpack();
+        let reward_burn_date: u8 = data.reward_burn_rate().into();
+        RollupConfig {
+            l1_sudt_script_type_hash: data.l1_sudt_script_type_hash().unpack(),
+            custodian_script_type_hash: data.custodian_script_type_hash().unpack(),
+            deposition_script_type_hash: data.deposition_script_type_hash().unpack(),
+            withdrawal_script_type_hash: data.withdrawal_script_type_hash().unpack(),
+            challenge_script_type_hash: data.challenge_script_type_hash().unpack(),
+            stake_script_type_hash: data.stake_script_type_hash().unpack(),
+            l2_sudt_validator_script_type_hash: data.l2_sudt_validator_script_type_hash().unpack(),
+            burn_lock_hash: data.burn_lock_hash().unpack(),
+            required_staking_capacity: required_staking_capacity.into(),
+            challenge_maturity_blocks: challenge_maturity_blocks.into(),
+            finality_blocks: finality_blocks.into(),
+            reward_burn_rate: (reward_burn_date as u32).into(),
+        }
+    }
+}

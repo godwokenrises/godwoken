@@ -120,7 +120,10 @@ const run = async () => {
     readFileSync(program.configFile, "utf8")
   );
   const address = ckbAddress(program.address, program.privateKey);
-  const genesis = await buildGenesisBlock(godwokenConfig.genesis);
+  const genesis = await buildGenesisBlock(
+    godwokenConfig.genesis,
+    godwokenConfig.rollup
+  );
 
   let txSkeleton = TransactionSkeleton({ cellProvider: indexer });
   txSkeleton = txSkeleton.update("cellDeps", (cellDeps) =>

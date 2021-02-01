@@ -76,6 +76,7 @@ export interface Config {
   chain: ChainConfig;
   store: StoreConfig;
   genesis: GenesisConfig;
+  rollup: RollupConfig;
   block_producer?: BlockProducerConfig;
 }
 
@@ -89,6 +90,21 @@ export interface StoreConfig {
 
 export interface GenesisConfig {
   timestamp: HexNumber;
+}
+
+export interface RollupConfig {
+  l1_sudt_script_type_hash: Hash;
+  custodian_script_type_hash: Hash;
+  deposition_script_type_hash: Hash;
+  withdrawal_script_type_hash: Hash;
+  challenge_script_type_hash: Hash;
+  stake_script_type_hash: Hash;
+  l2_sudt_validator_script_type_hash: Hash;
+  burn_lock_hash: Hash;
+  required_staking_capacity: HexNumber;
+  challenge_maturity_blocks: HexNumber;
+  finality_blocks: HexNumber;
+  reward_burn_rate: HexNumber; // * reward_burn_rate / 100
 }
 
 export interface BlockProducerConfig {
@@ -198,7 +214,8 @@ export interface L2BlockView {
 }
 
 export function buildGenesisBlock(
-  config: GenesisConfig
+  config: GenesisConfig,
+  rollup_config: RollupConfig
 ): Promise<GenesisWithGlobalState>;
 
 export class ChainService {
