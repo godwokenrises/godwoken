@@ -351,7 +351,9 @@ fn unlock_stake_lock_by_rollup_cell_works() {
         };
         chain.mem_pool.lock().package(param).unwrap()
     };
-    let param = ProduceBlockParam { aggregator_id: 0 };
+    let param = ProduceBlockParam {
+        block_producer_id: 0,
+    };
     let block_result = chain.produce_block(param, mem_pool_package).unwrap();
     let rollup_cell_data = block_result.global_state.as_bytes();
     let witness = WitnessArgs::new_builder()
@@ -383,7 +385,7 @@ fn unlock_stake_lock_by_rollup_cell_works() {
         .as_advanced_builder()
         .cell_dep(state_validator_dep)
         .cell_dep(stake_lock_dep)
-        .input(bollup_cell_input)
+        .input(rollup_cell_input)
         .input(stake_cell_input)
         .output(rollup_cell_output)
         .output(stake_cell_output)
