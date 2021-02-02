@@ -3520,6 +3520,484 @@ impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for L2TransactionVecReaderItera
     }
 }
 #[derive(Clone)]
+pub struct SubmitTransactions(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for SubmitTransactions {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for SubmitTransactions {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for SubmitTransactions {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "tx_witness_root", self.tx_witness_root())?;
+        write!(f, ", {}: {}", "tx_count", self.tx_count())?;
+        write!(
+            f,
+            ", {}: {}",
+            "compacted_post_root_list",
+            self.compacted_post_root_list()
+        )?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for SubmitTransactions {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            56, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        SubmitTransactions::new_unchecked(v.into())
+    }
+}
+impl SubmitTransactions {
+    pub const FIELD_COUNT: usize = 3;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn tx_witness_root(&self) -> Byte32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Byte32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn tx_count(&self) -> Uint32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Uint32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn compacted_post_root_list(&self) -> Byte32Vec {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            Byte32Vec::new_unchecked(self.0.slice(start..end))
+        } else {
+            Byte32Vec::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> SubmitTransactionsReader<'r> {
+        SubmitTransactionsReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for SubmitTransactions {
+    type Builder = SubmitTransactionsBuilder;
+    const NAME: &'static str = "SubmitTransactions";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        SubmitTransactions(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SubmitTransactionsReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SubmitTransactionsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .tx_witness_root(self.tx_witness_root())
+            .tx_count(self.tx_count())
+            .compacted_post_root_list(self.compacted_post_root_list())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct SubmitTransactionsReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for SubmitTransactionsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for SubmitTransactionsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for SubmitTransactionsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "tx_witness_root", self.tx_witness_root())?;
+        write!(f, ", {}: {}", "tx_count", self.tx_count())?;
+        write!(
+            f,
+            ", {}: {}",
+            "compacted_post_root_list",
+            self.compacted_post_root_list()
+        )?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> SubmitTransactionsReader<'r> {
+    pub const FIELD_COUNT: usize = 3;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn tx_witness_root(&self) -> Byte32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn tx_count(&self) -> Uint32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Uint32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn compacted_post_root_list(&self) -> Byte32VecReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            Byte32VecReader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for SubmitTransactionsReader<'r> {
+    type Entity = SubmitTransactions;
+    const NAME: &'static str = "SubmitTransactionsReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        SubmitTransactionsReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        let field_count = offset_first / 4 - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
+        if slice_len < header_size {
+            return ve!(Self, HeaderIsBroken, header_size, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
+            .chunks(molecule::NUMBER_SIZE)
+            .take(field_count)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        Byte32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        Uint32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Byte32VecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct SubmitTransactionsBuilder {
+    pub(crate) tx_witness_root: Byte32,
+    pub(crate) tx_count: Uint32,
+    pub(crate) compacted_post_root_list: Byte32Vec,
+}
+impl SubmitTransactionsBuilder {
+    pub const FIELD_COUNT: usize = 3;
+    pub fn tx_witness_root(mut self, v: Byte32) -> Self {
+        self.tx_witness_root = v;
+        self
+    }
+    pub fn tx_count(mut self, v: Uint32) -> Self {
+        self.tx_count = v;
+        self
+    }
+    pub fn compacted_post_root_list(mut self, v: Byte32Vec) -> Self {
+        self.compacted_post_root_list = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for SubmitTransactionsBuilder {
+    type Entity = SubmitTransactions;
+    const NAME: &'static str = "SubmitTransactionsBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.tx_witness_root.as_slice().len()
+            + self.tx_count.as_slice().len()
+            + self.compacted_post_root_list.as_slice().len()
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.tx_witness_root.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.tx_count.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.compacted_post_root_list.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.tx_witness_root.as_slice())?;
+        writer.write_all(self.tx_count.as_slice())?;
+        writer.write_all(self.compacted_post_root_list.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        SubmitTransactions::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct SubmitWithdrawals(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for SubmitWithdrawals {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for SubmitWithdrawals {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for SubmitWithdrawals {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(
+            f,
+            "{}: {}",
+            "withdrawal_witness_root",
+            self.withdrawal_witness_root()
+        )?;
+        write!(f, ", {}: {}", "withdrawal_count", self.withdrawal_count())?;
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for SubmitWithdrawals {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
+        ];
+        SubmitWithdrawals::new_unchecked(v.into())
+    }
+}
+impl SubmitWithdrawals {
+    pub const TOTAL_SIZE: usize = 36;
+    pub const FIELD_SIZES: [usize; 2] = [32, 4];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn withdrawal_witness_root(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(0..32))
+    }
+    pub fn withdrawal_count(&self) -> Uint32 {
+        Uint32::new_unchecked(self.0.slice(32..36))
+    }
+    pub fn as_reader<'r>(&'r self) -> SubmitWithdrawalsReader<'r> {
+        SubmitWithdrawalsReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for SubmitWithdrawals {
+    type Builder = SubmitWithdrawalsBuilder;
+    const NAME: &'static str = "SubmitWithdrawals";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        SubmitWithdrawals(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SubmitWithdrawalsReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SubmitWithdrawalsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .withdrawal_witness_root(self.withdrawal_witness_root())
+            .withdrawal_count(self.withdrawal_count())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct SubmitWithdrawalsReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for SubmitWithdrawalsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for SubmitWithdrawalsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for SubmitWithdrawalsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(
+            f,
+            "{}: {}",
+            "withdrawal_witness_root",
+            self.withdrawal_witness_root()
+        )?;
+        write!(f, ", {}: {}", "withdrawal_count", self.withdrawal_count())?;
+        write!(f, " }}")
+    }
+}
+impl<'r> SubmitWithdrawalsReader<'r> {
+    pub const TOTAL_SIZE: usize = 36;
+    pub const FIELD_SIZES: [usize; 2] = [32, 4];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn withdrawal_witness_root(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
+    }
+    pub fn withdrawal_count(&self) -> Uint32Reader<'r> {
+        Uint32Reader::new_unchecked(&self.as_slice()[32..36])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for SubmitWithdrawalsReader<'r> {
+    type Entity = SubmitWithdrawals;
+    const NAME: &'static str = "SubmitWithdrawalsReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        SubmitWithdrawalsReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct SubmitWithdrawalsBuilder {
+    pub(crate) withdrawal_witness_root: Byte32,
+    pub(crate) withdrawal_count: Uint32,
+}
+impl SubmitWithdrawalsBuilder {
+    pub const TOTAL_SIZE: usize = 36;
+    pub const FIELD_SIZES: [usize; 2] = [32, 4];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn withdrawal_witness_root(mut self, v: Byte32) -> Self {
+        self.withdrawal_witness_root = v;
+        self
+    }
+    pub fn withdrawal_count(mut self, v: Uint32) -> Self {
+        self.withdrawal_count = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for SubmitWithdrawalsBuilder {
+    type Entity = SubmitWithdrawals;
+    const NAME: &'static str = "SubmitWithdrawalsBuilder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(self.withdrawal_witness_root.as_slice())?;
+        writer.write_all(self.withdrawal_count.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        SubmitWithdrawals::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
 pub struct RawL2Block(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for RawL2Block {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -3559,8 +4037,8 @@ impl ::core::fmt::Display for RawL2Block {
         write!(
             f,
             ", {}: {}",
-            "withdrawal_requests_root",
-            self.withdrawal_requests_root()
+            "submit_withdrawals",
+            self.submit_withdrawals()
         )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -3572,7 +4050,7 @@ impl ::core::fmt::Display for RawL2Block {
 impl ::core::default::Default for RawL2Block {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            28, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0,
+            32, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0,
             0, 0, 160, 0, 0, 0, 196, 0, 0, 0, 252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -3582,6 +4060,7 @@ impl ::core::default::Default for RawL2Block {
             0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0,
         ];
         RawL2Block::new_unchecked(v.into())
     }
@@ -3652,14 +4131,14 @@ impl RawL2Block {
         let end = molecule::unpack_number(&slice[36..]) as usize;
         SubmitTransactions::new_unchecked(self.0.slice(start..end))
     }
-    pub fn withdrawal_requests_root(&self) -> Byte32 {
+    pub fn submit_withdrawals(&self) -> SubmitWithdrawals {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[36..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[40..]) as usize;
-            Byte32::new_unchecked(self.0.slice(start..end))
+            SubmitWithdrawals::new_unchecked(self.0.slice(start..end))
         } else {
-            Byte32::new_unchecked(self.0.slice(start..))
+            SubmitWithdrawals::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> RawL2BlockReader<'r> {
@@ -3697,7 +4176,7 @@ impl molecule::prelude::Entity for RawL2Block {
             .prev_account(self.prev_account())
             .post_account(self.post_account())
             .submit_transactions(self.submit_transactions())
-            .withdrawal_requests_root(self.withdrawal_requests_root())
+            .submit_withdrawals(self.submit_withdrawals())
     }
 }
 #[derive(Clone, Copy)]
@@ -3740,8 +4219,8 @@ impl<'r> ::core::fmt::Display for RawL2BlockReader<'r> {
         write!(
             f,
             ", {}: {}",
-            "withdrawal_requests_root",
-            self.withdrawal_requests_root()
+            "submit_withdrawals",
+            self.submit_withdrawals()
         )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -3816,14 +4295,14 @@ impl<'r> RawL2BlockReader<'r> {
         let end = molecule::unpack_number(&slice[36..]) as usize;
         SubmitTransactionsReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn withdrawal_requests_root(&self) -> Byte32Reader<'r> {
+    pub fn submit_withdrawals(&self) -> SubmitWithdrawalsReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[36..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[40..]) as usize;
-            Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+            SubmitWithdrawalsReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            Byte32Reader::new_unchecked(&self.as_slice()[start..])
+            SubmitWithdrawalsReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -3886,7 +4365,7 @@ impl<'r> molecule::prelude::Reader<'r> for RawL2BlockReader<'r> {
         AccountMerkleStateReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
         AccountMerkleStateReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
         SubmitTransactionsReader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
-        Byte32Reader::verify(&slice[offsets[8]..offsets[9]], compatible)?;
+        SubmitWithdrawalsReader::verify(&slice[offsets[8]..offsets[9]], compatible)?;
         Ok(())
     }
 }
@@ -3900,7 +4379,7 @@ pub struct RawL2BlockBuilder {
     pub(crate) prev_account: AccountMerkleState,
     pub(crate) post_account: AccountMerkleState,
     pub(crate) submit_transactions: SubmitTransactions,
-    pub(crate) withdrawal_requests_root: Byte32,
+    pub(crate) submit_withdrawals: SubmitWithdrawals,
 }
 impl RawL2BlockBuilder {
     pub const FIELD_COUNT: usize = 9;
@@ -3936,8 +4415,8 @@ impl RawL2BlockBuilder {
         self.submit_transactions = v;
         self
     }
-    pub fn withdrawal_requests_root(mut self, v: Byte32) -> Self {
-        self.withdrawal_requests_root = v;
+    pub fn submit_withdrawals(mut self, v: SubmitWithdrawals) -> Self {
+        self.submit_withdrawals = v;
         self
     }
 }
@@ -3954,7 +4433,7 @@ impl molecule::prelude::Builder for RawL2BlockBuilder {
             + self.prev_account.as_slice().len()
             + self.post_account.as_slice().len()
             + self.submit_transactions.as_slice().len()
-            + self.withdrawal_requests_root.as_slice().len()
+            + self.submit_withdrawals.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -3976,7 +4455,7 @@ impl molecule::prelude::Builder for RawL2BlockBuilder {
         offsets.push(total_size);
         total_size += self.submit_transactions.as_slice().len();
         offsets.push(total_size);
-        total_size += self.withdrawal_requests_root.as_slice().len();
+        total_size += self.submit_withdrawals.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -3989,7 +4468,7 @@ impl molecule::prelude::Builder for RawL2BlockBuilder {
         writer.write_all(self.prev_account.as_slice())?;
         writer.write_all(self.post_account.as_slice())?;
         writer.write_all(self.submit_transactions.as_slice())?;
-        writer.write_all(self.withdrawal_requests_root.as_slice())?;
+        writer.write_all(self.submit_withdrawals.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -4360,12 +4839,7 @@ impl ::core::fmt::Display for L2Block {
         write!(f, ", {}: {}", "kv_state_proof", self.kv_state_proof())?;
         write!(f, ", {}: {}", "transactions", self.transactions())?;
         write!(f, ", {}: {}", "block_proof", self.block_proof())?;
-        write!(
-            f,
-            ", {}: {}",
-            "withdrawal_requests",
-            self.withdrawal_requests()
-        )?;
+        write!(f, ", {}: {}", "withdrawals", self.withdrawals())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -4376,8 +4850,8 @@ impl ::core::fmt::Display for L2Block {
 impl ::core::default::Default for L2Block {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            76, 1, 0, 0, 28, 0, 0, 0, 56, 1, 0, 0, 60, 1, 0, 0, 64, 1, 0, 0, 68, 1, 0, 0, 72, 1, 0,
-            0, 28, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124,
+            80, 1, 0, 0, 28, 0, 0, 0, 60, 1, 0, 0, 64, 1, 0, 0, 68, 1, 0, 0, 72, 1, 0, 0, 76, 1, 0,
+            0, 32, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124,
             0, 0, 0, 160, 0, 0, 0, 196, 0, 0, 0, 252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -4387,7 +4861,7 @@ impl ::core::default::Default for L2Block {
             0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         L2Block::new_unchecked(v.into())
     }
@@ -4440,7 +4914,7 @@ impl L2Block {
         let end = molecule::unpack_number(&slice[24..]) as usize;
         Bytes::new_unchecked(self.0.slice(start..end))
     }
-    pub fn withdrawal_requests(&self) -> WithdrawalRequestVec {
+    pub fn withdrawals(&self) -> WithdrawalRequestVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[24..]) as usize;
         if self.has_extra_fields() {
@@ -4482,7 +4956,7 @@ impl molecule::prelude::Entity for L2Block {
             .kv_state_proof(self.kv_state_proof())
             .transactions(self.transactions())
             .block_proof(self.block_proof())
-            .withdrawal_requests(self.withdrawal_requests())
+            .withdrawals(self.withdrawals())
     }
 }
 #[derive(Clone, Copy)]
@@ -4509,12 +4983,7 @@ impl<'r> ::core::fmt::Display for L2BlockReader<'r> {
         write!(f, ", {}: {}", "kv_state_proof", self.kv_state_proof())?;
         write!(f, ", {}: {}", "transactions", self.transactions())?;
         write!(f, ", {}: {}", "block_proof", self.block_proof())?;
-        write!(
-            f,
-            ", {}: {}",
-            "withdrawal_requests",
-            self.withdrawal_requests()
-        )?;
+        write!(f, ", {}: {}", "withdrawals", self.withdrawals())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -4570,7 +5039,7 @@ impl<'r> L2BlockReader<'r> {
         let end = molecule::unpack_number(&slice[24..]) as usize;
         BytesReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn withdrawal_requests(&self) -> WithdrawalRequestVecReader<'r> {
+    pub fn withdrawals(&self) -> WithdrawalRequestVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[24..]) as usize;
         if self.has_extra_fields() {
@@ -4648,7 +5117,7 @@ pub struct L2BlockBuilder {
     pub(crate) kv_state_proof: Bytes,
     pub(crate) transactions: L2TransactionVec,
     pub(crate) block_proof: Bytes,
-    pub(crate) withdrawal_requests: WithdrawalRequestVec,
+    pub(crate) withdrawals: WithdrawalRequestVec,
 }
 impl L2BlockBuilder {
     pub const FIELD_COUNT: usize = 6;
@@ -4672,8 +5141,8 @@ impl L2BlockBuilder {
         self.block_proof = v;
         self
     }
-    pub fn withdrawal_requests(mut self, v: WithdrawalRequestVec) -> Self {
-        self.withdrawal_requests = v;
+    pub fn withdrawals(mut self, v: WithdrawalRequestVec) -> Self {
+        self.withdrawals = v;
         self
     }
 }
@@ -4687,7 +5156,7 @@ impl molecule::prelude::Builder for L2BlockBuilder {
             + self.kv_state_proof.as_slice().len()
             + self.transactions.as_slice().len()
             + self.block_proof.as_slice().len()
-            + self.withdrawal_requests.as_slice().len()
+            + self.withdrawals.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -4703,7 +5172,7 @@ impl molecule::prelude::Builder for L2BlockBuilder {
         offsets.push(total_size);
         total_size += self.block_proof.as_slice().len();
         offsets.push(total_size);
-        total_size += self.withdrawal_requests.as_slice().len();
+        total_size += self.withdrawals.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -4713,7 +5182,7 @@ impl molecule::prelude::Builder for L2BlockBuilder {
         writer.write_all(self.kv_state_proof.as_slice())?;
         writer.write_all(self.transactions.as_slice())?;
         writer.write_all(self.block_proof.as_slice())?;
-        writer.write_all(self.withdrawal_requests.as_slice())?;
+        writer.write_all(self.withdrawals.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -6117,308 +6586,6 @@ impl molecule::prelude::Builder for WithdrawalRequestBuilder {
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
         WithdrawalRequest::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct SubmitTransactions(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for SubmitTransactions {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for SubmitTransactions {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for SubmitTransactions {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "tx_witness_root", self.tx_witness_root())?;
-        write!(f, ", {}: {}", "tx_count", self.tx_count())?;
-        write!(
-            f,
-            ", {}: {}",
-            "compacted_post_root_list",
-            self.compacted_post_root_list()
-        )?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for SubmitTransactions {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            56, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-        SubmitTransactions::new_unchecked(v.into())
-    }
-}
-impl SubmitTransactions {
-    pub const FIELD_COUNT: usize = 3;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn tx_witness_root(&self) -> Byte32 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        Byte32::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn tx_count(&self) -> Uint32 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        Uint32::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn compacted_post_root_list(&self) -> Byte32Vec {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            Byte32Vec::new_unchecked(self.0.slice(start..end))
-        } else {
-            Byte32Vec::new_unchecked(self.0.slice(start..))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> SubmitTransactionsReader<'r> {
-        SubmitTransactionsReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for SubmitTransactions {
-    type Builder = SubmitTransactionsBuilder;
-    const NAME: &'static str = "SubmitTransactions";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        SubmitTransactions(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        SubmitTransactionsReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        SubmitTransactionsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .tx_witness_root(self.tx_witness_root())
-            .tx_count(self.tx_count())
-            .compacted_post_root_list(self.compacted_post_root_list())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct SubmitTransactionsReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for SubmitTransactionsReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for SubmitTransactionsReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for SubmitTransactionsReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "tx_witness_root", self.tx_witness_root())?;
-        write!(f, ", {}: {}", "tx_count", self.tx_count())?;
-        write!(
-            f,
-            ", {}: {}",
-            "compacted_post_root_list",
-            self.compacted_post_root_list()
-        )?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl<'r> SubmitTransactionsReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn tx_witness_root(&self) -> Byte32Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn tx_count(&self) -> Uint32Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        Uint32Reader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn compacted_post_root_list(&self) -> Byte32VecReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
-        } else {
-            Byte32VecReader::new_unchecked(&self.as_slice()[start..])
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for SubmitTransactionsReader<'r> {
-    type Entity = SubmitTransactions;
-    const NAME: &'static str = "SubmitTransactionsReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        SubmitTransactionsReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        let field_count = offset_first / 4 - 1;
-        if field_count < Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        } else if !compatible && field_count > Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        };
-        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
-        if slice_len < header_size {
-            return ve!(Self, HeaderIsBroken, header_size, slice_len);
-        }
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
-            .chunks(molecule::NUMBER_SIZE)
-            .take(field_count)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        Byte32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        Uint32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        Byte32VecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct SubmitTransactionsBuilder {
-    pub(crate) tx_witness_root: Byte32,
-    pub(crate) tx_count: Uint32,
-    pub(crate) compacted_post_root_list: Byte32Vec,
-}
-impl SubmitTransactionsBuilder {
-    pub const FIELD_COUNT: usize = 3;
-    pub fn tx_witness_root(mut self, v: Byte32) -> Self {
-        self.tx_witness_root = v;
-        self
-    }
-    pub fn tx_count(mut self, v: Uint32) -> Self {
-        self.tx_count = v;
-        self
-    }
-    pub fn compacted_post_root_list(mut self, v: Byte32Vec) -> Self {
-        self.compacted_post_root_list = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for SubmitTransactionsBuilder {
-    type Entity = SubmitTransactions;
-    const NAME: &'static str = "SubmitTransactionsBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.tx_witness_root.as_slice().len()
-            + self.tx_count.as_slice().len()
-            + self.compacted_post_root_list.as_slice().len()
-    }
-    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
-        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.tx_witness_root.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.tx_count.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.compacted_post_root_list.as_slice().len();
-        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-        for offset in offsets.into_iter() {
-            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-        }
-        writer.write_all(self.tx_witness_root.as_slice())?;
-        writer.write_all(self.tx_count.as_slice())?;
-        writer.write_all(self.compacted_post_root_list.as_slice())?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        SubmitTransactions::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -11036,7 +11203,7 @@ impl ::core::fmt::Display for ChallengeWitness {
 impl ::core::default::Default for ChallengeWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            44, 1, 0, 0, 12, 0, 0, 0, 40, 1, 0, 0, 28, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0,
+            48, 1, 0, 0, 12, 0, 0, 0, 44, 1, 0, 0, 32, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0,
             0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0, 196, 0, 0, 0, 252, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -11046,7 +11213,7 @@ impl ::core::default::Default for ChallengeWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         ChallengeWitness::new_unchecked(v.into())
     }
@@ -11655,8 +11822,8 @@ impl ::core::fmt::Display for VerifyTransactionWitness {
 impl ::core::default::Default for VerifyTransactionWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            229, 1, 0, 0, 36, 0, 0, 0, 64, 1, 0, 0, 177, 1, 0, 0, 181, 1, 0, 0, 185, 1, 0, 0, 189,
-            1, 0, 0, 193, 1, 0, 0, 225, 1, 0, 0, 28, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0,
+            233, 1, 0, 0, 36, 0, 0, 0, 68, 1, 0, 0, 181, 1, 0, 0, 185, 1, 0, 0, 189, 1, 0, 0, 193,
+            1, 0, 0, 197, 1, 0, 0, 229, 1, 0, 0, 32, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0,
             0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0, 196, 0, 0, 0, 252, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -11666,13 +11833,13 @@ impl ::core::default::Default for VerifyTransactionWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 113, 0, 0, 0, 12, 0, 0, 0, 48, 0, 0, 0, 36, 0,
-            0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 113, 0, 0, 0, 12, 0, 0, 0, 48, 0, 0,
+            0, 36, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0,
+            4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         VerifyTransactionWitness::new_unchecked(v.into())
     }
@@ -12089,7 +12256,7 @@ impl ::core::fmt::Display for VerifyWithdrawalWitness {
 impl ::core::default::Default for VerifyWithdrawalWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            37, 2, 0, 0, 16, 0, 0, 0, 44, 1, 0, 0, 33, 2, 0, 0, 28, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0,
+            41, 2, 0, 0, 16, 0, 0, 0, 48, 1, 0, 0, 37, 2, 0, 0, 32, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0,
             0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0, 196, 0, 0, 0,
             252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -12108,7 +12275,7 @@ impl ::core::default::Default for VerifyWithdrawalWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         VerifyWithdrawalWitness::new_unchecked(v.into())
     }
@@ -12582,8 +12749,8 @@ impl ::core::fmt::Display for RollupSubmitBlock {
 impl ::core::default::Default for RollupSubmitBlock {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            100, 1, 0, 0, 16, 0, 0, 0, 92, 1, 0, 0, 96, 1, 0, 0, 76, 1, 0, 0, 28, 0, 0, 0, 56, 1,
-            0, 0, 60, 1, 0, 0, 64, 1, 0, 0, 68, 1, 0, 0, 72, 1, 0, 0, 28, 1, 0, 0, 40, 0, 0, 0, 48,
+            104, 1, 0, 0, 16, 0, 0, 0, 96, 1, 0, 0, 100, 1, 0, 0, 80, 1, 0, 0, 28, 0, 0, 0, 60, 1,
+            0, 0, 64, 1, 0, 0, 68, 1, 0, 0, 72, 1, 0, 0, 76, 1, 0, 0, 32, 1, 0, 0, 40, 0, 0, 0, 48,
             0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0, 196, 0, 0,
             0, 252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -12593,8 +12760,8 @@ impl ::core::default::Default for RollupSubmitBlock {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0,
             0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0,
+            0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RollupSubmitBlock::new_unchecked(v.into())
     }
@@ -12882,21 +13049,35 @@ impl ::core::fmt::Debug for RollupEnterChallenge {
 impl ::core::fmt::Display for RollupEnterChallenge {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "witness", self.witness())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
-            write!(f, ".. ({} fields)", extra_count)?;
+            write!(f, ", .. ({} fields)", extra_count)?;
         }
         write!(f, " }}")
     }
 }
 impl ::core::default::Default for RollupEnterChallenge {
     fn default() -> Self {
-        let v: Vec<u8> = vec![4, 0, 0, 0];
+        let v: Vec<u8> = vec![
+            56, 1, 0, 0, 8, 0, 0, 0, 48, 1, 0, 0, 12, 0, 0, 0, 44, 1, 0, 0, 32, 1, 0, 0, 40, 0, 0,
+            0, 48, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0,
+            196, 0, 0, 0, 252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0,
+            48, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0,
+        ];
         RollupEnterChallenge::new_unchecked(v.into())
     }
 }
 impl RollupEnterChallenge {
-    pub const FIELD_COUNT: usize = 0;
+    pub const FIELD_COUNT: usize = 1;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -12912,6 +13093,16 @@ impl RollupEnterChallenge {
     }
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn witness(&self) -> ChallengeWitness {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[8..]) as usize;
+            ChallengeWitness::new_unchecked(self.0.slice(start..end))
+        } else {
+            ChallengeWitness::new_unchecked(self.0.slice(start..))
+        }
     }
     pub fn as_reader<'r>(&'r self) -> RollupEnterChallengeReader<'r> {
         RollupEnterChallengeReader::new_unchecked(self.as_slice())
@@ -12939,7 +13130,7 @@ impl molecule::prelude::Entity for RollupEnterChallenge {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
+        Self::new_builder().witness(self.witness())
     }
 }
 #[derive(Clone, Copy)]
@@ -12961,15 +13152,16 @@ impl<'r> ::core::fmt::Debug for RollupEnterChallengeReader<'r> {
 impl<'r> ::core::fmt::Display for RollupEnterChallengeReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "witness", self.witness())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
-            write!(f, ".. ({} fields)", extra_count)?;
+            write!(f, ", .. ({} fields)", extra_count)?;
         }
         write!(f, " }}")
     }
 }
 impl<'r> RollupEnterChallengeReader<'r> {
-    pub const FIELD_COUNT: usize = 0;
+    pub const FIELD_COUNT: usize = 1;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -12985,6 +13177,16 @@ impl<'r> RollupEnterChallengeReader<'r> {
     }
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn witness(&self) -> ChallengeWitnessReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[8..]) as usize;
+            ChallengeWitnessReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            ChallengeWitnessReader::new_unchecked(&self.as_slice()[start..])
+        }
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for RollupEnterChallengeReader<'r> {
@@ -13009,27 +13211,66 @@ impl<'r> molecule::prelude::Reader<'r> for RollupEnterChallengeReader<'r> {
         if slice_len != total_size {
             return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
         }
-        if slice_len > molecule::NUMBER_SIZE && !compatible {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, !0);
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
         }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        let field_count = offset_first / 4 - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
+        if slice_len < header_size {
+            return ve!(Self, HeaderIsBroken, header_size, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
+            .chunks(molecule::NUMBER_SIZE)
+            .take(field_count)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        ChallengeWitnessReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
-pub struct RollupEnterChallengeBuilder {}
+pub struct RollupEnterChallengeBuilder {
+    pub(crate) witness: ChallengeWitness,
+}
 impl RollupEnterChallengeBuilder {
-    pub const FIELD_COUNT: usize = 0;
+    pub const FIELD_COUNT: usize = 1;
+    pub fn witness(mut self, v: ChallengeWitness) -> Self {
+        self.witness = v;
+        self
+    }
 }
 impl molecule::prelude::Builder for RollupEnterChallengeBuilder {
     type Entity = RollupEnterChallenge;
     const NAME: &'static str = "RollupEnterChallengeBuilder";
     fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1) + self.witness.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        writer.write_all(&molecule::pack_number(
-            molecule::NUMBER_SIZE as molecule::Number,
-        ))?;
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.witness.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.witness.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -13542,19 +13783,19 @@ impl ::core::fmt::Display for RollupAction {
 impl ::core::default::Default for RollupAction {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            0, 0, 0, 0, 100, 1, 0, 0, 16, 0, 0, 0, 92, 1, 0, 0, 96, 1, 0, 0, 76, 1, 0, 0, 28, 0, 0,
-            0, 56, 1, 0, 0, 60, 1, 0, 0, 64, 1, 0, 0, 68, 1, 0, 0, 72, 1, 0, 0, 28, 1, 0, 0, 40, 0,
-            0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0,
-            196, 0, 0, 0, 252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 104, 1, 0, 0, 16, 0, 0, 0, 96, 1, 0, 0, 100, 1, 0, 0, 80, 1, 0, 0, 28, 0,
+            0, 0, 60, 1, 0, 0, 64, 1, 0, 0, 68, 1, 0, 0, 72, 1, 0, 0, 76, 1, 0, 0, 32, 1, 0, 0, 40,
+            0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0,
+            0, 196, 0, 0, 0, 252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0,
-            48, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0,
+            0, 48, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0,
-            0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
+            0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RollupAction::new_unchecked(v.into())
     }

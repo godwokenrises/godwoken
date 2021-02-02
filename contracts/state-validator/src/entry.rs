@@ -61,11 +61,12 @@ pub fn main() -> Result<(), Error> {
                 &prev_global_state,
             )?;
         }
-        RollupActionUnion::RollupEnterChallenge(_args) => {
+        RollupActionUnion::RollupEnterChallenge(args) => {
             // verify enter challenge
             verifications::challenge::verify_enter_challenge(
                 rollup_type_hash,
                 &rollup_config,
+                args,
                 &prev_global_state,
                 &post_global_state,
             )?;
@@ -84,9 +85,9 @@ pub fn main() -> Result<(), Error> {
             verifications::revert::verify(
                 rollup_type_hash,
                 &rollup_config,
+                args,
                 &prev_global_state,
                 &post_global_state,
-                args,
             )?;
         }
     }

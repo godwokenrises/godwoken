@@ -5,47 +5,18 @@ use gw_generator::{
     Error,
 };
 use gw_types::{
-    packed::{
-        CellOutput, DepositionRequest, HeaderInfo, RawWithdrawalRequest, Script, WithdrawalRequest,
-    },
+    packed::{CellOutput, DepositionRequest, RawWithdrawalRequest, Script, WithdrawalRequest},
     prelude::*,
 };
 
-use super::{build_sync_tx, setup_chain, ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH};
+use crate::testing_tools::{
+    apply_block_result, setup_chain, ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH,
+};
 use crate::{
-    chain::{
-        Chain, L1Action, L1ActionContext, ProduceBlockParam, ProduceBlockResult, SyncEvent,
-        SyncParam,
-    },
+    chain::{Chain, ProduceBlockParam},
     mem_pool::PackageParam,
     next_block_context::NextBlockContext,
 };
-
-fn apply_block_result(
-    chain: &mut Chain,
-    rollup_cell: CellOutput,
-    nb_ctx: NextBlockContext,
-    block_result: ProduceBlockResult,
-    deposition_requests: Vec<DepositionRequest>,
-) {
-    let transaction = build_sync_tx(rollup_cell, block_result);
-    let header_info = HeaderInfo::default();
-
-    let update = L1Action {
-        context: L1ActionContext::SubmitTxs {
-            deposition_requests,
-        },
-        transaction,
-        header_info,
-    };
-    let param = SyncParam {
-        updates: vec![update],
-        reverts: Default::default(),
-        next_block_context: nb_ctx,
-    };
-    let event = chain.sync(param).unwrap();
-    assert_eq!(event, SyncEvent::Success);
-}
 
 fn deposite_to_chain(
     chain: &mut Chain,
@@ -132,7 +103,7 @@ fn withdrawal_from_chain(
 #[test]
 fn test_deposition_and_withdrawal() {
     let rollup_type_script = Script::default();
-    let mut chain = setup_chain(&rollup_type_script);
+    let mut chain = setup_chain(rollup_type_script.clone(), Default::default());
     let block_producer_id = 0;
     let capacity = 500_00000000;
     let user_script = Script::new_builder()
@@ -233,7 +204,7 @@ fn test_deposition_and_withdrawal() {
 #[test]
 fn test_overdraft() {
     let rollup_type_script = Script::default();
-    let mut chain = setup_chain(&rollup_type_script);
+    let mut chain = setup_chain(rollup_type_script.clone(), Default::default());
     let block_producer_id = 0;
     let capacity = 500_00000000;
     let user_script = Script::new_builder()
@@ -274,7 +245,7 @@ fn test_overdraft() {
 #[test]
 fn test_deposit_faked_ckb() {
     let rollup_type_script = Script::default();
-    let mut chain = setup_chain(&rollup_type_script);
+    let mut chain = setup_chain(rollup_type_script.clone(), Default::default());
     let block_producer_id = 0;
     let capacity = 500_00000000;
     let user_script = Script::new_builder()

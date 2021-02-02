@@ -179,12 +179,15 @@ fn verify_withdrawal(
     }
 
     // verify witness root
-    let withdrawal_requests_root: [u8; 32] = raw_block.withdrawal_requests_root().unpack();
+    let withdrawal_witness_root: [u8; 32] = raw_block
+        .submit_withdrawals()
+        .withdrawal_witness_root()
+        .unpack();
     let withdrawal_index: u32 = lock_args.target().target_index().unpack();
     let withdrawal_witness_hash: [u8; 32] = withdrawal.witness_hash();
     let valid = CompiledMerkleProof(unlock_args.withdrawal_proof().unpack())
         .verify::<Blake2bHasher>(
-            &withdrawal_requests_root.into(),
+            &withdrawal_witness_root.into(),
             vec![(
                 H256::from_u32(withdrawal_index),
                 withdrawal_witness_hash.into(),
