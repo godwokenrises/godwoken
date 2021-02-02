@@ -21,8 +21,8 @@ pub const DEPOSITION_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const CUSTODIAN_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const L2_SUDT_CODE_HASH: [u8; 32] = [0u8; 32];
 pub const CKB_SUDT_SCRIPT_HASH: [u8; 32] = [
-    127, 220, 53, 111, 197, 11, 67, 192, 98, 225, 52, 115, 150, 81, 152, 155, 24, 212, 187, 145,
-    15, 66, 245, 53, 39, 191, 46, 195, 234, 199, 20, 224,
+    128, 74, 52, 101, 132, 195, 173, 228, 233, 202, 88, 4, 18, 108, 212, 244, 241, 77, 210, 5, 153,
+    202, 161, 219, 140, 187, 63, 65, 168, 184, 176, 129,
 ];
 pub const CKB_SUDT_SCRIPT_ARGS: [u8; 32] = [0; 32];
 pub const ACCOUNT_LOCK_CODE_HASH: [u8; 32] = [0u8; 32];

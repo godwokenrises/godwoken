@@ -99,7 +99,7 @@ const run = async () => {
   // Add stake cell
   const stakeLockArgs = {
     owner_lock_hash: ownerLockHash,
-    // default stake_block_number is 0, will be updated to actual L2 block number when this aggregator produce L2 block.
+    // default stake_block_number is 0, will be updated to actual L2 block number when this block producer produce L2 block.
     stake_block_number: "0x0",
   };
   const ckbCapacity = program.capacity * 10 ** 8;

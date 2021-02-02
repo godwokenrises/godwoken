@@ -429,7 +429,7 @@ export class Runner {
       }
     }
     throw new Error(
-      `No valid stake cell matches the aggregator's lockHash: ${this._lockHash()}`
+      `No valid stake cell matches the block producer's lockHash: ${this._lockHash()}`
     );
   }
 
