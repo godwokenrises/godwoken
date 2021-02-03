@@ -6,7 +6,8 @@ use crate::tests::utils::layer1::{
 use crate::tests::validators::{
     state_validator::setup_chain, STATE_VALIDATOR_CODE_HASH, STATE_VALIDATOR_PROGRAM,
 };
-use ckb_script::TransactionScriptsVerifier;
+use ckb_error::assert_error_eq;
+use ckb_script::{ScriptError, TransactionScriptsVerifier};
 use ckb_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -29,6 +30,7 @@ use gw_store::Store;
 use gw_types::packed::StakeLockArgs;
 use parking_lot::Mutex;
 use std::sync::Arc;
+const INVALID_STAKE_CELL_UNLOCK: i8 = 15;
 
 fn stake_lock_script(
     rollup_type_hash: Byte32,
@@ -58,51 +60,70 @@ fn state_validator_script() -> Script {
         .build()
 }
 
+fn gw_state_validator_script() -> gw_types::packed::Script {
+    gw_types::packed::Script::new_builder()
+        .code_hash(gw_types::prelude::Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
+        .hash_type(gw_types::core::ScriptHashType::Data.into())
+        .build()
+}
+
+fn always_success_dep(data_loader: &mut DummyDataLoader) -> CellDep {
+    let always_success_out_point = random_out_point();
+    data_loader.cells.insert(
+        always_success_out_point.clone(),
+        (
+            CellOutput::new_builder()
+                .capacity((ALWAYS_SUCCESS_PROGRAM.len() as u64).pack())
+                .build(),
+            ALWAYS_SUCCESS_PROGRAM.clone(),
+        ),
+    );
+    CellDep::new_builder()
+        .out_point(always_success_out_point)
+        .build()
+}
+
+fn stake_lock_dep(data_loader: &mut DummyDataLoader) -> CellDep {
+    let stake_lock_out_point = random_out_point();
+    data_loader.cells.insert(
+        stake_lock_out_point.clone(),
+        (
+            CellOutput::new_builder()
+                .capacity((STAKE_LOCK_PROGRAM.len() as u64).pack())
+                .build(),
+            STAKE_LOCK_PROGRAM.clone(),
+        ),
+    );
+    CellDep::new_builder()
+        .out_point(stake_lock_out_point)
+        .build()
+}
+
+fn state_validator_dep(data_loader: &mut DummyDataLoader) -> CellDep {
+    let state_validator_out_point = random_out_point();
+    data_loader.cells.insert(
+        state_validator_out_point.clone(),
+        (
+            CellOutput::new_builder()
+                .capacity((STATE_VALIDATOR_PROGRAM.len() as u64).pack())
+                .build(),
+            STATE_VALIDATOR_PROGRAM.clone(),
+        ),
+    );
+    CellDep::new_builder()
+        .out_point(state_validator_out_point)
+        .build()
+}
+
 #[test]
 fn unlock_stake_lock_by_owner_lock_hash_works() {
     let mut data_loader = DummyDataLoader::default();
 
     // deploy scripts
-    let always_success_dep = {
-        let always_success_out_point = random_out_point();
-        data_loader.cells.insert(
-            always_success_out_point.clone(),
-            (
-                CellOutput::new_builder()
-                    .capacity((ALWAYS_SUCCESS_PROGRAM.len() as u64).pack())
-                    .build(),
-                ALWAYS_SUCCESS_PROGRAM.clone(),
-            ),
-        );
-        CellDep::new_builder()
-            .out_point(always_success_out_point)
-            .build()
-    };
-    let stake_lock_dep = {
-        let stake_lock_out_point = random_out_point();
-        data_loader.cells.insert(
-            stake_lock_out_point.clone(),
-            (
-                CellOutput::new_builder()
-                    .capacity((STAKE_LOCK_PROGRAM.len() as u64).pack())
-                    .build(),
-                STAKE_LOCK_PROGRAM.clone(),
-            ),
-        );
-        CellDep::new_builder()
-            .out_point(stake_lock_out_point)
-            .build()
-    };
 
     // init chain and create rollup cell
     let rollup_cell_dep = {
-        let rollup_type_script = {
-            gw_types::packed::Script::new_builder()
-                .code_hash(gw_types::prelude::Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
-                .hash_type(gw_types::core::ScriptHashType::Data.into())
-                .build()
-        };
-        let chain = setup_chain(&rollup_type_script);
+        let chain = setup_chain(&gw_state_validator_script());
         let global_state = chain.local_state.last_global_state();
         let capacity = 1000_00000000u64;
         let out_point = random_out_point();
@@ -130,6 +151,7 @@ fn unlock_stake_lock_by_owner_lock_hash_works() {
             .insert(out_point.clone(), (always_success_cell, Default::default()));
         CellInput::new_builder().previous_output(out_point).build()
     };
+
     // create stake_lock input
     let stake_lock_input = {
         let capacity = 1000_00000000u64;
@@ -157,12 +179,12 @@ fn unlock_stake_lock_by_owner_lock_hash_works() {
     };
     let tx = Transaction::default()
         .as_advanced_builder()
+        .cell_dep(always_success_dep(&mut data_loader))
+        .cell_dep(rollup_cell_dep)
+        .cell_dep(stake_lock_dep(&mut data_loader))
         .input(always_success_input)
         .input(stake_lock_input)
         .output(output_cell)
-        .cell_dep(always_success_dep)
-        .cell_dep(rollup_cell_dep)
-        .cell_dep(stake_lock_dep)
         .build();
     let resolved_tx = build_resolved_tx(&data_loader, &tx);
     let mut verifier = TransactionScriptsVerifier::new(&resolved_tx, &data_loader);
@@ -174,47 +196,9 @@ fn unlock_stake_lock_by_owner_lock_hash_works() {
 fn unlock_stake_lock_by_owner_lock_hash_failed() {
     let mut data_loader = DummyDataLoader::default();
 
-    // deploy scripts
-    let always_success_dep = {
-        let always_success_out_point = random_out_point();
-        data_loader.cells.insert(
-            always_success_out_point.clone(),
-            (
-                CellOutput::new_builder()
-                    .capacity((ALWAYS_SUCCESS_PROGRAM.len() as u64).pack())
-                    .build(),
-                ALWAYS_SUCCESS_PROGRAM.clone(),
-            ),
-        );
-        CellDep::new_builder()
-            .out_point(always_success_out_point)
-            .build()
-    };
-    let stake_lock_dep = {
-        let stake_lock_out_point = random_out_point();
-        data_loader.cells.insert(
-            stake_lock_out_point.clone(),
-            (
-                CellOutput::new_builder()
-                    .capacity((STAKE_LOCK_PROGRAM.len() as u64).pack())
-                    .build(),
-                STAKE_LOCK_PROGRAM.clone(),
-            ),
-        );
-        CellDep::new_builder()
-            .out_point(stake_lock_out_point)
-            .build()
-    };
-
     // init chain and create rollup cell
     let rollup_cell_dep = {
-        let rollup_type_script = {
-            gw_types::packed::Script::new_builder()
-                .code_hash(gw_types::prelude::Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
-                .hash_type(gw_types::core::ScriptHashType::Data.into())
-                .build()
-        };
-        let chain = setup_chain(&rollup_type_script);
+        let chain = setup_chain(&gw_state_validator_script());
         let global_state = chain.local_state.last_global_state();
         let capacity = 1000_00000000u64;
         let out_point = random_out_point();
@@ -271,60 +255,31 @@ fn unlock_stake_lock_by_owner_lock_hash_failed() {
     };
     let tx = Transaction::default()
         .as_advanced_builder()
+        .cell_dep(always_success_dep(&mut data_loader))
+        .cell_dep(rollup_cell_dep)
+        .cell_dep(stake_lock_dep(&mut data_loader))
         .input(always_success_input)
         .input(stake_lock_input)
         .output(output_cell)
-        .cell_dep(always_success_dep)
-        .cell_dep(rollup_cell_dep)
-        .cell_dep(stake_lock_dep)
         .build();
     let resolved_tx = build_resolved_tx(&data_loader, &tx);
     let mut verifier = TransactionScriptsVerifier::new(&resolved_tx, &data_loader);
     verifier.set_debug_printer(|_script, msg| println!("[script debug] {}", msg));
-    assert_eq!(verifier.verify(MAX_CYCLES).is_err(), true);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    let stake_lock_input_index = 1;
+    assert_error_eq!(
+        verify_result.unwrap_err(),
+        ScriptError::ValidationFailure(INVALID_STAKE_CELL_UNLOCK)
+            .input_lock_script(stake_lock_input_index)
+    );
 }
 
 #[test]
 fn unlock_stake_lock_by_rollup_cell_works() {
     let mut data_loader = DummyDataLoader::default();
 
-    // deploy scripts
-    let state_validator_dep = {
-        let state_validator_out_point = random_out_point();
-        data_loader.cells.insert(
-            state_validator_out_point.clone(),
-            (
-                CellOutput::new_builder()
-                    .capacity((STATE_VALIDATOR_PROGRAM.len() as u64).pack())
-                    .build(),
-                STATE_VALIDATOR_PROGRAM.clone(),
-            ),
-        );
-        CellDep::new_builder()
-            .out_point(state_validator_out_point)
-            .build()
-    };
-    let stake_lock_dep = {
-        let stake_lock_out_point = random_out_point();
-        data_loader.cells.insert(
-            stake_lock_out_point.clone(),
-            (
-                CellOutput::new_builder()
-                    .capacity((STAKE_LOCK_PROGRAM.len() as u64).pack())
-                    .build(),
-                STAKE_LOCK_PROGRAM.clone(),
-            ),
-        );
-        CellDep::new_builder()
-            .out_point(stake_lock_out_point)
-            .build()
-    };
     // init chain and create rollup cell
-    let rollup_type_script = gw_types::packed::Script::new_builder()
-        .code_hash(gw_types::prelude::Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
-        .hash_type(gw_types::core::ScriptHashType::Data.into())
-        .build();
-    let chain = setup_chain(&rollup_type_script);
+    let chain = setup_chain(&gw_state_validator_script());
     // create rollup_cell input
     let capacity = 1000_00000000u64;
     let rollup_cell_out_point = random_out_point();
@@ -382,17 +337,29 @@ fn unlock_stake_lock_by_rollup_cell_works() {
     // create tx
     let tx = Transaction::default()
         .as_advanced_builder()
-        .cell_dep(state_validator_dep)
-        .cell_dep(stake_lock_dep)
+        .cell_dep(always_success_dep(&mut data_loader))
+        .cell_dep(state_validator_dep(&mut data_loader))
+        .cell_dep(stake_lock_dep(&mut data_loader))
         .input(rollup_cell_input)
         .input(stake_cell_input)
         .output(rollup_cell_output)
         .output(stake_cell_output)
         .output_data(rollup_cell_data.pack())
+        .witness(witness.as_bytes().pack())
         .build();
     let resolved_tx = build_resolved_tx(&data_loader, &tx);
     let mut verifier = TransactionScriptsVerifier::new(&resolved_tx, &data_loader);
     verifier.set_debug_printer(|_script, msg| println!("[script debug] {}", msg));
-    // TODO: use the dummy stake_validator to test
-    assert_eq!(verifier.verify(MAX_CYCLES).is_err(), true);
+    verifier.verify(MAX_CYCLES).expect("return success");
+}
+
+// #[test]
+// when unlock stake_lock by rollup cell
+// 1. (valid) stake_cell_input's stake_block_number = 0 and stake_cell_output's stake_block_number =
+//    current L2 block number
+// 2. (valid) stake_cell_inputs' stake_block_number = stake_cell_output's stake_block_number
+// 3. (invalid) stake_cell_inputs' stake_block_number > 0 and != stake_cell_output's
+//    stake_block_number (attempt to forge the stake_block_number)
+fn unlock_stake_lock_by_rollup_cell_failed_for_invalid_stake_block_number() {
+    // TODO
 }
