@@ -432,17 +432,42 @@ fn check_block_transactions(_context: &mut BlockContext, block: &L2Block) -> Res
     let tx_count: u32 = submit_transactions.tx_count().unpack();
     let compacted_post_root_list = submit_transactions.compacted_post_root_list();
 
-    if tx_count != compacted_post_root_list.item_count() as u32 {
+    if tx_count != compacted_post_root_list.item_count() as u32
+        || tx_count != block.transactions().len() as u32
+    {
         return Err(Error::InvalidTxsState);
     }
 
     let leaves = block
         .transactions()
         .into_iter()
-        .map(|tx| tx.hash())
+        .map(|tx| tx.witness_hash())
         .collect();
     let merkle_root: [u8; 32] = calculate_merkle_root(leaves)?;
     if tx_witness_root != merkle_root {
+        return Err(Error::MerkleProof);
+    }
+
+    Ok(())
+}
+
+fn check_block_withdrawals(_context: &mut BlockContext, block: &L2Block) -> Result<(), Error> {
+    // check withdrawal_witness_root
+    let submit_withdrawals = block.raw().submit_withdrawals();
+    let withdrawal_witness_root: [u8; 32] = submit_withdrawals.withdrawal_witness_root().unpack();
+    let withdrawal_count: u32 = submit_withdrawals.withdrawal_count().unpack();
+
+    if withdrawal_count != block.withdrawals().len() as u32 {
+        return Err(Error::InvalidBlock);
+    }
+
+    let leaves = block
+        .withdrawals()
+        .into_iter()
+        .map(|withdrawal| withdrawal.witness_hash())
+        .collect();
+    let merkle_root: [u8; 32] = calculate_merkle_root(leaves)?;
+    if withdrawal_witness_root != merkle_root {
         return Err(Error::MerkleProof);
     }
 
@@ -475,7 +500,7 @@ pub fn verify(
     // Withdrawal token: Layer2 SUDT -> withdrawals
     burn_layer2_sudt(config, &mut context, &withdrawal_cells)?;
     // Check new cells and reverted cells: deposition / withdrawal / custodian
-    let withdrawal_requests = block.withdrawal_requests().into_iter().collect();
+    let withdrawal_requests = block.withdrawals().into_iter().collect();
     check_withdrawal_cells(&mut context, withdrawal_requests, &withdrawal_cells)?;
     check_input_custodian_cells(config, &mut context, withdrawal_cells)?;
     check_output_custodian_cells(config, &mut context)?;
@@ -488,6 +513,8 @@ pub fn verify(
 
     // Check transactions
     check_block_transactions(&mut context, block)?;
+    // Check withdrawals
+    check_block_withdrawals(&mut context, block)?;
 
     // Verify Post state
     let actual_post_global_state = {

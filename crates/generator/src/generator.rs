@@ -165,7 +165,7 @@ impl Generator {
         args: StateTransitionArgs,
     ) -> Result<StateTransitionResult, Error> {
         let raw_block = args.l2block.raw();
-        let withdrawal_requests: Vec<_> = args.l2block.withdrawal_requests().into_iter().collect();
+        let withdrawal_requests: Vec<_> = args.l2block.withdrawals().into_iter().collect();
         // apply withdrawal to state
         state.apply_withdrawal_requests(&withdrawal_requests)?;
         // apply deposition to state

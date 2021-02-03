@@ -55,6 +55,18 @@ table L2Transaction {
 
 vector L2TransactionVec <L2Transaction>;
 
+table SubmitTransactions {
+    tx_witness_root: Byte32,
+    tx_count: Uint32,
+    // hash(account_root | account_count) before each transaction
+    compacted_post_root_list: Byte32Vec,
+}
+
+struct SubmitWithdrawals {
+    withdrawal_witness_root: Byte32,
+    withdrawal_count: Uint32,
+}
+
 table RawL2Block {
     number: Uint64,
     block_producer_id: Uint32,
@@ -64,7 +76,7 @@ table RawL2Block {
     prev_account: AccountMerkleState,
     post_account: AccountMerkleState,
     submit_transactions: SubmitTransactions,
-    withdrawal_requests_root: Byte32,
+    submit_withdrawals: SubmitWithdrawals,
 }
 
 vector RawL2BlockVec <RawL2Block>;
@@ -75,7 +87,7 @@ table L2Block {
     kv_state_proof: Bytes,
     transactions: L2TransactionVec,
     block_proof: Bytes,
-    withdrawal_requests: WithdrawalRequestVec,
+    withdrawals: WithdrawalRequestVec,
 }
 
 table DepositionRequest {
@@ -113,16 +125,6 @@ struct WithdrawalRequest {
     raw: RawWithdrawalRequest,
     signature: Signature,
 }
-
-// --- define actions ---
-table SubmitTransactions {
-    tx_witness_root: Byte32,
-    tx_count: Uint32,
-    // hash(account_root | account_count) before each transaction
-    compacted_post_root_list: Byte32Vec,
-}
-
-// --- end of define actions ---
 
 // --- contract execution ---
 
@@ -287,7 +289,9 @@ table RollupSubmitBlock {
     reverted_block_hashes: Byte32Vec,
     reverted_block_proof: Bytes,
 }
-table RollupEnterChallenge {}
+table RollupEnterChallenge {
+    witness: ChallengeWitness,
+}
 table RollupCancelChallenge {}
 table RollupRevert {
     reverted_blocks: RawL2BlockVec, // sorted by block number

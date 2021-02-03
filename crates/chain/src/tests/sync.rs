@@ -1,4 +1,4 @@
-use super::{build_sync_tx, setup_chain};
+use crate::testing_tools::{build_sync_tx, setup_chain};
 use crate::{
     chain::{L1Action, L1ActionContext, ProduceBlockParam, RevertedL1Action, SyncEvent, SyncParam},
     mem_pool::PackageParam,
@@ -13,7 +13,7 @@ use gw_types::{
 #[test]
 fn test_sync_a_block() {
     let rollup_type_script = Script::default();
-    let mut chain = setup_chain(&rollup_type_script);
+    let mut chain = setup_chain(rollup_type_script.clone(), Default::default());
 
     let block_producer_id = 0;
     let timestamp = 1000;
@@ -72,7 +72,7 @@ fn test_sync_a_block() {
 #[test]
 fn test_layer1_fork() {
     let rollup_type_script = Script::default();
-    let mut chain = setup_chain(&rollup_type_script);
+    let mut chain = setup_chain(rollup_type_script.clone(), Default::default());
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script.clone()).pack())
         .build();
@@ -92,7 +92,7 @@ fn test_layer1_fork() {
             .capacity(120u64.pack())
             .script(charlie_script)
             .build();
-        let chain = setup_chain(&rollup_type_script);
+        let chain = setup_chain(rollup_type_script.clone(), Default::default());
         let package_param = PackageParam {
             deposition_requests: vec![deposition.clone()],
             max_withdrawal_capacity: std::u128::MAX,

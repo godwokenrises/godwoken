@@ -370,7 +370,7 @@ pub struct L2Block {
     pub kv_state_proof: JsonBytes,
     pub transactions: Vec<L2Transaction>,
     pub block_proof: JsonBytes,
-    pub withdrawal_requests: Vec<WithdrawalRequest>,
+    pub withdrawals: Vec<WithdrawalRequest>,
 }
 
 impl From<L2Block> for packed::L2Block {
@@ -381,7 +381,7 @@ impl From<L2Block> for packed::L2Block {
             kv_state_proof,
             transactions,
             block_proof,
-            withdrawal_requests,
+            withdrawals,
         } = json;
         let kv_pair_vec: Vec<packed::KVPair> = kv_state.into_iter().map(|k| k.into()).collect();
         let packed_kv_state = packed::KVPairVec::new_builder().set(kv_pair_vec).build();
@@ -391,7 +391,7 @@ impl From<L2Block> for packed::L2Block {
             .set(transaction_vec)
             .build();
         let withdrawal_requests_vec: Vec<packed::WithdrawalRequest> =
-            withdrawal_requests.into_iter().map(|w| w.into()).collect();
+            withdrawals.into_iter().map(|w| w.into()).collect();
         let packed_withdrawal_requests = packed::WithdrawalRequestVec::new_builder()
             .set(withdrawal_requests_vec)
             .build();
@@ -401,7 +401,7 @@ impl From<L2Block> for packed::L2Block {
             .kv_state_proof(kv_state_proof.into_bytes().pack())
             .transactions(packed_transactions)
             .block_proof(block_proof.into_bytes().pack())
-            .withdrawal_requests(packed_withdrawal_requests)
+            .withdrawals(packed_withdrawal_requests)
             .build()
     }
 }
@@ -418,8 +418,8 @@ impl From<packed::L2Block> for L2Block {
                 .map(|t| t.into())
                 .collect(),
             block_proof: JsonBytes::from_bytes(l2_block.block_proof().unpack()),
-            withdrawal_requests: l2_block
-                .withdrawal_requests()
+            withdrawals: l2_block
+                .withdrawals()
                 .into_iter()
                 .map(|w| w.into())
                 .collect(),
@@ -438,7 +438,7 @@ pub struct RawL2Block {
     pub prev_account: AccountMerkleState,
     pub post_account: AccountMerkleState,
     pub submit_transactions: SubmitTransactions,
-    pub withdrawal_requests_root: H256,
+    pub submit_withdrawals: SubmitWithdrawals,
 }
 
 impl From<RawL2Block> for packed::RawL2Block {
@@ -452,7 +452,7 @@ impl From<RawL2Block> for packed::RawL2Block {
             prev_account,
             post_account,
             submit_transactions,
-            withdrawal_requests_root,
+            submit_withdrawals,
         } = json;
         packed::RawL2Block::new_builder()
             .number(u64::from(number).pack())
@@ -463,7 +463,7 @@ impl From<RawL2Block> for packed::RawL2Block {
             .prev_account(prev_account.into())
             .post_account(post_account.into())
             .submit_transactions(submit_transactions.into())
-            .withdrawal_requests_root(withdrawal_requests_root.pack())
+            .submit_withdrawals(submit_withdrawals.into())
             .build()
     }
 }
@@ -482,7 +482,7 @@ impl From<packed::RawL2Block> for RawL2Block {
             prev_account: raw_l2_block.prev_account().into(),
             post_account: raw_l2_block.post_account().into(),
             submit_transactions: raw_l2_block.submit_transactions().into(),
-            withdrawal_requests_root: raw_l2_block.withdrawal_requests_root().unpack(),
+            submit_withdrawals: raw_l2_block.submit_withdrawals().into(),
         }
     }
 }
@@ -513,7 +513,7 @@ impl From<packed::L2Block> for L2BlockView {
                 .collect(),
             block_proof: JsonBytes::from_bytes(l2_block.block_proof().unpack()),
             withdrawal_requests: l2_block
-                .withdrawal_requests()
+                .withdrawals()
                 .into_iter()
                 .map(|w| w.into())
                 .collect(),
@@ -564,6 +564,36 @@ impl From<packed::SubmitTransactions> for SubmitTransactions {
                 .into_iter()
                 .map(|c| c.unpack())
                 .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct SubmitWithdrawals {
+    pub withdrawal_witness_root: H256,
+    pub withdrawal_count: Uint32,
+}
+
+impl From<SubmitWithdrawals> for packed::SubmitWithdrawals {
+    fn from(json: SubmitWithdrawals) -> packed::SubmitWithdrawals {
+        let SubmitWithdrawals {
+            withdrawal_witness_root,
+            withdrawal_count,
+        } = json;
+        packed::SubmitWithdrawals::new_builder()
+            .withdrawal_witness_root(withdrawal_witness_root.pack())
+            .withdrawal_count(u32::from(withdrawal_count).pack())
+            .build()
+    }
+}
+
+impl From<packed::SubmitWithdrawals> for SubmitWithdrawals {
+    fn from(data: packed::SubmitWithdrawals) -> SubmitWithdrawals {
+        let withdrawal_count: u32 = data.withdrawal_count().unpack();
+        Self {
+            withdrawal_witness_root: data.withdrawal_witness_root().unpack(),
+            withdrawal_count: withdrawal_count.into(),
         }
     }
 }

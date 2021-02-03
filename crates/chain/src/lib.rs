@@ -9,5 +9,6 @@
 pub mod chain;
 pub mod mem_pool;
 pub mod next_block_context;
+pub mod testing_tools;
 #[cfg(test)]
 mod tests;

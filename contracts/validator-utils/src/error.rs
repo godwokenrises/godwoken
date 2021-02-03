@@ -36,6 +36,7 @@ pub enum Error {
     InvalidRevertedBlocks,
     InvalidChallengeReward,
     InvalidSUDTCell,
+    InvalidChallengeTarget,
 }
 
 impl From<SysError> for Error {

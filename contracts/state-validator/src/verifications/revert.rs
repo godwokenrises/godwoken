@@ -277,9 +277,9 @@ fn check_reverted_blocks(
 pub fn verify(
     rollup_type_hash: H256,
     config: &RollupConfig,
+    revert_args: RollupRevert,
     prev_global_state: &GlobalState,
     post_global_state: &GlobalState,
-    revert_args: RollupRevert,
 ) -> Result<(), Error> {
     check_status(prev_global_state, Status::Halting)?;
     // check rollup lock cells,

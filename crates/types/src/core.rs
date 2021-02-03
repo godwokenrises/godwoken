@@ -1,5 +1,8 @@
+use molecule::prelude::Byte;
+
 use crate::packed;
 use core::convert::TryFrom;
+use core::convert::TryInto;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ScriptHashType {
@@ -50,6 +53,20 @@ impl TryFrom<u8> for Status {
     }
 }
 
+impl Into<Byte> for Status {
+    fn into(self: Status) -> Byte {
+        (self as u8).into()
+    }
+}
+
+impl TryFrom<Byte> for Status {
+    type Error = u8;
+    fn try_from(value: Byte) -> Result<Self, Self::Error> {
+        let v: u8 = value.into();
+        v.try_into()
+    }
+}
+
 /// Challenge target type
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[repr(u8)]
@@ -72,5 +89,19 @@ impl TryFrom<u8> for ChallengeTargetType {
             1 => Ok(ChallengeTargetType::Withdrawal),
             n => return Err(n),
         }
+    }
+}
+
+impl Into<Byte> for ChallengeTargetType {
+    fn into(self: ChallengeTargetType) -> Byte {
+        (self as u8).into()
+    }
+}
+
+impl TryFrom<Byte> for ChallengeTargetType {
+    type Error = u8;
+    fn try_from(value: Byte) -> Result<Self, Self::Error> {
+        let v: u8 = value.into();
+        v.try_into()
     }
 }

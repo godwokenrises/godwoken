@@ -17,8 +17,8 @@ use gw_types::{
     packed::{
         AccountMerkleState, BlockMerkleState, ChallengeTarget, ChallengeWitness, DepositionRequest,
         GlobalState, HeaderInfo, L2Block, L2BlockReader, RawL2Block, RollupConfig,
-        SubmitTransactions, Transaction, TxReceipt, VerifyTransactionWitness, WitnessArgs,
-        WitnessArgsReader,
+        SubmitTransactions, SubmitWithdrawals, Transaction, TxReceipt, VerifyTransactionWitness,
+        WitnessArgs, WitnessArgsReader,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, PackVec as GWPackVec,
@@ -566,14 +566,21 @@ impl Chain {
                 .compacted_post_root_list(compacted_post_root_list.pack())
                 .build()
         };
-        let withdrawal_requests_root = calculate_merkle_root(
-            mem_pool_package
-                .withdrawal_requests
-                .iter()
-                .map(|request| request.raw().hash())
-                .collect(),
-        )
-        .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
+        let submit_withdrawals = {
+            let withdrawal_witness_root = calculate_merkle_root(
+                mem_pool_package
+                    .withdrawal_requests
+                    .iter()
+                    .map(|request| request.witness_hash())
+                    .collect(),
+            )
+            .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
+            let withdrawal_count = mem_pool_package.withdrawal_requests.len() as u32;
+            SubmitWithdrawals::new_builder()
+                .withdrawal_witness_root(withdrawal_witness_root.pack())
+                .withdrawal_count(withdrawal_count.pack())
+                .build()
+        };
         let prev_account = AccountMerkleState::new_builder()
             .merkle_root(mem_pool_package.prev_account_state.root.pack())
             .count(mem_pool_package.prev_account_state.count.pack())
@@ -589,8 +596,8 @@ impl Chain {
             .parent_block_hash(tip_block_hash.pack())
             .post_account(post_account.clone())
             .prev_account(prev_account)
-            .withdrawal_requests_root(withdrawal_requests_root.pack())
             .submit_transactions(submit_txs)
+            .submit_withdrawals(submit_withdrawals)
             .build();
         let db = self.store.begin_transaction();
         let account_state_tree = db.account_state_tree()?;
@@ -636,7 +643,7 @@ impl Chain {
             .kv_state(packed_kv_state)
             .kv_state_proof(proof.pack())
             .transactions(txs.pack())
-            .withdrawal_requests(mem_pool_package.withdrawal_requests.pack())
+            .withdrawals(mem_pool_package.withdrawal_requests.pack())
             .block_proof(block_proof.0.pack())
             .build();
         let post_block = {
