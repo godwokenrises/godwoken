@@ -144,13 +144,13 @@ function packStakeLockArgs(
   rollupTypeHash: HexString,
   stakeLockArgs: object
 ): HexString {
-  const packedWithdrawalLockArgs = schemas.SerializeStakeLockArgs(
+  const packedStakeLockArgs = schemas.SerializeStakeLockArgs(
     types.NormalizeStakeLockArgs(stakeLockArgs)
   );
-  const buffer = new ArrayBuffer(32 + packedWithdrawalLockArgs.byteLength);
+  const buffer = new ArrayBuffer(32 + packedStakeLockArgs.byteLength);
   const array = new Uint8Array(buffer);
   array.set(new Uint8Array(new Reader(rollupTypeHash).toArrayBuffer()), 0);
-  array.set(new Uint8Array(packedWithdrawalLockArgs), 32);
+  array.set(new Uint8Array(packedStakeLockArgs), 32);
   return new Reader(buffer).serializeJson();
 }
 

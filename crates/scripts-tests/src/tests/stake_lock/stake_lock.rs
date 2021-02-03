@@ -1,11 +1,10 @@
 use super::{STAKE_LOCK_CODE_HASH, STAKE_LOCK_PROGRAM};
-use crate::tests::utils::{
-    layer1::{
-        always_success_script, build_resolved_tx, build_simple_tx, random_out_point,
-        DummyDataLoader, ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM, MAX_CYCLES,
-        STATE_VALIDATOR_CODE_HASH, STATE_VALIDATOR_PROGRAM,
-    },
-    layer2::setup_chain,
+use crate::tests::utils::layer1::{
+    always_success_script, build_resolved_tx, build_simple_tx, random_out_point, DummyDataLoader,
+    ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM, MAX_CYCLES,
+};
+use crate::tests::validators::{
+    state_validator::setup_chain, STATE_VALIDATOR_CODE_HASH, STATE_VALIDATOR_PROGRAM,
 };
 use ckb_script::TransactionScriptsVerifier;
 use ckb_types::{

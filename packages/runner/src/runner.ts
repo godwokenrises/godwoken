@@ -408,6 +408,11 @@ export class Runner {
     return results[0];
   }
 
+  async _queryGlobalState(): Promise<schemas.GlobalState> {
+    const rollupCell = await this._queryLiveRollupCell();
+    return new schemas.GlobalState(new Reader(rollupCell.data).toArrayBuffer());
+  }
+
   async _queryValidStakeCell(): Promise<Cell> {
     const stakeCellQueryOptions: QueryOptions = {
       lock: {
@@ -1013,25 +1018,14 @@ export class Runner {
   // 3. extract `deposition_block_number` from `custodianLockArgs`, compare it with `globalState`'s `last_finalized_block_number`
   async _queryValidCustodianCells(): Promise<Cell[]> {
     const collector = this.indexer.collector(this._custodianCellQueryOptions());
-    const rollupCell = await this._queryLiveRollupCell();
     const globalState = types.DenormalizeGlobalState(
-      new schemas.GlobalState(new Reader(rollupCell.data).toArrayBuffer())
+      await this._queryGlobalState()
     );
     const cells = [];
     for await (const cell of collector.collect()) {
       const custodianLockArgs = this._unpackCustodianLockArgs(
         cell.cell_output.lock.args
       );
-      //console.log(cell);
-      //console.log(custodianLockArgs);
-      //this.logger(
-      //  "debug",
-      //  `GlobalState last_finalized_block_number: ${BigInt(
-      //    globalState.last_finalized_block_number
-      //  )}, custodianLockArgs deposition_block_number: ${BigInt(
-      //    custodianLockArgs.deposition_block_number
-      //  )}, deposition_block_hash: ${custodianLockArgs.deposition_block_hash}`
-      //);
       if (
         BigInt(custodianLockArgs.deposition_block_number) <=
         BigInt(globalState.last_finalized_block_number)
@@ -1106,6 +1100,20 @@ export class Runner {
     );
   }
 
+  _packStakeLockArgs(stakeLockArgs: object) {
+    const packedStakeLockArgs = schemas.SerializeStakeLockArgs(
+      types.NormalizeStakeLockArgs(stakeLockArgs)
+    );
+    const buffer = new ArrayBuffer(32 + packedStakeLockArgs.byteLength);
+    const array = new Uint8Array(buffer);
+    array.set(
+      new Uint8Array(new Reader(this.rollupTypeHash).toArrayBuffer()),
+      0
+    );
+    array.set(new Uint8Array(packedStakeLockArgs), 32);
+    return new Reader(buffer).serializeJson();
+  }
+
   _extractSudtTypeScriptFromScriptHash(
     validCustodianCells: Cell[],
     sudtScriptHash: Hash
@@ -1132,14 +1140,33 @@ export class Runner {
       return cellDeps.push(this.config.deploymentConfig.stake_lock_dep);
     });
 
-    const stakeCell: Cell = await this._queryValidStakeCell();
+    const oldStakeCell: Cell = await this._queryValidStakeCell();
     // Add stake cell input
     txSkeleton = txSkeleton.update("inputs", (inputs) =>
-      inputs.push(stakeCell)
+      inputs.push(oldStakeCell)
     );
     // Add stake cell output
+    let newStakeCell: Cell = oldStakeCell;
+    const oldStakeLockArgs = this._unpackStakeLockArgs(
+      oldStakeCell.cell_output.lock!.args
+    );
+    // Update stake_block_number to the current L2 block number
+    if (BigInt(oldStakeLockArgs.stake_block_number) === BigInt(0)) {
+      const globalState = types.DenormalizeGlobalState(
+        await this._queryGlobalState()
+      );
+      const updatedStakeBlockNumber =
+        BigInt(globalState.last_finalized_block_number) + BigInt(1);
+      const newStakeLockArgs = {
+        owner_lock_hash: oldStakeLockArgs.owner_lock_hash,
+        stake_block_number: "0x" + updatedStakeBlockNumber.toString(16),
+      };
+      newStakeCell.cell_output.lock!.args = this._packStakeLockArgs(
+        newStakeLockArgs
+      );
+    }
     txSkeleton = txSkeleton.update("outputs", (outputs) =>
-      outputs.push(stakeCell)
+      outputs.push(newStakeCell)
     );
     return txSkeleton;
   }

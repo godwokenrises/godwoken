@@ -161,17 +161,17 @@ $ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/tools/lib/deploy_genesi
 
 ## Stake
 
-Anyone can stake to becom an aggregator:
+Anyone can stake to becom a block producer:
 
 ```
 $ cd $TOP/godwoken
-$ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/runner/lib/stake.js --private-key <private key for aggregator> -f $TOP/runner_config.json --capacity 1000 -s "postgresql://user:password@127.0.0.1:5432/lumos"
+$ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/runner/lib/stake.js --private-key <private key for block producer> -f $TOP/runner_config.json --capacity 1000 -s "postgresql://user:password@127.0.0.1:5432/lumos"
 ```
 
 And unstake to withdraw fund after `finalized block number`:
 ```
 $ cd $TOP/godwoken
-$ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/runner/lib/unstake.js --private-key <private key for aggregator> -f $TOP/runner_config.json -s "postgresql://user:password@127.0.0.1:5432/lumos"
+$ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/runner/lib/unstake.js --private-key <private key for block producer> -f $TOP/runner_config.json -s "postgresql://user:password@127.0.0.1:5432/lumos"
 ```
 
 ## Add Sentry Support

@@ -3,7 +3,7 @@ use gw_types::bytes::Bytes;
 use lazy_static::lazy_static;
 use std::{fs, io::Read, path::PathBuf};
 
-mod state_validator;
+pub mod state_validator;
 
 const SCRIPT_DIR: &'static str = "../../build/debug";
 const STATE_VALIDATOR: &'static str = "dummy-state-validator";
