@@ -1,7 +1,7 @@
 use super::{STAKE_LOCK_CODE_HASH, STAKE_LOCK_PROGRAM};
 use crate::tests::utils::layer1::{
-    always_success_script, build_resolved_tx, build_simple_tx, random_out_point, DummyDataLoader,
-    ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM, MAX_CYCLES,
+    always_success_script, build_resolved_tx, random_out_point, DummyDataLoader,
+    ALWAYS_SUCCESS_PROGRAM, MAX_CYCLES,
 };
 use crate::tests::validators::{
     state_validator::setup_chain, STATE_VALIDATOR_CODE_HASH, STATE_VALIDATOR_PROGRAM,
@@ -9,27 +9,12 @@ use crate::tests::validators::{
 use ckb_error::assert_error_eq;
 use ckb_script::{ScriptError, TransactionScriptsVerifier};
 use ckb_types::{
-    bytes::Bytes,
     core::ScriptHashType,
     packed::{Byte32, CellDep, CellInput, CellOutput, Script, Transaction, WitnessArgs},
     prelude::*,
 };
-use gw_chain::{
-    chain::{Chain, ProduceBlockParam},
-    mem_pool::{MemPool, PackageParam},
-    next_block_context::NextBlockContext,
-};
-use gw_config::{ChainConfig, GenesisConfig};
-use gw_generator::{
-    account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
-    backend_manage::BackendManage,
-    genesis::init_genesis,
-    Generator,
-};
-use gw_store::Store;
+use gw_chain::{chain::ProduceBlockParam, mem_pool::PackageParam};
 use gw_types::packed::StakeLockArgs;
-use parking_lot::Mutex;
-use std::sync::Arc;
 const INVALID_STAKE_CELL_UNLOCK: i8 = 15;
 
 fn stake_lock_script(
@@ -353,6 +338,7 @@ fn unlock_stake_lock_by_rollup_cell_works() {
     verifier.verify(MAX_CYCLES).expect("return success");
 }
 
+// TODO
 // #[test]
 // when unlock stake_lock by rollup cell
 // 1. (valid) stake_cell_input's stake_block_number = 0 and stake_cell_output's stake_block_number =
@@ -360,6 +346,5 @@ fn unlock_stake_lock_by_rollup_cell_works() {
 // 2. (valid) stake_cell_inputs' stake_block_number = stake_cell_output's stake_block_number
 // 3. (invalid) stake_cell_inputs' stake_block_number > 0 and != stake_cell_output's
 //    stake_block_number (attempt to forge the stake_block_number)
-fn unlock_stake_lock_by_rollup_cell_failed_for_invalid_stake_block_number() {
-    // TODO
-}
+//fn unlock_stake_lock_by_rollup_cell_failed_for_invalid_stake_block_number() {
+//}
