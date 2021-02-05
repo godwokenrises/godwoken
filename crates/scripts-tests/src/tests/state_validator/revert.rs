@@ -1,25 +1,31 @@
 use super::*;
 use crate::tests::utils::layer1::build_simple_tx;
-use ckb_types::prelude::{Pack as CKBPack, Unpack};
+use ckb_types::{
+    packed::CellInput,
+    prelude::{Pack as CKBPack, Unpack as CKBUnpack},
+};
 use gw_chain::testing_tools::{
     apply_block_result, setup_chain, ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH,
 };
 use gw_chain::{
     chain::ProduceBlockParam, mem_pool::PackageParam, next_block_context::NextBlockContext,
 };
-use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State};
+use gw_common::{
+    builtins::CKB_SUDT_ACCOUNT_ID, h256_ext::H256Ext,
+    sparse_merkle_tree::default_store::DefaultStore, state::State, H256,
+};
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType, Status},
     packed::{
-        ChallengeLockArgs, ChallengeTarget, ChallengeWitness, DepositionRequest, L2Transaction,
-        RawL2Transaction, RollupAction, RollupActionUnion, RollupConfig, RollupEnterChallenge,
-        SUDTArgs, SUDTArgsUnion, SUDTTransfer, Script,
+        ChallengeLockArgs, ChallengeTarget, DepositionRequest, L2Transaction, RawL2Transaction,
+        RollupAction, RollupActionUnion, RollupConfig, RollupRevert, SUDTArgs, SUDTArgsUnion,
+        SUDTTransfer, Script,
     },
 };
 
 #[test]
-fn test_enter_challenge() {
+fn test_revert() {
     let rollup_type_script = {
         Script::new_builder()
             .code_hash(Pack::pack(&*STATE_VALIDATOR_CODE_HASH))
@@ -27,11 +33,24 @@ fn test_enter_challenge() {
             .build()
     };
     // rollup lock & config
+    let reward_receive_lock = always_success_script()
+        .as_builder()
+        .args(CKBPack::pack(&Bytes::from(b"reward_receive_lock".to_vec())))
+        .build();
+    let reward_burn_lock = ckb_types::packed::Script::new_builder()
+        .args(CKBPack::pack(&Bytes::from(b"reward_burned_lock".to_vec())))
+        .code_hash(CKBPack::pack(&[0u8; 32]))
+        .build();
+    let reward_burn_lock_hash: [u8; 32] = reward_burn_lock.calc_script_hash().unpack();
     let stake_lock_type = build_type_id_script(b"stake_lock_type_id");
+    let stake_script_type_hash: [u8; 32] = stake_lock_type.calc_script_hash().unpack();
     let challenge_lock_type = build_type_id_script(b"challenge_lock_type_id");
     let challenge_script_type_hash: [u8; 32] = challenge_lock_type.calc_script_hash().unpack();
     let rollup_config = RollupConfig::new_builder()
+        .stake_script_type_hash(Pack::pack(&stake_script_type_hash))
         .challenge_script_type_hash(Pack::pack(&challenge_script_type_hash))
+        .reward_burn_rate(50u8.into())
+        .burn_lock_hash(Pack::pack(&reward_burn_lock_hash))
         .build();
     // setup chain
     let mut chain = setup_chain(rollup_type_script.clone(), rollup_config.clone());
@@ -39,7 +58,7 @@ fn test_enter_challenge() {
     let capacity = 1000_00000000u64;
     let rollup_cell = build_always_success_cell(capacity, Some(state_validator_script()));
     // produce a block so we can challenge it
-    {
+    let prev_block_merkle = {
         // deposit two account
         let sender_script = Script::new_builder()
             .code_hash(Pack::pack(&ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.clone()))
@@ -137,6 +156,7 @@ fn test_enter_challenge() {
                 pkg,
             )
             .unwrap();
+        let prev_block_merkle = chain.local_state.last_global_state().block();
         apply_block_result(
             &mut chain,
             rollup_cell,
@@ -144,16 +164,29 @@ fn test_enter_challenge() {
             produce_block_result,
             vec![],
         );
-    }
+        prev_block_merkle
+    };
     // deploy scripts
     let param = CellContextParam {
         stake_lock_type: stake_lock_type.clone(),
+        challenge_lock_type: challenge_lock_type.clone(),
         ..Default::default()
     };
     let mut ctx = CellContext::new(&rollup_config, param);
-    let challenged_block = chain.local_state.tip().clone();
+    let stake_capacity = 10000_00000000u64;
+    let input_stake_cell = {
+        let cell = build_stake_cell(
+            &rollup_type_script.hash(),
+            &stake_script_type_hash,
+            stake_capacity,
+            StakeLockArgs::default(),
+        );
+        let out_point = ctx.insert_cell(cell, Bytes::default());
+        CellInput::new_builder().previous_output(out_point).build()
+    };
     let challenge_capacity = 10000_00000000u64;
-    let challenge_cell = {
+    let challenged_block = chain.local_state.tip().clone();
+    let input_challenge_cell = {
         let lock_args = ChallengeLockArgs::new_builder()
             .target(
                 ChallengeTarget::new_builder()
@@ -162,16 +195,48 @@ fn test_enter_challenge() {
                     .block_hash(Pack::pack(&challenged_block.hash()))
                     .build(),
             )
+            .rewards_receiver_lock(gw_types::packed::Script::new_unchecked(
+                reward_receive_lock.as_bytes(),
+            ))
             .build();
-        build_challenge_cell(
+        let cell = build_challenge_cell(
             &rollup_type_script.hash(),
             &challenge_script_type_hash,
             challenge_capacity,
             lock_args,
-        )
+        );
+        let out_point = ctx.insert_cell(cell, Bytes::new());
+        let since: u64 = {
+            let mut since = 1 << 63;
+            since |= rollup_config.challenge_maturity_blocks().unpack();
+            since
+        };
+        CellInput::new_builder()
+            .since(CKBPack::pack(&since))
+            .previous_output(out_point)
+            .build()
     };
-    let global_state = chain.local_state.last_global_state();
+    let burn_rate: u8 = rollup_config.reward_burn_rate().into();
+    let reward_capacity: u64 = stake_capacity * burn_rate as u64 / 100;
+    let received_capacity: u64 = reward_capacity + challenge_capacity;
+    let burned_capacity: u64 = stake_capacity - reward_capacity;
+    let receive_cell = CellOutput::new_builder()
+        .capacity(CKBPack::pack(&received_capacity))
+        .lock(reward_receive_lock)
+        .build();
+    let reward_burned_cell = CellOutput::new_builder()
+        .capacity(CKBPack::pack(&burned_capacity))
+        .lock(reward_burn_lock)
+        .build();
+    let global_state = chain
+        .local_state
+        .last_global_state()
+        .clone()
+        .as_builder()
+        .status(Status::Halting.into())
+        .build();
     let initial_rollup_cell_data = global_state.as_bytes();
+    let mut reverted_block_tree: gw_common::smt::SMT<DefaultStore<H256>> = Default::default();
     // verify enter challenge
     let witness = {
         let block_proof: Bytes = {
@@ -190,23 +255,48 @@ fn test_enter_challenge() {
                 .0
                 .into()
         };
-        let witness = ChallengeWitness::new_builder()
-            .raw_l2block(challenged_block.raw())
-            .block_proof(Pack::pack(&block_proof))
-            .build();
+        let reverted_block_proof: Bytes = {
+            reverted_block_tree
+                .merkle_proof(vec![challenged_block.hash().into()])
+                .unwrap()
+                .compile(vec![(challenged_block.hash().into(), H256::zero())])
+                .unwrap()
+                .0
+                .into()
+        };
         let rollup_action = RollupAction::new_builder()
-            .set(RollupActionUnion::RollupEnterChallenge(
-                RollupEnterChallenge::new_builder().witness(witness).build(),
+            .set(RollupActionUnion::RollupRevert(
+                RollupRevert::new_builder()
+                    .reverted_blocks(vec![challenged_block.raw()].pack())
+                    .block_proof(Pack::pack(&block_proof))
+                    .reverted_block_proof(Pack::pack(&reverted_block_proof))
+                    .build(),
             ))
             .build();
         ckb_types::packed::WitnessArgs::new_builder()
             .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
+    let post_reverted_block_root = {
+        reverted_block_tree
+            .update(challenged_block.hash().into(), H256::one())
+            .unwrap();
+        reverted_block_tree.root().clone()
+    };
+    let last_finalized_block_number = {
+        let number: u64 = challenged_block.raw().number().unpack();
+        let finalize_blocks = rollup_config.finality_blocks().unpack();
+        (number - 1).saturating_sub(finalize_blocks)
+    };
     let rollup_cell_data = global_state
         .clone()
         .as_builder()
-        .status(Status::Halting.into())
+        .status(Status::Running.into())
+        .reverted_block_root(Pack::pack(&post_reverted_block_root))
+        .last_finalized_block_number(Pack::pack(&last_finalized_block_number))
+        .account(challenged_block.raw().prev_account())
+        .block(prev_block_merkle)
+        .tip_block_hash(challenged_block.raw().parent_block_hash())
         .build()
         .as_bytes();
     let tx = build_simple_tx(
@@ -215,13 +305,19 @@ fn test_enter_challenge() {
         (rollup_cell, rollup_cell_data),
     )
     .as_advanced_builder()
-    .output(challenge_cell)
-    .output_data(CKBPack::pack(&Bytes::default()))
+    .input(input_challenge_cell)
+    .input(input_stake_cell)
+    .output(receive_cell)
+    .output_data(Default::default())
+    .output(reward_burned_cell)
+    .output_data(Default::default())
+    .cell_dep(ctx.challenge_lock_dep.clone())
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
     .witness(CKBPack::pack(&witness.as_bytes()))
+    .witness(CKBPack::pack(&Bytes::new()))
     .build();
     ctx.verify_tx(tx).expect("return success");
 }

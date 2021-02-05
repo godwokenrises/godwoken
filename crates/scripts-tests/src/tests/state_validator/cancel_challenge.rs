@@ -156,12 +156,14 @@ fn test_cancel_challenge() {
     };
     let mut ctx = CellContext::new(&rollup_config, param);
     let challenge_capacity = 10000_00000000u64;
+    let challenged_block = chain.local_state.tip().clone();
     let input_challenge_cell = {
         let lock_args = ChallengeLockArgs::new_builder()
             .target(
                 ChallengeTarget::new_builder()
                     .target_index(Pack::pack(&0u32))
                     .target_type(ChallengeTargetType::Transaction.into())
+                    .block_hash(Pack::pack(&challenged_block.hash()))
                     .build(),
             )
             .build();
@@ -194,7 +196,6 @@ fn test_cancel_challenge() {
             .build()
     };
     let challenge_witness = {
-        let challenged_block = chain.local_state.tip().clone();
         let block_proof: Bytes = {
             let db = chain.store().begin_transaction();
             let proof = db

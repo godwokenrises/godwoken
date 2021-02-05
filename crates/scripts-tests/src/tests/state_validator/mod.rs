@@ -19,6 +19,7 @@ use std::{fs, io::Read, path::PathBuf};
 
 mod cancel_challenge;
 mod enter_challenge;
+mod revert;
 mod submit_block;
 
 const SCRIPT_DIR: &'static str = "../../build/debug";

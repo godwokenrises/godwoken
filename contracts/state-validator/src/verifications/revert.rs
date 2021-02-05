@@ -43,7 +43,7 @@ fn check_challenge_maturity(
 
         _ => {}
     }
-    Err(Error::InvalidStatus)
+    Err(Error::InvalidChallengeCell)
 }
 
 fn check_challenge_cell(
@@ -93,17 +93,18 @@ fn check_rewards(
     reverted_blocks: &[RawL2Block],
     challenge_cell: &ChallengeCell,
 ) -> Result<(), Error> {
-    let reverted_stake_set: BTreeSet<_> = reverted_blocks
+    let reverted_block_stake_set: BTreeSet<_> = reverted_blocks
         .iter()
         .map(|b| b.stake_cell_owner_lock_hash())
         .collect();
 
-    // ensure all input stake cells are belongs to reverted blocks
     let stake_cells = collect_stake_cells(rollup_type_hash, config, Source::Input)?;
-    if !stake_cells
+    let reverted_stake_cells_set: BTreeSet<_> = stake_cells
         .iter()
-        .all(|cell| reverted_stake_set.contains(&cell.args.owner_lock_hash()))
-    {
+        .map(|cell| cell.args.owner_lock_hash())
+        .collect();
+    // ensure stake cells are all belongs to reverted blocks and no missing stake cells
+    if reverted_block_stake_set != reverted_stake_cells_set {
         return Err(Error::InvalidStakeCell);
     }
 
@@ -144,7 +145,7 @@ fn check_rewards(
         output_burned_capacity.saturating_sub(input_burned_capacity)
     };
     if burned_capacity < expected_burn_capacity {
-        return Err(Error::InvalidStatus);
+        return Err(Error::InvalidChallengeReward);
     }
     Ok(())
 }
@@ -183,7 +184,8 @@ fn check_reverted_blocks(
         }
 
         // must revert from current point to the tip block
-        let tip_number: u64 = prev_global_state.block().count().unpack();
+        let count: u64 = prev_global_state.block().count().unpack();
+        let tip_number = count - 1;
         if prev_number != tip_number {
             return Err(Error::InvalidRevertedBlocks);
         }
@@ -205,21 +207,21 @@ fn check_reverted_blocks(
     // prove the target block isn't in the prev reverted block root
     let reverted_block_merkle_proof =
         CompiledMerkleProof(revert_args.reverted_block_proof().unpack());
-    let is_reverted_block_prev = {
-        let leaves = reverted_block_hashes
+    let is_not_prev_reverted_block = {
+        let reverted_block_root: H256 = prev_global_state.reverted_block_root().unpack();
+        let leaves: Vec<_> = reverted_block_hashes
             .clone()
             .into_iter()
             .map(|hash| (hash, H256::zero()))
             .collect();
-        reverted_block_merkle_proof
-            .verify::<Blake2bHasher>(&prev_global_state.reverted_block_root().unpack(), leaves)?
+        reverted_block_merkle_proof.verify::<Blake2bHasher>(&reverted_block_root, leaves)?
     };
-    if is_reverted_block_prev {
+    if !is_not_prev_reverted_block {
         return Err(Error::InvalidRevertedBlocks);
     }
     // prove the target block in the post reverted block root
-    let is_reverted_block_post = {
-        let leaves = reverted_block_hashes
+    let is_post_reverted_block = {
+        let leaves: Vec<_> = reverted_block_hashes
             .clone()
             .into_iter()
             .map(|hash| (hash, H256::one()))
@@ -227,7 +229,7 @@ fn check_reverted_blocks(
         reverted_block_merkle_proof
             .verify::<Blake2bHasher>(&post_global_state.reverted_block_root().unpack(), leaves)?
     };
-    if !is_reverted_block_post {
+    if !is_post_reverted_block {
         return Err(Error::InvalidRevertedBlocks);
     }
     let reverted_block_root = post_global_state.reverted_block_root();
