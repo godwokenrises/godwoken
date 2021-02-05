@@ -94,10 +94,11 @@ function getRollupTypeHash(runnerConfig: RunnerConfig): HexString {
     .serializeJson();
 }
 
-async function queryValidStakeCellByOwnerLockHash(
+async function queryValidStakeCell(
   indexer: Indexer,
   ownerLockHash: HexString,
-  runnerConfig: RunnerConfig
+  runnerConfig: RunnerConfig,
+  lastFinalizedBlockNumber: HexString
 ): Promise<Cell> {
   const stakeCellQueryOptions: QueryOptions = {
     lock: {
@@ -112,8 +113,11 @@ async function queryValidStakeCellByOwnerLockHash(
   const cellCollector = indexer.collector(stakeCellQueryOptions);
   for await (const cell of cellCollector.collect()) {
     const stakeLockArgs = unpackStakeLockArgs(cell.cell_output.lock.args);
-    // if (ownerLockHash === stakeLockArgs.owner_lock_hash && BigInt(stakeLockArgs.stake_block_number) <= BigInt(globalState.last_finalized_block_number)) {
-    if (ownerLockHash === stakeLockArgs.owner_lock_hash) {
+    if (
+      ownerLockHash === stakeLockArgs.owner_lock_hash &&
+      BigInt(stakeLockArgs.stake_block_number) <=
+        BigInt(lastFinalizedBlockNumber)
+    ) {
       return cell;
     }
   }
@@ -220,10 +224,15 @@ const run = async () => {
     witnesses.push(buildSecp256k1WitnessArgsPlaceHolder())
   );
   // Add input stake cell
-  const stakeCell: Cell = await queryValidStakeCellByOwnerLockHash(
+  const globalState = types.DenormalizeGlobalState(
+    new schemas.GlobalState(new Reader(rollupCell.data).toArrayBuffer())
+  );
+
+  const stakeCell: Cell = await queryValidStakeCell(
     indexer,
     ownerLockHash,
-    runnerConfig
+    runnerConfig,
+    globalState.last_finalized_block_number
   );
   txSkeleton = txSkeleton.update("inputs", (inputs) => inputs.push(stakeCell));
   txSkeleton = txSkeleton.update("witnesses", (witnesses) =>

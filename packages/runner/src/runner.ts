@@ -578,7 +578,7 @@ export class Runner {
           medianTimeHex,
           txSkeleton
         );
-        txSkeleton = await this._injectStakeCell(txSkeleton);
+        txSkeleton = await this._injectStakeCell(txSkeleton, packedl2Block);
 
         txSkeleton = await this._injectWithdrawalRequest(
           txSkeleton,
@@ -1133,7 +1133,8 @@ export class Runner {
   }
 
   async _injectStakeCell(
-    txSkeleton: TransactionSkeletonType
+    txSkeleton: TransactionSkeletonType,
+    packedl2Block: HexString
   ): Promise<TransactionSkeletonType> {
     // Add stake lock dep
     txSkeleton = txSkeleton.update("cellDeps", (cellDeps) => {
@@ -1151,20 +1152,19 @@ export class Runner {
       oldStakeCell.cell_output.lock!.args
     );
     // Update stake_block_number to the current L2 block number
-    if (BigInt(oldStakeLockArgs.stake_block_number) === BigInt(0)) {
-      const globalState = types.DenormalizeGlobalState(
-        await this._queryGlobalState()
-      );
-      const updatedStakeBlockNumber =
-        BigInt(globalState.last_finalized_block_number) + BigInt(1);
-      const newStakeLockArgs = {
-        owner_lock_hash: oldStakeLockArgs.owner_lock_hash,
-        stake_block_number: "0x" + updatedStakeBlockNumber.toString(16),
-      };
-      newStakeCell.cell_output.lock!.args = this._packStakeLockArgs(
-        newStakeLockArgs
-      );
-    }
+    const l2Block = new schemas.L2Block(
+      new Reader(packedl2Block).toArrayBuffer()
+    );
+    const rawL2Block = l2Block.getRaw();
+    const l2BlockNumber =
+      "0x" + rawL2Block.getNumber().toLittleEndianBigUint64().toString(16);
+    const newStakeLockArgs = {
+      owner_lock_hash: oldStakeLockArgs.owner_lock_hash,
+      stake_block_number: l2BlockNumber,
+    };
+    newStakeCell.cell_output.lock!.args = this._packStakeLockArgs(
+      newStakeLockArgs
+    );
     txSkeleton = txSkeleton.update("outputs", (outputs) =>
       outputs.push(newStakeCell)
     );

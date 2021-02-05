@@ -161,7 +161,7 @@ $ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/tools/lib/deploy_genesi
 
 ## Stake
 
-Anyone can stake to becom a block producer:
+Anyone can stake to become a block producer:
 
 ```
 $ cd $TOP/godwoken
