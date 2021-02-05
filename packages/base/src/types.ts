@@ -200,6 +200,16 @@ export function NormalizeWithdrawalLockArgs(
   });
 }
 
+export function NormalizeStakeLockArgs(
+  args: object,
+  { debugPath = "stake_lock_args" } = {}
+) {
+  return normalizeObject(debugPath, args, {
+    stake_block_number: normalizeHexNumber(8),
+    owner_lock_hash: normalizeRawData(32),
+  });
+}
+
 export function DenormalizeCustodianLockArgs(
   custodianLockArgs: schemas.CustodianLockArgs
 ) {
@@ -249,5 +259,19 @@ export function DenormalizeGlobalState(globalState: schemas.GlobalState) {
         .toLittleEndianBigUint64()
         .toString(16),
     status: globalState.getStatus(),
+  };
+}
+
+export function DenormalizeStakeLockArgs(stakeLockArgs: schemas.StakeLockArgs) {
+  return {
+    stake_block_number:
+      "0x" +
+      stakeLockArgs
+        .getStakeBlockNumber()
+        .toLittleEndianBigUint64()
+        .toString(16),
+    owner_lock_hash: new Reader(
+      stakeLockArgs.getOwnerLockHash().raw()
+    ).serializeJson(),
   };
 }
