@@ -42,13 +42,16 @@ pub fn verify_enter_challenge(
     if !valid {
         return Err(Error::MerkleProof);
     }
-    let target_type: ChallengeTargetType = challenge_cell
-        .args
-        .target()
+    let challenge_target = challenge_cell.args.target();
+    let challenged_block_hash: [u8; 32] = challenge_target.block_hash().unpack();
+    if challenged_block.hash() != challenged_block_hash {
+        return Err(Error::InvalidChallengeTarget);
+    }
+    let target_type: ChallengeTargetType = challenge_target
         .target_type()
         .try_into()
         .map_err(|_| Error::InvalidChallengeTarget)?;
-    let target_index: u32 = challenge_cell.args.target().target_index().unpack();
+    let target_index: u32 = challenge_target.target_index().unpack();
     match target_type {
         ChallengeTargetType::Transaction => {
             let tx_count: u32 = challenged_block.submit_transactions().tx_count().unpack();
