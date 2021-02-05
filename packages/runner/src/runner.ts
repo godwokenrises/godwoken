@@ -607,7 +607,6 @@ export class Runner {
         const tx = sealTransaction(txSkeleton, signatures);
 
         try {
-          console.log(JSON.stringify(tx, null, 2));
           const hash = await this.rpc.send_transaction(tx);
           this.logger("info", `Submitted l2 block in ${hash}`);
         } catch (e) {
