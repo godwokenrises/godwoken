@@ -563,6 +563,7 @@ impl Chain {
             SubmitTransactions::new_builder()
                 .tx_witness_root(tx_witness_root.pack())
                 .tx_count(tx_count.pack())
+                .compacted_prev_root_hash(mem_pool_package.compacted_prev_root_hash.pack())
                 .compacted_post_root_list(compacted_post_root_list.pack())
                 .build()
         };

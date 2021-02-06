@@ -18,6 +18,7 @@ pub enum Error {
     RollupCellNotFound,
     RollupConfigNotFound,
     ProofNotFound,
+    AccountNotFound,
     MerkleProof,
     AmountOverflow,
     InsufficientAmount,
@@ -37,6 +38,7 @@ pub enum Error {
     InvalidChallengeReward,
     InvalidSUDTCell,
     InvalidChallengeTarget,
+    InvalidWithdrawalRequest,
 }
 
 impl From<SysError> for Error {

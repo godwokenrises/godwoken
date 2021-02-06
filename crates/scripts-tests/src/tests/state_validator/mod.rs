@@ -1,6 +1,6 @@
 use crate::tests::utils::layer1::{
     always_success_script, build_resolved_tx, random_out_point, DummyDataLoader,
-    ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM, MAX_CYCLES,
+    ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM, CHALLENGE_LOCK_PROGRAM, MAX_CYCLES,
 };
 use ckb_script::TransactionScriptsVerifier;
 use ckb_types::{
@@ -127,10 +127,10 @@ impl CellContext {
                 out_point.clone(),
                 (
                     CellOutput::new_builder()
-                        .capacity(CKBPack::pack(&(ALWAYS_SUCCESS_PROGRAM.len() as u64)))
+                        .capacity(CKBPack::pack(&(CHALLENGE_LOCK_PROGRAM.len() as u64)))
                         .type_(CKBPack::pack(&Some(param.challenge_lock_type.clone())))
                         .build(),
-                    ALWAYS_SUCCESS_PROGRAM.clone(),
+                    CHALLENGE_LOCK_PROGRAM.clone(),
                 ),
             );
             CellDep::new_builder().out_point(out_point).build()

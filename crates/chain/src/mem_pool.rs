@@ -195,6 +195,10 @@ impl MemPool {
     /// this method return a mem pool package contains txs and withdrawal requests,
     /// and remove these from the pool
     pub fn package(&mut self, param: PackageParam) -> Result<MemPoolPackage> {
+        // TODO fix package
+        // the package method should packs the items in order:
+        // withdrawals, then deposits, finally the txs. Thus, the state-validator can verify this correctly
+        let compacted_prev_root_hash = self.state.calculate_compacted_account_root()?;
         let txs_limit = min(MAX_PACKAGED_TXS, self.queue.len());
         let tx_iter = self.queue.iter().take(txs_limit);
         let txs = tx_iter.clone().map(|(tx, _)| tx).cloned().collect();
@@ -263,6 +267,7 @@ impl MemPool {
             prev_account_state: self.next_prev_account_state.clone(),
             post_account_state,
             withdrawal_requests,
+            compacted_prev_root_hash,
             total_withdrawal_capacity,
         };
         Ok(pkg)
@@ -343,13 +348,15 @@ pub struct PackageParam {
 pub struct MemPoolPackage {
     /// txs
     pub txs: Vec<L2Transaction>,
+    /// compacted state before execute txs
+    pub compacted_prev_root_hash: H256,
     /// tx receipts
     pub tx_receipts: Vec<TxReceipt>,
     /// txs touched keys, both reads and writes
     pub touched_keys: HashSet<H256>,
-    /// state of last block
+    /// state before this block
     pub prev_account_state: MerkleState,
-    /// state after handling depositin requests
+    /// state after this block
     pub post_account_state: MerkleState,
     /// withdrawal requests
     pub withdrawal_requests: Vec<WithdrawalRequest>,

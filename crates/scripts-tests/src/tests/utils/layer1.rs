@@ -16,6 +16,7 @@ use std::{collections::HashMap, fs, io::Read, path::PathBuf};
 
 const SCRIPT_DIR: &'static str = "../../build/debug";
 const ALWAYS_SUCCESS_PATH: &'static str = "always-success";
+const CHALLENGE_LOCK_PATH: &'static str = "challenge-lock";
 
 lazy_static! {
     pub static ref ALWAYS_SUCCESS_PROGRAM: Bytes = {
@@ -31,6 +32,22 @@ lazy_static! {
         let mut buf = [0u8; 32];
         let mut hasher = new_blake2b();
         hasher.update(&ALWAYS_SUCCESS_PROGRAM);
+        hasher.finalize(&mut buf);
+        buf
+    };
+    pub static ref CHALLENGE_LOCK_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut path = PathBuf::new();
+        path.push(&SCRIPT_DIR);
+        path.push(&CHALLENGE_LOCK_PATH);
+        let mut f = fs::File::open(&path).expect("load program");
+        f.read_to_end(&mut buf).expect("read program");
+        Bytes::from(buf.to_vec())
+    };
+    pub static ref CHALLENGE_LOCK_CODE_HASH: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&CHALLENGE_LOCK_PROGRAM);
         hasher.finalize(&mut buf);
         buf
     };

@@ -24,7 +24,7 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     error::Error as StateError,
     h256_ext::H256Ext,
-    merkle_utils::calculate_merkle_root,
+    merkle_utils::{calculate_compacted_account_root, calculate_merkle_root},
     smt::{Blake2bHasher, CompiledMerkleProof},
     state::State,
     CKB_SUDT_SCRIPT_ARGS, H256,
@@ -33,13 +33,14 @@ use gw_types::{
     bytes::Bytes,
     core::Status,
     packed::{
-        AccountMerkleState, GlobalState, L2Block, RawL2Block, RollupConfig, WithdrawalRequest,
+        AccountMerkleState, Byte32, GlobalState, L2Block, RawL2Block, RollupConfig,
+        WithdrawalRequest,
     },
     prelude::*,
 };
 
 fn check_withdrawal_cells(
-    context: &mut BlockContext,
+    context: &BlockContext,
     mut withdrawal_requests: Vec<WithdrawalRequest>,
     withdrawal_cells: &[WithdrawalCell],
 ) -> Result<(), Error> {
@@ -84,7 +85,7 @@ fn check_withdrawal_cells(
 
 fn check_input_custodian_cells(
     config: &RollupConfig,
-    context: &mut BlockContext,
+    context: &BlockContext,
     output_withdrawal_cells: Vec<WithdrawalCell>,
 ) -> Result<(), Error> {
     // collect input custodian cells
@@ -154,7 +155,7 @@ fn check_input_custodian_cells(
 
 fn check_output_custodian_cells(
     config: &RollupConfig,
-    context: &mut BlockContext,
+    context: &BlockContext,
 ) -> Result<(), Error> {
     // collect output custodian cells
     let (finalized_custodian_cells, unfinalized_custodian_cells): (Vec<_>, Vec<_>) =
@@ -260,23 +261,31 @@ fn mint_layer2_sudt(config: &RollupConfig, context: &mut BlockContext) -> Result
 fn burn_layer2_sudt(
     config: &RollupConfig,
     context: &mut BlockContext,
-    withdrawal_cells: &[WithdrawalCell],
+    block: &L2Block,
 ) -> Result<(), Error> {
-    for request in withdrawal_cells {
+    for request in block.withdrawals() {
+        let raw = request.raw();
         let l2_sudt_script_hash: [u8; 32] =
-            build_l2_sudt_script(config, request.value.sudt_script_hash.into()).hash();
+            build_l2_sudt_script(config, raw.sudt_script_hash().unpack()).hash();
         // find user account
         let id = context
-            .get_account_id_by_script_hash(&request.args.account_script_hash().unpack())?
+            .get_account_id_by_script_hash(&raw.account_script_hash().unpack())?
             .ok_or(StateError::MissingKey)?;
         // burn CKB
-        context.burn_sudt(CKB_SUDT_ACCOUNT_ID, id, request.value.capacity.into())?;
+        context.burn_sudt(CKB_SUDT_ACCOUNT_ID, id, raw.capacity().unpack() as u128)?;
         // find Simple UDT account
         let sudt_id = context
             .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
             .ok_or(StateError::MissingKey)?;
         // burn sudt
-        context.burn_sudt(sudt_id, id, request.value.amount)?;
+        context.burn_sudt(sudt_id, id, raw.amount().unpack())?;
+        // update nonce
+        let nonce = context.get_nonce(id)?;
+        let withdrawal_nonce: u32 = raw.nonce().unpack();
+        if nonce != withdrawal_nonce {
+            return Err(Error::InvalidWithdrawalRequest);
+        }
+        context.set_nonce(id, nonce.saturating_add(1))?;
     }
 
     Ok(())
@@ -425,9 +434,10 @@ fn verify_block_producer(
     Ok(())
 }
 
-fn check_block_transactions(_context: &mut BlockContext, block: &L2Block) -> Result<(), Error> {
+fn check_block_transactions(context: &BlockContext, block: &L2Block) -> Result<(), Error> {
     // check tx_witness_root
-    let submit_transactions = block.raw().submit_transactions();
+    let raw_block = block.raw();
+    let submit_transactions = raw_block.submit_transactions();
     let tx_witness_root: [u8; 32] = submit_transactions.tx_witness_root().unpack();
     let tx_count: u32 = submit_transactions.tx_count().unpack();
     let compacted_post_root_list = submit_transactions.compacted_post_root_list();
@@ -448,10 +458,31 @@ fn check_block_transactions(_context: &mut BlockContext, block: &L2Block) -> Res
         return Err(Error::MerkleProof);
     }
 
+    // check current account tree state
+    let compacted_prev_root_hash: H256 = submit_transactions.compacted_prev_root_hash().unpack();
+    if context.calculate_compacted_account_root()? != compacted_prev_root_hash {
+        return Err(Error::InvalidTxsState);
+    }
+
+    // check post account tree state
+    let post_compacted_account_root = submit_transactions
+        .compacted_post_root_list()
+        .into_iter()
+        .last()
+        .unwrap_or(submit_transactions.compacted_prev_root_hash());
+    let block_post_compacted_account_root: Byte32 = {
+        let account = raw_block.post_account();
+        calculate_compacted_account_root(&account.merkle_root().unpack(), account.count().unpack())
+            .pack()
+    };
+    if post_compacted_account_root != block_post_compacted_account_root {
+        return Err(Error::InvalidTxsState);
+    }
+
     Ok(())
 }
 
-fn check_block_withdrawals(_context: &mut BlockContext, block: &L2Block) -> Result<(), Error> {
+fn check_block_withdrawals_root(block: &L2Block) -> Result<(), Error> {
     // check withdrawal_witness_root
     let submit_withdrawals = block.raw().submit_withdrawals();
     let withdrawal_witness_root: [u8; 32] = submit_withdrawals.withdrawal_witness_root().unpack();
@@ -483,6 +514,8 @@ pub fn verify(
     post_global_state: &GlobalState,
 ) -> Result<(), Error> {
     check_status(&prev_global_state, Status::Running)?;
+    // Check withdrawals root
+    check_block_withdrawals_root(block)?;
     let mut context = load_l2block_context(
         rollup_type_hash,
         config,
@@ -492,18 +525,14 @@ pub fn verify(
     )?;
     // Verify block producer
     verify_block_producer(config, &context, block)?;
-    // Mint token: deposition requests -> layer2 SUDT
-    mint_layer2_sudt(config, &mut context)?;
     // build withdrawl_cells
     let withdrawal_cells: Vec<_> =
         collect_withdrawal_locks(&context.rollup_type_hash, config, Source::Output)?;
-    // Withdrawal token: Layer2 SUDT -> withdrawals
-    burn_layer2_sudt(config, &mut context, &withdrawal_cells)?;
     // Check new cells and reverted cells: deposition / withdrawal / custodian
     let withdrawal_requests = block.withdrawals().into_iter().collect();
-    check_withdrawal_cells(&mut context, withdrawal_requests, &withdrawal_cells)?;
-    check_input_custodian_cells(config, &mut context, withdrawal_cells)?;
-    check_output_custodian_cells(config, &mut context)?;
+    check_withdrawal_cells(&context, withdrawal_requests, &withdrawal_cells)?;
+    check_input_custodian_cells(config, &context, withdrawal_cells)?;
+    check_output_custodian_cells(config, &context)?;
     // Ensure no challenge cells in submitting block transaction
     if find_challenge_cell(&rollup_type_hash, config, Source::Input)?.is_some()
         || find_challenge_cell(&rollup_type_hash, config, Source::Output)?.is_some()
@@ -511,10 +540,12 @@ pub fn verify(
         return Err(Error::InvalidChallengeCell);
     }
 
+    // Withdrawal token: Layer2 SUDT -> withdrawals
+    burn_layer2_sudt(config, &mut context, block)?;
+    // Mint token: deposition requests -> layer2 SUDT
+    mint_layer2_sudt(config, &mut context)?;
     // Check transactions
-    check_block_transactions(&mut context, block)?;
-    // Check withdrawals
-    check_block_withdrawals(&mut context, block)?;
+    check_block_transactions(&context, block)?;
 
     // Verify Post state
     let actual_post_global_state = {

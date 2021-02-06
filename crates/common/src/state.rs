@@ -1,6 +1,6 @@
-use crate::blake2b::new_blake2b;
 use crate::error::Error;
 use crate::h256_ext::{H256Ext, H256};
+use crate::{blake2b::new_blake2b, merkle_utils::calculate_compacted_account_root};
 use core::mem::size_of;
 
 /* Account fields flags */
@@ -158,5 +158,12 @@ pub trait State {
         balance = balance.checked_sub(amount).ok_or(Error::AmountOverflow)?;
         self.update_raw(raw_key, H256::from_u128(balance))?;
         Ok(())
+    }
+
+    /// calculate compacted account root
+    fn calculate_compacted_account_root(&self) -> Result<H256, Error> {
+        let account_root = self.calculate_root()?;
+        let account_count = self.get_account_count()?;
+        Ok(calculate_compacted_account_root(&account_root.into(), account_count).into())
     }
 }
