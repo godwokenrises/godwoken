@@ -4,9 +4,7 @@ use ckb_types::{
     packed::CellInput,
     prelude::{Pack as CKBPack, Unpack},
 };
-use gw_chain::testing_tools::{
-    apply_block_result, setup_chain, ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH,
-};
+use gw_chain::testing_tools::{apply_block_result, setup_chain, ALWAYS_SUCCESS_CODE_HASH};
 use gw_chain::{
     chain::ProduceBlockParam, mem_pool::PackageParam, next_block_context::NextBlockContext,
 };
@@ -16,8 +14,8 @@ use gw_types::{
     core::{ChallengeTargetType, ScriptHashType, Status},
     packed::{
         ChallengeLockArgs, ChallengeTarget, DepositionRequest, RawWithdrawalRequest, RollupAction,
-        RollupActionUnion, RollupCancelChallenge, RollupConfig, Script, VerifyWithdrawalWitness,
-        WithdrawalRequest,
+        RollupActionUnion, RollupCancelChallenge, RollupConfig, Script, UnlockAccountWitness,
+        VerifyWithdrawalWitness, WithdrawalRequest,
     },
 };
 
@@ -42,15 +40,15 @@ fn test_cancel_challenge_via_withdrawal() {
     let capacity = 1000_00000000u64;
     let rollup_cell = build_always_success_cell(capacity, Some(state_validator_script()));
     // produce a block so we can challenge it
-    {
+    let sender_script = {
         // deposit two account
         let sender_script = Script::new_builder()
-            .code_hash(Pack::pack(&ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.clone()))
+            .code_hash(Pack::pack(&ALWAYS_SUCCESS_CODE_HASH.clone()))
             .hash_type(ScriptHashType::Data.into())
             .args(Pack::pack(&Bytes::from(b"sender".to_vec())))
             .build();
         let receiver_script = Script::new_builder()
-            .code_hash(Pack::pack(&ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.clone()))
+            .code_hash(Pack::pack(&ALWAYS_SUCCESS_CODE_HASH.clone()))
             .hash_type(ScriptHashType::Data.into())
             .args(Pack::pack(&Bytes::from(b"receiver".to_vec())))
             .build();
@@ -129,7 +127,8 @@ fn test_cancel_challenge_via_withdrawal() {
             produce_block_result,
             vec![],
         );
-    }
+        sender_script
+    };
     // deploy scripts
     let param = CellContextParam {
         stake_lock_type: stake_lock_type.clone(),
@@ -178,11 +177,11 @@ fn test_cancel_challenge_via_withdrawal() {
             .output_type(CKBPack::pack(&Some(rollup_action.as_bytes())))
             .build()
     };
+    let withdrawal = challenged_block
+        .withdrawals()
+        .get(challenge_target_index as usize)
+        .unwrap();
     let challenge_witness = {
-        let withdrawal = challenged_block
-            .withdrawals()
-            .get(challenge_target_index as usize)
-            .unwrap();
         let witness = {
             let withdrawal_proof: Bytes = {
                 let mut tree: gw_common::smt::SMT<DefaultStore<H256>> = Default::default();
@@ -205,12 +204,40 @@ fn test_cancel_challenge_via_withdrawal() {
             };
             VerifyWithdrawalWitness::new_builder()
                 .raw_l2block(challenged_block.raw())
-                .withdrawal_request(withdrawal)
+                .withdrawal_request(withdrawal.clone())
                 .withdrawal_proof(Pack::pack(&withdrawal_proof))
                 .build()
         };
         ckb_types::packed::WitnessArgs::new_builder()
             .lock(CKBPack::pack(&Some(witness.as_bytes())))
+            .build()
+    };
+    let input_unlock_cell = {
+        let cell = CellOutput::new_builder()
+            .lock(ckb_types::packed::Script::new_unchecked(
+                sender_script.as_bytes(),
+            ))
+            .capacity(CKBPack::pack(&42u64))
+            .build();
+        let out_point = ctx.insert_cell(cell, Bytes::new());
+        CellInput::new_builder().previous_output(out_point).build()
+    };
+    let input_unlock_witness = {
+        let message = {
+            let mut hasher = new_blake2b();
+            hasher.update(&rollup_type_script.hash());
+            hasher.update(withdrawal.raw().as_slice());
+            let mut hash = [0u8; 32];
+            hasher.finalize(&mut hash);
+            hash
+        };
+        ckb_types::packed::WitnessArgs::new_builder()
+            .lock(CKBPack::pack(&Some(
+                UnlockAccountWitness::new_builder()
+                    .message(Pack::pack(&message))
+                    .build()
+                    .as_bytes(),
+            )))
             .build()
     };
     let rollup_cell_data = global_state
@@ -225,14 +252,16 @@ fn test_cancel_challenge_via_withdrawal() {
         (rollup_cell, rollup_cell_data),
     )
     .as_advanced_builder()
+    .witness(CKBPack::pack(&witness.as_bytes()))
     .input(input_challenge_cell)
+    .witness(CKBPack::pack(&challenge_witness.as_bytes()))
+    .input(input_unlock_cell)
+    .witness(CKBPack::pack(&input_unlock_witness.as_bytes()))
     .cell_dep(ctx.challenge_lock_dep.clone())
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
-    .witness(CKBPack::pack(&witness.as_bytes()))
-    .witness(CKBPack::pack(&challenge_witness.as_bytes()))
     .build();
     ctx.verify_tx(tx).expect("return success");
 }

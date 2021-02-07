@@ -1,9 +1,7 @@
 use super::*;
 use crate::tests::utils::layer1::build_simple_tx;
 use ckb_types::prelude::{Pack as CKBPack, Unpack};
-use gw_chain::testing_tools::{
-    apply_block_result, setup_chain, ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH,
-};
+use gw_chain::testing_tools::{apply_block_result, setup_chain, ALWAYS_SUCCESS_CODE_HASH};
 use gw_chain::{
     chain::ProduceBlockParam, mem_pool::PackageParam, next_block_context::NextBlockContext,
 };
@@ -42,12 +40,12 @@ fn test_enter_challenge() {
     {
         // deposit two account
         let sender_script = Script::new_builder()
-            .code_hash(Pack::pack(&ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.clone()))
+            .code_hash(Pack::pack(&ALWAYS_SUCCESS_CODE_HASH.clone()))
             .hash_type(ScriptHashType::Data.into())
             .args(Pack::pack(&Bytes::from(b"sender".to_vec())))
             .build();
         let receiver_script = Script::new_builder()
-            .code_hash(Pack::pack(&ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.clone()))
+            .code_hash(Pack::pack(&ALWAYS_SUCCESS_CODE_HASH.clone()))
             .hash_type(ScriptHashType::Data.into())
             .args(Pack::pack(&Bytes::from(b"receiver".to_vec())))
             .build();
