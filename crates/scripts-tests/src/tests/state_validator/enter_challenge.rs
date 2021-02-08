@@ -161,11 +161,11 @@ fn test_enter_challenge() {
                     .build(),
             )
             .build();
-        build_challenge_cell(
+        build_rollup_locked_cell(
             &rollup_type_script.hash(),
             &challenge_script_type_hash,
             challenge_capacity,
-            lock_args,
+            lock_args.as_bytes(),
         )
     };
     let global_state = chain.local_state.last_global_state();

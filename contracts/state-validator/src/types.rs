@@ -19,19 +19,21 @@ pub struct DepositionRequest {
     pub account_script_hash: H256,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct CellValue {
     pub sudt_script_hash: H256,
     pub amount: u128,
     pub capacity: u64,
 }
 
+#[derive(Debug)]
 pub struct WithdrawalCell {
     pub index: usize,
     pub args: WithdrawalLockArgs,
     pub value: CellValue,
 }
 
+#[derive(Clone)]
 pub struct DepositionRequestCell {
     pub index: usize,
     pub args: DepositionLockArgs,
@@ -39,6 +41,7 @@ pub struct DepositionRequestCell {
     pub account_script_hash: H256,
 }
 
+#[derive(Debug)]
 pub struct CustodianCell {
     pub index: usize,
     pub args: CustodianLockArgs,

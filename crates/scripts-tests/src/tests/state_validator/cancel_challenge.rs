@@ -149,11 +149,11 @@ fn test_cancel_challenge_via_withdrawal() {
                     .build(),
             )
             .build();
-        let cell = build_challenge_cell(
+        let cell = build_rollup_locked_cell(
             &rollup_type_script.hash(),
             &challenge_script_type_hash,
             challenge_capacity,
-            lock_args,
+            lock_args.as_bytes(),
         );
         let out_point = ctx.insert_cell(cell, Bytes::new());
         CellInput::new_builder().previous_output(out_point).build()

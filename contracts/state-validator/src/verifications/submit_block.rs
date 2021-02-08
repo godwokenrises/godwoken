@@ -13,7 +13,7 @@ use crate::{
         collect_withdrawal_locks, find_challenge_cell, find_one_stake_cell,
     },
     ckb_std::ckb_constants::Source,
-    types::WithdrawalCell,
+    types::{CellValue, DepositionRequestCell, WithdrawalCell},
 };
 
 use super::check_status;
@@ -38,6 +38,23 @@ use gw_types::{
     },
     prelude::*,
 };
+
+fn build_assets_map_from_cells<'a, I: Iterator<Item = &'a CellValue>>(
+    cells: I,
+) -> Result<BTreeMap<H256, u128>, Error> {
+    let mut assets = BTreeMap::new();
+    for cell in cells {
+        let sudt_balance = assets.entry(cell.sudt_script_hash).or_insert(0u128);
+        *sudt_balance = sudt_balance
+            .checked_add(cell.amount)
+            .ok_or(Error::AmountOverflow)?;
+        let ckb_balance = assets.entry(CKB_SUDT_SCRIPT_ARGS.into()).or_insert(0u128);
+        *ckb_balance = ckb_balance
+            .checked_add(cell.capacity.into())
+            .ok_or(Error::AmountOverflow)?;
+    }
+    Ok(assets)
+}
 
 fn check_withdrawal_cells(
     context: &BlockContext,
@@ -87,7 +104,7 @@ fn check_input_custodian_cells(
     config: &RollupConfig,
     context: &BlockContext,
     output_withdrawal_cells: Vec<WithdrawalCell>,
-) -> Result<(), Error> {
+) -> Result<BTreeMap<H256, u128>, Error> {
     // collect input custodian cells
     let (finalized_custodian_cells, unfinalized_custodian_cells): (Vec<_>, Vec<_>) =
         collect_custodian_locks(&context.rollup_type_hash, config, Source::Input)?
@@ -96,66 +113,42 @@ fn check_input_custodian_cells(
                 let number: u64 = cell.args.deposition_block_number().unpack();
                 number <= context.finalized_number
             });
-    // check finalized custodian cells == withdrawal cells
-    // we only need to verify the assets is equal
-    {
-        let mut withdrawal_assets = BTreeMap::new();
-        for withdrawal in output_withdrawal_cells {
-            let sudt_balance = withdrawal_assets
-                .entry(withdrawal.value.sudt_script_hash)
-                .or_insert(0u128);
-            *sudt_balance = sudt_balance
-                .checked_add(withdrawal.value.amount)
-                .ok_or(Error::AmountOverflow)?;
-            let ckb_balance = withdrawal_assets
-                .entry(CKB_SUDT_SCRIPT_ARGS.into())
-                .or_insert(0u128);
-            *ckb_balance = ckb_balance
-                .checked_add(withdrawal.value.capacity.into())
-                .ok_or(Error::AmountOverflow)?;
-        }
-        for cell in finalized_custodian_cells {
-            let sudt_balance = withdrawal_assets
-                .entry(cell.value.sudt_script_hash)
-                .or_insert(0);
-            *sudt_balance = sudt_balance
-                .checked_sub(cell.value.amount)
-                .ok_or(Error::AmountOverflow)?;
-            let ckb_balance = withdrawal_assets
-                .entry(CKB_SUDT_SCRIPT_ARGS.into())
-                .or_insert(0);
-            *ckb_balance = ckb_balance
-                .checked_sub(cell.value.capacity.into())
-                .ok_or(Error::AmountOverflow)?;
-        }
-        // failed to check the equality
-        if !withdrawal_assets.values().all(|&v| v == 0) {
-            return Err(Error::InvalidWithdrawalCell);
-        }
-    }
-
     // check unfinalized custodian cells == reverted deposition requests
-    let mut reverted_deposition_cells =
+    let mut reverted_deposit_cells =
         collect_deposition_locks(&context.rollup_type_hash, config, Source::Output)?;
     for custodian_cell in unfinalized_custodian_cells {
-        let index = reverted_deposition_cells
+        let index = reverted_deposit_cells
             .iter()
             .position(|cell| {
                 custodian_cell.args.deposition_lock_args() == cell.args
                     && custodian_cell.value == cell.value
             })
             .ok_or(Error::InvalidWithdrawalCell)?;
-        reverted_deposition_cells.remove(index);
+        reverted_deposit_cells.remove(index);
     }
-    if !reverted_deposition_cells.is_empty() {
+    if !reverted_deposit_cells.is_empty() {
         return Err(Error::InvalidWithdrawalCell);
     }
-    Ok(())
+    // check input finalized custodian cells >= withdrawal cells
+    let withdrawal_assets =
+        build_assets_map_from_cells(output_withdrawal_cells.iter().map(|c| &c.value))?;
+    let mut input_finalized_assets =
+        build_assets_map_from_cells(finalized_custodian_cells.iter().map(|c| &c.value))?;
+    // calculate input finalized custodian assets - withdrawal assets
+    for (k, v) in withdrawal_assets {
+        let balance = input_finalized_assets.entry(k).or_insert(0);
+        *balance = balance
+            .checked_sub(v)
+            .ok_or(Error::InsufficientInputFinalizedAssets)?;
+    }
+    Ok(input_finalized_assets)
 }
 
 fn check_output_custodian_cells(
     config: &RollupConfig,
     context: &BlockContext,
+    mut deposit_cells: Vec<DepositionRequestCell>,
+    input_finalized_assets: BTreeMap<H256, u128>,
 ) -> Result<(), Error> {
     // collect output custodian cells
     let (finalized_custodian_cells, unfinalized_custodian_cells): (Vec<_>, Vec<_>) =
@@ -166,66 +159,57 @@ fn check_output_custodian_cells(
                 number <= context.finalized_number
             });
     // check depositions request cells == unfinalized custodian cells
-    let mut deposition_cells =
-        collect_deposition_locks(&context.rollup_type_hash, config, Source::Output)?;
     for custodian_cell in unfinalized_custodian_cells {
-        let index = deposition_cells
+        let index = deposit_cells
             .iter()
             .position(|cell| {
                 custodian_cell.args.deposition_lock_args() == cell.args
                     && custodian_cell.value == cell.value
             })
             .ok_or(Error::InvalidCustodianCell)?;
-        deposition_cells.remove(index);
+        deposit_cells.remove(index);
     }
-    if !deposition_cells.is_empty() {
+    if !deposit_cells.is_empty() {
         return Err(Error::InvalidDepositCell);
     }
-    // check reverted withdrawals == finalized custodian cells
+    // check reverted withdrawals <= finalized custodian cells
     {
         let reverted_withdrawals =
             collect_withdrawal_locks(&context.rollup_type_hash, config, Source::Input)?;
-        let mut reverted_withdrawal_assets = BTreeMap::new();
-        for cell in reverted_withdrawals {
-            let sudt_balance = reverted_withdrawal_assets
-                .entry(cell.value.sudt_script_hash)
-                .or_insert(0u128);
-            *sudt_balance = sudt_balance
-                .checked_add(cell.value.amount)
-                .ok_or(Error::AmountOverflow)?;
-            let ckb_balance = reverted_withdrawal_assets
-                .entry(CKB_SUDT_SCRIPT_ARGS.into())
-                .or_insert(0u128);
-            *ckb_balance = ckb_balance
-                .checked_add(cell.value.capacity.into())
-                .ok_or(Error::AmountOverflow)?;
+        let reverted_withdrawal_assets =
+            build_assets_map_from_cells(reverted_withdrawals.iter().map(|c| &c.value))?;
+        let mut output_finalized_assets =
+            build_assets_map_from_cells(finalized_custodian_cells.iter().map(|c| &c.value))?;
+        // calculate output finalized assets - reverted withdrawal assets
+        for (k, v) in reverted_withdrawal_assets {
+            let balance = output_finalized_assets.entry(k).or_insert(0);
+            *balance = balance
+                .checked_sub(v)
+                .ok_or(Error::InsufficientOutputFinalizedAssets)?;
         }
-        for cell in finalized_custodian_cells {
-            let sudt_balance = reverted_withdrawal_assets
-                .entry(cell.value.sudt_script_hash)
-                .or_insert(0);
-            *sudt_balance = sudt_balance
-                .checked_sub(cell.value.amount)
-                .ok_or(Error::AmountOverflow)?;
-            let ckb_balance = reverted_withdrawal_assets
-                .entry(CKB_SUDT_SCRIPT_ARGS.into())
-                .or_insert(0);
-            *ckb_balance = ckb_balance
-                .checked_sub(cell.value.capacity.into())
-                .ok_or(Error::AmountOverflow)?;
+        // check the remain inputs finalized assets == outputs finalized assets
+        // 1. output finalized assets - input finalized assets
+        for (k, v) in input_finalized_assets {
+            let balance = output_finalized_assets.entry(k).or_insert(0);
+            *balance = balance
+                .checked_sub(v)
+                .ok_or(Error::InsufficientOutputFinalizedAssets)?;
         }
-        // check the equality
-        if !reverted_withdrawal_assets.values().all(|&v| v == 0) {
-            return Err(Error::InvalidWithdrawalCell);
+        // 2. check output finalized assets is empty
+        let output_assets_is_empty = output_finalized_assets.iter().all(|(_k, v)| v == &0);
+        if !output_assets_is_empty {
+            return Err(Error::InsufficientInputFinalizedAssets);
         }
     }
     Ok(())
 }
 
-fn mint_layer2_sudt(config: &RollupConfig, context: &mut BlockContext) -> Result<(), Error> {
-    let deposition_requests =
-        collect_deposition_locks(&context.rollup_type_hash, config, Source::Input)?;
-    for request in &deposition_requests {
+fn mint_layer2_sudt(
+    config: &RollupConfig,
+    context: &mut BlockContext,
+    deposit_cells: &[DepositionRequestCell],
+) -> Result<(), Error> {
+    for request in deposit_cells {
         // find or create user account
         let id = match context.get_account_id_by_script_hash(&request.account_script_hash.into())? {
             Some(id) => id,
@@ -525,14 +509,21 @@ pub fn verify(
     )?;
     // Verify block producer
     verify_block_producer(config, &context, block)?;
-    // build withdrawl_cells
+    // collect withdrawal cells
     let withdrawal_cells: Vec<_> =
         collect_withdrawal_locks(&context.rollup_type_hash, config, Source::Output)?;
+    // collect deposit cells
+    let deposit_cells = collect_deposition_locks(&context.rollup_type_hash, config, Source::Input)?;
     // Check new cells and reverted cells: deposition / withdrawal / custodian
     let withdrawal_requests = block.withdrawals().into_iter().collect();
     check_withdrawal_cells(&context, withdrawal_requests, &withdrawal_cells)?;
-    check_input_custodian_cells(config, &context, withdrawal_cells)?;
-    check_output_custodian_cells(config, &context)?;
+    let input_finalized_assets = check_input_custodian_cells(config, &context, withdrawal_cells)?;
+    check_output_custodian_cells(
+        config,
+        &context,
+        deposit_cells.clone(),
+        input_finalized_assets,
+    )?;
     // Ensure no challenge cells in submitting block transaction
     if find_challenge_cell(&rollup_type_hash, config, Source::Input)?.is_some()
         || find_challenge_cell(&rollup_type_hash, config, Source::Output)?.is_some()
@@ -543,7 +534,7 @@ pub fn verify(
     // Withdrawal token: Layer2 SUDT -> withdrawals
     burn_layer2_sudt(config, &mut context, block)?;
     // Mint token: deposition requests -> layer2 SUDT
-    mint_layer2_sudt(config, &mut context)?;
+    mint_layer2_sudt(config, &mut context, &deposit_cells)?;
     // Check transactions
     check_block_transactions(&context, block)?;
 

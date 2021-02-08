@@ -108,7 +108,7 @@ pub fn collect_stake_cells(
                     return Some(Err(Error::Encoding));
                 }
             };
-            let value = match fetch_capacity_and_sudt_value(config, index, Source::Input) {
+            let value = match fetch_capacity_and_sudt_value(config, index, source) {
                 Ok(value) => value,
                 Err(err) => return Some(Err(err)),
             };
@@ -220,7 +220,7 @@ pub fn collect_withdrawal_locks(
                     return Some(Err(Error::Encoding));
                 }
             };
-            let value = match fetch_capacity_and_sudt_value(config, index, Source::Output) {
+            let value = match fetch_capacity_and_sudt_value(config, index, source) {
                 Ok(value) => value,
                 Err(err) => return Some(Err(err)),
             };
@@ -252,7 +252,7 @@ pub fn collect_custodian_locks(
                     return Some(Err(Error::Encoding));
                 }
             };
-            let value = match fetch_capacity_and_sudt_value(config, index, Source::Input) {
+            let value = match fetch_capacity_and_sudt_value(config, index, source) {
                 Ok(value) => value,
                 Err(err) => return Some(Err(err)),
             };
@@ -286,7 +286,7 @@ pub fn collect_deposition_locks(
                 }
             };
             let account_script_hash = args.layer2_lock().hash().into();
-            let value = match fetch_capacity_and_sudt_value(config, index, Source::Input) {
+            let value = match fetch_capacity_and_sudt_value(config, index, source) {
                 Ok(value) => value,
                 Err(err) => return Some(Err(err)),
             };
@@ -309,7 +309,7 @@ pub fn collect_burn_cells(config: &RollupConfig, source: Source) -> Result<Vec<B
             if !is_lock {
                 return None;
             }
-            let value = match fetch_capacity_and_sudt_value(config, index, Source::Input) {
+            let value = match fetch_capacity_and_sudt_value(config, index, source) {
                 Ok(value) => value,
                 Err(err) => return Some(Err(err)),
             };

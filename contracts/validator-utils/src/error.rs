@@ -22,6 +22,8 @@ pub enum Error {
     MerkleProof,
     AmountOverflow,
     InsufficientAmount,
+    InsufficientInputFinalizedAssets,
+    InsufficientOutputFinalizedAssets,
     NotForSell,
     SMTKeyMissing,
     InvalidTxsState,

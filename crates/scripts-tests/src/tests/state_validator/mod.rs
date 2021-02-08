@@ -11,7 +11,7 @@ use gw_common::blake2b::new_blake2b;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    packed::{ChallengeLockArgs, RollupConfig, StakeLockArgs},
+    packed::{RollupConfig, StakeLockArgs},
     prelude::*,
 };
 use lazy_static::lazy_static;
@@ -48,6 +48,9 @@ lazy_static! {
 pub struct CellContextParam {
     stake_lock_type: ckb_types::packed::Script,
     challenge_lock_type: ckb_types::packed::Script,
+    deposit_lock_type: ckb_types::packed::Script,
+    custodian_lock_type: ckb_types::packed::Script,
+    withdrawal_lock_type: ckb_types::packed::Script,
 }
 
 pub struct CellContext {
@@ -56,6 +59,9 @@ pub struct CellContext {
     rollup_config_dep: CellDep,
     stake_lock_dep: CellDep,
     challenge_lock_dep: CellDep,
+    deposit_lock_dep: CellDep,
+    custodian_lock_dep: CellDep,
+    withdrawal_lock_dep: CellDep,
     always_success_dep: CellDep,
 }
 
@@ -135,6 +141,48 @@ impl CellContext {
             );
             CellDep::new_builder().out_point(out_point).build()
         };
+        let deposit_lock_dep = {
+            let out_point = random_out_point();
+            data_loader.cells.insert(
+                out_point.clone(),
+                (
+                    CellOutput::new_builder()
+                        .capacity(CKBPack::pack(&(ALWAYS_SUCCESS_PROGRAM.len() as u64)))
+                        .type_(CKBPack::pack(&Some(param.deposit_lock_type.clone())))
+                        .build(),
+                    ALWAYS_SUCCESS_PROGRAM.clone(),
+                ),
+            );
+            CellDep::new_builder().out_point(out_point).build()
+        };
+        let custodian_lock_dep = {
+            let out_point = random_out_point();
+            data_loader.cells.insert(
+                out_point.clone(),
+                (
+                    CellOutput::new_builder()
+                        .capacity(CKBPack::pack(&(ALWAYS_SUCCESS_PROGRAM.len() as u64)))
+                        .type_(CKBPack::pack(&Some(param.custodian_lock_type.clone())))
+                        .build(),
+                    ALWAYS_SUCCESS_PROGRAM.clone(),
+                ),
+            );
+            CellDep::new_builder().out_point(out_point).build()
+        };
+        let withdrawal_lock_dep = {
+            let out_point = random_out_point();
+            data_loader.cells.insert(
+                out_point.clone(),
+                (
+                    CellOutput::new_builder()
+                        .capacity(CKBPack::pack(&(ALWAYS_SUCCESS_PROGRAM.len() as u64)))
+                        .type_(CKBPack::pack(&Some(param.withdrawal_lock_type.clone())))
+                        .build(),
+                    ALWAYS_SUCCESS_PROGRAM.clone(),
+                ),
+            );
+            CellDep::new_builder().out_point(out_point).build()
+        };
         CellContext {
             inner: data_loader,
             rollup_config_dep,
@@ -142,6 +190,9 @@ impl CellContext {
             stake_lock_dep,
             state_validator_dep,
             challenge_lock_dep,
+            deposit_lock_dep,
+            custodian_lock_dep,
+            withdrawal_lock_dep,
         }
     }
 
@@ -180,40 +231,18 @@ pub fn build_type_id_script(name: &[u8]) -> ckb_types::packed::Script {
         .build()
 }
 
-pub fn build_stake_cell(
+pub fn build_rollup_locked_cell(
     rollup_type_script_hash: &[u8; 32],
-    stake_script_type_hash: &[u8; 32],
-    stake_capacity: u64,
-    lock_args: StakeLockArgs,
-) -> ckb_types::packed::CellOutput {
-    let stake_lock = {
-        let mut args = Vec::new();
-        args.extend_from_slice(rollup_type_script_hash);
-        args.extend_from_slice(lock_args.as_slice());
-        ckb_types::packed::Script::new_builder()
-            .code_hash(CKBPack::pack(stake_script_type_hash))
-            .hash_type(ScriptHashType::Type.into())
-            .args(CKBPack::pack(&Bytes::from(args)))
-            .build()
-    };
-    CellOutput::new_builder()
-        .lock(stake_lock)
-        .capacity(CKBPack::pack(&stake_capacity))
-        .build()
-}
-
-pub fn build_challenge_cell(
-    rollup_type_script_hash: &[u8; 32],
-    challenge_script_type_hash: &[u8; 32],
+    script_type_hash: &[u8; 32],
     capacity: u64,
-    lock_args: ChallengeLockArgs,
+    lock_args: Bytes,
 ) -> ckb_types::packed::CellOutput {
     let lock = {
         let mut args = Vec::new();
         args.extend_from_slice(rollup_type_script_hash);
-        args.extend_from_slice(lock_args.as_slice());
+        args.extend_from_slice(&lock_args);
         ckb_types::packed::Script::new_builder()
-            .code_hash(CKBPack::pack(challenge_script_type_hash))
+            .code_hash(CKBPack::pack(script_type_hash))
             .hash_type(ScriptHashType::Type.into())
             .args(CKBPack::pack(&Bytes::from(args)))
             .build()
