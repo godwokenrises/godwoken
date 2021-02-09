@@ -9,9 +9,7 @@ use gw_types::{
     prelude::*,
 };
 
-use crate::testing_tools::{
-    apply_block_result, setup_chain, ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH,
-};
+use crate::testing_tools::{apply_block_result, setup_chain, ALWAYS_SUCCESS_CODE_HASH};
 use crate::{
     chain::{Chain, ProduceBlockParam},
     mem_pool::PackageParam,
@@ -107,7 +105,7 @@ fn test_deposition_and_withdrawal() {
     let block_producer_id = 0;
     let capacity = 500_00000000;
     let user_script = Script::new_builder()
-        .code_hash(ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.pack())
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
         .args(vec![42].pack())
         .build();
     let user_script_hash = user_script.hash();
@@ -208,7 +206,7 @@ fn test_overdraft() {
     let block_producer_id = 0;
     let capacity = 500_00000000;
     let user_script = Script::new_builder()
-        .code_hash(ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.pack())
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
         .args(vec![42].pack())
         .build();
     let user_script_hash = user_script.hash();
@@ -249,7 +247,7 @@ fn test_deposit_faked_ckb() {
     let block_producer_id = 0;
     let capacity = 500_00000000;
     let user_script = Script::new_builder()
-        .code_hash(ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.pack())
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
         .args(vec![42].pack())
         .build();
     let rollup_cell = CellOutput::new_builder()

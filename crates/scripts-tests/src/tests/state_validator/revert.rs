@@ -4,9 +4,7 @@ use ckb_types::{
     packed::CellInput,
     prelude::{Pack as CKBPack, Unpack as CKBUnpack},
 };
-use gw_chain::testing_tools::{
-    apply_block_result, setup_chain, ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH,
-};
+use gw_chain::testing_tools::{apply_block_result, setup_chain, ALWAYS_SUCCESS_CODE_HASH};
 use gw_chain::{
     chain::ProduceBlockParam, mem_pool::PackageParam, next_block_context::NextBlockContext,
 };
@@ -61,12 +59,12 @@ fn test_revert() {
     let prev_block_merkle = {
         // deposit two account
         let sender_script = Script::new_builder()
-            .code_hash(Pack::pack(&ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.clone()))
+            .code_hash(Pack::pack(&ALWAYS_SUCCESS_CODE_HASH.clone()))
             .hash_type(ScriptHashType::Data.into())
             .args(Pack::pack(&Bytes::from(b"sender".to_vec())))
             .build();
         let receiver_script = Script::new_builder()
-            .code_hash(Pack::pack(&ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.clone()))
+            .code_hash(Pack::pack(&ALWAYS_SUCCESS_CODE_HASH.clone()))
             .hash_type(ScriptHashType::Data.into())
             .args(Pack::pack(&Bytes::from(b"receiver".to_vec())))
             .build();
@@ -175,11 +173,11 @@ fn test_revert() {
     let mut ctx = CellContext::new(&rollup_config, param);
     let stake_capacity = 10000_00000000u64;
     let input_stake_cell = {
-        let cell = build_stake_cell(
+        let cell = build_rollup_locked_cell(
             &rollup_type_script.hash(),
             &stake_script_type_hash,
             stake_capacity,
-            StakeLockArgs::default(),
+            StakeLockArgs::default().as_bytes(),
         );
         let out_point = ctx.insert_cell(cell, Bytes::default());
         CellInput::new_builder().previous_output(out_point).build()
@@ -199,11 +197,11 @@ fn test_revert() {
                 reward_receive_lock.as_bytes(),
             ))
             .build();
-        let cell = build_challenge_cell(
+        let cell = build_rollup_locked_cell(
             &rollup_type_script.hash(),
             &challenge_script_type_hash,
             challenge_capacity,
-            lock_args,
+            lock_args.as_bytes(),
         );
         let out_point = ctx.insert_cell(cell, Bytes::new());
         let since: u64 = {

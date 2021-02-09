@@ -9,28 +9,29 @@ use ckb_types::{
     packed::{Byte32, CellInput, CellOutput, OutPoint, Script, Transaction},
     prelude::*,
 };
+pub use gw_chain::testing_tools::{ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM};
 use gw_common::blake2b;
 use lazy_static::lazy_static;
 use rand::{thread_rng, Rng};
 use std::{collections::HashMap, fs, io::Read, path::PathBuf};
 
 const SCRIPT_DIR: &'static str = "../../build/debug";
-const ALWAYS_SUCCESS_PATH: &'static str = "always-success";
+const CHALLENGE_LOCK_PATH: &'static str = "challenge-lock";
 
 lazy_static! {
-    pub static ref ALWAYS_SUCCESS_PROGRAM: Bytes = {
+    pub static ref CHALLENGE_LOCK_PROGRAM: Bytes = {
         let mut buf = Vec::new();
         let mut path = PathBuf::new();
         path.push(&SCRIPT_DIR);
-        path.push(&ALWAYS_SUCCESS_PATH);
+        path.push(&CHALLENGE_LOCK_PATH);
         let mut f = fs::File::open(&path).expect("load program");
         f.read_to_end(&mut buf).expect("read program");
         Bytes::from(buf.to_vec())
     };
-    pub static ref ALWAYS_SUCCESS_CODE_HASH: [u8; 32] = {
+    pub static ref CHALLENGE_LOCK_CODE_HASH: [u8; 32] = {
         let mut buf = [0u8; 32];
         let mut hasher = new_blake2b();
-        hasher.update(&ALWAYS_SUCCESS_PROGRAM);
+        hasher.update(&CHALLENGE_LOCK_PROGRAM);
         hasher.finalize(&mut buf);
         buf
     };

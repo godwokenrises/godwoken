@@ -58,7 +58,9 @@ vector L2TransactionVec <L2Transaction>;
 table SubmitTransactions {
     tx_witness_root: Byte32,
     tx_count: Uint32,
-    // hash(account_root | account_count) before each transaction
+    // hash(account_root | account_count) before apply all txs
+    compacted_prev_root_hash: Byte32,
+    // hash(account_root | account_count) of each transaction
     compacted_post_root_list: Byte32Vec,
 }
 

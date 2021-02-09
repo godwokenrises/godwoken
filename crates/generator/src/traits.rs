@@ -1,10 +1,7 @@
 use crate::error::{DepositionError, Error, ValidateError, WithdrawalError};
 use crate::sudt::build_l2_sudt_script;
 use crate::types::RunResult;
-use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID, merkle_utils::calculate_compacted_account_root, state::State,
-    CKB_SUDT_SCRIPT_ARGS, H256,
-};
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
@@ -25,7 +22,6 @@ pub trait StateExt {
         withdrawal_request: &WithdrawalRequest,
     ) -> Result<(), Error>;
 
-    fn calculate_compacted_account_root(&self) -> Result<H256, Error>;
     fn apply_deposition_requests(
         &mut self,
         deposition_requests: &[DepositionRequest],
@@ -142,11 +138,5 @@ impl<S: State + CodeStore> StateExt for S {
             .ok_or_else(|| ValidateError::NonceOverflow)?;
         self.set_nonce(id, new_nonce)?;
         Ok(())
-    }
-
-    fn calculate_compacted_account_root(&self) -> Result<H256, Error> {
-        let account_root = self.calculate_root()?;
-        let account_count = self.get_account_count()?;
-        Ok(calculate_compacted_account_root(&account_root.into(), account_count).into())
     }
 }

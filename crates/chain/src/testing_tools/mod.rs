@@ -3,6 +3,7 @@ use crate::{
     mem_pool::MemPool,
     next_block_context::NextBlockContext,
 };
+use gw_common::blake2b::new_blake2b;
 use gw_config::{ChainConfig, GenesisConfig};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
@@ -12,16 +13,38 @@ use gw_generator::{
 };
 use gw_store::Store;
 use gw_types::{
+    bytes::Bytes,
     packed::{
         CellOutput, DepositionRequest, HeaderInfo, RawTransaction, RollupConfig, Script,
         Transaction, WitnessArgs,
     },
     prelude::*,
 };
+use lazy_static::lazy_static;
 use parking_lot::Mutex;
-use std::sync::Arc;
+use std::{fs, io::Read, path::PathBuf, sync::Arc};
 
-pub const ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH: [u8; 32] = [42u8; 32];
+const SCRIPT_DIR: &'static str = "../../build/debug";
+const ALWAYS_SUCCESS_PATH: &'static str = "always-success";
+
+lazy_static! {
+    pub static ref ALWAYS_SUCCESS_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut path = PathBuf::new();
+        path.push(&SCRIPT_DIR);
+        path.push(&ALWAYS_SUCCESS_PATH);
+        let mut f = fs::File::open(&path).expect("load program");
+        f.read_to_end(&mut buf).expect("read program");
+        Bytes::from(buf.to_vec())
+    };
+    pub static ref ALWAYS_SUCCESS_CODE_HASH: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&ALWAYS_SUCCESS_PROGRAM);
+        hasher.finalize(&mut buf);
+        buf
+    };
+}
 
 pub fn setup_chain(rollup_type_script: Script, rollup_config: RollupConfig) -> Chain {
     let store = Store::open_tmp().unwrap();
@@ -30,7 +53,7 @@ pub fn setup_chain(rollup_type_script: Script, rollup_config: RollupConfig) -> C
     let backend_manage = BackendManage::default();
     let mut account_lock_manage = AccountLockManage::default();
     account_lock_manage.register_lock_algorithm(
-        ALWAYS_SUCCESS_ACCOUNT_LOCK_CODE_HASH.into(),
+        ALWAYS_SUCCESS_CODE_HASH.clone().into(),
         Box::new(AlwaysSuccess),
     );
     let config = ChainConfig {

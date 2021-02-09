@@ -292,6 +292,8 @@ impl From<PackageParam> for gw_chain::mem_pool::PackageParam {
 #[serde(rename_all = "snake_case")]
 pub struct MemPoolPackage {
     pub txs: Vec<JsonBytes>,
+    /// compacted state before execute txs
+    pub compacted_prev_root_hash: H256,
     /// tx receipts
     pub tx_receipts: Vec<JsonBytes>,
     /// txs touched keys, both reads and writes
@@ -309,6 +311,10 @@ pub struct MemPoolPackage {
 impl From<gw_chain::mem_pool::MemPoolPackage> for MemPoolPackage {
     fn from(pkg: gw_chain::mem_pool::MemPoolPackage) -> MemPoolPackage {
         MemPoolPackage {
+            compacted_prev_root_hash: {
+                let hash: [u8; 32] = pkg.compacted_prev_root_hash.into();
+                hash.into()
+            },
             txs: pkg
                 .txs
                 .into_iter()
@@ -342,6 +348,10 @@ impl From<gw_chain::mem_pool::MemPoolPackage> for MemPoolPackage {
 impl From<MemPoolPackage> for gw_chain::mem_pool::MemPoolPackage {
     fn from(pkg: MemPoolPackage) -> gw_chain::mem_pool::MemPoolPackage {
         gw_chain::mem_pool::MemPoolPackage {
+            compacted_prev_root_hash: {
+                let hash: [u8; 32] = pkg.compacted_prev_root_hash.into();
+                hash.into()
+            },
             txs: pkg
                 .txs
                 .into_iter()

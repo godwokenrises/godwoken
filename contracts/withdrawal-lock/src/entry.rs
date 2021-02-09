@@ -179,6 +179,10 @@ pub fn main() -> Result<(), Error> {
             let output_token = fetch_token_amount(&payment_lock_hash, &token_type, Source::Output)?;
             let sell_amount: u128 = lock_args.sell_amount().unpack();
             let sell_capacity: u64 = lock_args.sell_capacity().unpack();
+            // Withdrawal cell is not for sell
+            if sell_amount == 0 && sell_capacity == 0 {
+                return Err(Error::NotForSell);
+            }
             let expected_output_amount = input_token
                 .total_token_amount
                 .checked_add(sell_amount)
