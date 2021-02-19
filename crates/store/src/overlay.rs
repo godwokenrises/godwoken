@@ -1,7 +1,7 @@
 //! Provide overlay store feature
 //! Overlay store can be abandoned or commited.
 
-use crate::Store;
+use crate::transaction::StoreTransaction;
 use anyhow::Result;
 use gw_common::{
     error::Error,
@@ -21,26 +21,30 @@ use gw_types::{
     packed::{self, Script},
 };
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 pub struct OverlayStore {
     tree: SMT<OverlaySMTStore>,
-    store: Store,
+    db: Rc<StoreTransaction>,
     scripts: HashMap<H256, Script>,
     codes: HashMap<H256, Bytes>,
     account_count: u32,
 }
 
 impl OverlayStore {
-    pub fn new(root: H256, store: Store, account_count: u32) -> Self {
-        let smt_store = OverlaySMTStore::new(store.clone());
+    pub fn from_store_transaction(db: Rc<StoreTransaction>) -> Result<Self> {
+        let root = db.get_account_smt_root()?;
+        let account_count = db.get_account_count()?;
+        let smt_store = OverlaySMTStore::new(db.clone());
         let tree = SMT::new(root, smt_store);
-        OverlayStore {
+        let overlay_store = OverlayStore {
             tree,
-            store,
+            db,
             account_count,
             scripts: Default::default(),
             codes: Default::default(),
-        }
+        };
+        Ok(overlay_store)
     }
 
     pub fn overlay_store(&self) -> &OverlaySMTStore {
@@ -82,8 +86,7 @@ impl CodeStore for OverlayStore {
         match self.scripts.get(script_hash) {
             Some(script) => Some(script.clone()),
             None => {
-                let db = self.store.begin_transaction();
-                let tree = db.account_state_tree().expect("smt store");
+                let tree = self.db.account_state_tree().expect("smt store");
                 tree.get_script(script_hash)
             }
         }
@@ -95,8 +98,7 @@ impl CodeStore for OverlayStore {
         match self.codes.get(data_hash) {
             Some(data) => Some(data.clone()),
             None => {
-                let db = self.store.begin_transaction();
-                let tree = db.account_state_tree().expect("smt store");
+                let tree = self.db.account_state_tree().expect("smt store");
                 tree.get_data(data_hash)
             }
         }
@@ -104,27 +106,28 @@ impl CodeStore for OverlayStore {
 }
 
 impl ChainStore for OverlayStore {
+    fn get_tip_block_hash(&self) -> Result<H256, DBError> {
+        self.db.get_tip_block_hash()
+    }
     fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, DBError> {
-        self.store
-            .begin_transaction()
-            .get_block_hash_by_number(number)
+        self.db.get_block_hash_by_number(number)
     }
     fn get_block_number(&self, hash: &H256) -> Result<Option<u64>, DBError> {
-        self.store.begin_transaction().get_block_number(hash)
+        self.db.get_block_number(hash)
     }
     fn get_block_by_number(&self, number: u64) -> Result<Option<packed::L2Block>, DBError> {
-        self.store.begin_transaction().get_block_by_number(number)
+        self.db.get_block_by_number(number)
     }
     fn get_block(&self, block_hash: &H256) -> Result<Option<packed::L2Block>, DBError> {
-        self.store.begin_transaction().get_block(block_hash)
+        self.db.get_block(block_hash)
     }
     fn get_transaction(&self, tx_hash: &H256) -> Result<Option<packed::L2Transaction>, DBError> {
-        self.store.begin_transaction().get_transaction(tx_hash)
+        self.db.get_transaction(tx_hash)
     }
 }
 
 pub struct OverlaySMTStore {
-    store: Store,
+    db: Rc<StoreTransaction>,
     branches_map: HashMap<H256, BranchNode>,
     leaves_map: HashMap<H256, LeafNode<H256>>,
     deleted_branches: HashSet<H256>,
@@ -133,9 +136,9 @@ pub struct OverlaySMTStore {
 }
 
 impl OverlaySMTStore {
-    pub fn new(store: Store) -> Self {
+    pub fn new(db: Rc<StoreTransaction>) -> Self {
         OverlaySMTStore {
-            store,
+            db,
             branches_map: HashMap::default(),
             leaves_map: HashMap::default(),
             deleted_branches: HashSet::default(),
@@ -161,8 +164,8 @@ impl SMTStore<H256> for OverlaySMTStore {
         match self.branches_map.get(node) {
             Some(value) => Ok(Some(value.clone())),
             None => {
-                let db = self.store.begin_transaction();
-                let smt_store = db
+                let smt_store = self
+                    .db
                     .account_smt_store()
                     .map_err(|err| SMTError::Store(format!("{}", err)))?;
                 smt_store.get_branch(node)
@@ -176,8 +179,8 @@ impl SMTStore<H256> for OverlaySMTStore {
         match self.leaves_map.get(leaf_hash) {
             Some(value) => Ok(Some(value.clone())),
             None => {
-                let db = self.store.begin_transaction();
-                let smt_store = db
+                let smt_store = self
+                    .db
                     .account_smt_store()
                     .map_err(|err| SMTError::Store(format!("{}", err)))?;
                 smt_store.get_leaf(leaf_hash)

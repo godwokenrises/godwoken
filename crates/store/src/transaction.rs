@@ -186,6 +186,14 @@ impl StoreTransaction {
         Ok(())
     }
 
+    pub fn get_account_count(&self) -> Result<u32, Error> {
+        let slice = self
+            .get(COLUMN_META, META_ACCOUNT_SMT_COUNT_KEY)
+            .expect("account count");
+        let count = packed::Uint32Reader::from_slice_should_be_ok(&slice.as_ref()).to_entity();
+        Ok(count.unpack())
+    }
+
     pub fn account_smt_store<'a>(&'a self) -> Result<SMTStoreTransaction<'a>, Error> {
         let smt_store =
             SMTStoreTransaction::new(COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ACCOUNT_SMT_BRANCH, self);
@@ -379,6 +387,9 @@ impl StoreTransaction {
 }
 
 impl ChainStore for StoreTransaction {
+    fn get_tip_block_hash(&self) -> Result<H256, Error> {
+        self.get_tip_block_hash()
+    }
     fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, Error> {
         let block_number: packed::Uint64 = number.pack();
         match self.get(COLUMN_INDEX, block_number.as_slice()) {
@@ -458,12 +469,8 @@ impl<'a> State for StateTree<'a> {
         Ok(())
     }
     fn get_account_count(&self) -> Result<u32, StateError> {
-        let slice = self
-            .db
-            .get(COLUMN_META, META_ACCOUNT_SMT_COUNT_KEY)
-            .expect("account count");
-        let count = packed::Uint32Reader::from_slice_should_be_ok(&slice.as_ref()).to_entity();
-        Ok(count.unpack())
+        let count = self.db.get_account_count().expect("get account count");
+        Ok(count)
     }
     fn set_account_count(&mut self, count: u32) -> Result<(), StateError> {
         Ok(self.db.set_account_count(count).expect("set account count"))

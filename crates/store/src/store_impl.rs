@@ -3,7 +3,7 @@ use crate::snapshot::StoreSnapshot;
 use crate::transaction::StoreTransaction;
 use crate::write_batch::StoreWriteBatch;
 use anyhow::Result;
-use gw_common::{error::Error, smt::H256, state::State};
+use gw_common::{error::Error, smt::H256};
 use gw_db::{
     schema::{
         Col, COLUMNS, COLUMN_BLOCK, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_META,
@@ -17,6 +17,7 @@ use gw_types::{
     packed::{self, GlobalState, HeaderInfo, L2Block, L2Transaction},
     prelude::*,
 };
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct Store {
@@ -74,14 +75,9 @@ impl<'a> Store {
         Ok(db.get_block_hash_by_number(0)?.is_some())
     }
 
-    /// TODO use RocksDB snapshot
     pub fn new_overlay(&self) -> Result<OverlayStore> {
         let db = self.begin_transaction();
-        let root = db.get_account_smt_root()?;
-        let tree = db.account_state_tree()?;
-        let account_count = tree.get_account_count()?;
-        let store = self.clone();
-        Ok(OverlayStore::new(root, store, account_count))
+        OverlayStore::from_store_transaction(Rc::new(db))
     }
 
     pub fn get_chain_id(&self) -> Result<H256, Error> {

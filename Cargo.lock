@@ -261,9 +261,9 @@ dependencies = [
 
 [[package]]
 name = "ckb-librocksdb-sys"
-version = "6.7.4"
+version = "6.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "995341a6dea5f0d8ff4570bebbde3691349842d2c671472e09ea2ee2e3e0b083"
+checksum = "6a78d3b9b5fd3b4990ddd2083f6a6d4389b6c8e603a4f2896914165113beed2d"
 dependencies = [
  "cc",
  "glob",
@@ -350,9 +350,9 @@ dependencies = [
 
 [[package]]
 name = "ckb-rocksdb"
-version = "0.14.1"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "809a3a50c82a5fd7429c5141e64d8c4c37451ceb25fe3b51fce7fd5d929ad521"
+checksum = "e1ea710760c02edabe1cc9aa29d190671999b4c49a9573d2402a4c4167b44259"
 dependencies = [
  "ckb-librocksdb-sys",
  "libc",
@@ -717,6 +717,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "gw-block-producer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gw-common",
+ "gw-generator",
+ "gw-store",
+ "gw-types",
+]
+
+[[package]]
 name = "gw-chain"
 version = "0.1.0"
 dependencies = [
@@ -726,6 +737,7 @@ dependencies = [
  "gw-common",
  "gw-config",
  "gw-generator",
+ "gw-mem-pool",
  "gw-store",
  "gw-traits",
  "gw-types",
@@ -807,6 +819,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gw-mem-pool"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gw-common",
+ "gw-generator",
+ "gw-store",
+ "gw-traits",
+ "gw-types",
+]
+
+[[package]]
 name = "gw-store"
 version = "0.1.0"
 dependencies = [
@@ -817,6 +841,38 @@ dependencies = [
  "gw-traits",
  "gw-types",
  "parking_lot",
+ "thiserror",
+]
+
+[[package]]
+name = "gw-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "blake2b-rs 0.2.0",
+ "ckb-crypto",
+ "ckb-error",
+ "ckb-fixed-hash",
+ "ckb-hash",
+ "ckb-script",
+ "ckb-traits",
+ "ckb-types",
+ "ckb-vm 0.19.1",
+ "gw-block-producer",
+ "gw-chain",
+ "gw-common",
+ "gw-config",
+ "gw-generator",
+ "gw-mem-pool",
+ "gw-store",
+ "gw-traits",
+ "gw-types",
+ "hex",
+ "lazy_static",
+ "parking_lot",
+ "rand 0.8.2",
+ "secp256k1 0.20.0",
+ "sha3",
  "thiserror",
 ]
 
@@ -1461,36 +1517,6 @@ name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
-
-[[package]]
-name = "scripts-tests"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "blake2b-rs 0.2.0",
- "ckb-crypto",
- "ckb-error",
- "ckb-fixed-hash",
- "ckb-hash",
- "ckb-script",
- "ckb-traits",
- "ckb-types",
- "ckb-vm 0.19.1",
- "gw-chain",
- "gw-common",
- "gw-config",
- "gw-generator",
- "gw-store",
- "gw-traits",
- "gw-types",
- "hex",
- "lazy_static",
- "parking_lot",
- "rand 0.8.2",
- "secp256k1 0.20.0",
- "sha3",
- "thiserror",
-]
 
 [[package]]
 name = "scroll"
