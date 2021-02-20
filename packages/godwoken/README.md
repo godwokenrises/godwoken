@@ -1,3 +1,0 @@
-# godwoken
-
-Godwoken JS Binding
