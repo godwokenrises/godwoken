@@ -21,7 +21,7 @@ jobs:
     - name: Install moleculec
       run: CARGO_TARGET_DIR=target/ cargo install moleculec --version 0.6.1
     - name: Install capsule
-      run: CARGO_TARGET_DIR=target/ cargo install ckb-capsule --version 0.4.4
+      run: CARGO_TARGET_DIR=target/ cargo install ckb-capsule --version 0.4.5
     - name: Check format
       run: cargo fmt -- --check
     - name: Check contracts format
