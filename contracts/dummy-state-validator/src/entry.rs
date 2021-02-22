@@ -61,14 +61,14 @@ fn verify_l2block(
         return Err(Error::PrevGlobalState);
     }
 
-    let block_smt_key = RawL2Block::compute_smt_key(number);
+    let block_smt_key: H256 = RawL2Block::compute_smt_key(number).into();
     let block_proof: Bytes = l2block.block_proof().unpack();
     let block_merkle_proof = CompiledMerkleProof(block_proof.to_vec());
     let prev_block_root: [u8; 32] = prev_global_state.block().merkle_root().unpack();
     if !block_merkle_proof
         .verify::<Blake2bHasher>(
             &prev_block_root.into(),
-            vec![(block_smt_key.into(), H256::zero())],
+            vec![(block_smt_key, H256::zero())],
         )
         .map_err(|_| Error::MerkleProof)?
     {
@@ -85,7 +85,7 @@ fn verify_l2block(
     if !block_merkle_proof
         .verify::<Blake2bHasher>(
             &post_block_root.into(),
-            vec![(block_smt_key.into(), block_hash.into())],
+            vec![(block_smt_key, block_hash.into())],
         )
         .map_err(|_| Error::MerkleProof)?
     {
