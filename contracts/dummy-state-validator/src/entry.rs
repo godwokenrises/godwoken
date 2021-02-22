@@ -66,10 +66,7 @@ fn verify_l2block(
     let block_merkle_proof = CompiledMerkleProof(block_proof.to_vec());
     let prev_block_root: [u8; 32] = prev_global_state.block().merkle_root().unpack();
     if !block_merkle_proof
-        .verify::<Blake2bHasher>(
-            &prev_block_root.into(),
-            vec![(block_smt_key, H256::zero())],
-        )
+        .verify::<Blake2bHasher>(&prev_block_root.into(), vec![(block_smt_key, H256::zero())])
         .map_err(|_| Error::MerkleProof)?
     {
         return Err(Error::MerkleProof);
