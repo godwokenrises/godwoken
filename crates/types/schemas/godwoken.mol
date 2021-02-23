@@ -278,13 +278,6 @@ table VerifyWithdrawalWitness {
 
 // --- end of challenge ---
 
-// --- unlock account ---
-struct UnlockAccountWitness {
-    message: Byte32,
-    signature: Signature,
-}
-// --- end of unlock account ---
-
 // --- Rollup ---
 table RollupSubmitBlock {
     block: L2Block,

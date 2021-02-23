@@ -12,6 +12,7 @@
 #define SCRIPT_SIZE 32768
 #define MAX_WITNESS_SIZE 32768
 #define PUBKEY_SIZE 65
+#define SIGNATURE_SIZE 65
 /* Errors */
 #define ERROR_ARGUMENTS_LEN -1
 #define ERROR_ENCODING -2
@@ -25,6 +26,7 @@
 #define ERROR_WITNESS_SIZE -22
 #define ERROR_INCORRECT_SINCE_FLAGS -23
 #define ERROR_INCORRECT_SINCE_VALUE -24
+#define ERROR_MESSAGE_SIZE -25
 #define ERROR_PUBKEY_BLAKE160_HASH -31
 /* Others */
 #define ETH_SIGNING_PREFIX                                                     \
@@ -55,7 +57,7 @@ int load_pubkey_hash(uint8_t pubkey_hash[BLAKE160_SIZE]) {
     return ERROR_ARGUMENTS_LEN;
   }
   memcpy(pubkey_hash, args_bytes_seg.ptr, BLAKE160_SIZE);
-  return CKB_SUCCESS;
+  return 0;
 }
 
 /* Extract lock from WitnessArgs */
@@ -74,11 +76,28 @@ int extract_witness_lock(uint8_t *witness, uint64_t len,
     return ERROR_ENCODING;
   }
   *lock_bytes_seg = MolReader_Bytes_raw_bytes(&lock_seg);
-  return CKB_SUCCESS;
+  return 0;
 }
 
-int load_unlock_account_witness(uint8_t temp[MAX_WITNESS_SIZE],
-                                mol_seg_t *unlock_account_witness_seg) {
+/* Load message from cell's data */
+int load_message(uint8_t message[BLAKE2B_BLOCK_SIZE]) {
+  uint64_t len = BLAKE2B_BLOCK_SIZE;
+  int ret =
+      ckb_checked_load_cell_data(message, &len, 0, 0, CKB_SOURCE_GROUP_INPUT);
+  if (ret != CKB_SUCCESS) {
+    return ERROR_SYSCALL;
+  }
+
+  if (len != BLAKE2B_BLOCK_SIZE) {
+    return ERROR_MESSAGE_SIZE;
+  }
+
+  return 0;
+}
+
+/* load signature from witness */
+int load_signature_from_witness(uint8_t signature[SIGNATURE_SIZE]) {
+  uint8_t temp[MAX_WITNESS_SIZE] = {0};
   // Load the first witness, or the witness of the same index as the first input
   // using current script.
   uint64_t witness_len = MAX_WITNESS_SIZE;
@@ -91,23 +110,24 @@ int load_unlock_account_witness(uint8_t temp[MAX_WITNESS_SIZE],
     return ERROR_WITNESS_SIZE;
   }
 
-  // We will treat the first witness as WitnessArgs object, and extract the lock
-  // field from the object.
-  ret = extract_witness_lock(temp, witness_len, unlock_account_witness_seg);
+  // We treat the first witness as WitnessArgs, and extract the lock field
+  mol_seg_t lock_bytes_seg;
+  ret = extract_witness_lock(temp, witness_len, &lock_bytes_seg);
   if (ret != 0) {
     return ERROR_ENCODING;
   }
 
-  if (MolReader_UnlockAccountWitness_verify(unlock_account_witness_seg,
-                                            false) != MOL_OK) {
+  if (lock_bytes_seg.size != SIGNATURE_SIZE) {
     return ERROR_ENCODING;
   }
 
-  return CKB_SUCCESS;
+  memcpy(signature, lock_bytes_seg.ptr, SIGNATURE_SIZE);
+
+  return 0;
 }
 
 int recover_pubkey(unsigned char recovered_pubkey[PUBKEY_SIZE],
-                   unsigned char sig[65],
+                   unsigned char sig[SIGNATURE_SIZE],
                    unsigned char msg[BLAKE2B_BLOCK_SIZE]) {
   secp256k1_context context;
   uint8_t secp_data[CKB_SECP256K1_DATA_SIZE];
@@ -146,7 +166,7 @@ int recover_pubkey(unsigned char recovered_pubkey[PUBKEY_SIZE],
     return ERROR_SECP_SERIALIZE_PUBKEY;
   }
 
-  return CKB_SUCCESS;
+  return 0;
 }
 
 int main() {
@@ -156,25 +176,28 @@ int main() {
   if (ret != 0) {
     return ret;
   }
-  /* Load unlock account witness */
-  uint8_t witness[MAX_WITNESS_SIZE] = {0};
-  mol_seg_t unlock_account_witness_seg = {0};
-  ret = load_unlock_account_witness(witness, &unlock_account_witness_seg);
+  /* Load signature */
+  uint8_t signature[SIGNATURE_SIZE] = {0};
+  ret = load_signature_from_witness(signature);
   if (ret != 0) {
     return ret;
   }
 
-  mol_seg_t message_seg =
-      MolReader_UnlockAccountWitness_get_message(&unlock_account_witness_seg);
-  mol_seg_t signature_seg =
-      MolReader_UnlockAccountWitness_get_signature(&unlock_account_witness_seg);
+  /* Load message */
+  uint8_t message[BLAKE2B_BLOCK_SIZE] = {0};
+  ret = load_message(message);
+  if (ret != 0) {
+    return ret;
+  }
 
+  /* recover pubkey */
   uint8_t recovered_pubkey[PUBKEY_SIZE] = {0};
-  ret = recover_pubkey(recovered_pubkey, signature_seg.ptr, message_seg.ptr);
+  ret = recover_pubkey(recovered_pubkey, signature, message);
   if (ret != 0) {
     return ret;
   }
 
+  /* check pubkey hash */
   struct ethash_h256 recovered_pubkey_hash = {0};
   SHA3_256(&recovered_pubkey_hash, recovered_pubkey + 1, PUBKEY_SIZE - 1);
   if (memcmp(pubkey_hash, recovered_pubkey_hash.b + 12, BLAKE160_SIZE) != 0) {

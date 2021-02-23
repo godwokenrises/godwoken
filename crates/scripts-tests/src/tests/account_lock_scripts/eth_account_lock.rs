@@ -11,13 +11,12 @@ use ckb_types::{
 };
 use gw_generator::account_lock_manage::{secp256k1::Secp256k1Eth, LockAlgorithm};
 use gw_generator::builtin_scripts::ETH_ACCOUNT_LOCK;
-use gw_types::packed::UnlockAccountWitness;
 use rand::{thread_rng, Rng};
 use sha3::{Digest, Keccak256};
 
 const ERROR_PUBKEY_BLAKE160_HASH: i8 = -31;
 
-fn gen_tx(dummy: &mut DummyDataLoader, lock_args: Bytes) -> TransactionView {
+fn gen_tx(dummy: &mut DummyDataLoader, lock_args: Bytes, input_data: Bytes) -> TransactionView {
     let mut rng = thread_rng();
     // setup sighash_all dep
     let script_out_point = {
@@ -100,7 +99,7 @@ fn gen_tx(dummy: &mut DummyDataLoader, lock_args: Bytes) -> TransactionView {
         .build();
     dummy.cells.insert(
         previous_out_point.clone(),
-        (previous_output_cell.clone(), Bytes::new()),
+        (previous_output_cell.clone(), input_data),
     );
     tx_builder
         .input(CellInput::new(previous_out_point, 0))
@@ -139,22 +138,19 @@ fn test_sign_eth_message() {
     let privkey = Generator::random_privkey();
     let pubkey = privkey.pubkey().expect("pubkey");
     let pubkey_hash = sha3_pubkey_hash(&pubkey);
-    let tx = gen_tx(&mut data_loader, pubkey_hash.clone());
     let mut rng = thread_rng();
     let mut message = [0u8; 32];
     rng.fill(&mut message);
     let signature = sign_message(&privkey, message);
-    let unlock_witness = {
-        let message = gw_types::prelude::Pack::pack(&message);
-        UnlockAccountWitness::new_builder()
-            .message(message)
-            .signature(signature.clone())
-            .build()
-    };
+    let tx = gen_tx(
+        &mut data_loader,
+        pubkey_hash.clone(),
+        Bytes::from(message.to_vec()),
+    );
     let tx = tx
         .as_advanced_builder()
         .set_witnesses(vec![WitnessArgs::new_builder()
-            .lock(Some(unlock_witness.as_bytes()).pack())
+            .lock(Some(signature.as_bytes()).pack())
             .build()
             .as_bytes()
             .pack()])
@@ -176,7 +172,6 @@ fn test_wrong_signature() {
     let privkey = Generator::random_privkey();
     let pubkey = privkey.pubkey().expect("pubkey");
     let pubkey_hash = sha3_pubkey_hash(&pubkey);
-    let tx = gen_tx(&mut data_loader, pubkey_hash.clone());
     let mut rng = thread_rng();
     let mut message = [0u8; 32];
     rng.fill(&mut message);
@@ -185,17 +180,15 @@ fn test_wrong_signature() {
         rng.fill(&mut wrong_message);
         sign_message(&privkey, wrong_message)
     };
-    let unlock_witness = {
-        let message = gw_types::prelude::Pack::pack(&message);
-        UnlockAccountWitness::new_builder()
-            .message(message)
-            .signature(signature.clone())
-            .build()
-    };
+    let tx = gen_tx(
+        &mut data_loader,
+        pubkey_hash.clone(),
+        Bytes::from(message.to_vec()),
+    );
     let tx = tx
         .as_advanced_builder()
         .set_witnesses(vec![WitnessArgs::new_builder()
-            .lock(Some(unlock_witness.as_bytes()).pack())
+            .lock(Some(signature.as_bytes()).pack())
             .build()
             .as_bytes()
             .pack()])
