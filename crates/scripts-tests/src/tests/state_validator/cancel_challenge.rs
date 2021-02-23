@@ -4,17 +4,20 @@ use ckb_types::{
     packed::CellInput,
     prelude::{Pack as CKBPack, Unpack},
 };
-use gw_chain::testing_tools::{apply_block_result, setup_chain, ALWAYS_SUCCESS_CODE_HASH};
+use gw_chain::testing_tools::{
+    apply_block_result, setup_chain_with_account_lock_manage, ALWAYS_SUCCESS_CODE_HASH,
+};
 use gw_chain::{
     chain::ProduceBlockParam, mem_pool::PackageParam, next_block_context::NextBlockContext,
 };
 use gw_common::{h256_ext::H256Ext, sparse_merkle_tree::default_store::DefaultStore, H256};
+use gw_generator::account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage};
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType, Status},
     packed::{
-        ChallengeLockArgs, ChallengeTarget, DepositionRequest, RawWithdrawalRequest, RollupAction,
-        RollupActionUnion, RollupCancelChallenge, RollupConfig, Script, UnlockAccountWitness,
+        Byte32, ChallengeLockArgs, ChallengeTarget, DepositionRequest, RawWithdrawalRequest,
+        RollupAction, RollupActionUnion, RollupCancelChallenge, RollupConfig, Script,
         VerifyWithdrawalWitness, WithdrawalRequest,
     },
 };
@@ -30,12 +33,22 @@ fn test_cancel_challenge_via_withdrawal() {
     // rollup lock & config
     let stake_lock_type = build_type_id_script(b"stake_lock_type_id");
     let challenge_lock_type = build_type_id_script(b"challenge_lock_type_id");
+    let eoa_lock_type = build_type_id_script(b"eoa_lock_type_id");
     let challenge_script_type_hash: [u8; 32] = challenge_lock_type.calc_script_hash().unpack();
+    let eoa_lock_type_hash: [u8; 32] = eoa_lock_type.calc_script_hash().unpack();
+    let allowed_eoa_type_hashes: Vec<Byte32> = vec![Pack::pack(&eoa_lock_type_hash)];
     let rollup_config = RollupConfig::new_builder()
         .challenge_script_type_hash(Pack::pack(&challenge_script_type_hash))
+        .allowed_eoa_type_hashes(PackVec::pack(allowed_eoa_type_hashes))
         .build();
     // setup chain
-    let mut chain = setup_chain(rollup_type_script.clone(), rollup_config.clone());
+    let mut account_lock_manage = AccountLockManage::default();
+    account_lock_manage.register_lock_algorithm(eoa_lock_type_hash.into(), Box::new(AlwaysSuccess));
+    let mut chain = setup_chain_with_account_lock_manage(
+        rollup_type_script.clone(),
+        rollup_config.clone(),
+        account_lock_manage,
+    );
     // create a rollup cell
     let capacity = 1000_00000000u64;
     let rollup_cell = build_always_success_cell(capacity, Some(state_validator_script()));
@@ -43,8 +56,8 @@ fn test_cancel_challenge_via_withdrawal() {
     let sender_script = {
         // deposit two account
         let sender_script = Script::new_builder()
-            .code_hash(Pack::pack(&ALWAYS_SUCCESS_CODE_HASH.clone()))
-            .hash_type(ScriptHashType::Data.into())
+            .code_hash(Pack::pack(&eoa_lock_type_hash.clone()))
+            .hash_type(ScriptHashType::Type.into())
             .args(Pack::pack(&Bytes::from(b"sender".to_vec())))
             .build();
         let receiver_script = Script::new_builder()
@@ -133,6 +146,7 @@ fn test_cancel_challenge_via_withdrawal() {
     let param = CellContextParam {
         stake_lock_type: stake_lock_type.clone(),
         challenge_lock_type: challenge_lock_type.clone(),
+        eoa_lock_type: eoa_lock_type.clone(),
         ..Default::default()
     };
     let mut ctx = CellContext::new(&rollup_config, param);
@@ -204,6 +218,7 @@ fn test_cancel_challenge_via_withdrawal() {
             };
             VerifyWithdrawalWitness::new_builder()
                 .raw_l2block(challenged_block.raw())
+                .account_script(sender_script.clone())
                 .withdrawal_request(withdrawal.clone())
                 .withdrawal_proof(Pack::pack(&withdrawal_proof))
                 .build()
@@ -219,10 +234,6 @@ fn test_cancel_challenge_via_withdrawal() {
             ))
             .capacity(CKBPack::pack(&42u64))
             .build();
-        let out_point = ctx.insert_cell(cell, Bytes::new());
-        CellInput::new_builder().previous_output(out_point).build()
-    };
-    let input_unlock_witness = {
         let message = {
             let mut hasher = new_blake2b();
             hasher.update(&rollup_type_script.hash());
@@ -231,14 +242,8 @@ fn test_cancel_challenge_via_withdrawal() {
             hasher.finalize(&mut hash);
             hash
         };
-        ckb_types::packed::WitnessArgs::new_builder()
-            .lock(CKBPack::pack(&Some(
-                UnlockAccountWitness::new_builder()
-                    .message(Pack::pack(&message))
-                    .build()
-                    .as_bytes(),
-            )))
-            .build()
+        let out_point = ctx.insert_cell(cell, Bytes::from(message.to_vec()));
+        CellInput::new_builder().previous_output(out_point).build()
     };
     let rollup_cell_data = global_state
         .clone()
@@ -256,12 +261,13 @@ fn test_cancel_challenge_via_withdrawal() {
     .input(input_challenge_cell)
     .witness(CKBPack::pack(&challenge_witness.as_bytes()))
     .input(input_unlock_cell)
-    .witness(CKBPack::pack(&input_unlock_witness.as_bytes()))
+    .witness(Default::default())
     .cell_dep(ctx.challenge_lock_dep.clone())
     .cell_dep(ctx.stake_lock_dep.clone())
     .cell_dep(ctx.always_success_dep.clone())
     .cell_dep(ctx.state_validator_dep.clone())
     .cell_dep(ctx.rollup_config_dep.clone())
+    .cell_dep(ctx.eoa_lock_dep.clone())
     .build();
     ctx.verify_tx(tx).expect("return success");
 }

@@ -31,7 +31,7 @@ use gw_common::{
 };
 use gw_types::{
     bytes::Bytes,
-    core::Status,
+    core::{ScriptHashType, Status},
     packed::{
         AccountMerkleState, Byte32, GlobalState, L2Block, RawL2Block, RollupConfig,
         WithdrawalRequest,
@@ -210,7 +210,19 @@ fn mint_layer2_sudt(
     deposit_cells: &[DepositionRequestCell],
 ) -> Result<(), Error> {
     for request in deposit_cells {
-        // find or create user account
+        // check that account's script is a valid EOA script
+        if request.account_script.hash_type() != ScriptHashType::Type.into() {
+            return Err(Error::UnknownEOAScript);
+        }
+        if config
+            .allowed_eoa_type_hashes()
+            .into_iter()
+            .find(|code_hash| code_hash == &request.account_script.code_hash())
+            .is_none()
+        {
+            return Err(Error::UnknownEOAScript);
+        }
+        // find or create EOA
         let id = match context.get_account_id_by_script_hash(&request.account_script_hash.into())? {
             Some(id) => id,
             None => context.create_account(request.account_script_hash)?,
@@ -251,7 +263,7 @@ fn burn_layer2_sudt(
         let raw = request.raw();
         let l2_sudt_script_hash: [u8; 32] =
             build_l2_sudt_script(config, raw.sudt_script_hash().unpack()).hash();
-        // find user account
+        // find EOA
         let id = context
             .get_account_id_by_script_hash(&raw.account_script_hash().unpack())?
             .ok_or(StateError::MissingKey)?;

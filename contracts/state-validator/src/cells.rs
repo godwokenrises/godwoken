@@ -285,15 +285,17 @@ pub fn collect_deposition_locks(
                     return Some(Err(Error::Encoding));
                 }
             };
-            let account_script_hash = args.layer2_lock().hash().into();
             let value = match fetch_capacity_and_sudt_value(config, index, source) {
                 Ok(value) => value,
                 Err(err) => return Some(Err(err)),
             };
+            let account_script = args.layer2_lock();
+            let account_script_hash = account_script.hash().into();
             let cell = DepositionRequestCell {
                 index,
                 args,
                 value,
+                account_script,
                 account_script_hash,
             };
             Some(Ok(cell))

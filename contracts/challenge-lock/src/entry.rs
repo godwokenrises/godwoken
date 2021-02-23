@@ -12,7 +12,10 @@ use validator_utils::{
     },
     error::Error,
     kv_state::KVState,
-    search_cells::{parse_rollup_action, search_lock_hash, search_rollup_cell},
+    search_cells::{
+        load_rollup_config, parse_rollup_action, search_lock_hash, search_rollup_cell,
+        search_rollup_state,
+    },
     signature::check_input_account_lock,
 };
 
@@ -27,10 +30,11 @@ use gw_common::{
     H256,
 };
 use gw_types::{
-    core::ChallengeTargetType,
+    core::{ChallengeTargetType, ScriptHashType},
     packed::{
-        ChallengeLockArgs, ChallengeLockArgsReader, RollupActionUnion, VerifyTransactionWitness,
-        VerifyTransactionWitnessReader, VerifyWithdrawalWitness, VerifyWithdrawalWitnessReader,
+        ChallengeLockArgs, ChallengeLockArgsReader, RollupActionUnion, RollupConfig,
+        VerifyTransactionWitness, VerifyTransactionWitnessReader, VerifyWithdrawalWitness,
+        VerifyWithdrawalWitnessReader,
     },
     prelude::*,
 };
@@ -61,6 +65,7 @@ fn parse_lock_args() -> Result<([u8; 32], ChallengeLockArgs), Error> {
 /// 3. do other merkle proof verification
 fn verify_transaction(
     rollup_script_hash: &[u8; 32],
+    rollup_config: &RollupConfig,
     lock_args: &ChallengeLockArgs,
 ) -> Result<(), Error> {
     let witness_args: Bytes = load_witness_args(0, Source::GroupInput)?
@@ -72,7 +77,6 @@ fn verify_transaction(
         Ok(_) => VerifyTransactionWitness::new_unchecked(witness_args),
         Err(_) => return Err(Error::InvalidArgs),
     };
-    // verify tx signature
     let tx = unlock_args.l2tx();
     let raw_tx = tx.raw();
     let account_count: u32 = unlock_args.account_count().unpack();
@@ -81,12 +85,54 @@ fn verify_transaction(
         unlock_args.kv_state_proof().unpack(),
         account_count,
     );
+    // verify tx account's script
+    let sender_id: u32 = raw_tx.from_id().unpack();
+    let receiver_id: u32 = raw_tx.to_id().unpack();
     let sender_script_hash = kv_state
-        .get_script_hash(raw_tx.from_id().unpack())
+        .get_script_hash(sender_id)
         .map_err(|_| Error::SMTKeyMissing)?;
     let receiver_script_hash = kv_state
-        .get_script_hash(raw_tx.to_id().unpack())
+        .get_script_hash(receiver_id)
         .map_err(|_| Error::SMTKeyMissing)?;
+
+    // find scripts
+    let scripts = unlock_args.scripts();
+    let sender_script = scripts
+        .clone()
+        .into_iter()
+        .find(|script| H256::from(script.hash()) == sender_script_hash)
+        .ok_or(Error::ScriptNotFound)?;
+    let receiver_script = scripts
+        .into_iter()
+        .find(|script| H256::from(script.hash()) == receiver_script_hash)
+        .ok_or(Error::ScriptNotFound)?;
+
+    // sender must be a valid External Owned Account
+    if sender_script.hash_type() != ScriptHashType::Type.into() {
+        return Err(Error::UnknownEOAScript);
+    }
+    if rollup_config
+        .allowed_eoa_type_hashes()
+        .into_iter()
+        .find(|code_hash| code_hash == &sender_script.code_hash())
+        .is_none()
+    {
+        return Err(Error::UnknownEOAScript);
+    }
+    // receiver must be a valid contract account
+    if receiver_script.hash_type() != ScriptHashType::Type.into() {
+        return Err(Error::UnknownContractScript);
+    }
+    if rollup_config
+        .allowed_contract_type_hashes()
+        .into_iter()
+        .find(|code_hash| code_hash == &receiver_script.code_hash())
+        .is_none()
+    {
+        return Err(Error::UnknownContractScript);
+    }
+
+    // verify tx signature
     let message = {
         let mut hasher = new_blake2b();
         hasher.update(rollup_script_hash);
@@ -147,6 +193,7 @@ fn verify_transaction(
 /// Verify withdrawal signature
 fn verify_withdrawal(
     rollup_script_hash: &[u8; 32],
+    rollup_config: &RollupConfig,
     lock_args: &ChallengeLockArgs,
 ) -> Result<(), Error> {
     let witness_args: Bytes = load_witness_args(0, Source::GroupInput)?
@@ -158,10 +205,29 @@ fn verify_withdrawal(
         Ok(_) => VerifyWithdrawalWitness::new_unchecked(witness_args),
         Err(_) => return Err(Error::InvalidArgs),
     };
-    // verify withdrawal signature
+
     let withdrawal = unlock_args.withdrawal_request();
     let raw_withdrawal = withdrawal.raw();
     let sender_script_hash = raw_withdrawal.account_script_hash().unpack();
+    // check withdrawal account type
+    let account_script = unlock_args.account_script();
+    if H256::from(account_script.hash()) != sender_script_hash {
+        return Err(Error::ScriptNotFound);
+    }
+    // withdrawal account must be a valid External Owned Account
+    if account_script.hash_type() != ScriptHashType::Type.into() {
+        return Err(Error::UnknownEOAScript);
+    }
+    if rollup_config
+        .allowed_eoa_type_hashes()
+        .into_iter()
+        .find(|code_hash| code_hash == &account_script.code_hash())
+        .is_none()
+    {
+        return Err(Error::UnknownEOAScript);
+    }
+
+    // verify withdrawal signature
     let message = {
         let mut hasher = new_blake2b();
         hasher.update(rollup_script_hash);
@@ -213,6 +279,7 @@ fn verify_withdrawal(
 ///   * the verification tx must provides verification context
 pub fn main() -> Result<(), Error> {
     let (rollup_script_hash, lock_args) = parse_lock_args()?;
+
     // check rollup cell
     let index =
         search_rollup_cell(&rollup_script_hash, Source::Output).ok_or(Error::RollupCellNotFound)?;
@@ -228,6 +295,13 @@ pub fn main() -> Result<(), Error> {
         }
     }
 
+    // load rollup config
+    let rollup_config = {
+        let prev_global_state = search_rollup_state(&rollup_script_hash, Source::Input)?
+            .ok_or(Error::RollupCellNotFound)?;
+        load_rollup_config(&prev_global_state.rollup_config_hash().unpack())?
+    };
+
     // unlock via cancel challenge
     let challenge_target = lock_args.target();
     let target_type: ChallengeTargetType = {
@@ -237,10 +311,10 @@ pub fn main() -> Result<(), Error> {
 
     match target_type {
         ChallengeTargetType::Transaction => {
-            verify_transaction(&rollup_script_hash, &lock_args)?;
+            verify_transaction(&rollup_script_hash, &rollup_config, &lock_args)?;
         }
         ChallengeTargetType::Withdrawal => {
-            verify_withdrawal(&rollup_script_hash, &lock_args)?;
+            verify_withdrawal(&rollup_script_hash, &rollup_config, &lock_args)?;
         }
     }
 

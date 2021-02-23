@@ -6,7 +6,8 @@ use gw_common::smt::Blake2bHasher;
 use gw_common::sparse_merkle_tree::{CompiledMerkleProof, H256};
 use gw_common::{error::Error as StateError, state::State};
 use gw_types::packed::{
-    ChallengeLockArgs, CustodianLockArgs, DepositionLockArgs, StakeLockArgs, WithdrawalLockArgs,
+    ChallengeLockArgs, CustodianLockArgs, DepositionLockArgs, Script, StakeLockArgs,
+    WithdrawalLockArgs,
 };
 
 #[derive(Clone)]
@@ -38,6 +39,7 @@ pub struct DepositionRequestCell {
     pub index: usize,
     pub args: DepositionLockArgs,
     pub value: CellValue,
+    pub account_script: Script,
     pub account_script_hash: H256,
 }
 

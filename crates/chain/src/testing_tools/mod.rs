@@ -47,15 +47,23 @@ lazy_static! {
 }
 
 pub fn setup_chain(rollup_type_script: Script, rollup_config: RollupConfig) -> Chain {
-    let store = Store::open_tmp().unwrap();
-    let genesis_config = GenesisConfig { timestamp: 0 };
-    let genesis_header_info = HeaderInfo::default();
-    let backend_manage = BackendManage::default();
     let mut account_lock_manage = AccountLockManage::default();
     account_lock_manage.register_lock_algorithm(
         ALWAYS_SUCCESS_CODE_HASH.clone().into(),
         Box::new(AlwaysSuccess),
     );
+    setup_chain_with_account_lock_manage(rollup_type_script, rollup_config, account_lock_manage)
+}
+
+pub fn setup_chain_with_account_lock_manage(
+    rollup_type_script: Script,
+    rollup_config: RollupConfig,
+    account_lock_manage: AccountLockManage,
+) -> Chain {
+    let store = Store::open_tmp().unwrap();
+    let genesis_config = GenesisConfig { timestamp: 0 };
+    let genesis_header_info = HeaderInfo::default();
+    let backend_manage = BackendManage::default();
     let config = ChainConfig {
         rollup_type_script,
         rollup_config: rollup_config.clone(),
