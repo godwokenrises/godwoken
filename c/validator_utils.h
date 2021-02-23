@@ -239,6 +239,16 @@ int sys_create(gw_context_t *ctx, uint8_t *script, uint32_t script_len,
   int ret;
   uint32_t id = ctx->prev_account.count;
 
+  mol_seg_t account_script_seg;
+  account_script_seg.ptr = script;
+  account_script_seg.size = script_len;
+  /* check script */
+  ret = _check_account_script_is_allowed(&account_script_seg,
+                                         &ctx->rollup_config_seg);
+  if (ret != 0) {
+    return ret;
+  }
+
   uint8_t nonce_key[32];
   uint8_t nonce_value[32];
   gw_build_account_field_key(id, GW_ACCOUNT_NONCE, nonce_key);
@@ -281,12 +291,6 @@ int sys_create(gw_context_t *ctx, uint8_t *script, uint32_t script_len,
   ctx->scripts_size += 1;
 
   ctx->prev_account.count += 1;
-
-  /* check script */
-  ret = _check_account_script_is_allowed(script_seg, &ctx->rollup_config_seg);
-  if (ret != 0) {
-    return ret;
-  }
 
   return 0;
 }

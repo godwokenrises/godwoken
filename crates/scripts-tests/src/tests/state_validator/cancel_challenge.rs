@@ -5,7 +5,7 @@ use ckb_types::{
     prelude::{Pack as CKBPack, Unpack},
 };
 use gw_chain::testing_tools::{
-    apply_block_result, setup_chain, setup_chain_with_account_lock_manage, ALWAYS_SUCCESS_CODE_HASH,
+    apply_block_result, setup_chain_with_account_lock_manage, ALWAYS_SUCCESS_CODE_HASH,
 };
 use gw_chain::{
     chain::ProduceBlockParam, mem_pool::PackageParam, next_block_context::NextBlockContext,
