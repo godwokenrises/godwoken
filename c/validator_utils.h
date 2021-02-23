@@ -7,6 +7,10 @@
 #define SCRIPT_HASH_TYPE_DATA 0
 #define SCRIPT_HASH_TYPE_TYPE 1
 
+/* functions */
+int _check_account_script_is_allowed(mol_seg_t *script_seg,
+                                     mol_seg_t *rollup_config_seg);
+
 typedef struct {
   uint8_t merkle_root[32];
   uint32_t count;
@@ -30,6 +34,7 @@ typedef struct gw_context_t {
   /* verification context */
   gw_transaction_context_t transaction_context;
   gw_block_info_t block_info;
+  mol_seg_t rollup_config_seg;
   /* layer2 syscalls */
   gw_load_fn sys_load;
   gw_load_nonce_fn sys_load_nonce;
@@ -264,6 +269,11 @@ int sys_create(gw_context_t *ctx, uint8_t *script, uint32_t script_len,
     return -1;
   }
 
+  /* scripts slots is full */
+  if (ctx->scripts_size == ctx->max_scripts_size) {
+    return -1;
+  }
+
   mol_seg_t *script_seg = &(ctx->scripts[ctx->scripts_size].script_seg);
   script_seg->size = script_len;
   script_seg->ptr = (uint8_t *)malloc(script_len);
@@ -271,6 +281,12 @@ int sys_create(gw_context_t *ctx, uint8_t *script, uint32_t script_len,
   ctx->scripts_size += 1;
 
   ctx->prev_account.count += 1;
+
+  /* check script */
+  ret = _check_account_script_is_allowed(script_seg, &ctx->rollup_config_seg);
+  if (ret != 0) {
+    return ret;
+  }
 
   return 0;
 }
@@ -341,18 +357,17 @@ int _load_rollup_script_hash(uint8_t rollup_script_hash[32]) {
   return 0;
 }
 
-/* Load config cell */
-int _load_rollup_config(
-    uint8_t config_cell_data_hash[32],
-    uint8_t rollup_config_buf[sizeof(MolDefault_RollupConfig)],
-    mol_seg_t *config_seg) {
+/* Load config config */
+int _load_rollup_config(uint8_t config_cell_data_hash[32],
+                        uint8_t rollup_config_buf[GW_MAX_ROLLUP_CONFIG_SIZE],
+                        mol_seg_t *config_seg) {
   uint64_t config_cell_index = 0;
   int ret = _find_cell_by_data_hash(config_cell_data_hash, CKB_SOURCE_CELL_DEP,
                                     &config_cell_index);
   if (ret != CKB_SUCCESS) {
     return ret;
   }
-  uint64_t buf_len = 32;
+  uint64_t buf_len = GW_MAX_ROLLUP_CONFIG_SIZE;
   ret = ckb_checked_load_cell_data(rollup_config_buf, &buf_len, 0,
                                    config_cell_index, CKB_SOURCE_CELL_DEP);
   if (ret != CKB_SUCCESS) {
@@ -409,14 +424,11 @@ int _load_challenge_lock_args(uint8_t rollup_script_hash[32],
 }
 
 /* Load and verify challenge context */
-int _load_verification_context(gw_context_t *ctx,
-                               uint8_t rollup_script_hash[32],
+int _load_verification_context(uint8_t rollup_script_hash[32],
                                uint64_t rollup_cell_index,
-                               uint64_t *challenge_cell_index) {
-  if (ctx == NULL) {
-    return GW_ERROR_INVALID_CONTEXT;
-  }
-
+                               uint64_t *challenge_cell_index,
+                               uint32_t *tx_index,
+                               mol_seg_t *rollup_config_seg) {
   /* load global state */
   uint8_t global_state_buf[sizeof(MolDefault_GlobalState)];
   uint64_t buf_len = sizeof(global_state_buf);
@@ -436,17 +448,21 @@ int _load_verification_context(gw_context_t *ctx,
   /* load rollup config */
   mol_seg_t rollup_config_hash_seg =
       MolReader_GlobalState_get_rollup_config_hash(&global_state_seg);
-  uint8_t rollup_config_buf[sizeof(MolDefault_RollupConfig)];
-  mol_seg_t rollup_config_seg;
+  uint8_t rollup_config_buf[GW_MAX_ROLLUP_CONFIG_SIZE];
+  mol_seg_t config_seg;
   ret = _load_rollup_config(rollup_config_hash_seg.ptr, rollup_config_buf,
-                            &rollup_config_seg);
+                            &config_seg);
   if (ret != 0) {
     return ret;
   }
+  /* copy to rollup_config_seg */
+  rollup_config_seg->size = config_seg.size;
+  rollup_config_seg->ptr = (uint8_t *)malloc(config_seg.size);
+  memcpy(rollup_config_seg->ptr, config_seg.ptr, config_seg.size);
 
   /* load challenge cell */
   mol_seg_t challenge_script_type_hash_seg =
-      MolReader_RollupConfig_get_challenge_script_type_hash(&rollup_config_seg);
+      MolReader_RollupConfig_get_challenge_script_type_hash(rollup_config_seg);
 
   uint8_t challenge_script_buf[GW_MAX_SCRIPT_SIZE];
   *challenge_cell_index = 0;
@@ -469,7 +485,7 @@ int _load_verification_context(gw_context_t *ctx,
   }
   mol_seg_t tx_index_seg =
       MolReader_ChallengeTarget_get_target_index(&target_seg);
-  ctx->tx_index = *((uint32_t *)tx_index_seg.ptr);
+  *tx_index = *((uint32_t *)tx_index_seg.ptr);
   return 0;
 }
 
@@ -624,6 +640,64 @@ int _load_verify_transaction_witness(gw_context_t *ctx,
   return 0;
 }
 
+/* check that an account script is allowed */
+int _check_account_script_is_allowed(mol_seg_t *script_seg,
+                                     mol_seg_t *rollup_config_seg) {
+
+  if (MolReader_Script_verify(script_seg, false) != MOL_OK) {
+    return GW_ERROR_INVALID_DATA;
+  }
+
+  /* check hash type */
+  mol_seg_t hash_type_seg = MolReader_Script_get_hash_type(script_seg);
+  if (*(uint8_t *)hash_type_seg.ptr != SCRIPT_HASH_TYPE_TYPE) {
+    return GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH;
+  }
+  mol_seg_t code_hash_seg = MolReader_Script_get_code_hash(script_seg);
+  if (code_hash_seg.size != 32) {
+    return GW_ERROR_INVALID_DATA;
+  }
+
+  /* check allowed EOA list */
+  mol_seg_t eoa_list_seg =
+      MolReader_RollupConfig_get_allowed_eoa_type_hashes(rollup_config_seg);
+  uint32_t len = MolReader_Byte32Vec_length(&eoa_list_seg);
+  for (uint32_t i = 0; i < len; i++) {
+    mol_seg_res_t allowed_code_hash_res =
+        MolReader_Byte32Vec_get(&eoa_list_seg, i);
+    if (allowed_code_hash_res.errno != MOL_OK ||
+        allowed_code_hash_res.seg.size != code_hash_seg.size) {
+      return GW_ERROR_INVALID_DATA;
+    }
+    if (memcmp(allowed_code_hash_res.seg.ptr, code_hash_seg.ptr,
+               code_hash_seg.size) == 0) {
+      /* found a valid code_hash */
+      return 0;
+    }
+  }
+
+  /* check allowed contract list */
+  mol_seg_t contract_list_seg =
+      MolReader_RollupConfig_get_allowed_eoa_type_hashes(rollup_config_seg);
+  len = MolReader_Byte32Vec_length(&contract_list_seg);
+  for (uint32_t i = 0; i < len; i++) {
+    mol_seg_res_t allowed_code_hash_res =
+        MolReader_Byte32Vec_get(&contract_list_seg, i);
+    if (allowed_code_hash_res.errno != MOL_OK ||
+        allowed_code_hash_res.seg.size != code_hash_seg.size) {
+      return GW_ERROR_INVALID_DATA;
+    }
+    if (memcmp(allowed_code_hash_res.seg.ptr, code_hash_seg.ptr,
+               code_hash_seg.size) == 0) {
+      /* found a valid code_hash */
+      return 0;
+    }
+  }
+
+  /* script is not allowed */
+  return GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH;
+}
+
 int gw_context_init(gw_context_t *ctx) {
   /* setup syscalls */
   ctx->sys_load = sys_load;
@@ -651,8 +725,9 @@ int gw_context_init(gw_context_t *ctx) {
     return ret;
   }
   uint64_t challenge_cell_index = 0;
-  ret = _load_verification_context(ctx, rollup_script_hash, rollup_cell_index,
-                                   &challenge_cell_index);
+  ret = _load_verification_context(rollup_script_hash, rollup_cell_index,
+                                   &challenge_cell_index, &ctx->tx_index,
+                                   &ctx->rollup_config_seg);
   if (ret != 0) {
     return ret;
   }

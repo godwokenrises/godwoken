@@ -26,7 +26,7 @@ struct GlobalState {
     status: byte,
 }
 
-struct RollupConfig {
+table RollupConfig {
     l1_sudt_script_type_hash: Byte32,
     custodian_script_type_hash: Byte32,
     deposition_script_type_hash: Byte32,
@@ -39,6 +39,8 @@ struct RollupConfig {
     challenge_maturity_blocks: Uint64,
     finality_blocks: Uint64,
     reward_burn_rate: byte, // * reward_burn_rate / 100
+    allowed_eoa_type_hashes: Byte32Vec, // list of script code_hash allowed an EOA(external owned account) to use
+    allowed_contract_type_hashes: Byte32Vec, // list of script code_hash allowed a contract account to use
 }
 
 table RawL2Transaction {
@@ -272,6 +274,7 @@ table VerifyTransactionWitness {
 
 table VerifyWithdrawalWitness {
     raw_l2block: RawL2Block,
+    account_script: Script,
     withdrawal_request: WithdrawalRequest,
     withdrawal_proof: Bytes,
 }

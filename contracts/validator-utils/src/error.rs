@@ -42,6 +42,9 @@ pub enum Error {
     InvalidSUDTCell,
     InvalidChallengeTarget,
     InvalidWithdrawalRequest,
+    UnknownEOAScript,
+    UnknownContractScript,
+    ScriptNotFound,
 }
 
 impl From<SysError> for Error {
