@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rocksdb = { package = "ckb-rocksdb", version = "=0.14.1", features = ["snappy"] }
+rocksdb = { package = "ckb-rocksdb", version = "=0.15.0", features = ["snappy"] }
 libc = "0.2"
 thiserror = "1.0"
 tempfile = "3.0"

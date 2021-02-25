@@ -46,4 +46,23 @@ impl_std_eq!(DepositionLockArgs);
 impl_std_eq!(GlobalState);
 impl_std_eq!(RollupConfig);
 impl_std_eq!(StakeLockArgs);
+impl_std_eq!(L2Transaction);
+impl_std_eq!(WithdrawalRequest);
 impl_std_eq!(VerifyTransactionWitness);
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "std")] {
+        macro_rules! impl_std_hash {
+            ($struct:ident) => {
+                impl std::hash::Hash for packed::$struct {
+                    #[inline]
+                    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                        self.as_slice().hash(state);
+                    }
+                }
+            };
+        }
+        impl_std_hash!(L2Transaction);
+        impl_std_hash!(WithdrawalRequest);
+    }
+}

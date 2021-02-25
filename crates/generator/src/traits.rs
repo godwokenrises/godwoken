@@ -1,4 +1,4 @@
-use crate::error::{DepositionError, Error, ValidateError, WithdrawalError};
+use crate::error::{AccountError, DepositionError, Error, WithdrawalError};
 use crate::sudt::build_l2_sudt_script;
 use crate::types::RunResult;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS};
@@ -98,7 +98,7 @@ impl<S: State + CodeStore> StateExt for S {
             };
             // prevent fake CKB SUDT, the caller should filter these invalid depositions
             if sudt_id == CKB_SUDT_ACCOUNT_ID {
-                return Err(ValidateError::InvalidSUDTOperation.into());
+                return Err(AccountError::InvalidSUDTOperation.into());
             }
             // mint SUDT
             self.mint_sudt(sudt_id, id, amount)?;
@@ -118,13 +118,13 @@ impl<S: State + CodeStore> StateExt for S {
         // find user account
         let id = self
             .get_account_id_by_script_hash(&account_script_hash.into())?
-            .ok_or(ValidateError::UnknownAccount)?; // find Simple UDT account
+            .ok_or(AccountError::UnknownAccount)?; // find Simple UDT account
         let capacity: u64 = raw.capacity().unpack();
         // burn CKB
         self.burn_sudt(CKB_SUDT_ACCOUNT_ID, id, capacity.into())?;
         let sudt_id = self
             .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
-            .ok_or(ValidateError::UnknownSUDT)?;
+            .ok_or(AccountError::UnknownSUDT)?;
         if sudt_id != CKB_SUDT_ACCOUNT_ID {
             // burn sudt
             self.burn_sudt(sudt_id, id, amount)?;
@@ -135,7 +135,7 @@ impl<S: State + CodeStore> StateExt for S {
         let nonce = self.get_nonce(id)?;
         let new_nonce = nonce
             .checked_add(1)
-            .ok_or_else(|| ValidateError::NonceOverflow)?;
+            .ok_or_else(|| AccountError::NonceOverflow)?;
         self.set_nonce(id, new_nonce)?;
         Ok(())
     }

@@ -1,5 +1,5 @@
 use ckb_vm::Error as VMError;
-use gw_common::{error::Error as StateError, sparse_merkle_tree::error::Error as SMTError};
+use gw_common::{error::Error as StateError, sparse_merkle_tree::error::Error as SMTError, H256};
 use gw_types::packed::ChallengeTarget;
 use thiserror::Error;
 
@@ -10,8 +10,8 @@ pub enum Error {
     Transaction(TransactionErrorWithContext),
     #[error("State error {0:?}")]
     State(StateError),
-    #[error("Validate error {0:?}")]
-    Validate(ValidateError),
+    #[error("Account error {0:?}")]
+    Account(AccountError),
     #[error("Unlock error {0}")]
     Unlock(LockAlgorithmError),
     #[error("Deposition error {0}")]
@@ -59,7 +59,7 @@ pub enum WithdrawalError {
     #[error("Over withdrawal")]
     Overdraft,
     #[error("Invalid withdrawal nonce expected {expected} actual {actual}")]
-    InvalidNonce { expected: u32, actual: u32 },
+    Nonce { expected: u32, actual: u32 },
     #[error("Withdrawal Faked CKB")]
     WithdrawFakedCKB,
     #[error("Non positive sudt amount")]
@@ -73,7 +73,7 @@ impl From<WithdrawalError> for Error {
 }
 
 #[derive(Error, Debug, PartialEq, Clone, Eq)]
-pub enum ValidateError {
+pub enum AccountError {
     #[error("Insufficient capacity expected {expected} actual {actual}")]
     InsufficientCapacity { expected: u64, actual: u64 },
     #[error("Invalid SUDT operation")]
@@ -84,11 +84,13 @@ pub enum ValidateError {
     UnknownAccount,
     #[error("Nonce Overflow")]
     NonceOverflow,
+    #[error("can't find script for account {account_id}")]
+    ScriptNotFound { account_id: u32 },
 }
 
-impl From<ValidateError> for Error {
-    fn from(err: ValidateError) -> Self {
-        Error::Validate(err)
+impl From<AccountError> for Error {
+    fn from(err: AccountError) -> Self {
+        Error::Account(err)
     }
 }
 
@@ -111,8 +113,12 @@ pub enum TransactionError {
     Nonce { expected: u32, actual: u32 },
     #[error("State error {0:?}")]
     State(StateError),
-    #[error("Unknown backend account_id {account_id}")]
-    Backend { account_id: u32 },
+    #[error("can't find backend for script_hash {script_hash:?}")]
+    BackendNotFound { script_hash: H256 },
+    #[error("Exceeded maximum read data: max bytes {max_bytes}, readed bytes {used_bytes}")]
+    ExceededMaxReadData { max_bytes: usize, used_bytes: usize },
+    #[error("Exceeded maximum write data: max bytes {max_bytes}, writen bytes {used_bytes}")]
+    ExceededMaxWriteData { max_bytes: usize, used_bytes: usize },
 }
 
 impl From<VMError> for TransactionError {
@@ -144,5 +150,42 @@ pub struct TransactionErrorWithContext {
 impl TransactionErrorWithContext {
     pub fn new(context: ChallengeTarget, error: TransactionError) -> Self {
         Self { context, error }
+    }
+}
+
+/// Transaction error with challenge context
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+pub enum TransactionValidateError {
+    #[error("Transaction error {0}")]
+    Transaction(TransactionError),
+    #[error("State error {0:?}")]
+    State(StateError),
+    #[error("Account error {0:?}")]
+    Account(AccountError),
+    #[error("Unlock error {0}")]
+    Unlock(LockAlgorithmError),
+}
+
+impl From<TransactionError> for TransactionValidateError {
+    fn from(err: TransactionError) -> Self {
+        Self::Transaction(err)
+    }
+}
+
+impl From<AccountError> for TransactionValidateError {
+    fn from(err: AccountError) -> Self {
+        Self::Account(err)
+    }
+}
+
+impl From<LockAlgorithmError> for TransactionValidateError {
+    fn from(err: LockAlgorithmError) -> Self {
+        Self::Unlock(err)
+    }
+}
+
+impl From<StateError> for TransactionValidateError {
+    fn from(err: StateError) -> Self {
+        Self::State(err)
     }
 }

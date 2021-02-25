@@ -7,8 +7,3 @@
 //! * Submit new blocks to layer1(as an block_producer)
 
 pub mod chain;
-pub mod mem_pool;
-pub mod next_block_context;
-pub mod testing_tools;
-#[cfg(test)]
-mod tests;
