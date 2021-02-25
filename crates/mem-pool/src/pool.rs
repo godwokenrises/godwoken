@@ -13,7 +13,7 @@
 use anyhow::{anyhow, Result};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
 use gw_generator::{Generator, RunResult};
-use gw_store::{OverlayStore, Store};
+use gw_store::{Snapshot, Store};
 use gw_types::{
     packed::{BlockInfo, L2Transaction, WithdrawalRequest},
     prelude::{Entity, Unpack},
@@ -92,7 +92,7 @@ impl EntryList {
 
 pub struct MemPool {
     /// current state
-    state: OverlayStore,
+    state: Snapshot,
     /// store
     db: Store,
     /// current tip
@@ -113,9 +113,14 @@ impl MemPool {
         let pending = Default::default();
         let all_txs = Default::default();
         let all_withdrawals = Default::default();
-        let state = db.new_overlay()?;
 
-        let tip = db.get_tip_block_hash()?;
+        let tip_block = db.get_tip_block()?;
+        let tip: H256 = tip_block.hash().into();
+
+        let state = db.storage_at(
+            tip.clone(),
+            tip_block.raw().post_account().merkle_root().unpack(),
+        )?;
 
         let mut mem_pool = MemPool {
             db,
@@ -132,7 +137,7 @@ impl MemPool {
         Ok(mem_pool)
     }
 
-    pub fn state(&self) -> &OverlayStore {
+    pub fn state(&self) -> &Snapshot {
         &self.state
     }
 
@@ -348,7 +353,7 @@ impl MemPool {
                 eprintln!("skipping deep transaction reorg: depth {}", depth);
             } else {
                 let mut rem = old_tip_block;
-                let mut add = new_tip_block;
+                let mut add = new_tip_block.clone();
                 let mut discarded_txs: HashSet<L2Transaction> = Default::default();
                 let mut included_txs: HashSet<L2Transaction> = Default::default();
                 let mut discarded_withdrawals: HashSet<WithdrawalRequest> = Default::default();
@@ -397,7 +402,9 @@ impl MemPool {
         }
 
         // update current state
-        self.state = self.db.new_overlay()?;
+        let tip_block_hash = new_tip_block.hash().into();
+        let latest_state_root = new_tip_block.raw().post_account().merkle_root().unpack();
+        self.state = self.db.storage_at(tip_block_hash, latest_state_root)?;
 
         // re-inject txs
         for tx in reinject_txs {
