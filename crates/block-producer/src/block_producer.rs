@@ -7,7 +7,7 @@ use gw_common::{
     h256_ext::H256Ext, merkle_utils::calculate_merkle_root, smt::Blake2bHasher, state::State, H256,
 };
 use gw_generator::{traits::StateExt, Generator};
-use gw_store::{transaction::StoreTransaction, OverlayStore};
+use gw_store::{transaction::StoreTransaction, Snapshot};
 use gw_types::{
     core::Status,
     packed::{
@@ -59,8 +59,14 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
         max_withdrawal_capacity,
     } = param;
     let db = Rc::new(db);
-    // reset overlay, we need to record deposition / withdrawal touched keys to generate proof for state
-    let mut state = OverlayStore::from_store_transaction(db.clone())?;
+    // create overlay storage
+    let mut state = {
+        let tip_block = db.get_tip_block()?;
+        let tip_block_hash = tip_block.hash().into();
+        // the latest state
+        let account_state_root = tip_block.raw().post_account().merkle_root().unpack();
+        Snapshot::storage_at(db.clone(), tip_block_hash, account_state_root)?
+    };
     let prev_account_state_root = state.calculate_root()?;
     let prev_account_state_count = state.get_account_count()?;
     // verify the withdrawals
@@ -169,8 +175,7 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
     }
     assert_eq!(used_transactions.len(), tx_receipts.len());
     let touched_keys: Vec<H256> = state
-        .overlay_store_mut()
-        .touched_keys()
+        .state_tree_touched_keys()
         .into_iter()
         .cloned()
         .collect();

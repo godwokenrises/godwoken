@@ -1,5 +1,4 @@
-use super::overlay::OverlayStore;
-use crate::snapshot::StoreSnapshot;
+use super::snapshot::Snapshot;
 use crate::transaction::StoreTransaction;
 use crate::write_batch::StoreWriteBatch;
 use anyhow::Result;
@@ -50,12 +49,6 @@ impl<'a> Store {
         }
     }
 
-    pub fn get_snapshot(&self) -> StoreSnapshot {
-        StoreSnapshot {
-            inner: self.db.get_snapshot(),
-        }
-    }
-
     pub fn new_write_batch(&self) -> StoreWriteBatch {
         StoreWriteBatch {
             inner: self.db.new_write_batch(),
@@ -75,9 +68,11 @@ impl<'a> Store {
         Ok(db.get_block_hash_by_number(0)?.is_some())
     }
 
-    pub fn new_overlay(&self) -> Result<OverlayStore> {
+    /// Return a snapshot of a history point
+    /// TODO implemente the snapshot
+    pub fn storage_at(&self, tip_block_hash: H256, account_state_root: H256) -> Result<Snapshot> {
         let db = self.begin_transaction();
-        OverlayStore::from_store_transaction(Rc::new(db))
+        Snapshot::storage_at(Rc::new(db), tip_block_hash, account_state_root)
     }
 
     pub fn get_chain_id(&self) -> Result<H256, Error> {
