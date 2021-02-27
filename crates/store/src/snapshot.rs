@@ -22,6 +22,16 @@ use gw_types::{
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+/// SnapshotKey
+/// Represent a history point of the db.
+/// In the db representation we convert it to prefix key: <raw-key>-<block-number>-<tx-index>
+pub enum SnapshotKey {
+    // get snapshot of db after processed the block
+    AtBlock(H256),
+    // get snapshot of db after processed the transaction
+    AtTx { block_hash: H256, tx_index: u32 },
+}
+
 /// Represent a history point,
 /// changes on Snapshot won't affect the main chain db
 pub struct Snapshot {
@@ -36,13 +46,8 @@ impl Snapshot {
     /// Get snapshot at a history point
     ///
     /// - db, StoreTransaction that contains all main chain state
-    /// - tip_block_hash, The tip block hash of a history point
-    /// - account_state_root, Account state root of a history point
-    pub fn storage_at(
-        db: Rc<StoreTransaction>,
-        _tip_block_hash: H256,
-        _account_state_root: H256,
-    ) -> Result<Self> {
+    /// - key, Represents a history point
+    pub fn storage_at(db: Rc<StoreTransaction>, _key: SnapshotKey) -> Result<Self> {
         let root = db.get_account_smt_root()?;
         let account_count = db.get_account_count()?;
         let smt_store = OverlaySMTStore::new(db.clone());

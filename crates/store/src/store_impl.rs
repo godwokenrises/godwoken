@@ -1,6 +1,6 @@
 use super::snapshot::Snapshot;
-use crate::transaction::StoreTransaction;
 use crate::write_batch::StoreWriteBatch;
+use crate::{snapshot::SnapshotKey, transaction::StoreTransaction};
 use anyhow::Result;
 use gw_common::{error::Error, smt::H256};
 use gw_db::{
@@ -69,10 +69,9 @@ impl<'a> Store {
     }
 
     /// Return a snapshot of a history point
-    /// TODO implemente the snapshot
-    pub fn storage_at(&self, tip_block_hash: H256, account_state_root: H256) -> Result<Snapshot> {
+    pub fn storage_at(&self, key: SnapshotKey) -> Result<Snapshot> {
         let db = self.begin_transaction();
-        Snapshot::storage_at(Rc::new(db), tip_block_hash, account_state_root)
+        Snapshot::storage_at(Rc::new(db), key)
     }
 
     pub fn get_chain_id(&self) -> Result<H256, Error> {
