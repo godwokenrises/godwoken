@@ -7,7 +7,10 @@ use gw_common::{
     h256_ext::H256Ext, merkle_utils::calculate_merkle_root, smt::Blake2bHasher, state::State, H256,
 };
 use gw_generator::{traits::StateExt, Generator};
-use gw_store::{transaction::StoreTransaction, Snapshot};
+use gw_store::{
+    snapshot::{Snapshot, SnapshotKey},
+    transaction::StoreTransaction,
+};
 use gw_types::{
     core::Status,
     packed::{
@@ -61,11 +64,8 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
     let db = Rc::new(db);
     // create overlay storage
     let mut state = {
-        let tip_block = db.get_tip_block()?;
-        let tip_block_hash = tip_block.hash().into();
-        // the latest state
-        let account_state_root = tip_block.raw().post_account().merkle_root().unpack();
-        Snapshot::storage_at(db.clone(), tip_block_hash, account_state_root)?
+        let tip_block_hash = db.get_tip_block_hash()?;
+        Snapshot::storage_at(db.clone(), SnapshotKey::AtBlock(tip_block_hash))?
     };
     let prev_account_state_root = state.calculate_root()?;
     let prev_account_state_count = state.get_account_count()?;

@@ -13,7 +13,10 @@
 use anyhow::{anyhow, Result};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
 use gw_generator::{Generator, RunResult};
-use gw_store::{Snapshot, Store};
+use gw_store::{
+    snapshot::{Snapshot, SnapshotKey},
+    Store,
+};
 use gw_types::{
     packed::{BlockInfo, L2Transaction, WithdrawalRequest},
     prelude::{Entity, Unpack},
@@ -114,13 +117,9 @@ impl MemPool {
         let all_txs = Default::default();
         let all_withdrawals = Default::default();
 
-        let tip_block = db.get_tip_block()?;
-        let tip: H256 = tip_block.hash().into();
+        let tip = db.get_tip_block_hash()?;
 
-        let state = db.storage_at(
-            tip.clone(),
-            tip_block.raw().post_account().merkle_root().unpack(),
-        )?;
+        let state = db.storage_at(SnapshotKey::AtBlock(tip.clone()))?;
 
         let mut mem_pool = MemPool {
             db,
@@ -403,8 +402,7 @@ impl MemPool {
 
         // update current state
         let tip_block_hash = new_tip_block.hash().into();
-        let latest_state_root = new_tip_block.raw().post_account().merkle_root().unpack();
-        self.state = self.db.storage_at(tip_block_hash, latest_state_root)?;
+        self.state = self.db.storage_at(SnapshotKey::AtBlock(tip_block_hash))?;
 
         // re-inject txs
         for tx in reinject_txs {
