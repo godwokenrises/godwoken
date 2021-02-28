@@ -78,6 +78,7 @@ Now clone godwoken code:
 ```bash
 $ cd $TOP
 $ git clone --recursive https://github.com/nervosnetwork/godwoken
+$ cargo install moleculec --version 0.6.1
 $ cd godwoken
 $ cd c
 $ make all-via-docker
@@ -99,7 +100,7 @@ Clone lumos so we can initialize the database:
 ```bash
 $ cd $TOP
 $ git clone --recursive https://github.com/nervosnetwork/lumos
-$ cd lumos
+$ cd lumos && git checkout v0.14.2-rc6
 $ yarn
 $ cd packages/sql-indexer
 $ cat << EOF > knexfile.js
@@ -167,5 +168,5 @@ $ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/tools/lib/deploy_genesi
 $ cd $TOP/godwoken
 $ yarn workspace @ckb-godwoken/base tsc
 $ yarn workspace @ckb-godwoken/runner tsc
-$ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/runner/lib/index.js --private-key <private key for aggregator> -c $TOP/runner_config.json -s "postgresql://user:password@127.0.0.1:5432/lumos"
+$ LUMOS_CONFIG_FILE=$TOP/lumos-config.json node packages/runner/lib/index.js --private-key <private key for block_producer> -c $TOP/runner_config.json -s "postgresql://user:password@127.0.0.1:5432/lumos"
 ```

@@ -29,7 +29,7 @@ Clone lumos so we can initialize the database:
 ```bash
 $ cd $TOP
 $ git clone --recursive https://github.com/nervosnetwork/lumos
-$ cd lumos
+$ cd lumos && git checkout v0.14.2-rc6
 $ yarn
 $ cd packages/sql-indexer
 $ cat << EOF > knexfile.js
@@ -59,6 +59,7 @@ $ npx knex migrate:up
 ```bash
 $ cd $TOP
 $ git clone --recursive https://github.com/nervosnetwork/godwoken
+$ cargo install moleculec --version 0.6.1
 $ cd godwoken
 $ cd c
 $ make all-via-docker
