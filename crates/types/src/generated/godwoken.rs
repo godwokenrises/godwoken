@@ -12101,6 +12101,436 @@ impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for ScriptVecReaderIterator<'t,
     }
 }
 #[derive(Clone)]
+pub struct BlockHashEntry(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for BlockHashEntry {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for BlockHashEntry {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for BlockHashEntry {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "number", self.number())?;
+        write!(f, ", {}: {}", "hash", self.hash())?;
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for BlockHashEntry {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        BlockHashEntry::new_unchecked(v.into())
+    }
+}
+impl BlockHashEntry {
+    pub const TOTAL_SIZE: usize = 40;
+    pub const FIELD_SIZES: [usize; 2] = [8, 32];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn number(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(0..8))
+    }
+    pub fn hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(8..40))
+    }
+    pub fn as_reader<'r>(&'r self) -> BlockHashEntryReader<'r> {
+        BlockHashEntryReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for BlockHashEntry {
+    type Builder = BlockHashEntryBuilder;
+    const NAME: &'static str = "BlockHashEntry";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        BlockHashEntry(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        BlockHashEntryReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        BlockHashEntryReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().number(self.number()).hash(self.hash())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct BlockHashEntryReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for BlockHashEntryReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for BlockHashEntryReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for BlockHashEntryReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "number", self.number())?;
+        write!(f, ", {}: {}", "hash", self.hash())?;
+        write!(f, " }}")
+    }
+}
+impl<'r> BlockHashEntryReader<'r> {
+    pub const TOTAL_SIZE: usize = 40;
+    pub const FIELD_SIZES: [usize; 2] = [8, 32];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn number(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[0..8])
+    }
+    pub fn hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[8..40])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for BlockHashEntryReader<'r> {
+    type Entity = BlockHashEntry;
+    const NAME: &'static str = "BlockHashEntryReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        BlockHashEntryReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct BlockHashEntryBuilder {
+    pub(crate) number: Uint64,
+    pub(crate) hash: Byte32,
+}
+impl BlockHashEntryBuilder {
+    pub const TOTAL_SIZE: usize = 40;
+    pub const FIELD_SIZES: [usize; 2] = [8, 32];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn number(mut self, v: Uint64) -> Self {
+        self.number = v;
+        self
+    }
+    pub fn hash(mut self, v: Byte32) -> Self {
+        self.hash = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for BlockHashEntryBuilder {
+    type Entity = BlockHashEntry;
+    const NAME: &'static str = "BlockHashEntryBuilder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(self.number.as_slice())?;
+        writer.write_all(self.hash.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        BlockHashEntry::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct BlockHashEntryVec(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for BlockHashEntryVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for BlockHashEntryVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for BlockHashEntryVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl ::core::default::Default for BlockHashEntryVec {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![0, 0, 0, 0];
+        BlockHashEntryVec::new_unchecked(v.into())
+    }
+}
+impl BlockHashEntryVec {
+    pub const ITEM_SIZE: usize = 40;
+    pub fn total_size(&self) -> usize {
+        molecule::NUMBER_SIZE * (self.item_count() + 1)
+    }
+    pub fn item_count(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<BlockHashEntry> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> BlockHashEntry {
+        let start = molecule::NUMBER_SIZE + Self::ITEM_SIZE * idx;
+        let end = start + Self::ITEM_SIZE;
+        BlockHashEntry::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn as_reader<'r>(&'r self) -> BlockHashEntryVecReader<'r> {
+        BlockHashEntryVecReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for BlockHashEntryVec {
+    type Builder = BlockHashEntryVecBuilder;
+    const NAME: &'static str = "BlockHashEntryVec";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        BlockHashEntryVec(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        BlockHashEntryVecReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        BlockHashEntryVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().extend(self.into_iter())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct BlockHashEntryVecReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for BlockHashEntryVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for BlockHashEntryVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for BlockHashEntryVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl<'r> BlockHashEntryVecReader<'r> {
+    pub const ITEM_SIZE: usize = 40;
+    pub fn total_size(&self) -> usize {
+        molecule::NUMBER_SIZE * (self.item_count() + 1)
+    }
+    pub fn item_count(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<BlockHashEntryReader<'r>> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> BlockHashEntryReader<'r> {
+        let start = molecule::NUMBER_SIZE + Self::ITEM_SIZE * idx;
+        let end = start + Self::ITEM_SIZE;
+        BlockHashEntryReader::new_unchecked(&self.as_slice()[start..end])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for BlockHashEntryVecReader<'r> {
+    type Entity = BlockHashEntryVec;
+    const NAME: &'static str = "BlockHashEntryVecReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        BlockHashEntryVecReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let item_count = molecule::unpack_number(slice) as usize;
+        if item_count == 0 {
+            if slice_len != molecule::NUMBER_SIZE {
+                return ve!(Self, TotalSizeNotMatch, molecule::NUMBER_SIZE, slice_len);
+            }
+            return Ok(());
+        }
+        let total_size = molecule::NUMBER_SIZE + Self::ITEM_SIZE * item_count;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct BlockHashEntryVecBuilder(pub(crate) Vec<BlockHashEntry>);
+impl BlockHashEntryVecBuilder {
+    pub const ITEM_SIZE: usize = 40;
+    pub fn set(mut self, v: Vec<BlockHashEntry>) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn push(mut self, v: BlockHashEntry) -> Self {
+        self.0.push(v);
+        self
+    }
+    pub fn extend<T: ::core::iter::IntoIterator<Item = BlockHashEntry>>(mut self, iter: T) -> Self {
+        for elem in iter {
+            self.0.push(elem);
+        }
+        self
+    }
+}
+impl molecule::prelude::Builder for BlockHashEntryVecBuilder {
+    type Entity = BlockHashEntryVec;
+    const NAME: &'static str = "BlockHashEntryVecBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE + Self::ITEM_SIZE * self.0.len()
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(&molecule::pack_number(self.0.len() as molecule::Number))?;
+        for inner in &self.0[..] {
+            writer.write_all(inner.as_slice())?;
+        }
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        BlockHashEntryVec::new_unchecked(inner.into())
+    }
+}
+pub struct BlockHashEntryVecIterator(BlockHashEntryVec, usize, usize);
+impl ::core::iter::Iterator for BlockHashEntryVecIterator {
+    type Item = BlockHashEntry;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl ::core::iter::ExactSizeIterator for BlockHashEntryVecIterator {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+impl ::core::iter::IntoIterator for BlockHashEntryVec {
+    type Item = BlockHashEntry;
+    type IntoIter = BlockHashEntryVecIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        let len = self.len();
+        BlockHashEntryVecIterator(self, 0, len)
+    }
+}
+impl<'r> BlockHashEntryVecReader<'r> {
+    pub fn iter<'t>(&'t self) -> BlockHashEntryVecReaderIterator<'t, 'r> {
+        BlockHashEntryVecReaderIterator(&self, 0, self.len())
+    }
+}
+pub struct BlockHashEntryVecReaderIterator<'t, 'r>(&'t BlockHashEntryVecReader<'r>, usize, usize);
+impl<'t: 'r, 'r> ::core::iter::Iterator for BlockHashEntryVecReaderIterator<'t, 'r> {
+    type Item = BlockHashEntryReader<'t>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for BlockHashEntryVecReaderIterator<'t, 'r> {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+#[derive(Clone)]
 pub struct VerifyTransactionWitness(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for VerifyTransactionWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -12127,6 +12557,13 @@ impl ::core::fmt::Display for VerifyTransactionWitness {
         write!(f, ", {}: {}", "scripts", self.scripts())?;
         write!(f, ", {}: {}", "return_data_hash", self.return_data_hash())?;
         write!(f, ", {}: {}", "account_count", self.account_count())?;
+        write!(f, ", {}: {}", "block_hashes", self.block_hashes())?;
+        write!(
+            f,
+            ", {}: {}",
+            "block_hashes_proof",
+            self.block_hashes_proof()
+        )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -12137,31 +12574,32 @@ impl ::core::fmt::Display for VerifyTransactionWitness {
 impl ::core::default::Default for VerifyTransactionWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            13, 2, 0, 0, 36, 0, 0, 0, 104, 1, 0, 0, 217, 1, 0, 0, 221, 1, 0, 0, 225, 1, 0, 0, 229,
-            1, 0, 0, 233, 1, 0, 0, 9, 2, 0, 0, 68, 1, 0, 0, 40, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0,
-            84, 0, 0, 0, 116, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0, 196, 0, 0, 0, 32, 1, 0, 0, 0, 0,
+            29, 2, 0, 0, 44, 0, 0, 0, 112, 1, 0, 0, 225, 1, 0, 0, 229, 1, 0, 0, 233, 1, 0, 0, 237,
+            1, 0, 0, 241, 1, 0, 0, 17, 2, 0, 0, 21, 2, 0, 0, 25, 2, 0, 0, 68, 1, 0, 0, 40, 0, 0, 0,
+            48, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 116, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0, 196,
+            0, 0, 0, 32, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 92, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 113, 0, 0, 0, 12,
-            0, 0, 0, 48, 0, 0, 0, 36, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 92, 0, 0, 0, 20, 0, 0, 0, 52, 0,
+            0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0,
-            0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 113, 0, 0, 0, 12, 0, 0, 0, 48, 0, 0, 0, 36, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0,
+            28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0,
         ];
         VerifyTransactionWitness::new_unchecked(v.into())
     }
 }
 impl VerifyTransactionWitness {
-    pub const FIELD_COUNT: usize = 8;
+    pub const FIELD_COUNT: usize = 10;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -12223,11 +12661,23 @@ impl VerifyTransactionWitness {
     pub fn account_count(&self) -> Uint32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[32..]) as usize;
+        let end = molecule::unpack_number(&slice[36..]) as usize;
+        Uint32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn block_hashes(&self) -> BlockHashEntryVec {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[36..]) as usize;
+        let end = molecule::unpack_number(&slice[40..]) as usize;
+        BlockHashEntryVec::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn block_hashes_proof(&self) -> Bytes {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[40..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[36..]) as usize;
-            Uint32::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[44..]) as usize;
+            Bytes::new_unchecked(self.0.slice(start..end))
         } else {
-            Uint32::new_unchecked(self.0.slice(start..))
+            Bytes::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> VerifyTransactionWitnessReader<'r> {
@@ -12266,6 +12716,8 @@ impl molecule::prelude::Entity for VerifyTransactionWitness {
             .scripts(self.scripts())
             .return_data_hash(self.return_data_hash())
             .account_count(self.account_count())
+            .block_hashes(self.block_hashes())
+            .block_hashes_proof(self.block_hashes_proof())
     }
 }
 #[derive(Clone, Copy)]
@@ -12295,6 +12747,13 @@ impl<'r> ::core::fmt::Display for VerifyTransactionWitnessReader<'r> {
         write!(f, ", {}: {}", "scripts", self.scripts())?;
         write!(f, ", {}: {}", "return_data_hash", self.return_data_hash())?;
         write!(f, ", {}: {}", "account_count", self.account_count())?;
+        write!(f, ", {}: {}", "block_hashes", self.block_hashes())?;
+        write!(
+            f,
+            ", {}: {}",
+            "block_hashes_proof",
+            self.block_hashes_proof()
+        )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -12303,7 +12762,7 @@ impl<'r> ::core::fmt::Display for VerifyTransactionWitnessReader<'r> {
     }
 }
 impl<'r> VerifyTransactionWitnessReader<'r> {
-    pub const FIELD_COUNT: usize = 8;
+    pub const FIELD_COUNT: usize = 10;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -12365,11 +12824,23 @@ impl<'r> VerifyTransactionWitnessReader<'r> {
     pub fn account_count(&self) -> Uint32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[32..]) as usize;
+        let end = molecule::unpack_number(&slice[36..]) as usize;
+        Uint32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn block_hashes(&self) -> BlockHashEntryVecReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[36..]) as usize;
+        let end = molecule::unpack_number(&slice[40..]) as usize;
+        BlockHashEntryVecReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn block_hashes_proof(&self) -> BytesReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[40..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[36..]) as usize;
-            Uint32Reader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[44..]) as usize;
+            BytesReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            Uint32Reader::new_unchecked(&self.as_slice()[start..])
+            BytesReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -12432,6 +12903,8 @@ impl<'r> molecule::prelude::Reader<'r> for VerifyTransactionWitnessReader<'r> {
         ScriptVecReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
         Byte32Reader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
         Uint32Reader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
+        BlockHashEntryVecReader::verify(&slice[offsets[8]..offsets[9]], compatible)?;
+        BytesReader::verify(&slice[offsets[9]..offsets[10]], compatible)?;
         Ok(())
     }
 }
@@ -12445,9 +12918,11 @@ pub struct VerifyTransactionWitnessBuilder {
     pub(crate) scripts: ScriptVec,
     pub(crate) return_data_hash: Byte32,
     pub(crate) account_count: Uint32,
+    pub(crate) block_hashes: BlockHashEntryVec,
+    pub(crate) block_hashes_proof: Bytes,
 }
 impl VerifyTransactionWitnessBuilder {
-    pub const FIELD_COUNT: usize = 8;
+    pub const FIELD_COUNT: usize = 10;
     pub fn raw_l2block(mut self, v: RawL2Block) -> Self {
         self.raw_l2block = v;
         self
@@ -12480,6 +12955,14 @@ impl VerifyTransactionWitnessBuilder {
         self.account_count = v;
         self
     }
+    pub fn block_hashes(mut self, v: BlockHashEntryVec) -> Self {
+        self.block_hashes = v;
+        self
+    }
+    pub fn block_hashes_proof(mut self, v: Bytes) -> Self {
+        self.block_hashes_proof = v;
+        self
+    }
 }
 impl molecule::prelude::Builder for VerifyTransactionWitnessBuilder {
     type Entity = VerifyTransactionWitness;
@@ -12494,6 +12977,8 @@ impl molecule::prelude::Builder for VerifyTransactionWitnessBuilder {
             + self.scripts.as_slice().len()
             + self.return_data_hash.as_slice().len()
             + self.account_count.as_slice().len()
+            + self.block_hashes.as_slice().len()
+            + self.block_hashes_proof.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -12514,6 +12999,10 @@ impl molecule::prelude::Builder for VerifyTransactionWitnessBuilder {
         total_size += self.return_data_hash.as_slice().len();
         offsets.push(total_size);
         total_size += self.account_count.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.block_hashes.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.block_hashes_proof.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -12526,6 +13015,8 @@ impl molecule::prelude::Builder for VerifyTransactionWitnessBuilder {
         writer.write_all(self.scripts.as_slice())?;
         writer.write_all(self.return_data_hash.as_slice())?;
         writer.write_all(self.account_count.as_slice())?;
+        writer.write_all(self.block_hashes.as_slice())?;
+        writer.write_all(self.block_hashes_proof.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

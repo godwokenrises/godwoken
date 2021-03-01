@@ -260,6 +260,13 @@ table ChallengeWitness {
 
 vector ScriptVec<Script>;
 
+struct BlockHashEntry {
+    number: Uint64,
+    hash: Byte32,
+}
+
+vector BlockHashEntryVec <BlockHashEntry>;
+
 // witness to cancel a challenge by execute the transaction
 table VerifyTransactionWitness {
     raw_l2block: RawL2Block,
@@ -270,6 +277,8 @@ table VerifyTransactionWitness {
     scripts: ScriptVec,
     return_data_hash: Byte32,
     account_count: Uint32,
+    block_hashes: BlockHashEntryVec,
+    block_hashes_proof: Bytes,
 }
 
 table VerifyWithdrawalWitness {
