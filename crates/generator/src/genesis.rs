@@ -8,7 +8,11 @@ use gw_common::{
     CKB_SUDT_SCRIPT_ARGS,
 };
 use gw_config::GenesisConfig;
-use gw_store::{transaction::StoreTransaction, Store};
+use gw_store::{
+    state_db::{StateDBTransaction, StateDBVersion},
+    transaction::StoreTransaction,
+    Store,
+};
 use gw_types::{
     core::Status,
     packed::{
@@ -43,8 +47,9 @@ pub fn build_genesis_from_store(
     // initialize store
     db.set_account_smt_root(H256::zero())?;
     db.set_block_smt_root(H256::zero())?;
-    let mut tree = db.account_state_tree()?;
-    tree.set_account_count(0)?;
+    db.set_account_count(0)?;
+    let state_db = StateDBTransaction::from_version(db.clone(), StateDBVersion::from_genesis());
+    let mut tree = state_db.account_state_tree()?;
 
     // create a reserved account
     // this account is reserved for special use
@@ -131,6 +136,7 @@ pub fn build_genesis_from_store(
             .build()
     };
     db.set_block_smt_root(global_state.block().merkle_root().unpack())?;
+    tree.submit_tree()?;
     Ok(GenesisWithGlobalState {
         genesis,
         global_state,

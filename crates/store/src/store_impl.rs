@@ -1,6 +1,5 @@
-use super::snapshot::Snapshot;
-use crate::write_batch::StoreWriteBatch;
-use crate::{snapshot::SnapshotKey, transaction::StoreTransaction};
+use crate::{state_db::StateDBTransaction, write_batch::StoreWriteBatch};
+use crate::{state_db::StateDBVersion, transaction::StoreTransaction};
 use anyhow::Result;
 use gw_common::{error::Error, smt::H256};
 use gw_db::{
@@ -45,7 +44,7 @@ impl<'a> Store {
 
     pub fn begin_transaction(&self) -> StoreTransaction {
         StoreTransaction {
-            inner: self.db.transaction(),
+            inner: Rc::new(self.db.transaction()),
         }
     }
 
@@ -68,10 +67,11 @@ impl<'a> Store {
         Ok(db.get_block_hash_by_number(0)?.is_some())
     }
 
-    /// Return a snapshot of a history point
-    pub fn storage_at(&self, key: SnapshotKey) -> Result<Snapshot> {
+    /// Return state at version
+    pub fn state_at(&self, version: StateDBVersion) -> Result<StateDBTransaction> {
         let db = self.begin_transaction();
-        Snapshot::storage_at(Rc::new(db), key)
+        let state_db = StateDBTransaction::from_version(db, version);
+        Ok(state_db)
     }
 
     pub fn get_chain_id(&self) -> Result<H256, Error> {

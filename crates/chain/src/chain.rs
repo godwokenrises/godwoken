@@ -5,7 +5,11 @@ use gw_generator::{
     generator::StateTransitionArgs, ChallengeContext, Error as GeneratorError, Generator,
 };
 use gw_mem_pool::pool::MemPool;
-use gw_store::{transaction::StoreTransaction, Store};
+use gw_store::{
+    state_db::{StateDBTransaction, StateDBVersion},
+    transaction::StoreTransaction,
+    Store,
+};
 use gw_traits::ChainStore;
 use gw_types::{
     bytes::Bytes,
@@ -371,7 +375,11 @@ impl Chain {
                 expected_account_root,
                 "account root consistent in DB"
             );
-            let tree = db.account_state_tree().unwrap();
+            let state_db = StateDBTransaction::from_version(
+                db,
+                StateDBVersion::from_block_hash(self.local_state.tip().hash().into()),
+            );
+            let tree = state_db.account_state_tree()?;
             let current_account_root = tree.calculate_root().unwrap();
             assert_eq!(
                 current_account_root, expected_account_root,
@@ -394,6 +402,7 @@ impl Chain {
         let genesis_global_state = db
             .get_block_post_global_state(&genesis_hash.into())?
             .expect("genesis");
+        let old_tip_block_hash = self.local_state.tip().hash().into();
         self.local_state = LocalState {
             tip: genesis.clone(),
             last_synced: genesis_header_info,
@@ -401,7 +410,11 @@ impl Chain {
         };
         // reset account SMT to genesis
         // TODO use version based storage
-        db.clear_account_state_tree()?;
+        let state_db = StateDBTransaction::from_version(
+            db.clone(),
+            StateDBVersion::from_block_hash(old_tip_block_hash),
+        );
+        state_db.clear_account_state_tree()?;
         gw_generator::genesis::build_genesis_from_store(
             db,
             &GenesisConfig {
@@ -465,7 +478,11 @@ impl Chain {
             l2block: l2block.clone(),
             deposition_requests: deposition_requests.clone(),
         };
-        let mut tree = db.account_state_tree()?;
+        let state_db = StateDBTransaction::from_version(
+            db.clone(),
+            StateDBVersion::from_block_hash(self.local_state.tip().hash().into()),
+        );
+        let mut tree = state_db.account_state_tree()?;
         // process transactions
         let result = match self.generator.apply_state_transition(db, &mut tree, args) {
             Ok(result) => result,
@@ -503,6 +520,7 @@ impl Chain {
             deposition_requests,
         )?;
         db.attach_block(l2block.clone())?;
+        tree.submit_tree()?;
         self.local_state.tip = l2block;
         Ok(None)
     }

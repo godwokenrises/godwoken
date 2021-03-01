@@ -14,7 +14,7 @@ use anyhow::{anyhow, Result};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
 use gw_generator::{Generator, RunResult};
 use gw_store::{
-    snapshot::{Snapshot, SnapshotKey},
+    state_db::{StateDBTransaction, StateDBVersion},
     Store,
 };
 use gw_types::{
@@ -95,7 +95,7 @@ impl EntryList {
 
 pub struct MemPool {
     /// current state
-    state: Snapshot,
+    state_db: StateDBTransaction,
     /// store
     db: Store,
     /// current tip
@@ -119,11 +119,11 @@ impl MemPool {
 
         let tip = db.get_tip_block_hash()?;
 
-        let state = db.storage_at(SnapshotKey::AtBlock(tip.clone()))?;
+        let state_db = db.state_at(StateDBVersion::from_block_hash(tip.clone()))?;
 
         let mut mem_pool = MemPool {
             db,
-            state,
+            state_db,
             current_tip: None,
             generator,
             pending,
@@ -136,8 +136,8 @@ impl MemPool {
         Ok(mem_pool)
     }
 
-    pub fn state(&self) -> &Snapshot {
-        &self.state
+    pub fn state_db(&self) -> &StateDBTransaction {
+        &self.state_db
     }
 
     /// Push a layer2 tx into pool
@@ -181,8 +181,9 @@ impl MemPool {
         // TODO
         // we should introduce queue manchanism and only remove tx when tx.nonce is lower
         // reject tx if nonce is not equals account.nonce
+        let state = self.state_db.account_state_tree()?;
         let account_id: u32 = tx.raw().from_id().unpack();
-        let nonce = self.state.get_nonce(account_id)?;
+        let nonce = state.get_nonce(account_id)?;
         let tx_nonce: u32 = tx.raw().nonce().unpack();
         if nonce != tx_nonce {
             return Err(anyhow!(
@@ -193,8 +194,7 @@ impl MemPool {
         }
 
         // verify signature
-        self.generator
-            .check_transaction_signature(&self.state, &tx)?;
+        self.generator.check_transaction_signature(&state, &tx)?;
 
         Ok(())
     }
@@ -205,16 +205,19 @@ impl MemPool {
         tx: L2Transaction,
         block_info: &BlockInfo,
     ) -> Result<RunResult> {
+        let state = self.state_db.account_state_tree()?;
         // verify tx signature
-        self.generator
-            .check_transaction_signature(&self.state, &tx)?;
+        self.generator.check_transaction_signature(&state, &tx)?;
         // tx basic verification
-        self.generator.verify_transaction(&self.state, &tx)?;
+        self.generator.verify_transaction(&state, &tx)?;
         // execute tx
         let raw_tx = tx.raw();
-        let run_result =
-            self.generator
-                .execute_transaction(&self.state, &self.state, &block_info, &raw_tx)?;
+        let run_result = self.generator.execute_transaction(
+            &self.db.begin_transaction(),
+            &state,
+            &block_info,
+            &raw_tx,
+        )?;
         Ok(run_result)
     }
 
@@ -247,11 +250,11 @@ impl MemPool {
 
         // Add to pool
         // TODO check nonce conflict
+        let state = self.state_db.account_state_tree()?;
         self.all_withdrawals
             .insert(withdrawal_hash, withdrawal.clone());
         let account_script_hash: H256 = withdrawal.raw().account_script_hash().unpack();
-        let account_id = self
-            .state
+        let account_id = state
             .get_account_id_by_script_hash(&account_script_hash)?
             .expect("get account_id");
         let entry_list = self.pending.entry(account_id).or_default();
@@ -261,12 +264,13 @@ impl MemPool {
 
     /// Verify withdrawal request without push it into pool
     pub fn verify_withdrawal_request(&self, withdrawal_request: &WithdrawalRequest) -> Result<()> {
+        let state = self.state_db.account_state_tree()?;
         // verify withdrawal signature
         self.generator
-            .check_withdrawal_request_signature(&self.state, withdrawal_request)?;
+            .check_withdrawal_request_signature(&state, withdrawal_request)?;
         // withdrawal basic verification
         self.generator
-            .verify_withdrawal_request(&self.state, withdrawal_request)
+            .verify_withdrawal_request(&state, withdrawal_request)
             .map_err(Into::into)
     }
 
@@ -296,10 +300,11 @@ impl MemPool {
 
     /// Discard unexecutables from pending.
     fn demote_unexecutables(&mut self) -> Result<()> {
+        let state = self.state_db.account_state_tree()?;
         let mut remove_list = Vec::default();
         // iter pending accounts and demote any non-executable objects
         for (&account_id, list) in &mut self.pending {
-            let nonce = self.state.get_nonce(account_id)?;
+            let nonce = state.get_nonce(account_id)?;
 
             // drop txs if tx.nonce lower than nonce
             let deprecated_txs = list.remove_lower_nonce_txs(nonce);
@@ -308,9 +313,7 @@ impl MemPool {
                 self.all_txs.remove(&tx_hash);
             }
             // Drop all withdrawals that are have no enough balance
-            let capacity = self
-                .state
-                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, account_id)?;
+            let capacity = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, account_id)?;
             let deprecated_withdrawals =
                 list.remove_lower_nonce_balance_withdrawals(nonce, capacity);
             for withdrawal in deprecated_withdrawals {
@@ -402,7 +405,9 @@ impl MemPool {
 
         // update current state
         let tip_block_hash = new_tip_block.hash().into();
-        self.state = self.db.storage_at(SnapshotKey::AtBlock(tip_block_hash))?;
+        self.state_db = self
+            .db
+            .state_at(StateDBVersion::from_block_hash(tip_block_hash))?;
 
         // re-inject txs
         for tx in reinject_txs {

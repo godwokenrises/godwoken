@@ -4,6 +4,7 @@ use gw_generator::{
     error::{DepositionError, WithdrawalError},
     Error,
 };
+use gw_store::state_db::StateDBVersion;
 use gw_types::{
     packed::{CellOutput, DepositionRequest, RawWithdrawalRequest, Script, WithdrawalRequest},
     prelude::*,
@@ -93,7 +94,11 @@ fn test_deposition_and_withdrawal() {
     )
     .unwrap();
     let (user_id, ckb_balance) = {
-        let db = chain.store().begin_transaction();
+        let tip_block_hash = chain.store().get_tip_block_hash().unwrap();
+        let db = chain
+            .store()
+            .state_at(StateDBVersion::from_block_hash(tip_block_hash))
+            .unwrap();
         let tree = db.account_state_tree().unwrap();
         // check user account
         assert_eq!(
@@ -113,7 +118,8 @@ fn test_deposition_and_withdrawal() {
     // check tx pool state
     {
         let mem_pool = chain.mem_pool.lock();
-        let state = mem_pool.state();
+        let state_db = mem_pool.state_db();
+        let state = state_db.account_state_tree().unwrap();
         assert_eq!(
             state
                 .get_account_id_by_script_hash(&user_script_hash.into())
@@ -140,7 +146,11 @@ fn test_deposition_and_withdrawal() {
     )
     .unwrap();
     // check status
-    let db = chain.store().begin_transaction();
+    let tip_block_hash = chain.store().get_tip_block_hash().unwrap();
+    let db = chain
+        .store()
+        .state_at(StateDBVersion::from_block_hash(tip_block_hash))
+        .unwrap();
     let tree = db.account_state_tree().unwrap();
     let ckb_balance2 = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, user_id).unwrap();
     assert_eq!(ckb_balance, ckb_balance2 + withdraw_capacity as u128);
@@ -149,7 +159,8 @@ fn test_deposition_and_withdrawal() {
     // check tx pool state
     {
         let mem_pool = chain.mem_pool.lock();
-        let state = mem_pool.state();
+        let state_db = mem_pool.state_db();
+        let state = state_db.account_state_tree().unwrap();
         assert_eq!(
             state
                 .get_account_id_by_script_hash(&user_script_hash.into())

@@ -1,7 +1,11 @@
 use crate::genesis::{build_genesis, init_genesis};
 use gw_common::{sparse_merkle_tree::H256, state::State};
 use gw_config::GenesisConfig;
-use gw_store::Store;
+use gw_store::{
+    state_db::{StateDBTransaction, StateDBVersion},
+    transaction::StoreTransaction,
+    Store,
+};
 use gw_traits::CodeStore;
 use gw_types::{
     core::ScriptHashType,
@@ -29,7 +33,8 @@ fn test_init_genesis() {
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());
     assert_ne!(db.get_account_smt_root().unwrap(), H256::zero());
-    let tree = db.account_state_tree().unwrap();
+    let state_db = StateDBTransaction::from_version(db, StateDBVersion::from_genesis());
+    let tree = state_db.account_state_tree().unwrap();
     assert!(tree.get_account_count().unwrap() > 0);
     // get reserved account's script
     let meta_contract_script_hash = tree.get_script_hash(0).expect("script hash");

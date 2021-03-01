@@ -5,6 +5,7 @@ use crate::testing_tool::chain::{
 };
 use ckb_types::prelude::{Pack as CKBPack, Unpack};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State};
+use gw_store::state_db::StateDBVersion;
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType, Status},
@@ -69,7 +70,11 @@ fn test_enter_challenge() {
             produce_block_result,
             deposition_requests,
         );
-        let db = chain.store().begin_transaction();
+        let tip_block_hash = chain.store().get_tip_block_hash().unwrap();
+        let db = chain
+            .store()
+            .state_at(StateDBVersion::from_block_hash(tip_block_hash))
+            .unwrap();
         let tree = db.account_state_tree().unwrap();
         let sender_id = tree
             .get_account_id_by_script_hash(&sender_script.hash().into())

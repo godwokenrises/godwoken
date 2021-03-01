@@ -1,6 +1,7 @@
 use crate::testing_tool::chain::{build_sync_tx, construct_block, setup_chain};
 use gw_chain::chain::{L1Action, L1ActionContext, RevertedL1Action, SyncEvent, SyncParam};
 use gw_common::{state::State, H256};
+use gw_store::state_db::StateDBVersion;
 use gw_types::{
     packed::{CellOutput, DepositionRequest, GlobalState, HeaderInfo, Script},
     prelude::*,
@@ -167,7 +168,10 @@ fn test_layer1_fork() {
 
     // check account SMT, should be able to calculate account state root
     {
-        let db = chain.store().begin_transaction();
+        let db = chain
+            .store()
+            .state_at(StateDBVersion::from_block_hash(tip_block.hash().into()))
+            .unwrap();
         let tree = db.account_state_tree().unwrap();
         let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();

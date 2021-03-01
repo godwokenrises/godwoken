@@ -8,7 +8,7 @@ use gw_common::{
 };
 use gw_generator::{traits::StateExt, Generator};
 use gw_store::{
-    snapshot::{Snapshot, SnapshotKey},
+    state_db::{StateDBTransaction, StateDBVersion},
     transaction::StoreTransaction,
 };
 use gw_types::{
@@ -20,7 +20,6 @@ use gw_types::{
     },
     prelude::*,
 };
-use std::rc::Rc;
 
 pub struct ProduceBlockResult {
     pub block: L2Block,
@@ -61,12 +60,17 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
         rollup_config_hash,
         max_withdrawal_capacity,
     } = param;
-    let db = Rc::new(db);
     // create overlay storage
-    let mut state = {
+    let state_db = {
         let tip_block_hash = db.get_tip_block_hash()?;
-        Snapshot::storage_at(db.clone(), SnapshotKey::AtBlock(tip_block_hash))?
+        StateDBTransaction::from_version(
+            db.clone(),
+            StateDBVersion::from_block_hash(tip_block_hash),
+        )
     };
+    let mut state = state_db.account_state_tree()?;
+    // track state changes
+    state.track_touched_keys();
     let prev_account_state_root = state.calculate_root()?;
     let prev_account_state_count = state.get_account_count()?;
     // verify the withdrawals
@@ -138,7 +142,7 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
         }
         // 2. execute txs
         let raw_tx = tx.raw();
-        let run_result = match generator.execute_transaction(&state, &state, &block_info, &raw_tx) {
+        let run_result = match generator.execute_transaction(&db, &state, &block_info, &raw_tx) {
             Ok(run_result) => run_result,
             Err(_) => {
                 unused_transactions.push(tx);
@@ -175,7 +179,8 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
     }
     assert_eq!(used_transactions.len(), tx_receipts.len());
     let touched_keys: Vec<H256> = state
-        .state_tree_touched_keys()
+        .touched_keys()
+        .expect("track touched keys")
         .into_iter()
         .cloned()
         .collect();
@@ -254,7 +259,7 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
         })
         .collect::<Vec<_>>()
         .pack();
-    let account_smt = db.account_smt()?;
+    let account_smt = state_db.account_smt()?;
     let proof = if kv_state.is_empty() {
         // nothing need to prove
         Vec::new()
