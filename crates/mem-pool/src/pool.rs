@@ -14,6 +14,7 @@ use anyhow::{anyhow, Result};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
 use gw_generator::{Generator, RunResult};
 use gw_store::{
+    chain_view::ChainView,
     state_db::{StateDBTransaction, StateDBVersion},
     Store,
 };
@@ -206,18 +207,17 @@ impl MemPool {
         block_info: &BlockInfo,
     ) -> Result<RunResult> {
         let state = self.state_db.account_state_tree()?;
+        let tip_block_hash = self.db.get_tip_block_hash()?;
+        let chain_view = ChainView::new(self.db.begin_transaction(), tip_block_hash);
         // verify tx signature
         self.generator.check_transaction_signature(&state, &tx)?;
         // tx basic verification
         self.generator.verify_transaction(&state, &tx)?;
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = self.generator.execute_transaction(
-            &self.db.begin_transaction(),
-            &state,
-            &block_info,
-            &raw_tx,
-        )?;
+        let run_result =
+            self.generator
+                .execute_transaction(&chain_view, &state, &block_info, &raw_tx)?;
         Ok(run_result)
     }
 

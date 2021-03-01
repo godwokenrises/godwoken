@@ -1,3 +1,5 @@
+//! Storage implementation
+
 use crate::{state_db::StateDBTransaction, write_batch::StoreWriteBatch};
 use crate::{state_db::StateDBVersion, transaction::StoreTransaction};
 use anyhow::Result;
@@ -10,7 +12,6 @@ use gw_db::{
     },
     DBPinnableSlice, RocksDB,
 };
-use gw_traits::ChainStore;
 use gw_types::{
     packed::{self, GlobalState, HeaderInfo, L2Block, L2Transaction},
     prelude::*,

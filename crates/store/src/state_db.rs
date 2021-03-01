@@ -1,32 +1,14 @@
+//! State DB
+
 use std::collections::HashSet;
 
-use crate::{
-    db_utils::build_transaction_key, smt_store::SMTStore, traits::KVStore,
-    transaction::StoreTransaction,
-};
-use gw_common::{
-    error::Error as StateError,
-    smt::SMT,
-    sparse_merkle_tree::{
-        error::Error as SMTError,
-        tree::{BranchNode, LeafNode},
-    },
-    state::State,
-    H256,
-};
+use crate::{smt_store_impl::SMTStore, traits::KVStore, transaction::StoreTransaction};
+use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_db::schema::{
-    Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BLOCK,
-    COLUMN_BLOCK_DEPOSITION_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH,
-    COLUMN_BLOCK_SMT_LEAF, COLUMN_DATA, COLUMN_INDEX, COLUMN_META, COLUMN_SCRIPT,
-    COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
-    COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY,
-    META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
+    Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_DATA, COLUMN_SCRIPT,
 };
-use gw_db::{
-    error::Error, iter::DBIter, DBIterator, DBVector, IteratorMode, RocksDBTransaction,
-    RocksDBTransactionSnapshot,
-};
-use gw_traits::{ChainStore, CodeStore};
+use gw_db::{error::Error, iter::DBIter, DBVector, IteratorMode};
+use gw_traits::CodeStore;
 use gw_types::{bytes::Bytes, packed, prelude::*};
 
 pub struct StateDBVersion(String);
@@ -46,7 +28,7 @@ impl StateDBVersion {
 // TODO implement this
 pub struct StateDBTransaction {
     inner: StoreTransaction,
-    version: StateDBVersion,
+    _version: StateDBVersion,
 }
 
 impl KVStore for StateDBTransaction {
@@ -68,8 +50,8 @@ impl KVStore for StateDBTransaction {
 }
 
 impl StateDBTransaction {
-    pub fn from_version(inner: StoreTransaction, version: StateDBVersion) -> Self {
-        StateDBTransaction { inner, version }
+    pub fn from_version(inner: StoreTransaction, _version: StateDBVersion) -> Self {
+        StateDBTransaction { inner, _version }
     }
 
     pub fn commit(&self) -> Result<(), Error> {

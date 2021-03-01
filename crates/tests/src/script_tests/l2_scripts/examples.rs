@@ -1,4 +1,4 @@
-use super::{new_block_info, SUM_PROGRAM, SUM_PROGRAM_CODE_HASH};
+use super::{new_block_info, DummyChainStore, SUM_PROGRAM, SUM_PROGRAM_CODE_HASH};
 use gw_common::H256;
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
@@ -7,7 +7,6 @@ use gw_generator::{
     traits::StateExt,
     Generator,
 };
-use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     packed::{RawL2Transaction, Script},
@@ -16,9 +15,8 @@ use gw_types::{
 
 #[test]
 fn test_example_sum() {
-    let store = Store::open_tmp().unwrap();
-    let db = store.begin_transaction();
     let mut tree = DummyState::default();
+    let chain_view = DummyChainStore;
     let from_id: u32 = 2;
     let init_value: u64 = 0;
 
@@ -52,7 +50,7 @@ fn test_example_sum() {
                 .args(Bytes::from(add_value.to_le_bytes().to_vec()).pack())
                 .build();
             let run_result = generator
-                .execute_transaction(&db, &tree, &block_info, &raw_tx)
+                .execute_transaction(&chain_view, &tree, &block_info, &raw_tx)
                 .expect("construct");
             let return_value = {
                 let mut buf = [0u8; 8];

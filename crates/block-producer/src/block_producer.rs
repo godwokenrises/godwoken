@@ -8,6 +8,7 @@ use gw_common::{
 };
 use gw_generator::{traits::StateExt, Generator};
 use gw_store::{
+    chain_view::ChainView,
     state_db::{StateDBTransaction, StateDBVersion},
     transaction::StoreTransaction,
 };
@@ -130,6 +131,7 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
         .timestamp(timestamp.pack())
         .block_producer_id(block_producer_id.pack())
         .build();
+    let chain_view = ChainView::new(db.clone(), parent_block_hash.into());
     for tx in txs {
         // 1. verify tx
         if generator.check_transaction_signature(&state, &tx).is_err() {
@@ -142,13 +144,14 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
         }
         // 2. execute txs
         let raw_tx = tx.raw();
-        let run_result = match generator.execute_transaction(&db, &state, &block_info, &raw_tx) {
-            Ok(run_result) => run_result,
-            Err(_) => {
-                unused_transactions.push(tx);
-                continue;
-            }
-        };
+        let run_result =
+            match generator.execute_transaction(&chain_view, &state, &block_info, &raw_tx) {
+                Ok(run_result) => run_result,
+                Err(_) => {
+                    unused_transactions.push(tx);
+                    continue;
+                }
+            };
         // 3. apply tx state
         state.apply_run_result(&run_result)?;
         // 4. build tx receipt

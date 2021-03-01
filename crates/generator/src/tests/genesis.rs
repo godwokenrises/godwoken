@@ -3,7 +3,6 @@ use gw_common::{sparse_merkle_tree::H256, state::State};
 use gw_config::GenesisConfig;
 use gw_store::{
     state_db::{StateDBTransaction, StateDBVersion},
-    transaction::StoreTransaction,
     Store,
 };
 use gw_traits::CodeStore;

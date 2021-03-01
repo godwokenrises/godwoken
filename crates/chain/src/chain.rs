@@ -6,11 +6,11 @@ use gw_generator::{
 };
 use gw_mem_pool::pool::MemPool;
 use gw_store::{
+    chain_view::ChainView,
     state_db::{StateDBTransaction, StateDBVersion},
     transaction::StoreTransaction,
     Store,
 };
-use gw_traits::ChainStore;
 use gw_types::{
     bytes::Bytes,
     core::Status,
@@ -478,13 +478,18 @@ impl Chain {
             l2block: l2block.clone(),
             deposition_requests: deposition_requests.clone(),
         };
+        let tip_block_hash = self.local_state.tip().hash().into();
+        let chain_view = ChainView::new(db.clone(), tip_block_hash);
         let state_db = StateDBTransaction::from_version(
             db.clone(),
-            StateDBVersion::from_block_hash(self.local_state.tip().hash().into()),
+            StateDBVersion::from_block_hash(tip_block_hash),
         );
         let mut tree = state_db.account_state_tree()?;
         // process transactions
-        let result = match self.generator.apply_state_transition(db, &mut tree, args) {
+        let result = match self
+            .generator
+            .apply_state_transition(&chain_view, &mut tree, args)
+        {
             Ok(result) => result,
             Err(err) => {
                 // handle tx error
