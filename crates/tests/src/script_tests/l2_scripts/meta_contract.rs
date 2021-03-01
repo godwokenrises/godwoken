@@ -1,39 +1,17 @@
-use super::new_block_info;
+use super::{new_block_info, run_contract};
 use core::panic;
 use gw_common::state::State;
 use gw_common::H256;
 use gw_generator::builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH;
 use gw_generator::{
-    account_lock_manage::AccountLockManage, backend_manage::BackendManage, dummy_state::DummyState,
-    error::TransactionError, syscalls::ERROR_DUPLICATED_SCRIPT_HASH, traits::StateExt, Generator,
+    dummy_state::DummyState, error::TransactionError, syscalls::ERROR_DUPLICATED_SCRIPT_HASH,
+    traits::StateExt,
 };
-use gw_store::{transaction::StoreTransaction, Store};
-use gw_traits::CodeStore;
+use gw_store::Store;
 use gw_types::{
-    packed::{BlockInfo, CreateAccount, MetaContractArgs, RawL2Transaction, Script},
+    packed::{CreateAccount, MetaContractArgs, Script},
     prelude::*,
 };
-
-fn run_contract<S: State + CodeStore>(
-    db: &StoreTransaction,
-    tree: &mut S,
-    from_id: u32,
-    to_id: u32,
-    args: MetaContractArgs,
-    block_info: &BlockInfo,
-) -> Result<Vec<u8>, TransactionError> {
-    let raw_tx = RawL2Transaction::new_builder()
-        .from_id(from_id.pack())
-        .to_id(to_id.pack())
-        .args(args.as_bytes().pack())
-        .build();
-    let backend_manage = BackendManage::default();
-    let account_lock_manage = AccountLockManage::default();
-    let generator = Generator::new(backend_manage, account_lock_manage, Default::default());
-    let run_result = generator.execute_transaction(db, tree, block_info, &raw_tx)?;
-    tree.apply_run_result(&run_result).expect("update state");
-    Ok(run_result.return_data)
-}
 
 #[test]
 fn test_meta_contract() {
@@ -74,8 +52,15 @@ fn test_meta_contract() {
                 .build(),
         )
         .build();
-    let return_data =
-        run_contract(&db, &mut tree, a_id, meta_contract_id, args, &block_info).expect("execute");
+    let return_data = run_contract(
+        &db,
+        &mut tree,
+        a_id,
+        meta_contract_id,
+        args.as_bytes(),
+        &block_info,
+    )
+    .expect("execute");
     let account_id = {
         let mut buf = [0u8; 4];
         buf.copy_from_slice(&return_data);
@@ -137,7 +122,15 @@ fn test_duplicated_script_hash() {
                 .build(),
         )
         .build();
-    let err = run_contract(&db, &mut tree, a_id, meta_contract_id, args, &block_info).unwrap_err();
+    let err = run_contract(
+        &db,
+        &mut tree,
+        a_id,
+        meta_contract_id,
+        args.as_bytes(),
+        &block_info,
+    )
+    .unwrap_err();
     let err_code = match err {
         TransactionError::InvalidExitCode(code) => code,
         err => panic!("unexpected {:?}", err),
