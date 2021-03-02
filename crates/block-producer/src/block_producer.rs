@@ -71,7 +71,7 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
     };
     let mut state = state_db.account_state_tree()?;
     // track state changes
-    state.track_touched_keys();
+    state.tracker_mut().enable();
     let prev_account_state_root = state.calculate_root()?;
     let prev_account_state_count = state.get_account_count()?;
     // verify the withdrawals
@@ -182,10 +182,12 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
     }
     assert_eq!(used_transactions.len(), tx_receipts.len());
     let touched_keys: Vec<H256> = state
+        .tracker_mut()
         .touched_keys()
         .expect("track touched keys")
+        .borrow()
+        .clone()
         .into_iter()
-        .cloned()
         .collect();
     let post_account_state_root = state.calculate_root()?;
     let post_account_state_count = state.get_account_count()?;
