@@ -1,6 +1,6 @@
 //! State DB
 
-use std::collections::HashSet;
+use std::{cell::RefCell, collections::HashSet};
 
 use crate::{smt_store_impl::SMTStore, traits::KVStore, transaction::StoreTransaction};
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
@@ -88,11 +88,41 @@ impl StateDBTransaction {
     }
 }
 
+/// Tracker state changes
+pub struct StateTracker {
+    touched_keys: Option<RefCell<HashSet<H256>>>,
+}
+
+impl StateTracker {
+    pub fn new() -> Self {
+        StateTracker { touched_keys: None }
+    }
+
+    /// Enable state tracking
+    pub fn enable(&mut self) {
+        if self.touched_keys.is_none() {
+            self.touched_keys = Some(Default::default())
+        }
+    }
+
+    /// Return touched keys
+    pub fn touched_keys(&self) -> Option<&RefCell<HashSet<H256>>> {
+        self.touched_keys.as_ref()
+    }
+
+    /// Record a key in the tracker
+    pub fn touch_key(&self, key: &H256) {
+        if let Some(touched_keys) = self.touched_keys.as_ref() {
+            touched_keys.borrow_mut().insert(*key);
+        }
+    }
+}
+
 pub struct StateTree<'a> {
     tree: SMT<SMTStore<'a, StateDBTransaction>>,
     account_count: u32,
     db: &'a StateDBTransaction,
-    touched_keys: Option<HashSet<H256>>,
+    tracker: StateTracker,
 }
 
 impl<'a> StateTree<'a> {
@@ -105,18 +135,12 @@ impl<'a> StateTree<'a> {
             tree,
             db,
             account_count,
-            touched_keys: None,
+            tracker: StateTracker::new(),
         }
     }
 
-    pub fn track_touched_keys(&mut self) {
-        if self.touched_keys.is_none() {
-            self.touched_keys = Some(Default::default())
-        }
-    }
-
-    pub fn touched_keys(&self) -> Option<&HashSet<H256>> {
-        self.touched_keys.as_ref()
+    pub fn tracker_mut(&mut self) -> &mut StateTracker {
+        &mut self.tracker
     }
 
     /// submit tree changes into transaction
@@ -136,10 +160,12 @@ impl<'a> StateTree<'a> {
 
 impl<'a> State for StateTree<'a> {
     fn get_raw(&self, key: &H256) -> Result<H256, StateError> {
+        self.tracker.touch_key(key);
         let v = self.tree.get(&(*key).into())?;
         Ok(v.into())
     }
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
+        self.tracker.touch_key(&key);
         self.tree.update(key.into(), value.into())?;
         Ok(())
     }
