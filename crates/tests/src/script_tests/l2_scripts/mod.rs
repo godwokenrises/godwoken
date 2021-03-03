@@ -3,7 +3,7 @@ use gw_common::state::State;
 use gw_common::H256;
 use gw_generator::backend_manage::BackendManage;
 use gw_generator::{account_lock_manage::AccountLockManage, Generator};
-use gw_generator::{error::TransactionError, traits::StateExt};
+use gw_generator::{error::TransactionError, traits::StateExt, types::RollupContext};
 use gw_store::transaction::StoreTransaction;
 use gw_traits::{ChainStore, CodeStore};
 use gw_types::packed::RawL2Transaction;
@@ -67,7 +67,11 @@ pub fn run_contract<S: State + CodeStore>(
         .build();
     let backend_manage = BackendManage::default();
     let account_lock_manage = AccountLockManage::default();
-    let generator = Generator::new(backend_manage, account_lock_manage, Default::default());
+    let rollup_ctx = RollupContext {
+        rollup_config: Default::default(),
+        rollup_script_hash: [42u8; 32].into(),
+    };
+    let generator = Generator::new(backend_manage, account_lock_manage, rollup_ctx);
     let chain_view = DummyChainStore;
     let run_result = generator.execute_transaction(&chain_view, tree, block_info, &raw_tx)?;
     tree.apply_run_result(&run_result).expect("update state");

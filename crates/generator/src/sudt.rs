@@ -1,14 +1,22 @@
-use crate::builtin_scripts::SUDT_VALIDATOR_CODE_HASH;
+use gw_common::H256;
 use gw_types::{bytes::Bytes, core::ScriptHashType, packed::Script, prelude::*};
 
-pub fn build_l2_sudt_script(l1_sudt_script_hash: [u8; 32]) -> Script {
-    let args = Bytes::from(l1_sudt_script_hash.to_vec());
+use crate::RollupContext;
+
+pub fn build_l2_sudt_script(rollup_context: &RollupContext, l1_sudt_script_hash: &H256) -> Script {
+    let args = {
+        let mut args = Vec::with_capacity(64);
+        args.extend(rollup_context.rollup_script_hash.as_slice());
+        args.extend(l1_sudt_script_hash.as_slice());
+        Bytes::from(args)
+    };
     Script::new_builder()
         .args(args.pack())
-        .code_hash({
-            let code_hash: [u8; 32] = (*SUDT_VALIDATOR_CODE_HASH).into();
-            code_hash.pack()
-        })
-        .hash_type(ScriptHashType::Data.into())
+        .code_hash(
+            rollup_context
+                .rollup_config
+                .l2_sudt_validator_script_type_hash(),
+        )
+        .hash_type(ScriptHashType::Type.into())
         .build()
 }

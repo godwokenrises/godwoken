@@ -5,7 +5,7 @@ use gw_generator::{
     backend_manage::{Backend, BackendManage},
     dummy_state::DummyState,
     traits::StateExt,
-    Generator,
+    Generator, RollupContext,
 };
 use gw_types::{
     bytes::Bytes,
@@ -40,7 +40,11 @@ fn test_example_sum() {
         let mut account_lock_manage = AccountLockManage::default();
         account_lock_manage
             .register_lock_algorithm(H256::zero(), Box::new(AlwaysSuccess::default()));
-        let generator = Generator::new(backend_manage, account_lock_manage, Default::default());
+        let rollup_context = RollupContext {
+            rollup_config: Default::default(),
+            rollup_script_hash: [42u8; 32].into(),
+        };
+        let generator = Generator::new(backend_manage, account_lock_manage, rollup_context);
         let mut sum_value = init_value;
         for (number, add_value) in &[(1u64, 7u64), (2u64, 16u64)] {
             let block_info = new_block_info(0, *number, 0);

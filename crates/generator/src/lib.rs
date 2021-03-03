@@ -11,7 +11,7 @@ pub mod genesis;
 pub mod sudt;
 pub mod syscalls;
 pub mod traits;
-mod types;
+pub mod types;
 
 #[cfg(test)]
 mod tests;

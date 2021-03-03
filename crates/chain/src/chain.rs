@@ -16,7 +16,7 @@ use gw_types::{
     core::Status,
     packed::{
         ChallengeTarget, ChallengeWitness, DepositionRequest, GlobalState, HeaderInfo, L2Block,
-        L2BlockReader, RollupConfig, Transaction, TxReceipt, VerifyTransactionWitness, WitnessArgs,
+        L2BlockReader, Transaction, TxReceipt, VerifyTransactionWitness, WitnessArgs,
         WitnessArgsReader,
     },
     prelude::{
@@ -119,7 +119,6 @@ impl LocalState {
 pub struct Chain {
     pub rollup_type_script_hash: [u8; 32],
     pub rollup_config_hash: [u8; 32],
-    pub rollup_config: RollupConfig,
     pub store: Store,
     pub bad_block_context: Option<ChallengeTarget>,
     pub local_state: LocalState,
@@ -138,6 +137,11 @@ impl Chain {
             rollup_type_script,
             rollup_config,
         } = config;
+        assert_eq!(
+            rollup_config,
+            generator.rollup_context().rollup_config,
+            "check generator rollup config"
+        );
         let rollup_type_script_hash = rollup_type_script.hash();
         let chain_id: [u8; 32] = store.get_chain_id()?.into();
         assert_eq!(
@@ -165,7 +169,6 @@ impl Chain {
             mem_pool,
             rollup_type_script_hash,
             rollup_config_hash,
-            rollup_config,
         })
     }
 
@@ -176,10 +179,6 @@ impl Chain {
 
     pub fn store(&self) -> &Store {
         &self.store
-    }
-
-    pub fn rollup_config(&self) -> &RollupConfig {
-        &self.rollup_config
     }
 
     pub fn rollup_config_hash(&self) -> &[u8; 32] {
@@ -420,7 +419,7 @@ impl Chain {
             &GenesisConfig {
                 timestamp: genesis.raw().timestamp().unpack(),
             },
-            self.rollup_config(),
+            self.generator.rollup_context(),
         )?;
         // replay blocks
         for number in 1..tip_number {

@@ -2,6 +2,7 @@ use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
     error::{TransactionValidateError, WithdrawalError},
+    RollupContext,
 };
 use crate::{
     backend_manage::Backend,
@@ -49,24 +50,24 @@ pub struct StateTransitionResult {
 pub struct Generator {
     backend_manage: BackendManage,
     account_lock_manage: AccountLockManage,
-    rollup_type_script_hash: H256,
+    rollup_context: RollupContext,
 }
 
 impl Generator {
     pub fn new(
         backend_manage: BackendManage,
         account_lock_manage: AccountLockManage,
-        rollup_type_script_hash: H256,
+        rollup_context: RollupContext,
     ) -> Self {
         Generator {
             backend_manage,
             account_lock_manage,
-            rollup_type_script_hash,
+            rollup_context,
         }
     }
 
-    pub fn rollup_type_script_hash(&self) -> &H256 {
-        &self.rollup_type_script_hash
+    pub fn rollup_context(&self) -> &RollupContext {
+        &self.rollup_context
     }
 
     pub fn account_lock_manage(&self) -> &AccountLockManage {
@@ -81,8 +82,8 @@ impl Generator {
         withdrawal_request: &WithdrawalRequest,
     ) -> Result<(), Error> {
         let raw = withdrawal_request.raw();
-        let account_script_hash: [u8; 32] = raw.account_script_hash().unpack();
-        let sudt_script_hash: [u8; 32] = raw.sudt_script_hash().unpack();
+        let account_script_hash: H256 = raw.account_script_hash().unpack();
+        let sudt_script_hash: H256 = raw.sudt_script_hash().unpack();
         let amount: u128 = raw.amount().unpack();
         let capacity: u64 = raw.capacity().unpack();
 
@@ -105,7 +106,8 @@ impl Generator {
         if capacity as u128 > ckb_balance {
             return Err(WithdrawalError::Overdraft.into());
         }
-        let l2_sudt_script_hash = build_l2_sudt_script(sudt_script_hash).hash();
+        let l2_sudt_script_hash =
+            build_l2_sudt_script(&self.rollup_context, &sudt_script_hash).hash();
         let sudt_id = state
             .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
             .ok_or(AccountError::UnknownSUDT)?;
@@ -156,7 +158,7 @@ impl Generator {
             .get_lock_algorithm(&lock_code_hash.into())
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
 
-        let message = raw.calc_message(&self.rollup_type_script_hash);
+        let message = raw.calc_message(&self.rollup_context.rollup_script_hash);
         let valid_signature = lock_algo.verify_signature(
             account_script.args().unpack(),
             withdrawal_request.signature(),
@@ -223,7 +225,7 @@ impl Generator {
         let lock_code_hash: [u8; 32] = script.code_hash().unpack();
 
         let message = raw_tx.calc_message(
-            &self.rollup_type_script_hash,
+            &self.rollup_context.rollup_script_hash,
             &script_hash,
             &receiver_script_hash,
         );
@@ -254,9 +256,9 @@ impl Generator {
         let raw_block = args.l2block.raw();
         let withdrawal_requests: Vec<_> = args.l2block.withdrawals().into_iter().collect();
         // apply withdrawal to state
-        state.apply_withdrawal_requests(&withdrawal_requests)?;
+        state.apply_withdrawal_requests(&self.rollup_context, &withdrawal_requests)?;
         // apply deposition to state
-        state.apply_deposition_requests(&args.deposition_requests)?;
+        state.apply_deposition_requests(&self.rollup_context, &args.deposition_requests)?;
 
         // handle transactions
         let block_info = get_block_info(&raw_block);
@@ -364,6 +366,7 @@ impl Generator {
                     state,
                     block_info: block_info,
                     raw_tx,
+                    rollup_context: &self.rollup_context,
                     result: &mut run_result,
                     code_store: state,
                 }));

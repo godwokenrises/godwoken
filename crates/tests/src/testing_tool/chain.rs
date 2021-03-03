@@ -6,6 +6,7 @@ use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
     genesis::init_genesis,
+    types::RollupContext,
     Generator,
 };
 use gw_mem_pool::pool::MemPool;
@@ -67,17 +68,20 @@ pub fn setup_chain_with_account_lock_manage(
         rollup_config: rollup_config.clone(),
     };
     let rollup_script_hash = config.rollup_type_script.hash().into();
+    let rollup_context = RollupContext {
+        rollup_script_hash,
+        rollup_config,
+    };
     let generator = Arc::new(Generator::new(
         backend_manage,
         account_lock_manage,
-        rollup_script_hash,
+        rollup_context.clone(),
     ));
     init_genesis(
         &store,
         &genesis_config,
-        &rollup_config,
+        &rollup_context,
         genesis_header_info,
-        rollup_script_hash,
     )
     .unwrap();
     let mem_pool = MemPool::create(store.clone(), Arc::clone(&generator)).unwrap();
@@ -144,7 +148,6 @@ pub fn construct_block(
     let db = chain.store().begin_transaction();
     let generator = chain.generator.as_ref();
     let parent_block = chain.store().get_tip_block().unwrap();
-    let rollup_config = chain.rollup_config();
     let rollup_config_hash = chain.rollup_config_hash().clone().into();
     let mut txs = Vec::new();
     let mut withdrawal_requests = Vec::new();
@@ -166,7 +169,6 @@ pub fn construct_block(
         deposition_requests,
         withdrawal_requests,
         parent_block: &parent_block,
-        rollup_config,
         rollup_config_hash: &rollup_config_hash,
         max_withdrawal_capacity,
     };

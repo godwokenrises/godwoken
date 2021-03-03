@@ -16,7 +16,7 @@ use gw_types::{
     core::Status,
     packed::{
         AccountMerkleState, BlockInfo, BlockMerkleState, DepositionRequest, GlobalState, L2Block,
-        L2Transaction, RawL2Block, RollupConfig, SubmitTransactions, SubmitWithdrawals, TxReceipt,
+        L2Transaction, RawL2Block, SubmitTransactions, SubmitWithdrawals, TxReceipt,
         WithdrawalRequest,
     },
     prelude::*,
@@ -38,7 +38,6 @@ pub struct ProduceBlockParam<'a> {
     pub deposition_requests: Vec<DepositionRequest>,
     pub withdrawal_requests: Vec<WithdrawalRequest>,
     pub parent_block: &'a L2Block,
-    pub rollup_config: &'a RollupConfig,
     pub rollup_config_hash: &'a H256,
     pub max_withdrawal_capacity: u128,
 }
@@ -57,10 +56,10 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
         deposition_requests,
         withdrawal_requests,
         parent_block,
-        rollup_config,
         rollup_config_hash,
         max_withdrawal_capacity,
     } = param;
+    let rollup_context = generator.rollup_context();
     // create overlay storage
     let state_db = {
         let tip_block_hash = db.get_tip_block_hash()?;
@@ -105,7 +104,7 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
         }
         total_withdrawal_capacity = new_total_withdrwal_capacity;
         // update the state
-        match state.apply_withdrawal_request(&request) {
+        match state.apply_withdrawal_request(rollup_context, &request) {
             Ok(_) => {
                 used_withdrawal_requests.push(request);
             }
@@ -115,7 +114,7 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
         }
     }
     // update deposits
-    state.apply_deposition_requests(&deposition_requests)?;
+    state.apply_deposition_requests(rollup_context, &deposition_requests)?;
     // calculate state after withdrawals & deposits
     let compacted_prev_root_hash = state.calculate_compacted_account_root()?;
     // execute txs
@@ -299,7 +298,7 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
             .build()
     };
     let last_finalized_block_number =
-        number.saturating_sub(rollup_config.finality_blocks().unpack());
+        number.saturating_sub(rollup_context.rollup_config.finality_blocks().unpack());
     let global_state = GlobalState::new_builder()
         .account(post_account)
         .block(post_block)
