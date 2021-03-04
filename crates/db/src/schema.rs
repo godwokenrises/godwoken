@@ -3,7 +3,7 @@
 /// Column families alias type
 pub type Col = &'static str;
 /// Total column number
-pub const COLUMNS: u32 = 17;
+pub const COLUMNS: u32 = 18;
 /// Column store meta data
 pub const COLUMN_META: Col = "0";
 /// Column store chain index
@@ -38,6 +38,8 @@ pub const COLUMN_SCRIPT: Col = "14";
 pub const COLUMN_DATA: Col = "15";
 /// Column block deposition requests
 pub const COLUMN_BLOCK_DEPOSITION_REQUESTS: Col = "16";
+/// Column custodian assets
+pub const COLUMN_CUSTODIAN_ASSETS: Col = "17";
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";

@@ -1,15 +1,15 @@
 use crate::{db_utils::build_transaction_key, smt_store_impl::SMTStore, traits::KVStore};
-use gw_common::{smt::SMT, H256};
+use gw_common::{smt::SMT, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_db::schema::{
     Col, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSITION_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
-    COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_INDEX, COLUMN_META,
-    COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
+    COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_CUSTODIAN_ASSETS, COLUMN_INDEX,
+    COLUMN_META, COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
     COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY,
     META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
 };
 use gw_db::{error::Error, iter::DBIter, DBIterator, DBVector, IteratorMode, RocksDBTransaction};
 use gw_types::{packed, prelude::*};
-use std::rc::Rc;
+use std::{borrow::BorrowMut, collections::HashMap, rc::Rc};
 
 #[derive(Clone)]
 pub struct StoreTransaction {
@@ -205,6 +205,27 @@ impl StoreTransaction {
         }
     }
 
+    /// key: sudt_script_hash
+    fn set_custodian_asset(&self, key: H256, value: u128) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_CUSTODIAN_ASSETS,
+            key.as_slice(),
+            &value.to_le_bytes(),
+        )
+    }
+
+    /// key: sudt_script_hash
+    pub fn get_custodian_asset(&self, key: H256) -> Result<u128, Error> {
+        match self.get(COLUMN_CUSTODIAN_ASSETS, key.as_slice()) {
+            Some(slice) => {
+                let mut buf = [0u8; 16];
+                buf.copy_from_slice(&slice);
+                Ok(u128::from_le_bytes(buf))
+            }
+            None => Ok(0),
+        }
+    }
+
     pub fn insert_block(
         &self,
         block: packed::L2Block,
@@ -246,6 +267,82 @@ impl StoreTransaction {
         Ok(())
     }
 
+    /// Update custodian assets
+    fn update_custodian_assets<
+        AddIter: Iterator<Item = CustodianChange>,
+        RemIter: Iterator<Item = CustodianChange>,
+    >(
+        &self,
+        addition: AddIter,
+        removed: RemIter,
+    ) -> Result<(), Error> {
+        let mut touched_custodian_assets: HashMap<H256, u128> = Default::default();
+        for request in addition {
+            let CustodianChange {
+                sudt_script_hash,
+                amount,
+                capacity,
+            } = request;
+
+            // update ckb balance
+            let ckb_balance = touched_custodian_assets
+                .entry(CKB_SUDT_SCRIPT_ARGS.into())
+                .or_insert_with(|| {
+                    self.get_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
+                        .expect("get custodian asset")
+                })
+                .borrow_mut();
+            *ckb_balance = ckb_balance
+                .checked_add(capacity as u128)
+                .expect("deposit overflow");
+
+            // update sUDT balance
+            let balance = touched_custodian_assets
+                .entry(sudt_script_hash)
+                .or_insert_with(|| {
+                    self.get_custodian_asset(sudt_script_hash)
+                        .expect("get custodian asset")
+                })
+                .borrow_mut();
+            *balance = balance.checked_add(amount).expect("deposit overflow");
+        }
+        for request in removed {
+            let CustodianChange {
+                sudt_script_hash,
+                amount,
+                capacity,
+            } = request;
+
+            // update ckb balance
+            let ckb_balance = touched_custodian_assets
+                .entry(CKB_SUDT_SCRIPT_ARGS.into())
+                .or_insert_with(|| {
+                    self.get_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
+                        .expect("get custodian asset")
+                })
+                .borrow_mut();
+
+            *ckb_balance = ckb_balance
+                .checked_sub(capacity as u128)
+                .expect("withdrawal overflow");
+
+            // update sUDT balance
+            let balance = touched_custodian_assets
+                .entry(sudt_script_hash)
+                .or_insert_with(|| {
+                    self.get_custodian_asset(sudt_script_hash)
+                        .expect("get custodian asset")
+                })
+                .borrow_mut();
+            *balance = balance.checked_sub(amount).expect("withdrawal overflow");
+        }
+        // write touched assets to storage
+        for (key, balance) in touched_custodian_assets {
+            self.set_custodian_asset(key, balance)?;
+        }
+        Ok(())
+    }
+
     /// Attach block to the rollup main chain
     pub fn attach_block(&self, block: packed::L2Block) -> Result<(), Error> {
         let raw = block.raw();
@@ -262,6 +359,26 @@ impl StoreTransaction {
             let tx_hash = tx.hash();
             self.insert_raw(COLUMN_TRANSACTION_INFO, &tx_hash, info.as_slice())?;
         }
+
+        // update custodian assets
+        let deposit_assets = self
+            .get_block_deposition_requests(&block_hash.into())?
+            .expect("deposits")
+            .into_iter()
+            .map(|deposit| CustodianChange {
+                sudt_script_hash: deposit.sudt_script_hash().unpack(),
+                amount: deposit.amount().unpack(),
+                capacity: deposit.capacity().unpack(),
+            });
+        let withdrawal_assets = block.withdrawals().into_iter().map(|withdrawal| {
+            let raw = withdrawal.raw();
+            CustodianChange {
+                sudt_script_hash: raw.sudt_script_hash().unpack(),
+                amount: raw.amount().unpack(),
+                capacity: raw.capacity().unpack(),
+            }
+        });
+        self.update_custodian_assets(deposit_assets, withdrawal_assets)?;
 
         // build main chain index
         self.insert_raw(COLUMN_INDEX, raw_number.as_slice(), &block_hash)?;
@@ -280,10 +397,32 @@ impl StoreTransaction {
     }
 
     pub fn detach_block(&self, block: &packed::L2Block) -> Result<(), Error> {
+        // remove transaction info
         for tx in block.transactions().into_iter() {
             let tx_hash = tx.hash();
             self.delete(COLUMN_TRANSACTION_INFO, &tx_hash)?;
         }
+
+        // update custodian assets
+        let deposit_assets = self
+            .get_block_deposition_requests(&block.hash().into())?
+            .expect("deposits")
+            .into_iter()
+            .map(|deposit| CustodianChange {
+                sudt_script_hash: deposit.sudt_script_hash().unpack(),
+                amount: deposit.amount().unpack(),
+                capacity: deposit.capacity().unpack(),
+            });
+        let withdrawal_assets = block.withdrawals().into_iter().map(|withdrawal| {
+            let raw = withdrawal.raw();
+            CustodianChange {
+                sudt_script_hash: raw.sudt_script_hash().unpack(),
+                amount: raw.amount().unpack(),
+                capacity: raw.capacity().unpack(),
+            }
+        });
+        self.update_custodian_assets(withdrawal_assets, deposit_assets)?;
+
         let block_number = block.raw().number();
         self.delete(COLUMN_INDEX, block_number.as_slice())?;
         self.delete(COLUMN_INDEX, &block.hash())?;
@@ -309,4 +448,10 @@ impl StoreTransaction {
         )?;
         Ok(())
     }
+}
+
+struct CustodianChange {
+    capacity: u64,
+    sudt_script_hash: H256,
+    amount: u128,
 }
