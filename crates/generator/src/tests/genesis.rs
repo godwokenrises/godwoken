@@ -8,6 +8,7 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
+    bytes::Bytes,
     core::ScriptHashType,
     packed::{HeaderInfo, RollupConfig},
     prelude::*,
@@ -15,13 +16,17 @@ use gw_types::{
 use std::convert::TryInto;
 
 const GENESIS_BLOCK_HASH: [u8; 32] = [
-    246, 197, 150, 109, 12, 89, 50, 74, 28, 54, 195, 12, 149, 226, 102, 107, 161, 38, 3, 21, 134,
-    159, 123, 96, 243, 134, 50, 196, 194, 112, 114, 127,
+    99, 200, 170, 154, 13, 153, 9, 11, 153, 20, 66, 221, 149, 217, 203, 83, 28, 87, 40, 128, 209,
+    244, 186, 11, 252, 239, 196, 88, 60, 225, 32, 77,
 ];
 
 #[test]
 fn test_init_genesis() {
-    let config = GenesisConfig { timestamp: 42 };
+    let meta_contract_code_hash = [1u8; 32];
+    let config = GenesisConfig {
+        timestamp: 42,
+        meta_contract_validator_type_hash: meta_contract_code_hash.into(),
+    };
     let rollup_context = RollupContext {
         rollup_config: RollupConfig::default(),
         rollup_script_hash: [42u8; 32].into(),
@@ -43,8 +48,10 @@ fn test_init_genesis() {
     let meta_contract_script_hash = tree.get_script_hash(0).expect("script hash");
     assert_ne!(meta_contract_script_hash, H256::zero());
     let script = tree.get_script(&meta_contract_script_hash).expect("script");
+    let args: Bytes = script.args().unpack();
+    assert_eq!(&args, rollup_context.rollup_script_hash.as_slice());
     let hash_type: ScriptHashType = script.hash_type().try_into().unwrap();
-    assert!(hash_type == ScriptHashType::Data);
+    assert!(hash_type == ScriptHashType::Type);
     let code_hash: [u8; 32] = script.code_hash().unpack();
-    assert_ne!(code_hash, [0u8; 32]);
+    assert_eq!(code_hash, meta_contract_code_hash);
 }

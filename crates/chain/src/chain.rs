@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use gw_common::{sparse_merkle_tree, state::State, H256};
+use gw_common::{builtins::RESERVED_ACCOUNT_ID, sparse_merkle_tree, state::State, H256};
 use gw_config::{ChainConfig, GenesisConfig};
 use gw_generator::{
     generator::StateTransitionArgs, ChallengeContext, Error as GeneratorError, Generator,
@@ -11,6 +11,7 @@ use gw_store::{
     transaction::StoreTransaction,
     Store,
 };
+use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::Status,
@@ -413,11 +414,20 @@ impl Chain {
             db.clone(),
             StateDBVersion::from_block_hash(old_tip_block_hash),
         );
+        let reserved_account_code_hash: [u8; 32] = {
+            let tree = state_db.account_state_tree()?;
+            let script_hash = tree.get_script_hash(RESERVED_ACCOUNT_ID)?;
+            let script = tree
+                .get_script(&script_hash)
+                .expect("get meta contract script");
+            script.code_hash().unpack()
+        };
         state_db.clear_account_state_tree()?;
         gw_generator::genesis::build_genesis_from_store(
             db,
             &GenesisConfig {
                 timestamp: genesis.raw().timestamp().unpack(),
+                meta_contract_validator_type_hash: reserved_account_code_hash.into(),
             },
             self.generator.rollup_context(),
         )?;

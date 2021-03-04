@@ -1,6 +1,4 @@
-use crate::{
-    builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH, traits::StateExt, types::RollupContext,
-};
+use crate::{traits::StateExt, types::RollupContext};
 use anyhow::Result;
 use gw_common::{
     blake2b::new_blake2b,
@@ -16,7 +14,8 @@ use gw_store::{
     Store,
 };
 use gw_types::{
-    core::Status,
+    bytes::Bytes,
+    core::{ScriptHashType, Status},
     packed::{
         AccountMerkleState, BlockMerkleState, GlobalState, HeaderInfo, L2Block, RawL2Block, Script,
     },
@@ -58,8 +57,13 @@ pub fn build_genesis_from_store(
     let reserved_id = tree.create_account_from_script(
         Script::new_builder()
             .code_hash({
-                let code_hash: [u8; 32] = (*META_CONTRACT_VALIDATOR_CODE_HASH).into();
+                let code_hash: [u8; 32] = config.meta_contract_validator_type_hash.clone().into();
                 code_hash.pack()
+            })
+            .hash_type(ScriptHashType::Type.into())
+            .args({
+                let rollup_script_hash: [u8; 32] = rollup_context.rollup_script_hash.into();
+                Bytes::from(rollup_script_hash.to_vec()).pack()
             })
             .build(),
     )?;
