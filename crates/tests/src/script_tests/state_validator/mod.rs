@@ -23,7 +23,7 @@ mod enter_challenge;
 mod revert;
 mod submit_block;
 
-const SCRIPT_DIR: &'static str = "../../build/debug";
+const SCRIPT_DIR: &'static str = "../../godwoken-scripts/build/debug";
 const STATE_VALIDATOR: &'static str = "state-validator";
 
 lazy_static! {

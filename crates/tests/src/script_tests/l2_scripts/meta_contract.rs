@@ -1,29 +1,40 @@
 use super::{new_block_info, run_contract};
+use crate::testing_tool::chain::META_VALIDATOR_SCRIPT_TYPE_HASH;
+use ckb_types::bytes::Bytes;
 use core::panic;
 use gw_common::state::State;
 use gw_common::H256;
-use gw_generator::builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH;
 use gw_generator::{
     dummy_state::DummyState, error::TransactionError, syscalls::ERROR_DUPLICATED_SCRIPT_HASH,
     traits::StateExt,
 };
-use gw_store::Store;
 use gw_types::{
-    packed::{CreateAccount, MetaContractArgs, Script},
+    core::ScriptHashType,
+    packed::{CreateAccount, MetaContractArgs, RollupConfig, Script},
     prelude::*,
 };
+use lazy_static::lazy_static;
+
+lazy_static! {
+    pub static ref ETH_ACCOUNT_LOCK: Bytes = Bytes::from(
+        &include_bytes!("../../../../../godwoken-scripts/c/build/meta-contract-validator")[..]
+    );
+}
 
 #[test]
 fn test_meta_contract() {
-    let store = Store::open_tmp().unwrap();
-    let db = store.begin_transaction();
     let mut tree = DummyState::default();
+    let dummy_eoa_type_hash = [4u8; 32];
+    let rollup_config = RollupConfig::new_builder()
+        .allowed_eoa_type_hashes(vec![dummy_eoa_type_hash].pack())
+        .build();
     // init accounts
     let meta_contract_id = tree
         .create_account_from_script(
             Script::new_builder()
-                .code_hash(Into::<[u8; 32]>::into(META_CONTRACT_VALIDATOR_CODE_HASH.clone()).pack())
+                .code_hash(META_VALIDATOR_SCRIPT_TYPE_HASH.clone().pack())
                 .args([0u8; 32].to_vec().pack())
+                .hash_type(ScriptHashType::Type.into())
                 .build(),
         )
         .expect("create account");
@@ -34,6 +45,7 @@ fn test_meta_contract() {
             Script::new_builder()
                 .code_hash([0u8; 32].pack())
                 .args([0u8; 20].to_vec().pack())
+                .hash_type(ScriptHashType::Type.into())
                 .build(),
         )
         .expect("create account");
@@ -42,8 +54,9 @@ fn test_meta_contract() {
 
     // create contract
     let contract_script = Script::new_builder()
-        .code_hash([0u8; 32].pack())
+        .code_hash(dummy_eoa_type_hash.pack())
         .args(vec![42].pack())
+        .hash_type(ScriptHashType::Type.into())
         .build();
     let args = MetaContractArgs::new_builder()
         .set(
@@ -53,7 +66,7 @@ fn test_meta_contract() {
         )
         .build();
     let return_data = run_contract(
-        &db,
+        &rollup_config,
         &mut tree,
         a_id,
         meta_contract_id,
@@ -79,15 +92,16 @@ fn test_meta_contract() {
 
 #[test]
 fn test_duplicated_script_hash() {
-    let store = Store::open_tmp().unwrap();
-    let db = store.begin_transaction();
     let mut tree = DummyState::default();
+    let rollup_config = RollupConfig::default();
+
     // init accounts
     let meta_contract_id = tree
         .create_account_from_script(
             Script::new_builder()
-                .code_hash(Into::<[u8; 32]>::into(META_CONTRACT_VALIDATOR_CODE_HASH.clone()).pack())
+                .code_hash(META_VALIDATOR_SCRIPT_TYPE_HASH.clone().pack())
                 .args([0u8; 32].to_vec().pack())
+                .hash_type(ScriptHashType::Type.into())
                 .build(),
         )
         .expect("create account");
@@ -98,6 +112,7 @@ fn test_duplicated_script_hash() {
             Script::new_builder()
                 .code_hash([0u8; 32].pack())
                 .args([0u8; 20].to_vec().pack())
+                .hash_type(ScriptHashType::Type.into())
                 .build(),
         )
         .expect("create account");
@@ -108,6 +123,7 @@ fn test_duplicated_script_hash() {
     let contract_script = Script::new_builder()
         .code_hash([0u8; 32].pack())
         .args(vec![42].pack())
+        .hash_type(ScriptHashType::Type.into())
         .build();
 
     let _id = tree
@@ -123,7 +139,7 @@ fn test_duplicated_script_hash() {
         )
         .build();
     let err = run_contract(
-        &db,
+        &rollup_config,
         &mut tree,
         a_id,
         meta_contract_id,

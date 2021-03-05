@@ -15,7 +15,7 @@ use lazy_static::lazy_static;
 use rand::{thread_rng, Rng};
 use std::{collections::HashMap, fs, io::Read, path::PathBuf};
 
-const SCRIPT_DIR: &'static str = "../../build/debug";
+const SCRIPT_DIR: &'static str = "../../godwoken-scripts/build/debug";
 const CHALLENGE_LOCK_PATH: &'static str = "challenge-lock";
 
 lazy_static! {

@@ -2,30 +2,33 @@ use super::{new_block_info, run_contract};
 use gw_common::state::State;
 use gw_common::{h256_ext::H256Ext, H256};
 use gw_generator::dummy_state::DummyState;
-use gw_generator::{
-    builtin_scripts::SUDT_VALIDATOR_CODE_HASH, error::TransactionError, traits::StateExt,
-};
-use gw_store::Store;
+use gw_generator::{error::TransactionError, traits::StateExt};
 use gw_types::{
-    packed::{SUDTArgs, SUDTQuery, SUDTTransfer, Script},
+    core::ScriptHashType,
+    packed::{RollupConfig, SUDTArgs, SUDTQuery, SUDTTransfer, Script},
     prelude::*,
 };
 
 const ERROR_INSUFFICIENT_BALANCE: i8 = 12i8;
+const DUMMY_SUDT_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [3u8; 32];
 
 #[test]
 fn test_sudt() {
-    let store = Store::open_tmp().unwrap();
-    let db = store.begin_transaction();
     let mut tree = DummyState::default();
+
+    let rollup_config = RollupConfig::new_builder()
+        .l2_sudt_validator_script_type_hash(DUMMY_SUDT_VALIDATOR_SCRIPT_TYPE_HASH.pack())
+        .build();
+
     let init_a_balance: u128 = 10000;
 
     // init accounts
     let sudt_id = tree
         .create_account_from_script(
             Script::new_builder()
-                .code_hash(Into::<[u8; 32]>::into(SUDT_VALIDATOR_CODE_HASH.clone()).pack())
-                .args([0u8; 32].to_vec().pack())
+                .code_hash(DUMMY_SUDT_VALIDATOR_SCRIPT_TYPE_HASH.clone().pack())
+                .args([0u8; 64].to_vec().pack())
+                .hash_type(ScriptHashType::Type.into())
                 .build(),
         )
         .expect("create account");
@@ -34,6 +37,7 @@ fn test_sudt() {
             Script::new_builder()
                 .code_hash([0u8; 32].pack())
                 .args([0u8; 20].to_vec().pack())
+                .hash_type(ScriptHashType::Type.into())
                 .build(),
         )
         .expect("create account");
@@ -42,6 +46,7 @@ fn test_sudt() {
             Script::new_builder()
                 .code_hash([0u8; 32].pack())
                 .args([0u8; 20].to_vec().pack())
+                .hash_type(ScriptHashType::Type.into())
                 .build(),
         )
         .expect("create account");
@@ -50,6 +55,7 @@ fn test_sudt() {
             Script::new_builder()
                 .code_hash([0u8; 32].pack())
                 .args([0u8; 20].to_vec().pack())
+                .hash_type(ScriptHashType::Type.into())
                 .build(),
         )
         .expect("create account");
@@ -68,8 +74,15 @@ fn test_sudt() {
         let args = SUDTArgs::new_builder()
             .set(SUDTQuery::new_builder().account_id(a_id.pack()).build())
             .build();
-        let return_data = run_contract(&db, &mut tree, a_id, sudt_id, args.as_bytes(), &block_info)
-            .expect("execute");
+        let return_data = run_contract(
+            &rollup_config,
+            &mut tree,
+            a_id,
+            sudt_id,
+            args.as_bytes(),
+            &block_info,
+        )
+        .expect("execute");
         let balance = {
             let mut buf = [0u8; 16];
             buf.copy_from_slice(&return_data);
@@ -80,8 +93,15 @@ fn test_sudt() {
         let args = SUDTArgs::new_builder()
             .set(SUDTQuery::new_builder().account_id(b_id.pack()).build())
             .build();
-        let return_data = run_contract(&db, &mut tree, a_id, sudt_id, args.as_bytes(), &block_info)
-            .expect("execute");
+        let return_data = run_contract(
+            &rollup_config,
+            &mut tree,
+            a_id,
+            sudt_id,
+            args.as_bytes(),
+            &block_info,
+        )
+        .expect("execute");
         let balance = {
             let mut buf = [0u8; 16];
             buf.copy_from_slice(&return_data);
@@ -103,17 +123,30 @@ fn test_sudt() {
                     .build(),
             )
             .build();
-        let return_data = run_contract(&db, &mut tree, a_id, sudt_id, args.as_bytes(), &block_info)
-            .expect("execute");
+        let return_data = run_contract(
+            &rollup_config,
+            &mut tree,
+            a_id,
+            sudt_id,
+            args.as_bytes(),
+            &block_info,
+        )
+        .expect("execute");
         assert!(return_data.is_empty());
 
         {
             let args = SUDTArgs::new_builder()
                 .set(SUDTQuery::new_builder().account_id(a_id.pack()).build())
                 .build();
-            let return_data =
-                run_contract(&db, &mut tree, a_id, sudt_id, args.as_bytes(), &block_info)
-                    .expect("execute");
+            let return_data = run_contract(
+                &rollup_config,
+                &mut tree,
+                a_id,
+                sudt_id,
+                args.as_bytes(),
+                &block_info,
+            )
+            .expect("execute");
             let balance = {
                 let mut buf = [0u8; 16];
                 buf.copy_from_slice(&return_data);
@@ -124,9 +157,15 @@ fn test_sudt() {
             let args = SUDTArgs::new_builder()
                 .set(SUDTQuery::new_builder().account_id(b_id.pack()).build())
                 .build();
-            let return_data =
-                run_contract(&db, &mut tree, a_id, sudt_id, args.as_bytes(), &block_info)
-                    .expect("execute");
+            let return_data = run_contract(
+                &rollup_config,
+                &mut tree,
+                a_id,
+                sudt_id,
+                args.as_bytes(),
+                &block_info,
+            )
+            .expect("execute");
             let balance = {
                 let mut buf = [0u8; 16];
                 buf.copy_from_slice(&return_data);
@@ -141,9 +180,15 @@ fn test_sudt() {
                         .build(),
                 )
                 .build();
-            let return_data =
-                run_contract(&db, &mut tree, a_id, sudt_id, args.as_bytes(), &block_info)
-                    .expect("execute");
+            let return_data = run_contract(
+                &rollup_config,
+                &mut tree,
+                a_id,
+                sudt_id,
+                args.as_bytes(),
+                &block_info,
+            )
+            .expect("execute");
             let balance = {
                 let mut buf = [0u8; 16];
                 buf.copy_from_slice(&return_data);
@@ -156,17 +201,20 @@ fn test_sudt() {
 
 #[test]
 fn test_insufficient_balance() {
-    let store = Store::open_tmp().unwrap();
-    let db = store.begin_transaction();
     let mut tree = DummyState::default();
     let init_a_balance: u128 = 10000;
+
+    let rollup_config = RollupConfig::new_builder()
+        .l2_sudt_validator_script_type_hash(DUMMY_SUDT_VALIDATOR_SCRIPT_TYPE_HASH.pack())
+        .build();
 
     // init accounts
     let sudt_id = tree
         .create_account_from_script(
             Script::new_builder()
-                .code_hash(Into::<[u8; 32]>::into(SUDT_VALIDATOR_CODE_HASH.clone()).pack())
+                .code_hash(DUMMY_SUDT_VALIDATOR_SCRIPT_TYPE_HASH.clone().pack())
                 .args([0u8; 20].to_vec().pack())
+                .hash_type(ScriptHashType::Type.into())
                 .build(),
         )
         .expect("create account");
@@ -175,6 +223,7 @@ fn test_insufficient_balance() {
             Script::new_builder()
                 .code_hash([0u8; 32].pack())
                 .args([0u8; 20].to_vec().pack())
+                .hash_type(ScriptHashType::Type.into())
                 .build(),
         )
         .expect("create account");
@@ -183,6 +232,7 @@ fn test_insufficient_balance() {
             Script::new_builder()
                 .code_hash([0u8; 32].pack())
                 .args([0u8; 20].to_vec().pack())
+                .hash_type(ScriptHashType::Type.into())
                 .build(),
         )
         .expect("create account");
@@ -208,8 +258,15 @@ fn test_insufficient_balance() {
                     .build(),
             )
             .build();
-        let err = run_contract(&db, &mut tree, a_id, sudt_id, args.as_bytes(), &block_info)
-            .expect_err("err");
+        let err = run_contract(
+            &rollup_config,
+            &mut tree,
+            a_id,
+            sudt_id,
+            args.as_bytes(),
+            &block_info,
+        )
+        .expect_err("err");
         let err_code = match err {
             TransactionError::InvalidExitCode(code) => code,
             err => panic!("unexpected {:?}", err),

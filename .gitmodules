@@ -4,3 +4,6 @@
 [submodule "c/deps/ckb-miscellaneous-scripts"]
 	path = c/deps/ckb-miscellaneous-scripts
 	url = https://github.com/nervosnetwork/ckb-miscellaneous-scripts.git
+[submodule "godwoken-scripts"]
+	path = godwoken-scripts
+	url = https://github.com/nervosnetwork/godwoken-scripts.git

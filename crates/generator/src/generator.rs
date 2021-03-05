@@ -338,11 +338,15 @@ impl Generator {
         Ok(state
             .get_script(&script_hash)
             .and_then(|script| {
-                // only accept data script hash type for now
-                if script.hash_type() == ScriptHashType::Data.into() {
+                // only accept type script hash type for now
+                if script.hash_type() == ScriptHashType::Type.into() {
                     let code_hash: [u8; 32] = script.code_hash().unpack();
                     self.backend_manage.get_backend(&code_hash.into())
                 } else {
+                    eprintln!(
+                        "Found a invalid account script which hash_type is data: {:?}",
+                        script
+                    );
                     None
                 }
             })

@@ -1,7 +1,7 @@
 use gw_block_producer::block_producer::{produce_block, ProduceBlockParam, ProduceBlockResult};
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncEvent, SyncParam};
 use gw_common::blake2b::new_blake2b;
-use gw_config::{ChainConfig, GenesisConfig};
+use gw_config::{BackendConfig, BackendManageConfig, ChainConfig, GenesisConfig};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
@@ -45,6 +45,33 @@ lazy_static! {
     };
 }
 
+// meta contract
+pub const META_VALIDATOR_PATH: &str = "../../godwoken-scripts/c/build/meta-contract-validator";
+pub const META_GENERATOR_PATH: &str = "../../godwoken-scripts/c/build/meta-contract-generator";
+pub const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
+
+// simple UDT
+pub const SUDT_VALIDATOR_PATH: &str = "../../godwoken-scripts/c/build/sudt-validator";
+pub const SUDT_GENERATOR_PATH: &str = "../../godwoken-scripts/c/build/sudt-generator";
+
+pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
+    let sudt_validator_script_type_hash: [u8; 32] =
+        rollup_config.l2_sudt_validator_script_type_hash().unpack();
+    let config = BackendManageConfig {
+        meta_contract: BackendConfig {
+            validator_path: META_VALIDATOR_PATH.into(),
+            generator_path: META_GENERATOR_PATH.into(),
+            validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
+        },
+        simple_udt: BackendConfig {
+            validator_path: SUDT_VALIDATOR_PATH.into(),
+            generator_path: SUDT_GENERATOR_PATH.into(),
+            validator_script_type_hash: sudt_validator_script_type_hash.into(),
+        },
+    };
+    BackendManage::from_config(config).expect("default backend")
+}
+
 pub fn setup_chain(rollup_type_script: Script, rollup_config: RollupConfig) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
     account_lock_manage.register_lock_algorithm(
@@ -65,7 +92,7 @@ pub fn setup_chain_with_account_lock_manage(
         meta_contract_validator_type_hash: Default::default(),
     };
     let genesis_header_info = HeaderInfo::default();
-    let backend_manage = BackendManage::default();
+    let backend_manage = build_backend_manage(&rollup_config);
     let config = ChainConfig {
         rollup_type_script,
         rollup_config: rollup_config.clone(),

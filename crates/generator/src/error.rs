@@ -82,6 +82,8 @@ pub enum AccountError {
     UnknownSUDT,
     #[error("Unknown account")]
     UnknownAccount,
+    #[error("Unknown script")]
+    UnknownScript,
     #[error("Nonce Overflow")]
     NonceOverflow,
     #[error("can't find script for account {account_id}")]

@@ -10,11 +10,16 @@ use ckb_types::{
     prelude::*,
 };
 use gw_generator::account_lock_manage::{secp256k1::Secp256k1Eth, LockAlgorithm};
-use gw_generator::builtin_scripts::ETH_ACCOUNT_LOCK;
 use rand::{thread_rng, Rng};
 use sha3::{Digest, Keccak256};
 
 const ERROR_PUBKEY_BLAKE160_HASH: i8 = -31;
+
+lazy_static! {
+    pub static ref ETH_ACCOUNT_LOCK: Bytes = Bytes::from(
+        &include_bytes!("../../../../../godwoken-scripts/c/build/account_locks/eth-account-lock")[..]
+    );
+}
 
 fn gen_tx(dummy: &mut DummyDataLoader, lock_args: Bytes, input_data: Bytes) -> TransactionView {
     let mut rng = thread_rng();

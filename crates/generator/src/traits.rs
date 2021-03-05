@@ -8,6 +8,7 @@ use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARG
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
+    core::ScriptHashType,
     packed::{DepositionRequest, Script, WithdrawalRequest},
     prelude::*,
 };
@@ -53,6 +54,10 @@ pub trait StateExt {
 
 impl<S: State + CodeStore> StateExt for S {
     fn create_account_from_script(&mut self, script: Script) -> Result<u32, Error> {
+        // Godwoken requires account's script using ScriptHashType::Type
+        if script.hash_type() != ScriptHashType::Type.into() {
+            return Err(AccountError::UnknownScript.into());
+        }
         let script_hash = script.hash();
         self.insert_script(script_hash.into(), script);
         let id = self.create_account(script_hash.into())?;
