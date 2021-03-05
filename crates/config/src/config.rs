@@ -31,3 +31,16 @@ pub struct ChainConfig {
 pub struct StoreConfig {
     pub path: PathBuf,
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BackendConfig {
+    pub validator_path: PathBuf,
+    pub generator_path: PathBuf,
+    pub validator_script_type_hash: H256,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BackendManageConfig {
+    pub meta_contract: BackendConfig,
+    pub simple_udt: BackendConfig,
+}

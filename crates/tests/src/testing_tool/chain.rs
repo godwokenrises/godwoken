@@ -60,7 +60,10 @@ pub fn setup_chain_with_account_lock_manage(
     account_lock_manage: AccountLockManage,
 ) -> Chain {
     let store = Store::open_tmp().unwrap();
-    let genesis_config = GenesisConfig { timestamp: 0, meta_contract_validator_type_hash: Default::default() };
+    let genesis_config = GenesisConfig {
+        timestamp: 0,
+        meta_contract_validator_type_hash: Default::default(),
+    };
     let genesis_header_info = HeaderInfo::default();
     let backend_manage = BackendManage::default();
     let config = ChainConfig {
