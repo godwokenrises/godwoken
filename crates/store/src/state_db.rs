@@ -11,24 +11,29 @@ use gw_db::{error::Error, iter::DBIter, DBVector, IteratorMode};
 use gw_traits::CodeStore;
 use gw_types::{bytes::Bytes, packed, prelude::*};
 
-pub struct StateDBVersion(String);
+pub struct StateDBVersion(H256);
 
 impl StateDBVersion {
     /// TODO implement this
-    pub fn from_block_hash(_block_hash: H256) -> Self {
-        Self(Default::default())
+    pub fn from_block_hash(block_hash: H256) -> Self {
+        StateDBVersion(block_hash)
     }
 
     /// TODO implement this
     pub fn from_genesis() -> Self {
         Self(Default::default())
     }
+
+    pub fn get_block_hash(&self) -> H256 {
+        self.0
+    }
 }
 
 // TODO implement this
 pub struct StateDBTransaction {
     inner: StoreTransaction,
-    _version: StateDBVersion,
+    block_number: u64,
+    tx_index: u32,
 }
 
 impl KVStore for StateDBTransaction {
@@ -50,8 +55,19 @@ impl KVStore for StateDBTransaction {
 }
 
 impl StateDBTransaction {
-    pub fn from_version(inner: StoreTransaction, _version: StateDBVersion) -> Self {
-        StateDBTransaction { inner, _version }
+    pub fn from_version(inner: StoreTransaction, version: StateDBVersion) -> Self {
+        let (block_number, tx_index) = StateDBTransaction::get_tx_index(&inner, version);
+        StateDBTransaction { inner, block_number, tx_index }
+    }
+
+    fn get_tx_index(_inner: &StoreTransaction, version: StateDBVersion) -> (u64, u32) {
+        let _block_hash = version.0;
+        unimplemented!();
+    }
+
+    // TODO: set private so can be used by unit tests 
+    pub fn from_tx_index(inner: StoreTransaction, block_number: u64, tx_index: u32) -> Self {
+        StateDBTransaction { inner, block_number, tx_index }
     }
 
     pub fn commit(&self) -> Result<(), Error> {
