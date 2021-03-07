@@ -43,17 +43,59 @@ fn insert_and_get() {
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 1u32);
     state_db_txn.insert_raw("1", &[1, 1], &[1, 1, 1]).unwrap();
     state_db_txn.commit().unwrap();
-    assert!(state_db_txn.get("1", &[1, 1]).is_none());
+    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 2u32);
+    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
+    assert!(state_db_txn.get("1", &[2]).is_none());
     state_db_txn.insert_raw("1", &[2], &[2, 2, 2]).unwrap();
     state_db_txn.commit().unwrap();
-    assert!(state_db_txn.get("1", &[2]).is_none());
+    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
 
-    let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 3u32);
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 4u32);
     state_db_txn.insert_raw("1", &[2], &[3, 3, 3]).unwrap();
     state_db_txn.commit().unwrap();
-    assert_eq!(vec![2u8, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![3, 3, 3].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+
+    // overwrite
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 2u32);
+    state_db_txn.insert_raw("1", &[2], &[0, 2, 2]).unwrap();
+    state_db_txn.commit().unwrap();
+    assert_eq!(vec![0, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 3u32);
+    assert_eq!(vec![0, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+}
+
+#[test]
+fn insert_and_get_cross_block() {
+    let store = Store::open_tmp().unwrap();
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 1u32);
+    state_db_txn.insert_raw("1", &[1, 1], &[1, 1, 1]).unwrap();
+    state_db_txn.commit().unwrap();
+    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 5u32);
+    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
+    state_db_txn.insert_raw("1", &[2], &[2, 2, 2]).unwrap();
+    state_db_txn.commit().unwrap();
+    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 3u64, 1u32);
+    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
+    state_db_txn.insert_raw("1", &[2], &[3, 3, 3]).unwrap();
+    state_db_txn.commit().unwrap();
+    assert_eq!(vec![3, 3, 3].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+
+    // overwrite
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 5u32);
+    state_db_txn.insert_raw("1", &[2], &[0, 2, 2]).unwrap();
+    state_db_txn.commit().unwrap();
+    assert_eq!(vec![0, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 6u32);
+    assert_eq!(vec![0, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
 }
 
 #[test]
@@ -73,19 +115,19 @@ fn get_iter() {
     for (key, val) in iter {
         r.insert(key.to_vec(), val.to_vec());
     }
-    assert_eq!(0, r.len());
+    assert_eq!(2, r.len());
+    assert_eq!(Some(&vec![1, 1, 1]), r.get(&vec![1, 1]));
+    assert_eq!(Some(&vec![2, 2, 2]), r.get(&vec![2]));
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 3u32);
-    state_db_txn.insert_raw("1", &[2], &[3, 3, 3]).unwrap();
-    state_db_txn.commit().unwrap();
-
     let iter = state_db_txn.get_iter("1", IteratorMode::Start);
     let mut r = HashMap::new();
     for (key, val) in iter {
         r.insert(key.to_vec(), val.to_vec());
     }
-    assert_eq!(1, r.len());
-    assert_eq!(Some(&vec![2u8, 2, 2]), r.get(&vec![2]));
+    assert_eq!(2, r.len());
+    assert_eq!(Some(&vec![1, 1, 1]), r.get(&vec![1, 1]));
+    assert_eq!(Some(&vec![2, 2, 2]), r.get(&vec![2]));
 }
 
 #[test]
@@ -95,21 +137,25 @@ fn delete() {
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 1u32);
     state_db_txn.insert_raw("1", &[2], &[1, 1, 1]).unwrap();
     state_db_txn.commit().unwrap();
-    assert!(state_db_txn.get("1", &[2]).is_none());
+    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
 
-    let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 2u32);
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 2u32);
+    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
     state_db_txn.insert_raw("1", &[2], &[2, 2, 2]).unwrap();
     state_db_txn.commit().unwrap();
-    assert_eq!(vec![1u8, 1, 1].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
 
-    let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 3u32);
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 4u32);
     state_db_txn.delete("1", &[2]).unwrap();
     state_db_txn.commit().unwrap();
-    assert_eq!(vec![2u8, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
-
-    let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 4u32);
     assert!(state_db_txn.get("1", &[2]).is_none());
 
-    let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 2u32);
-    assert_eq!(vec![1u8, 1, 1].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 5u32);
+    assert!(state_db_txn.get("1", &[2]).is_none());
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 3u64, 1u32);
+    assert!(state_db_txn.get("1", &[2]).is_none());
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 3u32);
+    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
 }
