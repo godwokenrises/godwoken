@@ -23,7 +23,7 @@ use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use std::{fs, io::Read, path::PathBuf, sync::Arc};
 
-const SCRIPT_DIR: &'static str = "../../build/debug";
+const SCRIPT_DIR: &'static str = "../../godwoken-scripts/build/debug";
 const ALWAYS_SUCCESS_PATH: &'static str = "always-success";
 
 lazy_static! {
