@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 gw-types = { path = "../types" }
+ckb-fixed-hash = "0.37"

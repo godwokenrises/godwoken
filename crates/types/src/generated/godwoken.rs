@@ -8945,54 +8945,66 @@ impl ::core::default::Default for UnlockWithdrawalWitnessUnion {
 impl ::core::fmt::Display for UnlockWithdrawalWitnessUnion {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
-            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(ref item) => write!(
-                f,
-                "{}::{}({})",
-                Self::NAME,
-                UnlockWithdrawalViaFinalize::NAME,
-                item
-            ),
-            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(ref item) => write!(
-                f,
-                "{}::{}({})",
-                Self::NAME,
-                UnlockWithdrawalViaRevert::NAME,
-                item
-            ),
-            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(ref item) => write!(
-                f,
-                "{}::{}({})",
-                Self::NAME,
-                UnlockWithdrawalViaTrade::NAME,
-                item
-            ),
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(ref item) => {
+                write!(
+                    f,
+                    "{}::{}({})",
+                    Self::NAME,
+                    UnlockWithdrawalViaFinalize::NAME,
+                    item
+                )
+            }
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(ref item) => {
+                write!(
+                    f,
+                    "{}::{}({})",
+                    Self::NAME,
+                    UnlockWithdrawalViaRevert::NAME,
+                    item
+                )
+            }
+            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(ref item) => {
+                write!(
+                    f,
+                    "{}::{}({})",
+                    Self::NAME,
+                    UnlockWithdrawalViaTrade::NAME,
+                    item
+                )
+            }
         }
     }
 }
 impl<'r> ::core::fmt::Display for UnlockWithdrawalWitnessUnionReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
-            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaFinalize(ref item) => write!(
-                f,
-                "{}::{}({})",
-                Self::NAME,
-                UnlockWithdrawalViaFinalize::NAME,
-                item
-            ),
-            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaRevert(ref item) => write!(
-                f,
-                "{}::{}({})",
-                Self::NAME,
-                UnlockWithdrawalViaRevert::NAME,
-                item
-            ),
-            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(ref item) => write!(
-                f,
-                "{}::{}({})",
-                Self::NAME,
-                UnlockWithdrawalViaTrade::NAME,
-                item
-            ),
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaFinalize(ref item) => {
+                write!(
+                    f,
+                    "{}::{}({})",
+                    Self::NAME,
+                    UnlockWithdrawalViaFinalize::NAME,
+                    item
+                )
+            }
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaRevert(ref item) => {
+                write!(
+                    f,
+                    "{}::{}({})",
+                    Self::NAME,
+                    UnlockWithdrawalViaRevert::NAME,
+                    item
+                )
+            }
+            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(ref item) => {
+                write!(
+                    f,
+                    "{}::{}({})",
+                    Self::NAME,
+                    UnlockWithdrawalViaTrade::NAME,
+                    item
+                )
+            }
         }
     }
 }
@@ -14639,20 +14651,24 @@ impl ::core::fmt::Display for RollupActionUnion {
             RollupActionUnion::RollupSubmitBlock(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, RollupSubmitBlock::NAME, item)
             }
-            RollupActionUnion::RollupEnterChallenge(ref item) => write!(
-                f,
-                "{}::{}({})",
-                Self::NAME,
-                RollupEnterChallenge::NAME,
-                item
-            ),
-            RollupActionUnion::RollupCancelChallenge(ref item) => write!(
-                f,
-                "{}::{}({})",
-                Self::NAME,
-                RollupCancelChallenge::NAME,
-                item
-            ),
+            RollupActionUnion::RollupEnterChallenge(ref item) => {
+                write!(
+                    f,
+                    "{}::{}({})",
+                    Self::NAME,
+                    RollupEnterChallenge::NAME,
+                    item
+                )
+            }
+            RollupActionUnion::RollupCancelChallenge(ref item) => {
+                write!(
+                    f,
+                    "{}::{}({})",
+                    Self::NAME,
+                    RollupCancelChallenge::NAME,
+                    item
+                )
+            }
             RollupActionUnion::RollupRevert(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, RollupRevert::NAME, item)
             }
@@ -14665,20 +14681,24 @@ impl<'r> ::core::fmt::Display for RollupActionUnionReader<'r> {
             RollupActionUnionReader::RollupSubmitBlock(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, RollupSubmitBlock::NAME, item)
             }
-            RollupActionUnionReader::RollupEnterChallenge(ref item) => write!(
-                f,
-                "{}::{}({})",
-                Self::NAME,
-                RollupEnterChallenge::NAME,
-                item
-            ),
-            RollupActionUnionReader::RollupCancelChallenge(ref item) => write!(
-                f,
-                "{}::{}({})",
-                Self::NAME,
-                RollupCancelChallenge::NAME,
-                item
-            ),
+            RollupActionUnionReader::RollupEnterChallenge(ref item) => {
+                write!(
+                    f,
+                    "{}::{}({})",
+                    Self::NAME,
+                    RollupEnterChallenge::NAME,
+                    item
+                )
+            }
+            RollupActionUnionReader::RollupCancelChallenge(ref item) => {
+                write!(
+                    f,
+                    "{}::{}({})",
+                    Self::NAME,
+                    RollupCancelChallenge::NAME,
+                    item
+                )
+            }
             RollupActionUnionReader::RollupRevert(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, RollupRevert::NAME, item)
             }

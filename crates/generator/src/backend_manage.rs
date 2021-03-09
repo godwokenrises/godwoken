@@ -1,28 +1,14 @@
-use crate::builtin_scripts::{
-    META_CONTRACT_GENERATOR, META_CONTRACT_VALIDATOR, META_CONTRACT_VALIDATOR_CODE_HASH,
-    SUDT_GENERATOR, SUDT_VALIDATOR, SUDT_VALIDATOR_CODE_HASH,
-};
-use crate::code_hash;
+use anyhow::Result;
 use gw_common::H256;
+use gw_config::{BackendConfig, BackendManageConfig};
 use gw_types::bytes::Bytes;
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 #[derive(Clone)]
 pub struct Backend {
     pub validator: Bytes,
     pub generator: Bytes,
-    pub validator_code_hash: H256,
-}
-
-impl Backend {
-    pub fn from_binaries(validator: Bytes, generator: Bytes) -> Backend {
-        let validator_code_hash = code_hash(&validator);
-        Backend {
-            validator,
-            generator,
-            validator_code_hash,
-        }
-    }
+    pub validator_script_type_hash: H256,
 }
 
 #[derive(Clone)]
@@ -30,33 +16,49 @@ pub struct BackendManage {
     backends: HashMap<H256, Backend>,
 }
 
-impl Default for BackendManage {
-    fn default() -> Self {
+impl BackendManage {
+    pub fn from_config(config: BackendManageConfig) -> Result<Self> {
         let mut backend_manage = BackendManage {
             backends: Default::default(),
         };
 
+        let BackendManageConfig {
+            meta_contract,
+            simple_udt,
+        } = config;
+
         // Meta contract
-        backend_manage.register_backend(Backend {
-            validator: META_CONTRACT_VALIDATOR.clone(),
-            generator: META_CONTRACT_GENERATOR.clone(),
-            validator_code_hash: META_CONTRACT_VALIDATOR_CODE_HASH.clone(),
-        });
-
+        backend_manage.register_backend_config(meta_contract)?;
         // Simple UDT
-        backend_manage.register_backend(Backend {
-            validator: SUDT_VALIDATOR.clone(),
-            generator: SUDT_GENERATOR.clone(),
-            validator_code_hash: SUDT_VALIDATOR_CODE_HASH.clone(),
-        });
+        backend_manage.register_backend_config(simple_udt)?;
 
-        backend_manage
+        Ok(backend_manage)
     }
-}
 
-impl BackendManage {
+    pub fn register_backend_config(&mut self, config: BackendConfig) -> Result<()> {
+        let BackendConfig {
+            validator_path,
+            generator_path,
+            validator_script_type_hash,
+        } = config;
+        let validator = fs::read(validator_path)?.into();
+        let generator = fs::read(generator_path)?.into();
+        let validator_script_type_hash = {
+            let hash: [u8; 32] = validator_script_type_hash.into();
+            hash.into()
+        };
+        let backend = Backend {
+            validator,
+            generator,
+            validator_script_type_hash,
+        };
+        self.register_backend(backend);
+        Ok(())
+    }
+
     pub fn register_backend(&mut self, backend: Backend) {
-        self.backends.insert(backend.validator_code_hash, backend);
+        self.backends
+            .insert(backend.validator_script_type_hash, backend);
     }
 
     pub fn get_backend(&self, code_hash: &H256) -> Option<&Backend> {

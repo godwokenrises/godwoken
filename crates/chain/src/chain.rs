@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use gw_common::{sparse_merkle_tree, state::State, H256};
+use gw_common::{builtins::RESERVED_ACCOUNT_ID, sparse_merkle_tree, state::State, H256};
 use gw_config::{ChainConfig, GenesisConfig};
 use gw_generator::{
     generator::StateTransitionArgs, ChallengeContext, Error as GeneratorError, Generator,
@@ -11,12 +11,13 @@ use gw_store::{
     transaction::StoreTransaction,
     Store,
 };
+use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::Status,
     packed::{
         ChallengeTarget, ChallengeWitness, DepositionRequest, GlobalState, HeaderInfo, L2Block,
-        L2BlockReader, RollupConfig, Transaction, TxReceipt, VerifyTransactionWitness, WitnessArgs,
+        L2BlockReader, Transaction, TxReceipt, VerifyTransactionWitness, WitnessArgs,
         WitnessArgsReader,
     },
     prelude::{
@@ -119,7 +120,6 @@ impl LocalState {
 pub struct Chain {
     pub rollup_type_script_hash: [u8; 32],
     pub rollup_config_hash: [u8; 32],
-    pub rollup_config: RollupConfig,
     pub store: Store,
     pub bad_block_context: Option<ChallengeTarget>,
     pub local_state: LocalState,
@@ -138,6 +138,11 @@ impl Chain {
             rollup_type_script,
             rollup_config,
         } = config;
+        assert_eq!(
+            rollup_config,
+            generator.rollup_context().rollup_config,
+            "check generator rollup config"
+        );
         let rollup_type_script_hash = rollup_type_script.hash();
         let chain_id: [u8; 32] = store.get_chain_id()?.into();
         assert_eq!(
@@ -165,7 +170,6 @@ impl Chain {
             mem_pool,
             rollup_type_script_hash,
             rollup_config_hash,
-            rollup_config,
         })
     }
 
@@ -176,10 +180,6 @@ impl Chain {
 
     pub fn store(&self) -> &Store {
         &self.store
-    }
-
-    pub fn rollup_config(&self) -> &RollupConfig {
-        &self.rollup_config
     }
 
     pub fn rollup_config_hash(&self) -> &[u8; 32] {
@@ -414,13 +414,22 @@ impl Chain {
             db.clone(),
             StateDBVersion::from_block_hash(old_tip_block_hash),
         );
+        let reserved_account_code_hash: [u8; 32] = {
+            let tree = state_db.account_state_tree()?;
+            let script_hash = tree.get_script_hash(RESERVED_ACCOUNT_ID)?;
+            let script = tree
+                .get_script(&script_hash)
+                .expect("get meta contract script");
+            script.code_hash().unpack()
+        };
         state_db.clear_account_state_tree()?;
         gw_generator::genesis::build_genesis_from_store(
             db,
             &GenesisConfig {
                 timestamp: genesis.raw().timestamp().unpack(),
+                meta_contract_validator_type_hash: reserved_account_code_hash.into(),
             },
-            self.rollup_config(),
+            self.generator.rollup_context(),
         )?;
         // replay blocks
         for number in 1..tip_number {

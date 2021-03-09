@@ -1,4 +1,4 @@
-use crate::{builtin_scripts::META_CONTRACT_VALIDATOR_CODE_HASH, traits::StateExt};
+use crate::{traits::StateExt, types::RollupContext};
 use anyhow::Result;
 use gw_common::{
     blake2b::new_blake2b,
@@ -14,10 +14,10 @@ use gw_store::{
     Store,
 };
 use gw_types::{
-    core::Status,
+    bytes::Bytes,
+    core::{ScriptHashType, Status},
     packed::{
-        AccountMerkleState, BlockMerkleState, GlobalState, HeaderInfo, L2Block, RawL2Block,
-        RollupConfig, Script,
+        AccountMerkleState, BlockMerkleState, GlobalState, HeaderInfo, L2Block, RawL2Block, Script,
     },
     prelude::*,
 };
@@ -25,11 +25,11 @@ use gw_types::{
 /// Build genesis block
 pub fn build_genesis(
     config: &GenesisConfig,
-    rollup_config: &RollupConfig,
+    rollup_context: &RollupContext,
 ) -> Result<GenesisWithGlobalState> {
     let store = Store::open_tmp()?;
     let mut db = store.begin_transaction();
-    build_genesis_from_store(&mut db, config, rollup_config)
+    build_genesis_from_store(&mut db, config, rollup_context)
 }
 
 pub struct GenesisWithGlobalState {
@@ -42,7 +42,7 @@ pub struct GenesisWithGlobalState {
 pub fn build_genesis_from_store(
     db: &StoreTransaction,
     config: &GenesisConfig,
-    rollup_config: &RollupConfig,
+    rollup_context: &RollupContext,
 ) -> Result<GenesisWithGlobalState> {
     // initialize store
     db.set_account_smt_root(H256::zero())?;
@@ -57,8 +57,13 @@ pub fn build_genesis_from_store(
     let reserved_id = tree.create_account_from_script(
         Script::new_builder()
             .code_hash({
-                let code_hash: [u8; 32] = (*META_CONTRACT_VALIDATOR_CODE_HASH).into();
+                let code_hash: [u8; 32] = config.meta_contract_validator_type_hash.clone().into();
                 code_hash.pack()
+            })
+            .hash_type(ScriptHashType::Type.into())
+            .args({
+                let rollup_script_hash: [u8; 32] = rollup_context.rollup_script_hash.into();
+                Bytes::from(rollup_script_hash.to_vec()).pack()
             })
             .build(),
     )?;
@@ -68,7 +73,8 @@ pub fn build_genesis_from_store(
     );
 
     // setup CKB simple UDT contract
-    let ckb_sudt_script = crate::sudt::build_l2_sudt_script(CKB_SUDT_SCRIPT_ARGS.into());
+    let ckb_sudt_script =
+        crate::sudt::build_l2_sudt_script(rollup_context, &CKB_SUDT_SCRIPT_ARGS.into());
     let ckb_sudt_id = tree.create_account_from_script(ckb_sudt_script)?;
     assert_eq!(
         ckb_sudt_id, CKB_SUDT_ACCOUNT_ID,
@@ -122,7 +128,7 @@ pub fn build_genesis_from_store(
             .build();
         let rollup_config_hash = {
             let mut hasher = new_blake2b();
-            hasher.update(rollup_config.as_slice());
+            hasher.update(rollup_context.rollup_config.as_slice());
             let mut hash = [0u8; 32];
             hasher.finalize(&mut hash);
             hash
@@ -146,19 +152,18 @@ pub fn build_genesis_from_store(
 pub fn init_genesis(
     store: &Store,
     config: &GenesisConfig,
-    rollup_config: &RollupConfig,
+    rollup_context: &RollupContext,
     header: HeaderInfo,
-    chain_id: H256,
 ) -> Result<()> {
     if store.has_genesis()? {
         panic!("The store is already initialized!");
     }
     let mut db = store.begin_transaction();
-    db.setup_chain_id(chain_id)?;
+    db.setup_chain_id(rollup_context.rollup_script_hash)?;
     let GenesisWithGlobalState {
         genesis,
         global_state,
-    } = build_genesis_from_store(&mut db, config, rollup_config)?;
+    } = build_genesis_from_store(&mut db, config, rollup_context)?;
     db.insert_block(
         genesis.clone(),
         header,
