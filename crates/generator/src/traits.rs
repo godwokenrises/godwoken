@@ -1,10 +1,14 @@
-use crate::error::{AccountError, DepositionError, Error, WithdrawalError};
 use crate::sudt::build_l2_sudt_script;
 use crate::types::RunResult;
+use crate::{
+    error::{AccountError, DepositionError, Error, WithdrawalError},
+    RollupContext,
+};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
+    core::ScriptHashType,
     packed::{DepositionRequest, Script, WithdrawalRequest},
     prelude::*,
 };
@@ -14,30 +18,34 @@ pub trait StateExt {
     fn apply_run_result(&mut self, run_result: &RunResult) -> Result<(), Error>;
     fn apply_deposition_request(
         &mut self,
+        ctx: &RollupContext,
         deposition_request: &DepositionRequest,
     ) -> Result<(), Error>;
 
     fn apply_withdrawal_request(
         &mut self,
+        ctx: &RollupContext,
         withdrawal_request: &WithdrawalRequest,
     ) -> Result<(), Error>;
 
     fn apply_deposition_requests(
         &mut self,
+        ctx: &RollupContext,
         deposition_requests: &[DepositionRequest],
     ) -> Result<(), Error> {
         for request in deposition_requests {
-            self.apply_deposition_request(request)?;
+            self.apply_deposition_request(ctx, request)?;
         }
         Ok(())
     }
 
     fn apply_withdrawal_requests(
         &mut self,
+        ctx: &RollupContext,
         withdrawal_requests: &[WithdrawalRequest],
     ) -> Result<(), Error> {
         for request in withdrawal_requests {
-            self.apply_withdrawal_request(request)?;
+            self.apply_withdrawal_request(ctx, request)?;
         }
 
         Ok(())
@@ -46,6 +54,10 @@ pub trait StateExt {
 
 impl<S: State + CodeStore> StateExt for S {
     fn create_account_from_script(&mut self, script: Script) -> Result<u32, Error> {
+        // Godwoken requires account's script using ScriptHashType::Type
+        if script.hash_type() != ScriptHashType::Type.into() {
+            return Err(AccountError::UnknownScript.into());
+        }
         let script_hash = script.hash();
         self.insert_script(script_hash.into(), script);
         let id = self.create_account(script_hash.into())?;
@@ -70,7 +82,11 @@ impl<S: State + CodeStore> StateExt for S {
         Ok(())
     }
 
-    fn apply_deposition_request(&mut self, request: &DepositionRequest) -> Result<(), Error> {
+    fn apply_deposition_request(
+        &mut self,
+        ctx: &RollupContext,
+        request: &DepositionRequest,
+    ) -> Result<(), Error> {
         // find or create user account
         let account_script_hash = request.script().hash();
         let id = match self.get_account_id_by_script_hash(&account_script_hash.into())? {
@@ -85,9 +101,9 @@ impl<S: State + CodeStore> StateExt for S {
         self.mint_sudt(CKB_SUDT_ACCOUNT_ID, id, capacity.into())?;
         let sudt_script_hash = request.sudt_script_hash().unpack();
         let amount = request.amount().unpack();
-        if sudt_script_hash != CKB_SUDT_SCRIPT_ARGS {
+        if sudt_script_hash != CKB_SUDT_SCRIPT_ARGS.into() {
             // find or create Simple UDT account
-            let l2_sudt_script = build_l2_sudt_script(sudt_script_hash);
+            let l2_sudt_script = build_l2_sudt_script(&ctx, &sudt_script_hash);
             let l2_sudt_script_hash: [u8; 32] = l2_sudt_script.hash();
             let sudt_id = match self.get_account_id_by_script_hash(&l2_sudt_script_hash.into())? {
                 Some(id) => id,
@@ -109,11 +125,15 @@ impl<S: State + CodeStore> StateExt for S {
         Ok(())
     }
 
-    fn apply_withdrawal_request(&mut self, request: &WithdrawalRequest) -> Result<(), Error> {
+    fn apply_withdrawal_request(
+        &mut self,
+        ctx: &RollupContext,
+        request: &WithdrawalRequest,
+    ) -> Result<(), Error> {
         let raw = request.raw();
         let account_script_hash: [u8; 32] = raw.account_script_hash().unpack();
         let l2_sudt_script_hash: [u8; 32] =
-            build_l2_sudt_script(raw.sudt_script_hash().unpack()).hash();
+            build_l2_sudt_script(&ctx, &raw.sudt_script_hash().unpack()).hash();
         let amount: u128 = raw.amount().unpack();
         // find user account
         let id = self

@@ -1,11 +1,12 @@
 use gw_block_producer::block_producer::{produce_block, ProduceBlockParam, ProduceBlockResult};
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncEvent, SyncParam};
 use gw_common::blake2b::new_blake2b;
-use gw_config::{ChainConfig, GenesisConfig};
+use gw_config::{BackendConfig, BackendManageConfig, ChainConfig, GenesisConfig};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
     genesis::init_genesis,
+    types::RollupContext,
     Generator,
 };
 use gw_mem_pool::pool::MemPool;
@@ -22,7 +23,7 @@ use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use std::{fs, io::Read, path::PathBuf, sync::Arc};
 
-const SCRIPT_DIR: &'static str = "../../build/debug";
+const SCRIPT_DIR: &'static str = "../../godwoken-scripts/build/debug";
 const ALWAYS_SUCCESS_PATH: &'static str = "always-success";
 
 lazy_static! {
@@ -44,6 +45,33 @@ lazy_static! {
     };
 }
 
+// meta contract
+pub const META_VALIDATOR_PATH: &str = "../../godwoken-scripts/c/build/meta-contract-validator";
+pub const META_GENERATOR_PATH: &str = "../../godwoken-scripts/c/build/meta-contract-generator";
+pub const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
+
+// simple UDT
+pub const SUDT_VALIDATOR_PATH: &str = "../../godwoken-scripts/c/build/sudt-validator";
+pub const SUDT_GENERATOR_PATH: &str = "../../godwoken-scripts/c/build/sudt-generator";
+
+pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
+    let sudt_validator_script_type_hash: [u8; 32] =
+        rollup_config.l2_sudt_validator_script_type_hash().unpack();
+    let config = BackendManageConfig {
+        meta_contract: BackendConfig {
+            validator_path: META_VALIDATOR_PATH.into(),
+            generator_path: META_GENERATOR_PATH.into(),
+            validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
+        },
+        simple_udt: BackendConfig {
+            validator_path: SUDT_VALIDATOR_PATH.into(),
+            generator_path: SUDT_GENERATOR_PATH.into(),
+            validator_script_type_hash: sudt_validator_script_type_hash.into(),
+        },
+    };
+    BackendManage::from_config(config).expect("default backend")
+}
+
 pub fn setup_chain(rollup_type_script: Script, rollup_config: RollupConfig) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
     account_lock_manage.register_lock_algorithm(
@@ -59,25 +87,31 @@ pub fn setup_chain_with_account_lock_manage(
     account_lock_manage: AccountLockManage,
 ) -> Chain {
     let store = Store::open_tmp().unwrap();
-    let genesis_config = GenesisConfig { timestamp: 0 };
+    let genesis_config = GenesisConfig {
+        timestamp: 0,
+        meta_contract_validator_type_hash: Default::default(),
+    };
     let genesis_header_info = HeaderInfo::default();
-    let backend_manage = BackendManage::default();
+    let backend_manage = build_backend_manage(&rollup_config);
     let config = ChainConfig {
         rollup_type_script,
         rollup_config: rollup_config.clone(),
     };
     let rollup_script_hash = config.rollup_type_script.hash().into();
+    let rollup_context = RollupContext {
+        rollup_script_hash,
+        rollup_config,
+    };
     let generator = Arc::new(Generator::new(
         backend_manage,
         account_lock_manage,
-        rollup_script_hash,
+        rollup_context.clone(),
     ));
     init_genesis(
         &store,
         &genesis_config,
-        &rollup_config,
+        &rollup_context,
         genesis_header_info,
-        rollup_script_hash,
     )
     .unwrap();
     let mem_pool = MemPool::create(store.clone(), Arc::clone(&generator)).unwrap();
@@ -144,7 +178,6 @@ pub fn construct_block(
     let db = chain.store().begin_transaction();
     let generator = chain.generator.as_ref();
     let parent_block = chain.store().get_tip_block().unwrap();
-    let rollup_config = chain.rollup_config();
     let rollup_config_hash = chain.rollup_config_hash().clone().into();
     let mut txs = Vec::new();
     let mut withdrawal_requests = Vec::new();
@@ -166,7 +199,6 @@ pub fn construct_block(
         deposition_requests,
         withdrawal_requests,
         parent_block: &parent_block,
-        rollup_config,
         rollup_config_hash: &rollup_config_hash,
         max_withdrawal_capacity,
     };

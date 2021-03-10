@@ -1,4 +1,4 @@
-use crate::types::RunResult;
+use crate::{types::RunResult, RollupContext};
 use ckb_vm::{
     memory::Memory,
     registers::{A0, A1, A2, A3, A7},
@@ -16,10 +16,11 @@ use gw_common::{
 use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     bytes::Bytes,
+    core::ScriptHashType,
     packed::{BlockInfo, LogItem, RawL2Transaction, Script},
     prelude::*,
 };
-use std::cmp;
+use std::{cmp, convert::TryInto};
 
 /* Constants */
 // 24KB is max ethereum contract code size
@@ -46,10 +47,13 @@ const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 /* Syscall errors */
 pub const SUCCESS: u8 = 0;
 pub const ERROR_DUPLICATED_SCRIPT_HASH: u8 = std::i8::MAX as u8;
+pub const ERROR_UNKNOWN_SCRIPT_CODE_HASH: u8 = 50;
+pub const ERROR_INVALID_CONTRACT_SCRIPT: u8 = 53;
 
 pub(crate) struct L2Syscalls<'a, S, C> {
     pub(crate) chain: &'a C,
     pub(crate) state: &'a S,
+    pub(crate) rollup_context: &'a RollupContext,
     pub(crate) block_info: &'a BlockInfo,
     pub(crate) raw_tx: &'a RawL2Transaction,
     pub(crate) code_store: &'a dyn CodeStore,
@@ -170,6 +174,42 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 {
                     machine.set_register(A0, Mac::REG::from_u8(ERROR_DUPLICATED_SCRIPT_HASH));
                     return Ok(true);
+                }
+                // Check script validity
+                let script_hash_type: ScriptHashType =
+                    script.hash_type().try_into().expect("script hash type");
+                if script_hash_type != ScriptHashType::Type {
+                    machine.set_register(A0, Mac::REG::from_u8(ERROR_UNKNOWN_SCRIPT_CODE_HASH));
+                    return Ok(true);
+                }
+                let is_eoa_account = self
+                    .rollup_context
+                    .rollup_config
+                    .allowed_eoa_type_hashes()
+                    .into_iter()
+                    .find(|type_hash| type_hash == &script.code_hash())
+                    .is_some();
+                if !is_eoa_account {
+                    let is_contract_account = self
+                        .rollup_context
+                        .rollup_config
+                        .allowed_contract_type_hashes()
+                        .into_iter()
+                        .find(|type_hash| type_hash == &script.code_hash())
+                        .is_some();
+                    if !is_contract_account {
+                        machine.set_register(A0, Mac::REG::from_u8(ERROR_UNKNOWN_SCRIPT_CODE_HASH));
+                        return Ok(true);
+                    }
+
+                    // check contract script prefix
+                    let args: Bytes = script.args().unpack();
+                    if args.len() < 32
+                        || !args.starts_with(self.rollup_context.rollup_script_hash.as_slice())
+                    {
+                        machine.set_register(A0, Mac::REG::from_u8(ERROR_INVALID_CONTRACT_SCRIPT));
+                        return Ok(true);
+                    }
                 }
 
                 // Same logic from State::create_account()
