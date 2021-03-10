@@ -148,31 +148,31 @@ fn seek_for_prev_with_suffix() {
     let store = Store::open_tmp().unwrap();
     let store_txn = store.begin_transaction();
 
-    let (block_number_1, tx_index_5) = ([0u8, 0, 0, 0, 0, 0, 0, 1], [5]);
-    let (block_number_2, tx_index_7) = ([0u8, 0, 0, 0, 0, 0, 0, 2], [7]);
-    let (block_number_256, tx_index_2) = ([0u8, 0, 0, 0, 0, 0, 1, 0], [2]);
+    let (block_number_1, tx_index_5) = (1u64, 5u32);
+    let (block_number_2, tx_index_7) = (2u64, 7u32);
+    let (block_number_256, tx_index_2) = (256u64, 2u32);
 
     let (key_1, value_1) = ([1u8], [1u8]); 
     let (key_2, value_2) = ([2u8, 2], [2u8, 2]);
     let (key_3, value_3) = ([3u8, 3, 3], [3u8, 3, 3]);
 
-    let mut key_1_with_version_1_5 = vec![0;key_1.len()+8+1];
+    let mut key_1_with_version_1_5 = vec![0;key_1.len()+8+4];
     key_1_with_version_1_5[..key_1.len()].copy_from_slice(&key_1);
-    key_1_with_version_1_5[key_1.len()..key_1.len()+8].copy_from_slice(&block_number_1);
-    key_1_with_version_1_5[key_1.len()+8..key_1.len()+9].copy_from_slice(&tx_index_5);
-    assert_eq!(vec![1, 0, 0, 0, 0, 0, 0, 0, 1, 5], key_1_with_version_1_5);
+    key_1_with_version_1_5[key_1.len()..key_1.len()+8].copy_from_slice(&block_number_1.to_be_bytes());
+    key_1_with_version_1_5[key_1.len()+8..key_1.len()+12].copy_from_slice(&tx_index_5.to_be_bytes());
+    assert_eq!(vec![1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 5], key_1_with_version_1_5);
 
-    let mut key_2_with_version_2_7 = vec![0;key_2.len()+8+1];
+    let mut key_2_with_version_2_7 = vec![0;key_2.len()+8+4];
     key_2_with_version_2_7[..key_2.len()].copy_from_slice(&key_2);
-    key_2_with_version_2_7[key_2.len()..key_2.len()+8].copy_from_slice(&block_number_2);
-    key_2_with_version_2_7[key_2.len()+8..key_2.len()+9].copy_from_slice(&tx_index_7);
-    assert_eq!(vec![2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 7], key_2_with_version_2_7);
+    key_2_with_version_2_7[key_2.len()..key_2.len()+8].copy_from_slice(&block_number_2.to_be_bytes());
+    key_2_with_version_2_7[key_2.len()+8..key_2.len()+12].copy_from_slice(&tx_index_7.to_be_bytes());
+    assert_eq!(vec![2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 7], key_2_with_version_2_7);
 
-    let mut key_3_with_version_256_2 = vec![0;key_3.len()+8+1];
+    let mut key_3_with_version_256_2 = vec![0;key_3.len()+8+4];
     key_3_with_version_256_2[..key_3.len()].copy_from_slice(&key_3);
-    key_3_with_version_256_2[key_3.len()..key_3.len()+8].copy_from_slice(&block_number_256);
-    key_3_with_version_256_2[key_3.len()+8..key_3.len()+9].copy_from_slice(&tx_index_2);
-    assert_eq!(vec![3, 3, 3, 0, 0, 0, 0, 0, 0, 1, 0, 2], key_3_with_version_256_2);
+    key_3_with_version_256_2[key_3.len()..key_3.len()+8].copy_from_slice(&block_number_256.to_be_bytes());
+    key_3_with_version_256_2[key_3.len()+8..key_3.len()+12].copy_from_slice(&tx_index_2.to_be_bytes());
+    assert_eq!(vec![3, 3, 3, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 2], key_3_with_version_256_2);
 
     store_txn.insert_raw("1", &key_1_with_version_1_5, &value_1).unwrap();
     store_txn.insert_raw("1", &key_2_with_version_2_7, &value_2).unwrap();   
@@ -182,25 +182,25 @@ fn seek_for_prev_with_suffix() {
     let mut key_3_with_version_256_9 = key_3_with_version_256_2.clone();
     let n = key_3_with_version_256_9.len()-1;
     key_3_with_version_256_9[n] = 9u8;
-    assert_eq!(vec![3, 3, 3, 0, 0, 0, 0, 0, 0, 1, 0, 9], key_3_with_version_256_9);
+    assert_eq!(vec![3, 3, 3, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 9], key_3_with_version_256_9);
 
     // key_3_with_version_256_1 in not in db
     let mut key_3_with_version_256_1 = key_3_with_version_256_2.clone();
     let n = key_3_with_version_256_1.len()-1;
     key_3_with_version_256_1[n] = 1u8;
-    assert_eq!(vec![3, 3, 3, 0, 0, 0, 0, 0, 0, 1, 0, 1], key_3_with_version_256_1);
+    assert_eq!(vec![3, 3, 3, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], key_3_with_version_256_1);
 
     // key_2_with_version_2_6 in not in db
     let mut key_2_with_version_2_6 = key_2_with_version_2_7.clone();
     let n = key_2_with_version_2_6.len()-1;
     key_2_with_version_2_6[n] = 6u8;
-    assert_eq!(vec![2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 6], key_2_with_version_2_6);
+    assert_eq!(vec![2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 6], key_2_with_version_2_6);
 
     // key_1_with_version_1_4 in not in db
     let mut key_1_with_version_1_4 = key_1_with_version_1_5.clone();
     let n = key_1_with_version_1_4.len()-1;
     key_1_with_version_1_4[n] = 4u8;
-    assert_eq!(vec![1, 0, 0, 0, 0, 0, 0, 0, 1, 4], key_1_with_version_1_4);
+    assert_eq!(vec![1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4], key_1_with_version_1_4);
 
     let iter = store_txn.get_iter("1", IteratorMode::Start);
     let mut raw_iter: DBRawIterator = iter.into();
