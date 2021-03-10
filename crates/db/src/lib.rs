@@ -15,7 +15,7 @@ pub use crate::transaction::{RocksDBTransaction, RocksDBTransactionSnapshot};
 pub use crate::write_batch::RocksDBWriteBatch;
 pub use rocksdb::{
     self as internal, DBPinnableSlice, DBVector, Direction, Error as DBError, IteratorMode,
-    ReadOptions, WriteBatch,
+    ReadOptions, WriteBatch, DBRawIterator,
 };
 
 use error::Error;

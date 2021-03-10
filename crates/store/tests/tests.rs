@@ -10,12 +10,6 @@ use gw_db::{IteratorMode};
 
 use std::collections::HashMap;
 
-fn get_state_db_txn_from_version(store: &Store, block_ver: H256) -> StateDBTransaction {
-    let store_txn = store.begin_transaction();
-    let version = StateDBVersion::from_block_hash(block_ver);
-    StateDBTransaction::from_version(store_txn, version)
-}
-
 fn get_state_db_txn_from_tx_index(store: &Store, block_number: u64, tx_index: u32) -> StateDBTransaction {
     let store_txn = store.begin_transaction();
     StateDBTransaction::from_tx_index(store_txn, block_number, tx_index)
@@ -30,10 +24,10 @@ fn get_version() {
 }
 
 #[test]
-fn get_state_db_txn() {
+fn get_state_db_txn_from_version() {
     let store = Store::open_tmp().unwrap();
-    let _state_db_txn = get_state_db_txn_from_version(&store, H256::zero());
-    // no panic
+    let version = StateDBVersion::from_block_hash(H256::zero());
+    assert!(store.state_at(version).is_ok());
 }
 
 #[test]
@@ -53,6 +47,8 @@ fn insert_and_get() {
     assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 4u32);
+    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
+    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
     state_db_txn.insert_raw("1", &[2], &[3, 3, 3]).unwrap();
     state_db_txn.commit().unwrap();
     assert_eq!(vec![3, 3, 3].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
@@ -86,7 +82,8 @@ fn insert_and_get_cross_block() {
     assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 3u64, 1u32);
-    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
+    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
+    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
     state_db_txn.insert_raw("1", &[2], &[3, 3, 3]).unwrap();
     state_db_txn.commit().unwrap();
     assert_eq!(vec![3, 3, 3].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
@@ -97,8 +94,14 @@ fn insert_and_get_cross_block() {
     state_db_txn.commit().unwrap();
     assert_eq!(vec![0, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
 
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 4u32);
+    assert!(state_db_txn.get("1", &[2]).is_none());
+
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 6u32);
     assert_eq!(vec![0, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 3u64, 2u32);
+    assert_eq!(vec![3, 3, 3].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
 }
 
 #[test]
