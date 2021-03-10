@@ -1,6 +1,6 @@
 use anyhow::Result;
 use gw_common::H256;
-use gw_config::{BackendConfig, BackendManageConfig};
+use gw_config::BackendConfig;
 use gw_types::bytes::Bytes;
 use std::{collections::HashMap, fs};
 
@@ -17,20 +17,14 @@ pub struct BackendManage {
 }
 
 impl BackendManage {
-    pub fn from_config(config: BackendManageConfig) -> Result<Self> {
+    pub fn from_config(configs: Vec<BackendConfig>) -> Result<Self> {
         let mut backend_manage = BackendManage {
             backends: Default::default(),
         };
 
-        let BackendManageConfig {
-            meta_contract,
-            simple_udt,
-        } = config;
-
-        // Meta contract
-        backend_manage.register_backend_config(meta_contract)?;
-        // Simple UDT
-        backend_manage.register_backend_config(simple_udt)?;
+        for config in configs {
+            backend_manage.register_backend_config(config)?;
+        }
 
         Ok(backend_manage)
     }

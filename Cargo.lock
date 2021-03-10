@@ -721,10 +721,14 @@ name = "gw-block-producer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "gw-chain",
  "gw-common",
+ "gw-config",
  "gw-generator",
+ "gw-mem-pool",
  "gw-store",
  "gw-types",
+ "parking_lot",
 ]
 
 [[package]]

@@ -14,6 +14,6 @@ impl<'r> Unpack<H256> for packed::Byte32Reader<'r> {
         r.into()
     }
 }
-impl_conversion_for_entity_unpack!(H256, Byte32);
 
+impl_conversion_for_entity_unpack!(H256, Byte32);
 impl_conversion_for_vector!(H256, Byte32Vec, Byte32VecReader);

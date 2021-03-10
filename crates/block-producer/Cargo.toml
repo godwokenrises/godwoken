@@ -8,7 +8,11 @@ edition = "2018"
 
 [dependencies]
 gw-common = { path = "../common" }
+gw-config = { path = "../config" }
+gw-chain = { path = "../chain" }
 gw-types = { path = "../types" }
 gw-store = { path = "../store" }
 gw-generator = { path = "../generator" }
+gw-mem-pool = { path = "../mem-pool" }
+parking_lot = "0.11"
 anyhow = "1.0"

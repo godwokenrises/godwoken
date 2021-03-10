@@ -64,5 +64,6 @@ cfg_if::cfg_if! {
         }
         impl_std_hash!(L2Transaction);
         impl_std_hash!(WithdrawalRequest);
+        impl_std_eq!(CellDep);
     }
 }

@@ -1,5 +1,4 @@
 use crate::genesis::{build_genesis, init_genesis};
-use crate::types::RollupContext;
 use gw_common::{sparse_merkle_tree::H256, state::State};
 use gw_config::GenesisConfig;
 use gw_store::{
@@ -23,20 +22,19 @@ const GENESIS_BLOCK_HASH: [u8; 32] = [
 #[test]
 fn test_init_genesis() {
     let meta_contract_code_hash = [1u8; 32];
+    let rollup_script_hash: [u8; 32] = [42u8; 32];
     let config = GenesisConfig {
         timestamp: 42,
         meta_contract_validator_type_hash: meta_contract_code_hash.into(),
-    };
-    let rollup_context = RollupContext {
         rollup_config: RollupConfig::default(),
-        rollup_script_hash: [42u8; 32].into(),
+        rollup_script_hash: rollup_script_hash.into(),
     };
-    let genesis = build_genesis(&config, &rollup_context).unwrap();
+    let genesis = build_genesis(&config).unwrap();
     let genesis_block_hash: [u8; 32] = genesis.genesis.hash();
     assert_eq!(genesis_block_hash, GENESIS_BLOCK_HASH);
     let header_info = HeaderInfo::default();
     let store: Store = Store::open_tmp().unwrap();
-    init_genesis(&store, &config, &rollup_context, header_info).unwrap();
+    init_genesis(&store, &config, header_info).unwrap();
     let db = store.begin_transaction();
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());
@@ -49,7 +47,7 @@ fn test_init_genesis() {
     assert_ne!(meta_contract_script_hash, H256::zero());
     let script = tree.get_script(&meta_contract_script_hash).expect("script");
     let args: Bytes = script.args().unpack();
-    assert_eq!(&args, rollup_context.rollup_script_hash.as_slice());
+    assert_eq!(&args, &rollup_script_hash[..]);
     let hash_type: ScriptHashType = script.hash_type().try_into().unwrap();
     assert!(hash_type == ScriptHashType::Type);
     let code_hash: [u8; 32] = script.code_hash().unpack();

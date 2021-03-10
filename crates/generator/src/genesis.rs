@@ -1,4 +1,4 @@
-use crate::{traits::StateExt, types::RollupContext};
+use crate::{traits::StateExt, RollupContext};
 use anyhow::Result;
 use gw_common::{
     blake2b::new_blake2b,
@@ -23,13 +23,10 @@ use gw_types::{
 };
 
 /// Build genesis block
-pub fn build_genesis(
-    config: &GenesisConfig,
-    rollup_context: &RollupContext,
-) -> Result<GenesisWithGlobalState> {
+pub fn build_genesis(config: &GenesisConfig) -> Result<GenesisWithGlobalState> {
     let store = Store::open_tmp()?;
     let db = store.begin_transaction();
-    build_genesis_from_store(&db, config, rollup_context)
+    build_genesis_from_store(&db, config)
 }
 
 pub struct GenesisWithGlobalState {
@@ -42,8 +39,14 @@ pub struct GenesisWithGlobalState {
 pub fn build_genesis_from_store(
     db: &StoreTransaction,
     config: &GenesisConfig,
-    rollup_context: &RollupContext,
 ) -> Result<GenesisWithGlobalState> {
+    let rollup_context = RollupContext {
+        rollup_script_hash: {
+            let rollup_script_hash: [u8; 32] = config.rollup_script_hash.clone().into();
+            rollup_script_hash.into()
+        },
+        rollup_config: config.rollup_config.clone(),
+    };
     // initialize store
     db.set_account_smt_root(H256::zero())?;
     db.set_block_smt_root(H256::zero())?;
@@ -74,7 +77,7 @@ pub fn build_genesis_from_store(
 
     // setup CKB simple UDT contract
     let ckb_sudt_script =
-        crate::sudt::build_l2_sudt_script(rollup_context, &CKB_SUDT_SCRIPT_ARGS.into());
+        crate::sudt::build_l2_sudt_script(&rollup_context, &CKB_SUDT_SCRIPT_ARGS.into());
     let ckb_sudt_id = tree.create_account_from_script(ckb_sudt_script)?;
     assert_eq!(
         ckb_sudt_id, CKB_SUDT_ACCOUNT_ID,
@@ -149,21 +152,20 @@ pub fn build_genesis_from_store(
     })
 }
 
-pub fn init_genesis(
-    store: &Store,
-    config: &GenesisConfig,
-    rollup_context: &RollupContext,
-    header: HeaderInfo,
-) -> Result<()> {
+pub fn init_genesis(store: &Store, config: &GenesisConfig, header: HeaderInfo) -> Result<()> {
     if store.has_genesis()? {
         panic!("The store is already initialized!");
     }
+    let rollup_script_hash: H256 = {
+        let rollup_script_hash: [u8; 32] = config.rollup_script_hash.clone().into();
+        rollup_script_hash.into()
+    };
     let db = store.begin_transaction();
-    db.setup_chain_id(rollup_context.rollup_script_hash)?;
+    db.setup_chain_id(rollup_script_hash)?;
     let GenesisWithGlobalState {
         genesis,
         global_state,
-    } = build_genesis_from_store(&db, config, rollup_context)?;
+    } = build_genesis_from_store(&db, config)?;
     db.insert_block(
         genesis.clone(),
         header,
