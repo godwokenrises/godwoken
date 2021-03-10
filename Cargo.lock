@@ -806,9 +806,9 @@ dependencies = [
 name = "gw-jsonrpc-types"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "ckb-fixed-hash",
  "ckb-jsonrpc-types",
- "failure",
  "faster-hex 0.4.1",
  "gw-chain",
  "gw-common",

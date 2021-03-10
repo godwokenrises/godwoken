@@ -1,8 +1,8 @@
 use crate::blockchain::Script;
 use crate::fixed_bytes::Byte65;
+use anyhow::{anyhow, Error as JsonError};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
-use failure::{err_msg, Error as FailureError};
 use gw_types::{bytes::Bytes, packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
@@ -198,13 +198,13 @@ impl From<ChallengeTargetType> for packed::Byte {
     }
 }
 impl TryFrom<packed::Byte> for ChallengeTargetType {
-    type Error = FailureError;
+    type Error = JsonError;
 
     fn try_from(v: packed::Byte) -> Result<ChallengeTargetType, Self::Error> {
         match u8::from(v) {
             0 => Ok(ChallengeTargetType::Transaction),
             1 => Ok(ChallengeTargetType::Withdrawal),
-            _ => Err(err_msg(format!("Invalid challenge target type {}", v))),
+            _ => Err(anyhow!("Invalid challenge target type {}", v)),
         }
     }
 }

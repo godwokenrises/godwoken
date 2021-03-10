@@ -1,6 +1,6 @@
+use anyhow::{anyhow, Error as JsonError};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Uint32, Uint64};
-use failure::{err_msg, Error as FailureError};
 use gw_types::{packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -29,13 +29,13 @@ impl From<ScriptHashType> for packed::Byte {
     }
 }
 impl TryFrom<packed::Byte> for ScriptHashType {
-    type Error = FailureError;
+    type Error = JsonError;
 
     fn try_from(v: packed::Byte) -> Result<ScriptHashType, Self::Error> {
         match u8::from(v) {
             0 => Ok(ScriptHashType::Data),
             1 => Ok(ScriptHashType::Type),
-            _ => Err(err_msg(format!("Invalid script hash type {}", v))),
+            _ => Err(anyhow!("Invalid script hash type {}", v)),
         }
     }
 }

@@ -17,4 +17,4 @@ gw-common = { path = "../common" }
 gw-store = { path = "../store" }
 ckb-jsonrpc-types = "0.37.0"
 ckb-fixed-hash = "0.37.0"
-failure = "0.1.5"
+anyhow = "1.0"
