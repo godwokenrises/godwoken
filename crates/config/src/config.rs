@@ -1,5 +1,5 @@
 use ckb_fixed_hash::H256;
-use gw_types::packed::{CellDep, HeaderInfo, RollupConfig, Script};
+use gw_types::packed::{HeaderInfo, RollupConfig, Script};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -16,9 +16,6 @@ pub struct Config {
 #[derive(Clone, Debug, PartialEq)]
 pub struct RollupDeploymentConfig {
     pub genesis_header: HeaderInfo,
-    pub rollup_type_dep: CellDep,
-    pub rollup_lock_dep: CellDep,
-    pub deposit_lock_dep: CellDep,
 }
 
 /// Genesis config

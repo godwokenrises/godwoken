@@ -1,6 +1,7 @@
+use anyhow::Result;
 use gw_types::{
     bytes::Bytes,
-    packed::{CellDep, CellInput, CellOutput, WitnessArgs},
+    packed::{CellDep, CellInput, CellOutput, Transaction, WitnessArgs},
 };
 
 #[derive(Default)]
@@ -30,5 +31,13 @@ impl TransactionSkeleton {
 
     pub fn witnesses(&mut self) -> &mut Vec<WitnessArgs> {
         &mut self.witnesses
+    }
+
+    pub fn signature_messages(&self) -> Vec<[u8; 32]> {
+        unreachable!()
+    }
+
+    pub fn seal(self, signatures: Vec<[u8; 65]>) -> Result<Transaction> {
+        unimplemented!()
     }
 }

@@ -1,5 +1,5 @@
-use anyhow::Result;
-use cell_collector::CellCollector;
+use anyhow::{anyhow, Result};
+use cell_collector::{CellCollector, DepositInfo};
 use gw_block_producer::block_producer::{produce_block, ProduceBlockParam, ProduceBlockResult};
 use gw_chain::chain::Chain;
 use gw_config::Config;
@@ -10,11 +10,12 @@ use gw_generator::{
 use gw_mem_pool::pool::MemPool;
 use gw_store::Store;
 use gw_types::{
-    packed::{CellInput, DepositionRequest, OutPoint, RawTransaction, Transaction, WitnessArgs},
+    bytes::Bytes,
+    packed::{CellDep, CellInput, CellOutput, GlobalState, L2Block, Transaction, WitnessArgs},
     prelude::{Builder, Entity, Pack},
 };
 use parking_lot::Mutex;
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 use transaction_skeleton::TransactionSkeleton;
 
 mod block_producer;
@@ -25,57 +26,105 @@ fn read_config() -> Result<Config> {
     unimplemented!()
 }
 
-/// Block producer
-fn main() {
-    // read config
-    let config = read_config().expect("read config");
-    // start godwoken components
-    // TODO: use persistent store later
-    let store = Store::open_tmp().expect("store");
-    init_genesis(
-        &store,
-        &config.genesis,
-        config.rollup_deployment.genesis_header,
-    )
-    .expect("init genesis");
-    let rollup_context = RollupContext {
-        rollup_config: config.genesis.rollup_config.clone(),
-        rollup_script_hash: {
-            let rollup_script_hash: [u8; 32] = config.genesis.rollup_script_hash.clone().into();
-            rollup_script_hash.into()
-        },
-    };
-    let generator = {
-        let backend_manage = BackendManage::from_config(config.backends).expect("backend manage");
-        let account_lock_manage = AccountLockManage::default();
-        Arc::new(Generator::new(
-            backend_manage,
-            account_lock_manage,
-            rollup_context,
-        ))
-    };
-    let mem_pool = Arc::new(Mutex::new(
-        MemPool::create(store.clone(), generator.clone()).expect("mem pool"),
-    ));
-    let chain = Chain::create(
-        config.chain.clone(),
-        store.clone(),
-        generator.clone(),
-        mem_pool.clone(),
-    )
-    .expect("Error creating chain");
-    // query parameters
-    let block_producer_id = 0;
-    let timestamp = 0;
-    let collector = CellCollector;
-    let deposition_requests = collector.query_deposition_requests();
-    let has_deposit = !deposition_requests.is_empty();
+fn generate_custodian_cells(
+    block: &L2Block,
+    deposit_cells: &[DepositInfo],
+) -> Vec<(CellOutput, Bytes)> {
+    unimplemented!()
+}
+
+/// Add fee cell to tx skeleton
+fn fill_tx_fee(collector: &CellCollector, tx_skeleton: &mut TransactionSkeleton) -> Result<()> {
+    unimplemented!()
+}
+
+// sign message
+fn sign(msg: [u8; 32]) -> [u8; 65] {
+    unimplemented!()
+}
+
+fn build_tx(
+    collector: &CellCollector,
+    deposit_cells: Vec<DepositInfo>,
+    block: L2Block,
+    global_state: GlobalState,
+) -> Result<Transaction> {
+    let rollup_cell_info = collector
+        .query_rollup_cell()
+        .ok_or(anyhow!("can't find rollup cell"))?;
+    let mut tx_skeleton = TransactionSkeleton::default();
+    // rollup cell
+    tx_skeleton.inputs().push(
+        CellInput::new_builder()
+            .previous_output(rollup_cell_info.out_point)
+            .build(),
+    );
+    // deps
+    tx_skeleton.cell_deps().push(
+        rollup_cell_info
+            .type_dep
+            .ok_or(anyhow!("rollup type dep should exists"))?,
+    );
+    tx_skeleton.cell_deps().push(rollup_cell_info.lock_dep);
+    // deposit lock dep
+    if let Some(deposit) = deposit_cells.first() {
+        tx_skeleton.cell_deps().push(deposit.cell.lock_dep.clone());
+    }
+    // witnesses
+    tx_skeleton.witnesses().push(
+        WitnessArgs::new_builder()
+            .output_type(Some(block.as_bytes()).pack())
+            .build(),
+    );
+    // output
+    let output = rollup_cell_info.output;
+    let output_data = global_state.as_bytes();
+    tx_skeleton.outputs().push((output, output_data));
+    // deposit cells
+    for deposit in &deposit_cells {
+        tx_skeleton.inputs().push(
+            CellInput::new_builder()
+                .previous_output(deposit.cell.out_point.clone())
+                .build(),
+        );
+    }
+
+    // Some deposition cells might have type scripts for sUDTs, handle cell deps
+    // here.
+    let deposit_type_deps: HashSet<CellDep> = deposit_cells
+        .iter()
+        .filter_map(|deposit| deposit.cell.type_dep.clone())
+        .collect();
+    tx_skeleton.cell_deps().extend(deposit_type_deps);
+    // custodian cells
+    let custodian_cells = generate_custodian_cells(&block, &deposit_cells);
+    tx_skeleton.outputs().extend(custodian_cells);
+    // TODO stake cell
+    // tx fee cell
+    fill_tx_fee(collector, &mut tx_skeleton)?;
+    let mut signatures = Vec::new();
+    for message in tx_skeleton.signature_messages() {
+        signatures.push(sign(message));
+    }
+    let tx = tx_skeleton.seal(signatures)?;
+    Ok(tx)
+}
+
+fn produce_next_block(
+    config: &Config,
+    collector: &CellCollector,
+    chain: &Chain,
+    block_producer_id: u32,
+    timestamp: u64,
+) -> Result<()> {
+    // get deposit cells
+    let deposit_cells = collector.query_deposit_cells();
 
     // get txs & withdrawal requests from mem pool
     let mut txs = Vec::new();
     let mut withdrawal_requests = Vec::new();
     {
-        let mem_pool = mem_pool.lock();
+        let mem_pool = chain.mem_pool.lock();
         for (_id, entry) in mem_pool.pending() {
             if let Some(withdrawal) = entry.withdrawals.first() {
                 withdrawal_requests.push(withdrawal.clone());
@@ -89,18 +138,18 @@ fn main() {
     let max_withdrawal_capacity = std::u128::MAX;
     // produce block
     let param = ProduceBlockParam {
-        db: store.begin_transaction(),
-        generator: &generator,
+        db: chain.store.begin_transaction(),
+        generator: &chain.generator,
         block_producer_id,
         timestamp,
         txs,
-        deposition_requests,
+        deposition_requests: deposit_cells.iter().map(|d| &d.request).cloned().collect(),
         withdrawal_requests,
         parent_block,
         rollup_config_hash: &rollup_config_hash,
         max_withdrawal_capacity,
     };
-    let block_result = produce_block(param).expect("produce block");
+    let block_result = produce_block(param)?;
     let ProduceBlockResult {
         block,
         global_state,
@@ -113,42 +162,66 @@ fn main() {
         unused_transactions.len(),
         unused_withdrawal_requests.len()
     );
+    let block_hash = block.hash().into();
 
     // composit tx
-    let rollup_cell_info = collector.query_rollup_cell().expect("rollup cell");
-    let mut tx_skeleton = TransactionSkeleton::default();
-    // rollup cell
-    tx_skeleton.inputs().push(
-        CellInput::new_builder()
-            .previous_output(rollup_cell_info.out_point)
-            .build(),
-    );
-    // deps
-    tx_skeleton
-        .cell_deps()
-        .push(config.rollup_deployment.rollup_type_dep);
-    tx_skeleton
-        .cell_deps()
-        .push(config.rollup_deployment.rollup_lock_dep);
-    if has_deposit {
-        tx_skeleton
-            .cell_deps()
-            .push(config.rollup_deployment.deposit_lock_dep);
-    }
-    // witnesses
-    tx_skeleton.witnesses().push(
-        WitnessArgs::new_builder()
-            .output_type(Some(block.as_bytes()).pack())
-            .build(),
-    );
-    // output
-    let output = rollup_cell_info.output;
-    let output_data = global_state.as_bytes();
-    tx_skeleton.outputs().push((output, output_data));
+    let tx = build_tx(&collector, deposit_cells, block, global_state)?;
+    collector.send_transaction(tx)?;
 
     // update status
-    mem_pool
-        .lock()
-        .notify_new_tip(block.hash().into())
-        .expect("update mem pool status");
+    chain.mem_pool.lock().notify_new_tip(block_hash)?;
+    Ok(())
+}
+
+fn run() -> Result<()> {
+    // read config
+    let config = read_config()?;
+    // start godwoken components
+    // TODO: use persistent store later
+    let store = Store::open_tmp()?;
+    init_genesis(
+        &store,
+        &config.genesis,
+        config.rollup_deployment.genesis_header.clone(),
+    )?;
+    let rollup_context = RollupContext {
+        rollup_config: config.genesis.rollup_config.clone(),
+        rollup_script_hash: {
+            let rollup_script_hash: [u8; 32] = config.genesis.rollup_script_hash.clone().into();
+            rollup_script_hash.into()
+        },
+    };
+    let generator = {
+        let backend_manage = BackendManage::from_config(config.backends.clone())?;
+        let account_lock_manage = AccountLockManage::default();
+        Arc::new(Generator::new(
+            backend_manage,
+            account_lock_manage,
+            rollup_context,
+        ))
+    };
+    let mem_pool = Arc::new(Mutex::new(MemPool::create(
+        store.clone(),
+        generator.clone(),
+    )?));
+    let chain = Chain::create(
+        config.chain.clone(),
+        store.clone(),
+        generator.clone(),
+        mem_pool.clone(),
+    )?;
+    // query parameters
+    let block_producer_id = 0;
+    let timestamp = 0;
+    let collector = CellCollector;
+
+    // produce block
+    produce_next_block(&config, &collector, &chain, block_producer_id, timestamp)?;
+
+    Ok(())
+}
+
+/// Block producer
+fn main() {
+    run().expect("block producer");
 }
