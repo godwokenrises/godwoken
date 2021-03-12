@@ -7,7 +7,7 @@ use gw_db::schema::{
     COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY,
     META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
 };
-use gw_db::{error::Error, iter::DBIter, DBIterator, DBVector, IteratorMode, RocksDBTransaction};
+use gw_db::{error::Error, iter::DBIter, DBIterator, IteratorMode, RocksDBTransaction};
 use gw_types::{packed, prelude::*};
 use std::{borrow::BorrowMut, collections::HashMap, rc::Rc};
 
@@ -17,8 +17,10 @@ pub struct StoreTransaction {
 }
 
 impl KVStore for StoreTransaction {
-    fn get(&self, col: Col, key: &[u8]) -> Option<DBVector> {
-        self.inner.get(col, key).expect("db operation should be ok")
+    fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
+        self.inner.get(col, key)
+        .expect("db operation should be ok")
+        .map(|v| { Box::<[u8]>::from(v.as_ref()) })
     }
 
     fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
