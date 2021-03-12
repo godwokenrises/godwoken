@@ -18,14 +18,16 @@ fn get_state_db_txn_from_tx_index(store: &Store, block_number: u64, tx_index: u3
 #[test]
 fn get_version() {
     let genesis_ver = StateDBVersion::from_genesis();
-    let block_ver = StateDBVersion::from_block_hash([1;32].into());
-    assert_eq!(genesis_ver.get_block_hash(), [1;32].into()); // TODO: solve to get the genesis block hash
-    assert_eq!(block_ver.get_block_hash(), [1;32].into());
+    let block_ver = StateDBVersion::from_block_hash([1u8;32].into());
+    assert_eq!(genesis_ver.get_block_hash(), [0u8;32].into()); 
+    assert_eq!(block_ver.get_block_hash(), [1u8;32].into());
 }
 
 #[test]
 fn get_state_db_txn_from_version() {
     let store = Store::open_tmp().unwrap();
+    let version = StateDBVersion::from_genesis();
+    assert!(store.state_at(version).is_ok());
     let version = StateDBVersion::from_block_hash(H256::zero());
     assert!(store.state_at(version).is_ok());
 }
@@ -37,33 +39,36 @@ fn insert_and_get() {
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 1u32);
     state_db_txn.insert_raw("1", &[1, 1], &[1, 1, 1]).unwrap();
     state_db_txn.commit().unwrap();
-    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
+    assert!(state_db_txn.get("1", &[1]).is_none());
+    assert_eq!(vec![1, 1, 1].into_boxed_slice(), state_db_txn.get("1", &[1, 1]).unwrap());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 2u32);
-    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
+    assert_eq!(vec![1, 1, 1].into_boxed_slice(), state_db_txn.get("1", &[1, 1]).unwrap());
+    assert!(state_db_txn.get("1", &[1]).is_none());
     assert!(state_db_txn.get("1", &[2]).is_none());
     state_db_txn.insert_raw("1", &[2], &[2, 2, 2]).unwrap();
     state_db_txn.commit().unwrap();
-    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert!(state_db_txn.get("1", &[1]).is_none());
+    assert_eq!(vec![2, 2, 2].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 4u32);
-    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
-    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![1, 1, 1].into_boxed_slice(), state_db_txn.get("1", &[1, 1]).unwrap());
+    assert_eq!(vec![2, 2, 2].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
     state_db_txn.insert_raw("1", &[2], &[3, 3, 3]).unwrap();
     state_db_txn.commit().unwrap();
-    assert_eq!(vec![3, 3, 3].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![3, 3, 3].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
 
     // overwrite
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 4u32);
     state_db_txn.insert_raw("1", &[2], &[4, 4, 4]).unwrap();
     state_db_txn.commit().unwrap();
-    assert_eq!(vec![4, 4, 4].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![4, 4, 4].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 2u32);
-    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![2, 2, 2].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 5u32);
-    assert_eq!(vec![4, 4, 4].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![4, 4, 4].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
 }
 
 #[test]
@@ -73,35 +78,35 @@ fn insert_and_get_cross_block() {
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 1u32);
     state_db_txn.insert_raw("1", &[1, 1], &[1, 1, 1]).unwrap();
     state_db_txn.commit().unwrap();
-    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
+    assert_eq!(vec![1, 1, 1].into_boxed_slice(), state_db_txn.get("1", &[1, 1]).unwrap());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 5u32);
-    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
+    assert_eq!(vec![1, 1, 1].into_boxed_slice(), state_db_txn.get("1", &[1, 1]).unwrap());
     state_db_txn.insert_raw("1", &[2], &[2, 2, 2]).unwrap();
     state_db_txn.commit().unwrap();
-    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![2, 2, 2].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 3u64, 1u32);
-    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[1, 1]).unwrap().as_ref());
-    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![1, 1, 1].into_boxed_slice(), state_db_txn.get("1", &[1, 1]).unwrap());
+    assert_eq!(vec![2, 2, 2].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
     state_db_txn.insert_raw("1", &[2], &[3, 3, 3]).unwrap();
     state_db_txn.commit().unwrap();
-    assert_eq!(vec![3, 3, 3].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![3, 3, 3].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
 
     // overwrite
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 5u32);
     state_db_txn.insert_raw("1", &[2], &[0, 2, 2]).unwrap();
     state_db_txn.commit().unwrap();
-    assert_eq!(vec![0, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![0, 2, 2].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 4u32);
     assert!(state_db_txn.get("1", &[2]).is_none());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 6u32);
-    assert_eq!(vec![0, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![0, 2, 2].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 3u64, 2u32);
-    assert_eq!(vec![3, 3, 3].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![3, 3, 3].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
 }
 
 #[test]
@@ -143,13 +148,13 @@ fn delete() {
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 1u32);
     state_db_txn.insert_raw("1", &[2], &[1, 1, 1]).unwrap();
     state_db_txn.commit().unwrap();
-    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![1, 1, 1].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 2u32);
-    assert_eq!(vec![1, 1, 1].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![1, 1, 1].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
     state_db_txn.insert_raw("1", &[2], &[2, 2, 2]).unwrap();
     state_db_txn.commit().unwrap();
-    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![2, 2, 2].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 4u32);
     state_db_txn.delete("1", &[2]).unwrap();
@@ -163,5 +168,18 @@ fn delete() {
     assert!(state_db_txn.get("1", &[2]).is_none());
 
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 3u32);
-    assert_eq!(vec![2, 2, 2].as_slice(), state_db_txn.get("1", &[2]).unwrap().as_ref());
+    assert_eq!(vec![2, 2, 2].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 4u64, 1u32);
+    state_db_txn.insert_raw("1", &[2], &0u32.to_be_bytes()).unwrap();
+    state_db_txn.commit().unwrap();
+    assert_eq!(Box::<[u8]>::from(&0u32.to_be_bytes()[..]), state_db_txn.get("1", &[2]).unwrap());
+
+    // insert 0u8 is a special case.
+    // value is 0u8 presents the key has been deleted.
+    // so make sure value insert by user excludes 0u8. 0u16, 0u32, 0u64 are even allowed. 
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 4u64, 1u32);
+    state_db_txn.insert_raw("1", &[2], &0u8.to_be_bytes()).unwrap();
+    state_db_txn.commit().unwrap();
+    assert!(state_db_txn.get("1", &[2]).is_none());
 }

@@ -1,27 +1,25 @@
 //! State DB
 
-use std::{cell::RefCell, collections::HashSet};
+use std::{cell::RefCell, collections::HashSet, mem::size_of_val};
 
 use crate::{smt_store_impl::SMTStore, traits::KVStore, transaction::StoreTransaction};
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_db::schema::{
     Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_DATA, COLUMN_SCRIPT,
 };
-use gw_db::{error::Error, iter::DBIter, DBVector, IteratorMode};
+use gw_db::{error::Error, iter::DBIter, IteratorMode, DBRawIterator};
 use gw_traits::CodeStore;
 use gw_types::{bytes::Bytes, packed, prelude::*};
 
 pub struct StateDBVersion(H256);
 
 impl StateDBVersion {
-    /// TODO implement this
     pub fn from_block_hash(block_hash: H256) -> Self {
         StateDBVersion(block_hash)
     }
 
-    /// TODO implement this
     pub fn from_genesis() -> Self {
-        Self(Default::default())
+        StateDBVersion(H256::zero())
     }
 
     pub fn get_block_hash(&self) -> H256 {
@@ -29,16 +27,34 @@ impl StateDBVersion {
     }
 }
 
-// TODO implement this
 pub struct StateDBTransaction {
     inner: StoreTransaction,
-    block_number: u64,
-    tx_index: u32,
+    block_num: u64,
+    tx_idx: u32,
 }
 
 impl KVStore for StateDBTransaction {
-    fn get(&self, col: Col, key: &[u8]) -> Option<DBVector> {
-        self.inner.get(col, key)
+    fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
+        let key_with_ver = [key, &self.block_num.to_be_bytes(), &self.tx_idx.to_be_bytes()].concat();
+        let kwv_len = key_with_ver.len();
+        let mut raw_iter: DBRawIterator = self.inner.get_iter(col, IteratorMode::Start).into();
+        raw_iter.seek_for_prev(key_with_ver);
+
+        if !raw_iter.valid() { return None; }
+        
+        match raw_iter.key() {
+            Some(k) => {
+                if key[..] != k[..kwv_len-size_of_val(&self.block_num)-size_of_val(&self.tx_idx)] {
+                    return None;
+                } 
+                match raw_iter.value() {
+                    Some(&[0u8]) => None,
+                    Some(v) => Some(Box::<[u8]>::from(v)),
+                    None => None,
+                }
+            },
+            None => None,
+        }
     }
 
     fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
@@ -46,28 +62,31 @@ impl KVStore for StateDBTransaction {
     }
 
     fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
-        self.inner.insert_raw(col, key, value)
+        let key_with_ver = [key, &self.block_num.to_be_bytes(), &self.tx_idx.to_be_bytes()].concat();
+        self.inner.insert_raw(col, &key_with_ver, value)
     }
-
+ 
     fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
-        self.inner.delete(col, key)
+        let key_with_ver = [key, &self.block_num.to_be_bytes(), &self.tx_idx.to_be_bytes()].concat();
+        self.inner.insert_raw(col, &key_with_ver, &0u8.to_be_bytes())
     }
 }
 
 impl StateDBTransaction {
     pub fn from_version(inner: StoreTransaction, version: StateDBVersion) -> Self {
-        let (block_number, tx_index) = StateDBTransaction::get_tx_index(&inner, version);
-        StateDBTransaction { inner, block_number, tx_index }
+        let (block_num, tx_idx) = StateDBTransaction::get_tx_index(&inner, version);
+        StateDBTransaction { inner, block_num, tx_idx }
     }
 
     fn get_tx_index(_inner: &StoreTransaction, version: StateDBVersion) -> (u64, u32) {
-        let _block_hash = version.0;
-        unimplemented!();
+        let block_hash = version.0;
+        if block_hash == H256::zero() { return (0u64, 0u32); }
+        unimplemented!()
     }
 
     // TODO: set private so can be used by unit tests 
-    pub fn from_tx_index(inner: StoreTransaction, block_number: u64, tx_index: u32) -> Self {
-        StateDBTransaction { inner, block_number, tx_index }
+    pub fn from_tx_index(inner: StoreTransaction, block_num: u64, tx_idx: u32) -> Self {
+        StateDBTransaction { inner, block_num, tx_idx }
     }
 
     pub fn commit(&self) -> Result<(), Error> {
