@@ -38,26 +38,10 @@ pub struct StateDBTransaction {
 
 impl KVStore for StateDBTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        let key_with_ver = self.get_key_with_ver(key);
-        let kwv_len = key_with_ver.len();
+        let raw_key = self.get_key_with_ver(key);
         let mut raw_iter: DBRawIterator = self.inner.get_iter(col, IteratorMode::Start).into();
-        raw_iter.seek_for_prev(key_with_ver);
-
-        if !raw_iter.valid() { return None; }
-        
-        match raw_iter.key() {
-            Some(k) => {
-                if key[..] != k[..kwv_len-size_of_val(&self.block_num)-size_of_val(&self.tx_idx)] {
-                    return None;
-                } 
-                match raw_iter.value() {
-                    Some(&[0u8]) => None,
-                    Some(v) => Some(Box::<[u8]>::from(v)),
-                    None => None,
-                }
-            },
-            None => None,
-        }
+        raw_iter.seek_for_prev(raw_key);
+        self.get_value_by_raw_iter(key, &raw_iter)
     }
 
     fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
@@ -127,6 +111,27 @@ impl StateDBTransaction {
 
     fn get_key_with_ver(&self, key: &[u8]) -> Vec<u8> {
         [key, &self.block_num.to_be_bytes(), &self.tx_idx.to_be_bytes()].concat()
+    }
+
+    fn get_origin_key<'a>(&self, key: &'a [u8]) -> &'a[u8] {
+        &key[..key.len()-size_of_val(&self.block_num)-size_of_val(&self.tx_idx)]
+    }
+
+    fn get_value_by_raw_iter(&self, key: &[u8], raw_iter: &DBRawIterator) -> Option<Box<[u8]>> {
+        if !raw_iter.valid() { return None; }
+        match raw_iter.key() {
+            Some(raw_key) => {
+                if &key[..] != self.get_origin_key(raw_key) {
+                    return None;
+                } 
+                match raw_iter.value() {
+                    Some(&[DELETE_FLAG_VALUE]) => None,
+                    Some(v) => Some(Box::<[u8]>::from(v)),
+                    None => None,
+                }
+            },
+            None => None,
+        }
     }
 }
 
