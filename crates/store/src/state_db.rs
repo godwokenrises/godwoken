@@ -11,6 +11,9 @@ use gw_db::{error::Error, iter::DBIter, IteratorMode, DBRawIterator};
 use gw_traits::CodeStore;
 use gw_types::{bytes::Bytes, packed, prelude::*};
 
+/// StateDBTransaction insert the value 0u8 presents the key be deleted.
+const DELETE_FLAG_VALUE: u8 = 0;
+
 pub struct StateDBVersion(H256);
 
 impl StateDBVersion {
@@ -35,7 +38,7 @@ pub struct StateDBTransaction {
 
 impl KVStore for StateDBTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        let key_with_ver = [key, &self.block_num.to_be_bytes(), &self.tx_idx.to_be_bytes()].concat();
+        let key_with_ver = self.get_key_with_ver(key);
         let kwv_len = key_with_ver.len();
         let mut raw_iter: DBRawIterator = self.inner.get_iter(col, IteratorMode::Start).into();
         raw_iter.seek_for_prev(key_with_ver);
@@ -62,13 +65,13 @@ impl KVStore for StateDBTransaction {
     }
 
     fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
-        let key_with_ver = [key, &self.block_num.to_be_bytes(), &self.tx_idx.to_be_bytes()].concat();
+        let key_with_ver = self.get_key_with_ver(key);
         self.inner.insert_raw(col, &key_with_ver, value)
     }
  
     fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
-        let key_with_ver = [key, &self.block_num.to_be_bytes(), &self.tx_idx.to_be_bytes()].concat();
-        self.inner.insert_raw(col, &key_with_ver, &0u8.to_be_bytes())
+        let key_with_ver = self.get_key_with_ver(key);
+        self.inner.insert_raw(col, &key_with_ver, &DELETE_FLAG_VALUE.to_be_bytes())
     }
 }
 
@@ -120,6 +123,10 @@ impl StateDBTransaction {
             }
         }
         Ok(())
+    }
+
+    fn get_key_with_ver(&self, key: &[u8]) -> Vec<u8> {
+        [key, &self.block_num.to_be_bytes(), &self.tx_idx.to_be_bytes()].concat()
     }
 }
 
