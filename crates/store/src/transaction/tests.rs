@@ -1,5 +1,6 @@
-use gw_store::{Store, traits::KVStore};
-use gw_db::{IteratorMode};
+use super::*;
+
+use crate::store_impl::Store;
 use gw_db::{DBRawIterator};
 
 use std::collections::HashMap;

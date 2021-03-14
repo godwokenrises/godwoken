@@ -11,22 +11,34 @@ use gw_db::{error::Error, iter::DBIter, IteratorMode, DBRawIterator};
 use gw_traits::CodeStore;
 use gw_types::{bytes::Bytes, packed, prelude::*};
 
-/// StateDBTransaction insert the value 0u8 presents the key be deleted.
+// StateDBTransaction's delete method insert the value 0u8 presents the key to be deleted.
 const DELETE_FLAG_VALUE: u8 = 0;
 
-pub struct StateDBVersion(H256);
+pub struct StateDBVersion {
+    block_hash: H256,
+    tx_index: Option<u32>,
+}
 
 impl StateDBVersion {
-    pub fn from_block_hash(block_hash: H256) -> Self {
-        StateDBVersion(block_hash)
-    }
-
     pub fn from_genesis() -> Self {
-        StateDBVersion(H256::zero())
+        StateDBVersion { 
+            block_hash: H256::zero(), 
+            tx_index: None,
+        }
     }
 
-    pub fn get_block_hash(&self) -> H256 {
-        self.0
+    pub fn from_block_hash(block_hash: H256) -> Self {
+        StateDBVersion { 
+            block_hash, 
+            tx_index: None, 
+        }
+    }
+
+    pub fn from_transaction_index(block_hash: H256, tx_index: u32) -> Self {
+        StateDBVersion { 
+            block_hash, 
+            tx_index: Some(tx_index),
+        }
     }
 }
 
@@ -41,7 +53,7 @@ impl KVStore for StateDBTransaction {
         let raw_key = self.get_key_with_ver(key);
         let mut raw_iter: DBRawIterator = self.inner.get_iter(col, IteratorMode::Start).into();
         raw_iter.seek_for_prev(raw_key);
-        self.get_value_by_raw_iter(key, &raw_iter)
+        self.filter_value_after_seek(key, &raw_iter)
     }
 
     fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
@@ -49,30 +61,28 @@ impl KVStore for StateDBTransaction {
     }
 
     fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
-        let key_with_ver = self.get_key_with_ver(key);
-        self.inner.insert_raw(col, &key_with_ver, value)
+        let raw_key = self.get_key_with_ver(key);
+        self.inner.insert_raw(col, &raw_key, value)
     }
  
     fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
-        let key_with_ver = self.get_key_with_ver(key);
-        self.inner.insert_raw(col, &key_with_ver, &DELETE_FLAG_VALUE.to_be_bytes())
+        let raw_key = self.get_key_with_ver(key);
+        self.inner.insert_raw(col, &raw_key, &DELETE_FLAG_VALUE.to_be_bytes())
     }
 }
 
 impl StateDBTransaction {
     pub fn from_version(inner: StoreTransaction, version: StateDBVersion) -> Self {
         let (block_num, tx_idx) = StateDBTransaction::get_tx_index(&inner, version);
-        StateDBTransaction { inner, block_num, tx_idx }
+        StateDBTransaction::from_tx_index(inner, block_num, tx_idx)
     }
 
     fn get_tx_index(_inner: &StoreTransaction, version: StateDBVersion) -> (u64, u32) {
-        let block_hash = version.0;
-        if block_hash == H256::zero() { return (0u64, 0u32); }
+        if version.block_hash == H256::zero() { return (0u64, 0u32); }
         unimplemented!()
     }
 
-    // TODO: set private so can be used by unit tests 
-    pub fn from_tx_index(inner: StoreTransaction, block_num: u64, tx_idx: u32) -> Self {
+    fn from_tx_index(inner: StoreTransaction, block_num: u64, tx_idx: u32) -> Self {
         StateDBTransaction { inner, block_num, tx_idx }
     }
 
@@ -113,20 +123,20 @@ impl StateDBTransaction {
         [key, &self.block_num.to_be_bytes(), &self.tx_idx.to_be_bytes()].concat()
     }
 
-    fn get_origin_key<'a>(&self, key: &'a [u8]) -> &'a[u8] {
+    fn get_ori_key<'a>(&self, key: &'a [u8]) -> &'a[u8] {
         &key[..key.len()-size_of_val(&self.block_num)-size_of_val(&self.tx_idx)]
     }
 
-    fn get_value_by_raw_iter(&self, key: &[u8], raw_iter: &DBRawIterator) -> Option<Box<[u8]>> {
+    fn filter_value_after_seek(&self, ori_key: &[u8], raw_iter: &DBRawIterator) -> Option<Box<[u8]>> {
         if !raw_iter.valid() { return None; }
         match raw_iter.key() {
-            Some(raw_key) => {
-                if &key[..] != self.get_origin_key(raw_key) {
+            Some(raw_key_found) => {
+                if ori_key != self.get_ori_key(raw_key_found) {
                     return None;
                 } 
                 match raw_iter.value() {
                     Some(&[DELETE_FLAG_VALUE]) => None,
-                    Some(v) => Some(Box::<[u8]>::from(v)),
+                    Some(value) => Some(Box::<[u8]>::from(value)),
                     None => None,
                 }
             },
@@ -255,3 +265,6 @@ impl<'a> CodeStore for StateTree<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

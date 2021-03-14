@@ -1,12 +1,6 @@
-use gw_store::{Store, 
-    state_db::{
-        StateDBTransaction, 
-        StateDBVersion,
-    },
-    traits::KVStore,
-};
-use gw_common::{H256};
-use gw_db::{IteratorMode};
+use super::*;
+
+use crate::store_impl::Store;
 
 use std::collections::HashMap;
 
@@ -19,8 +13,13 @@ fn get_state_db_txn_from_tx_index(store: &Store, block_number: u64, tx_index: u3
 fn get_version() {
     let genesis_ver = StateDBVersion::from_genesis();
     let block_ver = StateDBVersion::from_block_hash([1u8;32].into());
-    assert_eq!(genesis_ver.get_block_hash(), [0u8;32].into()); 
-    assert_eq!(block_ver.get_block_hash(), [1u8;32].into());
+    let block_ver_with_tx_index = StateDBVersion::from_transaction_index([1u8;32].into(), 100u32);
+    assert_eq!(genesis_ver.block_hash, [0u8;32].into()); 
+    assert_eq!(genesis_ver.tx_index, None); 
+    assert_eq!(block_ver.block_hash, [1u8;32].into());
+    assert_eq!(block_ver.tx_index, None);
+    assert_eq!(block_ver_with_tx_index.block_hash, [1u8;32].into());
+    assert_eq!(block_ver_with_tx_index.tx_index, Some(100u32));
 }
 
 #[test]
