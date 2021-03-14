@@ -10,25 +10,33 @@ fn get_state_db_txn_from_tx_index(store: &Store, block_number: u64, tx_index: u3
 }
 
 #[test]
-fn get_version() {
+fn construct_version() {
     let genesis_ver = StateDBVersion::from_genesis();
-    let block_ver = StateDBVersion::from_block_hash([1u8;32].into());
-    let block_ver_with_tx_index = StateDBVersion::from_transaction_index([1u8;32].into(), 100u32);
     assert_eq!(genesis_ver.block_hash, [0u8;32].into()); 
     assert_eq!(genesis_ver.tx_index, None); 
+
+    let block_ver = StateDBVersion::from_block_hash([1u8;32].into());
     assert_eq!(block_ver.block_hash, [1u8;32].into());
     assert_eq!(block_ver.tx_index, None);
+
+    let block_ver_with_tx_index = StateDBVersion::from_tx_index([1u8;32].into(), 100u32);
     assert_eq!(block_ver_with_tx_index.block_hash, [1u8;32].into());
     assert_eq!(block_ver_with_tx_index.tx_index, Some(100u32));
 }
 
 #[test]
-fn get_state_db_txn_from_version() {
+fn construct_state_db_txn_from_version() {
     let store = Store::open_tmp().unwrap();
+
     let version = StateDBVersion::from_genesis();
     assert!(store.state_at(version).is_ok());
+    
     let version = StateDBVersion::from_block_hash(H256::zero());
     assert!(store.state_at(version).is_ok());
+
+    // This case will always be passed, for the db is empty.
+    let version = StateDBVersion::from_tx_index(H256::zero(), 5u32);
+    assert!(store.state_at(version).is_err());
 }
 
 #[test]

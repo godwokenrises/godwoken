@@ -48,7 +48,7 @@ pub fn build_genesis_from_store(
     db.set_account_smt_root(H256::zero())?;
     db.set_block_smt_root(H256::zero())?;
     db.set_account_count(0)?;
-    let state_db = StateDBTransaction::from_version(db.clone(), StateDBVersion::from_genesis());
+    let state_db = StateDBTransaction::from_version(db.clone(), StateDBVersion::from_genesis())?;
     let mut tree = state_db.account_state_tree()?;
 
     // create a reserved account

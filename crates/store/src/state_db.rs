@@ -14,6 +14,10 @@ use gw_types::{bytes::Bytes, packed, prelude::*};
 // StateDBTransaction's delete method insert the value 0u8 presents the key to be deleted.
 const DELETE_FLAG_VALUE: u8 = 0;
 
+// Error message 
+const ERROR_MSG_STATE_DB_INIT_BLOCK_NUM_NOT_EXIST: &str = "Block number do not exists when state db transaction init";
+const ERROR_MSG_STATE_DB_INIT_TX_INDEX_NOT_EXIST: &str = "Tx number do not exists when state db transaction init";
+
 pub struct StateDBVersion {
     block_hash: H256,
     tx_index: Option<u32>,
@@ -34,7 +38,7 @@ impl StateDBVersion {
         }
     }
 
-    pub fn from_transaction_index(block_hash: H256, tx_index: u32) -> Self {
+    pub fn from_tx_index(block_hash: H256, tx_index: u32) -> Self {
         StateDBVersion { 
             block_hash, 
             tx_index: Some(tx_index),
@@ -45,7 +49,7 @@ impl StateDBVersion {
 pub struct StateDBTransaction {
     inner: StoreTransaction,
     block_num: u64,
-    tx_idx: u32,
+    tx_index: u32,
 }
 
 impl KVStore for StateDBTransaction {
@@ -72,18 +76,34 @@ impl KVStore for StateDBTransaction {
 }
 
 impl StateDBTransaction {
-    pub fn from_version(inner: StoreTransaction, version: StateDBVersion) -> Self {
-        let (block_num, tx_idx) = StateDBTransaction::get_tx_index(&inner, version);
-        StateDBTransaction::from_tx_index(inner, block_num, tx_idx)
+    pub fn from_version(inner: StoreTransaction, ver: StateDBVersion) -> Result<Self, Error> {
+        if StateDBTransaction::is_genesis_block(&ver) { 
+            return Ok(StateDBTransaction::from_tx_index(inner, 0u64, 0u32)); 
+        }
+
+        let block_num = StateDBTransaction::get_block_num(&inner, &ver.block_hash)?;
+        let block_num = block_num.ok_or_else(|| ERROR_MSG_STATE_DB_INIT_BLOCK_NUM_NOT_EXIST.to_string())?;
+        let tx_idx = StateDBTransaction::get_tx_index(&inner, block_num)?;
+        let tx_idx = tx_idx.ok_or_else(|| ERROR_MSG_STATE_DB_INIT_TX_INDEX_NOT_EXIST.to_string())?;
+
+        Ok(StateDBTransaction::from_tx_index(inner, block_num, tx_idx))
     }
 
-    fn get_tx_index(_inner: &StoreTransaction, version: StateDBVersion) -> (u64, u32) {
-        if version.block_hash == H256::zero() { return (0u64, 0u32); }
+    fn is_genesis_block(ver: &StateDBVersion) -> bool {
+        ver.block_hash == H256::zero() && ver.tx_index.is_none()
+    }
+
+    fn get_block_num(inner: &StoreTransaction, block_hash: &H256) -> Result<Option<u64>, Error> {
+        inner.get_block_number(block_hash)
+    }
+
+    fn get_tx_index(_inner: &StoreTransaction, _block_num: u64) -> Result<Option<u32>, Error> {
         unimplemented!()
     }
 
-    fn from_tx_index(inner: StoreTransaction, block_num: u64, tx_idx: u32) -> Self {
-        StateDBTransaction { inner, block_num, tx_idx }
+    // this private constructor can be injected with mock data by unit test
+    fn from_tx_index(inner: StoreTransaction, block_num: u64, tx_index: u32) -> Self {
+        StateDBTransaction { inner, block_num, tx_index }
     }
 
     pub fn commit(&self) -> Result<(), Error> {
@@ -120,11 +140,11 @@ impl StateDBTransaction {
     }
 
     fn get_key_with_ver(&self, key: &[u8]) -> Vec<u8> {
-        [key, &self.block_num.to_be_bytes(), &self.tx_idx.to_be_bytes()].concat()
+        [key, &self.block_num.to_be_bytes(), &self.tx_index.to_be_bytes()].concat()
     }
 
     fn get_ori_key<'a>(&self, key: &'a [u8]) -> &'a[u8] {
-        &key[..key.len()-size_of_val(&self.block_num)-size_of_val(&self.tx_idx)]
+        &key[..key.len()-size_of_val(&self.block_num)-size_of_val(&self.tx_index)]
     }
 
     fn filter_value_after_seek(&self, ori_key: &[u8], raw_iter: &DBRawIterator) -> Option<Box<[u8]>> {
