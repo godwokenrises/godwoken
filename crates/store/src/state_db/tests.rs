@@ -2,8 +2,6 @@ use super::*;
 
 use crate::store_impl::Store;
 
-use std::collections::HashMap;
-
 fn get_state_db_txn_from_tx_index(store: &Store, block_number: u64, tx_index: u32) -> StateDBTransaction {
     let store_txn = store.begin_transaction();
     StateDBTransaction::from_tx_index(store_txn, block_number, tx_index)
@@ -11,16 +9,17 @@ fn get_state_db_txn_from_tx_index(store: &Store, block_number: u64, tx_index: u3
 
 #[test]
 fn construct_version() {
-    let genesis_ver = StateDBVersion::from_genesis();
-    assert_eq!(genesis_ver.block_hash, [0u8;32].into()); 
-    assert_eq!(genesis_ver.tx_index, None); 
+    let block_ver = StateDBVersion::from_genesis();
+    assert!(block_ver.is_genesis_version()); 
+    assert_eq!(block_ver.block_hash, None);
+    assert_eq!(block_ver.tx_index, None);
 
     let block_ver = StateDBVersion::from_block_hash([1u8;32].into());
-    assert_eq!(block_ver.block_hash, [1u8;32].into());
+    assert_eq!(block_ver.block_hash, Some([1u8;32].into()));
     assert_eq!(block_ver.tx_index, None);
 
     let block_ver_with_tx_index = StateDBVersion::from_tx_index([1u8;32].into(), 100u32);
-    assert_eq!(block_ver_with_tx_index.block_hash, [1u8;32].into());
+    assert_eq!(block_ver_with_tx_index.block_hash, Some([1u8;32].into()));
     assert_eq!(block_ver_with_tx_index.tx_index, Some(100u32));
 }
 
@@ -31,8 +30,9 @@ fn construct_state_db_txn_from_version() {
     let version = StateDBVersion::from_genesis();
     assert!(store.state_at(version).is_ok());
     
+    // This case will always be passed, for the db is empty.
     let version = StateDBVersion::from_block_hash(H256::zero());
-    assert!(store.state_at(version).is_ok());
+    assert!(store.state_at(version).is_err());
 
     // This case will always be passed, for the db is empty.
     let version = StateDBVersion::from_tx_index(H256::zero(), 5u32);
@@ -151,38 +151,6 @@ fn insert_keys_with_the_same_version() {
     let state_db_txn = get_state_db_txn_from_tx_index(&store, 3u64, 6u32);
     assert_eq!(vec![1, 1, 1].into_boxed_slice(), state_db_txn.get("1", &[1, 1]).unwrap());
     assert_eq!(vec![2, 2].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
-}
-
-#[test]
-fn get_iter() {
-    let store = Store::open_tmp().unwrap();
-
-    let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 1u32);
-    state_db_txn.insert_raw("1", &[1, 1], &[1, 1, 1]).unwrap();
-    state_db_txn.commit().unwrap();
-
-    let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 2u32);
-    state_db_txn.insert_raw("1", &[2], &[2, 2, 2]).unwrap();
-    state_db_txn.commit().unwrap();
-
-    let iter = state_db_txn.get_iter("1", IteratorMode::Start);
-    let mut r = HashMap::new();
-    for (key, val) in iter {
-        r.insert(key.to_vec(), val.to_vec());
-    }
-    assert_eq!(2, r.len());
-    assert_eq!(Some(&vec![1, 1, 1]), r.get(&vec![1, 1]));
-    assert_eq!(Some(&vec![2, 2, 2]), r.get(&vec![2]));
-
-    let state_db_txn = get_state_db_txn_from_tx_index(&store, 1u64, 3u32);
-    let iter = state_db_txn.get_iter("1", IteratorMode::Start);
-    let mut r = HashMap::new();
-    for (key, val) in iter {
-        r.insert(key.to_vec(), val.to_vec());
-    }
-    assert_eq!(2, r.len());
-    assert_eq!(Some(&vec![1, 1, 1]), r.get(&vec![1, 1]));
-    assert_eq!(Some(&vec![2, 2, 2]), r.get(&vec![2]));
 }
 
 #[test]

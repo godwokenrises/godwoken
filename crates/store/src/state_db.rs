@@ -11,40 +11,39 @@ use gw_db::{error::Error, iter::DBIter, IteratorMode, DBRawIterator};
 use gw_traits::CodeStore;
 use gw_types::{bytes::Bytes, packed, prelude::*};
 
-// StateDBTransaction's delete method insert the value 0u8 presents the key to be deleted.
-const DELETE_FLAG_VALUE: u8 = 0;
-
-// Error message 
-const ERR_MSG_STATE_DB_INIT_BLOCK_NUM_NOT_EXIST: &str = 
-    "Block number do not exists when state db transaction init";
-const ERR_MSG_STATE_DB_INIT_TX_INDEX_NOT_EXIST: &str = 
-    "Tx number do not exists when state db transaction init";
+const DELETE_FLAG_VALUE: u8 = 0; // State db insert the value 0u8 presents the key to be deleted.
+const BLOCK_NUMBER_ZERO: u64 = 0;
+const TX_INDEX_ZERO: u32 = 0;
 
 pub struct StateDBVersion {
-    block_hash: H256,
+    block_hash: Option<H256>,
     tx_index: Option<u32>,
 }
 
 impl StateDBVersion {
     pub fn from_genesis() -> Self {
         StateDBVersion { 
-            block_hash: H256::zero(), 
+            block_hash: None, 
             tx_index: None,
         }
     }
 
     pub fn from_block_hash(block_hash: H256) -> Self {
         StateDBVersion { 
-            block_hash, 
+            block_hash: Some(block_hash), 
             tx_index: None, 
         }
     }
 
     pub fn from_tx_index(block_hash: H256, tx_index: u32) -> Self {
         StateDBVersion { 
-            block_hash, 
+            block_hash: Some(block_hash), 
             tx_index: Some(tx_index),
         }
+    }
+
+    pub fn is_genesis_version(&self) -> bool {
+        self.block_hash.is_none() && self.tx_index.is_none()
     }
 }
 
@@ -56,51 +55,42 @@ pub struct StateDBTransaction {
 
 impl KVStore for StateDBTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        let raw_key = self.get_key_with_ver(key);
+        let raw_key = self.get_key_with_ver_sfx(key);
         let mut raw_iter: DBRawIterator = self.inner.get_iter(col, IteratorMode::Start).into();
         raw_iter.seek_for_prev(raw_key);
         self.filter_value_after_seek(key, &raw_iter)
     }
 
+    // TODO: this trait method will be deleted in the future.
     fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
         self.inner.get_iter(col, mode)
     }
 
     fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
-        let raw_key = self.get_key_with_ver(key);
+        let raw_key = self.get_key_with_ver_sfx(key);
         self.inner.insert_raw(col, &raw_key, value)
     }
  
     fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
-        let raw_key = self.get_key_with_ver(key);
+        let raw_key = self.get_key_with_ver_sfx(key);
         self.inner.insert_raw(col, &raw_key, &DELETE_FLAG_VALUE.to_be_bytes())
     }
 }
 
 impl StateDBTransaction {
     pub fn from_version(inner: StoreTransaction, ver: StateDBVersion) -> Result<Self, Error> {
-        if StateDBTransaction::is_genesis_block(&ver) { 
-            return Ok(StateDBTransaction::from_tx_index(inner, 0u64, 0u32)); 
-        }
-
-        let block_num = StateDBTransaction::get_block_num(&inner, &ver)?;
-        let block_num = block_num.ok_or_else(|| ERR_MSG_STATE_DB_INIT_BLOCK_NUM_NOT_EXIST.to_string())?;
-        let tx_idx = StateDBTransaction::get_tx_index(&inner, &ver)?;
-        let tx_idx = tx_idx.ok_or_else(|| ERR_MSG_STATE_DB_INIT_TX_INDEX_NOT_EXIST.to_string())?;
-
+        let (block_num, tx_idx) = if ver.is_genesis_version() { 
+            (BLOCK_NUMBER_ZERO, TX_INDEX_ZERO) 
+        } else {
+            StateDBTransaction::get_block_num_and_tx_index(&inner, &ver)?
+        };
         Ok(StateDBTransaction::from_tx_index(inner, block_num, tx_idx))
     }
 
-    fn is_genesis_block(ver: &StateDBVersion) -> bool {
-        ver.block_hash == H256::zero() && ver.tx_index.is_none()
-    }
-
-    fn get_block_num(inner: &StoreTransaction, ver: &StateDBVersion) -> Result<Option<u64>, Error> {
-        inner.get_block_number(&ver.block_hash)
-    }
-
-    fn get_tx_index(inner: &StoreTransaction, ver: &StateDBVersion) -> Result<Option<u32>, Error> {
-        inner.get_block(&ver.block_hash).map(|blk| { 
+    fn get_block_num_and_tx_index(inner: &StoreTransaction, ver: &StateDBVersion) -> Result<(u64, u32), Error> {
+        let block_num = inner.get_block_number(&ver.block_hash.unwrap())?;
+        let block_num = block_num.ok_or_else(|| "Block number doesn't exist given the version".to_owned())?;
+        let tx_idx = inner.get_block(&ver.block_hash.unwrap()).map(|blk| { 
             if let Some(block) = blk {
                 let txs = block.transactions();
                 if let Some(tx_idx) = ver.tx_index {
@@ -111,7 +101,9 @@ impl StateDBTransaction {
             } else {
                 None
             }
-        })
+        })?;
+        let tx_idx = tx_idx.ok_or_else(|| "Tx number doesn't exist given the version".to_owned())?;
+        Ok((block_num, tx_idx))
     }
 
     // This private constructor can be injected with mock data by unit test
@@ -152,12 +144,12 @@ impl StateDBTransaction {
         Ok(())
     }
 
-    fn get_key_with_ver(&self, key: &[u8]) -> Vec<u8> {
+    fn get_key_with_ver_sfx(&self, key: &[u8]) -> Vec<u8> {
         [key, &self.block_num.to_be_bytes(), &self.tx_index.to_be_bytes()].concat()
     }
 
-    fn get_ori_key<'a>(&self, key: &'a [u8]) -> &'a[u8] {
-        &key[..key.len()-size_of_val(&self.block_num)-size_of_val(&self.tx_index)]
+    fn get_ori_key<'a>(&self, raw_key: &'a [u8]) -> &'a[u8] {
+        &raw_key[..raw_key.len()-size_of_val(&self.block_num)-size_of_val(&self.tx_index)]
     }
 
     fn filter_value_after_seek(&self, ori_key: &[u8], raw_iter: &DBRawIterator) -> Option<Box<[u8]>> {
