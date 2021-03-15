@@ -117,6 +117,43 @@ fn insert_and_get_cross_block() {
 }
 
 #[test]
+fn insert_keys_with_the_same_version() {
+    let store = Store::open_tmp().unwrap();
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 5u32);
+    state_db_txn.insert_raw("0", &[1, 1], &[1, 1, 1, 1]).unwrap();
+    state_db_txn.commit().unwrap();
+    
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 5u32);
+    state_db_txn.insert_raw("0", &[2], &[2, 2, 2]).unwrap();
+    state_db_txn.commit().unwrap();
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 5u32);
+    state_db_txn.insert_raw("1", &[1, 1], &[1, 1, 1]).unwrap();
+    state_db_txn.commit().unwrap();
+    
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 5u32);
+    state_db_txn.insert_raw("1", &[2], &[2, 2]).unwrap();
+    state_db_txn.commit().unwrap();
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 4u32);
+    assert!(state_db_txn.get("1", &[1, 1]).is_none());
+    assert!(state_db_txn.get("1", &[2]).is_none());
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 5u32);
+    assert_eq!(vec![1, 1, 1].into_boxed_slice(), state_db_txn.get("1", &[1, 1]).unwrap());
+    assert_eq!(vec![2, 2].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 2u64, 6u32);
+    assert_eq!(vec![1, 1, 1].into_boxed_slice(), state_db_txn.get("1", &[1, 1]).unwrap());
+    assert_eq!(vec![2, 2].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 3u64, 6u32);
+    assert_eq!(vec![1, 1, 1].into_boxed_slice(), state_db_txn.get("1", &[1, 1]).unwrap());
+    assert_eq!(vec![2, 2].into_boxed_slice(), state_db_txn.get("1", &[2]).unwrap());
+}
+
+#[test]
 fn get_iter() {
     let store = Store::open_tmp().unwrap();
 

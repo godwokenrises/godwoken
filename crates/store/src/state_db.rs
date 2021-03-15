@@ -15,8 +15,10 @@ use gw_types::{bytes::Bytes, packed, prelude::*};
 const DELETE_FLAG_VALUE: u8 = 0;
 
 // Error message 
-const ERROR_MSG_STATE_DB_INIT_BLOCK_NUM_NOT_EXIST: &str = "Block number do not exists when state db transaction init";
-const ERROR_MSG_STATE_DB_INIT_TX_INDEX_NOT_EXIST: &str = "Tx number do not exists when state db transaction init";
+const ERR_MSG_STATE_DB_INIT_BLOCK_NUM_NOT_EXIST: &str = 
+    "Block number do not exists when state db transaction init";
+const ERR_MSG_STATE_DB_INIT_TX_INDEX_NOT_EXIST: &str = 
+    "Tx number do not exists when state db transaction init";
 
 pub struct StateDBVersion {
     block_hash: H256,
@@ -81,10 +83,10 @@ impl StateDBTransaction {
             return Ok(StateDBTransaction::from_tx_index(inner, 0u64, 0u32)); 
         }
 
-        let block_num = StateDBTransaction::get_block_num(&inner, &ver.block_hash)?;
-        let block_num = block_num.ok_or_else(|| ERROR_MSG_STATE_DB_INIT_BLOCK_NUM_NOT_EXIST.to_string())?;
-        let tx_idx = StateDBTransaction::get_tx_index(&inner, block_num)?;
-        let tx_idx = tx_idx.ok_or_else(|| ERROR_MSG_STATE_DB_INIT_TX_INDEX_NOT_EXIST.to_string())?;
+        let block_num = StateDBTransaction::get_block_num(&inner, &ver)?;
+        let block_num = block_num.ok_or_else(|| ERR_MSG_STATE_DB_INIT_BLOCK_NUM_NOT_EXIST.to_string())?;
+        let tx_idx = StateDBTransaction::get_tx_index(&inner, &ver)?;
+        let tx_idx = tx_idx.ok_or_else(|| ERR_MSG_STATE_DB_INIT_TX_INDEX_NOT_EXIST.to_string())?;
 
         Ok(StateDBTransaction::from_tx_index(inner, block_num, tx_idx))
     }
@@ -93,15 +95,26 @@ impl StateDBTransaction {
         ver.block_hash == H256::zero() && ver.tx_index.is_none()
     }
 
-    fn get_block_num(inner: &StoreTransaction, block_hash: &H256) -> Result<Option<u64>, Error> {
-        inner.get_block_number(block_hash)
+    fn get_block_num(inner: &StoreTransaction, ver: &StateDBVersion) -> Result<Option<u64>, Error> {
+        inner.get_block_number(&ver.block_hash)
     }
 
-    fn get_tx_index(_inner: &StoreTransaction, _block_num: u64) -> Result<Option<u32>, Error> {
-        unimplemented!()
+    fn get_tx_index(inner: &StoreTransaction, ver: &StateDBVersion) -> Result<Option<u32>, Error> {
+        inner.get_block(&ver.block_hash).map(|blk| { 
+            if let Some(block) = blk {
+                let txs = block.transactions();
+                if let Some(tx_idx) = ver.tx_index {
+                    if txs.get(tx_idx as usize).is_some() { Some(tx_idx) } else { None }
+                } else {
+                    Some(txs.item_count() as u32)
+                }
+            } else {
+                None
+            }
+        })
     }
 
-    // this private constructor can be injected with mock data by unit test
+    // This private constructor can be injected with mock data by unit test
     fn from_tx_index(inner: StoreTransaction, block_num: u64, tx_index: u32) -> Self {
         StateDBTransaction { inner, block_num, tx_index }
     }
