@@ -70,7 +70,7 @@ function outPointsUnpacker(data: CanCastToArrayBuffer) {
     const item = vec.indexAt(i);
     results.push({
       tx_hash: new Reader(item.getTxHash().raw()).serializeJson(),
-      index: "0x" + BigInt(item.getIndex().toLittleEndianUint32()).toString(16)
+      index: "0x" + BigInt(item.getIndex().toLittleEndianUint32()).toString(16),
     });
   }
   return results;
@@ -101,7 +101,7 @@ export class Runner {
     this.indexer = indexer;
     this.chainService = chainService;
     this.config = config;
-    this.cancelListener = () => { };
+    this.cancelListener = () => {};
     this.logger = logger;
     this.privateKey = privateKey;
     this.rollupTypeHash = utils
@@ -314,7 +314,8 @@ export class Runner {
       } catch (e) {
         this.logger(
           "error",
-          `Ignoring deposition cell ${cell.out_point!.tx_hash} - ${cell.out_point!.index
+          `Ignoring deposition cell ${cell.out_point!.tx_hash} - ${
+            cell.out_point!.index
           } error: ${e}`
         );
       }
@@ -336,7 +337,9 @@ export class Runner {
       if (cellDep.dep_type === "dep_group") {
         const groupCell = await this.rpc.get_live_cell(cellDep.out_point, true);
 
-        for (const out_point of outPointsUnpacker(new Reader(groupCell.cell.data.content).toArrayBuffer())) {
+        for (const out_point of outPointsUnpacker(
+          new Reader(groupCell.cell.data.content).toArrayBuffer()
+        )) {
           const dep_type: DepType = "code";
           cellDeps.push({ dep_type, out_point });
         }
@@ -549,7 +552,10 @@ export class Runner {
           const hash = await this.rpc.send_transaction(tx);
           this.logger("info", `Submitted l2 block in ${hash}`);
         } catch (e) {
-          this.logger("error", `Error submiting block: ${e} transaction: ${tx}`);
+          this.logger(
+            "error",
+            `Error submiting block: ${e} transaction: ${tx}`
+          );
           this.lockGenerator!.cancelIssueBlock().catch((e) => {
             console.error(`Error cancelling block: ${e}`);
           });
