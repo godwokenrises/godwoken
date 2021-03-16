@@ -105,9 +105,6 @@ impl<S: SMTStore<H256>> Store<S> {
     pub fn attach_block(&mut self, block: L2Block) -> Result<()> {
         let raw = block.raw();
         let block_number: u64 = raw.number().unpack();
-        if block_number != 0 {
-            assert_eq!(self.tip_block_number + 1, block_number);
-        }
         self.block_tree
             .update(raw.smt_key().into(), raw.hash().into())?;
         self.tip_block_hash = raw.hash().into();

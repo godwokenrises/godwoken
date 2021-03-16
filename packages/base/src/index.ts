@@ -1,5 +1,6 @@
 export * as types from "./types";
 export * as schemas from "../schemas/godwoken";
+export * as extensions from "../schemas/extensions";
 
 import { RPC } from "ckb-js-toolkit";
 import {
