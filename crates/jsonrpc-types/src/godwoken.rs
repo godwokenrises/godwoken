@@ -123,7 +123,7 @@ impl From<packed::LogItem> for LogItem {
 #[serde(rename_all = "snake_case")]
 pub struct TxReceipt {
     pub tx_witness_hash: H256,
-    pub compacted_post_account_root: H256,
+    pub post_state: AccountMerkleState,
     pub read_data_hashes: Vec<H256>,
     pub logs: Vec<LogItem>,
 }
@@ -132,12 +132,11 @@ impl From<TxReceipt> for packed::TxReceipt {
     fn from(json: TxReceipt) -> packed::TxReceipt {
         let TxReceipt {
             tx_witness_hash,
-            compacted_post_account_root,
+            post_state,
             read_data_hashes,
             logs,
         } = json;
         let tx_witness_hash: [u8; 32] = tx_witness_hash.into();
-        let compacted_post_account_root: [u8; 32] = compacted_post_account_root.into();
         let read_data_hashes: Vec<_> = read_data_hashes
             .into_iter()
             .map(|hash| {
@@ -148,7 +147,7 @@ impl From<TxReceipt> for packed::TxReceipt {
         let logs: Vec<packed::LogItem> = logs.into_iter().map(|item| item.into()).collect();
         packed::TxReceipt::new_builder()
             .tx_witness_hash(tx_witness_hash.pack())
-            .compacted_post_account_root(compacted_post_account_root.pack())
+            .post_state(post_state.into())
             .read_data_hashes(read_data_hashes.pack())
             .logs(logs.pack())
             .build()
@@ -158,7 +157,7 @@ impl From<TxReceipt> for packed::TxReceipt {
 impl From<packed::TxReceipt> for TxReceipt {
     fn from(data: packed::TxReceipt) -> TxReceipt {
         let tx_witness_hash: [u8; 32] = data.tx_witness_hash().unpack();
-        let compacted_post_account_root: [u8; 32] = data.compacted_post_account_root().unpack();
+        let post_state: AccountMerkleState = data.post_state().into();
         let read_data_hashes: Vec<_> = data
             .read_data_hashes()
             .into_iter()
@@ -170,7 +169,7 @@ impl From<packed::TxReceipt> for TxReceipt {
         let logs: Vec<LogItem> = data.logs().into_iter().map(|item| item.into()).collect();
         TxReceipt {
             tx_witness_hash: tx_witness_hash.into(),
-            compacted_post_account_root: compacted_post_account_root.into(),
+            post_state,
             read_data_hashes,
             logs,
         }

@@ -22,8 +22,8 @@ use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     core::{ChallengeTargetType, ScriptHashType},
     packed::{
-        BlockInfo, ChallengeTarget, DepositionRequest, L2Block, L2Transaction, RawL2Block,
-        RawL2Transaction, TxReceipt, WithdrawalRequest,
+        AccountMerkleState, BlockInfo, ChallengeTarget, DepositionRequest, L2Block, L2Transaction,
+        RawL2Block, RawL2Transaction, TxReceipt, WithdrawalRequest,
     },
     prelude::*,
 };
@@ -301,10 +301,17 @@ impl Generator {
             };
             state.apply_run_result(&run_result)?;
 
-            let compacted_post_account_root = state.calculate_compacted_account_root()?;
+            let post_state = {
+                let account_root = state.calculate_root()?;
+                let account_count = state.get_account_count()?;
+                AccountMerkleState::new_builder()
+                    .merkle_root(account_root.pack())
+                    .count(account_count.pack())
+                    .build()
+            };
             let tx_receipt = TxReceipt::new_builder()
                 .tx_witness_hash(tx.witness_hash().pack())
-                .compacted_post_account_root(compacted_post_account_root.pack())
+                .post_state(post_state)
                 .read_data_hashes(
                     run_result
                         .read_data
