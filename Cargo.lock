@@ -729,6 +729,7 @@ dependencies = [
  "gw-store",
  "gw-types",
  "parking_lot",
+ "toml",
 ]
 
 [[package]]
@@ -766,7 +767,8 @@ name = "gw-config"
 version = "0.1.0"
 dependencies = [
  "ckb-fixed-hash",
- "gw-types",
+ "gw-jsonrpc-types",
+ "serde",
 ]
 
 [[package]]
@@ -814,11 +816,7 @@ dependencies = [
  "ckb-fixed-hash",
  "ckb-jsonrpc-types",
  "faster-hex 0.4.1",
- "gw-chain",
  "gw-common",
- "gw-config",
- "gw-generator",
- "gw-store",
  "gw-types",
  "serde",
 ]

@@ -278,31 +278,6 @@ impl From<packed::ChallengeWitness> for ChallengeWitness {
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
-pub struct ChallengeContext {
-    pub target: ChallengeTarget,
-    pub witness: ChallengeWitness,
-}
-
-impl From<ChallengeContext> for gw_generator::ChallengeContext {
-    fn from(json: ChallengeContext) -> gw_generator::ChallengeContext {
-        let ChallengeContext { target, witness } = json;
-        let target: packed::ChallengeTarget = target.into();
-        let witness: packed::ChallengeWitness = witness.into();
-        gw_generator::ChallengeContext { target, witness }
-    }
-}
-
-impl From<gw_generator::ChallengeContext> for ChallengeContext {
-    fn from(data: gw_generator::ChallengeContext) -> ChallengeContext {
-        let gw_generator::ChallengeContext { target, witness } = data;
-        let target: ChallengeTarget = target.into();
-        let witness: ChallengeWitness = witness.into();
-        Self { target, witness }
-    }
-}
-
-#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
-#[serde(rename_all = "snake_case")]
 pub struct VerifyTransactionWitness {
     pub raw_l2block: RawL2Block,
     pub l2tx: L2Transaction,

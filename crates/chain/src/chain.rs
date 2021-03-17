@@ -16,8 +16,8 @@ use gw_types::{
     core::Status,
     packed::{
         ChallengeTarget, ChallengeWitness, DepositionRequest, GlobalState, HeaderInfo, L2Block,
-        L2BlockReader, Transaction, TxReceipt, VerifyTransactionWitness, WitnessArgs,
-        WitnessArgsReader,
+        L2BlockReader, RollupConfig, Script, Transaction, TxReceipt, VerifyTransactionWitness,
+        WitnessArgs, WitnessArgsReader,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Reader as GWReader,
@@ -137,6 +137,9 @@ impl Chain {
             rollup_type_script,
             rollup_config,
         } = config;
+        // convert serde types to gw-types
+        let rollup_config: RollupConfig = rollup_config.into();
+        let rollup_type_script: Script = rollup_type_script.into();
         assert_eq!(
             rollup_config,
             generator.rollup_context().rollup_config,

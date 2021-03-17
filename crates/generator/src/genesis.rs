@@ -45,7 +45,7 @@ pub fn build_genesis_from_store(
             let rollup_script_hash: [u8; 32] = config.rollup_script_hash.clone().into();
             rollup_script_hash.into()
         },
-        rollup_config: config.rollup_config.clone(),
+        rollup_config: config.rollup_config.clone().into(),
     };
     // initialize store
     db.set_account_smt_root(H256::zero())?;

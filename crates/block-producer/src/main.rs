@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use cell_collector::{CellCollector, DepositInfo};
 use gw_block_producer::block_producer::{produce_block, ProduceBlockParam, ProduceBlockResult};
 use gw_chain::chain::Chain;
+use gw_common::H256;
 use gw_config::Config;
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, genesis::init_genesis,
@@ -15,15 +16,17 @@ use gw_types::{
     prelude::{Builder, Entity, Pack},
 };
 use parking_lot::Mutex;
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, fs, path::Path, sync::Arc};
 use transaction_skeleton::TransactionSkeleton;
 
 mod block_producer;
 mod cell_collector;
 mod transaction_skeleton;
 
-fn read_config() -> Result<Config> {
-    unimplemented!()
+fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
+    let content = fs::read(path)?;
+    let config = toml::from_slice(&content)?;
+    Ok(config)
 }
 
 fn generate_custodian_cells(
@@ -114,6 +117,7 @@ fn produce_next_block(
     config: &Config,
     collector: &CellCollector,
     chain: &Chain,
+    rollup_config_hash: &H256,
     block_producer_id: u32,
     timestamp: u64,
 ) -> Result<()> {
@@ -134,7 +138,6 @@ fn produce_next_block(
         }
     };
     let parent_block = chain.local_state.tip();
-    let rollup_config_hash = config.genesis.rollup_config.hash().into();
     let max_withdrawal_capacity = std::u128::MAX;
     // produce block
     let param = ProduceBlockParam {
@@ -146,7 +149,7 @@ fn produce_next_block(
         deposition_requests: deposit_cells.iter().map(|d| &d.request).cloned().collect(),
         withdrawal_requests,
         parent_block,
-        rollup_config_hash: &rollup_config_hash,
+        rollup_config_hash,
         max_withdrawal_capacity,
     };
     let block_result = produce_block(param)?;
@@ -174,23 +177,26 @@ fn produce_next_block(
 }
 
 fn run() -> Result<()> {
+    let config_path = "./config.toml";
     // read config
-    let config = read_config()?;
+    let config = read_config(&config_path)?;
     // start godwoken components
     // TODO: use persistent store later
     let store = Store::open_tmp()?;
     init_genesis(
         &store,
         &config.genesis,
-        config.rollup_deployment.genesis_header.clone(),
+        config.rollup_deployment.genesis_header.clone().into(),
     )?;
     let rollup_context = RollupContext {
-        rollup_config: config.genesis.rollup_config.clone(),
+        rollup_config: config.genesis.rollup_config.clone().into(),
         rollup_script_hash: {
             let rollup_script_hash: [u8; 32] = config.genesis.rollup_script_hash.clone().into();
             rollup_script_hash.into()
         },
     };
+
+    let rollup_config_hash = rollup_context.rollup_config.hash().into();
     let generator = {
         let backend_manage = BackendManage::from_config(config.backends.clone())?;
         let account_lock_manage = AccountLockManage::default();
@@ -216,7 +222,14 @@ fn run() -> Result<()> {
     let collector = CellCollector;
 
     // produce block
-    produce_next_block(&config, &collector, &chain, block_producer_id, timestamp)?;
+    produce_next_block(
+        &config,
+        &collector,
+        &chain,
+        &rollup_config_hash,
+        block_producer_id,
+        timestamp,
+    )?;
 
     Ok(())
 }
