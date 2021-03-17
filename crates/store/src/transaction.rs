@@ -1,4 +1,4 @@
-use crate::{db_utils::build_transaction_key, smt_store_impl::SMTStore, traits::KVStore};
+use crate::{smt_store_impl::SMTStore, traits::KVStore};
 use gw_common::{smt::SMT, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_db::schema::{
     Col, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSITION_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
@@ -8,7 +8,10 @@ use gw_db::schema::{
     META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
 };
 use gw_db::{error::Error, iter::DBIter, DBIterator, DBVector, IteratorMode, RocksDBTransaction};
-use gw_types::{packed, prelude::*};
+use gw_types::{
+    packed::{self, TransactionKey},
+    prelude::*,
+};
 use std::{borrow::BorrowMut, collections::HashMap, rc::Rc};
 
 #[derive(Clone)]
@@ -150,20 +153,40 @@ impl StoreTransaction {
             let info =
                 packed::TransactionInfoReader::from_slice_should_be_ok(&slice.as_ref()).to_entity();
             let tx_key = info.key();
-            let mut block_hash_bytes = [0u8; 32];
-            let mut index_bytes = [0u8; 4];
-            block_hash_bytes.copy_from_slice(&tx_key.as_slice()[..32]);
-            index_bytes.copy_from_slice(&tx_key.as_slice()[32..36]);
-            let block_hash = H256::from(block_hash_bytes);
-            let index = u32::from_le_bytes(index_bytes);
-            if let Some(block) = self.get_block(&block_hash)? {
-                Ok(block.transactions().get(index as usize))
-            } else {
-                Ok(None)
-            }
+            Ok(self
+                .get(COLUMN_TRANSACTION, &tx_key.as_slice())
+                .map(|slice| {
+                    packed::L2TransactionReader::from_slice_should_be_ok(&slice.as_ref())
+                        .to_entity()
+                }))
         } else {
             Ok(None)
         }
+    }
+
+    pub fn get_transaction_receipt(
+        &self,
+        tx_hash: &H256,
+    ) -> Result<Option<packed::TxReceipt>, Error> {
+        if let Some(slice) = self.get(COLUMN_TRANSACTION_INFO, tx_hash.as_slice()) {
+            let info =
+                packed::TransactionInfoReader::from_slice_should_be_ok(&slice.as_ref()).to_entity();
+            let tx_key = info.key();
+            self.get_transaction_receipt_by_key(&tx_key)
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn get_transaction_receipt_by_key(
+        &self,
+        key: &TransactionKey,
+    ) -> Result<Option<packed::TxReceipt>, Error> {
+        Ok(self
+            .get(COLUMN_TRANSACTION_RECEIPT, &key.as_slice())
+            .map(|slice| {
+                packed::TxReceiptReader::from_slice_should_be_ok(&slice.as_ref()).to_entity()
+            }))
     }
 
     pub fn get_block_synced_header_info(
@@ -260,9 +283,13 @@ impl StoreTransaction {
             .zip(tx_receipts)
             .enumerate()
         {
-            let key = build_transaction_key(tx.hash().pack(), index as u32);
-            self.insert_raw(COLUMN_TRANSACTION, &key, tx.as_slice())?;
-            self.insert_raw(COLUMN_TRANSACTION_RECEIPT, &key, tx_receipt.as_slice())?;
+            let key = TransactionKey::build_transaction_key(tx.hash().pack(), index as u32);
+            self.insert_raw(COLUMN_TRANSACTION, &key.as_slice(), tx.as_slice())?;
+            self.insert_raw(
+                COLUMN_TRANSACTION_RECEIPT,
+                &key.as_slice(),
+                tx_receipt.as_slice(),
+            )?;
         }
         Ok(())
     }
@@ -351,9 +378,9 @@ impl StoreTransaction {
 
         // build tx info
         for (index, tx) in block.transactions().into_iter().enumerate() {
-            let key = build_transaction_key(block_hash.pack(), index as u32);
+            let key = TransactionKey::build_transaction_key(block_hash.pack(), index as u32);
             let info = packed::TransactionInfo::new_builder()
-                .key(key.pack())
+                .key(key)
                 .block_number(raw_number.clone())
                 .build();
             let tx_hash = tx.hash();
