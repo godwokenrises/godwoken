@@ -22,7 +22,7 @@ use gw_types::{
 use std::cmp;
 
 /* Constants */
-const MAX_SET_RETURN_DATA_SIZE: u64 = 1024;
+const MAX_SET_RETURN_DATA_SIZE: u64 = 24 * 1024;
 
 /* Syscall numbers */
 const SYS_STORE: u64 = 3051;
