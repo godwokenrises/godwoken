@@ -66,3 +66,17 @@ impl_hash!(RawL2Transaction);
 impl_witness_hash!(L2Transaction);
 impl_hash!(RawWithdrawalRequest);
 impl_witness_hash!(WithdrawalRequest);
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "std")] {
+        impl packed::TransactionKey {
+            pub fn build_transaction_key(block_hash: crate::packed::Byte32, index: u32) -> Self {
+                let mut key = [0u8; 36];
+                key[..32].copy_from_slice(block_hash.as_slice());
+                // use BE, so we have a sorted bytes representation
+                key[32..].copy_from_slice(&index.to_be_bytes());
+                key.pack()
+            }
+        }
+    }
+}

@@ -1,4 +1,5 @@
 import blockchain;
+import godwoken;
 
 struct NumberHash {
     number:         Uint64,
@@ -21,8 +22,7 @@ vector LogItemVec <LogItem>;
 
 table TxReceipt {
     tx_witness_hash: Byte32,
-    // hash(account_root|account_count)
-    compacted_post_account_root: Byte32,
+    post_state: AccountMerkleState,
     read_data_hashes: Byte32Vec,
     logs: LogItemVec,
 }
