@@ -4,7 +4,11 @@
 
 use anyhow::{anyhow, Result};
 use gw_common::{
-    h256_ext::H256Ext, merkle_utils::calculate_merkle_root, smt::Blake2bHasher, state::State, H256,
+    h256_ext::H256Ext,
+    merkle_utils::{calculate_compacted_account_root, calculate_merkle_root},
+    smt::Blake2bHasher,
+    state::State,
+    H256,
 };
 use gw_generator::{traits::StateExt, Generator};
 use gw_store::{
@@ -155,10 +159,17 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
         state.apply_run_result(&run_result)?;
         // 4. build tx receipt
         let tx_witness_hash = tx.witness_hash();
-        let compacted_post_account_root = state.calculate_compacted_account_root()?;
+        let tx_post_state = {
+            let account_root = state.calculate_root()?;
+            let account_count = state.get_account_count()?;
+            AccountMerkleState::new_builder()
+                .merkle_root(account_root.pack())
+                .count(account_count.pack())
+                .build()
+        };
         let receipt = TxReceipt::new_builder()
             .tx_witness_hash(tx_witness_hash.pack())
-            .compacted_post_account_root(compacted_post_account_root.pack())
+            .post_state(tx_post_state)
             .read_data_hashes(
                 run_result
                     .read_data
@@ -203,7 +214,13 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
         let tx_count = tx_receipts.len() as u32;
         let compacted_post_root_list: Vec<[u8; 32]> = tx_receipts
             .iter()
-            .map(|tx_receipt| tx_receipt.compacted_post_account_root().unpack())
+            .map(|tx_receipt| {
+                let post_state = tx_receipt.post_state();
+                calculate_compacted_account_root(
+                    &post_state.merkle_root().unpack(),
+                    post_state.count().unpack(),
+                )
+            })
             .collect();
         SubmitTransactions::new_builder()
             .tx_witness_root(tx_witness_root.pack())
