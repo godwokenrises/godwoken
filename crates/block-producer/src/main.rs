@@ -12,8 +12,12 @@ use gw_mem_pool::pool::MemPool;
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
-    packed::{CellDep, CellInput, CellOutput, GlobalState, L2Block, Transaction, WitnessArgs},
-    prelude::{Builder, Entity, Pack},
+    core::ScriptHashType,
+    packed::{
+        Byte32, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositionLockArgs, GlobalState,
+        L2Block, Script, Transaction, WitnessArgs,
+    },
+    prelude::{Builder, Entity, Pack, Unpack},
 };
 use parking_lot::Mutex;
 use std::{collections::HashSet, fs, path::Path, sync::Arc};
@@ -30,10 +34,44 @@ fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
 }
 
 fn generate_custodian_cells(
+    rollup_context: &RollupContext,
     block: &L2Block,
     deposit_cells: &[DepositInfo],
 ) -> Vec<(CellOutput, Bytes)> {
-    unimplemented!()
+    let block_hash: Byte32 = block.hash().pack();
+    let block_number = block.raw().number();
+    deposit_cells
+        .iter()
+        .map(|deposit_info| {
+            let lock_args = {
+                let deposition_lock_args = DepositionLockArgs::new_unchecked(
+                    deposit_info.cell.output.lock().args().unpack(),
+                );
+
+                CustodianLockArgs::new_builder()
+                    .deposition_block_hash(block_hash.clone())
+                    .deposition_block_number(block_number.clone())
+                    .deposition_lock_args(deposition_lock_args)
+                    .build()
+            };
+            let lock = Script::new_builder()
+                .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+                .hash_type(ScriptHashType::Type.into())
+                .args(lock_args.as_bytes().pack())
+                .build();
+
+            // use custodian lock
+            let cell = deposit_info
+                .cell
+                .output
+                .clone()
+                .as_builder()
+                .lock(lock)
+                .build();
+            let data = deposit_info.cell.data.clone();
+            (cell, data)
+        })
+        .collect()
 }
 
 /// Add fee cell to tx skeleton
@@ -47,6 +85,7 @@ fn sign(msg: [u8; 32]) -> [u8; 65] {
 }
 
 fn build_tx(
+    rollup_context: &RollupContext,
     collector: &CellCollector,
     deposit_cells: Vec<DepositInfo>,
     block: L2Block,
@@ -100,7 +139,7 @@ fn build_tx(
         .collect();
     tx_skeleton.cell_deps().extend(deposit_type_deps);
     // custodian cells
-    let custodian_cells = generate_custodian_cells(&block, &deposit_cells);
+    let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
     tx_skeleton.outputs().extend(custodian_cells);
     // TODO stake cell
     // tx fee cell
@@ -114,7 +153,6 @@ fn build_tx(
 }
 
 fn produce_next_block(
-    config: &Config,
     collector: &CellCollector,
     chain: &Chain,
     rollup_config_hash: &H256,
@@ -168,7 +206,14 @@ fn produce_next_block(
     let block_hash = block.hash().into();
 
     // composit tx
-    let tx = build_tx(&collector, deposit_cells, block, global_state)?;
+    let rollup_context = chain.generator.rollup_context();
+    let tx = build_tx(
+        rollup_context,
+        &collector,
+        deposit_cells,
+        block,
+        global_state,
+    )?;
     collector.send_transaction(tx)?;
 
     // update status
@@ -223,7 +268,6 @@ fn run() -> Result<()> {
 
     // produce block
     produce_next_block(
-        &config,
         &collector,
         &chain,
         &rollup_config_hash,
