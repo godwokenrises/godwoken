@@ -11,7 +11,7 @@ use gw_db::{error::Error, iter::DBIter, IteratorMode, DBRawIterator};
 use gw_traits::CodeStore;
 use gw_types::{bytes::Bytes, packed, prelude::*};
 
-const DELETE_FLAG_VALUE: u8 = 0; // State db insert the value 0u8 presents the key to be deleted.
+const FLAG_DELETE_VALUE: u8 = 0;
 const BLOCK_NUMBER_ZERO: u64 = 0;
 const TX_INDEX_ZERO: u32 = 0;
 
@@ -56,9 +56,11 @@ pub struct StateDBTransaction {
 impl KVStore for StateDBTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
         let raw_key = self.get_key_with_ver_sfx(key);
-        let mut raw_iter: DBRawIterator = self.inner.get_iter(col, IteratorMode::Start).into();
+        let mut raw_iter: DBRawIterator = self.inner
+            .get_iter(col, IteratorMode::Start)
+            .into();
         raw_iter.seek_for_prev(raw_key);
-        self.filter_value_after_seek(key, &raw_iter)
+        self.filter_value_of_seek(key, &raw_iter)
     }
 
     // TODO: this trait method will be deleted in the future.
@@ -73,13 +75,17 @@ impl KVStore for StateDBTransaction {
  
     fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
         let raw_key = self.get_key_with_ver_sfx(key);
-        self.inner.insert_raw(col, &raw_key, &DELETE_FLAG_VALUE.to_be_bytes())
+        self.inner.insert_raw(col, &raw_key, &FLAG_DELETE_VALUE.to_be_bytes())
     }
 }
 
 impl StateDBTransaction {
-    pub fn from_version(inner: StoreTransaction, ver: StateDBVersion) -> Result<Self, Error> {
-        let (block_num, tx_idx) = StateDBTransaction::get_block_num_and_tx_index(&inner, &ver)?;
+    pub fn from_version(
+        inner: StoreTransaction, 
+        ver: StateDBVersion
+    ) -> Result<Self, Error> {
+        let (block_num, tx_idx) = 
+            StateDBTransaction::get_block_num_and_tx_index(&inner, &ver)?;
         Ok(StateDBTransaction::from_tx_index(inner, block_num, tx_idx))
     }
 
@@ -118,29 +124,42 @@ impl StateDBTransaction {
         Ok(())
     }
 
-    fn get_block_num_and_tx_index(inner: &StoreTransaction, ver: &StateDBVersion) -> Result<(u64, u32), Error> {
-        if ver.is_genesis_version() { return Ok((BLOCK_NUMBER_ZERO, TX_INDEX_ZERO)); }
-
-        let block_hash = &ver.block_hash.ok_or_else(|| "Block hash doesn't exist".to_owned())?;
-        let block_num = inner.get_block_number(block_hash)?;
-        let block_num = block_num.ok_or_else(|| { 
-            "Block num doesn't exist given the version".to_owned() 
+    fn get_block_num_and_tx_index(
+        inner: &StoreTransaction, 
+        ver: &StateDBVersion
+    ) -> Result<(u64, u32), Error> {
+        if ver.is_genesis_version() { 
+            return Ok((BLOCK_NUMBER_ZERO, TX_INDEX_ZERO)); 
+        }
+        let block_hash = &ver.block_hash.ok_or_else(|| { 
+            "Block hash doesn't exist".to_owned()
         })?;
-        let tx_idx = inner.get_block(block_hash).map(|blk| { 
-            if let Some(block) = blk {
-                let txs = block.transactions();
-                if let Some(tx_idx) = ver.tx_index {
-                    if txs.get(tx_idx as usize).is_some() { Some(tx_idx) } else { None }
+        let block_num = inner
+            .get_block_number(block_hash)?
+            .ok_or_else(|| { 
+                "Block num doesn't exist".to_owned() 
+            })?;
+        let tx_idx = inner
+            .get_block(block_hash)
+            .map(|blk| { 
+                if let Some(block) = blk {
+                    let txs = block.transactions();
+                    if let Some(tx_idx) = ver.tx_index {
+                        if txs.get(tx_idx as usize).is_some() { 
+                            Some(tx_idx) 
+                        } else { 
+                            None 
+                        }
+                    } else {
+                        Some(txs.item_count() as u32)
+                    }
                 } else {
-                    Some(txs.item_count() as u32)
+                    None
                 }
-            } else {
-                None
-            }
-        })?;
-        let tx_idx = tx_idx.ok_or_else(|| { 
-            "Tx index doesn't exist given the version".to_owned() 
-        })?;
+            })?
+            .ok_or_else(|| { 
+                "Tx index doesn't exist".to_owned() 
+            })?;
         Ok((block_num, tx_idx))
     }
 
@@ -151,31 +170,49 @@ impl StateDBTransaction {
     
     fn get_account_smt_root_and_count(&self) -> Result<(H256, u32), Error> {
         if self.block_num == 0 && self.tx_index == 0 { return Ok((H256::zero(), 0)); } // TODO: refactoring
-        let block_hash = self.inner.get_block_hash_by_number(self.block_num)?;
-        let block_hash = block_hash.ok_or_else(|| "Block hash doesn't exist".to_owned())?;
-        let block = self.inner.get_block(&block_hash)?;
-        let block = block.ok_or_else(|| "Block doesnt exist".to_owned())?;
+        let block_hash = self.inner
+            .get_block_hash_by_number(self.block_num)?
+            .ok_or_else(|| "Block hash doesn't exist".to_owned())?;
+        let block = self.inner
+            .get_block(&block_hash)?
+            .ok_or_else(|| "Block doesnt exist".to_owned())?;
         let account_merkle_state = block.raw().post_account();
-        Ok((account_merkle_state.merkle_root().unpack(), account_merkle_state.count().unpack()))
+        Ok((account_merkle_state.merkle_root().unpack(), 
+            account_merkle_state.count().unpack()
+        ))
     }
 
     fn get_key_with_ver_sfx(&self, key: &[u8]) -> Vec<u8> {
-        [key, &self.block_num.to_be_bytes(), &self.tx_index.to_be_bytes()].concat()
+        [
+            key, 
+            &self.block_num.to_be_bytes(), 
+            &self.tx_index.to_be_bytes()
+        ].concat()
     }
 
     fn get_ori_key<'a>(&self, raw_key: &'a [u8]) -> &'a[u8] {
-        &raw_key[..raw_key.len()-size_of_val(&self.block_num)-size_of_val(&self.tx_index)]
+        &raw_key[
+            ..raw_key.len()
+            -size_of_val(&self.block_num)
+            -size_of_val(&self.tx_index)
+        ]
     }
 
-    fn filter_value_after_seek(&self, ori_key: &[u8], raw_iter: &DBRawIterator) -> Option<Box<[u8]>> {
-        if !raw_iter.valid() { return None; }
+    fn filter_value_of_seek(
+        &self, 
+        ori_key: &[u8], 
+        raw_iter: &DBRawIterator
+    ) -> Option<Box<[u8]>> {
+        if !raw_iter.valid() { 
+            return None; 
+        }
         match raw_iter.key() {
             Some(raw_key_found) => {
                 if ori_key != self.get_ori_key(raw_key_found) {
                     return None;
                 } 
                 match raw_iter.value() {
-                    Some(&[DELETE_FLAG_VALUE]) => None,
+                    Some(&[FLAG_DELETE_VALUE]) => None,
                     Some(value) => Some(Box::<[u8]>::from(value)),
                     None => None,
                 }
@@ -261,18 +298,22 @@ impl<'a> State for StateTree<'a> {
         let v = self.tree.get(&(*key).into())?;
         Ok(v.into())
     }
+
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
         self.tracker.touch_key(&key);
         self.tree.update(key.into(), value.into())?;
         Ok(())
     }
+
     fn get_account_count(&self) -> Result<u32, StateError> {
         Ok(self.account_count)
     }
+
     fn set_account_count(&mut self, count: u32) -> Result<(), StateError> {
         self.account_count = count;
         Ok(())
     }
+
     fn calculate_root(&self) -> Result<H256, StateError> {
         let root = self.tree.root();
         Ok(*root)
@@ -285,6 +326,7 @@ impl<'a> CodeStore for StateTree<'a> {
             .insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())
             .expect("insert script");
     }
+
     fn get_script(&self, script_hash: &H256) -> Option<packed::Script> {
         match self.db.get(COLUMN_SCRIPT, script_hash.as_slice()) {
             Some(slice) => {
@@ -293,11 +335,13 @@ impl<'a> CodeStore for StateTree<'a> {
             None => None,
         }
     }
+
     fn insert_data(&mut self, data_hash: H256, code: Bytes) {
         self.db
             .insert_raw(COLUMN_DATA, data_hash.as_slice(), &code)
             .expect("insert data");
     }
+
     fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
         match self.db.get(COLUMN_DATA, data_hash.as_slice()) {
             Some(slice) => Some(Bytes::from(slice.to_vec())),
