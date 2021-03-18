@@ -21,9 +21,10 @@ pub struct StoreTransaction {
 
 impl KVStore for StoreTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        self.inner.get(col, key)
-        .expect("db operation should be ok")
-        .map(|v| { Box::<[u8]>::from(v.as_ref()) })
+        self.inner
+            .get(col, key)
+            .expect("db operation should be ok")
+            .map(|v| Box::<[u8]>::from(v.as_ref()))
     }
 
     fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {

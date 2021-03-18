@@ -7,7 +7,7 @@ use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_db::schema::{
     Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_DATA, COLUMN_SCRIPT,
 };
-use gw_db::{error::Error, iter::DBIter, IteratorMode, DBRawIterator};
+use gw_db::{error::Error, iter::DBIter, DBRawIterator, IteratorMode};
 use gw_traits::CodeStore;
 use gw_types::{bytes::Bytes, packed, prelude::*};
 
@@ -22,22 +22,22 @@ pub struct StateDBVersion {
 
 impl StateDBVersion {
     pub fn from_genesis() -> Self {
-        StateDBVersion { 
-            block_hash: None, 
+        StateDBVersion {
+            block_hash: None,
             tx_index: None,
         }
     }
 
     pub fn from_block_hash(block_hash: H256) -> Self {
-        StateDBVersion { 
-            block_hash: Some(block_hash), 
-            tx_index: None, 
+        StateDBVersion {
+            block_hash: Some(block_hash),
+            tx_index: None,
         }
     }
 
     pub fn from_tx_index(block_hash: H256, tx_index: u32) -> Self {
-        StateDBVersion { 
-            block_hash: Some(block_hash), 
+        StateDBVersion {
+            block_hash: Some(block_hash),
             tx_index: Some(tx_index),
         }
     }
@@ -56,9 +56,7 @@ pub struct StateDBTransaction {
 impl KVStore for StateDBTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
         let raw_key = self.get_key_with_ver_sfx(key);
-        let mut raw_iter: DBRawIterator = self.inner
-            .get_iter(col, IteratorMode::Start)
-            .into();
+        let mut raw_iter: DBRawIterator = self.inner.get_iter(col, IteratorMode::Start).into();
         raw_iter.seek_for_prev(raw_key);
         self.filter_value_of_seek(key, &raw_iter)
     }
@@ -72,20 +70,17 @@ impl KVStore for StateDBTransaction {
         let raw_key = self.get_key_with_ver_sfx(key);
         self.inner.insert_raw(col, &raw_key, value)
     }
- 
+
     fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
         let raw_key = self.get_key_with_ver_sfx(key);
-        self.inner.insert_raw(col, &raw_key, &FLAG_DELETE_VALUE.to_be_bytes())
+        self.inner
+            .insert_raw(col, &raw_key, &FLAG_DELETE_VALUE.to_be_bytes())
     }
 }
 
 impl StateDBTransaction {
-    pub fn from_version(
-        inner: StoreTransaction, 
-        ver: StateDBVersion
-    ) -> Result<Self, Error> {
-        let (block_num, tx_idx) = 
-            StateDBTransaction::get_block_num_and_tx_index(&inner, &ver)?;
+    pub fn from_version(inner: StoreTransaction, ver: StateDBVersion) -> Result<Self, Error> {
+        let (block_num, tx_idx) = StateDBTransaction::get_block_num_and_tx_index(&inner, &ver)?;
         Ok(StateDBTransaction::from_tx_index(inner, block_num, tx_idx))
     }
 
@@ -125,30 +120,28 @@ impl StateDBTransaction {
     }
 
     fn get_block_num_and_tx_index(
-        inner: &StoreTransaction, 
-        ver: &StateDBVersion
+        inner: &StoreTransaction,
+        ver: &StateDBVersion,
     ) -> Result<(u64, u32), Error> {
-        if ver.is_genesis_version() { 
-            return Ok((BLOCK_NUMBER_ZERO, TX_INDEX_ZERO)); 
+        if ver.is_genesis_version() {
+            return Ok((BLOCK_NUMBER_ZERO, TX_INDEX_ZERO));
         }
-        let block_hash = &ver.block_hash.ok_or_else(|| { 
-            "Block hash doesn't exist".to_owned()
-        })?;
+        let block_hash = &ver
+            .block_hash
+            .ok_or_else(|| "Block hash doesn't exist".to_owned())?;
         let block_num = inner
             .get_block_number(block_hash)?
-            .ok_or_else(|| { 
-                "Block num doesn't exist".to_owned() 
-            })?;
+            .ok_or_else(|| "Block num doesn't exist".to_owned())?;
         let tx_idx = inner
             .get_block(block_hash)
-            .map(|blk| { 
+            .map(|blk| {
                 if let Some(block) = blk {
                     let txs = block.transactions();
                     if let Some(tx_idx) = ver.tx_index {
-                        if txs.get(tx_idx as usize).is_some() { 
-                            Some(tx_idx) 
-                        } else { 
-                            None 
+                        if txs.get(tx_idx as usize).is_some() {
+                            Some(tx_idx)
+                        } else {
+                            None
                         }
                     } else {
                         Some(txs.item_count() as u32)
@@ -157,66 +150,66 @@ impl StateDBTransaction {
                     None
                 }
             })?
-            .ok_or_else(|| { 
-                "Tx index doesn't exist".to_owned() 
-            })?;
+            .ok_or_else(|| "Tx index doesn't exist".to_owned())?;
         Ok((block_num, tx_idx))
     }
 
     // This private constructor can be injected with mock data by unit test
     fn from_tx_index(inner: StoreTransaction, block_num: u64, tx_index: u32) -> Self {
-        StateDBTransaction { inner, block_num, tx_index }
+        StateDBTransaction {
+            inner,
+            block_num,
+            tx_index,
+        }
     }
-    
+
     fn get_account_smt_root_and_count(&self) -> Result<(H256, u32), Error> {
-        if self.block_num == 0 && self.tx_index == 0 { return Ok((H256::zero(), 0)); } // TODO: refactoring
-        let block_hash = self.inner
+        if self.block_num == 0 && self.tx_index == 0 {
+            return Ok((H256::zero(), 0));
+        } // TODO: refactoring
+        let block_hash = self
+            .inner
             .get_block_hash_by_number(self.block_num)?
             .ok_or_else(|| "Block hash doesn't exist".to_owned())?;
-        let block = self.inner
+        let block = self
+            .inner
             .get_block(&block_hash)?
             .ok_or_else(|| "Block doesnt exist".to_owned())?;
         let account_merkle_state = block.raw().post_account();
-        Ok((account_merkle_state.merkle_root().unpack(), 
-            account_merkle_state.count().unpack()
+        Ok((
+            account_merkle_state.merkle_root().unpack(),
+            account_merkle_state.count().unpack(),
         ))
     }
 
     fn get_key_with_ver_sfx(&self, key: &[u8]) -> Vec<u8> {
         [
-            key, 
-            &self.block_num.to_be_bytes(), 
-            &self.tx_index.to_be_bytes()
-        ].concat()
-    }
-
-    fn get_ori_key<'a>(&self, raw_key: &'a [u8]) -> &'a[u8] {
-        &raw_key[
-            ..raw_key.len()
-            -size_of_val(&self.block_num)
-            -size_of_val(&self.tx_index)
+            key,
+            &self.block_num.to_be_bytes(),
+            &self.tx_index.to_be_bytes(),
         ]
+        .concat()
     }
 
-    fn filter_value_of_seek(
-        &self, 
-        ori_key: &[u8], 
-        raw_iter: &DBRawIterator
-    ) -> Option<Box<[u8]>> {
-        if !raw_iter.valid() { 
-            return None; 
+    fn get_ori_key<'a>(&self, raw_key: &'a [u8]) -> &'a [u8] {
+        &raw_key[..raw_key.len() - size_of_val(&self.block_num) - size_of_val(&self.tx_index)]
+    }
+
+    fn filter_value_of_seek(&self, ori_key: &[u8], raw_iter: &DBRawIterator) -> Option<Box<[u8]>> {
+        if !raw_iter.valid() {
+            return None;
         }
         match raw_iter.key() {
             Some(raw_key_found) => {
                 if ori_key != self.get_ori_key(raw_key_found) {
                     return None;
-                } 
+                }
                 match raw_iter.value() {
                     Some(&[FLAG_DELETE_VALUE]) => None,
                     Some(value) => Some(Box::<[u8]>::from(value)),
                     None => None,
                 }
-            },
+            }
             None => None,
         }
     }
