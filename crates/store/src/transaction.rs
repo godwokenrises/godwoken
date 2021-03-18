@@ -7,7 +7,7 @@ use gw_db::schema::{
     COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY,
     META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
 };
-use gw_db::{error::Error, iter::DBIter, DBIterator, DBVector, IteratorMode, RocksDBTransaction};
+use gw_db::{error::Error, iter::DBIter, DBIterator, IteratorMode, RocksDBTransaction};
 use gw_types::{
     packed::{self, TransactionKey},
     prelude::*,

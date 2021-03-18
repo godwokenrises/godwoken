@@ -340,11 +340,11 @@ impl Chain {
                 self.revert_l1action(&db, reverted_action)?;
             }
             // reconstruct account state tree
-            let event = self.replay_chain(&db)?;
-            if event != SyncEvent::Success {
-                db.commit()?;
-                return Ok(event);
-            }
+            // let event = self.replay_chain(&db)?;
+            // if event != SyncEvent::Success {
+            //     db.commit()?;
+            //     return Ok(event);
+            // }
         }
         // update layer1 actions
         for action in param.updates {

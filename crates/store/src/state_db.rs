@@ -79,36 +79,8 @@ impl KVStore for StateDBTransaction {
 
 impl StateDBTransaction {
     pub fn from_version(inner: StoreTransaction, ver: StateDBVersion) -> Result<Self, Error> {
-        let (block_num, tx_idx) = if ver.is_genesis_version() { 
-            (BLOCK_NUMBER_ZERO, TX_INDEX_ZERO) 
-        } else {
-            StateDBTransaction::get_block_num_and_tx_index(&inner, &ver)?
-        };
+        let (block_num, tx_idx) = StateDBTransaction::get_block_num_and_tx_index(&inner, &ver)?;
         Ok(StateDBTransaction::from_tx_index(inner, block_num, tx_idx))
-    }
-
-    fn get_block_num_and_tx_index(inner: &StoreTransaction, ver: &StateDBVersion) -> Result<(u64, u32), Error> {
-        let block_num = inner.get_block_number(&ver.block_hash.unwrap())?;
-        let block_num = block_num.ok_or_else(|| "Block number doesn't exist given the version".to_owned())?;
-        let tx_idx = inner.get_block(&ver.block_hash.unwrap()).map(|blk| { 
-            if let Some(block) = blk {
-                let txs = block.transactions();
-                if let Some(tx_idx) = ver.tx_index {
-                    if txs.get(tx_idx as usize).is_some() { Some(tx_idx) } else { None }
-                } else {
-                    Some(txs.item_count() as u32)
-                }
-            } else {
-                None
-            }
-        })?;
-        let tx_idx = tx_idx.ok_or_else(|| "Tx number doesn't exist given the version".to_owned())?;
-        Ok((block_num, tx_idx))
-    }
-
-    // This private constructor can be injected with mock data by unit test
-    fn from_tx_index(inner: StoreTransaction, block_num: u64, tx_index: u32) -> Self {
-        StateDBTransaction { inner, block_num, tx_index }
     }
 
     pub fn commit(&self) -> Result<(), Error> {
@@ -121,13 +93,15 @@ impl StateDBTransaction {
     }
 
     pub fn account_smt<'a>(&'a self) -> Result<SMT<SMTStore<'a, Self>>, Error> {
-        let root = self.inner.get_account_smt_root()?;
+        // let root = self.inner.get_account_smt_root()?;
+        let (root, _) = self.get_account_smt_root_and_count()?;
         let smt_store = self.account_smt_store()?;
         Ok(SMT::new(root, smt_store))
     }
 
     pub fn account_state_tree<'a>(&'a self) -> Result<StateTree<'a>, Error> {
-        let account_count = self.inner.get_account_count()?;
+        // let account_count = self.inner.get_account_count()?;
+        let (_, account_count) = self.get_account_smt_root_and_count()?;
         Ok(StateTree::new(self, self.account_smt()?, account_count))
     }
 
@@ -142,6 +116,47 @@ impl StateDBTransaction {
             }
         }
         Ok(())
+    }
+
+    fn get_block_num_and_tx_index(inner: &StoreTransaction, ver: &StateDBVersion) -> Result<(u64, u32), Error> {
+        if ver.is_genesis_version() { return Ok((BLOCK_NUMBER_ZERO, TX_INDEX_ZERO)); }
+
+        let block_hash = &ver.block_hash.ok_or_else(|| "Block hash doesn't exist".to_owned())?;
+        let block_num = inner.get_block_number(block_hash)?;
+        let block_num = block_num.ok_or_else(|| { 
+            "Block num doesn't exist given the version".to_owned() 
+        })?;
+        let tx_idx = inner.get_block(block_hash).map(|blk| { 
+            if let Some(block) = blk {
+                let txs = block.transactions();
+                if let Some(tx_idx) = ver.tx_index {
+                    if txs.get(tx_idx as usize).is_some() { Some(tx_idx) } else { None }
+                } else {
+                    Some(txs.item_count() as u32)
+                }
+            } else {
+                None
+            }
+        })?;
+        let tx_idx = tx_idx.ok_or_else(|| { 
+            "Tx index doesn't exist given the version".to_owned() 
+        })?;
+        Ok((block_num, tx_idx))
+    }
+
+    // This private constructor can be injected with mock data by unit test
+    fn from_tx_index(inner: StoreTransaction, block_num: u64, tx_index: u32) -> Self {
+        StateDBTransaction { inner, block_num, tx_index }
+    }
+    
+    fn get_account_smt_root_and_count(&self) -> Result<(H256, u32), Error> {
+        if self.block_num == 0 && self.tx_index == 0 { return Ok((H256::zero(), 0)); } // TODO: refactoring
+        let block_hash = self.inner.get_block_hash_by_number(self.block_num)?;
+        let block_hash = block_hash.ok_or_else(|| "Block hash doesn't exist".to_owned())?;
+        let block = self.inner.get_block(&block_hash)?;
+        let block = block.ok_or_else(|| "Block doesnt exist".to_owned())?;
+        let account_merkle_state = block.raw().post_account();
+        Ok((account_merkle_state.merkle_root().unpack(), account_merkle_state.count().unpack()))
     }
 
     fn get_key_with_ver_sfx(&self, key: &[u8]) -> Vec<u8> {
