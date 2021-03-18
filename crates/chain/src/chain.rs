@@ -370,15 +370,20 @@ impl Chain {
                 .post_account()
                 .merkle_root()
                 .unpack();
-            assert_eq!(
-                db.get_account_smt_root().unwrap(),
-                expected_account_root,
-                "account root consistent in DB"
-            );
+            // assert_eq!(
+            //     db.get_account_smt_root().unwrap(),
+            //     expected_account_root,
+            //     "account root consistent in DB"
+            // );
             let state_db = StateDBTransaction::from_version(
                 db,
                 StateDBVersion::from_block_hash(self.local_state.tip().hash().into()),
             )?;
+            assert_eq!(
+                &expected_account_root,
+                state_db.account_smt().unwrap().root(),
+                "account root consistent in DB"
+            );
             let tree = state_db.account_state_tree()?;
             let current_account_root = tree.calculate_root().unwrap();
             assert_eq!(
