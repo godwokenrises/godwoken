@@ -164,13 +164,13 @@ impl StateDBTransaction {
     }
 
     fn get_account_smt_root_and_count(&self) -> Result<(H256, u32), Error> {
-        if self.block_num == 0 && self.tx_index == 0 {
-            return Ok((H256::zero(), 0));
-        } // TODO: refactoring
-        let block_hash = self
-            .inner
-            .get_block_hash_by_number(self.block_num)?
-            .ok_or_else(|| "Block hash doesn't exist".to_owned())?;
+        let block_hash = self.inner.get_block_hash_by_number(self.block_num)?;
+        let block_hash = match block_hash {
+            Some(hash) => hash,
+            None => {
+                return Ok((H256::zero(), 0));
+            }
+        };
         let block = self
             .inner
             .get_block(&block_hash)?
