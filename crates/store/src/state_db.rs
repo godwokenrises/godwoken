@@ -56,8 +56,7 @@ pub struct StateDBTransaction {
 impl KVStore for StateDBTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
         let raw_key = self.get_key_with_ver_sfx(key);
-        let mut raw_iter: DBRawIterator = 
-            self.inner.get_iter(col, IteratorMode::Start).into();
+        let mut raw_iter: DBRawIterator = self.inner.get_iter(col, IteratorMode::Start).into();
         raw_iter.seek_for_prev(raw_key);
         self.filter_value_of_seek(key, &raw_iter)
     }
@@ -81,8 +80,7 @@ impl KVStore for StateDBTransaction {
 
 impl StateDBTransaction {
     pub fn from_version(inner: StoreTransaction, ver: StateDBVersion) -> Result<Self, Error> {
-        let (block_num, tx_idx) = 
-            StateDBTransaction::get_block_num_and_tx_index(&inner, &ver)?;
+        let (block_num, tx_idx) = StateDBTransaction::get_block_num_and_tx_index(&inner, &ver)?;
         Ok(StateDBTransaction::from_tx_index(inner, block_num, tx_idx))
     }
 
@@ -138,7 +136,8 @@ impl StateDBTransaction {
                 if let Some(block) = blk {
                     let txs = block.transactions();
                     if let Some(tx_idx) = ver.tx_index {
-                        if txs.get(tx_idx as usize).is_some() { // check tx_idx exists in db
+                        if txs.get(tx_idx as usize).is_some() {
+                            // check tx_idx exists in db
                             Some(tx_idx)
                         } else {
                             None
