@@ -56,7 +56,8 @@ pub struct StateDBTransaction {
 impl KVStore for StateDBTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
         let raw_key = self.get_key_with_ver_sfx(key);
-        let mut raw_iter: DBRawIterator = self.inner.get_iter(col, IteratorMode::Start).into();
+        let mut raw_iter: DBRawIterator = 
+            self.inner.get_iter(col, IteratorMode::Start).into();
         raw_iter.seek_for_prev(raw_key);
         self.filter_value_of_seek(key, &raw_iter)
     }
@@ -80,7 +81,8 @@ impl KVStore for StateDBTransaction {
 
 impl StateDBTransaction {
     pub fn from_version(inner: StoreTransaction, ver: StateDBVersion) -> Result<Self, Error> {
-        let (block_num, tx_idx) = StateDBTransaction::get_block_num_and_tx_index(&inner, &ver)?;
+        let (block_num, tx_idx) = 
+            StateDBTransaction::get_block_num_and_tx_index(&inner, &ver)?;
         Ok(StateDBTransaction::from_tx_index(inner, block_num, tx_idx))
     }
 
@@ -94,14 +96,12 @@ impl StateDBTransaction {
     }
 
     pub fn account_smt<'a>(&'a self) -> Result<SMT<SMTStore<'a, Self>>, Error> {
-        // let root = self.inner.get_account_smt_root()?;
         let (root, _) = self.get_account_smt_root_and_count()?;
         let smt_store = self.account_smt_store()?;
         Ok(SMT::new(root, smt_store))
     }
 
     pub fn account_state_tree<'a>(&'a self) -> Result<StateTree<'a>, Error> {
-        // let account_count = self.inner.get_account_count()?;
         let (_, account_count) = self.get_account_smt_root_and_count()?;
         Ok(StateTree::new(self, self.account_smt()?, account_count))
     }
@@ -138,7 +138,7 @@ impl StateDBTransaction {
                 if let Some(block) = blk {
                     let txs = block.transactions();
                     if let Some(tx_idx) = ver.tx_index {
-                        if txs.get(tx_idx as usize).is_some() {
+                        if txs.get(tx_idx as usize).is_some() { // check tx_idx exists in db
                             Some(tx_idx)
                         } else {
                             None

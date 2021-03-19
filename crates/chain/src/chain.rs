@@ -339,12 +339,6 @@ impl Chain {
             for reverted_action in param.reverts {
                 self.revert_l1action(&db, reverted_action)?;
             }
-            // reconstruct account state tree
-            // let event = self.replay_chain(&db)?;
-            // if event != SyncEvent::Success {
-            //     db.commit()?;
-            //     return Ok(event);
-            // }
         }
         // update layer1 actions
         for action in param.updates {
@@ -370,18 +364,13 @@ impl Chain {
                 .post_account()
                 .merkle_root()
                 .unpack();
-            // assert_eq!(
-            //     db.get_account_smt_root().unwrap(),
-            //     expected_account_root,
-            //     "account root consistent in DB"
-            // );
             let state_db = StateDBTransaction::from_version(
                 db,
                 StateDBVersion::from_block_hash(self.local_state.tip().hash().into()),
             )?;
             assert_eq!(
-                &expected_account_root,
                 state_db.account_smt().unwrap().root(),
+                &expected_account_root,
                 "account root consistent in DB"
             );
             let tree = state_db.account_state_tree()?;
