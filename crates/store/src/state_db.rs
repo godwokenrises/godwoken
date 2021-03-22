@@ -45,22 +45,20 @@ impl StateDBVersion {
         self.block_hash.is_none() && self.tx_index.is_none()
     }
 
-    fn lock_block_number_and_tx_index(&self, db: &StoreTransaction) -> Result<(u64, u32), Error> {
+    fn load_block_number_and_tx_index(&self, db: &StoreTransaction) -> Result<(u64, u32), Error> {
         if self.is_genesis_version() {
             return Ok((0u64, 0u32));
         }
         let block_hash = &self
             .block_hash
             .ok_or_else(|| "Block hash doesn't exist".to_owned())?;
-        let block_number = db
-            .get_block_number(block_hash)?
-            .ok_or_else(|| "Block number doesn't exist".to_owned())?;
         let block = db
             .get_block(block_hash)?
             .ok_or_else(|| "Block doesn't exist".to_owned())?;
+        let block_number = block.raw().number().unpack();
         let tx_index = match self.tx_index {
             Some(tx_index) => {
-                if block.transactions().len() <= tx_index as usize {
+                if block.transactions().len() >= tx_index as usize {
                     tx_index
                 } else {
                     return Err(Error::from("Invalid tx index".to_owned()));
@@ -110,7 +108,7 @@ impl KVStore for StateDBTransaction {
 
 impl StateDBTransaction {
     pub fn from_version(inner: StoreTransaction, version: StateDBVersion) -> Result<Self, Error> {
-        let (block_number, tx_index) = version.lock_block_number_and_tx_index(&inner)?;
+        let (block_number, tx_index) = version.load_block_number_and_tx_index(&inner)?;
         Ok(StateDBTransaction {
             inner,
             block_number,
