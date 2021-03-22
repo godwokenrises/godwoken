@@ -485,6 +485,3 @@ struct CustodianChange {
     sudt_script_hash: H256,
     amount: u128,
 }
-
-#[cfg(test)]
-mod tests;

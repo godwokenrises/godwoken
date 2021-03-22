@@ -9,11 +9,10 @@ use gw_db::schema::{
 };
 use gw_db::{error::Error, iter::DBIter, DBRawIterator, IteratorMode};
 use gw_traits::CodeStore;
+use gw_types::packed::AccountMerkleState;
 use gw_types::{bytes::Bytes, packed, prelude::*};
 
 const FLAG_DELETE_VALUE: u8 = 0;
-const BLOCK_NUMBER_ZERO: u64 = 0;
-const TX_INDEX_ZERO: u32 = 0;
 
 pub struct StateDBVersion {
     block_hash: Option<H256>,
@@ -45,17 +44,43 @@ impl StateDBVersion {
     pub fn is_genesis_version(&self) -> bool {
         self.block_hash.is_none() && self.tx_index.is_none()
     }
+
+    fn lock_block_number_and_tx_index(&self, db: &StoreTransaction) -> Result<(u64, u32), Error> {
+        if self.is_genesis_version() {
+            return Ok((0u64, 0u32));
+        }
+        let block_hash = &self
+            .block_hash
+            .ok_or_else(|| "Block hash doesn't exist".to_owned())?;
+        let block_number = db
+            .get_block_number(block_hash)?
+            .ok_or_else(|| "Block number doesn't exist".to_owned())?;
+        let block = db
+            .get_block(block_hash)?
+            .ok_or_else(|| "Block doesn't exist".to_owned())?;
+        let tx_index = match self.tx_index {
+            Some(tx_index) => {
+                if block.transactions().len() <= tx_index as usize {
+                    tx_index
+                } else {
+                    return Err(Error::from("Invalid tx index".to_owned()));
+                }
+            }
+            None => block.transactions().len() as u32,
+        };
+        Ok((block_number, tx_index))
+    }
 }
 
 pub struct StateDBTransaction {
     inner: StoreTransaction,
-    block_num: u64,
+    block_number: u64,
     tx_index: u32,
 }
 
 impl KVStore for StateDBTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        let raw_key = self.get_key_with_ver_sfx(key);
+        let raw_key = self.get_key_with_suffix(key);
         let mut raw_iter: DBRawIterator = self.inner.get_iter(col, IteratorMode::Start).into();
         raw_iter.seek_for_prev(raw_key);
         self.filter_value_of_seek(key, &raw_iter)
@@ -67,21 +92,30 @@ impl KVStore for StateDBTransaction {
     }
 
     fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
-        let raw_key = self.get_key_with_ver_sfx(key);
+        assert_ne!(
+            value,
+            &FLAG_DELETE_VALUE.to_be_bytes(),
+            "forbid inserting the delete flag"
+        );
+        let raw_key = self.get_key_with_suffix(key);
         self.inner.insert_raw(col, &raw_key, value)
     }
 
     fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
-        let raw_key = self.get_key_with_ver_sfx(key);
+        let raw_key = self.get_key_with_suffix(key);
         self.inner
             .insert_raw(col, &raw_key, &FLAG_DELETE_VALUE.to_be_bytes())
     }
 }
 
 impl StateDBTransaction {
-    pub fn from_version(inner: StoreTransaction, ver: StateDBVersion) -> Result<Self, Error> {
-        let (block_num, tx_idx) = StateDBTransaction::get_block_num_and_tx_index(&inner, &ver)?;
-        Ok(StateDBTransaction::from_tx_index(inner, block_num, tx_idx))
+    pub fn from_version(inner: StoreTransaction, version: StateDBVersion) -> Result<Self, Error> {
+        let (block_number, tx_index) = version.lock_block_number_and_tx_index(&inner)?;
+        Ok(StateDBTransaction {
+            inner,
+            block_number,
+            tx_index,
+        })
     }
 
     pub fn commit(&self) -> Result<(), Error> {
@@ -94,14 +128,21 @@ impl StateDBTransaction {
     }
 
     pub fn account_smt<'a>(&'a self) -> Result<SMT<SMTStore<'a, Self>>, Error> {
-        let (root, _) = self.get_account_smt_root_and_count()?;
+        let current_account_merkle_state = self.get_current_account_merkle_state()?;
         let smt_store = self.account_smt_store()?;
-        Ok(SMT::new(root, smt_store))
+        Ok(SMT::new(
+            current_account_merkle_state.merkle_root().unpack(),
+            smt_store,
+        ))
     }
 
     pub fn account_state_tree<'a>(&'a self) -> Result<StateTree<'a>, Error> {
-        let (_, account_count) = self.get_account_smt_root_and_count()?;
-        Ok(StateTree::new(self, self.account_smt()?, account_count))
+        let current_account_merkle_state = self.get_current_account_merkle_state()?;
+        Ok(StateTree::new(
+            self,
+            self.account_smt()?,
+            current_account_merkle_state.count().unpack(),
+        ))
     }
 
     /// TODO refacotring with version based DB
@@ -117,81 +158,34 @@ impl StateDBTransaction {
         Ok(())
     }
 
-    fn get_block_num_and_tx_index(
-        inner: &StoreTransaction,
-        ver: &StateDBVersion,
-    ) -> Result<(u64, u32), Error> {
-        if ver.is_genesis_version() {
-            return Ok((BLOCK_NUMBER_ZERO, TX_INDEX_ZERO));
-        }
-        let block_hash = &ver
-            .block_hash
-            .ok_or_else(|| "Block hash doesn't exist".to_owned())?;
-        let block_num = inner
-            .get_block_number(block_hash)?
-            .ok_or_else(|| "Block num doesn't exist".to_owned())?;
-        let tx_idx = inner
-            .get_block(block_hash)
-            .map(|blk| {
-                if let Some(block) = blk {
-                    let txs = block.transactions();
-                    if let Some(tx_idx) = ver.tx_index {
-                        if txs.get(tx_idx as usize).is_some() {
-                            // check tx_idx exists in db
-                            Some(tx_idx)
-                        } else {
-                            None
-                        }
-                    } else {
-                        Some(txs.item_count() as u32)
-                    }
-                } else {
-                    None
-                }
-            })?
-            .ok_or_else(|| "Tx index doesn't exist".to_owned())?;
-        Ok((block_num, tx_idx))
-    }
-
-    // This private constructor can be injected with mock data by unit test
-    fn from_tx_index(inner: StoreTransaction, block_num: u64, tx_index: u32) -> Self {
-        StateDBTransaction {
-            inner,
-            block_num,
-            tx_index,
-        }
-    }
-
-    fn get_account_smt_root_and_count(&self) -> Result<(H256, u32), Error> {
-        let block_hash = self.inner.get_block_hash_by_number(self.block_num)?;
+    fn get_current_account_merkle_state(&self) -> Result<AccountMerkleState, Error> {
+        let block_hash = self.inner.get_block_hash_by_number(self.block_number)?;
         let block_hash = match block_hash {
             Some(hash) => hash,
             None => {
-                return Ok((H256::zero(), 0));
+                return Ok(AccountMerkleState::default());
             }
         };
-        let block = self
+        let account_merkle_state = self
             .inner
             .get_block(&block_hash)?
-            .ok_or_else(|| "Block doesnt exist".to_owned())?;
-        let account_merkle_state = block.raw().post_account();
-        Ok((
-            account_merkle_state.merkle_root().unpack(),
-            account_merkle_state.count().unpack(),
-        ))
+            .ok_or_else(|| "Block doesnt exist".to_owned())?
+            .raw()
+            .post_account();
+        Ok(account_merkle_state)
     }
 
-    fn get_key_with_ver_sfx(&self, key: &[u8]) -> Vec<u8> {
+    fn get_key_with_suffix(&self, key: &[u8]) -> Vec<u8> {
         [
             key,
-            &self.block_num.to_be_bytes(),
+            &self.block_number.to_be_bytes(),
             &self.tx_index.to_be_bytes(),
         ]
         .concat()
     }
 
-    fn get_ori_key<'a>(&self, raw_key: &'a [u8]) -> &'a [u8] {
-        &raw_key[..raw_key.len() - size_of_val(&self.block_num) - size_of_val(&self.tx_index)]
+    fn get_original_key<'a>(&self, raw_key: &'a [u8]) -> &'a [u8] {
+        &raw_key[..raw_key.len() - size_of_val(&self.block_number) - size_of_val(&self.tx_index)]
     }
 
     fn filter_value_of_seek(&self, ori_key: &[u8], raw_iter: &DBRawIterator) -> Option<Box<[u8]>> {
@@ -200,16 +194,25 @@ impl StateDBTransaction {
         }
         match raw_iter.key() {
             Some(raw_key_found) => {
-                if ori_key != self.get_ori_key(raw_key_found) {
+                if ori_key != self.get_original_key(raw_key_found) {
                     return None;
                 }
                 match raw_iter.value() {
                     Some(&[FLAG_DELETE_VALUE]) => None,
                     Some(value) => Some(Box::<[u8]>::from(value)),
-                    None => None,
+                    _ => None,
                 }
             }
-            None => None,
+            _ => None,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn from_tx_index(inner: StoreTransaction, block_number: u64, tx_index: u32) -> Self {
+        StateDBTransaction {
+            inner,
+            block_number,
+            tx_index,
         }
     }
 }
@@ -341,6 +344,3 @@ impl<'a> CodeStore for StateTree<'a> {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

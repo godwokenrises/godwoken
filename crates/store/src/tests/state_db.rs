@@ -1,6 +1,9 @@
-use super::*;
-
-use crate::store_impl::Store;
+use crate::{
+    state_db::{StateDBTransaction, StateDBVersion},
+    traits::KVStore,
+    Store,
+};
+use gw_common::H256;
 
 fn get_state_db_txn_from_tx_index(
     store: &Store,
@@ -13,18 +16,14 @@ fn get_state_db_txn_from_tx_index(
 
 #[test]
 fn construct_version() {
-    let block_ver = StateDBVersion::from_genesis();
-    assert!(block_ver.is_genesis_version());
-    assert_eq!(block_ver.block_hash, None);
-    assert_eq!(block_ver.tx_index, None);
+    let state_db_version = StateDBVersion::from_genesis();
+    assert!(state_db_version.is_genesis_version());
 
-    let block_ver = StateDBVersion::from_block_hash([1u8; 32].into());
-    assert_eq!(block_ver.block_hash, Some([1u8; 32].into()));
-    assert_eq!(block_ver.tx_index, None);
+    let state_db_version = StateDBVersion::from_block_hash([1u8; 32].into());
+    assert!(!state_db_version.is_genesis_version());
 
-    let block_ver_with_tx_index = StateDBVersion::from_tx_index([1u8; 32].into(), 100u32);
-    assert_eq!(block_ver_with_tx_index.block_hash, Some([1u8; 32].into()));
-    assert_eq!(block_ver_with_tx_index.tx_index, Some(100u32));
+    let state_db_version = StateDBVersion::from_tx_index([1u8; 32].into(), 100u32);
+    assert!(!state_db_version.is_genesis_version());
 }
 
 #[test]
@@ -281,15 +280,20 @@ fn delete() {
         Box::<[u8]>::from(&0u32.to_be_bytes()[..]),
         state_db_txn.get("1", &[2]).unwrap()
     );
+}
+
+#[test]
+#[should_panic]
+fn insert_special_value_0u8() {
+    let store = Store::open_tmp().unwrap();
+
+    let state_db_txn = get_state_db_txn_from_tx_index(&store, 4u64, 1u32);
 
     // insert 0u8 is a special case.
     // value is 0u8 presents the key has been deleted.
     // so make sure DO NOT insert 0u8 as value by user.
     // 0u16, 0u32, 0u64 as value are even allowed.
-    let state_db_txn = get_state_db_txn_from_tx_index(&store, 4u64, 1u32);
     state_db_txn
         .insert_raw("1", &[2], &0u8.to_be_bytes())
         .unwrap();
-    state_db_txn.commit().unwrap();
-    assert!(state_db_txn.get("1", &[2]).is_none());
 }

@@ -70,8 +70,8 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
         StateDBTransaction::from_version(
             db.clone(),
             StateDBVersion::from_block_hash(tip_block_hash),
-        )
-    }?;
+        )?
+    };
     let mut state = state_db.account_state_tree()?;
     // track state changes
     state.tracker_mut().enable();
