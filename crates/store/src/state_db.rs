@@ -159,15 +159,19 @@ impl StateDBTransaction {
     }
 
     fn get_current_account_merkle_state(&self) -> Result<AccountMerkleState, Error> {
-        let block_hash = if self.version.is_genesis_version() {
-            self.inner.get_block_hash_by_number(self.block_number)?
-        } else {
-            self.version.block_hash
-        };
-        let block_hash = match block_hash {
+        let block_hash = match self.version.block_hash {
             Some(hash) => hash,
             None => {
-                return Ok(AccountMerkleState::default());
+                if self.version.is_genesis_version() {
+                    match self.inner.get_block_hash_by_number(self.block_number)? {
+                        Some(hash) => hash,
+                        None => {
+                            return Ok(AccountMerkleState::default());
+                        }
+                    }
+                } else {
+                    return Err(Error::from("Invalid block hash".to_owned()));
+                }
             }
         };
         let account_merkle_state = self
