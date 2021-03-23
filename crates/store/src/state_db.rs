@@ -9,8 +9,11 @@ use gw_db::schema::{
 };
 use gw_db::{error::Error, iter::DBIter, DBRawIterator, IteratorMode};
 use gw_traits::CodeStore;
-use gw_types::packed::AccountMerkleState;
-use gw_types::{bytes::Bytes, packed, prelude::*};
+use gw_types::{
+    bytes::Bytes,
+    packed::{self, AccountMerkleState},
+    prelude::*,
+};
 
 const FLAG_DELETE_VALUE: u8 = 0;
 
@@ -58,7 +61,7 @@ impl StateDBVersion {
         let block_number = block.raw().number().unpack();
         let tx_index = match self.tx_index {
             Some(tx_index) => {
-                if block.transactions().len() >= tx_index as usize {
+                if tx_index as usize <= block.transactions().len() {
                     tx_index
                 } else {
                     return Err(Error::from("Invalid tx index".to_owned()));
