@@ -11,5 +11,6 @@ members = [
   "crates/types",
   "crates/block-producer",
   "crates/jsonrpc-types",
+  "crates/tools",
   "crates/tests",
 ]
