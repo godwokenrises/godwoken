@@ -1,14 +1,7 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
+use gw_block_producer::types::CellInfo;
 use gw_types::bytes::Bytes;
 use gw_types::packed::{CellDep, CellOutput, DepositionRequest, OutPoint, Transaction};
-
-pub struct CellInfo {
-    pub out_point: OutPoint,
-    pub output: CellOutput,
-    pub data: Bytes,
-    pub lock_dep: CellDep,
-    pub type_dep: Option<CellDep>,
-}
 
 pub struct DepositInfo {
     pub request: DepositionRequest,

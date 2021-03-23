@@ -1,6 +1,9 @@
 use anyhow::{anyhow, Result};
 use cell_collector::{CellCollector, DepositInfo};
-use gw_block_producer::block_producer::{produce_block, ProduceBlockParam, ProduceBlockResult};
+use gw_block_producer::{
+    block_producer::{produce_block, ProduceBlockParam, ProduceBlockResult},
+    types::InputCellInfo,
+};
 use gw_chain::chain::Chain;
 use gw_common::H256;
 use gw_config::Config;
@@ -17,7 +20,7 @@ use gw_types::{
         Byte32, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositionLockArgs, GlobalState,
         L2Block, Script, Transaction, WitnessArgs,
     },
-    prelude::{Builder, Entity, Pack, Unpack},
+    prelude::*,
 };
 use parking_lot::Mutex;
 use std::{collections::HashSet, fs, path::Path, sync::Arc};
@@ -91,11 +94,12 @@ fn build_tx(
         .ok_or(anyhow!("can't find rollup cell"))?;
     let mut tx_skeleton = TransactionSkeleton::default();
     // rollup cell
-    tx_skeleton.inputs_mut().push(
-        CellInput::new_builder()
-            .previous_output(rollup_cell_info.out_point)
+    tx_skeleton.inputs_mut().push(InputCellInfo {
+        input: CellInput::new_builder()
+            .previous_output(rollup_cell_info.out_point.clone())
             .build(),
-    );
+        cell: rollup_cell_info.clone(),
+    });
     // deps
     tx_skeleton.cell_deps_mut().push(
         rollup_cell_info
@@ -121,11 +125,13 @@ fn build_tx(
     tx_skeleton.outputs_mut().push((output, output_data));
     // deposit cells
     for deposit in &deposit_cells {
-        tx_skeleton.inputs_mut().push(
-            CellInput::new_builder()
-                .previous_output(deposit.cell.out_point.clone())
-                .build(),
-        );
+        let input = CellInput::new_builder()
+            .previous_output(deposit.cell.out_point.clone())
+            .build();
+        tx_skeleton.inputs_mut().push(InputCellInfo {
+            input,
+            cell: deposit.cell.clone(),
+        });
     }
 
     // Some deposition cells might have type scripts for sUDTs, handle cell deps
@@ -141,11 +147,8 @@ fn build_tx(
     // TODO stake cell
     // tx fee cell
     fill_tx_fee(&mut tx_skeleton, collector, wallet.lock_hash())?;
-    let mut signatures = Vec::new();
-    for message in tx_skeleton.signature_messages() {
-        signatures.push(wallet.sign(message));
-    }
-    let tx = tx_skeleton.seal(signatures)?;
+    // sign
+    let tx = wallet.sign_tx_skeleton(tx_skeleton)?;
     Ok(tx)
 }
 

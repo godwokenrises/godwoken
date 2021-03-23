@@ -2,6 +2,7 @@ use std::convert::TryInto;
 
 use crate::{cell_collector::CellCollector, transaction_skeleton::TransactionSkeleton};
 use anyhow::{anyhow, Result};
+use gw_block_producer::types::InputCellInfo;
 use gw_types::{packed::CellInput, prelude::*};
 
 /// 100 shannons per KB
@@ -15,16 +16,10 @@ fn calculate_required_tx_fee(tx_size: usize) -> u64 {
 }
 
 /// calculate tx skeleton inputs / outputs
-fn calculate_paid_fee(
-    tx_skeleton: &TransactionSkeleton,
-    cell_collector: &CellCollector,
-) -> Result<(u128, u128)> {
+fn calculate_paid_fee(tx_skeleton: &TransactionSkeleton) -> Result<(u128, u128)> {
     let mut input_capacity: u128 = 0;
     for input in tx_skeleton.inputs() {
-        let cell = cell_collector
-            .get_cell(&input.previous_output())
-            .ok_or(anyhow!("unknown input: {}", input))?;
-        let capacity: u64 = cell.output.capacity().unpack();
+        let capacity: u64 = input.cell.output.capacity().unpack();
         input_capacity = input_capacity
             .checked_add(capacity.into())
             .ok_or(anyhow!("overflow"))?;
@@ -47,7 +42,7 @@ pub fn fill_tx_fee(
     lock_hash: [u8; 32],
 ) -> Result<()> {
     let tx_size: usize = tx_skeleton.tx_in_block_size()?;
-    let (input_capacity, output_capacity) = calculate_paid_fee(tx_skeleton, cell_collector)?;
+    let (input_capacity, output_capacity) = calculate_paid_fee(tx_skeleton)?;
     assert!(
         input_capacity >= output_capacity,
         "Rollup cells capacity should be enough to use"
@@ -68,9 +63,10 @@ pub fn fill_tx_fee(
         tx_skeleton
             .inputs_mut()
             .extend(cells.into_iter().map(|cell| {
-                CellInput::new_builder()
-                    .previous_output(cell.out_point)
-                    .build()
+                let input = CellInput::new_builder()
+                    .previous_output(cell.out_point.clone())
+                    .build();
+                InputCellInfo { input, cell }
             }));
     }
     Ok(())

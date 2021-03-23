@@ -66,5 +66,6 @@ cfg_if::cfg_if! {
         impl_std_hash!(WithdrawalRequest);
         impl_std_hash!(CellDep);
         impl_std_eq!(CellDep);
+        impl_std_eq!(WitnessArgs);
     }
 }

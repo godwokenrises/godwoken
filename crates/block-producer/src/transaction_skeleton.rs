@@ -1,13 +1,16 @@
-use anyhow::Result;
+use std::collections::HashMap;
+
+use anyhow::{anyhow, Result};
+use gw_block_producer::types::{CellInfo, InputCellInfo, SignatureEntry};
 use gw_types::{
     bytes::Bytes,
-    packed::{CellDep, CellInput, CellOutput, Transaction, WitnessArgs},
-    prelude::Entity,
+    packed::{CellDep, CellInput, CellOutput, RawTransaction, Transaction, WitnessArgs},
+    prelude::*,
 };
 
 #[derive(Default)]
 pub struct TransactionSkeleton {
-    inputs: Vec<CellInput>,
+    inputs: Vec<InputCellInfo>,
     cell_deps: Vec<CellDep>,
     witnesses: Vec<WitnessArgs>,
     cell_outputs: Vec<(CellOutput, Bytes)>,
@@ -18,11 +21,11 @@ impl TransactionSkeleton {
         Self::default()
     }
 
-    pub fn inputs(&self) -> &Vec<CellInput> {
+    pub fn inputs(&self) -> &Vec<InputCellInfo> {
         &self.inputs
     }
 
-    pub fn inputs_mut(&mut self) -> &mut Vec<CellInput> {
+    pub fn inputs_mut(&mut self) -> &mut Vec<InputCellInfo> {
         &mut self.inputs
     }
 
@@ -42,22 +45,90 @@ impl TransactionSkeleton {
         &mut self.witnesses
     }
 
-    pub fn signature_messages(&self) -> Vec<[u8; 32]> {
-        unimplemented!()
+    pub fn signature_entries(&self) -> Vec<SignatureEntry> {
+        let mut entries: Vec<_> = self
+            .inputs
+            .iter()
+            .enumerate()
+            .map(|(index, input)| {
+                let lock_hash = input.cell.output.lock().hash();
+                SignatureEntry { lock_hash, index }
+            })
+            .collect();
+        entries.dedup_by_key(|entry| entry.lock_hash);
+        entries.sort_by_key(|entry| entry.index);
+        entries
     }
 
-    pub fn seal(&self, signatures: Vec<[u8; 65]>) -> Result<Transaction> {
-        unimplemented!()
+    pub fn seal(
+        &self,
+        entries: Vec<SignatureEntry>,
+        signatures: Vec<[u8; 65]>,
+    ) -> Result<Transaction> {
+        assert_eq!(entries.len(), signatures.len());
+        // build raw tx
+        let inputs = self
+            .inputs
+            .iter()
+            .map(|input_cell| &input_cell.input)
+            .cloned();
+        let outputs = self
+            .outputs()
+            .iter()
+            .map(|(output, _data)| output.to_owned())
+            .collect::<Vec<_>>();
+        let outputs_data = self
+            .outputs()
+            .iter()
+            .map(|(_output, data)| data.to_owned())
+            .collect::<Vec<_>>();
+        let raw_tx = RawTransaction::new_builder()
+            .inputs(inputs.pack())
+            .outputs(outputs.pack())
+            .outputs_data(outputs_data.pack())
+            .cell_deps(self.cell_deps.clone().pack())
+            .build();
+
+        // build witnesses
+        let mut witnesses: Vec<WitnessArgs> = self.witnesses.clone();
+        if witnesses.len() < self.inputs.len() {
+            witnesses.resize(self.inputs.len(), Default::default());
+        }
+        // set signature to witnesses
+        for (entry, signature) in entries.into_iter().zip(signatures) {
+            let witness_args = witnesses.get_mut(entry.index).expect("can't find witness");
+            if witness_args.lock().is_some() {
+                return Err(anyhow!(
+                    "entry signature conflict with the witness index: {}",
+                    entry.index
+                ));
+            }
+            *witness_args = witness_args
+                .to_owned()
+                .as_builder()
+                .lock(Some(Bytes::from(signature.to_vec())).pack())
+                .build();
+        }
+
+        let witnesses = witnesses
+            .into_iter()
+            .map(|args| args.as_bytes())
+            .collect::<Vec<_>>();
+        let tx = Transaction::new_builder()
+            .raw(raw_tx)
+            .witnesses(witnesses.pack())
+            .build();
+        Ok(tx)
     }
 
     pub fn tx_in_block_size(&self) -> Result<usize> {
+        let entries = self.signature_entries();
         let dummy_signatures = {
-            let len = self.signature_messages().len();
-            let mut dummy_signatures = Vec::with_capacity(len);
-            dummy_signatures.resize(len, [0u8; 65]);
+            let mut dummy_signatures = Vec::with_capacity(entries.len());
+            dummy_signatures.resize(entries.len(), [0u8; 65]);
             dummy_signatures
         };
-        let tx = self.seal(dummy_signatures)?;
+        let tx = self.seal(entries, dummy_signatures)?;
         // tx size + 4 in block serialization cost
         let tx_in_block_size = tx.as_slice().len() + 4;
         Ok(tx_in_block_size)
