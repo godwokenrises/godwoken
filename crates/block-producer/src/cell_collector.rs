@@ -31,4 +31,14 @@ impl CellCollector {
     pub fn send_transaction(&self, tx: Transaction) -> Result<()> {
         unimplemented!()
     }
+
+    pub fn get_cell(&self, out_point: &OutPoint) -> Option<CellInfo> {
+        unimplemented!()
+    }
+
+    /// query payment cells, the returned cells should provide at least total_capacity fee,
+    /// and the remained fees should be enough to cover a charge cell
+    pub fn query_payment_cells(&self, lock_hash: &[u8; 32], total_capacity: u64) -> Vec<CellInfo> {
+        unimplemented!()
+    }
 }

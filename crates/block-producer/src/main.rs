@@ -22,10 +22,14 @@ use gw_types::{
 use parking_lot::Mutex;
 use std::{collections::HashSet, fs, path::Path, sync::Arc};
 use transaction_skeleton::TransactionSkeleton;
+use utils::fill_tx_fee;
+use wallet::Wallet;
 
 mod block_producer;
 mod cell_collector;
 mod transaction_skeleton;
+mod utils;
+mod wallet;
 
 fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
     let content = fs::read(path)?;
@@ -74,19 +78,10 @@ fn generate_custodian_cells(
         .collect()
 }
 
-/// Add fee cell to tx skeleton
-fn fill_tx_fee(collector: &CellCollector, tx_skeleton: &mut TransactionSkeleton) -> Result<()> {
-    unimplemented!()
-}
-
-// sign message
-fn sign(msg: [u8; 32]) -> [u8; 65] {
-    unimplemented!()
-}
-
 fn build_tx(
     rollup_context: &RollupContext,
     collector: &CellCollector,
+    wallet: &Wallet,
     deposit_cells: Vec<DepositInfo>,
     block: L2Block,
     global_state: GlobalState,
@@ -96,24 +91,26 @@ fn build_tx(
         .ok_or(anyhow!("can't find rollup cell"))?;
     let mut tx_skeleton = TransactionSkeleton::default();
     // rollup cell
-    tx_skeleton.inputs().push(
+    tx_skeleton.inputs_mut().push(
         CellInput::new_builder()
             .previous_output(rollup_cell_info.out_point)
             .build(),
     );
     // deps
-    tx_skeleton.cell_deps().push(
+    tx_skeleton.cell_deps_mut().push(
         rollup_cell_info
             .type_dep
             .ok_or(anyhow!("rollup type dep should exists"))?,
     );
-    tx_skeleton.cell_deps().push(rollup_cell_info.lock_dep);
+    tx_skeleton.cell_deps_mut().push(rollup_cell_info.lock_dep);
     // deposit lock dep
     if let Some(deposit) = deposit_cells.first() {
-        tx_skeleton.cell_deps().push(deposit.cell.lock_dep.clone());
+        tx_skeleton
+            .cell_deps_mut()
+            .push(deposit.cell.lock_dep.clone());
     }
     // witnesses
-    tx_skeleton.witnesses().push(
+    tx_skeleton.witnesses_mut().push(
         WitnessArgs::new_builder()
             .output_type(Some(block.as_bytes()).pack())
             .build(),
@@ -121,10 +118,10 @@ fn build_tx(
     // output
     let output = rollup_cell_info.output;
     let output_data = global_state.as_bytes();
-    tx_skeleton.outputs().push((output, output_data));
+    tx_skeleton.outputs_mut().push((output, output_data));
     // deposit cells
     for deposit in &deposit_cells {
-        tx_skeleton.inputs().push(
+        tx_skeleton.inputs_mut().push(
             CellInput::new_builder()
                 .previous_output(deposit.cell.out_point.clone())
                 .build(),
@@ -137,16 +134,16 @@ fn build_tx(
         .iter()
         .filter_map(|deposit| deposit.cell.type_dep.clone())
         .collect();
-    tx_skeleton.cell_deps().extend(deposit_type_deps);
+    tx_skeleton.cell_deps_mut().extend(deposit_type_deps);
     // custodian cells
     let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
-    tx_skeleton.outputs().extend(custodian_cells);
+    tx_skeleton.outputs_mut().extend(custodian_cells);
     // TODO stake cell
     // tx fee cell
-    fill_tx_fee(collector, &mut tx_skeleton)?;
+    fill_tx_fee(&mut tx_skeleton, collector, wallet.lock_hash())?;
     let mut signatures = Vec::new();
     for message in tx_skeleton.signature_messages() {
-        signatures.push(sign(message));
+        signatures.push(wallet.sign(message));
     }
     let tx = tx_skeleton.seal(signatures)?;
     Ok(tx)
@@ -154,6 +151,7 @@ fn build_tx(
 
 fn produce_next_block(
     collector: &CellCollector,
+    wallet: &Wallet,
     chain: &Chain,
     rollup_config_hash: &H256,
     block_producer_id: u32,
@@ -209,7 +207,8 @@ fn produce_next_block(
     let rollup_context = chain.generator.rollup_context();
     let tx = build_tx(
         rollup_context,
-        &collector,
+        collector,
+        wallet,
         deposit_cells,
         block,
         global_state,
@@ -265,10 +264,12 @@ fn run() -> Result<()> {
     let block_producer_id = 0;
     let timestamp = 0;
     let collector = CellCollector;
+    let wallet = Wallet;
 
     // produce block
     produce_next_block(
         &collector,
+        &wallet,
         &chain,
         &rollup_config_hash,
         block_producer_id,
