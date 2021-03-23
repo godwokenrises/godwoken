@@ -11,7 +11,8 @@ fn get_state_db_txn_from_tx_index(
     tx_index: u32,
 ) -> StateDBTransaction {
     let store_txn = store.begin_transaction();
-    StateDBTransaction::from_tx_index(store_txn, block_number, tx_index)
+    let version = StateDBVersion::from_genesis();   // placeholder, no use for tests
+    StateDBTransaction::from_tx_index(store_txn, version, block_number, tx_index)
 }
 
 #[test]

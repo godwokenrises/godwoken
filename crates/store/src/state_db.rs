@@ -72,6 +72,7 @@ impl StateDBVersion {
 
 pub struct StateDBTransaction {
     inner: StoreTransaction,
+    version: StateDBVersion,
     block_number: u64,
     tx_index: u32,
 }
@@ -111,6 +112,7 @@ impl StateDBTransaction {
         let (block_number, tx_index) = version.load_block_number_and_tx_index(&inner)?;
         Ok(StateDBTransaction {
             inner,
+            version,
             block_number,
             tx_index,
         })
@@ -157,7 +159,11 @@ impl StateDBTransaction {
     }
 
     fn get_current_account_merkle_state(&self) -> Result<AccountMerkleState, Error> {
-        let block_hash = self.inner.get_block_hash_by_number(self.block_number)?;
+        let block_hash = if self.version.is_genesis_version() {
+            self.inner.get_block_hash_by_number(self.block_number)?
+        } else {
+            self.version.block_hash
+        };
         let block_hash = match block_hash {
             Some(hash) => hash,
             None => {
@@ -206,9 +212,15 @@ impl StateDBTransaction {
     }
 
     #[cfg(test)]
-    pub fn from_tx_index(inner: StoreTransaction, block_number: u64, tx_index: u32) -> Self {
+    pub fn from_tx_index(
+        inner: StoreTransaction,
+        version: StateDBVersion,
+        block_number: u64,
+        tx_index: u32,
+    ) -> Self {
         StateDBTransaction {
             inner,
+            version,
             block_number,
             tx_index,
         }
