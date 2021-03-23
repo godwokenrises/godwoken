@@ -41,6 +41,11 @@ fn test_init_genesis() {
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());
     assert_ne!(db.get_account_smt_root().unwrap(), H256::zero());
+    let result = StateDBTransaction::from_version(
+        db.clone(),
+        StateDBVersion::from_tx_index(GENESIS_BLOCK_HASH.into(), 1),
+    );
+    assert!(result.is_err(), "invalid tx index");
     let state_db = StateDBTransaction::from_version(db, StateDBVersion::from_genesis()).unwrap();
     let tree = state_db.account_state_tree().unwrap();
     assert!(tree.get_account_count().unwrap() > 0);
