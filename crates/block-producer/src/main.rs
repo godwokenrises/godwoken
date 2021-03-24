@@ -267,7 +267,10 @@ fn run() -> Result<()> {
     let block_producer_id = 0;
     let timestamp = 0;
     let collector = CellCollector;
-    let wallet = Wallet;
+    let wallet = {
+        let block_producer_config = &config.block_producer.ok_or(anyhow!("block producer"))?;
+        Wallet::from_config(&block_producer_config.wallet_config)?
+    };
 
     // produce block
     produce_next_block(

@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
-use gw_block_producer::types::{CellInfo, InputCellInfo, SignatureEntry};
+use gw_block_producer::types::{InputCellInfo, SignatureEntry};
 use gw_types::{
     bytes::Bytes,
-    packed::{CellDep, CellInput, CellOutput, RawTransaction, Transaction, WitnessArgs},
+    packed::{CellDep, CellOutput, RawTransaction, Transaction, WitnessArgs},
     prelude::*,
 };
 
@@ -46,23 +46,22 @@ impl TransactionSkeleton {
     }
 
     pub fn signature_entries(&self) -> Vec<SignatureEntry> {
-        let mut entries: Vec<_> = self
-            .inputs
-            .iter()
-            .enumerate()
-            .map(|(index, input)| {
-                let lock_hash = input.cell.output.lock().hash();
-                SignatureEntry { lock_hash, index }
-            })
-            .collect();
-        entries.dedup_by_key(|entry| entry.lock_hash);
-        entries.sort_by_key(|entry| entry.index);
-        entries
+        let mut entries: HashMap<[u8; 32], SignatureEntry> = Default::default();
+        for (index, input) in self.inputs.iter().enumerate() {
+            let lock_hash = input.cell.output.lock().hash();
+            let entry = entries.entry(lock_hash).or_insert_with(|| SignatureEntry {
+                lock_hash,
+                indexes: Vec::new(),
+            });
+            entry.indexes.push(index);
+        }
+
+        entries.values().cloned().collect()
     }
 
     pub fn seal(
         &self,
-        entries: Vec<SignatureEntry>,
+        entries: &[SignatureEntry],
         signatures: Vec<[u8; 65]>,
     ) -> Result<Transaction> {
         assert_eq!(entries.len(), signatures.len());
@@ -96,11 +95,13 @@ impl TransactionSkeleton {
         }
         // set signature to witnesses
         for (entry, signature) in entries.into_iter().zip(signatures) {
-            let witness_args = witnesses.get_mut(entry.index).expect("can't find witness");
+            let witness_args = witnesses
+                .get_mut(entry.indexes[0])
+                .expect("can't find witness");
             if witness_args.lock().is_some() {
                 return Err(anyhow!(
                     "entry signature conflict with the witness index: {}",
-                    entry.index
+                    entry.indexes[0]
                 ));
             }
             *witness_args = witness_args
@@ -128,7 +129,7 @@ impl TransactionSkeleton {
             dummy_signatures.resize(entries.len(), [0u8; 65]);
             dummy_signatures
         };
-        let tx = self.seal(entries, dummy_signatures)?;
+        let tx = self.seal(&entries, dummy_signatures)?;
         // tx size + 4 in block serialization cost
         let tx_in_block_size = tx.as_slice().len() + 4;
         Ok(tx_in_block_size)

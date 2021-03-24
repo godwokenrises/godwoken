@@ -17,7 +17,8 @@ pub struct InputCellInfo {
     pub cell: CellInfo,
 }
 
+#[derive(Clone)]
 pub struct SignatureEntry {
-    pub index: usize,
+    pub indexes: Vec<usize>,
     pub lock_hash: [u8; 32],
 }

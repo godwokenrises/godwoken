@@ -721,6 +721,8 @@ name = "gw-block-producer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "ckb-crypto",
+ "faster-hex 0.4.1",
  "gw-chain",
  "gw-common",
  "gw-config",

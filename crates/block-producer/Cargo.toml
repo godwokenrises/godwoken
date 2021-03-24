@@ -14,6 +14,8 @@ gw-types = { path = "../types" }
 gw-store = { path = "../store" }
 gw-generator = { path = "../generator" }
 gw-mem-pool = { path = "../mem-pool" }
+faster-hex = "0.4"
+ckb-crypto = "0.37.0"
 toml = "0.5"
 parking_lot = "0.11"
 anyhow = "1.0"

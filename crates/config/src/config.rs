@@ -32,8 +32,15 @@ pub struct GenesisConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WalletConfig {
+    pub privkey_path: PathBuf,
+    pub lock_hash: H256,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockProducerConfig {
     pub account_id: u32,
+    pub wallet_config: WalletConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

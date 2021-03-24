@@ -21,4 +21,4 @@ secp256k1 = { version = "0.20", features = ["recovery"] }
 sha3 = "0.9.1"
 
 [dev-dependencies]
-hex = "0.4.2"
+hex = "0.4"
