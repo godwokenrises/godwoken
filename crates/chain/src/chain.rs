@@ -339,12 +339,6 @@ impl Chain {
             for reverted_action in param.reverts {
                 self.revert_l1action(&db, reverted_action)?;
             }
-            // reconstruct account state tree
-            let event = self.replay_chain(&db)?;
-            if event != SyncEvent::Success {
-                db.commit()?;
-                return Ok(event);
-            }
         }
         // update layer1 actions
         for action in param.updates {
@@ -370,14 +364,14 @@ impl Chain {
                 .post_account()
                 .merkle_root()
                 .unpack();
-            assert_eq!(
-                db.get_account_smt_root().unwrap(),
-                expected_account_root,
-                "account root consistent in DB"
-            );
             let state_db = StateDBTransaction::from_version(
                 db,
                 StateDBVersion::from_block_hash(self.local_state.tip().hash().into()),
+            )?;
+            assert_eq!(
+                state_db.account_smt().unwrap().root(),
+                &expected_account_root,
+                "account root consistent in DB"
             );
             let tree = state_db.account_state_tree()?;
             let current_account_root = tree.calculate_root().unwrap();
@@ -413,7 +407,7 @@ impl Chain {
         let state_db = StateDBTransaction::from_version(
             db.clone(),
             StateDBVersion::from_block_hash(old_tip_block_hash),
-        );
+        )?;
         let reserved_account_code_hash: [u8; 32] = {
             let tree = state_db.account_state_tree()?;
             let script_hash = tree.get_script_hash(RESERVED_ACCOUNT_ID)?;
@@ -492,7 +486,7 @@ impl Chain {
         let state_db = StateDBTransaction::from_version(
             db.clone(),
             StateDBVersion::from_block_hash(tip_block_hash),
-        );
+        )?;
         let mut tree = state_db.account_state_tree()?;
         // process transactions
         let result = match self

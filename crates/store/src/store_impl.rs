@@ -71,7 +71,7 @@ impl<'a> Store {
     /// Return state at version
     pub fn state_at(&self, version: StateDBVersion) -> Result<StateDBTransaction> {
         let db = self.begin_transaction();
-        let state_db = StateDBTransaction::from_version(db, version);
+        let state_db = StateDBTransaction::from_version(db, version)?;
         Ok(state_db)
     }
 

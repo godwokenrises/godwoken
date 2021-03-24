@@ -1,7 +1,7 @@
 use gw_db::schema::Col;
-use gw_db::{error::Error, iter::DBIter, DBVector, IteratorMode};
+use gw_db::{error::Error, iter::DBIter, IteratorMode};
 pub trait KVStore {
-    fn get(&self, col: Col, key: &[u8]) -> Option<DBVector>;
+    fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>>;
 
     fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter;
 

@@ -7,3 +7,6 @@ pub mod transaction;
 mod write_batch;
 
 pub use store_impl::Store;
+
+#[cfg(test)]
+mod tests;
