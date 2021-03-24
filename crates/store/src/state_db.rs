@@ -61,13 +61,13 @@ impl StateDBVersion {
         let block_number = block.raw().number().unpack();
         let tx_index = match self.tx_index {
             Some(tx_index) => {
-                if tx_index as usize <= block.transactions().len() {
+                if tx_index as usize <= block.transactions().len().saturating_sub(1) {
                     tx_index
                 } else {
                     return Err(Error::from("Invalid tx index".to_owned()));
                 }
             }
-            None => block.transactions().len() as u32,
+            None => block.transactions().len().saturating_sub(1) as u32,
         };
         Ok((block_number, tx_index))
     }
