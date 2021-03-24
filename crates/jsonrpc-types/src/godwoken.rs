@@ -235,7 +235,7 @@ impl From<ChallengeTarget> for packed::ChallengeTarget {
 impl From<packed::ChallengeTarget> for ChallengeTarget {
     fn from(challenge_target: packed::ChallengeTarget) -> ChallengeTarget {
         let target_index: u32 = challenge_target.target_index().unpack();
-        let target_type: packed::Byte = challenge_target.target_type().into();
+        let target_type: packed::Byte = challenge_target.target_type();
         Self {
             block_hash: challenge_target.block_hash().unpack(),
             target_index: Uint32::from(target_index),

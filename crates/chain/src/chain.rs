@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
-use gw_common::{builtins::RESERVED_ACCOUNT_ID, sparse_merkle_tree, state::State, H256};
-use gw_config::{ChainConfig, GenesisConfig};
+use gw_common::{sparse_merkle_tree, state::State, H256};
+use gw_config::ChainConfig;
 use gw_generator::{
     generator::StateTransitionArgs, ChallengeContext, Error as GeneratorError, Generator,
 };
@@ -11,7 +11,6 @@ use gw_store::{
     transaction::StoreTransaction,
     Store,
 };
-use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::Status,
@@ -152,10 +151,10 @@ impl Chain {
         let tip = store.get_tip_block()?;
         let last_synced = store
             .get_block_synced_header_info(&tip.hash().into())?
-            .ok_or(anyhow!("can't find last synced header info"))?;
+            .ok_or_else(|| anyhow!("can't find last synced header info"))?;
         let last_global_state = store
             .get_block_post_global_state(&tip.hash().into())?
-            .ok_or(anyhow!("can't find last global state"))?;
+            .ok_or_else(|| anyhow!("can't find last global state"))?;
         let local_state = LocalState {
             tip,
             last_synced,
@@ -220,7 +219,7 @@ impl Chain {
                 let l2block = parse_l2block(&transaction, &self.rollup_type_script_hash)?;
                 if let Some(challenge_context) = self.process_block(
                     db,
-                    l2block.clone(),
+                    l2block,
                     header_info.clone(),
                     global_state.clone(),
                     deposition_requests,
@@ -247,7 +246,7 @@ impl Chain {
                     // in both cases the challenge is bad
                     // TODO: implement this
                     let _witness = VerifyTransactionWitness::default();
-                    let _tx_receipt = unimplemented!();
+                    unimplemented!();
                     // SyncEvent::BadChallenge {
                     //     witness,
                     //     tx_receipt,
@@ -280,7 +279,7 @@ impl Chain {
         };
 
         // update last global state
-        self.local_state.last_global_state = global_state.clone();
+        self.local_state.last_global_state = global_state;
         self.local_state.last_synced = header_info;
         Ok(event)
     }
@@ -303,6 +302,7 @@ impl Chain {
             },
             "must be smaller than or equalled to last synced number"
         );
+        #[allow(clippy::single_match)]
         match context {
             L1ActionContext::SubmitTxs {
                 deposition_requests: _,
@@ -322,7 +322,7 @@ impl Chain {
         };
 
         // update last global state
-        self.local_state.last_global_state = prev_global_state.clone();
+        self.local_state.last_global_state = prev_global_state;
         self.local_state.tip = db.get_tip_block()?;
         self.local_state.last_synced = db
             .get_block_synced_header_info(&self.local_state.tip.hash().into())?
@@ -379,79 +379,6 @@ impl Chain {
                 current_account_root, expected_account_root,
                 "check account tree"
             );
-        }
-        Ok(SyncEvent::Success)
-    }
-
-    // replay chain to reconstruct account SMT
-    // TODO this method should be replaced with a version based storage
-    fn replay_chain(&mut self, db: &StoreTransaction) -> Result<SyncEvent> {
-        let tip_number: u64 = self.local_state.tip.raw().number().unpack();
-        // reset local state
-        let genesis_hash = db.get_block_hash_by_number(0)?.expect("genesis").into();
-        let genesis = db.get_block(&genesis_hash)?.expect("genesis");
-        let genesis_header_info = db
-            .get_block_synced_header_info(&genesis_hash.into())?
-            .expect("genesis");
-        let genesis_global_state = db
-            .get_block_post_global_state(&genesis_hash.into())?
-            .expect("genesis");
-        let old_tip_block_hash = self.local_state.tip().hash().into();
-        self.local_state = LocalState {
-            tip: genesis.clone(),
-            last_synced: genesis_header_info,
-            last_global_state: genesis_global_state,
-        };
-        // reset account SMT to genesis
-        // TODO use version based storage
-        let state_db = StateDBTransaction::from_version(
-            db.clone(),
-            StateDBVersion::from_block_hash(old_tip_block_hash),
-        )?;
-        let reserved_account_code_hash: [u8; 32] = {
-            let tree = state_db.account_state_tree()?;
-            let script_hash = tree.get_script_hash(RESERVED_ACCOUNT_ID)?;
-            let script = tree
-                .get_script(&script_hash)
-                .expect("get meta contract script");
-            script.code_hash().unpack()
-        };
-        state_db.clear_account_state_tree()?;
-        gw_generator::genesis::build_genesis_from_store(
-            db,
-            &GenesisConfig {
-                timestamp: genesis.raw().timestamp().unpack(),
-                meta_contract_validator_type_hash: reserved_account_code_hash.into(),
-            },
-            self.generator.rollup_context(),
-        )?;
-        // replay blocks
-        for number in 1..tip_number {
-            let block_hash = db
-                .get_block_hash_by_number(number)?
-                .expect("get l2block")
-                .into();
-            let l2block = db.get_block(&block_hash)?.expect("l2block");
-            let header_info = db
-                .get_block_synced_header_info(&block_hash)?
-                .expect("get l2block header info");
-            let global_state = db
-                .get_block_post_global_state(&block_hash)?
-                .expect("get l2block global state");
-            let deposition_requests = db
-                .get_block_deposition_requests(&block_hash)?
-                .expect("get l2block deposition requests");
-            if let Some(challenge_context) = self.process_block(
-                db,
-                l2block.clone(),
-                header_info.clone(),
-                global_state.clone(),
-                deposition_requests,
-            )? {
-                // stop syncing and return event
-                self.bad_block_context = Some(challenge_context.target.clone());
-                return Ok(SyncEvent::BadBlock(challenge_context));
-            }
         }
         Ok(SyncEvent::Success)
     }

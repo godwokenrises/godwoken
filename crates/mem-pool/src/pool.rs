@@ -1,3 +1,5 @@
+#![allow(clippy::mutable_key_type)]
+#![allow(clippy::unnecessary_unwrap)]
 //! MemPool
 //!
 //! MemPool does not guarantee that tx & withdraw is fully valid,
@@ -81,7 +83,7 @@ impl EntryList {
         }
 
         // remove lower balance withdrawals
-        if let Some(withdrawal) = self.withdrawals.get(0).clone() {
+        if let Some(withdrawal) = self.withdrawals.get(0) {
             let withdrawal_capacity: u64 = withdrawal.raw().capacity().unpack();
             if (withdrawal_capacity as u128) > capacity {
                 // TODO instead of remove all withdrawals, put them into future queue
@@ -120,7 +122,7 @@ impl MemPool {
 
         let tip = db.get_tip_block_hash()?;
 
-        let state_db = db.state_at(StateDBVersion::from_block_hash(tip.clone()))?;
+        let state_db = db.state_at(StateDBVersion::from_block_hash(tip))?;
 
         let mut mem_pool = MemPool {
             db,
@@ -294,6 +296,7 @@ impl MemPool {
 
     /// Move executables into pending.
     /// TODO
+    #[allow(clippy::unnecessary_wraps)]
     fn promote_executables<I: Iterator>(&self, _accounts: I) -> Result<()> {
         Ok(())
     }

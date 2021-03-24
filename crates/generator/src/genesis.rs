@@ -28,8 +28,8 @@ pub fn build_genesis(
     rollup_context: &RollupContext,
 ) -> Result<GenesisWithGlobalState> {
     let store = Store::open_tmp()?;
-    let mut db = store.begin_transaction();
-    build_genesis_from_store(&mut db, config, rollup_context)
+    let db = store.begin_transaction();
+    build_genesis_from_store(&db, config, rollup_context)
 }
 
 pub struct GenesisWithGlobalState {
@@ -109,7 +109,7 @@ pub fn build_genesis_from_store(
         let block_proof = smt
             .merkle_proof(vec![block_key.into()])?
             .compile(vec![(block_key.into(), genesis_hash.into())])?;
-        let block_root = smt.root().clone();
+        let block_root = *smt.root();
         (block_root, block_proof)
     };
 
@@ -158,12 +158,12 @@ pub fn init_genesis(
     if store.has_genesis()? {
         panic!("The store is already initialized!");
     }
-    let mut db = store.begin_transaction();
+    let db = store.begin_transaction();
     db.setup_chain_id(rollup_context.rollup_script_hash)?;
     let GenesisWithGlobalState {
         genesis,
         global_state,
-    } = build_genesis_from_store(&mut db, config, rollup_context)?;
+    } = build_genesis_from_store(&db, config, rollup_context)?;
     db.insert_block(
         genesis.clone(),
         header,

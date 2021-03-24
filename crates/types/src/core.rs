@@ -48,7 +48,7 @@ impl TryFrom<u8> for Status {
         match value {
             0 => Ok(Status::Running),
             1 => Ok(Status::Halting),
-            n => return Err(n),
+            n => Err(n),
         }
     }
 }
@@ -87,7 +87,7 @@ impl TryFrom<u8> for ChallengeTargetType {
         match value {
             0 => Ok(ChallengeTargetType::Transaction),
             1 => Ok(ChallengeTargetType::Withdrawal),
-            n => return Err(n),
+            n => Err(n),
         }
     }
 }

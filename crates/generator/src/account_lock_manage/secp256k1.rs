@@ -53,7 +53,7 @@ impl LockAlgorithm for Secp256k1 {
             pubkey_hash.copy_from_slice(&buf[..20]);
             pubkey_hash
         };
-        if &pubkey_hash != &expected_pubkey_hash {
+        if pubkey_hash != expected_pubkey_hash {
             return Ok(false);
         }
         Ok(true)
@@ -108,7 +108,7 @@ impl LockAlgorithm for Secp256k1Eth {
             pubkey_hash.copy_from_slice(&buf[12..]);
             pubkey_hash
         };
-        if &pubkey_hash != &expected_pubkey_hash {
+        if pubkey_hash != expected_pubkey_hash {
             return Ok(false);
         }
         Ok(true)

@@ -66,7 +66,7 @@ impl<S: State + CodeStore> StateExt for S {
 
     fn apply_run_result(&mut self, run_result: &RunResult) -> Result<(), Error> {
         for (k, v) in &run_result.write_values {
-            self.update_raw((*k).into(), (*v).into())?;
+            self.update_raw(*k, *v)?;
         }
         if let Some(id) = run_result.account_count {
             self.set_account_count(id)?;
@@ -92,7 +92,7 @@ impl<S: State + CodeStore> StateExt for S {
         let id = match self.get_account_id_by_script_hash(&account_script_hash.into())? {
             Some(id) => id,
             None => {
-                self.insert_script(account_script_hash.into(), request.script().clone());
+                self.insert_script(account_script_hash.into(), request.script());
                 self.create_account(account_script_hash.into())?
             }
         };
@@ -153,9 +153,7 @@ impl<S: State + CodeStore> StateExt for S {
         }
         // increase nonce
         let nonce = self.get_nonce(id)?;
-        let new_nonce = nonce
-            .checked_add(1)
-            .ok_or_else(|| AccountError::NonceOverflow)?;
+        let new_nonce = nonce.checked_add(1).ok_or(AccountError::NonceOverflow)?;
         self.set_nonce(id, new_nonce)?;
         Ok(())
     }

@@ -14,7 +14,7 @@ impl Default for Byte65 {
 
 impl PartialEq for Byte65 {
     fn eq(&self, other: &Byte65) -> bool {
-        &self.0[..] == &other.0[..]
+        self.0[..] == other.0[..]
     }
 }
 

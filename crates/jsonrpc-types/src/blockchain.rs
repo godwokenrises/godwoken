@@ -71,9 +71,7 @@ impl From<packed::Script> for Script {
         Script {
             code_hash: input.code_hash().unpack(),
             args: JsonBytes::from_bytes(input.args().unpack()),
-            hash_type: ScriptHashType::try_from(input.hash_type())
-                .expect("checked data")
-                .into(),
+            hash_type: ScriptHashType::try_from(input.hash_type()).expect("checked data"),
         }
     }
 }

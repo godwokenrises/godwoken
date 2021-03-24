@@ -2,10 +2,10 @@
 mod build {
     use std::process::Command;
 
-    const MOLECULE: &'static str = "moleculec";
-    const REQUIRED_MOLECULE_VERSION: &'static str = "0.6.1";
-    const SCHEMAS_DIR: &'static str = "schemas";
-    const OUTPUT_DIR: &'static str = "src/generated";
+    const MOLECULE: &str = "moleculec";
+    const REQUIRED_MOLECULE_VERSION: &str = "0.6.1";
+    const SCHEMAS_DIR: &str = "schemas";
+    const OUTPUT_DIR: &str = "src/generated";
 
     pub fn check_molecule_version() {
         let output = Command::new(MOLECULE)

@@ -50,7 +50,7 @@ pub struct ProduceBlockParam<'a> {
 /// this method take txs & withdrawal requests from tx pool and produce a new block
 /// the package method should packs the items in order:
 /// withdrawals, then deposits, finally the txs. Thus, the state-validator can verify this correctly
-pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockResult> {
+pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult> {
     let ProduceBlockParam {
         db,
         generator,
@@ -100,7 +100,7 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
         let capacity: u64 = request.raw().capacity().unpack();
         let new_total_withdrwal_capacity = total_withdrawal_capacity
             .checked_add(capacity as u128)
-            .ok_or(anyhow!("total withdrawal capacity overflow"))?;
+            .ok_or_else(|| anyhow!("total withdrawal capacity overflow"))?;
         // skip package withdrwal if overdraft the Rollup capacity
         if new_total_withdrwal_capacity > max_withdrawal_capacity {
             unused_withdrawal_requests.push(request);
@@ -178,14 +178,7 @@ pub fn produce_block<'a>(param: ProduceBlockParam<'a>) -> Result<ProduceBlockRes
                     .collect::<Vec<_>>()
                     .pack(),
             )
-            .logs(
-                run_result
-                    .logs
-                    .iter()
-                    .map(|item| item.clone().into())
-                    .collect::<Vec<_>>()
-                    .pack(),
-            )
+            .logs(run_result.logs.pack())
             .build();
         used_transactions.push(tx);
         tx_receipts.push(receipt);

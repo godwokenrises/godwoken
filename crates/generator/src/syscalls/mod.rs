@@ -82,13 +82,13 @@ fn load_data_h256<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<H
     Ok(H256::from(data))
 }
 
+#[allow(clippy::clippy::needless_range_loop)]
 fn load_bytes<Mac: SupportMachine>(
     machine: &mut Mac,
     addr: u64,
     len: usize,
 ) -> Result<Vec<u8>, VMError> {
-    let mut data = Vec::with_capacity(len);
-    data.resize(len, 0);
+    let mut data = vec![0; len];
     for i in 0..len {
         data[i] = machine
             .memory_mut()
@@ -187,16 +187,14 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     .rollup_config
                     .allowed_eoa_type_hashes()
                     .into_iter()
-                    .find(|type_hash| type_hash == &script.code_hash())
-                    .is_some();
+                    .any(|type_hash| type_hash == script.code_hash());
                 if !is_eoa_account {
                     let is_contract_account = self
                         .rollup_context
                         .rollup_config
                         .allowed_contract_type_hashes()
                         .into_iter()
-                        .find(|type_hash| type_hash == &script.code_hash())
-                        .is_some();
+                        .any(|type_hash| type_hash == script.code_hash());
                     if !is_contract_account {
                         machine.set_register(A0, Mac::REG::from_u8(ERROR_UNKNOWN_SCRIPT_CODE_HASH));
                         return Ok(true);
@@ -214,23 +212,22 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
 
                 // Same logic from State::create_account()
                 let id = self.get_account_count()?;
+                self.result
+                    .write_values
+                    .insert(build_account_field_key(id, GW_ACCOUNT_NONCE), H256::zero());
                 self.result.write_values.insert(
-                    build_account_field_key(id, GW_ACCOUNT_NONCE).into(),
-                    H256::zero(),
-                );
-                self.result.write_values.insert(
-                    build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH).into(),
+                    build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH),
                     script_hash.into(),
                 );
                 // script hash to id
                 self.result.write_values.insert(
-                    build_script_hash_to_account_id_key(&script_hash[..]).into(),
+                    build_script_hash_to_account_id_key(&script_hash[..]),
                     H256::from_u32(id),
                 );
                 self.result
                     .new_scripts
                     .insert(script_hash.into(), script.as_slice().to_vec());
-                self.set_account_count(id + 1)?;
+                self.set_account_count(id + 1);
                 machine
                     .memory_mut()
                     .store32(&account_id_addr, &Mac::REG::from_u32(id))?;
@@ -435,9 +432,8 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
             })
         }
     }
-    fn set_account_count(&mut self, count: u32) -> Result<(), VMError> {
+    fn set_account_count(&mut self, count: u32) {
         self.result.account_count = Some(count);
-        Ok(())
     }
     fn get_script(&self, script_hash: &H256) -> Option<Script> {
         self.result
@@ -455,19 +451,19 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
     }
     fn get_script_hash(&mut self, id: u32) -> Result<H256, VMError> {
         let value = self
-            .get_raw(&build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH).into())
+            .get_raw(&build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH))
             .map_err(|err| {
                 eprintln!("syscall error: get script hash by account id : {:?}", err);
                 VMError::Unexpected
             })?;
-        Ok(value.into())
+        Ok(value)
     }
     fn get_account_id_by_script_hash(
         &mut self,
         script_hash: &H256,
     ) -> Result<Option<u32>, VMError> {
         let value = self
-            .get_raw(&build_script_hash_to_account_id_key(script_hash.as_slice()).into())
+            .get_raw(&build_script_hash_to_account_id_key(script_hash.as_slice()))
             .map_err(|err| {
                 eprintln!("syscall error: get account id by script hash : {:?}", err);
                 VMError::Unexpected

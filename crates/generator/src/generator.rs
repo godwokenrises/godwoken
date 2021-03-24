@@ -98,7 +98,7 @@ impl Generator {
 
         // find user account
         let id = state
-            .get_account_id_by_script_hash(&account_script_hash.into())?
+            .get_account_id_by_script_hash(&account_script_hash)?
             .ok_or(AccountError::UnknownAccount)?; // find Simple UDT account
 
         // check CKB balance
@@ -162,7 +162,7 @@ impl Generator {
         let valid_signature = lock_algo.verify_signature(
             account_script.args().unpack(),
             withdrawal_request.signature(),
-            message.into(),
+            message,
         )?;
 
         if !valid_signature {
@@ -235,7 +235,7 @@ impl Generator {
             .get_lock_algorithm(&lock_code_hash.into())
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
         let valid_signature =
-            lock_algo.verify_signature(script.args().unpack(), tx.signature(), message.into())?;
+            lock_algo.verify_signature(script.args().unpack(), tx.signature(), message)?;
         if !valid_signature {
             return Err(LockAlgorithmError::InvalidSignature.into());
         }
@@ -320,14 +320,7 @@ impl Generator {
                         .collect::<Vec<_>>()
                         .pack(),
                 )
-                .logs(
-                    run_result
-                        .logs
-                        .into_iter()
-                        .map(|item| item.into())
-                        .collect::<Vec<_>>()
-                        .pack(),
-                )
+                .logs(run_result.logs.pack())
                 .build();
             receipts.push(tx_receipt);
         }
@@ -337,12 +330,8 @@ impl Generator {
         Ok(result)
     }
 
-    fn load_backend<S: State + CodeStore>(
-        &self,
-        state: &S,
-        script_hash: &H256,
-    ) -> Result<Option<Backend>, StateError> {
-        Ok(state
+    fn load_backend<S: State + CodeStore>(&self, state: &S, script_hash: &H256) -> Option<Backend> {
+        state
             .get_script(&script_hash)
             .and_then(|script| {
                 // only accept type script hash type for now
@@ -357,7 +346,7 @@ impl Generator {
                     None
                 }
             })
-            .cloned())
+            .cloned()
     }
 
     /// execute a layer2 tx
@@ -375,7 +364,7 @@ impl Generator {
                 DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls {
                     chain,
                     state,
-                    block_info: block_info,
+                    block_info,
                     raw_tx,
                     rollup_context: &self.rollup_context,
                     result: &mut run_result,
@@ -385,12 +374,12 @@ impl Generator {
             let account_id = raw_tx.to_id().unpack();
             let script_hash = state.get_script_hash(account_id)?;
             let backend = self
-                .load_backend(state, &script_hash)?
+                .load_backend(state, &script_hash)
                 .ok_or(TransactionError::BackendNotFound { script_hash })?;
             machine.load_program(&backend.generator, &[])?;
             let code = machine.run()?;
             if code != 0 {
-                return Err(TransactionError::InvalidExitCode(code).into());
+                return Err(TransactionError::InvalidExitCode(code));
             }
         }
         // set nonce
