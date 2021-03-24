@@ -1,6 +1,6 @@
 //! State DB
 
-use std::{cell::RefCell, collections::HashSet, mem::size_of_val};
+use std::{cell::RefCell, collections::HashSet, fmt, mem::size_of_val};
 
 use crate::{smt_store_impl::SMTStore, traits::KVStore, transaction::StoreTransaction};
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
@@ -17,6 +17,7 @@ use gw_types::{
 
 const FLAG_DELETE_VALUE: u8 = 0;
 
+#[derive(Debug)]
 pub struct StateDBVersion {
     block_hash: Option<H256>,
     tx_index: Option<u32>,
@@ -107,6 +108,16 @@ impl KVStore for StateDBTransaction {
         let raw_key = self.get_key_with_suffix(key);
         self.inner
             .insert_raw(col, &raw_key, &FLAG_DELETE_VALUE.to_be_bytes())
+    }
+}
+
+impl fmt::Debug for StateDBTransaction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StateDBTransaction")
+            .field("version", &self.version)
+            .field("block number", &self.block_number)
+            .field("tx index", &self.tx_index)
+            .finish()
     }
 }
 

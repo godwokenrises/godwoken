@@ -10,8 +10,6 @@ use gw_types::{
     prelude::*,
 };
 
-use std::fmt;
-
 fn get_state_db_from_mock_data(
     store: &Store,
     block_number: u64,
@@ -20,13 +18,6 @@ fn get_state_db_from_mock_data(
     let store_txn = store.begin_transaction();
     let version = StateDBVersion::from_genesis(); // just as a placeholder
     StateDBTransaction::from_tx_index(store_txn, version, block_number, tx_index)
-}
-
-// Need to unwrap_err for Result<StateDBTransaction, Error>
-impl fmt::Debug for StateDBTransaction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StateDBTransaction").finish()
-    }
 }
 
 #[test]
