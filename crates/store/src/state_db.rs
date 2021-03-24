@@ -136,12 +136,12 @@ impl StateDBTransaction {
         self.inner.commit()
     }
 
-    pub fn account_smt_store<'a>(&'a self) -> Result<SMTStore<'a, Self>, Error> {
+    pub fn account_smt_store(&self) -> Result<SMTStore<'_, Self>, Error> {
         let smt_store = SMTStore::new(COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ACCOUNT_SMT_BRANCH, self);
         Ok(smt_store)
     }
 
-    pub fn account_smt<'a>(&'a self) -> Result<SMT<SMTStore<'a, Self>>, Error> {
+    pub fn account_smt(&self) -> Result<SMT<SMTStore<'_, Self>>, Error> {
         let current_account_merkle_state = self.get_current_account_merkle_state()?;
         let smt_store = self.account_smt_store()?;
         Ok(SMT::new(
@@ -150,7 +150,7 @@ impl StateDBTransaction {
         ))
     }
 
-    pub fn account_state_tree<'a>(&'a self) -> Result<StateTree<'a>, Error> {
+    pub fn account_state_tree(&self) -> Result<StateTree<'_>, Error> {
         let current_account_merkle_state = self.get_current_account_merkle_state()?;
         Ok(StateTree::new(
             self,
@@ -250,6 +250,12 @@ pub struct StateTracker {
     touched_keys: Option<RefCell<HashSet<H256>>>,
 }
 
+impl Default for StateTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StateTracker {
     pub fn new() -> Self {
         StateTracker { touched_keys: None }
@@ -318,13 +324,13 @@ impl<'a> StateTree<'a> {
 impl<'a> State for StateTree<'a> {
     fn get_raw(&self, key: &H256) -> Result<H256, StateError> {
         self.tracker.touch_key(key);
-        let v = self.tree.get(&(*key).into())?;
-        Ok(v.into())
+        let v = self.tree.get(key)?;
+        Ok(v)
     }
 
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
         self.tracker.touch_key(&key);
-        self.tree.update(key.into(), value.into())?;
+        self.tree.update(key, value)?;
         Ok(())
     }
 

@@ -34,6 +34,7 @@ impl AccountLockManage {
         self.locks.insert(code_hash, lock_algo);
     }
 
+    #[allow(clippy::borrowed_box)]
     pub fn get_lock_algorithm(&self, code_hash: &H256) -> Option<&Box<dyn LockAlgorithm>> {
         self.locks.get(code_hash)
     }

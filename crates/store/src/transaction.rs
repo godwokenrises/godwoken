@@ -67,7 +67,7 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn block_smt<'a>(&'a self) -> Result<SMT<SMTStore<'a, Self>>, Error> {
+    pub fn block_smt(&self) -> Result<SMT<SMTStore<'_, Self>>, Error> {
         let root = self.get_block_smt_root()?;
         let smt_store = SMTStore::new(COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_SMT_BRANCH, self);
         Ok(SMT::new(root, smt_store))

@@ -1,8 +1,11 @@
-#![allow(clippy::all)]
+#![allow(warnings)]
 #![allow(unused_imports)]
 
+#[allow(clippy::all)]
 mod blockchain;
+#[allow(clippy::all)]
 mod godwoken;
+#[allow(clippy::all)]
 mod store;
 
 pub mod packed {

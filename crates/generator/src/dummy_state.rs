@@ -17,15 +17,15 @@ pub struct DummyState {
 
 impl State for DummyState {
     fn get_raw(&self, key: &H256) -> Result<H256, Error> {
-        let v = self.tree.get(&(*key).into())?;
-        Ok(v.into())
+        let v = self.tree.get(key)?;
+        Ok(v)
     }
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), Error> {
-        self.tree.update(key.into(), value.into())?;
+        self.tree.update(key, value)?;
         Ok(())
     }
     fn calculate_root(&self) -> Result<H256, Error> {
-        let root = (*self.tree.root()).into();
+        let root = *self.tree.root();
         Ok(root)
     }
     fn get_account_count(&self) -> Result<u32, Error> {
@@ -39,7 +39,7 @@ impl State for DummyState {
 
 impl CodeStore for DummyState {
     fn insert_script(&mut self, script_hash: H256, script: Script) {
-        self.scripts.insert(script_hash.into(), script);
+        self.scripts.insert(script_hash, script);
     }
     fn get_script(&self, script_hash: &H256) -> Option<Script> {
         self.scripts.get(&script_hash).cloned()
