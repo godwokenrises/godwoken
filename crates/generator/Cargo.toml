@@ -17,6 +17,6 @@ thiserror = "1.0"
 lazy_static = "1.4"
 secp256k1 = { version = "0.17", features = ["recovery"] }
 sha3 = "0.9.1"
+hex = "0.4.2"
 
 [dev-dependencies]
-hex = "0.4.2"
