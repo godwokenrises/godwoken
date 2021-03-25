@@ -1,7 +1,5 @@
 //! State DB
 
-use std::{cell::RefCell, collections::HashSet, fmt, mem::size_of_val};
-
 use crate::{smt_store_impl::SMTStore, traits::KVStore, transaction::StoreTransaction};
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_db::schema::{
@@ -14,6 +12,7 @@ use gw_types::{
     packed::{self, AccountMerkleState},
     prelude::*,
 };
+use std::{cell::RefCell, collections::HashSet, fmt, mem::size_of_val};
 
 const FLAG_DELETE_VALUE: u8 = 0;
 

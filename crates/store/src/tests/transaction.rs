@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
 use crate::{traits::KVStore, Store};
 use gw_db::{DBRawIterator, IteratorMode};
+use std::collections::HashMap;
 
 #[test]
 fn insert_and_get() {
