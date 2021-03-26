@@ -40,6 +40,10 @@ pub const COLUMN_DATA: Col = "15";
 pub const COLUMN_BLOCK_DEPOSITION_REQUESTS: Col = "16";
 /// Column custodian assets
 pub const COLUMN_CUSTODIAN_ASSETS: Col = "17";
+/// Column block account record of SMT branch
+pub const COLUMN_BLOCK_ACCOUNT_SMT_BRANCH_RECORD: Col = "18";
+/// Column block account record of SMT leaf
+pub const COLUMN_BLOCK_ACCOUNT_SMT_LEAF_RECORD: Col = "19";
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";

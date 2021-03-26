@@ -14,7 +14,7 @@ use gw_types::{
 };
 use std::{borrow::BorrowMut, collections::HashMap};
 
-const NUMBER_OF_CONFIRMATION: u64 = 6;
+const NUMBER_OF_CONFIRMATION: u64 = 10;
 
 pub struct StoreTransaction {
     pub(crate) inner: RocksDBTransaction,
@@ -425,7 +425,7 @@ impl StoreTransaction {
         self.set_block_smt_root(*root)?;
         // update tip
         self.insert_raw(COLUMN_META, &META_TIP_BLOCK_HASH_KEY, &block_hash)?;
-        self.clear_last_account_state_record(raw_number.unpack())?;
+        self.compact_block_account_record(raw_number.unpack())?;
         Ok(())
     }
 
@@ -483,11 +483,7 @@ impl StoreTransaction {
         Ok(())
     }
 
-    fn clear_account_state_tree(&self, _block_hash: H256) -> Result<(), Error> {
-        unimplemented!()
-    }
-
-    fn clear_last_account_state_record(&self, current_block_number: u64) -> Result<(), Error> {
+    fn compact_block_account_record(&self, current_block_number: u64) -> Result<(), Error> {
         if current_block_number > NUMBER_OF_CONFIRMATION {
             let block_number = current_block_number - NUMBER_OF_CONFIRMATION - 1;
             let block_hash = self
@@ -503,13 +499,17 @@ impl StoreTransaction {
         unimplemented!()
     }
 
+    fn clear_account_state_tree(&self, _block_hash: H256) -> Result<(), Error> {
+        unimplemented!()
+    }
+
     #[cfg(test)]
-    pub fn clear_account_state_tree_for_test(&self, block_hash: H256) -> Result<(), Error> {
+    pub fn clear_block_account_state_tree(&self, block_hash: H256) -> Result<(), Error> {
         self.clear_account_state_tree(block_hash)
     }
 
     #[cfg(test)]
-    pub fn clear_account_state_record_for_test(&self, block_hash: H256) -> Result<(), Error> {
+    pub fn clear_block_account_state_record(&self, block_hash: H256) -> Result<(), Error> {
         self.clear_account_state_record(block_hash)
     }
 }

@@ -52,6 +52,11 @@ fn delete() {
     // new transaction is not affected by uncommit transaction
     let store_txn = store.begin_transaction();
     assert!(store_txn.get("1", &[2]).is_none());
+
+    // delete a nonexistent
+    let store_txn = store.begin_transaction();
+    assert!(store_txn.delete("1", &[3]).is_ok());
+    assert!(store_txn.commit().is_ok());
 }
 
 #[test]
