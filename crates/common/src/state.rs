@@ -1,13 +1,31 @@
+//! State
+// the State keeps consistent interface upon lower storage structure (SMT or other trees).
+//
+// Key domain:
+//
+// The account and some special values used in the Godwoken are persisted in the state kv storage.
+// We serperate these keys into different key domains.
+//
+// Any `key` in the State must be converted into `raw_key`:
+//
+// raw_key: blake2b(id(4 bytes) | type(1 byte) | key(32 bytes))
+//
+// - `id` represents account's id, id must be set to 0 if the key isn't belong to an account
+// - `type` is a domain seperator, different type of keys must use a different `type`
+// - `key` the original key
+//
+// Thus, the first 5 bytes keeps uniqueness for different type of keys.
+
 use crate::error::Error;
 use crate::h256_ext::{H256Ext, H256};
 use crate::{blake2b::new_blake2b, merkle_utils::calculate_compacted_account_root};
 use core::mem::size_of;
 
-/* Account fields flags */
+/* Account fields types */
 pub const GW_ACCOUNT_KV: u8 = 0;
 pub const GW_ACCOUNT_NONCE: u8 = 1;
 pub const GW_ACCOUNT_SCRIPT_HASH: u8 = 2;
-/* prefix */
+/* Non-account types */
 pub const GW_SCRIPT_HASH_TO_ID_PREFIX: [u8; 5] = [0, 0, 0, 0, 3];
 pub const GW_DATA_HASH_PREFIX: [u8; 5] = [0, 0, 0, 0, 4];
 
