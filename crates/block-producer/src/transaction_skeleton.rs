@@ -17,10 +17,6 @@ pub struct TransactionSkeleton {
 }
 
 impl TransactionSkeleton {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn inputs(&self) -> &Vec<InputCellInfo> {
         &self.inputs
     }

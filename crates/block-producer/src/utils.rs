@@ -1,13 +1,12 @@
 use std::convert::TryInto;
 
-use crate::{cell_collector::CellCollector, transaction_skeleton::TransactionSkeleton};
+use crate::{rpc_client::RPCClient, transaction_skeleton::TransactionSkeleton};
 use anyhow::{anyhow, Result};
 use gw_block_producer::types::InputCellInfo;
-use gw_types::{packed::CellInput, prelude::*};
-
-/// 100 shannons per KB
-const MIN_FEE_RATE: usize = 1000;
-const KB: usize = 1000;
+use gw_types::{
+    packed::{CellInput, Script},
+    prelude::*,
+};
 
 /// Calculate tx fee
 fn calculate_required_tx_fee(tx_size: usize) -> u64 {
@@ -36,10 +35,10 @@ fn calculate_paid_fee(tx_skeleton: &TransactionSkeleton) -> Result<(u128, u128)>
 }
 
 /// Add fee cell to tx skeleton
-pub fn fill_tx_fee(
+pub async fn fill_tx_fee(
     tx_skeleton: &mut TransactionSkeleton,
-    cell_collector: &CellCollector,
-    lock_hash: [u8; 32],
+    rpc_client: &RPCClient,
+    lock_script: Script,
 ) -> Result<()> {
     let tx_size: usize = tx_skeleton.tx_in_block_size()?;
     let (input_capacity, output_capacity) = calculate_paid_fee(tx_skeleton)?;
@@ -58,7 +57,9 @@ pub fn fill_tx_fee(
     // find a cell to pay tx fee
     if required_fee > 0 {
         // get payment cells
-        let cells = cell_collector.query_payment_cells(&lock_hash, required_fee);
+        let cells = rpc_client
+            .query_payment_cells(lock_script, required_fee)
+            .await?;
         // put cells in tx skeleton
         tx_skeleton
             .inputs_mut()

@@ -5,7 +5,7 @@ use gw_common::blake2b::new_blake2b;
 use gw_config::WalletConfig;
 use gw_types::{
     bytes::Bytes,
-    packed::Transaction,
+    packed::{Script, Transaction},
     prelude::{Entity, Unpack},
 };
 
@@ -13,16 +13,16 @@ use crate::transaction_skeleton::TransactionSkeleton;
 
 pub struct Wallet {
     privkey: Privkey,
-    lock_hash: [u8; 32],
+    lock: Script,
 }
 
 impl Wallet {
-    pub fn new(privkey: Privkey, lock_hash: [u8; 32]) -> Self {
-        Wallet { privkey, lock_hash }
+    pub fn new(privkey: Privkey, lock: Script) -> Self {
+        Wallet { privkey, lock }
     }
 
     pub fn from_config(config: &WalletConfig) -> Result<Self> {
-        let lock_hash = config.lock_hash.clone().into();
+        let lock = config.lock.clone().into();
         let privkey = {
             let content = std::fs::read_to_string(&config.privkey_path)?;
             let content = content.trim_start_matches("0x");
@@ -31,12 +31,12 @@ impl Wallet {
             hex_decode(content.as_bytes(), &mut decoded)?;
             Privkey::from_slice(&decoded)
         };
-        let wallet = Self::new(privkey, lock_hash);
+        let wallet = Self::new(privkey, lock);
         Ok(wallet)
     }
 
-    pub fn lock_hash(&self) -> [u8; 32] {
-        self.lock_hash
+    pub fn lock(&self) -> &Script {
+        &self.lock
     }
 
     // sign message

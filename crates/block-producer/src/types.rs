@@ -3,13 +3,11 @@ use gw_types::{
     packed::{CellDep, CellInput, CellOutput, OutPoint},
 };
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CellInfo {
     pub out_point: OutPoint,
     pub output: CellOutput,
     pub data: Bytes,
-    pub lock_dep: CellDep,
-    pub type_dep: Option<CellDep>,
 }
 
 pub struct InputCellInfo {

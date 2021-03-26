@@ -105,3 +105,41 @@ impl TryFrom<Byte> for ChallengeTargetType {
         v.try_into()
     }
 }
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DepType {
+    Code = 0,
+    DepGroup = 1,
+}
+
+impl Default for DepType {
+    fn default() -> Self {
+        DepType::Code
+    }
+}
+
+impl TryFrom<packed::Byte> for DepType {
+    type Error = u8;
+
+    fn try_from(v: packed::Byte) -> Result<Self, Self::Error> {
+        match Into::<u8>::into(v) {
+            0 => Ok(DepType::Code),
+            1 => Ok(DepType::DepGroup),
+            n => Err(n),
+        }
+    }
+}
+
+impl Into<u8> for DepType {
+    #[inline]
+    fn into(self) -> u8 {
+        self as u8
+    }
+}
+
+impl Into<packed::Byte> for DepType {
+    #[inline]
+    fn into(self) -> packed::Byte {
+        (self as u8).into()
+    }
+}
