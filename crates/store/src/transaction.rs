@@ -425,7 +425,7 @@ impl StoreTransaction {
         self.set_block_smt_root(*root)?;
         // update tip
         self.insert_raw(COLUMN_META, &META_TIP_BLOCK_HASH_KEY, &block_hash)?;
-        self.compact_block_account_record(raw_number.unpack())?;
+        self.prune_block_state_record(raw_number.unpack())?;
         Ok(())
     }
 
@@ -467,7 +467,7 @@ impl StoreTransaction {
             .map_err(|err| Error::from(format!("SMT error {}", err)))?;
         let root = block_smt.root();
         self.set_block_smt_root(*root)?;
-        self.clear_account_state_tree(block.hash().into())?;
+        self.clear_block_state(block.hash().into())?;
 
         // update tip
         let block_number: u64 = block_number.unpack();
@@ -483,34 +483,33 @@ impl StoreTransaction {
         Ok(())
     }
 
-    fn compact_block_account_record(&self, current_block_number: u64) -> Result<(), Error> {
-        if current_block_number > NUMBER_OF_CONFIRMATION {
-            let block_number = current_block_number - NUMBER_OF_CONFIRMATION - 1;
-            let block_hash = self
-                .get_block_hash_by_number(block_number)?
-                .ok_or_else(|| "Invalid block number".to_owned())?;
-            self.clear_account_state_record(block_hash)
-        } else {
-            Ok(())
+    fn prune_block_state_record(&self, current_block_number: u64) -> Result<(), Error> {
+        if current_block_number <= NUMBER_OF_CONFIRMATION {
+            return Ok(());
         }
+        let to_be_pruned_block_number = current_block_number - NUMBER_OF_CONFIRMATION - 1;
+        let block_hash = self
+            .get_block_hash_by_number(to_be_pruned_block_number)?
+            .ok_or_else(|| "Invalid block number".to_owned())?;
+        self.clear_block_state_record(block_hash)
     }
 
-    fn clear_account_state_record(&self, _block_hash: H256) -> Result<(), Error> {
+    fn clear_block_state_record(&self, _block_hash: H256) -> Result<(), Error> {
         unimplemented!()
     }
 
-    fn clear_account_state_tree(&self, _block_hash: H256) -> Result<(), Error> {
+    fn clear_block_state(&self, _block_hash: H256) -> Result<(), Error> {
         unimplemented!()
     }
 
     #[cfg(test)]
-    pub fn clear_block_account_state_tree(&self, block_hash: H256) -> Result<(), Error> {
-        self.clear_account_state_tree(block_hash)
+    pub fn clear_block_account_state(&self, block_hash: H256) -> Result<(), Error> {
+        self.clear_block_state(block_hash)
     }
 
     #[cfg(test)]
     pub fn clear_block_account_state_record(&self, block_hash: H256) -> Result<(), Error> {
-        self.clear_account_state_record(block_hash)
+        self.clear_block_state_record(block_hash)
     }
 }
 
