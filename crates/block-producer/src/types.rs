@@ -1,6 +1,6 @@
 use gw_types::{
     bytes::Bytes,
-    packed::{CellDep, CellInput, CellOutput, OutPoint},
+    packed::{CellInput, CellOutput, OutPoint},
 };
 
 #[derive(Debug, Clone)]

@@ -1,4 +1,4 @@
-use gw_block_producer::block_producer::{produce_block, ProduceBlockParam, ProduceBlockResult};
+use gw_block_producer::produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult};
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncEvent, SyncParam};
 use gw_common::blake2b::new_blake2b;
 use gw_config::{BackendConfig, ChainConfig, GenesisConfig};

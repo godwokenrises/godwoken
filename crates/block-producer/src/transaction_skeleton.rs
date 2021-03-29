@@ -1,12 +1,11 @@
-use std::collections::HashMap;
-
+use crate::types::{InputCellInfo, SignatureEntry};
 use anyhow::{anyhow, Result};
-use gw_block_producer::types::{InputCellInfo, SignatureEntry};
 use gw_types::{
     bytes::Bytes,
     packed::{CellDep, CellOutput, RawTransaction, Transaction, WitnessArgs},
     prelude::*,
 };
+use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct TransactionSkeleton {
@@ -90,7 +89,7 @@ impl TransactionSkeleton {
             witnesses.resize(self.inputs.len(), Default::default());
         }
         // set signature to witnesses
-        for (entry, signature) in entries.into_iter().zip(signatures) {
+        for (entry, signature) in entries.iter().zip(signatures) {
             let witness_args = witnesses
                 .get_mut(entry.indexes[0])
                 .expect("can't find witness");

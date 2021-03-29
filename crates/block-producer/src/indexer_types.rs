@@ -2,8 +2,7 @@
 
 use ckb_fixed_hash::H256;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{
-    BlockNumber, BlockView, Capacity, CellOutput, JsonBytes, LocalNode, OutPoint, Script, Uint32,
-    Uint64,
+    BlockNumber, CellOutput, JsonBytes, OutPoint, Script, Uint32, Uint64,
 };
 use serde::{Deserialize, Serialize};
 

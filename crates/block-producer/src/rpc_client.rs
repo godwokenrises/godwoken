@@ -1,8 +1,8 @@
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
+use crate::types::CellInfo;
 use anyhow::Result;
 use async_jsonrpc_client::{HttpClient, Output, Params as ClientParams, Transport};
 use ckb_types::prelude::{Entity, Unpack as CKBUnpack};
-use gw_block_producer::types::CellInfo;
 use gw_common::H256;
 use gw_generator::RollupContext;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Uint32};
@@ -252,7 +252,7 @@ impl RPCClient {
                 self.ckb_client
                     .request(
                         "get_block_by_number",
-                        Some(ClientParams::Array(vec![json!(number)])),
+                        Some(ClientParams::Array(vec![json!(block_number)])),
                     )
                     .await?,
             )?;

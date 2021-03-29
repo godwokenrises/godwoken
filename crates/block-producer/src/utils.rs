@@ -1,12 +1,23 @@
 use std::convert::TryInto;
 
+use crate::types::InputCellInfo;
 use crate::{rpc_client::RPCClient, transaction_skeleton::TransactionSkeleton};
 use anyhow::{anyhow, Result};
-use gw_block_producer::types::InputCellInfo;
+use async_jsonrpc_client::Output;
 use gw_types::{
     packed::{CellInput, Script},
     prelude::*,
 };
+use serde::de::DeserializeOwned;
+use serde_json::from_value;
+
+// convert json output to result
+pub fn to_result<T: DeserializeOwned>(output: Output) -> anyhow::Result<T> {
+    match output {
+        Output::Success(success) => Ok(from_value(success.result)?),
+        Output::Failure(failure) => Err(anyhow::anyhow!("JSONRPC error: {}", failure.error)),
+    }
+}
 
 /// Calculate tx fee
 fn calculate_required_tx_fee(tx_size: usize) -> u64 {
@@ -21,7 +32,7 @@ fn calculate_paid_fee(tx_skeleton: &TransactionSkeleton) -> Result<(u128, u128)>
         let capacity: u64 = input.cell.output.capacity().unpack();
         input_capacity = input_capacity
             .checked_add(capacity.into())
-            .ok_or(anyhow!("overflow"))?;
+            .ok_or_else(|| anyhow!("overflow"))?;
     }
 
     let mut output_capacity: u128 = 0;
@@ -29,7 +40,7 @@ fn calculate_paid_fee(tx_skeleton: &TransactionSkeleton) -> Result<(u128, u128)>
         let capacity: u64 = output.capacity().unpack();
         output_capacity = output_capacity
             .checked_add(capacity.into())
-            .ok_or(anyhow!("overflow"))?;
+            .ok_or_else(|| anyhow!("overflow"))?;
     }
     Ok((input_capacity, output_capacity))
 }
@@ -50,9 +61,7 @@ pub async fn fill_tx_fee(
         .try_into()
         .expect("paid fee too large");
     // calculate required fee
-    let required_fee = calculate_required_tx_fee(tx_size)
-        .checked_sub(paid_fee)
-        .unwrap_or(0);
+    let required_fee = calculate_required_tx_fee(tx_size).saturating_sub(paid_fee);
 
     // find a cell to pay tx fee
     if required_fee > 0 {
