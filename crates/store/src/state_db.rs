@@ -100,7 +100,9 @@ impl<'db> KVStore for StateDBTransaction<'db> {
             "forbid inserting the delete flag"
         );
         let raw_key = self.get_key_with_suffix(key);
-        self.inner.insert_raw(col, &raw_key, value)
+        self.inner
+            .insert_raw(col, &raw_key, value)
+            .and(self.record_block_state(&raw_key))
     }
 
     fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
@@ -229,6 +231,10 @@ impl<'db> StateDBTransaction<'db> {
             }
             _ => None,
         }
+    }
+
+    fn record_block_state(&self, _raw_key: &[u8]) -> Result<(), Error> {
+        Ok(())
     }
 
     #[cfg(test)]
