@@ -1,7 +1,7 @@
-use gw_block_producer::block_producer::{produce_block, ProduceBlockParam, ProduceBlockResult};
+use gw_block_producer::produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult};
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncEvent, SyncParam};
 use gw_common::blake2b::new_blake2b;
-use gw_config::{BackendConfig, BackendManageConfig, ChainConfig, GenesisConfig};
+use gw_config::{BackendConfig, GenesisConfig};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
@@ -57,19 +57,19 @@ pub const SUDT_GENERATOR_PATH: &str = "../../godwoken-scripts/c/build/sudt-gener
 pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
     let sudt_validator_script_type_hash: [u8; 32] =
         rollup_config.l2_sudt_validator_script_type_hash().unpack();
-    let config = BackendManageConfig {
-        meta_contract: BackendConfig {
+    let configs = vec![
+        BackendConfig {
             validator_path: META_VALIDATOR_PATH.into(),
             generator_path: META_GENERATOR_PATH.into(),
             validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
         },
-        simple_udt: BackendConfig {
+        BackendConfig {
             validator_path: SUDT_VALIDATOR_PATH.into(),
             generator_path: SUDT_GENERATOR_PATH.into(),
             validator_script_type_hash: sudt_validator_script_type_hash.into(),
         },
-    };
-    BackendManage::from_config(config).expect("default backend")
+    ];
+    BackendManage::from_config(configs).expect("default backend")
 }
 
 pub fn setup_chain(rollup_type_script: Script, rollup_config: RollupConfig) -> Chain {
@@ -87,35 +87,34 @@ pub fn setup_chain_with_account_lock_manage(
     account_lock_manage: AccountLockManage,
 ) -> Chain {
     let store = Store::open_tmp().unwrap();
+    let rollup_script_hash = rollup_type_script.hash();
     let genesis_config = GenesisConfig {
         timestamp: 0,
         meta_contract_validator_type_hash: Default::default(),
+        rollup_config: rollup_config.clone().into(),
+        rollup_type_hash: rollup_script_hash.into(),
     };
     let genesis_header_info = HeaderInfo::default();
     let backend_manage = build_backend_manage(&rollup_config);
-    let config = ChainConfig {
-        rollup_type_script,
-        rollup_config: rollup_config.clone(),
-    };
-    let rollup_script_hash = config.rollup_type_script.hash().into();
     let rollup_context = RollupContext {
-        rollup_script_hash,
-        rollup_config,
+        rollup_script_hash: rollup_script_hash.into(),
+        rollup_config: rollup_config.clone(),
     };
     let generator = Arc::new(Generator::new(
         backend_manage,
         account_lock_manage,
         rollup_context.clone(),
     ));
-    init_genesis(
-        &store,
-        &genesis_config,
-        &rollup_context,
-        genesis_header_info,
-    )
-    .unwrap();
+    init_genesis(&store, &genesis_config, genesis_header_info).unwrap();
     let mem_pool = MemPool::create(store.clone(), Arc::clone(&generator)).unwrap();
-    Chain::create(config, store, generator, Arc::new(Mutex::new(mem_pool))).unwrap()
+    Chain::create(
+        &rollup_config,
+        &rollup_type_script,
+        store,
+        generator,
+        Arc::new(Mutex::new(mem_pool)),
+    )
+    .unwrap()
 }
 
 pub fn build_sync_tx(

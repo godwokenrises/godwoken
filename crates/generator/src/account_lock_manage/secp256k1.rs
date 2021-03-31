@@ -16,7 +16,7 @@ lazy_static! {
 pub struct Secp256k1;
 
 /// Usage
-/// register AlwaysSuccess to AccountLockManage
+/// register an algorithm to AccountLockManage
 ///
 /// manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
 impl LockAlgorithm for Secp256k1 {

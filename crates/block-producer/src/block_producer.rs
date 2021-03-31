@@ -1,326 +1,375 @@
-//! Block producer
-//! Block producer assemble serveral Godwoken components into a single executor.
-//! A block producer can act without the ability of produce block.
+#![allow(clippy::clippy::mutable_key_type)]
 
+use crate::rpc_client::{DepositInfo, RPCClient};
+use crate::transaction_skeleton::TransactionSkeleton;
+use crate::utils::fill_tx_fee;
+use crate::wallet::Wallet;
+use crate::{
+    produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
+    types::{CellInfo, InputCellInfo},
+};
 use anyhow::{anyhow, Result};
-use gw_common::{
-    h256_ext::H256Ext,
-    merkle_utils::{calculate_compacted_account_root, calculate_merkle_root},
-    smt::Blake2bHasher,
-    state::State,
-    H256,
-};
-use gw_generator::{traits::StateExt, Generator};
-use gw_store::{
-    chain_view::ChainView,
-    state_db::{StateDBTransaction, StateDBVersion},
-    transaction::StoreTransaction,
-};
+use ckb_types::prelude::Unpack as CKBUnpack;
+use futures::{future::select_all, FutureExt};
+use gw_chain::chain::Chain;
+use gw_common::H256;
+use gw_config::BlockProducerConfig;
+use gw_generator::{Generator, RollupContext};
+use gw_mem_pool::pool::MemPool;
+use gw_store::Store;
 use gw_types::{
-    core::Status,
+    bytes::Bytes,
+    core::{DepType, ScriptHashType},
     packed::{
-        AccountMerkleState, BlockInfo, BlockMerkleState, DepositionRequest, GlobalState, L2Block,
-        L2Transaction, RawL2Block, SubmitTransactions, SubmitWithdrawals, TxReceipt,
-        WithdrawalRequest,
+        Byte32, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositionLockArgs, GlobalState,
+        L2Block, OutPoint, OutPointVec, Script, Transaction, WitnessArgs,
     },
     prelude::*,
 };
+use parking_lot::Mutex;
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryFrom,
+    sync::Arc,
+};
 
-pub struct ProduceBlockResult {
-    pub block: L2Block,
-    pub global_state: GlobalState,
-    pub unused_transactions: Vec<L2Transaction>,
-    pub unused_withdrawal_requests: Vec<WithdrawalRequest>,
-}
+fn generate_custodian_cells(
+    rollup_context: &RollupContext,
+    block: &L2Block,
+    deposit_cells: &[DepositInfo],
+) -> Vec<(CellOutput, Bytes)> {
+    let block_hash: Byte32 = block.hash().pack();
+    let block_number = block.raw().number();
+    deposit_cells
+        .iter()
+        .map(|deposit_info| {
+            let lock_args = {
+                let deposition_lock_args = DepositionLockArgs::new_unchecked(
+                    deposit_info.cell.output.lock().args().unpack(),
+                );
 
-pub struct ProduceBlockParam<'a> {
-    pub db: StoreTransaction,
-    pub generator: &'a Generator,
-    pub block_producer_id: u32,
-    pub timestamp: u64,
-    pub txs: Vec<L2Transaction>,
-    pub deposition_requests: Vec<DepositionRequest>,
-    pub withdrawal_requests: Vec<WithdrawalRequest>,
-    pub parent_block: &'a L2Block,
-    pub rollup_config_hash: &'a H256,
-    pub max_withdrawal_capacity: u128,
-}
-
-/// Produce block
-/// this method take txs & withdrawal requests from tx pool and produce a new block
-/// the package method should packs the items in order:
-/// withdrawals, then deposits, finally the txs. Thus, the state-validator can verify this correctly
-pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult> {
-    let ProduceBlockParam {
-        db,
-        generator,
-        block_producer_id,
-        timestamp,
-        txs,
-        deposition_requests,
-        withdrawal_requests,
-        parent_block,
-        rollup_config_hash,
-        max_withdrawal_capacity,
-    } = param;
-    let rollup_context = generator.rollup_context();
-    // create overlay storage
-    let state_db = {
-        let tip_block_hash = db.get_tip_block_hash()?;
-        StateDBTransaction::from_version(
-            db.clone(),
-            StateDBVersion::from_block_hash(tip_block_hash),
-        )?
-    };
-    let mut state = state_db.account_state_tree()?;
-    // track state changes
-    state.tracker_mut().enable();
-    let prev_account_state_root = state.calculate_root()?;
-    let prev_account_state_count = state.get_account_count()?;
-    // verify the withdrawals
-    let mut used_withdrawal_requests = Vec::with_capacity(withdrawal_requests.len());
-    let mut unused_withdrawal_requests = Vec::with_capacity(withdrawal_requests.len());
-    let mut total_withdrawal_capacity: u128 = 0;
-    for request in withdrawal_requests {
-        // check withdrawal request
-        if generator
-            .check_withdrawal_request_signature(&state, &request)
-            .is_err()
-        {
-            unused_withdrawal_requests.push(request);
-            continue;
-        }
-        if generator
-            .verify_withdrawal_request(&state, &request)
-            .is_err()
-        {
-            unused_withdrawal_requests.push(request);
-            continue;
-        }
-        let capacity: u64 = request.raw().capacity().unpack();
-        let new_total_withdrwal_capacity = total_withdrawal_capacity
-            .checked_add(capacity as u128)
-            .ok_or_else(|| anyhow!("total withdrawal capacity overflow"))?;
-        // skip package withdrwal if overdraft the Rollup capacity
-        if new_total_withdrwal_capacity > max_withdrawal_capacity {
-            unused_withdrawal_requests.push(request);
-            continue;
-        }
-        total_withdrawal_capacity = new_total_withdrwal_capacity;
-        // update the state
-        match state.apply_withdrawal_request(rollup_context, &request) {
-            Ok(_) => {
-                used_withdrawal_requests.push(request);
-            }
-            Err(_err) => {
-                unused_withdrawal_requests.push(request);
-            }
-        }
-    }
-    // update deposits
-    state.apply_deposition_requests(rollup_context, &deposition_requests)?;
-    // calculate state after withdrawals & deposits
-    let compacted_prev_root_hash = state.calculate_compacted_account_root()?;
-    // execute txs
-    let mut tx_receipts = Vec::with_capacity(txs.len());
-    let mut used_transactions = Vec::with_capacity(txs.len());
-    let mut unused_transactions = Vec::with_capacity(txs.len());
-    // build block info
-    let parent_block_number: u64 = parent_block.raw().number().unpack();
-    let parent_block_hash = parent_block.hash();
-    let number = parent_block_number + 1;
-    let block_info = BlockInfo::new_builder()
-        .number(number.pack())
-        .timestamp(timestamp.pack())
-        .block_producer_id(block_producer_id.pack())
-        .build();
-    let chain_view = ChainView::new(db.clone(), parent_block_hash.into());
-    for tx in txs {
-        // 1. verify tx
-        if generator.check_transaction_signature(&state, &tx).is_err() {
-            unused_transactions.push(tx);
-            continue;
-        }
-        if generator.verify_transaction(&state, &tx).is_err() {
-            unused_transactions.push(tx);
-            continue;
-        }
-        // 2. execute txs
-        let raw_tx = tx.raw();
-        let run_result =
-            match generator.execute_transaction(&chain_view, &state, &block_info, &raw_tx) {
-                Ok(run_result) => run_result,
-                Err(_) => {
-                    unused_transactions.push(tx);
-                    continue;
-                }
+                CustodianLockArgs::new_builder()
+                    .deposition_block_hash(block_hash.clone())
+                    .deposition_block_number(block_number.clone())
+                    .deposition_lock_args(deposition_lock_args)
+                    .build()
             };
-        // 3. apply tx state
-        state.apply_run_result(&run_result)?;
-        // 4. build tx receipt
-        let tx_witness_hash = tx.witness_hash();
-        let tx_post_state = {
-            let account_root = state.calculate_root()?;
-            let account_count = state.get_account_count()?;
-            AccountMerkleState::new_builder()
-                .merkle_root(account_root.pack())
-                .count(account_count.pack())
-                .build()
-        };
-        let receipt = TxReceipt::new_builder()
-            .tx_witness_hash(tx_witness_hash.pack())
-            .post_state(tx_post_state)
-            .read_data_hashes(
-                run_result
-                    .read_data
-                    .iter()
-                    .map(|(hash, _)| *hash)
-                    .collect::<Vec<_>>()
-                    .pack(),
-            )
-            .logs(run_result.logs.pack())
-            .build();
-        used_transactions.push(tx);
-        tx_receipts.push(receipt);
-    }
-    assert_eq!(used_transactions.len(), tx_receipts.len());
-    let touched_keys: Vec<H256> = state
-        .tracker_mut()
-        .touched_keys()
-        .expect("track touched keys")
-        .borrow()
-        .clone()
-        .into_iter()
-        .collect();
-    let post_account_state_root = state.calculate_root()?;
-    let post_account_state_count = state.get_account_count()?;
+            let lock = Script::new_builder()
+                .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+                .hash_type(ScriptHashType::Type.into())
+                .args(lock_args.as_bytes().pack())
+                .build();
 
-    // assemble block
-    let submit_txs = {
-        let tx_witness_root = calculate_merkle_root(
-            tx_receipts
-                .iter()
-                .map(|tx_receipt| tx_receipt.tx_witness_hash().unpack())
-                .collect(),
-        )
-        .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
-        let tx_count = tx_receipts.len() as u32;
-        let compacted_post_root_list: Vec<[u8; 32]> = tx_receipts
-            .iter()
-            .map(|tx_receipt| {
-                let post_state = tx_receipt.post_state();
-                calculate_compacted_account_root(
-                    &post_state.merkle_root().unpack(),
-                    post_state.count().unpack(),
-                )
+            // use custodian lock
+            let cell = deposit_info
+                .cell
+                .output
+                .clone()
+                .as_builder()
+                .lock(lock)
+                .build();
+            let data = deposit_info.cell.data.clone();
+            (cell, data)
+        })
+        .collect()
+}
+
+async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Vec<CellInfo>> {
+    async fn resolve_dep_group(rpc_client: &RPCClient, dep: CellDep) -> Result<Vec<CellDep>> {
+        // return dep
+        if dep.dep_type() == DepType::Code.into() {
+            return Ok(vec![dep]);
+        }
+        // parse dep group
+        let cell = rpc_client
+            .get_cell(dep.out_point())
+            .await?
+            .ok_or_else(|| anyhow!("can't find dep group cell"))?;
+        let out_points =
+            OutPointVec::from_slice(&cell.data).map_err(|_| anyhow!("invalid dep group"))?;
+        let cell_deps = out_points
+            .into_iter()
+            .map(|out_point| {
+                CellDep::new_builder()
+                    .out_point(out_point)
+                    .dep_type(DepType::Code.into())
+                    .build()
             })
             .collect();
-        SubmitTransactions::new_builder()
-            .tx_witness_root(tx_witness_root.pack())
-            .tx_count(tx_count.pack())
-            .compacted_prev_root_hash(compacted_prev_root_hash.pack())
-            .compacted_post_root_list(compacted_post_root_list.pack())
-            .build()
+        Ok(cell_deps)
+    }
+
+    // get deposit cells txs
+    let tx = rpc_client
+        .get_transaction(tx_hash)
+        .await?
+        .ok_or_else(|| anyhow!("can't get deposit tx"))?;
+    let mut resolve_dep_futs: Vec<_> = tx
+        .raw()
+        .cell_deps()
+        .into_iter()
+        .map(|dep| resolve_dep_group(rpc_client, dep).boxed())
+        .collect();
+    let mut get_cell_futs = Vec::default();
+
+    // wait resolved dep groups futures
+    while !resolve_dep_futs.is_empty() {
+        let (tx_cell_deps_res, _index, remained) = select_all(resolve_dep_futs.into_iter()).await;
+        resolve_dep_futs = remained;
+        let tx_cell_deps = tx_cell_deps_res?;
+        let futs = tx_cell_deps
+            .iter()
+            .map(|dep| rpc_client.get_cell(dep.out_point()).boxed());
+        get_cell_futs.extend(futs);
+    }
+
+    // wait all cells
+    let mut cells = Vec::with_capacity(get_cell_futs.len());
+    for cell_fut in get_cell_futs {
+        let cell = cell_fut
+            .await?
+            .ok_or_else(|| anyhow!("can't find dep cell"))?;
+        cells.push(cell);
+    }
+    Ok(cells)
+}
+
+async fn complete_tx_skeleton(
+    block_producer_config: &BlockProducerConfig,
+    rollup_context: &RollupContext,
+    rpc_client: &RPCClient,
+    wallet: &Wallet,
+    deposit_cells: Vec<DepositInfo>,
+    block: L2Block,
+    global_state: GlobalState,
+) -> Result<Transaction> {
+    let rollup_cell_info = smol::block_on(rpc_client.query_rollup_cell())?
+        .ok_or_else(|| anyhow!("can't find rollup cell"))?;
+    let mut tx_skeleton = TransactionSkeleton::default();
+    // rollup cell
+    tx_skeleton.inputs_mut().push(InputCellInfo {
+        input: CellInput::new_builder()
+            .previous_output(rollup_cell_info.out_point.clone())
+            .build(),
+        cell: rollup_cell_info.clone(),
+    });
+    // rollup deps
+    tx_skeleton
+        .cell_deps_mut()
+        .push(block_producer_config.rollup_cell_type_dep.clone().into());
+    tx_skeleton
+        .cell_deps_mut()
+        .push(block_producer_config.rollup_cell_lock_dep.clone().into());
+    // deposit lock dep
+    if !deposit_cells.is_empty() {
+        let cell_dep: CellDep = block_producer_config.deposit_cell_lock_dep.clone().into();
+        tx_skeleton
+            .cell_deps_mut()
+            .push(CellDep::new_unchecked(cell_dep.as_bytes()));
+    }
+    // witnesses
+    tx_skeleton.witnesses_mut().push(
+        WitnessArgs::new_builder()
+            .output_type(Some(block.as_bytes()).pack())
+            .build(),
+    );
+    // output
+    let output = rollup_cell_info.output;
+    let output_data = global_state.as_bytes();
+    tx_skeleton.outputs_mut().push((output, output_data));
+    // deposit cells
+    for deposit in &deposit_cells {
+        let input = CellInput::new_builder()
+            .previous_output(deposit.cell.out_point.clone())
+            .build();
+        tx_skeleton.inputs_mut().push(InputCellInfo {
+            input,
+            cell: deposit.cell.clone(),
+        });
+    }
+
+    // Some deposition cells might have type scripts for sUDTs, handle cell deps
+    // here.
+    let deposit_type_deps: HashSet<CellDep> = {
+        // fetch deposit cells deps
+        let dep_cell_futs: Vec<_> = deposit_cells
+            .iter()
+            .filter_map(|deposit| {
+                deposit.cell.output.type_().to_opt().map(|_type_| {
+                    resolve_tx_deps(rpc_client, deposit.cell.out_point.tx_hash().unpack())
+                })
+            })
+            .collect();
+
+        // wait futures
+        let mut dep_cells: Vec<CellInfo> = Vec::new();
+        for fut in dep_cell_futs {
+            dep_cells.extend(fut.await?);
+        }
+
+        // resolve deposit cells deps
+        let dep_cell_by_data: HashMap<[u8; 32], OutPoint> = dep_cells
+            .iter()
+            .map(|cell| {
+                let data_hash = ckb_types::packed::CellOutput::calc_data_hash(&cell.data).unpack();
+                (data_hash, cell.out_point.clone())
+            })
+            .collect();
+        let dep_cell_by_type: HashMap<[u8; 32], OutPoint> = dep_cells
+            .iter()
+            .filter_map(|cell| {
+                cell.output
+                    .type_()
+                    .to_opt()
+                    .map(|type_| (type_.hash(), cell.out_point.clone()))
+            })
+            .collect();
+
+        let mut deps: HashSet<CellDep> = Default::default();
+        for deposit in &deposit_cells {
+            if let Some(type_) = deposit.cell.output.type_().to_opt() {
+                let code_hash: [u8; 32] = type_.code_hash().unpack();
+                let out_point_opt = match ScriptHashType::try_from(type_.hash_type())
+                    .map_err(|n| anyhow!("invalid hash_type {}", n))?
+                {
+                    ScriptHashType::Data => dep_cell_by_data.get(&code_hash),
+                    ScriptHashType::Type => dep_cell_by_type.get(&code_hash),
+                };
+                let out_point = out_point_opt
+                    .ok_or_else(|| anyhow!("can't find deps code_hash: {:?}", code_hash))?;
+                let cell_dep = CellDep::new_builder()
+                    .out_point(out_point.to_owned())
+                    .dep_type(DepType::Code.into())
+                    .build();
+                deps.insert(cell_dep);
+            }
+        }
+        deps
     };
-    let submit_withdrawals = {
-        let withdrawal_witness_root = calculate_merkle_root(
-            used_withdrawal_requests
-                .iter()
-                .map(|request| request.witness_hash())
-                .collect(),
+    tx_skeleton.cell_deps_mut().extend(deposit_type_deps);
+    // custodian cells
+    let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
+    tx_skeleton.outputs_mut().extend(custodian_cells);
+    // TODO stake cell
+    // tx fee cell
+    fill_tx_fee(&mut tx_skeleton, rpc_client, wallet.lock().to_owned()).await?;
+    // sign
+    let tx = wallet.sign_tx_skeleton(tx_skeleton)?;
+    Ok(tx)
+}
+
+pub struct BlockProducer {
+    rollup_config_hash: H256,
+    store: Store,
+    chain: Arc<Mutex<Chain>>,
+    mem_pool: Arc<Mutex<MemPool>>,
+    generator: Arc<Generator>,
+    wallet: Wallet,
+    config: BlockProducerConfig,
+    rpc_client: RPCClient,
+}
+
+impl BlockProducer {
+    pub fn create(
+        rollup_config_hash: H256,
+        store: Store,
+        generator: Arc<Generator>,
+        chain: Arc<Mutex<Chain>>,
+        mem_pool: Arc<Mutex<MemPool>>,
+        rpc_client: RPCClient,
+        config: BlockProducerConfig,
+    ) -> Result<Self> {
+        let wallet = Wallet::from_config(&config.wallet_config)?;
+
+        let block_producer = BlockProducer {
+            rollup_config_hash,
+            store,
+            generator,
+            chain,
+            mem_pool,
+            rpc_client,
+            wallet,
+            config,
+        };
+        Ok(block_producer)
+    }
+
+    pub async fn poll_loop(&self) -> Result<()> {
+        loop {
+            async_std::task::sleep(std::time::Duration::from_secs(15)).await;
+            self.produce_next_block().await?;
+        }
+    }
+
+    pub async fn produce_next_block(&self) -> Result<()> {
+        // TODO fix the default value
+        let block_producer_id = 0;
+        let timestamp = 0;
+
+        // get deposit cells
+        let deposit_cells = self.rpc_client.query_deposit_cells().await?;
+
+        // get txs & withdrawal requests from mem pool
+        let mut txs = Vec::new();
+        let mut withdrawal_requests = Vec::new();
+        {
+            let mem_pool = self.mem_pool.lock();
+            for entry in mem_pool.pending().values() {
+                if let Some(withdrawal) = entry.withdrawals.first() {
+                    withdrawal_requests.push(withdrawal.clone());
+                } else {
+                    txs.extend(entry.txs.iter().cloned());
+                }
+            }
+        };
+        let parent_block = self.chain.lock().local_state.tip().clone();
+        let max_withdrawal_capacity = std::u128::MAX;
+        // produce block
+        let param = ProduceBlockParam {
+            db: self.store.begin_transaction(),
+            generator: &self.generator,
+            block_producer_id,
+            timestamp,
+            txs,
+            deposition_requests: deposit_cells.iter().map(|d| &d.request).cloned().collect(),
+            withdrawal_requests,
+            parent_block: &parent_block,
+            rollup_config_hash: &self.rollup_config_hash,
+            max_withdrawal_capacity,
+        };
+        let block_result = produce_block(param)?;
+        let ProduceBlockResult {
+            block,
+            global_state,
+            unused_transactions,
+            unused_withdrawal_requests,
+        } = block_result;
+        println!(
+            "produce new block {} unused transactions {} unused withdrawals {}",
+            block.raw().number(),
+            unused_transactions.len(),
+            unused_withdrawal_requests.len()
+        );
+        let block_hash = block.hash().into();
+
+        // composit tx
+        let rollup_context = self.generator.rollup_context();
+        let tx = complete_tx_skeleton(
+            &self.config,
+            rollup_context,
+            &self.rpc_client,
+            &self.wallet,
+            deposit_cells,
+            block,
+            global_state,
         )
-        .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
-        let withdrawal_count = used_withdrawal_requests.len() as u32;
-        SubmitWithdrawals::new_builder()
-            .withdrawal_witness_root(withdrawal_witness_root.pack())
-            .withdrawal_count(withdrawal_count.pack())
-            .build()
-    };
-    let prev_account = AccountMerkleState::new_builder()
-        .merkle_root(prev_account_state_root.pack())
-        .count(prev_account_state_count.pack())
-        .build();
-    let post_account = AccountMerkleState::new_builder()
-        .merkle_root(post_account_state_root.pack())
-        .count(post_account_state_count.pack())
-        .build();
-    let raw_block = RawL2Block::new_builder()
-        .number(number.pack())
-        .block_producer_id(block_producer_id.pack())
-        .timestamp(timestamp.pack())
-        .parent_block_hash(parent_block_hash.pack())
-        .post_account(post_account.clone())
-        .prev_account(prev_account)
-        .submit_transactions(submit_txs)
-        .submit_withdrawals(submit_withdrawals)
-        .build();
-    // generate block fields from current state
-    let kv_state: Vec<(H256, H256)> = touched_keys
-        .iter()
-        .map(|k| {
-            state
-                .get_raw(k)
-                .map(|v| (*k, v))
-                .map_err(|err| anyhow!("can't fetch value error: {:?}", err))
-        })
-        .collect::<Result<_>>()?;
-    let packed_kv_state = kv_state
-        .iter()
-        .map(|(k, v)| {
-            let k: [u8; 32] = (*k).into();
-            let v: [u8; 32] = (*v).into();
-            (k, v)
-        })
-        .collect::<Vec<_>>()
-        .pack();
-    let account_smt = state_db.account_smt()?;
-    let proof = if kv_state.is_empty() {
-        // nothing need to prove
-        Vec::new()
-    } else {
-        account_smt
-            .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
-            .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
-            .compile(kv_state)?
-            .0
-    };
-    let block_smt = db.block_smt()?;
-    let block_proof = block_smt
-        .merkle_proof(vec![H256::from_u64(number)])
-        .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
-        .compile(vec![(H256::from_u64(number), H256::zero())])?;
-    let block = L2Block::new_builder()
-        .raw(raw_block)
-        .kv_state(packed_kv_state)
-        .kv_state_proof(proof.pack())
-        .transactions(used_transactions.pack())
-        .withdrawals(used_withdrawal_requests.pack())
-        .block_proof(block_proof.0.pack())
-        .build();
-    let post_block = {
-        let post_block_root: [u8; 32] = block_proof
-            .compute_root::<Blake2bHasher>(vec![(block.smt_key().into(), block.hash().into())])?
-            .into();
-        let block_count = number + 1;
-        BlockMerkleState::new_builder()
-            .merkle_root(post_block_root.pack())
-            .count(block_count.pack())
-            .build()
-    };
-    let last_finalized_block_number =
-        number.saturating_sub(rollup_context.rollup_config.finality_blocks().unpack());
-    let global_state = GlobalState::new_builder()
-        .account(post_account)
-        .block(post_block)
-        .tip_block_hash(block.hash().pack())
-        .last_finalized_block_number(last_finalized_block_number.pack())
-        .rollup_config_hash(rollup_config_hash.pack())
-        .status((Status::Running as u8).into())
-        .build();
-    Ok(ProduceBlockResult {
-        block,
-        global_state,
-        unused_transactions,
-        unused_withdrawal_requests,
-    })
+        .await?;
+
+        // send transaction
+        self.rpc_client.send_transaction(tx).await?;
+
+        // update status
+        self.mem_pool.lock().notify_new_tip(block_hash)?;
+        Ok(())
+    }
 }

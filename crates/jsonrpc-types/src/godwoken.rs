@@ -1,8 +1,8 @@
 use crate::blockchain::Script;
 use crate::fixed_bytes::Byte65;
+use anyhow::{anyhow, Error as JsonError};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
-use failure::{err_msg, Error as FailureError};
 use gw_types::{bytes::Bytes, packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
@@ -198,13 +198,13 @@ impl From<ChallengeTargetType> for packed::Byte {
     }
 }
 impl TryFrom<packed::Byte> for ChallengeTargetType {
-    type Error = FailureError;
+    type Error = JsonError;
 
     fn try_from(v: packed::Byte) -> Result<ChallengeTargetType, Self::Error> {
         match u8::from(v) {
             0 => Ok(ChallengeTargetType::Transaction),
             1 => Ok(ChallengeTargetType::Withdrawal),
-            _ => Err(err_msg(format!("Invalid challenge target type {}", v))),
+            _ => Err(anyhow!("Invalid challenge target type {}", v)),
         }
     }
 }
@@ -273,31 +273,6 @@ impl From<packed::ChallengeWitness> for ChallengeWitness {
             raw_l2block,
             block_proof,
         }
-    }
-}
-
-#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
-#[serde(rename_all = "snake_case")]
-pub struct ChallengeContext {
-    pub target: ChallengeTarget,
-    pub witness: ChallengeWitness,
-}
-
-impl From<ChallengeContext> for gw_generator::ChallengeContext {
-    fn from(json: ChallengeContext) -> gw_generator::ChallengeContext {
-        let ChallengeContext { target, witness } = json;
-        let target: packed::ChallengeTarget = target.into();
-        let witness: packed::ChallengeWitness = witness.into();
-        gw_generator::ChallengeContext { target, witness }
-    }
-}
-
-impl From<gw_generator::ChallengeContext> for ChallengeContext {
-    fn from(data: gw_generator::ChallengeContext) -> ChallengeContext {
-        let gw_generator::ChallengeContext { target, witness } = data;
-        let target: ChallengeTarget = target.into();
-        let witness: ChallengeWitness = witness.into();
-        Self { target, witness }
     }
 }
 

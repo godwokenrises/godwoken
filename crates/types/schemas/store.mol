@@ -1,6 +1,8 @@
 import blockchain;
 import godwoken;
 
+vector OutPointVec <OutPoint>;
+
 struct NumberHash {
     number:         Uint64,
     block_hash:     Byte32,
