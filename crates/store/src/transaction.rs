@@ -532,9 +532,9 @@ impl StoreTransaction {
                     Some(col) => col,
                     None => continue,
                 };
-                let _ = self.delete(column, &value)?;
+                self.delete(column, &value)?;
             }
-            let _ = self.delete(COLUMN_BLOCK_STATE_RECORD, &key)?;
+            self.delete(COLUMN_BLOCK_STATE_RECORD, &key)?;
         }
         Ok(())
     }
