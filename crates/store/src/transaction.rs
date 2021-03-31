@@ -1,18 +1,21 @@
 use crate::{smt_store_impl::SMTStore, traits::KVStore};
 use gw_common::{smt::SMT, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_db::schema::{
-    Col, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSITION_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
-    COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_CUSTODIAN_ASSETS, COLUMN_INDEX,
-    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
-    COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY,
-    META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
+    Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BLOCK,
+    COLUMN_BLOCK_DEPOSITION_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH,
+    COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD, COLUMN_CUSTODIAN_ASSETS, COLUMN_INDEX,
+    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_SCRIPT, COLUMN_TRANSACTION,
+    COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY,
+    META_ACCOUNT_SMT_ROOT_KEY, META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
 };
-use gw_db::{error::Error, iter::DBIter, DBIterator, IteratorMode, RocksDBTransaction};
+use gw_db::{
+    error::Error, iter::DBIter, DBIterator, Direction::Forward, IteratorMode, RocksDBTransaction,
+};
 use gw_types::{
     packed::{self, TransactionKey},
     prelude::*,
 };
-use std::{borrow::BorrowMut, collections::HashMap};
+use std::{borrow::BorrowMut, collections::HashMap, mem::size_of_val};
 
 const NUMBER_OF_CONFIRMATION: u64 = 10;
 
@@ -467,7 +470,6 @@ impl StoreTransaction {
             .map_err(|err| Error::from(format!("SMT error {}", err)))?;
         let root = block_smt.root();
         self.set_block_smt_root(*root)?;
-        self.clear_block_state(block.hash().into())?;
 
         // update tip
         let block_number: u64 = block_number.unpack();
@@ -480,7 +482,19 @@ impl StoreTransaction {
             &META_TIP_BLOCK_HASH_KEY,
             parent_block_hash.as_slice(),
         )?;
+        self.clear_block_state(block_number)?;
         Ok(())
+    }
+
+    pub fn record_block_state(
+        &self,
+        block_number: u64,
+        tx_index: u32,
+        col: Col,
+        raw_key: &[u8],
+    ) -> Result<(), Error> {
+        let key = self.get_state_record_key(block_number, tx_index, col)?;
+        self.insert_raw(COLUMN_BLOCK_STATE_RECORD, key.as_ref(), raw_key)
     }
 
     fn prune_block_state_record(&self, current_block_number: u64) -> Result<(), Error> {
@@ -488,28 +502,85 @@ impl StoreTransaction {
             return Ok(());
         }
         let to_be_pruned_block_number = current_block_number - NUMBER_OF_CONFIRMATION - 1;
-        let block_hash = self
-            .get_block_hash_by_number(to_be_pruned_block_number)?
-            .ok_or_else(|| "Invalid block number".to_owned())?;
-        self.clear_block_state_record(block_hash)
+        self.clear_block_state_record(to_be_pruned_block_number)
     }
 
-    fn clear_block_state_record(&self, _block_hash: H256) -> Result<(), Error> {
-        unimplemented!()
+    fn clear_block_state_record(&self, block_number: u64) -> Result<(), Error> {
+        self.clear_block_state_and_record(false, block_number)
     }
 
-    fn clear_block_state(&self, _block_hash: H256) -> Result<(), Error> {
-        unimplemented!()
+    fn clear_block_state(&self, block_number: u64) -> Result<(), Error> {
+        self.clear_block_state_and_record(true, block_number)
+    }
+
+    fn clear_block_state_and_record(
+        &self,
+        need_clear_state: bool,
+        block_number: u64,
+    ) -> Result<(), Error> {
+        let start_key = self.get_state_record_key(block_number, 0u32, "0")?;
+        let iter = self.get_iter(
+            COLUMN_BLOCK_STATE_RECORD,
+            IteratorMode::From(start_key.as_ref(), Forward),
+        );
+        for (key, value) in
+            iter.filter(|(key, _)| key[..size_of_val(&block_number)] == block_number.to_be_bytes())
+        {
+            if need_clear_state {
+                let column = self.get_column_from_state_record(&key);
+                let column = match column {
+                    Some(col) => col,
+                    None => continue,
+                };
+                let _ = self.delete(column, &value)?;
+            }
+            let _ = self.delete(COLUMN_BLOCK_STATE_RECORD, &key)?;
+        }
+        Ok(())
+    }
+
+    fn get_state_record_key(
+        &self,
+        block_number: u64,
+        tx_index: u32,
+        col: Col,
+    ) -> Result<Vec<u8>, Error> {
+        let column =
+            u8::from_str_radix(col, 10).map_err(|_| "Column parse int error".to_owned())?;
+        Ok([
+            &block_number.to_be_bytes()[..],
+            &tx_index.to_be_bytes()[..],
+            &column.to_be_bytes()[..],
+        ]
+        .concat())
+    }
+
+    fn get_column_from_state_record(&self, key: &Box<[u8]>) -> Option<&'static str> {
+        let column = key[key.len() - 1].to_string();
+        match column.as_str() {
+            COLUMN_ACCOUNT_SMT_BRANCH => Some(COLUMN_ACCOUNT_SMT_BRANCH),
+            COLUMN_ACCOUNT_SMT_LEAF => Some(COLUMN_ACCOUNT_SMT_LEAF),
+            COLUMN_SCRIPT => Some(COLUMN_SCRIPT),
+            _ => None,
+        }
     }
 
     #[cfg(test)]
-    pub fn clear_block_account_state(&self, block_hash: H256) -> Result<(), Error> {
-        self.clear_block_state(block_hash)
+    pub fn clear_block_account_state(
+        &self,
+        _block_hash: H256,
+        block_number: u64,
+    ) -> Result<(), Error> {
+        self.clear_block_state(block_number)
     }
 
     #[cfg(test)]
-    pub fn clear_block_account_state_record(&self, block_hash: H256) -> Result<(), Error> {
-        self.clear_block_state_record(block_hash)
+    pub fn clear_block_account_state_record(
+        &self,
+        _block_hash: H256,
+        block_number: u64,
+    ) -> Result<(), Error> {
+        self.clear_block_state_record(block_number)
     }
 }
 

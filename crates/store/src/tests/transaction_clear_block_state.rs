@@ -170,14 +170,14 @@ fn clear_block_account_state() {
     // attach block 2
     let (block_2_hash, block_2_number) = (H256::from([2; 32]), 2u64);
     insert_to_branch_column(&db, block_2_hash, block_2_number, 1u32, &[1], &[1, 1]);
-    insert_to_branch_column(&db, block_2_hash, block_2_number, 2u32, &[1], &[2, 2]);
-    insert_to_branch_column(&db, block_2_hash, block_2_number, 3u32, &[2], &[3, 3]);
-    insert_to_branch_column(&db, block_2_hash, block_2_number, 4u32, &[2], &[4, 4]);
+    insert_to_branch_column(&db, block_2_hash, block_2_number, 2u32, &[2], &[2, 2]);
+    insert_to_branch_column(&db, block_2_hash, block_2_number, 3u32, &[3], &[3, 3]);
+    insert_to_branch_column(&db, block_2_hash, block_2_number, 4u32, &[4], &[4, 4]);
 
     insert_to_leaf_column(&db, block_2_hash, block_2_number, 1u32, &[1, 1], &[1]);
-    insert_to_leaf_column(&db, block_2_hash, block_2_number, 2u32, &[1, 1], &[2]);
-    insert_to_leaf_column(&db, block_2_hash, block_2_number, 3u32, &[2, 2], &[3]);
-    insert_to_leaf_column(&db, block_2_hash, block_2_number, 4u32, &[2, 2], &[4]);
+    insert_to_leaf_column(&db, block_2_hash, block_2_number, 2u32, &[2, 2], &[2]);
+    insert_to_leaf_column(&db, block_2_hash, block_2_number, 3u32, &[3, 3], &[3]);
+    insert_to_leaf_column(&db, block_2_hash, block_2_number, 4u32, &[4, 4], &[4]);
 
     insert_to_script_column(&db, block_2_hash, block_2_number, 1u32, &[1], &[11]);
     insert_to_script_column(&db, block_2_hash, block_2_number, 2u32, &[2], &[22]);
@@ -187,8 +187,42 @@ fn clear_block_account_state() {
 
     // detach block 2
     let store_txn = db.begin_transaction();
-    store_txn.clear_block_account_state(block_2_hash).unwrap();
+    store_txn
+        .clear_block_account_state(block_2_hash, block_2_number)
+        .unwrap();
     store_txn.commit().unwrap();
+
+    // check old block 2
+    assert_eq!(
+        vec![2, 2, 2].into_boxed_slice(),
+        get_from_branch_column(&db, block_2_hash, block_2_number, 1u32, &[1]).unwrap()
+    );
+    assert_eq!(
+        vec![4, 4, 4].into_boxed_slice(),
+        get_from_branch_column(&db, block_2_hash, block_2_number, 2u32, &[2]).unwrap()
+    );
+    assert!(get_from_branch_column(&db, block_2_hash, block_2_number, 3u32, &[3]).is_none());
+    assert!(get_from_branch_column(&db, block_2_hash, block_2_number, 4u32, &[4]).is_none());
+    assert_eq!(
+        vec![22].into_boxed_slice(),
+        get_from_leaf_column(&db, block_2_hash, block_2_number, 1u32, &[1, 1]).unwrap()
+    );
+    assert_eq!(
+        vec![44].into_boxed_slice(),
+        get_from_leaf_column(&db, block_2_hash, block_2_number, 2u32, &[2, 2]).unwrap()
+    );
+    assert!(get_from_leaf_column(&db, block_2_hash, block_2_number, 3u32, &[3, 3]).is_none());
+    assert!(get_from_leaf_column(&db, block_2_hash, block_2_number, 4u32, &[4, 4]).is_none());
+    assert!(get_from_script_column(&db, block_2_hash, block_2_number, 1u32, &[1]).is_none());
+    assert!(get_from_script_column(&db, block_2_hash, block_2_number, 2u32, &[2]).is_none());
+    assert_eq!(
+        vec![5].into_boxed_slice(),
+        get_from_state_db(&db, "1", block_2_hash, block_2_number, 5u32, &[5]).unwrap()
+    );
+    assert_eq!(
+        vec![6].into_boxed_slice(),
+        get_from_state_db(&db, "2", block_2_hash, block_2_number, 6u32, &[6]).unwrap()
+    );
 
     // attach new block with the same block number 2
     let (block_new_hash, block_new_number) = (H256::from([3; 32]), block_2_number);
@@ -207,20 +241,6 @@ fn clear_block_account_state() {
 
     insert_to_state_db(&db, "1", block_new_hash, block_new_number, 1u32, &[5], &[5]);
     insert_to_state_db(&db, "2", block_new_hash, block_new_number, 1u32, &[6], &[6]);
-
-    // check old block 2
-    assert!(get_from_branch_column(&db, block_2_hash, block_2_number, 1u32, &[1]).is_none());
-    assert!(get_from_branch_column(&db, block_2_hash, block_2_number, 2u32, &[1]).is_none());
-    assert!(get_from_branch_column(&db, block_2_hash, block_2_number, 3u32, &[2]).is_none());
-    assert!(get_from_branch_column(&db, block_2_hash, block_2_number, 4u32, &[2]).is_none());
-    assert!(get_from_leaf_column(&db, block_2_hash, block_2_number, 1u32, &[1, 1]).is_none());
-    assert!(get_from_leaf_column(&db, block_2_hash, block_2_number, 2u32, &[1, 1]).is_none());
-    assert!(get_from_leaf_column(&db, block_2_hash, block_2_number, 3u32, &[2, 2]).is_none());
-    assert!(get_from_leaf_column(&db, block_2_hash, block_2_number, 4u32, &[2, 2]).is_none());
-    assert!(get_from_script_column(&db, block_2_hash, block_2_number, 1u32, &[1]).is_none());
-    assert!(get_from_script_column(&db, block_2_hash, block_2_number, 2u32, &[2]).is_none());
-    assert!(get_from_state_db(&db, "1", block_2_hash, block_2_number, 5u32, &[5]).is_none());
-    assert!(get_from_state_db(&db, "2", block_2_hash, block_2_number, 6u32, &[6]).is_none());
 
     // check block new
     assert_eq!(
@@ -348,17 +368,15 @@ fn clear_block_account_state_record() {
     // clear account record
     let store_txn = db.begin_transaction();
     store_txn
-        .clear_block_account_state_record(block_1_hash)
+        .clear_block_account_state_record(block_1_hash, block_1_number)
         .unwrap();
     store_txn.commit().unwrap();
 
-    // TODO assert COLUMN_BLOCK_STATE_RECORD column
-    // clear block's keys have been deleted
-    unimplemented!();
-
     // clear account state tree without account record
     let store_txn = db.begin_transaction();
-    store_txn.clear_block_account_state(block_1_hash).unwrap();
+    store_txn
+        .clear_block_account_state(block_1_hash, block_1_number)
+        .unwrap();
     store_txn.commit().unwrap();
 
     // check block 1

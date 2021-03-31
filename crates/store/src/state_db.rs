@@ -102,7 +102,7 @@ impl<'db> KVStore for StateDBTransaction<'db> {
         let raw_key = self.get_key_with_suffix(key);
         self.inner
             .insert_raw(col, &raw_key, value)
-            .and(self.record_block_state(&raw_key))
+            .and(self.record_block_state(col, &raw_key))
     }
 
     fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
@@ -163,19 +163,6 @@ impl<'db> StateDBTransaction<'db> {
         ))
     }
 
-    /// TODO refacotring with version based DB
-    /// clear account state tree, delete leaves and branches from DB
-    pub fn clear_account_state_tree(&self) -> Result<(), Error> {
-        self.inner.set_account_smt_root(H256::zero())?;
-        self.inner.set_account_count(0)?;
-        for col in &[COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ACCOUNT_SMT_BRANCH] {
-            for (k, _v) in self.get_iter(col, IteratorMode::Start) {
-                self.delete(col, k.as_ref())?;
-            }
-        }
-        Ok(())
-    }
-
     fn get_current_account_merkle_state(&self) -> Result<AccountMerkleState, Error> {
         let block_hash = match self.version.block_hash {
             Some(hash) => hash,
@@ -233,8 +220,9 @@ impl<'db> StateDBTransaction<'db> {
         }
     }
 
-    fn record_block_state(&self, _raw_key: &[u8]) -> Result<(), Error> {
-        Ok(())
+    fn record_block_state(&self, col: Col, raw_key: &[u8]) -> Result<(), Error> {
+        self.inner
+            .record_block_state(self.block_number, self.tx_index, col, raw_key)
     }
 
     #[cfg(test)]
