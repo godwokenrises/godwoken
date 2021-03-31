@@ -27,7 +27,7 @@ fn test_init_genesis() {
         timestamp: 42,
         meta_contract_validator_type_hash: meta_contract_code_hash.into(),
         rollup_config: RollupConfig::default().into(),
-        rollup_script_hash: rollup_script_hash.into(),
+        rollup_type_hash: rollup_script_hash.into(),
     };
     let genesis = build_genesis(&config).unwrap();
     let genesis_block_hash: [u8; 32] = genesis.genesis.hash();

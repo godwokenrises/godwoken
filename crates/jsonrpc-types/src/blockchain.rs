@@ -3,7 +3,7 @@ use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Uint32, Uint64};
 use gw_types::{packed, prelude::*};
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -119,10 +119,33 @@ pub type Version = Uint32;
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct CellDep {
-    /// Reference to the cell.
-    pub out_point: OutPoint,
     /// Dependency type.
     pub dep_type: DepType,
+    /// Reference to the cell.
+    pub out_point: OutPoint,
+}
+
+impl From<CellDep> for packed::CellDep {
+    fn from(json: CellDep) -> Self {
+        let CellDep {
+            dep_type,
+            out_point,
+        } = json;
+        let dep_type: packed::Byte = dep_type.into();
+        packed::CellDep::new_builder()
+            .dep_type(dep_type)
+            .out_point(out_point.into())
+            .build()
+    }
+}
+
+impl From<packed::CellDep> for CellDep {
+    fn from(data: packed::CellDep) -> CellDep {
+        CellDep {
+            dep_type: data.dep_type().try_into().expect("dep type"),
+            out_point: data.out_point().into(),
+        }
+    }
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
@@ -162,6 +185,27 @@ pub struct OutPoint {
     pub index: Uint32,
 }
 
+impl From<OutPoint> for packed::OutPoint {
+    fn from(json: OutPoint) -> Self {
+        let OutPoint { tx_hash, index } = json;
+        let index: u32 = index.into();
+        packed::OutPoint::new_builder()
+            .tx_hash(tx_hash.pack())
+            .index(index.pack())
+            .build()
+    }
+}
+
+impl From<packed::OutPoint> for OutPoint {
+    fn from(data: packed::OutPoint) -> OutPoint {
+        let index: u32 = data.index().unpack();
+        OutPoint {
+            tx_hash: data.tx_hash().unpack(),
+            index: index.into(),
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum DepType {
@@ -177,6 +221,25 @@ pub enum DepType {
     /// The dep group stores the array of `OutPoint`s serialized via molecule in the cell data.
     /// Each `OutPoint` points to one cell member.
     DepGroup,
+}
+
+impl From<DepType> for packed::Byte {
+    fn from(json: DepType) -> Self {
+        match json {
+            DepType::Code => gw_types::core::DepType::Code.into(),
+            DepType::DepGroup => gw_types::core::DepType::DepGroup.into(),
+        }
+    }
+}
+
+impl From<packed::Byte> for DepType {
+    fn from(data: packed::Byte) -> DepType {
+        let dep_type: gw_types::core::DepType = data.try_into().expect("dep type");
+        match dep_type {
+            gw_types::core::DepType::Code => DepType::Code,
+            gw_types::core::DepType::DepGroup => DepType::DepGroup,
+        }
+    }
 }
 
 impl Default for DepType {

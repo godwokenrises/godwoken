@@ -42,7 +42,7 @@ pub fn build_genesis_from_store(
 ) -> Result<GenesisWithGlobalState> {
     let rollup_context = RollupContext {
         rollup_script_hash: {
-            let rollup_script_hash: [u8; 32] = config.rollup_script_hash.clone().into();
+            let rollup_script_hash: [u8; 32] = config.rollup_type_hash.clone().into();
             rollup_script_hash.into()
         },
         rollup_config: config.rollup_config.clone().into(),
@@ -157,7 +157,7 @@ pub fn init_genesis(store: &Store, config: &GenesisConfig, header: HeaderInfo) -
         panic!("The store is already initialized!");
     }
     let rollup_script_hash: H256 = {
-        let rollup_script_hash: [u8; 32] = config.rollup_script_hash.clone().into();
+        let rollup_script_hash: [u8; 32] = config.rollup_type_hash.clone().into();
         rollup_script_hash.into()
     };
     let db = store.begin_transaction();

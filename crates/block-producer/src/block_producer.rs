@@ -154,20 +154,15 @@ async fn complete_tx_skeleton(
         cell: rollup_cell_info.clone(),
     });
     // rollup deps
-    tx_skeleton.cell_deps_mut().push({
-        let cell_dep: ckb_types::packed::CellDep =
-            block_producer_config.rollup_cell_type_dep.clone().into();
-        CellDep::new_unchecked(cell_dep.as_bytes())
-    });
-    tx_skeleton.cell_deps_mut().push({
-        let cell_dep: ckb_types::packed::CellDep =
-            block_producer_config.rollup_cell_lock_dep.clone().into();
-        CellDep::new_unchecked(cell_dep.as_bytes())
-    });
+    tx_skeleton
+        .cell_deps_mut()
+        .push(block_producer_config.rollup_cell_type_dep.clone().into());
+    tx_skeleton
+        .cell_deps_mut()
+        .push(block_producer_config.rollup_cell_lock_dep.clone().into());
     // deposit lock dep
     if !deposit_cells.is_empty() {
-        let cell_dep: ckb_types::packed::CellDep =
-            block_producer_config.deposit_cell_lock_dep.clone().into();
+        let cell_dep: CellDep = block_producer_config.deposit_cell_lock_dep.clone().into();
         tx_skeleton
             .cell_deps_mut()
             .push(CellDep::new_unchecked(cell_dep.as_bytes()));

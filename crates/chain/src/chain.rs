@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
 use gw_common::{sparse_merkle_tree, state::State, H256};
-use gw_config::ChainConfig;
 use gw_generator::{
     generator::StateTransitionArgs, ChallengeContext, Error as GeneratorError, Generator,
 };
@@ -128,21 +127,16 @@ pub struct Chain {
 
 impl Chain {
     pub fn create(
-        config: ChainConfig,
+        rollup_config: &RollupConfig,
+        rollup_type_script: &Script,
         store: Store,
         generator: Arc<Generator>,
         mem_pool: Arc<Mutex<MemPool>>,
     ) -> Result<Self> {
-        let ChainConfig {
-            rollup_type_script,
-            rollup_config,
-        } = config;
         // convert serde types to gw-types
-        let rollup_config: RollupConfig = rollup_config.into();
-        let rollup_type_script: Script = rollup_type_script.into();
         assert_eq!(
             rollup_config,
-            generator.rollup_context().rollup_config,
+            &generator.rollup_context().rollup_config,
             "check generator rollup config"
         );
         let rollup_type_script_hash = rollup_type_script.hash();

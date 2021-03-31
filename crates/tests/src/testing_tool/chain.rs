@@ -1,7 +1,7 @@
 use gw_block_producer::produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult};
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncEvent, SyncParam};
 use gw_common::blake2b::new_blake2b;
-use gw_config::{BackendConfig, ChainConfig, GenesisConfig};
+use gw_config::{BackendConfig, GenesisConfig};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
@@ -88,21 +88,17 @@ pub fn setup_chain_with_account_lock_manage(
 ) -> Chain {
     let store = Store::open_tmp().unwrap();
     let rollup_script_hash = rollup_type_script.hash();
-    let config = ChainConfig {
-        rollup_type_script: rollup_type_script.into(),
-        rollup_config: rollup_config.clone().into(),
-    };
     let genesis_config = GenesisConfig {
         timestamp: 0,
         meta_contract_validator_type_hash: Default::default(),
         rollup_config: rollup_config.clone().into(),
-        rollup_script_hash: rollup_script_hash.into(),
+        rollup_type_hash: rollup_script_hash.into(),
     };
     let genesis_header_info = HeaderInfo::default();
     let backend_manage = build_backend_manage(&rollup_config);
     let rollup_context = RollupContext {
         rollup_script_hash: rollup_script_hash.into(),
-        rollup_config,
+        rollup_config: rollup_config.clone(),
     };
     let generator = Arc::new(Generator::new(
         backend_manage,
@@ -111,7 +107,14 @@ pub fn setup_chain_with_account_lock_manage(
     ));
     init_genesis(&store, &genesis_config, genesis_header_info).unwrap();
     let mem_pool = MemPool::create(store.clone(), Arc::clone(&generator)).unwrap();
-    Chain::create(config, store, generator, Arc::new(Mutex::new(mem_pool))).unwrap()
+    Chain::create(
+        &rollup_config,
+        &rollup_type_script,
+        store,
+        generator,
+        Arc::new(Mutex::new(mem_pool)),
+    )
+    .unwrap()
 }
 
 pub fn build_sync_tx(

@@ -12,7 +12,10 @@ use gw_generator::{
 };
 use gw_mem_pool::pool::MemPool;
 use gw_store::Store;
-use gw_types::{packed::Script, prelude::*};
+use gw_types::{
+    packed::{RollupConfig, Script},
+    prelude::*,
+};
 use parking_lot::Mutex;
 use std::{fs, path::Path, process::exit, sync::Arc};
 
@@ -26,22 +29,23 @@ fn run() -> Result<()> {
     let config_path = "./config.toml";
     // read config
     let config = read_config(&config_path)?;
+    let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
     // TODO: use persistent store later
     let store = Store::open_tmp()?;
     init_genesis(
         &store,
         &config.genesis,
-        config.rollup_deployment.genesis_header.clone().into(),
+        config.chain.genesis_header.clone().into(),
     )?;
     let rollup_context = RollupContext {
-        rollup_config: config.genesis.rollup_config.clone().into(),
+        rollup_config: rollup_config.clone(),
         rollup_script_hash: {
-            let rollup_script_hash: [u8; 32] = config.genesis.rollup_script_hash.clone().into();
+            let rollup_script_hash: [u8; 32] = config.genesis.rollup_type_hash.clone().into();
             rollup_script_hash.into()
         },
     };
 
-    let rollup_config_hash = rollup_context.rollup_config.hash().into();
+    let rollup_config_hash = rollup_config.hash().into();
     let generator = {
         let backend_manage = BackendManage::from_config(config.backends.clone())?;
         let account_lock_manage = AccountLockManage::default();
@@ -56,7 +60,8 @@ fn run() -> Result<()> {
         generator.clone(),
     )?));
     let chain = Arc::new(Mutex::new(Chain::create(
-        config.chain.clone(),
+        &rollup_config,
+        &config.chain.rollup_type_script.clone().into(),
         store.clone(),
         generator.clone(),
         mem_pool.clone(),
@@ -123,7 +128,17 @@ fn run() -> Result<()> {
     Ok(())
 }
 
+fn generate_example_config<P: AsRef<Path>>(path: P) -> Result<()> {
+    let mut config = Config::default();
+    config.backends.push(Default::default());
+    config.block_producer = Some(Default::default());
+    let content = toml::to_string_pretty(&config)?;
+    fs::write(path, content)?;
+    Ok(())
+}
+
 /// Block producer
 fn main() {
+    generate_example_config("./config.example.toml").expect("default config");
     run().expect("block producer");
 }
