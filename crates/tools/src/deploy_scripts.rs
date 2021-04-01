@@ -61,7 +61,7 @@ pub struct DeployItem {
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-pub struct DeploymentResult {
+pub struct ScriptsDeploymentResult {
     pub custodian_lock: DeployItem,
     pub deposition_lock: DeployItem,
     pub withdrawal_lock: DeployItem,
@@ -354,7 +354,7 @@ pub fn deploy_scripts(
         &target_lock,
         &target_address,
     )?;
-    let deployment_result = DeploymentResult {
+    let deployment_result = ScriptsDeploymentResult {
         custodian_lock,
         deposition_lock,
         withdrawal_lock,

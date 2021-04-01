@@ -67,11 +67,11 @@ fn main() {
                         .help("The poa config json file path"),
                 )
                 .arg(
-                    Arg::with_name("runner-config-path")
+                    Arg::with_name("output-path")
                         .short("o")
                         .takes_value(true)
                         .required(true)
-                        .help("The output runner config json file path"),
+                        .help("The output json file path"),
                 ),
         );
 
@@ -98,14 +98,14 @@ fn main() {
             let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
             let user_rollup_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
             let poa_config_path = Path::new(m.value_of("poa-config-path").unwrap());
-            let runner_config_path = Path::new(m.value_of("runner-config-path").unwrap());
+            let output_path = Path::new(m.value_of("output-path").unwrap());
             if let Err(err) = deploy_genesis::deploy_genesis(
                 &privkey_path,
                 ckb_rpc_url,
                 &deployment_results_path,
                 &user_rollup_path,
                 &poa_config_path,
-                &runner_config_path,
+                &output_path,
             ) {
                 log::error!("Deploy genesis error: {}", err);
                 std::process::exit(-1);

@@ -1,6 +1,6 @@
-use std::ops::Deref;
 use std::path::Path;
 use std::str::FromStr;
+use std::{fs, ops::Deref};
 
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
@@ -25,14 +25,14 @@ use ckb_types::{
     prelude::Unpack as CKBUnpack,
 };
 use gw_config::GenesisConfig;
-use gw_generator::{genesis::build_genesis, types::RollupContext};
+use gw_generator::genesis::build_genesis;
 use gw_types::{
     packed as gw_packed, packed::RollupConfig, prelude::Entity as GwEntity,
     prelude::Pack as GwPack, prelude::PackVec as GwPackVec,
 };
 
 use super::deploy_scripts::{
-    get_network_type, run_cmd, wait_for_tx, DeploymentResult, TYPE_ID_CODE_HASH,
+    get_network_type, run_cmd, wait_for_tx, ScriptsDeploymentResult, TYPE_ID_CODE_HASH,
 };
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
@@ -103,26 +103,31 @@ pub fn serialize_poa_data(data: &PoAData) -> Bytes {
     buffer.freeze()
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+pub struct GenesisDeploymentResult {
+    pub tx_hash: H256,
+}
+
 pub fn deploy_genesis(
     privkey_path: &Path,
     ckb_rpc_url: &str,
     deployment_result_path: &Path,
     user_rollup_config_path: &Path,
     poa_config_path: &Path,
-    _runner_config_path: &Path,
+    output_path: &Path,
 ) -> Result<(), String> {
     let deployment_result_string =
         std::fs::read_to_string(deployment_result_path).map_err(|err| err.to_string())?;
-    let deployment_result: DeploymentResult =
-        serde_json::from_str(&deployment_result_string).map_err(|err| err.to_string())?;
+    let deployment_result: ScriptsDeploymentResult =
+        toml::from_str(&deployment_result_string).map_err(|err| err.to_string())?;
     let user_rollup_config_string =
         std::fs::read_to_string(user_rollup_config_path).map_err(|err| err.to_string())?;
     let user_rollup_config: UserRollupConfig =
-        serde_json::from_str(&user_rollup_config_string).map_err(|err| err.to_string())?;
+        toml::from_str(&user_rollup_config_string).map_err(|err| err.to_string())?;
     let poa_config_string =
         std::fs::read_to_string(poa_config_path).map_err(|err| err.to_string())?;
     let poa_config: PoAConfig =
-        serde_json::from_str(&poa_config_string).map_err(|err| err.to_string())?;
+        toml::from_str(&poa_config_string).map_err(|err| err.to_string())?;
     let poa_setup = poa_config.poa_setup;
 
     let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
@@ -178,13 +183,6 @@ pub fn deploy_genesis(
     log::info!("rollup_script_hash: {:#x}", rollup_script_hash);
 
     // 1. build genesis block
-    let genesis_config = GenesisConfig {
-        timestamp,
-        meta_contract_validator_type_hash: deployment_result
-            .meta_contract_validator
-            .script_type_hash
-            .clone(),
-    };
     let allowed_contract_type_hashes: Vec<gw_packed::Byte32> = vec![
         GwPack::pack(&deployment_result.meta_contract_validator.script_type_hash),
         GwPack::pack(&deployment_result.l2_sudt_validator.script_type_hash),
@@ -221,12 +219,17 @@ pub fn deploy_genesis(
         ))
         .allowed_contract_type_hashes(GwPackVec::pack(allowed_contract_type_hashes))
         .build();
-    let rollup_context = RollupContext {
-        rollup_script_hash: rollup_script_hash.0.into(),
-        rollup_config,
+    let genesis_config = GenesisConfig {
+        timestamp,
+        meta_contract_validator_type_hash: deployment_result
+            .meta_contract_validator
+            .script_type_hash
+            .clone(),
+        rollup_type_hash: rollup_script_hash.into(),
+        rollup_config: rollup_config.clone().into(),
     };
     let genesis_with_global_state =
-        build_genesis(&genesis_config, &rollup_context).map_err(|err| err.to_string())?;
+        build_genesis(&genesis_config).map_err(|err| err.to_string())?;
 
     // 2. build rollup cell (with type id)
     let (rollup_output, rollup_data): (ckb_packed::CellOutput, Bytes) = {
@@ -382,7 +385,7 @@ pub fn deploy_genesis(
     cli_tx["transaction"] = tx_body;
     let cli_tx_content = serde_json::to_string_pretty(&cli_tx).unwrap();
     std::fs::write(tx_path_str, cli_tx_content.as_bytes()).map_err(|err| err.to_string())?;
-    let _otuput = run_cmd(&[
+    let _output = run_cmd(&[
         "--url",
         rpc_client.url(),
         "tx",
@@ -409,7 +412,11 @@ pub fn deploy_genesis(
     let tx_hash = H256::from_str(&send_output.trim()[2..]).map_err(|err| err.to_string())?;
     wait_for_tx(&mut rpc_client, &tx_hash, 120)?;
 
-    // 9. write runner config
+    // 9. write genesis deployment result
+    let genesis_deployment_result = GenesisDeploymentResult { tx_hash };
+    let output_content = serde_json::to_string_pretty(&genesis_deployment_result)
+        .expect("serde json to string pretty");
+    fs::write(output_path, output_content.as_bytes()).map_err(|err| err.to_string())?;
     Ok(())
 }
 
