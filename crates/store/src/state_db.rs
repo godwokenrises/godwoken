@@ -164,20 +164,10 @@ impl<'db> StateDBTransaction<'db> {
     }
 
     fn get_current_account_merkle_state(&self) -> Result<AccountMerkleState, Error> {
-        let block_hash = match self.version.block_hash {
-            Some(hash) => hash,
-            None => {
-                if self.version.is_genesis_version() {
-                    match self.inner.get_block_hash_by_number(self.block_number)? {
-                        Some(hash) => hash,
-                        None => {
-                            return Ok(AccountMerkleState::default());
-                        }
-                    }
-                } else {
-                    return Err(Error::from("Invalid block hash".to_owned()));
-                }
-            }
+        let block_hash = self.get_valid_block_hash()?;
+        let block_hash = match block_hash {
+            Some(block_hash) => block_hash,
+            None => return Ok(AccountMerkleState::default()),
         };
         let account_merkle_state = self
             .inner
@@ -221,8 +211,26 @@ impl<'db> StateDBTransaction<'db> {
     }
 
     fn record_block_state(&self, col: &str, raw_key: &[u8]) -> Result<(), Error> {
+        let block_hash = self.get_valid_block_hash()?;
+        let block_hash = match block_hash {
+            Some(block_hash) => block_hash,
+            None => return Ok(()),
+        };
         self.inner
-            .record_block_state(self.block_number, self.tx_index, col, raw_key)
+            .record_block_state(&block_hash, self.tx_index, col, raw_key)
+    }
+
+    fn get_valid_block_hash(&self) -> Result<Option<H256>, Error> {
+        match self.version.block_hash {
+            Some(block_hash) => Ok(Some(block_hash)),
+            None => {
+                if self.version.is_genesis_version() {
+                    self.inner.get_block_hash_by_number(self.block_number)
+                } else {
+                    Err(Error::from("Invalid block hash".to_owned()))
+                }
+            }
+        }
     }
 
     #[cfg(test)]

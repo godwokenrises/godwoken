@@ -482,18 +482,18 @@ impl StoreTransaction {
             &META_TIP_BLOCK_HASH_KEY,
             parent_block_hash.as_slice(),
         )?;
-        self.clear_block_state(block_number)?;
+        self.clear_block_state(&block.hash().into())?;
         Ok(())
     }
 
     pub fn record_block_state(
         &self,
-        block_number: u64,
+        block_hash: &H256,
         tx_index: u32,
         col: &str,
         raw_key: &[u8],
     ) -> Result<(), Error> {
-        let key = self.get_state_record_key(block_number, tx_index, col)?;
+        let key = self.get_state_record_key(block_hash, tx_index, col)?;
         self.insert_raw(COLUMN_BLOCK_STATE_RECORD, key.as_ref(), raw_key)
     }
 
@@ -502,29 +502,37 @@ impl StoreTransaction {
             return Ok(());
         }
         let to_be_pruned_block_number = current_block_number - NUMBER_OF_CONFIRMATION - 1;
-        self.clear_block_state_record(to_be_pruned_block_number)
+        let block_hash = self.get_block_hash_by_number(to_be_pruned_block_number)?;
+        let block_hash = match block_hash {
+            Some(block_hash) => block_hash,
+            None => match to_be_pruned_block_number {
+                0u64 => return Ok(()),
+                _ => return Err(Error::from("Invalid block hash".to_owned())),
+            },
+        };
+        self.clear_block_state_record(&block_hash)
     }
 
-    fn clear_block_state_record(&self, block_number: u64) -> Result<(), Error> {
-        self.clear_block_state_and_record(false, block_number)
+    fn clear_block_state_record(&self, block_hash: &H256) -> Result<(), Error> {
+        self.clear_block_state_and_record(block_hash, false)
     }
 
-    fn clear_block_state(&self, block_number: u64) -> Result<(), Error> {
-        self.clear_block_state_and_record(true, block_number)
+    fn clear_block_state(&self, block_hash: &H256) -> Result<(), Error> {
+        self.clear_block_state_and_record(block_hash, true)
     }
 
     fn clear_block_state_and_record(
         &self,
+        block_hash: &H256,
         need_clear_state: bool,
-        block_number: u64,
     ) -> Result<(), Error> {
-        let start_key = self.get_state_record_key(block_number, 0u32, "0")?;
+        let start_key = self.get_state_record_key(block_hash, 0u32, "0")?;
         let iter = self.get_iter(
             COLUMN_BLOCK_STATE_RECORD,
             IteratorMode::From(start_key.as_ref(), Forward),
         );
         for (key, value) in
-            iter.filter(|(key, _)| key[..size_of_val(&block_number)] == block_number.to_be_bytes())
+            iter.filter(|(key, _)| &key[..size_of_val(block_hash)] == block_hash.as_slice())
         {
             if need_clear_state {
                 let column = self.get_column_from_state_record(&key)?;
@@ -537,21 +545,21 @@ impl StoreTransaction {
 
     fn get_state_record_key(
         &self,
-        block_number: u64,
+        block_hash: &H256,
         tx_index: u32,
         col: &str,
     ) -> Result<Vec<u8>, Error> {
         let column =
             u8::from_str_radix(col, 10).map_err(|_| "Parse column to int failed".to_owned())?;
         Ok([
-            &block_number.to_be_bytes()[..],
+            block_hash.as_slice(),
             &tx_index.to_be_bytes()[..],
             &column.to_be_bytes()[..],
         ]
         .concat())
     }
 
-    fn get_column_from_state_record<'a>(&self, key: &'a [u8]) -> Result<String, Error> {
+    fn get_column_from_state_record(&self, key: &[u8]) -> Result<String, Error> {
         let column = key
             .last()
             .ok_or_else(|| "Decode column failed".to_owned())?;
@@ -561,19 +569,19 @@ impl StoreTransaction {
     #[cfg(test)]
     pub fn clear_block_account_state(
         &self,
-        _block_hash: H256,
-        block_number: u64,
+        block_hash: H256,
+        _block_number: u64,
     ) -> Result<(), Error> {
-        self.clear_block_state(block_number)
+        self.clear_block_state(&block_hash)
     }
 
     #[cfg(test)]
     pub fn clear_block_account_state_record(
         &self,
-        _block_hash: H256,
-        block_number: u64,
+        block_hash: H256,
+        _block_number: u64,
     ) -> Result<(), Error> {
-        self.clear_block_state_record(block_number)
+        self.clear_block_state_record(&block_hash)
     }
 }
 
