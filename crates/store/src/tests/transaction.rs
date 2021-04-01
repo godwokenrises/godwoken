@@ -322,15 +322,13 @@ fn delete_range() {
     store_txn.insert_raw("1", &[3], &[3, 3]).unwrap();
     store_txn.commit().unwrap();
 
-    store
-        .new_write_batch()
-        .inner
-        .delete_range("1", &[0], &[3])
-        .unwrap();
+    let mut batch = store.new_write_batch();
+    batch.inner.delete_range("1", &[0], &[3]).unwrap();
+    store.write(&batch).unwrap();
 
-    assert!(store_txn.get("1", &[0]).is_some()); // expect None
-    assert!(store_txn.get("1", &[1]).is_some()); // expect None
-    assert!(store_txn.get("1", &[2]).is_some()); // expect None
+    assert!(store_txn.get("1", &[0]).is_none());
+    assert!(store_txn.get("1", &[1]).is_none());
+    assert!(store_txn.get("1", &[2]).is_none());
     assert!(store_txn.get("1", &[3]).is_some());
 }
 
