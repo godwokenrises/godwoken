@@ -93,7 +93,7 @@ impl<'db> KVStore for StateDBTransaction<'db> {
         self.inner.get_iter(col, mode)
     }
 
-    fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
+    fn insert_raw(&self, col: &str, key: &[u8], value: &[u8]) -> Result<(), Error> {
         assert_ne!(
             value,
             &FLAG_DELETE_VALUE.to_be_bytes(),
@@ -105,7 +105,7 @@ impl<'db> KVStore for StateDBTransaction<'db> {
             .and(self.record_block_state(col, &raw_key))
     }
 
-    fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
+    fn delete(&self, col: &str, key: &[u8]) -> Result<(), Error> {
         let raw_key = self.get_key_with_suffix(key);
         self.inner
             .insert_raw(col, &raw_key, &FLAG_DELETE_VALUE.to_be_bytes())
@@ -220,7 +220,7 @@ impl<'db> StateDBTransaction<'db> {
         }
     }
 
-    fn record_block_state(&self, col: Col, raw_key: &[u8]) -> Result<(), Error> {
+    fn record_block_state(&self, col: &str, raw_key: &[u8]) -> Result<(), Error> {
         self.inner
             .record_block_state(self.block_number, self.tx_index, col, raw_key)
     }

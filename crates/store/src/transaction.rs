@@ -1,12 +1,12 @@
 use crate::{smt_store_impl::SMTStore, traits::KVStore};
 use gw_common::{smt::SMT, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_db::schema::{
-    Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BLOCK,
-    COLUMN_BLOCK_DEPOSITION_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH,
-    COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD, COLUMN_CUSTODIAN_ASSETS, COLUMN_INDEX,
-    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_SCRIPT, COLUMN_TRANSACTION,
-    COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY,
-    META_ACCOUNT_SMT_ROOT_KEY, META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
+    Col, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSITION_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
+    COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD,
+    COLUMN_CUSTODIAN_ASSETS, COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META,
+    COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT,
+    META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY, META_BLOCK_SMT_ROOT_KEY,
+    META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
 };
 use gw_db::{
     error::Error, iter::DBIter, DBIterator, Direction::Forward, IteratorMode, RocksDBTransaction,
@@ -37,11 +37,11 @@ impl KVStore for StoreTransaction {
             .expect("db operation should be ok")
     }
 
-    fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
+    fn insert_raw(&self, col: &str, key: &[u8], value: &[u8]) -> Result<(), Error> {
         self.inner.put(col, key, value)
     }
 
-    fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
+    fn delete(&self, col: &str, key: &[u8]) -> Result<(), Error> {
         self.inner.delete(col, key)
     }
 }
@@ -490,7 +490,7 @@ impl StoreTransaction {
         &self,
         block_number: u64,
         tx_index: u32,
-        col: Col,
+        col: &str,
         raw_key: &[u8],
     ) -> Result<(), Error> {
         let key = self.get_state_record_key(block_number, tx_index, col)?;
@@ -527,12 +527,8 @@ impl StoreTransaction {
             iter.filter(|(key, _)| key[..size_of_val(&block_number)] == block_number.to_be_bytes())
         {
             if need_clear_state {
-                let column = self.get_column_from_state_record(&key);
-                let column = match column {
-                    Some(col) => col,
-                    None => continue,
-                };
-                self.delete(column, &value)?;
+                let column = self.get_column_from_state_record(&key)?;
+                self.delete(column.as_str(), &value)?;
             }
             self.delete(COLUMN_BLOCK_STATE_RECORD, &key)?;
         }
@@ -543,10 +539,10 @@ impl StoreTransaction {
         &self,
         block_number: u64,
         tx_index: u32,
-        col: Col,
+        col: &str,
     ) -> Result<Vec<u8>, Error> {
         let column =
-            u8::from_str_radix(col, 10).map_err(|_| "Column parse int error".to_owned())?;
+            u8::from_str_radix(col, 10).map_err(|_| "Parse column to int failed".to_owned())?;
         Ok([
             &block_number.to_be_bytes()[..],
             &tx_index.to_be_bytes()[..],
@@ -555,14 +551,11 @@ impl StoreTransaction {
         .concat())
     }
 
-    fn get_column_from_state_record(&self, key: &Box<[u8]>) -> Option<&'static str> {
-        let column = key[key.len() - 1].to_string();
-        match column.as_str() {
-            COLUMN_ACCOUNT_SMT_BRANCH => Some(COLUMN_ACCOUNT_SMT_BRANCH),
-            COLUMN_ACCOUNT_SMT_LEAF => Some(COLUMN_ACCOUNT_SMT_LEAF),
-            COLUMN_SCRIPT => Some(COLUMN_SCRIPT),
-            _ => None,
-        }
+    fn get_column_from_state_record<'a>(&self, key: &'a [u8]) -> Result<String, Error> {
+        let column = key
+            .last()
+            .ok_or_else(|| "Decode column failed".to_owned())?;
+        Ok(column.to_string())
     }
 
     #[cfg(test)]

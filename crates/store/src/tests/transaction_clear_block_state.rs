@@ -215,14 +215,8 @@ fn clear_block_account_state() {
     assert!(get_from_leaf_column(&db, block_2_hash, block_2_number, 4u32, &[4, 4]).is_none());
     assert!(get_from_script_column(&db, block_2_hash, block_2_number, 1u32, &[1]).is_none());
     assert!(get_from_script_column(&db, block_2_hash, block_2_number, 2u32, &[2]).is_none());
-    assert_eq!(
-        vec![5].into_boxed_slice(),
-        get_from_state_db(&db, "1", block_2_hash, block_2_number, 5u32, &[5]).unwrap()
-    );
-    assert_eq!(
-        vec![6].into_boxed_slice(),
-        get_from_state_db(&db, "2", block_2_hash, block_2_number, 6u32, &[6]).unwrap()
-    );
+    assert!(get_from_state_db(&db, "1", block_2_hash, block_2_number, 5u32, &[5]).is_none());
+    assert!(get_from_state_db(&db, "2", block_2_hash, block_2_number, 6u32, &[6]).is_none());
 
     // attach new block with the same block number 2
     let (block_new_hash, block_new_number) = (H256::from([3; 32]), block_2_number);
