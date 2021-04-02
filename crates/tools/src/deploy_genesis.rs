@@ -103,9 +103,13 @@ pub fn serialize_poa_data(data: &PoAData) -> Bytes {
     buffer.freeze()
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 pub struct GenesisDeploymentResult {
     pub tx_hash: H256,
+    pub timestamp: u64,
+    pub rollup_type_hash: H256,
+    pub rollup_type_script: ckb_jsonrpc_types::Script,
+    pub rollup_config: gw_jsonrpc_types::godwoken::RollupConfig,
 }
 
 pub fn deploy_genesis(
@@ -225,7 +229,7 @@ pub fn deploy_genesis(
             .meta_contract_validator
             .script_type_hash
             .clone(),
-        rollup_type_hash: rollup_script_hash.into(),
+        rollup_type_hash: rollup_script_hash.clone().into(),
         rollup_config: rollup_config.clone().into(),
     };
     let genesis_with_global_state =
@@ -251,7 +255,7 @@ pub fn deploy_genesis(
             .build();
         let output = ckb_packed::CellOutput::new_builder()
             .lock(lock_script)
-            .type_(CKBPack::pack(&Some(rollup_type_script)))
+            .type_(CKBPack::pack(&Some(rollup_type_script.clone())))
             .build();
         let output = fit_output_capacity(output, data.len());
         (output, data)
@@ -413,7 +417,13 @@ pub fn deploy_genesis(
     wait_for_tx(&mut rpc_client, &tx_hash, 120)?;
 
     // 9. write genesis deployment result
-    let genesis_deployment_result = GenesisDeploymentResult { tx_hash };
+    let genesis_deployment_result = GenesisDeploymentResult {
+        tx_hash,
+        timestamp,
+        rollup_type_hash: rollup_script_hash.into(),
+        rollup_type_script: rollup_type_script.into(),
+        rollup_config: rollup_config.into(),
+    };
     let output_content = serde_json::to_string_pretty(&genesis_deployment_result)
         .expect("serde json to string pretty");
     fs::write(output_path, output_content.as_bytes()).map_err(|err| err.to_string())?;

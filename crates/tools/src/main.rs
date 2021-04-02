@@ -1,5 +1,6 @@
 mod deploy_genesis;
 mod deploy_scripts;
+mod generate_config;
 
 use clap::{App, Arg, SubCommand};
 use std::path::Path;
@@ -106,6 +107,24 @@ fn main() {
                 &user_rollup_path,
                 &poa_config_path,
                 &output_path,
+            ) {
+                log::error!("Deploy genesis error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("generate-config", Some(m)) => {
+            let ckb_url = m.value_of("ckb-rpc-url").unwrap().to_string();
+            let indexer_url = m.value_of("indexer-rpc-url").unwrap().to_string();
+            let scripts_path = Path::new(m.value_of("scripts-deployment-results-path").unwrap());
+            let genesis_path = Path::new(m.value_of("genesis-deployment-results-path").unwrap());
+            let output_path = Path::new(m.value_of("output-path").unwrap());
+
+            if let Err(err) = generate_config::generate_config(
+                genesis_path,
+                scripts_path,
+                ckb_url,
+                indexer_url,
+                output_path,
             ) {
                 log::error!("Deploy genesis error: {}", err);
                 std::process::exit(-1);
