@@ -25,7 +25,7 @@ use ckb_types::{
     prelude::Unpack as CKBUnpack,
 };
 use gw_config::GenesisConfig;
-use gw_generator::{genesis::build_genesis, types::RollupContext};
+use gw_generator::genesis::build_genesis;
 use gw_types::{
     packed as gw_packed, packed::RollupConfig, prelude::Entity as GwEntity,
     prelude::Pack as GwPack, prelude::PackVec as GwPackVec,
@@ -178,37 +178,45 @@ pub fn deploy_genesis(
     log::info!("rollup_script_hash: {:#x}", rollup_script_hash);
 
     // 1. build genesis block
-    let genesis_config = GenesisConfig {
-        timestamp,
-        meta_contract_validator_type_hash: deployment_result
-            .meta_contract_validator
-            .script_type_hash
-            .clone(),
-    };
     let allowed_contract_type_hashes: Vec<gw_packed::Byte32> = vec![
-        GwPack::pack(&deployment_result.meta_contract_validator.script_type_hash),
-        GwPack::pack(&deployment_result.l2_sudt_validator.script_type_hash),
-        GwPack::pack(&deployment_result.polyjuice_validator.script_type_hash),
+        GwPack::pack(&Into::<[u8; 32]>::into(
+            deployment_result
+                .meta_contract_validator
+                .script_type_hash
+                .clone(),
+        )),
+        GwPack::pack(&Into::<[u8; 32]>::into(
+            deployment_result.l2_sudt_validator.script_type_hash.clone(),
+        )),
+        GwPack::pack(&Into::<[u8; 32]>::into(
+            deployment_result.polyjuice_validator.script_type_hash,
+        )),
     ];
     let rollup_config = RollupConfig::new_builder()
-        .l1_sudt_script_type_hash(GwPack::pack(&user_rollup_config.l1_sudt_script_type_hash))
-        .custodian_script_type_hash(GwPack::pack(
-            &deployment_result.custodian_lock.script_type_hash,
-        ))
-        .deposition_script_type_hash(GwPack::pack(
-            &deployment_result.deposition_lock.script_type_hash,
-        ))
-        .withdrawal_script_type_hash(GwPack::pack(
-            &deployment_result.withdrawal_lock.script_type_hash,
-        ))
-        .challenge_script_type_hash(GwPack::pack(
-            &deployment_result.challenge_lock.script_type_hash,
-        ))
-        .stake_script_type_hash(GwPack::pack(&deployment_result.stake_lock.script_type_hash))
-        .l2_sudt_validator_script_type_hash(GwPack::pack(
-            &deployment_result.l2_sudt_validator.script_type_hash,
-        ))
-        .burn_lock_hash(GwPack::pack(&user_rollup_config.burn_lock_hash))
+        .l1_sudt_script_type_hash(GwPack::pack(&Into::<[u8; 32]>::into(
+            user_rollup_config.l1_sudt_script_type_hash,
+        )))
+        .custodian_script_type_hash(GwPack::pack(&Into::<[u8; 32]>::into(
+            deployment_result.custodian_lock.script_type_hash,
+        )))
+        .deposition_script_type_hash(GwPack::pack(&Into::<[u8; 32]>::into(
+            deployment_result.deposition_lock.script_type_hash,
+        )))
+        .withdrawal_script_type_hash(GwPack::pack(&Into::<[u8; 32]>::into(
+            deployment_result.withdrawal_lock.script_type_hash,
+        )))
+        .challenge_script_type_hash(GwPack::pack(&Into::<[u8; 32]>::into(
+            deployment_result.challenge_lock.script_type_hash,
+        )))
+        .stake_script_type_hash(GwPack::pack(&Into::<[u8; 32]>::into(
+            deployment_result.stake_lock.script_type_hash,
+        )))
+        .l2_sudt_validator_script_type_hash(GwPack::pack(&Into::<[u8; 32]>::into(
+            deployment_result.l2_sudt_validator.script_type_hash,
+        )))
+        .burn_lock_hash(GwPack::pack(&Into::<[u8; 32]>::into(
+            user_rollup_config.burn_lock_hash,
+        )))
         .required_staking_capacity(GwPack::pack(&user_rollup_config.required_staking_capacity))
         .challenge_maturity_blocks(GwPack::pack(&user_rollup_config.challenge_maturity_blocks))
         .finality_blocks(GwPack::pack(&user_rollup_config.finality_blocks))
@@ -217,16 +225,22 @@ pub fn deploy_genesis(
             user_rollup_config
                 .allowed_eoa_type_hashes
                 .into_iter()
-                .map(|hash| GwPack::pack(&hash)),
+                .map(|hash| GwPack::pack(&Into::<[u8; 32]>::into(hash))),
         ))
         .allowed_contract_type_hashes(GwPackVec::pack(allowed_contract_type_hashes))
         .build();
-    let rollup_context = RollupContext {
-        rollup_script_hash: rollup_script_hash.0.into(),
-        rollup_config,
+    let genesis_config = GenesisConfig {
+        timestamp,
+        meta_contract_validator_type_hash: deployment_result
+            .meta_contract_validator
+            .script_type_hash
+            .clone(),
+        rollup_type_hash: rollup_script_hash.into(),
+        rollup_config: rollup_config.into(),
     };
+
     let genesis_with_global_state =
-        build_genesis(&genesis_config, &rollup_context).map_err(|err| err.to_string())?;
+        build_genesis(&genesis_config).map_err(|err| err.to_string())?;
 
     // 2. build rollup cell (with type id)
     let (rollup_output, rollup_data): (ckb_packed::CellOutput, Bytes) = {
