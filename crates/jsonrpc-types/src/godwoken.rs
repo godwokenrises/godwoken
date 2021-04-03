@@ -851,6 +851,16 @@ impl From<HeaderInfo> for packed::HeaderInfo {
             .build()
     }
 }
+impl From<packed::HeaderInfo> for HeaderInfo {
+    fn from(data: packed::HeaderInfo) -> HeaderInfo {
+        let number: u64 = data.number().unpack();
+        let block_hash: H256 = data.block_hash().unpack();
+        HeaderInfo {
+            number: number.into(),
+            block_hash,
+        }
+    }
+}
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
