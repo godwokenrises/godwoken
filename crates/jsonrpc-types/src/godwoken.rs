@@ -95,14 +95,21 @@ impl From<packed::L2Transaction> for L2TransactionView {
 #[serde(rename_all = "snake_case")]
 pub struct LogItem {
     pub account_id: Uint32,
+    // The actual type is `u8`
+    pub service_flag: Uint32,
     pub data: JsonBytes,
 }
 
 impl From<LogItem> for packed::LogItem {
     fn from(json: LogItem) -> packed::LogItem {
-        let LogItem { account_id, data } = json;
+        let LogItem {
+            account_id,
+            service_flag,
+            data,
+        } = json;
         packed::LogItem::new_builder()
             .account_id(account_id.value().pack())
+            .service_flag((service_flag.value() as u8).into())
             .data(data.into_bytes().pack())
             .build()
     }
@@ -111,9 +118,11 @@ impl From<LogItem> for packed::LogItem {
 impl From<packed::LogItem> for LogItem {
     fn from(data: packed::LogItem) -> LogItem {
         let account_id: u32 = data.account_id().unpack();
+        let service_flag: u8 = data.service_flag().into();
         let data = JsonBytes::from_bytes(data.data().unpack());
         LogItem {
             account_id: Uint32::from(account_id),
+            service_flag: Uint32::from(service_flag as u32),
             data,
         }
     }
