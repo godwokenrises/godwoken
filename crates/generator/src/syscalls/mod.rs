@@ -388,13 +388,15 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
             }
             SYS_LOG => {
                 let account_id = machine.registers()[A0].to_u32();
-                let data_len = machine.registers()[A1].to_u32();
-                let data_addr = machine.registers()[A2].to_u64();
+                let service_flag = machine.registers()[A1].to_u8();
+                let data_len = machine.registers()[A2].to_u32();
+                let data_addr = machine.registers()[A3].to_u64();
 
                 let data = load_bytes(machine, data_addr, data_len as usize)?;
                 self.result.logs.push(
                     LogItem::new_builder()
                         .account_id(account_id.pack())
+                        .service_flag(service_flag.into())
                         .data(Bytes::from(data).pack())
                         .build(),
                 );

@@ -1247,6 +1247,7 @@ impl ::core::fmt::Display for LogItem {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "account_id", self.account_id())?;
+        write!(f, ", {}: {}", "service_flag", self.service_flag())?;
         write!(f, ", {}: {}", "data", self.data())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -1258,13 +1259,13 @@ impl ::core::fmt::Display for LogItem {
 impl ::core::default::Default for LogItem {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            25, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         LogItem::new_unchecked(v.into())
     }
 }
 impl LogItem {
-    pub const FIELD_COUNT: usize = 2;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -1287,11 +1288,17 @@ impl LogItem {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         Uint32::new_unchecked(self.0.slice(start..end))
     }
-    pub fn data(&self) -> Bytes {
+    pub fn service_flag(&self) -> Byte {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Byte::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn data(&self) -> Bytes {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
+            let end = molecule::unpack_number(&slice[16..]) as usize;
             Bytes::new_unchecked(self.0.slice(start..end))
         } else {
             Bytes::new_unchecked(self.0.slice(start..))
@@ -1325,6 +1332,7 @@ impl molecule::prelude::Entity for LogItem {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .account_id(self.account_id())
+            .service_flag(self.service_flag())
             .data(self.data())
     }
 }
@@ -1348,6 +1356,7 @@ impl<'r> ::core::fmt::Display for LogItemReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "account_id", self.account_id())?;
+        write!(f, ", {}: {}", "service_flag", self.service_flag())?;
         write!(f, ", {}: {}", "data", self.data())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -1357,7 +1366,7 @@ impl<'r> ::core::fmt::Display for LogItemReader<'r> {
     }
 }
 impl<'r> LogItemReader<'r> {
-    pub const FIELD_COUNT: usize = 2;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -1380,11 +1389,17 @@ impl<'r> LogItemReader<'r> {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         Uint32Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn data(&self) -> BytesReader<'r> {
+    pub fn service_flag(&self) -> ByteReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        ByteReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn data(&self) -> BytesReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
+            let end = molecule::unpack_number(&slice[16..]) as usize;
             BytesReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             BytesReader::new_unchecked(&self.as_slice()[start..])
@@ -1443,19 +1458,25 @@ impl<'r> molecule::prelude::Reader<'r> for LogItemReader<'r> {
             return ve!(Self, OffsetsNotMatch);
         }
         Uint32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        BytesReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        ByteReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        BytesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct LogItemBuilder {
     pub(crate) account_id: Uint32,
+    pub(crate) service_flag: Byte,
     pub(crate) data: Bytes,
 }
 impl LogItemBuilder {
-    pub const FIELD_COUNT: usize = 2;
+    pub const FIELD_COUNT: usize = 3;
     pub fn account_id(mut self, v: Uint32) -> Self {
         self.account_id = v;
+        self
+    }
+    pub fn service_flag(mut self, v: Byte) -> Self {
+        self.service_flag = v;
         self
     }
     pub fn data(mut self, v: Bytes) -> Self {
@@ -1469,6 +1490,7 @@ impl molecule::prelude::Builder for LogItemBuilder {
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.account_id.as_slice().len()
+            + self.service_flag.as_slice().len()
             + self.data.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
@@ -1477,12 +1499,15 @@ impl molecule::prelude::Builder for LogItemBuilder {
         offsets.push(total_size);
         total_size += self.account_id.as_slice().len();
         offsets.push(total_size);
+        total_size += self.service_flag.as_slice().len();
+        offsets.push(total_size);
         total_size += self.data.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
         writer.write_all(self.account_id.as_slice())?;
+        writer.write_all(self.service_flag.as_slice())?;
         writer.write_all(self.data.as_slice())?;
         Ok(())
     }

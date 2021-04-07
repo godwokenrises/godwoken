@@ -17,6 +17,7 @@ struct TransactionInfo {
 
 table LogItem {
     account_id: Uint32,
+    service_flag: byte,
     data: Bytes,
 }
 
