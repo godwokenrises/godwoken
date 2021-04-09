@@ -8,7 +8,7 @@ use crate::{
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
     types::{CellInfo, InputCellInfo},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
 use gw_chain::chain::Chain;
@@ -279,7 +279,7 @@ impl BlockProducer {
         rpc_client: RPCClient,
         config: BlockProducerConfig,
     ) -> Result<Self> {
-        let wallet = Wallet::from_config(&config.wallet_config)?;
+        let wallet = Wallet::from_config(&config.wallet_config).with_context(|| "init wallet")?;
 
         let block_producer = BlockProducer {
             rollup_config_hash,

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use ckb_crypto::secp::Privkey;
 use faster_hex::hex_decode;
 use gw_common::blake2b::new_blake2b;
@@ -24,10 +24,11 @@ impl Wallet {
     pub fn from_config(config: &WalletConfig) -> Result<Self> {
         let lock = config.lock.clone().into();
         let privkey = {
-            let content = std::fs::read_to_string(&config.privkey_path)?;
-            let content = content.trim_start_matches("0x");
-            let mut decoded = Vec::new();
-            decoded.resize(content.as_bytes().len() / 2, 0);
+            let content = std::fs::read_to_string(&config.privkey_path)
+                .with_context(|| "read wallet privkey")?;
+            let content = content.trim_start_matches("0x").trim();
+            assert_eq!(content.as_bytes().len(), 64, "invalid privkey length");
+            let mut decoded = [0u8; 32];
             hex_decode(content.as_bytes(), &mut decoded)?;
             Privkey::from_slice(&decoded)
         };

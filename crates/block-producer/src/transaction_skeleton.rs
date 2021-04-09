@@ -114,7 +114,44 @@ impl TransactionSkeleton {
             .raw(raw_tx)
             .witnesses(witnesses.pack())
             .build();
+
+        self.check_tx_fee_rate(tx.as_slice().len())?;
+
         Ok(tx)
+    }
+
+    fn check_tx_fee_rate(&self, tx_size: usize) -> Result<()> {
+        let tx_in_block_size = tx_size + 4;
+        // tx_in_block_size * 1000(min fee rate per KB) / 1000(KB)
+        let expected_fee = tx_in_block_size as u64;
+
+        let inputs_capacity: u64 = self
+            .inputs
+            .iter()
+            .map(|input| {
+                let capacity: u64 = input.cell.output.capacity().unpack();
+                capacity
+            })
+            .sum();
+
+        let outputs_capacity: u64 = self
+            .cell_outputs
+            .iter()
+            .map(|(output, _data)| {
+                let capacity: u64 = output.capacity().unpack();
+                capacity
+            })
+            .sum();
+
+        let tx_fee = outputs_capacity.saturating_sub(inputs_capacity);
+        if tx_fee < expected_fee {
+            return Err(anyhow!(
+                "Insufficient tx fee, expected_fee: {}, tx_fee: {}",
+                expected_fee,
+                tx_fee
+            ));
+        }
+        Ok(())
     }
 
     pub fn tx_in_block_size(&self) -> Result<usize> {

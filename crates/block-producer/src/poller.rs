@@ -91,7 +91,7 @@ impl ChainUpdater {
                     )
                     .await?,
             )?;
-            println!("L2 blocks to sync: {}", txs.objects.len());
+            println!("Pool transactions: {}", txs.objects.len());
             self.update(&txs.objects).await?;
 
             while !txs.objects.is_empty() {
@@ -114,7 +114,7 @@ impl ChainUpdater {
                 self.update(&txs.objects).await?;
             }
 
-            async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+            async_std::task::sleep(std::time::Duration::from_secs(3)).await;
         }
     }
 
