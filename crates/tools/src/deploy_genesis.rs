@@ -123,15 +123,15 @@ pub fn deploy_genesis(
     let deployment_result_string =
         std::fs::read_to_string(deployment_result_path).map_err(|err| err.to_string())?;
     let deployment_result: ScriptsDeploymentResult =
-        toml::from_str(&deployment_result_string).map_err(|err| err.to_string())?;
+        serde_json::from_str(&deployment_result_string).map_err(|err| err.to_string())?;
     let user_rollup_config_string =
         std::fs::read_to_string(user_rollup_config_path).map_err(|err| err.to_string())?;
     let user_rollup_config: UserRollupConfig =
-        toml::from_str(&user_rollup_config_string).map_err(|err| err.to_string())?;
+        serde_json::from_str(&user_rollup_config_string).map_err(|err| err.to_string())?;
     let poa_config_string =
         std::fs::read_to_string(poa_config_path).map_err(|err| err.to_string())?;
     let poa_config: PoAConfig =
-        toml::from_str(&poa_config_string).map_err(|err| err.to_string())?;
+        serde_json::from_str(&poa_config_string).map_err(|err| err.to_string())?;
     let poa_setup = poa_config.poa_setup;
 
     let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());

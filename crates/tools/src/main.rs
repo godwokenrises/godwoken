@@ -74,6 +74,47 @@ fn main() {
                         .required(true)
                         .help("The output json file path"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("generate-config")
+                .about("Generate configure")
+                .arg(arg_ckb_rpc.clone())
+                .arg(
+                    Arg::with_name("indexer-rpc-url")
+                        .short("i")
+                        .takes_value(true)
+                        .default_value("http://127.0.0.1:8116")
+                        .required(true)
+                        .help("The URL of ckb indexer"),
+                )
+                .arg(
+                    Arg::with_name("scripts-deployment-results-path")
+                        .short("s")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Scripts deployment results json file path"),
+                )
+                .arg(
+                    Arg::with_name("genesis-deployment-results-path")
+                        .short("g")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The genesis deployment results json file path"),
+                )
+                .arg(
+                    Arg::with_name("polyjuice-binaries-dir-path")
+                        .short("p")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Polyjuice binaries directory path"),
+                )
+                .arg(
+                    Arg::with_name("output-path")
+                        .short("o")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The output json file path"),
+                ),
         );
 
     let matches = app.clone().get_matches();
@@ -117,11 +158,14 @@ fn main() {
             let indexer_url = m.value_of("indexer-rpc-url").unwrap().to_string();
             let scripts_path = Path::new(m.value_of("scripts-deployment-results-path").unwrap());
             let genesis_path = Path::new(m.value_of("genesis-deployment-results-path").unwrap());
+            let polyjuice_binaries_dir =
+                Path::new(m.value_of("polyjuice-binaries-dir-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
 
             if let Err(err) = generate_config::generate_config(
                 genesis_path,
                 scripts_path,
+                polyjuice_binaries_dir,
                 ckb_url,
                 indexer_url,
                 output_path,

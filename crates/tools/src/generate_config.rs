@@ -11,9 +11,12 @@ use gw_config::{
 };
 use gw_jsonrpc_types::godwoken::HeaderInfo;
 
+const BACKEND_BINARIES_DIR: &str = "godwoken-scripts/c/build";
+
 pub fn generate_config(
     genesis_path: &Path,
     scripts_path: &Path,
+    polyjuice_binaries_dir: &Path,
     ckb_url: String,
     indexer_url: String,
     output_path: &Path,
@@ -52,28 +55,52 @@ pub fn generate_config(
 
     let rollup_config = genesis.rollup_config.clone().into();
     let rollup_type_hash = genesis.rollup_type_hash.into();
-    let meta_contract_validator_type_hash = scripts.meta_contract_validator.script_type_hash.into();
+    let meta_contract_validator_type_hash = scripts
+        .meta_contract_validator
+        .script_type_hash
+        .clone()
+        .into();
     let genesis_header = HeaderInfo { block_hash, number };
     let rollup_type_script = {
         let script: ckb_types::packed::Script = genesis.rollup_type_script.into();
         gw_types::packed::Script::new_unchecked(script.as_bytes()).into()
     };
     let rollup_cell_lock_dep = {
-        let dep: ckb_types::packed::CellDep = scripts.state_validator_lock.cell_dep.into();
+        let dep: ckb_types::packed::CellDep = scripts.state_validator_lock.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let rollup_cell_type_dep = {
-        let dep: ckb_types::packed::CellDep = scripts.state_validator.cell_dep.into();
+        let dep: ckb_types::packed::CellDep = scripts.state_validator.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let deposit_cell_lock_dep = {
-        let dep: ckb_types::packed::CellDep = scripts.deposition_lock.cell_dep.into();
+        let dep: ckb_types::packed::CellDep = scripts.deposition_lock.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
 
     let wallet_config: WalletConfig = WalletConfig { privkey_path, lock };
 
-    let backends: Vec<BackendConfig> = Vec::new();
+    let mut backends: Vec<BackendConfig> = Vec::new();
+    backends.push(BackendConfig {
+        validator_path: format!("{}/meta-contract-validator", BACKEND_BINARIES_DIR).into(),
+        generator_path: format!("{}/meta-contract-generator", BACKEND_BINARIES_DIR).into(),
+        validator_script_type_hash: scripts
+            .meta_contract_validator
+            .script_type_hash
+            .clone()
+            .into(),
+    });
+    backends.push(BackendConfig {
+        validator_path: format!("{}/sudt-validator", BACKEND_BINARIES_DIR).into(),
+        generator_path: format!("{}/sudt-generator", BACKEND_BINARIES_DIR).into(),
+        validator_script_type_hash: scripts.l2_sudt_validator.script_type_hash.clone().into(),
+    });
+    let polyjuice_binaries_dir = polyjuice_binaries_dir.to_string_lossy().to_string();
+    backends.push(BackendConfig {
+        validator_path: format!("{}/polyjuice-validator", polyjuice_binaries_dir).into(),
+        generator_path: format!("{}/polyjuice-generator", polyjuice_binaries_dir).into(),
+        validator_script_type_hash: scripts.polyjuice_validator.script_type_hash.clone().into(),
+    });
     let store: StoreConfig = StoreConfig {
         path: "./store.db".into(),
     };

@@ -37,6 +37,10 @@ pub struct Programs {
     pub state_validator: PathBuf,
     // path: godwoken-scripts/c/build/sudt-validator
     pub l2_sudt_validator: PathBuf,
+
+    // path: godwoken-scripts/c/build/account_locks/eth-account-lock
+    pub eth_account_lock: PathBuf,
+
     // path: godwoken-scripts/c/build/meta-contract-validator
     pub meta_contract_validator: PathBuf,
     // path: godwoken-polyjuice/build/validator
@@ -70,6 +74,7 @@ pub struct ScriptsDeploymentResult {
     pub state_validator: DeployItem,
     pub meta_contract_validator: DeployItem,
     pub l2_sudt_validator: DeployItem,
+    pub eth_account_lock: DeployItem,
     pub polyjuice_validator: DeployItem,
     pub state_validator_lock: DeployItem,
     pub poa_state: DeployItem,
@@ -252,6 +257,7 @@ pub fn deploy_scripts(
         &deployment_index.programs.stake_lock,
         &deployment_index.programs.state_validator,
         &deployment_index.programs.l2_sudt_validator,
+        &deployment_index.programs.eth_account_lock,
         &deployment_index.programs.meta_contract_validator,
         &deployment_index.programs.polyjuice_validator,
         &deployment_index.programs.state_validator_lock,
@@ -332,6 +338,13 @@ pub fn deploy_scripts(
         &target_lock,
         &target_address,
     )?;
+    let eth_account_lock = deploy_program(
+        privkey_path,
+        &mut rpc_client,
+        &deployment_index.programs.eth_account_lock,
+        &target_lock,
+        &target_address,
+    )?;
     // FIXME: write godwoken-polyjuice binary to named temp file then use the path
     let polyjuice_validator = deploy_program(
         privkey_path,
@@ -363,6 +376,7 @@ pub fn deploy_scripts(
         state_validator,
         l2_sudt_validator,
         meta_contract_validator,
+        eth_account_lock,
         polyjuice_validator,
         state_validator_lock,
         poa_state,
