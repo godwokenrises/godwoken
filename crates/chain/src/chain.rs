@@ -214,6 +214,7 @@ impl Chain {
                 // Submit transactions
                 // parse layer2 block
                 let l2block = parse_l2block(&transaction, &self.rollup_type_script_hash)?;
+                let number: u64 = l2block.raw().number().unpack();
                 if let Some(challenge_context) = self.process_block(
                     db,
                     l2block,
@@ -225,6 +226,7 @@ impl Chain {
                     self.bad_block_context = Some(challenge_context.target.clone());
                     SyncEvent::BadBlock(challenge_context)
                 } else {
+                    println!("sync new block #{} success", number);
                     SyncEvent::Success
                 }
             }

@@ -9,7 +9,7 @@ use gw_config::{
     BackendConfig, BlockProducerConfig, ChainConfig, Config, GenesisConfig, RPCClientConfig,
     StoreConfig, WalletConfig,
 };
-use gw_jsonrpc_types::godwoken::HeaderInfo;
+use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 
 const BACKEND_BINARIES_DIR: &str = "godwoken-scripts/c/build";
 
@@ -32,7 +32,7 @@ pub fn generate_config(
 
     let mut rpc_client = HttpRpcClient::new(ckb_url.to_string());
     let tx_with_status = rpc_client
-        .get_transaction(genesis.tx_hash)
+        .get_transaction(genesis.tx_hash.clone())
         .map_err(|err| anyhow!("{}", err))?
         .ok_or_else(|| anyhow!("can't find genesis block transaction"))?;
     let block_hash = tx_with_status.tx_status.block_hash.ok_or_else(|| {
@@ -60,7 +60,6 @@ pub fn generate_config(
         .script_type_hash
         .clone()
         .into();
-    let genesis_header = HeaderInfo { block_hash, number };
     let rollup_type_script = {
         let script: ckb_types::packed::Script = genesis.rollup_type_script.into();
         gw_types::packed::Script::new_unchecked(script.as_bytes()).into()
@@ -104,14 +103,13 @@ pub fn generate_config(
     let store: StoreConfig = StoreConfig {
         path: "./store.db".into(),
     };
-    let genesis: GenesisConfig = GenesisConfig {
-        timestamp: genesis.timestamp,
-        rollup_type_hash,
-        meta_contract_validator_type_hash,
-        rollup_config,
+    let genesis_committed_info = L2BlockCommittedInfo {
+        block_hash,
+        number,
+        transaction_hash: genesis.tx_hash,
     };
     let chain: ChainConfig = ChainConfig {
-        genesis_header,
+        genesis_committed_info,
         rollup_type_script,
     };
     let rpc_client: RPCClientConfig = RPCClientConfig {
@@ -126,6 +124,12 @@ pub fn generate_config(
         deposit_cell_lock_dep,
         wallet_config,
     });
+    let genesis: GenesisConfig = GenesisConfig {
+        timestamp: genesis.timestamp,
+        rollup_type_hash,
+        meta_contract_validator_type_hash,
+        rollup_config,
+    };
     let config: Config = Config {
         backends,
         store,

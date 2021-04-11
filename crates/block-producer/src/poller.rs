@@ -79,24 +79,9 @@ impl ChainUpdater {
             // TODO: the syncing logic here works under the assumption that a single
             // L1 CKB block can contain at most one L2 Godwoken block. The logic
             // here needs revising, once we relax this constraint for more performance.
-            let mut txs: Pagination<Tx> = to_result(
-                self.rpc_client
-                    .indexer_client
-                    .request(
-                        "get_transactions",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                        ])),
-                    )
-                    .await?,
-            )?;
-            println!("Pool transactions: {}", txs.objects.len());
-            self.update(&txs.objects).await?;
-
-            while !txs.objects.is_empty() {
-                txs = to_result(
+            let mut last_cursor = None;
+            loop {
+                let txs: Pagination<Tx> = to_result(
                     self.rpc_client
                         .indexer_client
                         .request(
@@ -105,13 +90,17 @@ impl ChainUpdater {
                                 json!(search_key),
                                 json!(order),
                                 json!(limit),
-                                json!(txs.last_cursor),
+                                json!(last_cursor),
                             ])),
                         )
                         .await?,
                 )?;
+                if txs.objects.is_empty() {
+                    break;
+                }
+                last_cursor = Some(txs.last_cursor);
 
-                println!("L2 blocks to sync: {}", txs.objects.len());
+                println!("Poll transactions: {}", txs.objects.len());
                 self.update(&txs.objects).await?;
             }
 
@@ -150,7 +139,7 @@ impl ChainUpdater {
             Transaction::new_unchecked(tx.as_bytes())
         };
         let block_hash = tx_with_status.tx_status.block_hash.ok_or_else(|| {
-            anyhow::anyhow!("Ttransaction {:x} is not committed on chain!", tx_hash)
+            anyhow::anyhow!("Transaction {:x} is not committed on chain!", tx_hash)
         })?;
         let header_view: Option<HeaderView> = to_result(
             self.rpc_client

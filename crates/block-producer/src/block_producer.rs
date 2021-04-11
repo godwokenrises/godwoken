@@ -304,7 +304,7 @@ impl BlockProducer {
 
     pub async fn poll_loop(&self) -> Result<()> {
         loop {
-            async_std::task::sleep(std::time::Duration::from_secs(15)).await;
+            async_std::task::sleep(std::time::Duration::from_secs(45)).await;
             self.produce_next_block().await?;
         }
     }
@@ -352,9 +352,11 @@ impl BlockProducer {
             unused_transactions,
             unused_withdrawal_requests,
         } = block_result;
+        let number: u64 = block.raw().number().unpack();
         println!(
-            "produce new block {} unused transactions {} unused withdrawals {}",
-            block.raw().number(),
+            "produce new block #{} (txs: {}, unused txs: {}, unused withdrawals: {})",
+            number,
+            block.transactions().len(),
             unused_transactions.len(),
             unused_withdrawal_requests.len()
         );
