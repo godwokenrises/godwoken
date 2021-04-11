@@ -3,6 +3,7 @@ use async_jsonrpc_client::HttpClient;
 use futures::{select, FutureExt};
 use gw_block_producer::{
     block_producer::BlockProducer, poller::ChainUpdater, rpc_client::RPCClient,
+    utils::CKBGenesisInfo,
 };
 use gw_chain::chain::Chain;
 use gw_config::Config;
@@ -36,7 +37,7 @@ fn run() -> Result<()> {
     init_genesis(
         &store,
         &config.genesis,
-        config.chain.genesis_header.clone().into(),
+        config.chain.genesis_committed_info.clone().into(),
     )
     .with_context(|| "init genesis")?;
     let rollup_context = RollupContext {
@@ -94,6 +95,11 @@ fn run() -> Result<()> {
         rollup_type_script,
     );
 
+    let ckb_genesis_info = {
+        let ckb_genesis = smol::block_on(async { rpc_client.get_block_by_number(0).await })?;
+        CKBGenesisInfo::from_block(&ckb_genesis)?
+    };
+
     // create block producer
     let block_producer = BlockProducer::create(
         rollup_config_hash,
@@ -102,6 +108,7 @@ fn run() -> Result<()> {
         chain,
         mem_pool,
         rpc_client,
+        ckb_genesis_info,
         config
             .block_producer
             .ok_or_else(|| anyhow!("not set block producer"))?,

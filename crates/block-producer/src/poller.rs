@@ -13,7 +13,8 @@ use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     packed::{
-        Byte32, CellOutput, DepositionLockArgs, DepositionRequest, HeaderInfo, Script, Transaction,
+        Byte32, CellOutput, DepositionLockArgs, DepositionRequest, L2BlockCommittedInfo, Script,
+        Transaction,
     },
     prelude::*,
 };
@@ -162,17 +163,18 @@ impl ChainUpdater {
         )?;
         let header_view =
             header_view.ok_or_else(|| anyhow::anyhow!("Cannot locate block: {:x}", block_hash))?;
-        let header_info = HeaderInfo::new_builder()
-            .number(header_view.inner.number.value().pack())
-            .block_hash(block_hash.0.pack())
-            .build();
         let requests = self.extract_deposition_requests(&tx).await?;
         let context = L1ActionContext::SubmitTxs {
             deposition_requests: requests,
         };
+        let l2block_committed_info = L2BlockCommittedInfo::new_builder()
+            .number(header_view.inner.number.value().pack())
+            .block_hash(block_hash.0.pack())
+            .transaction_hash(tx_hash.pack())
+            .build();
         let update = L1Action {
             transaction: tx.clone(),
-            header_info,
+            l2block_committed_info,
             context,
         };
         // todo handle layer1 fork

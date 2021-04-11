@@ -10,8 +10,8 @@ use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     packed::{
-        CellOutput, DepositionLockArgs, DepositionLockArgsReader, DepositionRequest, OutPoint,
-        Script, Transaction,
+        Block, CellOutput, DepositionLockArgs, DepositionLockArgsReader, DepositionRequest,
+        OutPoint, Script, Transaction,
     },
     prelude::*,
 };
@@ -187,7 +187,6 @@ impl RPCClient {
                 }
             }
         }
-        dbg!(&collected_cells, &collected_capacity);
         Ok(collected_cells)
     }
 
@@ -232,6 +231,20 @@ impl RPCClient {
                 .await?,
         )?;
         Ok(number.value())
+    }
+
+    pub async fn get_block_by_number(&self, number: u64) -> Result<Block> {
+        let block_number = BlockNumber::from(number);
+        let block: ckb_jsonrpc_types::BlockView = to_result(
+            self.ckb_client
+                .request(
+                    "get_block_by_number",
+                    Some(ClientParams::Array(vec![json!(block_number)])),
+                )
+                .await?,
+        )?;
+        let block: ckb_types::core::BlockView = block.into();
+        Ok(Block::new_unchecked(block.data().as_bytes()))
     }
 
     /// return all lived deposition requests

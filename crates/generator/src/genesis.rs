@@ -17,7 +17,8 @@ use gw_types::{
     bytes::Bytes,
     core::{ScriptHashType, Status},
     packed::{
-        AccountMerkleState, BlockMerkleState, GlobalState, HeaderInfo, L2Block, RawL2Block, Script,
+        AccountMerkleState, BlockMerkleState, GlobalState, L2Block, L2BlockCommittedInfo,
+        RawL2Block, Script,
     },
     prelude::*,
 };
@@ -152,7 +153,11 @@ pub fn build_genesis_from_store(
     })
 }
 
-pub fn init_genesis(store: &Store, config: &GenesisConfig, header: HeaderInfo) -> Result<()> {
+pub fn init_genesis(
+    store: &Store,
+    config: &GenesisConfig,
+    genesis_committed_info: L2BlockCommittedInfo,
+) -> Result<()> {
     if store.has_genesis()? {
         panic!("The store is already initialized!");
     }
@@ -168,7 +173,7 @@ pub fn init_genesis(store: &Store, config: &GenesisConfig, header: HeaderInfo) -
     } = build_genesis_from_store(&db, config)?;
     db.insert_block(
         genesis.clone(),
-        header,
+        genesis_committed_info,
         global_state,
         Vec::new(),
         Vec::new(),
