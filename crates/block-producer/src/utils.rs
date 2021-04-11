@@ -42,7 +42,7 @@ pub async fn fill_tx_fee(
         let cells = rpc_client
             .query_payment_cells(lock_script, required_fee)
             .await?;
-        assert!(cells.len() > 0, "need cells to pay fee");
+        assert!(!cells.is_empty(), "need cells to pay fee");
         // put cells in tx skeleton
         tx_skeleton
             .inputs_mut()

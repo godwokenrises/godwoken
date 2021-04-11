@@ -249,7 +249,7 @@ pub fn deploy_scripts(
     let target_address = Address::new(network_type, address_payload);
 
     let mut total_file_size = 0;
-    for path in vec![
+    for path in &[
         &deployment_index.programs.custodian_lock,
         &deployment_index.programs.deposition_lock,
         &deployment_index.programs.withdrawal_lock,
@@ -272,11 +272,7 @@ pub fn deploy_scripts(
                 log::info!("cost {:>6} CKBytes for file: {:?}", metadata.len(), path);
             }
             Err(err) => {
-                return Err(format!(
-                    "error read metadata of {:?}, error: {}",
-                    path,
-                    err.to_string()
-                ));
+                return Err(format!("error read metadata of {:?}, error: {}", path, err));
             }
         }
     }

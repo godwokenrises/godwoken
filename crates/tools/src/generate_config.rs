@@ -53,13 +53,10 @@ pub fn generate_config(
     let privkey_path = "<private key path>".into();
     let lock = Default::default();
 
-    let rollup_config = genesis.rollup_config.clone().into();
-    let rollup_type_hash = genesis.rollup_type_hash.into();
-    let meta_contract_validator_type_hash = scripts
-        .meta_contract_validator
-        .script_type_hash
-        .clone()
-        .into();
+    let rollup_config = genesis.rollup_config.clone();
+    let rollup_type_hash = genesis.rollup_type_hash;
+    let meta_contract_validator_type_hash =
+        scripts.meta_contract_validator.script_type_hash.clone();
     let rollup_type_script = {
         let script: ckb_types::packed::Script = genesis.rollup_type_script.into();
         gw_types::packed::Script::new_unchecked(script.as_bytes()).into()
@@ -83,22 +80,18 @@ pub fn generate_config(
     backends.push(BackendConfig {
         validator_path: format!("{}/meta-contract-validator", BACKEND_BINARIES_DIR).into(),
         generator_path: format!("{}/meta-contract-generator", BACKEND_BINARIES_DIR).into(),
-        validator_script_type_hash: scripts
-            .meta_contract_validator
-            .script_type_hash
-            .clone()
-            .into(),
+        validator_script_type_hash: scripts.meta_contract_validator.script_type_hash.clone(),
     });
     backends.push(BackendConfig {
         validator_path: format!("{}/sudt-validator", BACKEND_BINARIES_DIR).into(),
         generator_path: format!("{}/sudt-generator", BACKEND_BINARIES_DIR).into(),
-        validator_script_type_hash: scripts.l2_sudt_validator.script_type_hash.clone().into(),
+        validator_script_type_hash: scripts.l2_sudt_validator.script_type_hash.clone(),
     });
     let polyjuice_binaries_dir = polyjuice_binaries_dir.to_string_lossy().to_string();
     backends.push(BackendConfig {
         validator_path: format!("{}/polyjuice-validator", polyjuice_binaries_dir).into(),
         generator_path: format!("{}/polyjuice-generator", polyjuice_binaries_dir).into(),
-        validator_script_type_hash: scripts.polyjuice_validator.script_type_hash.clone().into(),
+        validator_script_type_hash: scripts.polyjuice_validator.script_type_hash,
     });
     let store: StoreConfig = StoreConfig {
         path: "./store.db".into(),

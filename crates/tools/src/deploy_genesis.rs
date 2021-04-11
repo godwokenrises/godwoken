@@ -229,7 +229,7 @@ pub fn deploy_genesis(
             .meta_contract_validator
             .script_type_hash
             .clone(),
-        rollup_type_hash: rollup_script_hash.clone().into(),
+        rollup_type_hash: rollup_script_hash.clone(),
         rollup_config: rollup_config.clone().into(),
     };
     let genesis_with_global_state =
@@ -338,7 +338,7 @@ pub fn deploy_genesis(
         total_capacity,
     )?;
     if inputs[0].as_slice() != first_cell_input.as_slice() {
-        return Err(format!("first input cell changed"));
+        return Err("first input cell changed".to_string());
     }
     let mut raw_outputs_data = vec![rollup_data, poa_setup_data, poa_data_data];
     let mut outputs = vec![rollup_output, poa_setup_output, poa_data_output];
@@ -420,7 +420,7 @@ pub fn deploy_genesis(
     let genesis_deployment_result = GenesisDeploymentResult {
         tx_hash,
         timestamp,
-        rollup_type_hash: rollup_script_hash.into(),
+        rollup_type_hash: rollup_script_hash,
         rollup_type_script: rollup_type_script.into(),
         rollup_config: rollup_config.into(),
     };

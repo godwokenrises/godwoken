@@ -134,6 +134,7 @@ async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Ve
     Ok(cells)
 }
 
+#[allow(clippy::clippy::too_many_arguments)]
 async fn complete_tx_skeleton(
     block_producer_config: &BlockProducerConfig,
     rollup_context: &RollupContext,
@@ -276,6 +277,7 @@ pub struct BlockProducer {
 }
 
 impl BlockProducer {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         rollup_config_hash: H256,
         store: Store,
