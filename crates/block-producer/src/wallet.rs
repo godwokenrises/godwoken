@@ -59,7 +59,9 @@ impl Wallet {
             sigs
         };
         // seal a dummy tx for calculation
-        let tx = tx_skeleton.seal(&signature_entries, dummy_signatures)?;
+        let tx = tx_skeleton
+            .seal(&signature_entries, dummy_signatures)?
+            .transaction;
         let tx_hash = {
             let mut hasher = new_blake2b();
             hasher.update(tx.raw().as_slice());
@@ -99,7 +101,9 @@ impl Wallet {
             signatures.push(signature);
         }
         // seal
-        let tx = tx_skeleton.seal(&signature_entries, signatures)?;
-        Ok(tx)
+        let sealed_tx = tx_skeleton.seal(&signature_entries, signatures)?;
+        // check fee rate
+        sealed_tx.check_fee_rate()?;
+        Ok(sealed_tx.transaction)
     }
 }

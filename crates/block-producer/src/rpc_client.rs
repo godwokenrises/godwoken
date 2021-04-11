@@ -120,12 +120,12 @@ impl RPCClient {
         Ok(None)
     }
 
-    /// query payment cells, the returned cells should provide at least total_capacity fee,
+    /// query payment cells, the returned cells should provide at least required_capacity fee,
     /// and the remained fees should be enough to cover a charge cell
     pub async fn query_payment_cells(
         &self,
         lock: Script,
-        total_capacity: u64,
+        required_capacity: u64,
     ) -> Result<Vec<CellInfo>> {
         let search_key = SearchKey {
             script: {
@@ -133,12 +133,7 @@ impl RPCClient {
                 lock.into()
             },
             script_type: ScriptType::Lock,
-            filter: Some(SearchKeyFilter {
-                script: None,
-                output_data_len_range: None,
-                output_capacity_range: None,
-                block_range: None,
-            }),
+            filter: None,
         };
         let order = Order::Desc;
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
@@ -146,7 +141,7 @@ impl RPCClient {
         let mut collected_cells = Vec::new();
         let mut collected_capacity = 0u64;
         let mut cursor = None;
-        while collected_capacity >= total_capacity {
+        while collected_capacity < required_capacity {
             let cells: Pagination<Cell> = to_result(
                 self.indexer_client
                     .request(
@@ -161,37 +156,38 @@ impl RPCClient {
                     .await?,
             )?;
             cursor = Some(cells.last_cursor);
-            let cells: Vec<_> = cells
-                .objects
-                .into_iter()
-                .map(|cell| {
-                    let out_point = {
-                        let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-                        OutPoint::new_unchecked(out_point.as_bytes())
-                    };
-                    let output = {
-                        let output: ckb_types::packed::CellOutput = cell.output.into();
-                        CellOutput::new_unchecked(output.as_bytes())
-                    };
-                    let data = cell.output_data.into_bytes();
-                    CellInfo {
-                        out_point,
-                        output,
-                        data,
-                    }
+            let cells = cells.objects.into_iter().filter_map(|cell| {
+                // delete cells with data & type
+                if !cell.output_data.is_empty() || cell.output.type_.is_some() {
+                    return None;
+                }
+                let out_point = {
+                    let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
+                    OutPoint::new_unchecked(out_point.as_bytes())
+                };
+                let output = {
+                    let output: ckb_types::packed::CellOutput = cell.output.into();
+                    CellOutput::new_unchecked(output.as_bytes())
+                };
+                let data = cell.output_data.into_bytes();
+                Some(CellInfo {
+                    out_point,
+                    output,
+                    data,
                 })
-                .collect();
-            collected_capacity = collected_capacity.saturating_add(
-                cells
-                    .iter()
-                    .map(|cell| {
-                        let capacity: u64 = cell.output.capacity().unpack();
-                        capacity
-                    })
-                    .sum::<u64>(),
-            );
-            collected_cells.extend(cells);
+            });
+
+            // collect least cells
+            for cell in cells {
+                collected_capacity =
+                    collected_capacity.saturating_add(cell.output.capacity().unpack());
+                collected_cells.push(cell);
+                if collected_capacity >= required_capacity {
+                    break;
+                }
+            }
         }
+        dbg!(&collected_cells, &collected_capacity);
         Ok(collected_cells)
     }
 

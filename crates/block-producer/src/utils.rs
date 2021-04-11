@@ -1,8 +1,6 @@
-use std::convert::TryInto;
-
 use crate::types::InputCellInfo;
 use crate::{rpc_client::RPCClient, transaction_skeleton::TransactionSkeleton};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_jsonrpc_client::Output;
 use gw_types::{
     packed::{CellInput, Script},
@@ -25,41 +23,14 @@ fn calculate_required_tx_fee(tx_size: usize) -> u64 {
     tx_size as u64
 }
 
-/// calculate tx skeleton inputs / outputs
-fn calculate_paid_fee(tx_skeleton: &TransactionSkeleton) -> Result<(u128, u128)> {
-    let mut input_capacity: u128 = 0;
-    for input in tx_skeleton.inputs() {
-        let capacity: u64 = input.cell.output.capacity().unpack();
-        input_capacity = input_capacity
-            .checked_add(capacity.into())
-            .ok_or_else(|| anyhow!("overflow"))?;
-    }
-
-    let mut output_capacity: u128 = 0;
-    for (output, _data) in tx_skeleton.outputs() {
-        let capacity: u64 = output.capacity().unpack();
-        output_capacity = output_capacity
-            .checked_add(capacity.into())
-            .ok_or_else(|| anyhow!("overflow"))?;
-    }
-    Ok((input_capacity, output_capacity))
-}
-
 /// Add fee cell to tx skeleton
 pub async fn fill_tx_fee(
     tx_skeleton: &mut TransactionSkeleton,
     rpc_client: &RPCClient,
     lock_script: Script,
 ) -> Result<()> {
-    let tx_size: usize = tx_skeleton.tx_in_block_size()?;
-    let (input_capacity, output_capacity) = calculate_paid_fee(tx_skeleton)?;
-    assert!(
-        input_capacity >= output_capacity,
-        "Rollup cells capacity should be enough to use"
-    );
-    let paid_fee: u64 = (input_capacity - output_capacity)
-        .try_into()
-        .expect("paid fee too large");
+    let tx_size = tx_skeleton.tx_in_block_size()?;
+    let paid_fee: u64 = tx_skeleton.calculate_fee()?;
     // calculate required fee
     let required_fee = calculate_required_tx_fee(tx_size).saturating_sub(paid_fee);
 
@@ -69,6 +40,7 @@ pub async fn fill_tx_fee(
         let cells = rpc_client
             .query_payment_cells(lock_script, required_fee)
             .await?;
+        assert!(cells.len() > 0, "need cells to pay fee");
         // put cells in tx skeleton
         tx_skeleton
             .inputs_mut()
@@ -78,6 +50,13 @@ pub async fn fill_tx_fee(
                     .build();
                 InputCellInfo { input, cell }
             }));
+    }
+
+    {
+        let paid_fee: u64 = tx_skeleton.calculate_fee()?;
+        // calculate required fee
+        let required_fee = calculate_required_tx_fee(tx_size).saturating_sub(paid_fee);
+        assert_eq!(required_fee, 0, "should have enough tx fee");
     }
     Ok(())
 }

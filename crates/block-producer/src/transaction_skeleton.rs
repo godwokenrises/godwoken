@@ -7,6 +7,28 @@ use gw_types::{
 };
 use std::collections::HashMap;
 
+pub struct SealedTransaction {
+    pub transaction: Transaction,
+    pub fee: u64,
+}
+
+impl SealedTransaction {
+    pub fn check_fee_rate(&self) -> Result<()> {
+        let tx_in_block_size = self.transaction.as_slice().len() + 4;
+        // tx_in_block_size * 1000(min fee rate per KB) / 1000(KB)
+        let expected_fee = tx_in_block_size as u64;
+
+        if self.fee < expected_fee {
+            return Err(anyhow!(
+                "Insufficient tx fee, expected_fee: {}, tx_fee: {}",
+                expected_fee,
+                self.fee
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Default)]
 pub struct TransactionSkeleton {
     inputs: Vec<InputCellInfo>,
@@ -58,7 +80,7 @@ impl TransactionSkeleton {
         &self,
         entries: &[SignatureEntry],
         signatures: Vec<[u8; 65]>,
-    ) -> Result<Transaction> {
+    ) -> Result<SealedTransaction> {
         assert_eq!(entries.len(), signatures.len());
         // build raw tx
         let inputs = self
@@ -110,21 +132,17 @@ impl TransactionSkeleton {
             .into_iter()
             .map(|args| args.as_bytes())
             .collect::<Vec<_>>();
-        let tx = Transaction::new_builder()
+        let transaction = Transaction::new_builder()
             .raw(raw_tx)
             .witnesses(witnesses.pack())
             .build();
+        let fee = self.calculate_fee()?;
 
-        self.check_tx_fee_rate(tx.as_slice().len())?;
-
-        Ok(tx)
+        let sealed = SealedTransaction { transaction, fee };
+        Ok(sealed)
     }
 
-    fn check_tx_fee_rate(&self, tx_size: usize) -> Result<()> {
-        let tx_in_block_size = tx_size + 4;
-        // tx_in_block_size * 1000(min fee rate per KB) / 1000(KB)
-        let expected_fee = tx_in_block_size as u64;
-
+    pub fn calculate_fee(&self) -> Result<u64> {
         let inputs_capacity: u64 = self
             .inputs
             .iter()
@@ -143,15 +161,8 @@ impl TransactionSkeleton {
             })
             .sum();
 
-        let tx_fee = outputs_capacity.saturating_sub(inputs_capacity);
-        if tx_fee < expected_fee {
-            return Err(anyhow!(
-                "Insufficient tx fee, expected_fee: {}, tx_fee: {}",
-                expected_fee,
-                tx_fee
-            ));
-        }
-        Ok(())
+        let tx_fee = inputs_capacity.saturating_sub(outputs_capacity);
+        Ok(tx_fee)
     }
 
     pub fn tx_in_block_size(&self) -> Result<usize> {
@@ -161,9 +172,9 @@ impl TransactionSkeleton {
             dummy_signatures.resize(entries.len(), [0u8; 65]);
             dummy_signatures
         };
-        let tx = self.seal(&entries, dummy_signatures)?;
+        let sealed_tx = self.seal(&entries, dummy_signatures)?;
         // tx size + 4 in block serialization cost
-        let tx_in_block_size = tx.as_slice().len() + 4;
+        let tx_in_block_size = sealed_tx.transaction.as_slice().len() + 4;
         Ok(tx_in_block_size)
     }
 }
