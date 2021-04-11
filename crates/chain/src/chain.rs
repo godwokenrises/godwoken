@@ -14,9 +14,9 @@ use gw_types::{
     bytes::Bytes,
     core::Status,
     packed::{
-        ChallengeTarget, ChallengeWitness, DepositionRequest, GlobalState, HeaderInfo, L2Block,
-        L2BlockReader, RollupConfig, Script, Transaction, TxReceipt, VerifyTransactionWitness,
-        WitnessArgs, WitnessArgsReader,
+        ChallengeTarget, ChallengeWitness, DepositionRequest, GlobalState, L2Block,
+        L2BlockCommittedInfo, L2BlockReader, RollupConfig, Script, Transaction, TxReceipt,
+        VerifyTransactionWitness, WitnessArgs, WitnessArgsReader,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Reader as GWReader,
@@ -55,8 +55,8 @@ pub enum L1ActionContext {
 pub struct L1Action {
     /// transaction
     pub transaction: Transaction,
-    /// transactions' header info
-    pub header_info: HeaderInfo,
+    /// l2block committed info
+    pub l2block_committed_info: L2BlockCommittedInfo,
     pub context: L1ActionContext,
 }
 
@@ -66,8 +66,8 @@ pub struct RevertedL1Action {
     pub prev_global_state: GlobalState,
     /// transaction
     pub transaction: Transaction,
-    /// transactions' header info
-    pub header_info: HeaderInfo,
+    /// l2block committed info
+    pub l2block_committed_info: L2BlockCommittedInfo,
     pub context: L1ActionContext,
 }
 
@@ -92,7 +92,7 @@ pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_mer
 
 pub struct LocalState {
     tip: L2Block,
-    last_synced: HeaderInfo,
+    last_synced: L2BlockCommittedInfo,
     last_global_state: GlobalState,
 }
 
@@ -106,7 +106,7 @@ impl LocalState {
         Status::try_from(status).expect("invalid status")
     }
 
-    pub fn last_synced(&self) -> &HeaderInfo {
+    pub fn last_synced(&self) -> &L2BlockCommittedInfo {
         &self.last_synced
     }
 
@@ -147,8 +147,8 @@ impl Chain {
         );
         let tip = store.get_tip_block()?;
         let last_synced = store
-            .get_block_synced_header_info(&tip.hash().into())?
-            .ok_or_else(|| anyhow!("can't find last synced header info"))?;
+            .get_l2block_committed_info(&tip.hash().into())?
+            .ok_or_else(|| anyhow!("can't find last synced committed info"))?;
         let last_global_state = store
             .get_block_post_global_state(&tip.hash().into())?
             .ok_or_else(|| anyhow!("can't find last global state"))?;
@@ -186,13 +186,13 @@ impl Chain {
     fn update_l1action(&mut self, db: &StoreTransaction, action: L1Action) -> Result<SyncEvent> {
         let L1Action {
             transaction,
-            header_info,
+            l2block_committed_info,
             context,
         } = action;
         let global_state = parse_global_state(&transaction, &self.rollup_type_script_hash)?;
         assert!(
             {
-                let number: u64 = header_info.number().unpack();
+                let number: u64 = l2block_committed_info.number().unpack();
                 number
             } >= {
                 let number: u64 = self.local_state.last_synced.number().unpack();
@@ -214,10 +214,11 @@ impl Chain {
                 // Submit transactions
                 // parse layer2 block
                 let l2block = parse_l2block(&transaction, &self.rollup_type_script_hash)?;
+                let number: u64 = l2block.raw().number().unpack();
                 if let Some(challenge_context) = self.process_block(
                     db,
                     l2block,
-                    header_info.clone(),
+                    l2block_committed_info.clone(),
                     global_state.clone(),
                     deposition_requests,
                 )? {
@@ -225,6 +226,7 @@ impl Chain {
                     self.bad_block_context = Some(challenge_context.target.clone());
                     SyncEvent::BadBlock(challenge_context)
                 } else {
+                    println!("sync new block #{} success", number);
                     SyncEvent::Success
                 }
             }
@@ -277,7 +279,7 @@ impl Chain {
 
         // update last global state
         self.local_state.last_global_state = global_state;
-        self.local_state.last_synced = header_info;
+        self.local_state.last_synced = l2block_committed_info;
         Ok(event)
     }
 
@@ -286,12 +288,12 @@ impl Chain {
         let RevertedL1Action {
             prev_global_state,
             transaction,
-            header_info,
+            l2block_committed_info,
             context,
         } = action;
         assert!(
             {
-                let number: u64 = header_info.number().unpack();
+                let number: u64 = l2block_committed_info.number().unpack();
                 number
             } <= {
                 let number: u64 = self.local_state.last_synced.number().unpack();
@@ -322,8 +324,8 @@ impl Chain {
         self.local_state.last_global_state = prev_global_state;
         self.local_state.tip = db.get_tip_block()?;
         self.local_state.last_synced = db
-            .get_block_synced_header_info(&self.local_state.tip.hash().into())?
-            .expect("last header info");
+            .get_l2block_committed_info(&self.local_state.tip.hash().into())?
+            .expect("last committed info");
         Ok(())
     }
 
@@ -384,7 +386,7 @@ impl Chain {
         &mut self,
         db: &StoreTransaction,
         l2block: L2Block,
-        header_info: HeaderInfo,
+        l2block_committed_info: L2BlockCommittedInfo,
         global_state: GlobalState,
         deposition_requests: Vec<DepositionRequest>,
     ) -> Result<Option<ChallengeContext>> {
@@ -446,7 +448,7 @@ impl Chain {
         // update chain
         db.insert_block(
             l2block.clone(),
-            header_info,
+            l2block_committed_info,
             global_state,
             result.receipts,
             deposition_requests,

@@ -6,14 +6,14 @@ use anyhow::Result;
 use gw_common::{error::Error, smt::H256};
 use gw_db::{
     schema::{
-        Col, COLUMNS, COLUMN_BLOCK, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_META,
-        COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION, COLUMN_TRANSACTION_RECEIPT,
-        META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
+        Col, COLUMNS, COLUMN_BLOCK, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_L2BLOCK_COMMITTED_INFO,
+        COLUMN_META, COLUMN_TRANSACTION, COLUMN_TRANSACTION_RECEIPT, META_CHAIN_ID_KEY,
+        META_TIP_BLOCK_HASH_KEY,
     },
     DBPinnableSlice, RocksDB,
 };
 use gw_types::{
-    packed::{self, GlobalState, HeaderInfo, L2Block, L2Transaction},
+    packed::{self, GlobalState, L2Block, L2Transaction},
     prelude::*,
 };
 use std::rc::Rc;
@@ -122,13 +122,14 @@ impl<'a> Store {
         }
     }
 
-    pub fn get_block_synced_header_info(
+    pub fn get_l2block_committed_info(
         &self,
         block_hash: &H256,
-    ) -> Result<Option<HeaderInfo>, Error> {
-        match self.get(COLUMN_SYNC_BLOCK_HEADER_INFO, block_hash.as_slice()) {
+    ) -> Result<Option<packed::L2BlockCommittedInfo>, Error> {
+        match self.get(COLUMN_L2BLOCK_COMMITTED_INFO, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::HeaderInfoReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+                packed::L2BlockCommittedInfoReader::from_slice_should_be_ok(&slice.as_ref())
+                    .to_entity(),
             )),
             None => Ok(None),
         }

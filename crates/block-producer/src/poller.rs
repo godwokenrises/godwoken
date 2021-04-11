@@ -13,7 +13,8 @@ use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     packed::{
-        Byte32, CellOutput, DepositionLockArgs, DepositionRequest, HeaderInfo, Script, Transaction,
+        Byte32, CellOutput, DepositionLockArgs, DepositionRequest, L2BlockCommittedInfo, Script,
+        Transaction,
     },
     prelude::*,
 };
@@ -78,24 +79,9 @@ impl ChainUpdater {
             // TODO: the syncing logic here works under the assumption that a single
             // L1 CKB block can contain at most one L2 Godwoken block. The logic
             // here needs revising, once we relax this constraint for more performance.
-            let mut txs: Pagination<Tx> = to_result(
-                self.rpc_client
-                    .indexer_client
-                    .request(
-                        "get_transactions",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                        ])),
-                    )
-                    .await?,
-            )?;
-            println!("L2 blocks to sync: {}", txs.objects.len());
-            self.update(&txs.objects).await?;
-
-            while !txs.objects.is_empty() {
-                txs = to_result(
+            let mut last_cursor = None;
+            loop {
+                let txs: Pagination<Tx> = to_result(
                     self.rpc_client
                         .indexer_client
                         .request(
@@ -104,17 +90,21 @@ impl ChainUpdater {
                                 json!(search_key),
                                 json!(order),
                                 json!(limit),
-                                json!(txs.last_cursor),
+                                json!(last_cursor),
                             ])),
                         )
                         .await?,
                 )?;
+                if txs.objects.is_empty() {
+                    break;
+                }
+                last_cursor = Some(txs.last_cursor);
 
-                println!("L2 blocks to sync: {}", txs.objects.len());
+                println!("Poll transactions: {}", txs.objects.len());
                 self.update(&txs.objects).await?;
             }
 
-            async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+            async_std::task::sleep(std::time::Duration::from_secs(3)).await;
         }
     }
 
@@ -149,7 +139,7 @@ impl ChainUpdater {
             Transaction::new_unchecked(tx.as_bytes())
         };
         let block_hash = tx_with_status.tx_status.block_hash.ok_or_else(|| {
-            anyhow::anyhow!("Ttransaction {:x} is not committed on chain!", tx_hash)
+            anyhow::anyhow!("Transaction {:x} is not committed on chain!", tx_hash)
         })?;
         let header_view: Option<HeaderView> = to_result(
             self.rpc_client
@@ -162,17 +152,18 @@ impl ChainUpdater {
         )?;
         let header_view =
             header_view.ok_or_else(|| anyhow::anyhow!("Cannot locate block: {:x}", block_hash))?;
-        let header_info = HeaderInfo::new_builder()
-            .number(header_view.inner.number.value().pack())
-            .block_hash(block_hash.0.pack())
-            .build();
         let requests = self.extract_deposition_requests(&tx).await?;
         let context = L1ActionContext::SubmitTxs {
             deposition_requests: requests,
         };
+        let l2block_committed_info = L2BlockCommittedInfo::new_builder()
+            .number(header_view.inner.number.value().pack())
+            .block_hash(block_hash.0.pack())
+            .transaction_hash(tx_hash.pack())
+            .build();
         let update = L1Action {
             transaction: tx.clone(),
-            header_info,
+            l2block_committed_info,
             context,
         };
         // todo handle layer1 fork

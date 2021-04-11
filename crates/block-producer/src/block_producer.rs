@@ -2,13 +2,13 @@
 
 use crate::rpc_client::{DepositInfo, RPCClient};
 use crate::transaction_skeleton::TransactionSkeleton;
-use crate::utils::fill_tx_fee;
+use crate::utils::{fill_tx_fee, CKBGenesisInfo};
 use crate::wallet::Wallet;
 use crate::{
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
     types::{CellInfo, InputCellInfo},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
 use gw_chain::chain::Chain;
@@ -134,9 +134,11 @@ async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Ve
     Ok(cells)
 }
 
+#[allow(clippy::clippy::too_many_arguments)]
 async fn complete_tx_skeleton(
     block_producer_config: &BlockProducerConfig,
     rollup_context: &RollupContext,
+    ckb_genesis_info: &CKBGenesisInfo,
     rpc_client: &RPCClient,
     wallet: &Wallet,
     deposit_cells: Vec<DepositInfo>,
@@ -167,6 +169,10 @@ async fn complete_tx_skeleton(
             .cell_deps_mut()
             .push(CellDep::new_unchecked(cell_dep.as_bytes()));
     }
+    // secp256k1 lock, used for unlock tx fee payment cells
+    tx_skeleton
+        .cell_deps_mut()
+        .push(ckb_genesis_info.sighash_dep());
     // witnesses
     tx_skeleton.witnesses_mut().push(
         WitnessArgs::new_builder()
@@ -267,9 +273,11 @@ pub struct BlockProducer {
     wallet: Wallet,
     config: BlockProducerConfig,
     rpc_client: RPCClient,
+    ckb_genesis_info: CKBGenesisInfo,
 }
 
 impl BlockProducer {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         rollup_config_hash: H256,
         store: Store,
@@ -277,9 +285,10 @@ impl BlockProducer {
         chain: Arc<Mutex<Chain>>,
         mem_pool: Arc<Mutex<MemPool>>,
         rpc_client: RPCClient,
+        ckb_genesis_info: CKBGenesisInfo,
         config: BlockProducerConfig,
     ) -> Result<Self> {
-        let wallet = Wallet::from_config(&config.wallet_config)?;
+        let wallet = Wallet::from_config(&config.wallet_config).with_context(|| "init wallet")?;
 
         let block_producer = BlockProducer {
             rollup_config_hash,
@@ -289,6 +298,7 @@ impl BlockProducer {
             mem_pool,
             rpc_client,
             wallet,
+            ckb_genesis_info,
             config,
         };
         Ok(block_producer)
@@ -296,7 +306,7 @@ impl BlockProducer {
 
     pub async fn poll_loop(&self) -> Result<()> {
         loop {
-            async_std::task::sleep(std::time::Duration::from_secs(15)).await;
+            async_std::task::sleep(std::time::Duration::from_secs(45)).await;
             self.produce_next_block().await?;
         }
     }
@@ -344,19 +354,21 @@ impl BlockProducer {
             unused_transactions,
             unused_withdrawal_requests,
         } = block_result;
+        let number: u64 = block.raw().number().unpack();
         println!(
-            "produce new block {} unused transactions {} unused withdrawals {}",
-            block.raw().number(),
+            "produce new block #{} (txs: {}, unused txs: {}, unused withdrawals: {})",
+            number,
+            block.transactions().len(),
             unused_transactions.len(),
             unused_withdrawal_requests.len()
         );
-        let block_hash = block.hash().into();
 
         // composit tx
         let rollup_context = self.generator.rollup_context();
         let tx = complete_tx_skeleton(
             &self.config,
             rollup_context,
+            &self.ckb_genesis_info,
             &self.rpc_client,
             &self.wallet,
             deposit_cells,
@@ -367,9 +379,6 @@ impl BlockProducer {
 
         // send transaction
         self.rpc_client.send_transaction(tx).await?;
-
-        // update status
-        self.mem_pool.lock().notify_new_tip(block_hash)?;
         Ok(())
     }
 }

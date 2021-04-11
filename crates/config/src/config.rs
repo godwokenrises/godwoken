@@ -1,7 +1,7 @@
 use ckb_fixed_hash::H256;
 use gw_jsonrpc_types::{
     blockchain::{CellDep, Script},
-    godwoken::{HeaderInfo, RollupConfig},
+    godwoken::{L2BlockCommittedInfo, RollupConfig},
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -25,7 +25,7 @@ pub struct RPCClientConfig {
 /// Onchain rollup cell config
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ChainConfig {
-    pub genesis_header: HeaderInfo,
+    pub genesis_committed_info: L2BlockCommittedInfo,
     pub rollup_type_script: Script,
 }
 

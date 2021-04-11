@@ -8,6 +8,12 @@ struct NumberHash {
     block_hash:     Byte32,
 }
 
+struct L2BlockCommittedInfo {
+    number:         Uint64,
+    block_hash:     Byte32,
+    transaction_hash: Byte32,
+}
+
 array TransactionKey [byte; 36];
 
 struct TransactionInfo {

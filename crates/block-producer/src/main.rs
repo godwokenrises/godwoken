@@ -1,8 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use futures::{select, FutureExt};
 use gw_block_producer::{
     block_producer::BlockProducer, poller::ChainUpdater, rpc_client::RPCClient,
+    utils::CKBGenesisInfo,
 };
 use gw_chain::chain::Chain;
 use gw_config::Config;
@@ -20,8 +21,9 @@ use parking_lot::Mutex;
 use std::{fs, path::Path, process::exit, sync::Arc};
 
 fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
-    let content = fs::read(path)?;
-    let config = toml::from_slice(&content)?;
+    let content = fs::read(&path)
+        .with_context(|| format!("read config file from {}", path.as_ref().to_string_lossy()))?;
+    let config = toml::from_slice(&content).with_context(|| "parse config file")?;
     Ok(config)
 }
 
@@ -31,12 +33,13 @@ fn run() -> Result<()> {
     let config = read_config(&config_path)?;
     let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
     // TODO: use persistent store later
-    let store = Store::open_tmp()?;
+    let store = Store::open_tmp().with_context(|| "init store")?;
     init_genesis(
         &store,
         &config.genesis,
-        config.chain.genesis_header.clone().into(),
-    )?;
+        config.chain.genesis_committed_info.clone().into(),
+    )
+    .with_context(|| "init genesis")?;
     let rollup_context = RollupContext {
         rollup_config: rollup_config.clone(),
         rollup_script_hash: {
@@ -47,7 +50,8 @@ fn run() -> Result<()> {
 
     let rollup_config_hash = rollup_config.hash().into();
     let generator = {
-        let backend_manage = BackendManage::from_config(config.backends.clone())?;
+        let backend_manage = BackendManage::from_config(config.backends.clone())
+            .with_context(|| "config backends")?;
         let account_lock_manage = AccountLockManage::default();
         Arc::new(Generator::new(
             backend_manage,
@@ -55,24 +59,26 @@ fn run() -> Result<()> {
             rollup_context.clone(),
         ))
     };
-    let mem_pool = Arc::new(Mutex::new(MemPool::create(
-        store.clone(),
-        generator.clone(),
-    )?));
-    let chain = Arc::new(Mutex::new(Chain::create(
-        &rollup_config,
-        &config.chain.rollup_type_script.clone().into(),
-        store.clone(),
-        generator.clone(),
-        mem_pool.clone(),
-    )?));
+    let mem_pool = Arc::new(Mutex::new(
+        MemPool::create(store.clone(), generator.clone()).with_context(|| "create mem-pool")?,
+    ));
+    let chain = Arc::new(Mutex::new(
+        Chain::create(
+            &rollup_config,
+            &config.chain.rollup_type_script.clone().into(),
+            store.clone(),
+            generator.clone(),
+            mem_pool.clone(),
+        )
+        .with_context(|| "create chain")?,
+    ));
 
     let rollup_type_script: Script = config.chain.rollup_type_script.into();
     let rpc_client = {
         let indexer_client = HttpClient::new(config.rpc_client.indexer_url)?;
         let ckb_client = HttpClient::new(config.rpc_client.ckb_url)?;
         let rollup_type_script =
-            { ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes()) };
+            ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
         RPCClient {
             indexer_client,
             ckb_client,
@@ -89,6 +95,11 @@ fn run() -> Result<()> {
         rollup_type_script,
     );
 
+    let ckb_genesis_info = {
+        let ckb_genesis = smol::block_on(async { rpc_client.get_block_by_number(0).await })?;
+        CKBGenesisInfo::from_block(&ckb_genesis)?
+    };
+
     // create block producer
     let block_producer = BlockProducer::create(
         rollup_config_hash,
@@ -97,10 +108,12 @@ fn run() -> Result<()> {
         chain,
         mem_pool,
         rpc_client,
+        ckb_genesis_info,
         config
             .block_producer
             .ok_or_else(|| anyhow!("not set block producer"))?,
-    )?;
+    )
+    .with_context(|| "init block producer")?;
 
     let (s, ctrl_c) = async_channel::bounded(100);
     let handle = move || {
@@ -140,5 +153,5 @@ fn generate_example_config<P: AsRef<Path>>(path: P) -> Result<()> {
 /// Block producer
 fn main() {
     generate_example_config("./config.example.toml").expect("default config");
-    run().expect("block producer");
+    run().expect("run");
 }

@@ -14,7 +14,7 @@ use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     packed::{
-        CellOutput, DepositionRequest, HeaderInfo, RawTransaction, RollupConfig, Script,
+        CellOutput, DepositionRequest, L2BlockCommittedInfo, RawTransaction, RollupConfig, Script,
         Transaction, WitnessArgs,
     },
     prelude::*,
@@ -94,7 +94,7 @@ pub fn setup_chain_with_account_lock_manage(
         rollup_config: rollup_config.clone().into(),
         rollup_type_hash: rollup_script_hash.into(),
     };
-    let genesis_header_info = HeaderInfo::default();
+    let genesis_committed_info = L2BlockCommittedInfo::default();
     let backend_manage = build_backend_manage(&rollup_config);
     let rollup_context = RollupContext {
         rollup_script_hash: rollup_script_hash.into(),
@@ -105,7 +105,7 @@ pub fn setup_chain_with_account_lock_manage(
         account_lock_manage,
         rollup_context.clone(),
     ));
-    init_genesis(&store, &genesis_config, genesis_header_info).unwrap();
+    init_genesis(&store, &genesis_config, genesis_committed_info).unwrap();
     let mem_pool = MemPool::create(store.clone(), Arc::clone(&generator)).unwrap();
     Chain::create(
         &rollup_config,
@@ -149,14 +149,14 @@ pub fn apply_block_result(
     deposition_requests: Vec<DepositionRequest>,
 ) {
     let transaction = build_sync_tx(rollup_cell, block_result);
-    let header_info = HeaderInfo::default();
+    let l2block_committed_info = L2BlockCommittedInfo::default();
 
     let update = L1Action {
         context: L1ActionContext::SubmitTxs {
             deposition_requests,
         },
         transaction,
-        header_info,
+        l2block_committed_info,
     };
     let param = SyncParam {
         updates: vec![update],

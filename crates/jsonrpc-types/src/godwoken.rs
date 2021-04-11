@@ -837,28 +837,24 @@ impl From<packed::RawWithdrawalRequest> for RawWithdrawalRequest {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
-pub struct HeaderInfo {
+pub struct L2BlockCommittedInfo {
     pub number: Uint64,
     pub block_hash: H256,
+    pub transaction_hash: H256,
 }
 
-impl From<HeaderInfo> for packed::HeaderInfo {
-    fn from(json: HeaderInfo) -> packed::HeaderInfo {
-        let HeaderInfo { number, block_hash } = json;
-        packed::HeaderInfo::new_builder()
+impl From<L2BlockCommittedInfo> for packed::L2BlockCommittedInfo {
+    fn from(json: L2BlockCommittedInfo) -> packed::L2BlockCommittedInfo {
+        let L2BlockCommittedInfo {
+            number,
+            block_hash,
+            transaction_hash,
+        } = json;
+        packed::L2BlockCommittedInfo::new_builder()
             .number(u64::from(number).pack())
             .block_hash(block_hash.pack())
+            .transaction_hash(transaction_hash.pack())
             .build()
-    }
-}
-impl From<packed::HeaderInfo> for HeaderInfo {
-    fn from(data: packed::HeaderInfo) -> HeaderInfo {
-        let number: u64 = data.number().unpack();
-        let block_hash: H256 = data.block_hash().unpack();
-        HeaderInfo {
-            number: number.into(),
-            block_hash,
-        }
     }
 }
 

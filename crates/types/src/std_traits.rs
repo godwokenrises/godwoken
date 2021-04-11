@@ -39,7 +39,7 @@ impl_std_eq!(TxReceipt);
 impl_std_eq!(ChallengeLockArgs);
 impl_std_eq!(ChallengeWitness);
 impl_std_eq!(ChallengeTarget);
-impl_std_eq!(HeaderInfo);
+impl_std_eq!(L2BlockCommittedInfo);
 impl_std_eq!(Transaction);
 impl_std_eq!(DepositionRequest);
 impl_std_eq!(DepositionLockArgs);

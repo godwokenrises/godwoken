@@ -66,6 +66,8 @@ impl_hash!(RawL2Transaction);
 impl_witness_hash!(L2Transaction);
 impl_hash!(RawWithdrawalRequest);
 impl_witness_hash!(WithdrawalRequest);
+impl_hash!(RawTransaction);
+impl_witness_hash!(Transaction);
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "std")] {

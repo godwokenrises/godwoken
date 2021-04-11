@@ -3,7 +3,7 @@ use gw_common::{smt::SMT, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_db::schema::{
     Col, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSITION_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
     COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_CUSTODIAN_ASSETS, COLUMN_INDEX,
-    COLUMN_META, COLUMN_SYNC_BLOCK_HEADER_INFO, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
+    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
     COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY,
     META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
 };
@@ -192,13 +192,14 @@ impl StoreTransaction {
             }))
     }
 
-    pub fn get_block_synced_header_info(
+    pub fn get_l2block_committed_info(
         &self,
         block_hash: &H256,
-    ) -> Result<Option<packed::HeaderInfo>, Error> {
-        match self.get(COLUMN_SYNC_BLOCK_HEADER_INFO, block_hash.as_slice()) {
+    ) -> Result<Option<packed::L2BlockCommittedInfo>, Error> {
+        match self.get(COLUMN_L2BLOCK_COMMITTED_INFO, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::HeaderInfoReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+                packed::L2BlockCommittedInfoReader::from_slice_should_be_ok(&slice.as_ref())
+                    .to_entity(),
             )),
             None => Ok(None),
         }
@@ -255,7 +256,7 @@ impl StoreTransaction {
     pub fn insert_block(
         &self,
         block: packed::L2Block,
-        header_info: packed::HeaderInfo,
+        committed_info: packed::L2BlockCommittedInfo,
         global_state: packed::GlobalState,
         tx_receipts: Vec<packed::TxReceipt>,
         deposition_requests: Vec<packed::DepositionRequest>,
@@ -264,9 +265,9 @@ impl StoreTransaction {
         let block_hash = block.hash();
         self.insert_raw(COLUMN_BLOCK, &block_hash, block.as_slice())?;
         self.insert_raw(
-            COLUMN_SYNC_BLOCK_HEADER_INFO,
+            COLUMN_L2BLOCK_COMMITTED_INFO,
             &block_hash,
-            header_info.as_slice(),
+            committed_info.as_slice(),
         )?;
         self.insert_raw(
             COLUMN_BLOCK_GLOBAL_STATE,
