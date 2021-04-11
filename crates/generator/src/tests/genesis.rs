@@ -9,7 +9,7 @@ use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    packed::{HeaderInfo, RollupConfig},
+    packed::{L2BlockCommittedInfo, RollupConfig},
     prelude::*,
 };
 use std::convert::TryInto;
@@ -32,9 +32,9 @@ fn test_init_genesis() {
     let genesis = build_genesis(&config).unwrap();
     let genesis_block_hash: [u8; 32] = genesis.genesis.hash();
     assert_eq!(genesis_block_hash, GENESIS_BLOCK_HASH);
-    let header_info = HeaderInfo::default();
+    let genesis_committed_info = L2BlockCommittedInfo::default();
     let store: Store = Store::open_tmp().unwrap();
-    init_genesis(&store, &config, header_info).unwrap();
+    init_genesis(&store, &config, genesis_committed_info).unwrap();
     let db = store.begin_transaction();
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());

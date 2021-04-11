@@ -3,7 +3,7 @@ use gw_chain::chain::{L1Action, L1ActionContext, RevertedL1Action, SyncEvent, Sy
 use gw_common::{state::State, H256};
 use gw_store::state_db::StateDBVersion;
 use gw_types::{
-    packed::{CellOutput, DepositionRequest, GlobalState, HeaderInfo, Script},
+    packed::{CellOutput, DepositionRequest, GlobalState, L2BlockCommittedInfo, Script},
     prelude::*,
 };
 
@@ -38,14 +38,14 @@ fn test_sync_a_block() {
         .type_(Some(rollup_type_script).pack())
         .build();
     let transaction = build_sync_tx(rollup_cell, block_result);
-    let header_info = HeaderInfo::default();
+    let l2block_committed_info = L2BlockCommittedInfo::default();
 
     let update = L1Action {
         context: L1ActionContext::SubmitTxs {
             deposition_requests: vec![deposition.clone()],
         },
         transaction,
-        header_info,
+        l2block_committed_info,
     };
     let param = SyncParam {
         updates: vec![update],
@@ -81,7 +81,9 @@ fn test_layer1_fork() {
                 deposition_requests: vec![deposition],
             },
             transaction: build_sync_tx(rollup_cell.clone(), block_result),
-            header_info: HeaderInfo::new_builder().number(1u64.pack()).build(),
+            l2block_committed_info: L2BlockCommittedInfo::new_builder()
+                .number(1u64.pack())
+                .build(),
         }
     };
     // update block 1
@@ -99,7 +101,9 @@ fn test_layer1_fork() {
             deposition_requests: vec![deposition.clone()],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
-        header_info: HeaderInfo::new_builder().number(1u64.pack()).build(),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number(1u64.pack())
+            .build(),
     };
     let param = SyncParam {
         updates: vec![action1.clone()],
@@ -122,7 +126,9 @@ fn test_layer1_fork() {
             deposition_requests: vec![deposition],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
-        header_info: HeaderInfo::new_builder().number(2u64.pack()).build(),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number(2u64.pack())
+            .build(),
     };
     let param = SyncParam {
         updates: vec![action2.clone()],
@@ -143,13 +149,13 @@ fn test_layer1_fork() {
             let prev_global_state = GlobalState::default();
             let L1Action {
                 transaction,
-                header_info,
+                l2block_committed_info,
                 context,
             } = action;
             RevertedL1Action {
                 prev_global_state,
                 transaction,
-                header_info,
+                l2block_committed_info,
                 context,
             }
         })

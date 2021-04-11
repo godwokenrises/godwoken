@@ -6,7 +6,7 @@ use crate::{
 
 use gw_common::H256;
 use gw_types::{
-    packed::{GlobalState, HeaderInfo, L2Block, L2Transaction, TxReceipt},
+    packed::{GlobalState, L2Block, L2BlockCommittedInfo, L2Transaction, TxReceipt},
     prelude::*,
 };
 
@@ -29,7 +29,7 @@ fn construct_state_db_from_block_hash() {
     store_txn
         .insert_block(
             block.clone(),
-            HeaderInfo::default(),
+            L2BlockCommittedInfo::default(),
             GlobalState::default(),
             Vec::new(),
             Vec::new(),
@@ -84,7 +84,7 @@ fn construct_state_db_from_tx_index() {
     store_txn
         .insert_block(
             block.clone(),
-            HeaderInfo::default(),
+            L2BlockCommittedInfo::default(),
             GlobalState::default(),
             vec![TxReceipt::default(); 2],
             Vec::new(),
