@@ -332,7 +332,7 @@ impl BlockProducer {
                 }
             }
         };
-        let parent_block = self.chain.lock().local_state.tip().clone();
+        let parent_block = self.chain.lock().local_state().tip().clone();
         let max_withdrawal_capacity = std::u128::MAX;
         // produce block
         let param = ProduceBlockParam {

@@ -12,11 +12,10 @@ use gw_types::{
     packed::{self, TransactionKey},
     prelude::*,
 };
-use std::{borrow::BorrowMut, collections::HashMap, rc::Rc};
+use std::{borrow::BorrowMut, collections::HashMap};
 
-#[derive(Clone)]
 pub struct StoreTransaction {
-    pub(crate) inner: Rc<RocksDBTransaction>,
+    pub(crate) inner: RocksDBTransaction,
 }
 
 impl KVStore for StoreTransaction {

@@ -1,7 +1,7 @@
 use crate::testing_tool::chain::{build_sync_tx, construct_block, setup_chain};
 use gw_chain::chain::{L1Action, L1ActionContext, RevertedL1Action, SyncEvent, SyncParam};
 use gw_common::{state::State, H256};
-use gw_store::state_db::StateDBVersion;
+use gw_store::state_db::{StateDBTransaction, StateDBVersion};
 use gw_types::{
     packed::{CellOutput, DepositionRequest, GlobalState, L2BlockCommittedInfo, Script},
     prelude::*,
@@ -18,7 +18,7 @@ fn test_sync_a_block() {
         .script(user_script)
         .build();
     let block_result = {
-        let mem_pool = chain.mem_pool.lock();
+        let mem_pool = chain.mem_pool().lock();
         construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap()
     };
     assert_eq!(
@@ -73,7 +73,7 @@ fn test_layer1_fork() {
             .script(charlie_script)
             .build();
         let chain = setup_chain(rollup_type_script.clone(), Default::default());
-        let mem_pool = chain.mem_pool.lock();
+        let mem_pool = chain.mem_pool().lock();
         let block_result = construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap();
 
         L1Action {
@@ -93,7 +93,7 @@ fn test_layer1_fork() {
         .script(alice_script)
         .build();
     let block_result = {
-        let mem_pool = chain.mem_pool.lock();
+        let mem_pool = chain.mem_pool().lock();
         construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap()
     };
     let action1 = L1Action {
@@ -118,7 +118,7 @@ fn test_layer1_fork() {
         .script(bob_script)
         .build();
     let block_result = {
-        let mem_pool = chain.mem_pool.lock();
+        let mem_pool = chain.mem_pool().lock();
         construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap()
     };
     let action2 = L1Action {
@@ -174,10 +174,12 @@ fn test_layer1_fork() {
 
     // check account SMT, should be able to calculate account state root
     {
-        let db = chain
-            .store()
-            .state_at(StateDBVersion::from_block_hash(tip_block.hash().into()))
-            .unwrap();
+        let db = chain.store().begin_transaction();
+        let db = StateDBTransaction::from_version(
+            &db,
+            StateDBVersion::from_block_hash(tip_block.hash().into()),
+        )
+        .unwrap();
         let tree = db.account_state_tree().unwrap();
         let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();

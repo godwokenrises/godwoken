@@ -116,13 +116,13 @@ impl LocalState {
 }
 
 pub struct Chain {
-    pub rollup_type_script_hash: [u8; 32],
-    pub rollup_config_hash: [u8; 32],
-    pub store: Store,
-    pub bad_block_context: Option<ChallengeTarget>,
-    pub local_state: LocalState,
-    pub generator: Arc<Generator>,
-    pub mem_pool: Arc<Mutex<MemPool>>,
+    rollup_type_script_hash: [u8; 32],
+    rollup_config_hash: [u8; 32],
+    store: Store,
+    bad_block_context: Option<ChallengeTarget>,
+    local_state: LocalState,
+    generator: Arc<Generator>,
+    mem_pool: Arc<Mutex<MemPool>>,
 }
 
 impl Chain {
@@ -176,6 +176,14 @@ impl Chain {
 
     pub fn store(&self) -> &Store {
         &self.store
+    }
+
+    pub fn mem_pool(&self) -> &Mutex<MemPool> {
+        &self.mem_pool
+    }
+
+    pub fn generator(&self) -> &Generator {
+        &self.generator
     }
 
     pub fn rollup_config_hash(&self) -> &[u8; 32] {
@@ -364,7 +372,7 @@ impl Chain {
                 .merkle_root()
                 .unpack();
             let state_db = StateDBTransaction::from_version(
-                db,
+                &db,
                 StateDBVersion::from_block_hash(self.local_state.tip().hash().into()),
             )?;
             assert_eq!(
@@ -408,11 +416,9 @@ impl Chain {
             deposition_requests: deposition_requests.clone(),
         };
         let tip_block_hash = self.local_state.tip().hash().into();
-        let chain_view = ChainView::new(db.clone(), tip_block_hash);
-        let state_db = StateDBTransaction::from_version(
-            db.clone(),
-            StateDBVersion::from_block_hash(tip_block_hash),
-        )?;
+        let chain_view = ChainView::new(db, tip_block_hash);
+        let state_db =
+            StateDBTransaction::from_version(db, StateDBVersion::from_block_hash(tip_block_hash))?;
         let mut tree = state_db.account_state_tree()?;
         // process transactions
         let result = match self

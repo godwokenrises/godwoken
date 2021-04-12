@@ -4,7 +4,7 @@ use gw_generator::{
     error::{DepositionError, WithdrawalError},
     Error,
 };
-use gw_store::state_db::StateDBVersion;
+use gw_store::state_db::{StateDBTransaction, StateDBVersion};
 use gw_types::{
     packed::{CellOutput, DepositionRequest, RawWithdrawalRequest, Script, WithdrawalRequest},
     prelude::*,
@@ -30,7 +30,7 @@ fn deposite_to_chain(
         .script(user_script)
         .build()];
     let block_result = {
-        let mem_pool = chain.mem_pool.lock();
+        let mem_pool = chain.mem_pool().lock();
         construct_block(chain, &mem_pool, deposition_requests.clone())?
     };
     // deposit
@@ -61,7 +61,7 @@ fn withdrawal_from_chain(
         WithdrawalRequest::new_builder().raw(raw).build()
     };
     let block_result = {
-        let mut mem_pool = chain.mem_pool.lock();
+        let mut mem_pool = chain.mem_pool().lock();
         mem_pool.push_withdrawal_request(withdrawal)?;
         construct_block(chain, &mem_pool, Vec::default()).unwrap()
     };
@@ -95,11 +95,11 @@ fn test_deposition_and_withdrawal() {
     .unwrap();
     let (user_id, ckb_balance) = {
         let tip_block_hash = chain.store().get_tip_block_hash().unwrap();
-        let db = chain
-            .store()
-            .state_at(StateDBVersion::from_block_hash(tip_block_hash))
-            .unwrap();
-        let tree = db.account_state_tree().unwrap();
+        let db = chain.store().begin_transaction();
+        let state_db =
+            StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_block_hash))
+                .unwrap();
+        let tree = state_db.account_state_tree().unwrap();
         // check user account
         assert_eq!(
             tree.get_account_count().unwrap(),
@@ -117,8 +117,9 @@ fn test_deposition_and_withdrawal() {
     };
     // check tx pool state
     {
-        let mem_pool = chain.mem_pool.lock();
-        let state_db = mem_pool.state_db();
+        let mem_pool = chain.mem_pool().lock();
+        let db = chain.store().begin_transaction();
+        let state_db = mem_pool.fetch_state_db(&db).unwrap();
         let state = state_db.account_state_tree().unwrap();
         assert_eq!(
             state
@@ -147,19 +148,19 @@ fn test_deposition_and_withdrawal() {
     .unwrap();
     // check status
     let tip_block_hash = chain.store().get_tip_block_hash().unwrap();
-    let db = chain
-        .store()
-        .state_at(StateDBVersion::from_block_hash(tip_block_hash))
-        .unwrap();
-    let tree = db.account_state_tree().unwrap();
+    let db = chain.store().begin_transaction();
+    let state_db =
+        StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_block_hash))
+            .unwrap();
+    let tree = state_db.account_state_tree().unwrap();
     let ckb_balance2 = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, user_id).unwrap();
     assert_eq!(ckb_balance, ckb_balance2 + withdraw_capacity as u128);
     let nonce = tree.get_nonce(user_id).unwrap();
     assert_eq!(nonce, 1);
     // check tx pool state
     {
-        let mem_pool = chain.mem_pool.lock();
-        let state_db = mem_pool.state_db();
+        let mem_pool = chain.mem_pool().lock();
+        let state_db = mem_pool.fetch_state_db(&db).unwrap();
         let state = state_db.account_state_tree().unwrap();
         assert_eq!(
             state

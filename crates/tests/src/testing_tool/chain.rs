@@ -175,7 +175,7 @@ pub fn construct_block(
     let timestamp = 0;
     let max_withdrawal_capacity = std::u128::MAX;
     let db = chain.store().begin_transaction();
-    let generator = chain.generator.as_ref();
+    let generator = chain.generator();
     let parent_block = chain.store().get_tip_block().unwrap();
     let rollup_config_hash = chain.rollup_config_hash().clone().into();
     let mut txs = Vec::new();

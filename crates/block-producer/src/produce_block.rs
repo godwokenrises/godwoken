@@ -67,10 +67,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
     // create overlay storage
     let state_db = {
         let tip_block_hash = db.get_tip_block_hash()?;
-        StateDBTransaction::from_version(
-            db.clone(),
-            StateDBVersion::from_block_hash(tip_block_hash),
-        )?
+        StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_block_hash))?
     };
     let mut state = state_db.account_state_tree()?;
     // track state changes
@@ -134,7 +131,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         .timestamp(timestamp.pack())
         .block_producer_id(block_producer_id.pack())
         .build();
-    let chain_view = ChainView::new(db.clone(), parent_block_hash.into());
+    let chain_view = ChainView::new(&db, parent_block_hash.into());
     for tx in txs {
         // 1. verify tx
         if generator.check_transaction_signature(&state, &tx).is_err() {

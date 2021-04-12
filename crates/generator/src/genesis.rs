@@ -27,7 +27,7 @@ use gw_types::{
 pub fn build_genesis(config: &GenesisConfig) -> Result<GenesisWithGlobalState> {
     let store = Store::open_tmp()?;
     let db = store.begin_transaction();
-    build_genesis_from_store(&db, config)
+    build_genesis_from_store(db, config).map(|(_db, genesis_with_state)| genesis_with_state)
 }
 
 pub struct GenesisWithGlobalState {
@@ -38,9 +38,9 @@ pub struct GenesisWithGlobalState {
 /// build genesis from store
 /// This function initialize db to genesis state
 pub fn build_genesis_from_store(
-    db: &StoreTransaction,
+    db: StoreTransaction,
     config: &GenesisConfig,
-) -> Result<GenesisWithGlobalState> {
+) -> Result<(StoreTransaction, GenesisWithGlobalState)> {
     let rollup_context = RollupContext {
         rollup_script_hash: {
             let rollup_script_hash: [u8; 32] = config.rollup_type_hash.clone().into();
@@ -52,7 +52,7 @@ pub fn build_genesis_from_store(
     db.set_account_smt_root(H256::zero())?;
     db.set_block_smt_root(H256::zero())?;
     db.set_account_count(0)?;
-    let state_db = StateDBTransaction::from_version(db.clone(), StateDBVersion::from_genesis())?;
+    let state_db = StateDBTransaction::from_version(&db, StateDBVersion::from_genesis())?;
     let mut tree = state_db.account_state_tree()?;
 
     // create a reserved account
@@ -145,12 +145,13 @@ pub fn build_genesis_from_store(
             .tip_block_hash(genesis.hash().pack())
             .build()
     };
-    db.set_block_smt_root(global_state.block().merkle_root().unpack())?;
     tree.submit_tree()?;
-    Ok(GenesisWithGlobalState {
+    db.set_block_smt_root(global_state.block().merkle_root().unpack())?;
+    let genesis_with_global_state = GenesisWithGlobalState {
         genesis,
         global_state,
-    })
+    };
+    Ok((db, genesis_with_global_state))
 }
 
 pub fn init_genesis(
@@ -167,10 +168,13 @@ pub fn init_genesis(
     };
     let db = store.begin_transaction();
     db.setup_chain_id(rollup_script_hash)?;
-    let GenesisWithGlobalState {
-        genesis,
-        global_state,
-    } = build_genesis_from_store(&db, config)?;
+    let (
+        db,
+        GenesisWithGlobalState {
+            genesis,
+            global_state,
+        },
+    ) = build_genesis_from_store(db, config)?;
     db.insert_block(
         genesis.clone(),
         genesis_committed_info,
