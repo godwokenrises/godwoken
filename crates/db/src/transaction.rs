@@ -19,12 +19,12 @@ impl RocksDBTransaction {
         self.inner.get_cf(cf, key).map_err(internal_error)
     }
 
-    pub fn put(&self, col: &str, key: &[u8], value: &[u8]) -> Result<()> {
+    pub fn put(&self, col: Col, key: &[u8], value: &[u8]) -> Result<()> {
         let cf = cf_handle(&self.db, col)?;
         self.inner.put_cf(cf, key, value).map_err(internal_error)
     }
 
-    pub fn delete(&self, col: &str, key: &[u8]) -> Result<()> {
+    pub fn delete(&self, col: Col, key: &[u8]) -> Result<()> {
         let cf = cf_handle(&self.db, col)?;
         self.inner.delete_cf(cf, key).map_err(internal_error)
     }

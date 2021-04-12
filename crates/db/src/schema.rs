@@ -1,7 +1,7 @@
 //! The schema include constants define the low level database column families.
 
 /// Column families alias type
-pub type Col = &'static str;
+pub type Col<'a> = &'a str;
 /// Total column number
 pub const COLUMNS: u32 = 19;
 /// Column store meta data

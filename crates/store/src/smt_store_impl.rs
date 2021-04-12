@@ -13,13 +13,13 @@ use gw_db::schema::Col;
 use gw_types::{packed, prelude::*};
 
 pub struct SMTStore<'a, DB: KVStore> {
-    leaf_col: Col,
-    branch_col: Col,
+    leaf_col: Col<'a>,
+    branch_col: Col<'a>,
     store: &'a DB,
 }
 
 impl<'a, DB: KVStore> SMTStore<'a, DB> {
-    pub fn new(leaf_col: Col, branch_col: Col, store: &'a DB) -> Self {
+    pub fn new(leaf_col: Col<'a>, branch_col: Col<'a>, store: &'a DB) -> Self {
         SMTStore {
             leaf_col,
             branch_col,

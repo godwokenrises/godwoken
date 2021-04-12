@@ -37,11 +37,11 @@ impl KVStore for StoreTransaction {
             .expect("db operation should be ok")
     }
 
-    fn insert_raw(&self, col: &str, key: &[u8], value: &[u8]) -> Result<(), Error> {
+    fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
         self.inner.put(col, key, value)
     }
 
-    fn delete(&self, col: &str, key: &[u8]) -> Result<(), Error> {
+    fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
         self.inner.delete(col, key)
     }
 }
@@ -490,7 +490,7 @@ impl StoreTransaction {
         &self,
         block_hash: &H256,
         tx_index: u32,
-        col: &str,
+        col: Col,
         raw_key: &[u8],
     ) -> Result<(), Error> {
         let key = self.get_state_record_key(block_hash, tx_index, col)?;
@@ -547,7 +547,7 @@ impl StoreTransaction {
         &self,
         block_hash: &H256,
         tx_index: u32,
-        col: &str,
+        col: Col,
     ) -> Result<Vec<u8>, Error> {
         let column =
             u8::from_str_radix(col, 10).map_err(|_| "Parse column to int failed".to_owned())?;
