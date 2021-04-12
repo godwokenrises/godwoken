@@ -1,7 +1,7 @@
 //! Storage implementation
 
-use crate::{state_db::StateDBTransaction, write_batch::StoreWriteBatch};
-use crate::{state_db::StateDBVersion, transaction::StoreTransaction};
+use crate::transaction::StoreTransaction;
+use crate::write_batch::StoreWriteBatch;
 use anyhow::Result;
 use gw_common::{error::Error, smt::H256};
 use gw_db::{
@@ -16,7 +16,6 @@ use gw_types::{
     packed::{self, GlobalState, L2Block, L2Transaction},
     prelude::*,
 };
-use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct Store {
@@ -45,7 +44,7 @@ impl<'a> Store {
 
     pub fn begin_transaction(&self) -> StoreTransaction {
         StoreTransaction {
-            inner: Rc::new(self.db.transaction()),
+            inner: self.db.transaction(),
         }
     }
 
@@ -66,13 +65,6 @@ impl<'a> Store {
     pub fn has_genesis(&self) -> Result<bool> {
         let db = self.begin_transaction();
         Ok(db.get_block_hash_by_number(0)?.is_some())
-    }
-
-    /// Return state at version
-    pub fn state_at(&self, version: StateDBVersion) -> Result<StateDBTransaction> {
-        let db = self.begin_transaction();
-        let state_db = StateDBTransaction::from_version(db, version)?;
-        Ok(state_db)
     }
 
     pub fn get_chain_id(&self) -> Result<H256, Error> {

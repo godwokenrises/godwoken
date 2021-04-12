@@ -9,18 +9,18 @@ use crate::transaction::StoreTransaction;
 /// Max block hashes we can read, not included tip
 const MAX_BLOCK_HASHES_DEPTH: u64 = 256;
 
-pub struct ChainView {
-    db: StoreTransaction,
+pub struct ChainView<'db> {
+    db: &'db StoreTransaction,
     tip_block_hash: H256,
 }
 
-impl ChainView {
-    pub fn new(db: StoreTransaction, tip_block_hash: H256) -> Self {
+impl<'db> ChainView<'db> {
+    pub fn new(db: &'db StoreTransaction, tip_block_hash: H256) -> Self {
         Self { db, tip_block_hash }
     }
 }
 
-impl ChainStore for ChainView {
+impl<'db> ChainStore for ChainView<'db> {
     fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, Error> {
         // if we can read block number from db index, we are in the main chain
         if let Some(tip_number) = self.db.get_block_number(&self.tip_block_hash)? {

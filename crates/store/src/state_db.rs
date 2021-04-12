@@ -17,7 +17,7 @@ use gw_types::{
 
 const FLAG_DELETE_VALUE: u8 = 0;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StateDBVersion {
     block_hash: Option<H256>,
     tx_index: Option<u32>,
@@ -74,14 +74,14 @@ impl StateDBVersion {
     }
 }
 
-pub struct StateDBTransaction {
-    inner: StoreTransaction,
+pub struct StateDBTransaction<'db> {
+    inner: &'db StoreTransaction,
     version: StateDBVersion,
     block_number: u64,
     tx_index: u32,
 }
 
-impl KVStore for StateDBTransaction {
+impl<'db> KVStore for StateDBTransaction<'db> {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
         let raw_key = self.get_key_with_suffix(key);
         let mut raw_iter: DBRawIterator = self.inner.get_iter(col, IteratorMode::Start).into();
@@ -111,7 +111,7 @@ impl KVStore for StateDBTransaction {
     }
 }
 
-impl fmt::Debug for StateDBTransaction {
+impl<'db> fmt::Debug for StateDBTransaction<'db> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StateDBTransaction")
             .field("version", &self.version)
@@ -121,8 +121,11 @@ impl fmt::Debug for StateDBTransaction {
     }
 }
 
-impl StateDBTransaction {
-    pub fn from_version(inner: StoreTransaction, version: StateDBVersion) -> Result<Self, Error> {
+impl<'db> StateDBTransaction<'db> {
+    pub fn from_version(
+        inner: &'db StoreTransaction,
+        version: StateDBVersion,
+    ) -> Result<Self, Error> {
         let (block_number, tx_index) = version.load_block_number_and_tx_index(&inner)?;
         Ok(StateDBTransaction {
             inner,
@@ -150,7 +153,7 @@ impl StateDBTransaction {
         ))
     }
 
-    pub fn account_state_tree(&self) -> Result<StateTree<'_>, Error> {
+    pub fn account_state_tree(&self) -> Result<StateTree<'_, 'db>, Error> {
         let current_account_merkle_state = self.get_current_account_merkle_state()?;
         Ok(StateTree::new(
             self,
@@ -231,7 +234,7 @@ impl StateDBTransaction {
 
     #[cfg(test)]
     pub fn from_tx_index(
-        inner: StoreTransaction,
+        inner: &'db StoreTransaction,
         version: StateDBVersion,
         block_number: u64,
         tx_index: u32,
@@ -281,17 +284,17 @@ impl StateTracker {
     }
 }
 
-pub struct StateTree<'a> {
-    tree: SMT<SMTStore<'a, StateDBTransaction>>,
+pub struct StateTree<'a, 'db> {
+    tree: SMT<SMTStore<'a, StateDBTransaction<'db>>>,
     account_count: u32,
-    db: &'a StateDBTransaction,
+    db: &'a StateDBTransaction<'db>,
     tracker: StateTracker,
 }
 
-impl<'a> StateTree<'a> {
+impl<'a, 'db> StateTree<'a, 'db> {
     pub fn new(
-        db: &'a StateDBTransaction,
-        tree: SMT<SMTStore<'a, StateDBTransaction>>,
+        db: &'a StateDBTransaction<'db>,
+        tree: SMT<SMTStore<'a, StateDBTransaction<'db>>>,
         account_count: u32,
     ) -> Self {
         StateTree {
@@ -321,7 +324,7 @@ impl<'a> StateTree<'a> {
     }
 }
 
-impl<'a> State for StateTree<'a> {
+impl<'a, 'db> State for StateTree<'a, 'db> {
     fn get_raw(&self, key: &H256) -> Result<H256, StateError> {
         self.tracker.touch_key(key);
         let v = self.tree.get(key)?;
@@ -349,7 +352,7 @@ impl<'a> State for StateTree<'a> {
     }
 }
 
-impl<'a> CodeStore for StateTree<'a> {
+impl<'a, 'db> CodeStore for StateTree<'a, 'db> {
     fn insert_script(&mut self, script_hash: H256, script: packed::Script) {
         self.db
             .insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())

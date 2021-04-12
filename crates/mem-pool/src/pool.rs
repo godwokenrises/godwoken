@@ -18,6 +18,7 @@ use gw_generator::{Generator, RunResult};
 use gw_store::{
     chain_view::ChainView,
     state_db::{StateDBTransaction, StateDBVersion},
+    transaction::StoreTransaction,
     Store,
 };
 use gw_types::{
@@ -97,10 +98,10 @@ impl EntryList {
 }
 
 pub struct MemPool {
-    /// current state
-    state_db: StateDBTransaction,
+    /// current state db version
+    state_db_version: StateDBVersion,
     /// store
-    db: Store,
+    store: Store,
     /// current tip
     /// TODO remove me after version based storage
     current_tip: Option<H256>,
@@ -115,18 +116,18 @@ pub struct MemPool {
 }
 
 impl MemPool {
-    pub fn create(db: Store, generator: Arc<Generator>) -> Result<Self> {
+    pub fn create(store: Store, generator: Arc<Generator>) -> Result<Self> {
         let pending = Default::default();
         let all_txs = Default::default();
         let all_withdrawals = Default::default();
 
-        let tip = db.get_tip_block_hash()?;
+        let tip = store.get_tip_block_hash()?;
 
-        let state_db = db.state_at(StateDBVersion::from_block_hash(tip))?;
+        let state_db_version = StateDBVersion::from_block_hash(tip);
 
         let mut mem_pool = MemPool {
-            db,
-            state_db,
+            store,
+            state_db_version,
             current_tip: None,
             generator,
             pending,
@@ -139,8 +140,9 @@ impl MemPool {
         Ok(mem_pool)
     }
 
-    pub fn state_db(&self) -> &StateDBTransaction {
-        &self.state_db
+    pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
+        StateDBTransaction::from_version(db, self.state_db_version.clone())
+            .map_err(|err| anyhow!("err: {}", err))
     }
 
     /// Push a layer2 tx into pool
@@ -181,10 +183,13 @@ impl MemPool {
             return Err(anyhow!("tx over size"));
         }
 
+        let db = self.store.begin_transaction();
+        let state_db = self.fetch_state_db(&db)?;
+
         // TODO
         // we should introduce queue manchanism and only remove tx when tx.nonce is lower
         // reject tx if nonce is not equals account.nonce
-        let state = self.state_db.account_state_tree()?;
+        let state = state_db.account_state_tree()?;
         let account_id: u32 = tx.raw().from_id().unpack();
         let nonce = state.get_nonce(account_id)?;
         let tx_nonce: u32 = tx.raw().nonce().unpack();
@@ -208,9 +213,11 @@ impl MemPool {
         tx: L2Transaction,
         block_info: &BlockInfo,
     ) -> Result<RunResult> {
-        let state = self.state_db.account_state_tree()?;
-        let tip_block_hash = self.db.get_tip_block_hash()?;
-        let chain_view = ChainView::new(self.db.begin_transaction(), tip_block_hash);
+        let db = self.store.begin_transaction();
+        let state_db = self.fetch_state_db(&db)?;
+        let state = state_db.account_state_tree()?;
+        let tip_block_hash = self.store.get_tip_block_hash()?;
+        let chain_view = ChainView::new(&db, tip_block_hash);
         // verify tx signature
         self.generator.check_transaction_signature(&state, &tx)?;
         // tx basic verification
@@ -252,9 +259,11 @@ impl MemPool {
 
         // Add to pool
         // TODO check nonce conflict
-        let state = self.state_db.account_state_tree()?;
         self.all_withdrawals
             .insert(withdrawal_hash, withdrawal.clone());
+        let db = self.store.begin_transaction();
+        let state_db = self.fetch_state_db(&db)?;
+        let state = state_db.account_state_tree()?;
         let account_script_hash: H256 = withdrawal.raw().account_script_hash().unpack();
         let account_id = state
             .get_account_id_by_script_hash(&account_script_hash)?
@@ -266,7 +275,9 @@ impl MemPool {
 
     /// Verify withdrawal request without push it into pool
     pub fn verify_withdrawal_request(&self, withdrawal_request: &WithdrawalRequest) -> Result<()> {
-        let state = self.state_db.account_state_tree()?;
+        let db = self.store.begin_transaction();
+        let state_db = self.fetch_state_db(&db)?;
+        let state = state_db.account_state_tree()?;
         // verify withdrawal signature
         self.generator
             .check_withdrawal_request_signature(&state, withdrawal_request)?;
@@ -303,7 +314,9 @@ impl MemPool {
 
     /// Discard unexecutables from pending.
     fn demote_unexecutables(&mut self) -> Result<()> {
-        let state = self.state_db.account_state_tree()?;
+        let db = self.store.begin_transaction();
+        let state_db = self.fetch_state_db(&db)?;
+        let state = state_db.account_state_tree()?;
         let mut remove_list = Vec::default();
         // iter pending accounts and demote any non-executable objects
         for (&account_id, list) in &mut self.pending {
@@ -343,13 +356,13 @@ impl MemPool {
         // read block from db
         let new_tip = match new_tip {
             Some(block_hash) => block_hash,
-            None => self.db.get_tip_block_hash()?,
+            None => self.store.get_tip_block_hash()?,
         };
-        let new_tip_block = self.db.get_block(&new_tip)?.expect("new tip block");
+        let new_tip_block = self.store.get_block(&new_tip)?.expect("new tip block");
 
         if old_tip.is_some() && old_tip != Some(new_tip_block.raw().parent_block_hash().unpack()) {
             let old_tip = old_tip.unwrap();
-            let old_tip_block = self.db.get_block(&old_tip)?.expect("old tip block");
+            let old_tip_block = self.store.get_block(&old_tip)?.expect("old tip block");
 
             let new_number: u64 = new_tip_block.raw().number().unpack();
             let old_number: u64 = old_tip_block.raw().number().unpack();
@@ -367,7 +380,7 @@ impl MemPool {
                     discarded_txs.extend(rem.transactions().into_iter());
                     discarded_withdrawals.extend(rem.withdrawals().into_iter());
                     rem = self
-                        .db
+                        .store
                         .get_block(&rem.raw().parent_block_hash().unpack())?
                         .expect("get block");
                 }
@@ -375,7 +388,7 @@ impl MemPool {
                     included_txs.extend(add.transactions().into_iter());
                     included_withdrawals.extend(rem.withdrawals().into_iter());
                     add = self
-                        .db
+                        .store
                         .get_block(&add.raw().parent_block_hash().unpack())?
                         .expect("get block");
                 }
@@ -383,13 +396,13 @@ impl MemPool {
                     discarded_txs.extend(rem.transactions().into_iter());
                     discarded_withdrawals.extend(rem.withdrawals().into_iter());
                     rem = self
-                        .db
+                        .store
                         .get_block(&rem.raw().parent_block_hash().unpack())?
                         .expect("get block");
                     included_txs.extend(add.transactions().into_iter());
                     included_withdrawals.extend(add.withdrawals().into_iter());
                     add = self
-                        .db
+                        .store
                         .get_block(&add.raw().parent_block_hash().unpack())?
                         .expect("get block");
                 }
@@ -408,9 +421,7 @@ impl MemPool {
 
         // update current state
         let tip_block_hash = new_tip_block.hash().into();
-        self.state_db = self
-            .db
-            .state_at(StateDBVersion::from_block_hash(tip_block_hash))?;
+        self.state_db_version = StateDBVersion::from_block_hash(tip_block_hash);
 
         // re-inject txs
         for tx in reinject_txs {
