@@ -187,9 +187,7 @@ fn clear_block_account_state() {
 
     // detach block 2
     let store_txn = db.begin_transaction();
-    store_txn
-        .clear_block_account_state(block_2_hash, block_2_number)
-        .unwrap();
+    store_txn.clear_block_state(&block_2_hash).unwrap();
     store_txn.commit().unwrap();
 
     // check old block 2
@@ -361,16 +359,12 @@ fn clear_block_account_state_record() {
 
     // clear account record
     let store_txn = db.begin_transaction();
-    store_txn
-        .clear_block_account_state_record(block_1_hash, block_1_number)
-        .unwrap();
+    store_txn.clear_block_state_record(&block_1_hash).unwrap();
     store_txn.commit().unwrap();
 
     // clear account state tree without account record
     let store_txn = db.begin_transaction();
-    store_txn
-        .clear_block_account_state(block_1_hash, block_1_number)
-        .unwrap();
+    store_txn.clear_block_state(&block_1_hash).unwrap();
     store_txn.commit().unwrap();
 
     // check block 1

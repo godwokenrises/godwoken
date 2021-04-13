@@ -15,9 +15,9 @@ use gw_types::{
     packed::{self, TransactionKey},
     prelude::*,
 };
-use std::{borrow::BorrowMut, collections::HashMap, mem::size_of_val};
+use std::{borrow::BorrowMut, collections::HashMap, mem::size_of};
 
-const NUMBER_OF_CONFIRMATION: u64 = 10;
+const NUMBER_OF_CONFIRMATION: u64 = 100;
 
 pub struct StoreTransaction {
     pub(crate) inner: RocksDBTransaction,
@@ -493,8 +493,8 @@ impl StoreTransaction {
         col: Col,
         raw_key: &[u8],
     ) -> Result<(), Error> {
-        let key = self.get_state_record_key(block_hash, tx_index, col)?;
-        self.insert_raw(COLUMN_BLOCK_STATE_RECORD, key.as_ref(), raw_key)
+        let record_key = BlockStateRecordKey::get_record_key(block_hash, tx_index, col)?;
+        self.insert_raw(COLUMN_BLOCK_STATE_RECORD, record_key.as_ref(), raw_key)
     }
 
     fn prune_block_state_record(&self, current_block_number: u64) -> Result<(), Error> {
@@ -505,83 +505,40 @@ impl StoreTransaction {
         let block_hash = self.get_block_hash_by_number(to_be_pruned_block_number)?;
         let block_hash = match block_hash {
             Some(block_hash) => block_hash,
-            None => match to_be_pruned_block_number {
-                0u64 => return Ok(()),
-                _ => return Err(Error::from("Invalid block hash".to_owned())),
-            },
+            None if to_be_pruned_block_number == 0 => return Ok(()),
+            _ => return Err(Error::from("Invalid block hash".to_owned())),
         };
         self.clear_block_state_record(&block_hash)
     }
 
-    fn clear_block_state_record(&self, block_hash: &H256) -> Result<(), Error> {
-        self.clear_block_state_and_record(block_hash, false)
-    }
-
-    fn clear_block_state(&self, block_hash: &H256) -> Result<(), Error> {
-        self.clear_block_state_and_record(block_hash, true)
-    }
-
-    fn clear_block_state_and_record(
-        &self,
-        block_hash: &H256,
-        need_clear_state: bool,
-    ) -> Result<(), Error> {
-        let start_key = self.get_state_record_key(block_hash, 0u32, "0")?;
-        let iter = self.get_iter(
-            COLUMN_BLOCK_STATE_RECORD,
-            IteratorMode::From(start_key.as_ref(), Forward),
-        );
-        for (key, value) in
-            iter.filter(|(key, _)| &key[..size_of_val(block_hash)] == block_hash.as_slice())
+    pub(crate) fn clear_block_state_record(&self, block_hash: &H256) -> Result<(), Error> {
+        let iter = self.iter_block_state_record(block_hash)?;
+        for (record_key, _) in
+            iter.filter(|(key, _)| BlockStateRecordKey::is_same_block(key, block_hash))
         {
-            if need_clear_state {
-                let column = self.get_column_from_state_record(&key)?;
-                self.delete(column.as_str(), &value)?;
-            }
-            self.delete(COLUMN_BLOCK_STATE_RECORD, &key)?;
+            self.delete(COLUMN_BLOCK_STATE_RECORD, &record_key)?;
         }
         Ok(())
     }
 
-    fn get_state_record_key(
-        &self,
-        block_hash: &H256,
-        tx_index: u32,
-        col: Col,
-    ) -> Result<Vec<u8>, Error> {
-        let column =
-            u8::from_str_radix(col, 10).map_err(|_| "Parse column to int failed".to_owned())?;
-        Ok([
-            block_hash.as_slice(),
-            &tx_index.to_be_bytes()[..],
-            &column.to_be_bytes()[..],
-        ]
-        .concat())
+    pub(crate) fn clear_block_state(&self, block_hash: &H256) -> Result<(), Error> {
+        let iter = self.iter_block_state_record(block_hash)?;
+        for (record_key, state_key) in
+            iter.filter(|(key, _)| BlockStateRecordKey::is_same_block(key, block_hash))
+        {
+            let column = BlockStateRecordKey::get_column(&record_key)?;
+            self.delete(column, &state_key)?;
+            self.delete(COLUMN_BLOCK_STATE_RECORD, &record_key)?;
+        }
+        Ok(())
     }
 
-    fn get_column_from_state_record(&self, key: &[u8]) -> Result<String, Error> {
-        let column = key
-            .last()
-            .ok_or_else(|| "Decode column failed".to_owned())?;
-        Ok(column.to_string())
-    }
-
-    #[cfg(test)]
-    pub fn clear_block_account_state(
-        &self,
-        block_hash: H256,
-        _block_number: u64,
-    ) -> Result<(), Error> {
-        self.clear_block_state(&block_hash)
-    }
-
-    #[cfg(test)]
-    pub fn clear_block_account_state_record(
-        &self,
-        block_hash: H256,
-        _block_number: u64,
-    ) -> Result<(), Error> {
-        self.clear_block_state_record(&block_hash)
+    fn iter_block_state_record(&self, block_hash: &H256) -> Result<DBIter, Error> {
+        let start_key = BlockStateRecordKey::get_record_key(block_hash, 0u32, "0")?;
+        Ok(self.get_iter(
+            COLUMN_BLOCK_STATE_RECORD,
+            IteratorMode::From(start_key.as_ref(), Forward),
+        ))
     }
 }
 
@@ -589,4 +546,28 @@ struct CustodianChange {
     capacity: u64,
     sudt_script_hash: H256,
     amount: u128,
+}
+
+struct BlockStateRecordKey;
+
+impl BlockStateRecordKey {
+    fn get_record_key(block_hash: &H256, tx_index: u32, col: Col) -> Result<Vec<u8>, Error> {
+        let record_key = [
+            block_hash.as_slice(),
+            &tx_index.to_be_bytes()[..],
+            &col.as_bytes(),
+        ]
+        .concat();
+        Ok(record_key)
+    }
+
+    fn get_column(record_key: &[u8]) -> Result<&str, Error> {
+        let column = &record_key[size_of::<H256>() + size_of::<u32>()..];
+        std::str::from_utf8(column)
+            .map_err(|_| Error::from("Parse column to int failed".to_owned()))
+    }
+
+    fn is_same_block(record_key: &[u8], block_hash: &H256) -> bool {
+        &record_key[..size_of::<H256>()] == block_hash.as_slice()
+    }
 }
