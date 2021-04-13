@@ -3,7 +3,7 @@ use crate::fixed_bytes::Byte65;
 use anyhow::{anyhow, Error as JsonError};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
-use gw_types::{bytes::Bytes, packed, prelude::*};
+use gw_types::{bytes::Bytes, offchain, packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 
@@ -932,6 +932,27 @@ impl From<packed::RollupConfig> for RollupConfig {
             challenge_maturity_blocks: challenge_maturity_blocks.into(),
             finality_blocks: finality_blocks.into(),
             reward_burn_rate: (reward_burn_date as u32).into(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct RunResult {
+    // return data
+    pub return_data: JsonBytes,
+    // log data
+    pub logs: Vec<LogItem>,
+}
+
+impl From<offchain::RunResult> for RunResult {
+    fn from(data: offchain::RunResult) -> RunResult {
+        let offchain::RunResult {
+            return_data, logs, ..
+        } = data;
+        RunResult {
+            return_data: JsonBytes::from_vec(return_data),
+            logs: logs.into_iter().map(Into::into).collect(),
         }
     }
 }

@@ -1,5 +1,4 @@
 use crate::sudt::build_l2_sudt_script;
-use crate::types::RunResult;
 use crate::{
     error::{AccountError, DepositionError, Error, WithdrawalError},
     RollupContext,
@@ -9,6 +8,7 @@ use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    offchain::RunResult,
     packed::{DepositionRequest, Script, WithdrawalRequest},
     prelude::*,
 };

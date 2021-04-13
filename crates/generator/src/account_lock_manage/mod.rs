@@ -19,7 +19,7 @@ pub trait LockAlgorithm {
 }
 
 pub struct AccountLockManage {
-    locks: HashMap<H256, Box<dyn LockAlgorithm>>,
+    locks: HashMap<H256, Box<dyn LockAlgorithm + Send + Sync>>,
 }
 
 impl Default for AccountLockManage {
@@ -31,12 +31,19 @@ impl Default for AccountLockManage {
 }
 
 impl AccountLockManage {
-    pub fn register_lock_algorithm(&mut self, code_hash: H256, lock_algo: Box<dyn LockAlgorithm>) {
+    pub fn register_lock_algorithm(
+        &mut self,
+        code_hash: H256,
+        lock_algo: Box<dyn LockAlgorithm + Send + Sync>,
+    ) {
         self.locks.insert(code_hash, lock_algo);
     }
 
     #[allow(clippy::borrowed_box)]
-    pub fn get_lock_algorithm(&self, code_hash: &H256) -> Option<&Box<dyn LockAlgorithm>> {
+    pub fn get_lock_algorithm(
+        &self,
+        code_hash: &H256,
+    ) -> Option<&Box<dyn LockAlgorithm + Send + Sync>> {
         self.locks.get(code_hash)
     }
 }

@@ -11,7 +11,6 @@ use hyper::{body::HttpBody, Body, Request, Response, Server};
 use smol::{io, prelude::*, Async};
 
 use jsonrpc_v2::{RequestKind, ResponseObjects, Router, Server as JsonrpcServer};
-use log::debug;
 
 use crate::registry::Registry;
 
@@ -19,9 +18,9 @@ pub async fn start_jsonrpc_server(listen_addr: SocketAddr, registry: Registry) -
     let rpc_server = registry.build_rpc_server()?;
     let listener = Async::<TcpListener>::bind(listen_addr)?;
 
-    // Format the full host address.
-    let host = format!("http://{}", listener.get_ref().local_addr()?);
-    debug!("JSONRPC server listening on {}", host);
+    // Format the full address.
+    let url = format!("http://{}", listener.get_ref().local_addr()?);
+    println!("JSONRPC server listening on {}", url);
 
     // Start a hyper server.
     Server::builder(SmolListener::new(&listener))
@@ -133,16 +132,13 @@ impl tokio::io::AsyncRead for SmolStream {
         cx: &mut Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        loop {
-            match &mut *self {
-                SmolStream::Plain(s) => {
-                    return Pin::new(s)
-                        .poll_read(cx, buf.initialize_unfilled())
-                        .map_ok(|size| {
-                            buf.advance(size);
-                            ()
-                        });
-                }
+        match &mut *self {
+            SmolStream::Plain(s) => {
+                return Pin::new(s)
+                    .poll_read(cx, buf.initialize_unfilled())
+                    .map_ok(|size| {
+                        buf.advance(size);
+                    });
             }
         }
     }
@@ -154,10 +150,8 @@ impl tokio::io::AsyncWrite for SmolStream {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        loop {
-            match &mut *self {
-                SmolStream::Plain(s) => return Pin::new(s).poll_write(cx, buf),
-            }
+        match &mut *self {
+            SmolStream::Plain(s) => Pin::new(s).poll_write(cx, buf),
         }
     }
 

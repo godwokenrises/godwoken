@@ -1,28 +1,11 @@
 use gw_common::H256;
-use gw_types::packed::{self, ChallengeTarget, ChallengeWitness, RollupConfig};
-use std::{
-    collections::HashMap,
-    fmt::{self, Display},
-};
+use gw_types::packed::{ChallengeTarget, ChallengeWitness, RollupConfig};
+use std::fmt::{self, Display};
 
 #[derive(Clone)]
 pub struct RollupContext {
     pub rollup_script_hash: H256,
     pub rollup_config: RollupConfig,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct RunResult {
-    pub read_values: HashMap<H256, H256>,
-    pub write_values: HashMap<H256, H256>,
-    pub return_data: Vec<u8>,
-    pub account_count: Option<u32>,
-    pub new_scripts: HashMap<H256, Vec<u8>>,
-    pub write_data: HashMap<H256, Vec<u8>>,
-    // data hash -> data full size
-    pub read_data: HashMap<H256, usize>,
-    // log data
-    pub logs: Vec<packed::LogItem>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

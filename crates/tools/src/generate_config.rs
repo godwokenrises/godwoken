@@ -7,7 +7,7 @@ use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::Entity;
 use gw_config::{
     BackendConfig, BlockProducerConfig, ChainConfig, Config, GenesisConfig, RPCClientConfig,
-    StoreConfig, WalletConfig,
+    RPCServerConfig, StoreConfig, WalletConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 
@@ -109,6 +109,9 @@ pub fn generate_config(
         indexer_url,
         ckb_url,
     };
+    let rpc_server = RPCServerConfig {
+        listen: "localhost:8119".to_string(),
+    };
     let block_producer: Option<BlockProducerConfig> = Some(BlockProducerConfig {
         account_id,
         // cell deps
@@ -129,6 +132,7 @@ pub fn generate_config(
         genesis,
         chain,
         rpc_client,
+        rpc_server,
         block_producer,
     };
     let output_content = toml::to_string_pretty(&config).expect("serde toml to string pretty");

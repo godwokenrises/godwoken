@@ -9,7 +9,7 @@ use crate::{
     error::{Error, TransactionError, TransactionErrorWithContext},
     sudt::build_l2_sudt_script,
 };
-use crate::{error::AccountError, syscalls::L2Syscalls, types::RunResult};
+use crate::{error::AccountError, syscalls::L2Syscalls};
 use crate::{error::LockAlgorithmError, traits::StateExt};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
@@ -21,6 +21,7 @@ use gw_common::{
 use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     core::{ChallengeTargetType, ScriptHashType},
+    offchain::RunResult,
     packed::{
         AccountMerkleState, BlockInfo, ChallengeTarget, DepositionRequest, L2Block, L2Transaction,
         RawL2Block, RawL2Transaction, TxReceipt, WithdrawalRequest,
