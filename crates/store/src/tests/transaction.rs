@@ -7,9 +7,9 @@ fn insert_and_get() {
     let store = Store::open_tmp().unwrap();
     let store_txn = store.begin_transaction();
 
-    store_txn.insert_raw("0", &[0, 0], &[0, 0, 0]).unwrap();
-    store_txn.insert_raw("1", &[1, 1], &[1, 1, 1]).unwrap();
-    store_txn.insert_raw("1", &[2], &[2, 2, 2]).unwrap();
+    store_txn.insert_raw(0, &[0, 0], &[0, 0, 0]).unwrap();
+    store_txn.insert_raw(1, &[1, 1], &[1, 1, 1]).unwrap();
+    store_txn.insert_raw(1, &[2], &[2, 2, 2]).unwrap();
     store_txn.commit().unwrap();
 
     // new transaction can't be affected by uncommit transaction
@@ -17,19 +17,19 @@ fn insert_and_get() {
 
     assert_eq!(
         vec![0u8, 0, 0].into_boxed_slice(),
-        store_txn.get("0", &[0, 0]).unwrap()
+        store_txn.get(0, &[0, 0]).unwrap()
     );
-    assert!(store_txn.get("0", &[1, 1]).is_none());
+    assert!(store_txn.get(0, &[1, 1]).is_none());
     assert_eq!(
         vec![1u8, 1, 1].into_boxed_slice(),
-        store_txn.get("1", &[1, 1]).unwrap()
+        store_txn.get(1, &[1, 1]).unwrap()
     );
     assert_eq!(
         vec![2u8, 2, 2].into_boxed_slice(),
-        store_txn.get("1", &[2]).unwrap()
+        store_txn.get(1, &[2]).unwrap()
     );
 
-    let iter = store_txn.get_iter("1", IteratorMode::Start);
+    let iter = store_txn.get_iter(1, IteratorMode::Start);
     let mut r = HashMap::new();
     for (key, val) in iter {
         r.insert(key.to_vec(), val.to_vec());
@@ -45,17 +45,17 @@ fn delete() {
     let store = Store::open_tmp().unwrap();
     let store_txn = store.begin_transaction();
 
-    store_txn.insert_raw("1", &[2], &[1, 1, 1]).unwrap();
-    store_txn.delete("1", &[2]).unwrap();
+    store_txn.insert_raw(1, &[2], &[1, 1, 1]).unwrap();
+    store_txn.delete(1, &[2]).unwrap();
     store_txn.commit().unwrap();
 
     // new transaction is not affected by uncommit transaction
     let store_txn = store.begin_transaction();
-    assert!(store_txn.get("1", &[2]).is_none());
+    assert!(store_txn.get(1, &[2]).is_none());
 
     // delete a nonexistent
     let store_txn = store.begin_transaction();
-    assert!(store_txn.delete("1", &[3]).is_ok());
+    assert!(store_txn.delete(1, &[3]).is_ok());
     assert!(store_txn.commit().is_ok());
 }
 
@@ -65,14 +65,14 @@ fn insert_without_commit() {
     let store_txn = store.begin_transaction();
 
     // insert without commit
-    store_txn.insert_raw("0", &[0, 0], &[0, 0, 0]).unwrap();
-    store_txn.insert_raw("1", &[1, 1], &[1, 1, 1]).unwrap();
+    store_txn.insert_raw(0, &[0, 0], &[0, 0, 0]).unwrap();
+    store_txn.insert_raw(1, &[1, 1], &[1, 1, 1]).unwrap();
 
     // new transaction can't be affected by uncommit transaction
     let store_txn = store.begin_transaction();
 
-    assert!(store_txn.get("0", &[0, 0]).is_none());
-    assert!(store_txn.get("1", &[1, 1]).is_none());
+    assert!(store_txn.get(0, &[0, 0]).is_none());
+    assert!(store_txn.get(1, &[1, 1]).is_none());
 }
 
 #[test]
@@ -84,56 +84,56 @@ fn intersect_transactions() {
     let store_txn_4 = store.begin_transaction();
 
     // store_txn_2 insert key without commit
-    store_txn_2.insert_raw("1", &[1, 1], &[1, 1, 1]).unwrap();
+    store_txn_2.insert_raw(1, &[1, 1], &[1, 1, 1]).unwrap();
 
-    assert!(store_txn_1.get("1", &[1, 1]).is_none());
+    assert!(store_txn_1.get(1, &[1, 1]).is_none());
     assert_eq!(
         vec![1, 1, 1].into_boxed_slice(),
-        store_txn_2.get("1", &[1, 1]).unwrap()
+        store_txn_2.get(1, &[1, 1]).unwrap()
     );
-    assert!(store_txn_3.get("1", &[1, 1]).is_none());
-    assert!(store_txn_4.get("1", &[1, 1]).is_none());
+    assert!(store_txn_3.get(1, &[1, 1]).is_none());
+    assert!(store_txn_4.get(1, &[1, 1]).is_none());
 
-    store_txn_4.insert_raw("1", &[2, 2], &[2, 2, 2]).unwrap();
+    store_txn_4.insert_raw(1, &[2, 2], &[2, 2, 2]).unwrap();
     store_txn_4.commit().unwrap();
 
     // Transaction isolation level: Read Committed
     assert_eq!(
         vec![2, 2, 2].into_boxed_slice(),
-        store_txn_1.get("1", &[2, 2]).unwrap()
+        store_txn_1.get(1, &[2, 2]).unwrap()
     );
     assert_eq!(
         vec![2, 2, 2].into_boxed_slice(),
-        store_txn_2.get("1", &[2, 2]).unwrap()
+        store_txn_2.get(1, &[2, 2]).unwrap()
     );
     assert_eq!(
         vec![2, 2, 2].into_boxed_slice(),
-        store_txn_3.get("1", &[2, 2]).unwrap()
+        store_txn_3.get(1, &[2, 2]).unwrap()
     );
     assert_eq!(
         vec![2, 2, 2].into_boxed_slice(),
-        store_txn_4.get("1", &[2, 2]).unwrap()
+        store_txn_4.get(1, &[2, 2]).unwrap()
     );
 
     // overwrite store_txn_2's key inserted without commit
-    store_txn_4.insert_raw("1", &[1, 1], &[0, 0, 0]).unwrap();
+    store_txn_4.insert_raw(1, &[1, 1], &[0, 0, 0]).unwrap();
     store_txn_4.commit().unwrap();
 
     assert_eq!(
         vec![0, 0, 0].into_boxed_slice(),
-        store_txn_1.get("1", &[1, 1]).unwrap()
+        store_txn_1.get(1, &[1, 1]).unwrap()
     );
     assert_eq!(
         vec![1, 1, 1].into_boxed_slice(),
-        store_txn_2.get("1", &[1, 1]).unwrap() // keep modified
+        store_txn_2.get(1, &[1, 1]).unwrap() // keep modified
     );
     assert_eq!(
         vec![0, 0, 0].into_boxed_slice(),
-        store_txn_3.get("1", &[1, 1]).unwrap()
+        store_txn_3.get(1, &[1, 1]).unwrap()
     );
     assert_eq!(
         vec![0, 0, 0].into_boxed_slice(),
-        store_txn_4.get("1", &[1, 1]).unwrap()
+        store_txn_4.get(1, &[1, 1]).unwrap()
     );
 
     // RosksDB's PessimisticTransaction mode will lock the key when insert
@@ -148,32 +148,32 @@ fn seek_for_prev() {
     let store = Store::open_tmp().unwrap();
     let store_txn = store.begin_transaction();
 
-    store_txn.insert_raw("1", &[0], &[0, 0, 0]).unwrap();
-    store_txn.insert_raw("1", &[1], &[1, 1, 1]).unwrap();
-    store_txn.insert_raw("2", &[2], &[2, 2, 2]).unwrap();
-    store_txn.insert_raw("1", &[3], &[3, 3, 3]).unwrap();
+    store_txn.insert_raw(1, &[0], &[0, 0, 0]).unwrap();
+    store_txn.insert_raw(1, &[1], &[1, 1, 1]).unwrap();
+    store_txn.insert_raw(2, &[2], &[2, 2, 2]).unwrap();
+    store_txn.insert_raw(1, &[3], &[3, 3, 3]).unwrap();
     store_txn.commit().unwrap();
 
     let store_txn = store.begin_transaction();
     assert_eq!(
         vec![0u8, 0, 0].into_boxed_slice(),
-        store_txn.get("1", &[0]).unwrap()
+        store_txn.get(1, &[0]).unwrap()
     );
     assert_eq!(
         vec![1u8, 1, 1].into_boxed_slice(),
-        store_txn.get("1", &[1]).unwrap()
+        store_txn.get(1, &[1]).unwrap()
     );
     assert_eq!(
         vec![2u8, 2, 2].into_boxed_slice(),
-        store_txn.get("2", &[2]).unwrap()
+        store_txn.get(2, &[2]).unwrap()
     );
     assert_eq!(
         vec![3u8, 3, 3].into_boxed_slice(),
-        store_txn.get("1", &[3]).unwrap()
+        store_txn.get(1, &[3]).unwrap()
     );
 
     let store_txn = store.begin_transaction();
-    let iter = store_txn.get_iter("1", IteratorMode::Start);
+    let iter = store_txn.get_iter(1, IteratorMode::Start);
     let mut r = HashMap::new();
     for (key, val) in iter {
         r.insert(key.to_vec(), val.to_vec());
@@ -183,7 +183,7 @@ fn seek_for_prev() {
     assert_eq!(Some(&vec![1u8, 1, 1]), r.get(&vec![1]));
     assert_eq!(Some(&vec![3u8, 3, 3]), r.get(&vec![3]));
 
-    let iter = store_txn.get_iter("1", IteratorMode::Start);
+    let iter = store_txn.get_iter(1, IteratorMode::Start);
     let mut raw_iter: DBRawIterator = iter.into();
     raw_iter.seek_for_prev([5]);
     assert_eq!(&[3], raw_iter.key().unwrap());
@@ -249,13 +249,13 @@ fn seek_for_prev_with_suffix() {
     );
 
     store_txn
-        .insert_raw("1", &key_1_with_ver_1_5, &value_1)
+        .insert_raw(1, &key_1_with_ver_1_5, &value_1)
         .unwrap();
     store_txn
-        .insert_raw("1", &key_2_with_ver_2_7, &value_2)
+        .insert_raw(1, &key_2_with_ver_2_7, &value_2)
         .unwrap();
     store_txn
-        .insert_raw("1", &key_3_with_ver_256_2, &value_3)
+        .insert_raw(1, &key_3_with_ver_256_2, &value_3)
         .unwrap();
 
     // construct keys not in db
@@ -275,7 +275,7 @@ fn seek_for_prev_with_suffix() {
     let key_2_with_ver_2_6 = [&key_2[..], &block_num_2.to_be_bytes(), &6u32.to_be_bytes()].concat();
     let key_1_with_ver_1_4 = [&key_1[..], &block_num_1.to_be_bytes(), &4u32.to_be_bytes()].concat();
 
-    let iter = store_txn.get_iter("1", IteratorMode::Start);
+    let iter = store_txn.get_iter(1, IteratorMode::Start);
     let mut raw_iter: DBRawIterator = iter.into();
 
     raw_iter.seek_for_prev(key_3_with_ver_257_1);
@@ -316,20 +316,20 @@ fn delete_range() {
     let store = Store::open_tmp().unwrap();
 
     let store_txn = store.begin_transaction();
-    store_txn.insert_raw("1", &[0], &[0, 0]).unwrap();
-    store_txn.insert_raw("1", &[1], &[1, 1]).unwrap();
-    store_txn.insert_raw("1", &[2], &[2, 2]).unwrap();
-    store_txn.insert_raw("1", &[3], &[3, 3]).unwrap();
+    store_txn.insert_raw(1, &[0], &[0, 0]).unwrap();
+    store_txn.insert_raw(1, &[1], &[1, 1]).unwrap();
+    store_txn.insert_raw(1, &[2], &[2, 2]).unwrap();
+    store_txn.insert_raw(1, &[3], &[3, 3]).unwrap();
     store_txn.commit().unwrap();
 
     let mut batch = store.new_write_batch();
-    batch.inner.delete_range("1", &[0], &[3]).unwrap();
+    batch.inner.delete_range(1, &[0], &[3]).unwrap();
     store.write(&batch).unwrap();
 
-    assert!(store_txn.get("1", &[0]).is_none());
-    assert!(store_txn.get("1", &[1]).is_none());
-    assert!(store_txn.get("1", &[2]).is_none());
-    assert!(store_txn.get("1", &[3]).is_some());
+    assert!(store_txn.get(1, &[0]).is_none());
+    assert!(store_txn.get(1, &[1]).is_none());
+    assert!(store_txn.get(1, &[2]).is_none());
+    assert!(store_txn.get(1, &[3]).is_some());
 }
 
 #[test]
@@ -337,24 +337,35 @@ fn range_search_and_delete() {
     let store = Store::open_tmp().unwrap();
 
     let store_txn = store.begin_transaction();
-    store_txn.insert_raw("1", &[0, 0], &[1, 0, 0]).unwrap();
-    store_txn.insert_raw("1", &[0, 1], &[1, 0, 1]).unwrap();
-    store_txn.insert_raw("1", &[0, 2], &[3, 0, 2]).unwrap();
-    store_txn.insert_raw("1", &[1, 1], &[2, 1, 0]).unwrap();
-    store_txn.insert_raw("1", &[1, 2], &[4, 1, 1]).unwrap();
-    store_txn.insert_raw("1", &[1, 3], &[6, 1, 2]).unwrap();
-    store_txn.insert_raw("1", &[2, 0], &[5, 2, 0]).unwrap();
+    store_txn.insert_raw(1, &[0, 0], &[1, 0, 0]).unwrap();
+    store_txn.insert_raw(1, &[0, 1], &[1, 0, 1]).unwrap();
+    store_txn.insert_raw(1, &[0, 2], &[3, 0, 2]).unwrap();
+
+    store_txn.insert_raw(1, &[2, 0], &[5, 2, 0]).unwrap();
+    store_txn.insert_raw(1, &[3, 0], &[5, 2, 0]).unwrap();
+    store_txn.insert_raw(1, &[5, 0], &[5, 2, 0]).unwrap();
+    store_txn.insert_raw(1, &[6, 0], &[5, 2, 0]).unwrap();
+
+    store_txn.insert_raw(1, &[1, 1], &[2, 1, 0]).unwrap();
+    store_txn.insert_raw(1, &[1, 2], &[4, 1, 1]).unwrap();
+    store_txn.insert_raw(1, &[1, 3], &[6, 1, 2]).unwrap();
     store_txn.commit().unwrap();
 
-    let iter = store_txn.get_iter("1", IteratorMode::From(&[1, 0], Forward));
-    for (key, _) in iter.filter(|(key, _)| key[0] == 1) {
-        store_txn.delete("1", &key).unwrap();
+    let iter = store_txn.get_iter(1, IteratorMode::From(&[1, 0], Forward));
+    for (key, _) in iter.take_while(|(key, _)| key[0] <= 5) {
+        store_txn.delete(1, &key).unwrap();
     }
 
-    assert!(store_txn.get("1", &[0, 1]).is_some());
-    assert!(store_txn.get("1", &[0, 2]).is_some());
-    assert!(store_txn.get("1", &[1, 1]).is_none());
-    assert!(store_txn.get("1", &[1, 2]).is_none());
-    assert!(store_txn.get("1", &[1, 3]).is_none());
-    assert!(store_txn.get("1", &[2, 0]).is_some());
+    assert!(store_txn.get(1, &[0, 0]).is_some());
+    assert!(store_txn.get(1, &[0, 1]).is_some());
+    assert!(store_txn.get(1, &[0, 2]).is_some());
+
+    assert!(store_txn.get(1, &[1, 1]).is_none());
+    assert!(store_txn.get(1, &[1, 2]).is_none());
+    assert!(store_txn.get(1, &[1, 3]).is_none());
+    assert!(store_txn.get(1, &[2, 0]).is_none());
+    assert!(store_txn.get(1, &[3, 0]).is_none());
+    assert!(store_txn.get(1, &[5, 0]).is_none());
+
+    assert!(store_txn.get(1, &[6, 0]).is_some());
 }

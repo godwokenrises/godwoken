@@ -1,47 +1,47 @@
 //! The schema include constants define the low level database column families.
 
 /// Column families alias type
-pub type Col<'a> = &'a str;
+pub type Col = u8;
 /// Total column number
 pub const COLUMNS: u32 = 19;
 /// Column store meta data
-pub const COLUMN_META: Col = "0";
+pub const COLUMN_META: Col = 0;
 /// Column store chain index
-pub const COLUMN_INDEX: Col = "1";
+pub const COLUMN_INDEX: Col = 1;
 /// Column store block
-pub const COLUMN_BLOCK: Col = "2";
+pub const COLUMN_BLOCK: Col = 2;
 /// Column store block's header info
-pub const COLUMN_BLOCK_HEADER_INFO: Col = "3";
+pub const COLUMN_BLOCK_HEADER_INFO: Col = 3;
 /// Column store block's global state
-pub const COLUMN_BLOCK_GLOBAL_STATE: Col = "4";
+pub const COLUMN_BLOCK_GLOBAL_STATE: Col = 4;
 /// Column store transaction
-pub const COLUMN_TRANSACTION: Col = "5";
+pub const COLUMN_TRANSACTION: Col = 5;
 /// Column store transaction receipt
-pub const COLUMN_TRANSACTION_RECEIPT: Col = "6";
+pub const COLUMN_TRANSACTION_RECEIPT: Col = 6;
 /// Column store l2 block committed info
-pub const COLUMN_L2BLOCK_COMMITTED_INFO: Col = "7";
+pub const COLUMN_L2BLOCK_COMMITTED_INFO: Col = 7;
 /// Column store transaction extra information
-pub const COLUMN_TRANSACTION_INFO: Col = "8";
+pub const COLUMN_TRANSACTION_INFO: Col = 8;
 /// Column account SMT branch
-pub const COLUMN_ACCOUNT_SMT_BRANCH: Col = "9";
+pub const COLUMN_ACCOUNT_SMT_BRANCH: Col = 9;
 /// Column account SMT leaf
-pub const COLUMN_ACCOUNT_SMT_LEAF: Col = "10";
+pub const COLUMN_ACCOUNT_SMT_LEAF: Col = 10;
 /// Column block SMT branch
-pub const COLUMN_BLOCK_SMT_BRANCH: Col = "11";
+pub const COLUMN_BLOCK_SMT_BRANCH: Col = 11;
 /// Column block SMT leaf
-pub const COLUMN_BLOCK_SMT_LEAF: Col = "12";
+pub const COLUMN_BLOCK_SMT_LEAF: Col = 12;
 /// Column store block number-hash pair
-pub const COLUMN_NUMBER_HASH: Col = "13";
+pub const COLUMN_NUMBER_HASH: Col = 13;
 /// Column script
-pub const COLUMN_SCRIPT: Col = "14";
+pub const COLUMN_SCRIPT: Col = 14;
 /// Column data
-pub const COLUMN_DATA: Col = "15";
+pub const COLUMN_DATA: Col = 15;
 /// Column block deposition requests
-pub const COLUMN_BLOCK_DEPOSITION_REQUESTS: Col = "16";
+pub const COLUMN_BLOCK_DEPOSITION_REQUESTS: Col = 16;
 /// Column custodian assets
-pub const COLUMN_CUSTODIAN_ASSETS: Col = "17";
+pub const COLUMN_CUSTODIAN_ASSETS: Col = 17;
 /// Column block state record
-pub const COLUMN_BLOCK_STATE_RECORD: Col = "18";
+pub const COLUMN_BLOCK_STATE_RECORD: Col = 18;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";

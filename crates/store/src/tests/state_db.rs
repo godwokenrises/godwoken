@@ -122,12 +122,12 @@ fn insert_and_get() {
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 1u64, 1u32);
-        state_db_txn.insert_raw("1", &[1, 1], &[1, 1, 1]).unwrap();
+        state_db_txn.insert_raw(1, &[1, 1], &[1, 1, 1]).unwrap();
         state_db_txn.commit().unwrap();
-        assert!(state_db_txn.get("1", &[1]).is_none());
+        assert!(state_db_txn.get(1, &[1]).is_none());
         assert_eq!(
             vec![1, 1, 1].into_boxed_slice(),
-            state_db_txn.get("1", &[1, 1]).unwrap()
+            state_db_txn.get(1, &[1, 1]).unwrap()
         );
     }
 
@@ -136,16 +136,16 @@ fn insert_and_get() {
         let state_db_txn = get_state_db_from_mock_data(&db, 1u64, 2u32);
         assert_eq!(
             vec![1, 1, 1].into_boxed_slice(),
-            state_db_txn.get("1", &[1, 1]).unwrap()
+            state_db_txn.get(1, &[1, 1]).unwrap()
         );
-        assert!(state_db_txn.get("1", &[1]).is_none());
-        assert!(state_db_txn.get("1", &[2]).is_none());
-        state_db_txn.insert_raw("1", &[2], &[2, 2, 2]).unwrap();
+        assert!(state_db_txn.get(1, &[1]).is_none());
+        assert!(state_db_txn.get(1, &[2]).is_none());
+        state_db_txn.insert_raw(1, &[2], &[2, 2, 2]).unwrap();
         state_db_txn.commit().unwrap();
-        assert!(state_db_txn.get("1", &[1]).is_none());
+        assert!(state_db_txn.get(1, &[1]).is_none());
         assert_eq!(
             vec![2, 2, 2].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 
@@ -154,17 +154,17 @@ fn insert_and_get() {
         let state_db_txn = get_state_db_from_mock_data(&db, 1u64, 4u32);
         assert_eq!(
             vec![1, 1, 1].into_boxed_slice(),
-            state_db_txn.get("1", &[1, 1]).unwrap()
+            state_db_txn.get(1, &[1, 1]).unwrap()
         );
         assert_eq!(
             vec![2, 2, 2].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
-        state_db_txn.insert_raw("1", &[2], &[3, 3, 3]).unwrap();
+        state_db_txn.insert_raw(1, &[2], &[3, 3, 3]).unwrap();
         state_db_txn.commit().unwrap();
         assert_eq!(
             vec![3, 3, 3].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 
@@ -172,11 +172,11 @@ fn insert_and_get() {
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 1u64, 4u32);
-        state_db_txn.insert_raw("1", &[2], &[4, 4, 4]).unwrap();
+        state_db_txn.insert_raw(1, &[2], &[4, 4, 4]).unwrap();
         state_db_txn.commit().unwrap();
         assert_eq!(
             vec![4, 4, 4].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 
@@ -185,7 +185,7 @@ fn insert_and_get() {
         let state_db_txn = get_state_db_from_mock_data(&db, 1u64, 2u32);
         assert_eq!(
             vec![2, 2, 2].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 
@@ -194,7 +194,7 @@ fn insert_and_get() {
         let state_db_txn = get_state_db_from_mock_data(&db, 1u64, 5u32);
         assert_eq!(
             vec![4, 4, 4].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 }
@@ -206,11 +206,11 @@ fn insert_and_get_cross_block() {
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 1u64, 1u32);
-        state_db_txn.insert_raw("1", &[1, 1], &[1, 1, 1]).unwrap();
+        state_db_txn.insert_raw(1, &[1, 1], &[1, 1, 1]).unwrap();
         state_db_txn.commit().unwrap();
         assert_eq!(
             vec![1, 1, 1].into_boxed_slice(),
-            state_db_txn.get("1", &[1, 1]).unwrap()
+            state_db_txn.get(1, &[1, 1]).unwrap()
         );
     }
 
@@ -219,13 +219,13 @@ fn insert_and_get_cross_block() {
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 5u32);
         assert_eq!(
             vec![1, 1, 1].into_boxed_slice(),
-            state_db_txn.get("1", &[1, 1]).unwrap()
+            state_db_txn.get(1, &[1, 1]).unwrap()
         );
-        state_db_txn.insert_raw("1", &[2], &[2, 2, 2]).unwrap();
+        state_db_txn.insert_raw(1, &[2], &[2, 2, 2]).unwrap();
         state_db_txn.commit().unwrap();
         assert_eq!(
             vec![2, 2, 2].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 
@@ -234,17 +234,17 @@ fn insert_and_get_cross_block() {
         let state_db_txn = get_state_db_from_mock_data(&db, 3u64, 1u32);
         assert_eq!(
             vec![1, 1, 1].into_boxed_slice(),
-            state_db_txn.get("1", &[1, 1]).unwrap()
+            state_db_txn.get(1, &[1, 1]).unwrap()
         );
         assert_eq!(
             vec![2, 2, 2].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
-        state_db_txn.insert_raw("1", &[2], &[3, 3, 3]).unwrap();
+        state_db_txn.insert_raw(1, &[2], &[3, 3, 3]).unwrap();
         state_db_txn.commit().unwrap();
         assert_eq!(
             vec![3, 3, 3].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 
@@ -252,18 +252,18 @@ fn insert_and_get_cross_block() {
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 5u32);
-        state_db_txn.insert_raw("1", &[2], &[0, 2, 2]).unwrap();
+        state_db_txn.insert_raw(1, &[2], &[0, 2, 2]).unwrap();
         state_db_txn.commit().unwrap();
         assert_eq!(
             vec![0, 2, 2].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 4u32);
-        assert!(state_db_txn.get("1", &[2]).is_none());
+        assert!(state_db_txn.get(1, &[2]).is_none());
     }
 
     {
@@ -271,7 +271,7 @@ fn insert_and_get_cross_block() {
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 6u32);
         assert_eq!(
             vec![0, 2, 2].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 
@@ -280,7 +280,7 @@ fn insert_and_get_cross_block() {
         let state_db_txn = get_state_db_from_mock_data(&db, 3u64, 2u32);
         assert_eq!(
             vec![3, 3, 3].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 }
@@ -292,38 +292,36 @@ fn insert_keys_with_the_same_version() {
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 5u32);
-        state_db_txn
-            .insert_raw("0", &[1, 1], &[1, 1, 1, 1])
-            .unwrap();
+        state_db_txn.insert_raw(0, &[1, 1], &[1, 1, 1, 1]).unwrap();
         state_db_txn.commit().unwrap();
     }
 
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 5u32);
-        state_db_txn.insert_raw("0", &[2], &[2, 2, 2]).unwrap();
+        state_db_txn.insert_raw(0, &[2], &[2, 2, 2]).unwrap();
         state_db_txn.commit().unwrap();
     }
 
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 5u32);
-        state_db_txn.insert_raw("1", &[1, 1], &[1, 1, 1]).unwrap();
+        state_db_txn.insert_raw(1, &[1, 1], &[1, 1, 1]).unwrap();
         state_db_txn.commit().unwrap();
     }
 
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 5u32);
-        state_db_txn.insert_raw("1", &[2], &[2, 2]).unwrap();
+        state_db_txn.insert_raw(1, &[2], &[2, 2]).unwrap();
         state_db_txn.commit().unwrap();
     }
 
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 4u32);
-        assert!(state_db_txn.get("1", &[1, 1]).is_none());
-        assert!(state_db_txn.get("1", &[2]).is_none());
+        assert!(state_db_txn.get(1, &[1, 1]).is_none());
+        assert!(state_db_txn.get(1, &[2]).is_none());
     }
 
     {
@@ -331,11 +329,11 @@ fn insert_keys_with_the_same_version() {
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 5u32);
         assert_eq!(
             vec![1, 1, 1].into_boxed_slice(),
-            state_db_txn.get("1", &[1, 1]).unwrap()
+            state_db_txn.get(1, &[1, 1]).unwrap()
         );
         assert_eq!(
             vec![2, 2].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 
@@ -344,11 +342,11 @@ fn insert_keys_with_the_same_version() {
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 6u32);
         assert_eq!(
             vec![1, 1, 1].into_boxed_slice(),
-            state_db_txn.get("1", &[1, 1]).unwrap()
+            state_db_txn.get(1, &[1, 1]).unwrap()
         );
         assert_eq!(
             vec![2, 2].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 
@@ -357,11 +355,11 @@ fn insert_keys_with_the_same_version() {
         let state_db_txn = get_state_db_from_mock_data(&db, 3u64, 6u32);
         assert_eq!(
             vec![1, 1, 1].into_boxed_slice(),
-            state_db_txn.get("1", &[1, 1]).unwrap()
+            state_db_txn.get(1, &[1, 1]).unwrap()
         );
         assert_eq!(
             vec![2, 2].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 }
@@ -373,11 +371,11 @@ fn delete() {
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 1u64, 1u32);
-        state_db_txn.insert_raw("1", &[2], &[1, 1, 1]).unwrap();
+        state_db_txn.insert_raw(1, &[2], &[1, 1, 1]).unwrap();
         state_db_txn.commit().unwrap();
         assert_eq!(
             vec![1, 1, 1].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 
@@ -386,34 +384,34 @@ fn delete() {
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 2u32);
         assert_eq!(
             vec![1, 1, 1].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
-        state_db_txn.insert_raw("1", &[2], &[2, 2, 2]).unwrap();
+        state_db_txn.insert_raw(1, &[2], &[2, 2, 2]).unwrap();
         state_db_txn.commit().unwrap();
         assert_eq!(
             vec![2, 2, 2].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 4u32);
-        state_db_txn.delete("1", &[2]).unwrap();
+        state_db_txn.delete(1, &[2]).unwrap();
         state_db_txn.commit().unwrap();
-        assert!(state_db_txn.get("1", &[2]).is_none());
+        assert!(state_db_txn.get(1, &[2]).is_none());
     }
 
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 5u32);
-        assert!(state_db_txn.get("1", &[2]).is_none());
+        assert!(state_db_txn.get(1, &[2]).is_none());
     }
 
     {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 3u64, 1u32);
-        assert!(state_db_txn.get("1", &[2]).is_none());
+        assert!(state_db_txn.get(1, &[2]).is_none());
     }
 
     {
@@ -421,7 +419,7 @@ fn delete() {
         let state_db_txn = get_state_db_from_mock_data(&db, 2u64, 3u32);
         assert_eq!(
             vec![2, 2, 2].into_boxed_slice(),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 
@@ -429,12 +427,12 @@ fn delete() {
         let db = store.begin_transaction();
         let state_db_txn = get_state_db_from_mock_data(&db, 4u64, 1u32);
         state_db_txn
-            .insert_raw("1", &[2], &0u32.to_be_bytes())
+            .insert_raw(1, &[2], &0u32.to_be_bytes())
             .unwrap();
         state_db_txn.commit().unwrap();
         assert_eq!(
             Box::<[u8]>::from(&0u32.to_be_bytes()[..]),
-            state_db_txn.get("1", &[2]).unwrap()
+            state_db_txn.get(1, &[2]).unwrap()
         );
     }
 }
@@ -452,6 +450,6 @@ fn insert_special_value_0u8() {
     // so make sure DO NOT insert 0u8 as value by user.
     // 0u16, 0u32, 0u64 as value are even allowed.
     state_db_txn
-        .insert_raw("1", &[2], &0u8.to_be_bytes())
+        .insert_raw(1, &[2], &0u8.to_be_bytes())
         .unwrap();
 }

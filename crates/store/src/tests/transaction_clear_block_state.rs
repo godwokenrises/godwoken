@@ -164,8 +164,8 @@ fn clear_block_account_state() {
     insert_to_script_column(&db, block_1_hash, block_1_number, 1u32, &[11], &[1]);
     insert_to_script_column(&db, block_1_hash, block_1_number, 2u32, &[22], &[2]);
 
-    insert_to_state_db(&db, "1", block_1_hash, block_1_number, 1u32, &[1], &[1]);
-    insert_to_state_db(&db, "2", block_1_hash, block_1_number, 1u32, &[2], &[2]);
+    insert_to_state_db(&db, 1, block_1_hash, block_1_number, 1u32, &[1], &[1]);
+    insert_to_state_db(&db, 2, block_1_hash, block_1_number, 1u32, &[2], &[2]);
 
     // attach block 2
     let (block_2_hash, block_2_number) = (H256::from([2; 32]), 2u64);
@@ -182,8 +182,8 @@ fn clear_block_account_state() {
     insert_to_script_column(&db, block_2_hash, block_2_number, 1u32, &[1], &[11]);
     insert_to_script_column(&db, block_2_hash, block_2_number, 2u32, &[2], &[22]);
 
-    insert_to_state_db(&db, "1", block_2_hash, block_2_number, 5u32, &[5], &[5]);
-    insert_to_state_db(&db, "2", block_2_hash, block_2_number, 6u32, &[6], &[6]);
+    insert_to_state_db(&db, 1, block_2_hash, block_2_number, 5u32, &[5], &[5]);
+    insert_to_state_db(&db, 2, block_2_hash, block_2_number, 6u32, &[6], &[6]);
 
     // detach block 2
     let store_txn = db.begin_transaction();
@@ -213,8 +213,8 @@ fn clear_block_account_state() {
     assert!(get_from_leaf_column(&db, block_2_hash, block_2_number, 4u32, &[4, 4]).is_none());
     assert!(get_from_script_column(&db, block_2_hash, block_2_number, 1u32, &[1]).is_none());
     assert!(get_from_script_column(&db, block_2_hash, block_2_number, 2u32, &[2]).is_none());
-    assert!(get_from_state_db(&db, "1", block_2_hash, block_2_number, 5u32, &[5]).is_none());
-    assert!(get_from_state_db(&db, "2", block_2_hash, block_2_number, 6u32, &[6]).is_none());
+    assert!(get_from_state_db(&db, 1, block_2_hash, block_2_number, 5u32, &[5]).is_none());
+    assert!(get_from_state_db(&db, 2, block_2_hash, block_2_number, 6u32, &[6]).is_none());
 
     // attach new block with the same block number 2
     let (block_new_hash, block_new_number) = (H256::from([3; 32]), block_2_number);
@@ -231,8 +231,8 @@ fn clear_block_account_state() {
     insert_to_script_column(&db, block_new_hash, block_new_number, 1u32, &[55], &[5]);
     insert_to_script_column(&db, block_new_hash, block_new_number, 2u32, &[66], &[6]);
 
-    insert_to_state_db(&db, "1", block_new_hash, block_new_number, 1u32, &[5], &[5]);
-    insert_to_state_db(&db, "2", block_new_hash, block_new_number, 1u32, &[6], &[6]);
+    insert_to_state_db(&db, 1, block_new_hash, block_new_number, 1u32, &[5], &[5]);
+    insert_to_state_db(&db, 2, block_new_hash, block_new_number, 1u32, &[6], &[6]);
 
     // check block new
     assert_eq!(
@@ -277,11 +277,11 @@ fn clear_block_account_state() {
     );
     assert_eq!(
         vec![5].into_boxed_slice(),
-        get_from_state_db(&db, "1", block_new_hash, block_new_number, 1u32, &[5]).unwrap()
+        get_from_state_db(&db, 1, block_new_hash, block_new_number, 1u32, &[5]).unwrap()
     );
     assert_eq!(
         vec![6].into_boxed_slice(),
-        get_from_state_db(&db, "2", block_new_hash, block_new_number, 1u32, &[6]).unwrap()
+        get_from_state_db(&db, 2, block_new_hash, block_new_number, 1u32, &[6]).unwrap()
     );
 
     // check block 1
@@ -327,11 +327,11 @@ fn clear_block_account_state() {
     );
     assert_eq!(
         vec![1].into_boxed_slice(),
-        get_from_state_db(&db, "1", block_1_hash, block_1_number, 1u32, &[1]).unwrap()
+        get_from_state_db(&db, 1, block_1_hash, block_1_number, 1u32, &[1]).unwrap()
     );
     assert_eq!(
         vec![2].into_boxed_slice(),
-        get_from_state_db(&db, "2", block_1_hash, block_1_number, 1u32, &[2]).unwrap()
+        get_from_state_db(&db, 2, block_1_hash, block_1_number, 1u32, &[2]).unwrap()
     );
 }
 
@@ -354,8 +354,8 @@ fn clear_block_account_state_record() {
     insert_to_script_column(&db, block_1_hash, block_1_number, 1u32, &[11], &[1]);
     insert_to_script_column(&db, block_1_hash, block_1_number, 2u32, &[22], &[2]);
 
-    insert_to_state_db(&db, "1", block_1_hash, block_1_number, 1u32, &[1], &[1]);
-    insert_to_state_db(&db, "2", block_1_hash, block_1_number, 1u32, &[2], &[2]);
+    insert_to_state_db(&db, 1, block_1_hash, block_1_number, 1u32, &[1], &[1]);
+    insert_to_state_db(&db, 2, block_1_hash, block_1_number, 1u32, &[2], &[2]);
 
     // clear account record
     let store_txn = db.begin_transaction();
@@ -410,10 +410,10 @@ fn clear_block_account_state_record() {
     );
     assert_eq!(
         vec![1].into_boxed_slice(),
-        get_from_state_db(&db, "1", block_1_hash, block_1_number, 1u32, &[1]).unwrap()
+        get_from_state_db(&db, 1, block_1_hash, block_1_number, 1u32, &[1]).unwrap()
     );
     assert_eq!(
         vec![2].into_boxed_slice(),
-        get_from_state_db(&db, "2", block_1_hash, block_1_number, 1u32, &[2]).unwrap()
+        get_from_state_db(&db, 2, block_1_hash, block_1_number, 1u32, &[2]).unwrap()
     );
 }

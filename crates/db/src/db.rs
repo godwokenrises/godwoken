@@ -196,19 +196,21 @@ impl RocksDB {
         let inner = Arc::get_mut(&mut self.inner)
             .ok_or_else(|| internal_error("create_cf get_mut failed"))?;
         let opts = Options::default();
-        inner.create_cf(col, &opts).map_err(internal_error)
+        inner
+            .create_cf(&col.to_string(), &opts)
+            .map_err(internal_error)
     }
 
     pub fn drop_cf(&mut self, col: Col) -> Result<()> {
         let inner = Arc::get_mut(&mut self.inner)
             .ok_or_else(|| internal_error("drop_cf get_mut failed"))?;
-        inner.drop_cf(col).map_err(internal_error)
+        inner.drop_cf(&col.to_string()).map_err(internal_error)
     }
 }
 
 #[inline]
 pub(crate) fn cf_handle<'a>(db: &'a OptimisticTransactionDB, col: Col) -> Result<&'a ColumnFamily> {
-    db.cf_handle(col)
+    db.cf_handle(&col.to_string())
         .ok_or_else(|| internal_error(format!("column {} not found", col)))
 }
 
@@ -287,30 +289,26 @@ mod tests {
         let db = setup_db("write_and_read", 2);
 
         let txn = db.transaction();
-        txn.put("0", &[0, 0], &[0, 0, 0]).unwrap();
-        txn.put("1", &[1, 1], &[1, 1, 1]).unwrap();
-        txn.put("1", &[2], &[1, 1, 1]).unwrap();
-        txn.delete("1", &[2]).unwrap();
+        txn.put(0, &[0, 0], &[0, 0, 0]).unwrap();
+        txn.put(1, &[1, 1], &[1, 1, 1]).unwrap();
+        txn.put(1, &[2], &[1, 1, 1]).unwrap();
+        txn.delete(1, &[2]).unwrap();
         txn.commit().unwrap();
 
-        assert!(
-            vec![0u8, 0, 0].as_slice() == db.get_pinned("0", &[0, 0]).unwrap().unwrap().as_ref()
-        );
-        assert!(db.get_pinned("0", &[1, 1]).unwrap().is_none());
+        assert!(vec![0u8, 0, 0].as_slice() == db.get_pinned(0, &[0, 0]).unwrap().unwrap().as_ref());
+        assert!(db.get_pinned(0, &[1, 1]).unwrap().is_none());
 
-        assert!(db.get_pinned("1", &[0, 0]).unwrap().is_none());
-        assert!(
-            vec![1u8, 1, 1].as_slice() == db.get_pinned("1", &[1, 1]).unwrap().unwrap().as_ref()
-        );
+        assert!(db.get_pinned(1, &[0, 0]).unwrap().is_none());
+        assert!(vec![1u8, 1, 1].as_slice() == db.get_pinned(1, &[1, 1]).unwrap().unwrap().as_ref());
 
-        assert!(db.get_pinned("1", &[2]).unwrap().is_none());
+        assert!(db.get_pinned(1, &[2]).unwrap().is_none());
 
         let mut r = HashMap::new();
         let callback = |k: &[u8], v: &[u8]| -> Result<()> {
             r.insert(k.to_vec(), v.to_vec());
             Ok(())
         };
-        db.traverse("1", callback).unwrap();
+        db.traverse(1, callback).unwrap();
         assert!(r.len() == 1);
         assert_eq!(r.get(&vec![1, 1]), Some(&vec![1, 1, 1]));
     }
@@ -320,19 +318,19 @@ mod tests {
         let db = setup_db("snapshot_isolation", 2);
         let snapshot = db.get_snapshot();
         let txn = db.transaction();
-        txn.put("0", &[0, 0], &[5, 4, 3, 2]).unwrap();
-        txn.put("1", &[1, 1], &[1, 2, 3, 4, 5]).unwrap();
+        txn.put(0, &[0, 0], &[5, 4, 3, 2]).unwrap();
+        txn.put(1, &[1, 1], &[1, 2, 3, 4, 5]).unwrap();
         txn.commit().unwrap();
 
-        assert!(snapshot.get_pinned("0", &[0, 0]).unwrap().is_none());
-        assert!(snapshot.get_pinned("1", &[1, 1]).unwrap().is_none());
+        assert!(snapshot.get_pinned(0, &[0, 0]).unwrap().is_none());
+        assert!(snapshot.get_pinned(1, &[1, 1]).unwrap().is_none());
         let snapshot = db.get_snapshot();
         assert_eq!(
-            snapshot.get_pinned("0", &[0, 0]).unwrap().unwrap().as_ref(),
+            snapshot.get_pinned(0, &[0, 0]).unwrap().unwrap().as_ref(),
             &[5, 4, 3, 2]
         );
         assert_eq!(
-            snapshot.get_pinned("1", &[1, 1]).unwrap().unwrap().as_ref(),
+            snapshot.get_pinned(1, &[1, 1]).unwrap().unwrap().as_ref(),
             &[1, 2, 3, 4, 5]
         );
     }
@@ -342,16 +340,16 @@ mod tests {
         let db = setup_db("write_and_partial_read", 2);
 
         let txn = db.transaction();
-        txn.put("0", &[0, 0], &[5, 4, 3, 2]).unwrap();
-        txn.put("1", &[1, 1], &[1, 2, 3, 4, 5]).unwrap();
+        txn.put(0, &[0, 0], &[5, 4, 3, 2]).unwrap();
+        txn.put(1, &[1, 1], &[1, 2, 3, 4, 5]).unwrap();
         txn.commit().unwrap();
 
-        let ret = db.get_pinned("1", &[1, 1]).unwrap().unwrap();
+        let ret = db.get_pinned(1, &[1, 1]).unwrap().unwrap();
 
         assert!(vec![2u8, 3, 4].as_slice() == &ret.as_ref()[1..4]);
-        assert!(db.get_pinned("1", &[0, 0]).unwrap().is_none());
+        assert!(db.get_pinned(1, &[0, 0]).unwrap().is_none());
 
-        let ret = db.get_pinned("0", &[0, 0]).unwrap().unwrap();
+        let ret = db.get_pinned(0, &[0, 0]).unwrap().unwrap();
 
         assert!(vec![4u8, 3, 2].as_slice() == &ret.as_ref()[1..4]);
     }

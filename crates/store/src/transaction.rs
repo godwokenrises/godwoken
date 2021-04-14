@@ -493,7 +493,7 @@ impl StoreTransaction {
         col: Col,
         raw_key: &[u8],
     ) -> Result<(), Error> {
-        let record_key = BlockStateRecordKey::get_record_key(block_hash, tx_index, col)?;
+        let record_key = BlockStateRecordKey::get_record_key(block_hash, tx_index, col);
         self.insert_raw(COLUMN_BLOCK_STATE_RECORD, record_key.as_ref(), raw_key)
     }
 
@@ -512,9 +512,9 @@ impl StoreTransaction {
     }
 
     pub(crate) fn clear_block_state_record(&self, block_hash: &H256) -> Result<(), Error> {
-        let iter = self.iter_block_state_record(block_hash)?;
+        let iter = self.iter_block_state_record(block_hash);
         for (record_key, _) in
-            iter.filter(|(key, _)| BlockStateRecordKey::is_same_block(key, block_hash))
+            iter.take_while(|(key, _)| BlockStateRecordKey::is_same_block(key, block_hash))
         {
             self.delete(COLUMN_BLOCK_STATE_RECORD, &record_key)?;
         }
@@ -522,23 +522,23 @@ impl StoreTransaction {
     }
 
     pub(crate) fn clear_block_state(&self, block_hash: &H256) -> Result<(), Error> {
-        let iter = self.iter_block_state_record(block_hash)?;
+        let iter = self.iter_block_state_record(block_hash);
         for (record_key, state_key) in
-            iter.filter(|(key, _)| BlockStateRecordKey::is_same_block(key, block_hash))
+            iter.take_while(|(key, _)| BlockStateRecordKey::is_same_block(key, block_hash))
         {
-            let column = BlockStateRecordKey::get_column(&record_key)?;
+            let column = BlockStateRecordKey::get_column(&record_key);
             self.delete(column, &state_key)?;
             self.delete(COLUMN_BLOCK_STATE_RECORD, &record_key)?;
         }
         Ok(())
     }
 
-    fn iter_block_state_record(&self, block_hash: &H256) -> Result<DBIter, Error> {
-        let start_key = BlockStateRecordKey::get_record_key(block_hash, 0u32, "0")?;
-        Ok(self.get_iter(
+    fn iter_block_state_record(&self, block_hash: &H256) -> DBIter {
+        let start_key = BlockStateRecordKey::get_record_key(block_hash, 0u32, 0);
+        self.get_iter(
             COLUMN_BLOCK_STATE_RECORD,
             IteratorMode::From(start_key.as_ref(), Forward),
-        ))
+        )
     }
 }
 
@@ -551,20 +551,17 @@ struct CustodianChange {
 struct BlockStateRecordKey;
 
 impl BlockStateRecordKey {
-    fn get_record_key(block_hash: &H256, tx_index: u32, col: Col) -> Result<Vec<u8>, Error> {
-        let record_key = [
+    fn get_record_key(block_hash: &H256, tx_index: u32, col: Col) -> Vec<u8> {
+        [
             block_hash.as_slice(),
             &tx_index.to_be_bytes()[..],
-            &col.as_bytes(),
+            &col.to_be_bytes()[..],
         ]
-        .concat();
-        Ok(record_key)
+        .concat()
     }
 
-    fn get_column(record_key: &[u8]) -> Result<&str, Error> {
-        let column = &record_key[size_of::<H256>() + size_of::<u32>()..];
-        std::str::from_utf8(column)
-            .map_err(|_| Error::from("Parse column to int failed".to_owned()))
+    fn get_column(record_key: &[u8]) -> u8 {
+        record_key[size_of::<H256>() + size_of::<u32>()]
     }
 
     fn is_same_block(record_key: &[u8], block_hash: &H256) -> bool {
