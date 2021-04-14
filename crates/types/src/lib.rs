@@ -20,6 +20,7 @@ cfg_if::cfg_if! {
         use std::str;
         use std::string;
 
+        pub mod offchain;
         mod signature_message;
     } else {
         use alloc::vec;

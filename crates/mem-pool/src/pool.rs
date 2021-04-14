@@ -14,7 +14,7 @@
 
 use anyhow::{anyhow, Result};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
-use gw_generator::{Generator, RunResult};
+use gw_generator::Generator;
 use gw_store::{
     chain_view::ChainView,
     state_db::{StateDBTransaction, StateDBVersion},
@@ -22,6 +22,7 @@ use gw_store::{
     Store,
 };
 use gw_types::{
+    offchain::RunResult,
     packed::{BlockInfo, L2Transaction, WithdrawalRequest},
     prelude::{Entity, Unpack},
 };

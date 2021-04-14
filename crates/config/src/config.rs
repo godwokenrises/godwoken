@@ -13,7 +13,13 @@ pub struct Config {
     pub genesis: GenesisConfig,
     pub chain: ChainConfig,
     pub rpc_client: RPCClientConfig,
+    pub rpc_server: RPCServerConfig,
     pub block_producer: Option<BlockProducerConfig>,
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RPCServerConfig {
+    pub listen: String,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]

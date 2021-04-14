@@ -151,7 +151,8 @@ pub trait State {
         self.update_raw(key, H256::one())?;
         Ok(())
     }
-    fn get_data_hash(&self, data_hash: &H256) -> Result<bool, Error> {
+
+    fn is_data_hash_exist(&self, data_hash: &H256) -> Result<bool, Error> {
         let key = build_data_hash_key(data_hash.as_slice());
         let v = self.get_raw(&key)?;
         Ok(v == H256::one())

@@ -1,4 +1,4 @@
-use crate::{types::RunResult, RollupContext};
+use crate::RollupContext;
 use ckb_vm::{
     memory::Memory,
     registers::{A0, A1, A2, A3, A7},
@@ -17,6 +17,7 @@ use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    offchain::RunResult,
     packed::{BlockInfo, LogItem, RawL2Transaction, Script},
     prelude::*,
 };

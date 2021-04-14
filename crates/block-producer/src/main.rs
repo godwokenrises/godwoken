@@ -12,12 +12,14 @@ use gw_generator::{
     Generator, RollupContext,
 };
 use gw_mem_pool::pool::MemPool;
+use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
 use gw_types::{
     packed::{RollupConfig, Script},
     prelude::*,
 };
 use parking_lot::Mutex;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::{fs, path::Path, process::exit, sync::Arc};
 
 fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
@@ -87,6 +89,9 @@ fn run() -> Result<()> {
         }
     };
 
+    // RPC registry
+    let rpc_registry = Registry::new(mem_pool.clone(), store.clone());
+
     // create chain updater
     let mut chain_updater = ChainUpdater::new(
         Arc::clone(&chain),
@@ -121,6 +126,17 @@ fn run() -> Result<()> {
     };
     ctrlc::set_handler(handle).unwrap();
 
+    let rpc_address: SocketAddr = {
+        let mut addrs: Vec<_> = config.rpc_server.listen.to_socket_addrs()?.collect();
+        if addrs.len() != 1 {
+            return Err(anyhow!(
+                "Invalid RPC listen address `{}`",
+                &config.rpc_server.listen
+            ));
+        }
+        addrs.remove(0)
+    };
+
     smol::block_on(async {
         select! {
             _ = ctrl_c.recv().fuse() => println!("Exiting..."),
@@ -131,10 +147,10 @@ fn run() -> Result<()> {
             e = block_producer.poll_loop().fuse() => {
                 eprintln!("Error occurs produce block: {:?}", e);
             }
-            // e = start_jsonrpc_server(matches.value_of("listen").unwrap().to_string()).fuse() => {
-            //     info!("Error running JSONRPC server: {:?}", e);
-            //     exit(1);
-            // },
+            e = start_jsonrpc_server(rpc_address, rpc_registry).fuse() => {
+                eprintln!("Error running JSONRPC server: {:?}", e);
+                exit(1);
+            },
         };
     });
 

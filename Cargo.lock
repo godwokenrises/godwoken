@@ -1891,17 +1891,15 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
+ "gw-rpc-server",
  "gw-store",
  "gw-types",
- "hyper 0.14.4",
- "jsonrpc-v2",
  "log",
  "parking_lot 0.11.1",
  "serde",
  "serde_json",
  "smol",
  "sqlx",
- "tokio 1.4.0",
  "toml",
 ]
 
@@ -2004,6 +2002,44 @@ dependencies = [
  "gw-store",
  "gw-traits",
  "gw-types",
+]
+
+[[package]]
+name = "gw-rpc-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "async-jsonrpc-client",
+ "async-native-tls",
+ "async-std",
+ "bytes 1.0.1",
+ "ckb-crypto",
+ "ckb-fixed-hash",
+ "ckb-types",
+ "clap",
+ "ctrlc",
+ "env_logger",
+ "faster-hex 0.4.1",
+ "futures 0.3.13",
+ "gw-chain",
+ "gw-common",
+ "gw-config",
+ "gw-generator",
+ "gw-jsonrpc-types",
+ "gw-mem-pool",
+ "gw-store",
+ "gw-traits",
+ "gw-types",
+ "hyper 0.14.4",
+ "jsonrpc-v2",
+ "log",
+ "parking_lot 0.11.1",
+ "serde",
+ "serde_json",
+ "smol",
+ "tokio 1.4.0",
+ "toml",
 ]
 
 [[package]]
