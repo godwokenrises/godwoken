@@ -482,7 +482,7 @@ impl StoreTransaction {
             &META_TIP_BLOCK_HASH_KEY,
             parent_block_hash.as_slice(),
         )?;
-        self.clear_block_state(&block.hash().into())?;
+        self.clear_block_state(block.hash().into())?;
         Ok(())
     }
 
@@ -508,24 +508,20 @@ impl StoreTransaction {
             None if to_be_pruned_block_number == 0 => return Ok(()),
             _ => return Err(Error::from("Invalid block hash".to_owned())),
         };
-        self.clear_block_state_record(&block_hash)
+        self.clear_block_state_record(block_hash)
     }
 
-    pub(crate) fn clear_block_state_record(&self, block_hash: &H256) -> Result<(), Error> {
+    pub(crate) fn clear_block_state_record(&self, block_hash: H256) -> Result<(), Error> {
         let iter = self.iter_block_state_record(block_hash);
-        for (record_key, _) in
-            iter.take_while(|(key, _)| BlockStateRecordKey::is_same_block(key, block_hash))
-        {
+        for (record_key, _) in iter {
             self.delete(COLUMN_BLOCK_STATE_RECORD, &record_key)?;
         }
         Ok(())
     }
 
-    pub(crate) fn clear_block_state(&self, block_hash: &H256) -> Result<(), Error> {
+    pub(crate) fn clear_block_state(&self, block_hash: H256) -> Result<(), Error> {
         let iter = self.iter_block_state_record(block_hash);
-        for (record_key, state_key) in
-            iter.take_while(|(key, _)| BlockStateRecordKey::is_same_block(key, block_hash))
-        {
+        for (record_key, state_key) in iter {
             let column = BlockStateRecordKey::get_column(&record_key);
             self.delete(column, &state_key)?;
             self.delete(COLUMN_BLOCK_STATE_RECORD, &record_key)?;
@@ -533,12 +529,16 @@ impl StoreTransaction {
         Ok(())
     }
 
-    fn iter_block_state_record(&self, block_hash: &H256) -> DBIter {
-        let start_key = BlockStateRecordKey::get_record_key(block_hash, 0u32, 0);
+    fn iter_block_state_record(
+        &self,
+        block_hash: H256,
+    ) -> impl Iterator<Item = (Box<[u8]>, Box<[u8]>)> + '_ {
+        let start_key = BlockStateRecordKey::get_record_key(&block_hash, 0u32, 0u8);
         self.get_iter(
             COLUMN_BLOCK_STATE_RECORD,
             IteratorMode::From(start_key.as_ref(), Forward),
         )
+        .take_while(move |(key, _)| BlockStateRecordKey::is_same_block(key, block_hash))
     }
 }
 
@@ -564,7 +564,7 @@ impl BlockStateRecordKey {
         record_key[size_of::<H256>() + size_of::<u32>()]
     }
 
-    fn is_same_block(record_key: &[u8], block_hash: &H256) -> bool {
+    fn is_same_block(record_key: &[u8], block_hash: H256) -> bool {
         &record_key[..size_of::<H256>()] == block_hash.as_slice()
     }
 }
