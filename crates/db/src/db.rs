@@ -209,7 +209,7 @@ impl RocksDB {
 }
 
 #[inline]
-pub(crate) fn cf_handle<'a>(db: &'a OptimisticTransactionDB, col: Col) -> Result<&'a ColumnFamily> {
+pub(crate) fn cf_handle(db: &OptimisticTransactionDB, col: Col) -> Result<&ColumnFamily> {
     db.cf_handle(&col.to_string())
         .ok_or_else(|| internal_error(format!("column {} not found", col)))
 }
