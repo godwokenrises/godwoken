@@ -15,7 +15,7 @@ use gw_types::{
     packed::{self, TransactionKey},
     prelude::*,
 };
-use std::{borrow::BorrowMut, collections::HashMap, mem::size_of};
+use std::{borrow::BorrowMut, collections::HashMap};
 
 const NUMBER_OF_CONFIRMATION: u64 = 100;
 
@@ -493,8 +493,8 @@ impl StoreTransaction {
         col: Col,
         raw_key: &[u8],
     ) -> Result<(), Error> {
-        let record_key = BlockStateRecordKey::get_record_key(block_hash, tx_index, col);
-        self.insert_raw(COLUMN_BLOCK_STATE_RECORD, record_key.as_ref(), raw_key)
+        let record_key = BlockStateRecordKey::new(block_hash, tx_index, col);
+        self.insert_raw(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice(), raw_key)
     }
 
     fn prune_block_state_record(&self, current_block_number: u64) -> Result<(), Error> {
@@ -514,7 +514,7 @@ impl StoreTransaction {
     pub(crate) fn clear_block_state_record(&self, block_hash: H256) -> Result<(), Error> {
         let iter = self.iter_block_state_record(block_hash);
         for (record_key, _) in iter {
-            self.delete(COLUMN_BLOCK_STATE_RECORD, &record_key)?;
+            self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
         }
         Ok(())
     }
@@ -522,9 +522,9 @@ impl StoreTransaction {
     pub(crate) fn clear_block_state(&self, block_hash: H256) -> Result<(), Error> {
         let iter = self.iter_block_state_record(block_hash);
         for (record_key, state_key) in iter {
-            let column = BlockStateRecordKey::get_column(&record_key);
+            let column = record_key.get_column();
             self.delete(column, &state_key)?;
-            self.delete(COLUMN_BLOCK_STATE_RECORD, &record_key)?;
+            self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
         }
         Ok(())
     }
@@ -532,13 +532,14 @@ impl StoreTransaction {
     fn iter_block_state_record(
         &self,
         block_hash: H256,
-    ) -> impl Iterator<Item = (Box<[u8]>, Box<[u8]>)> + '_ {
-        let start_key = BlockStateRecordKey::get_record_key(&block_hash, 0u32, 0u8);
+    ) -> impl Iterator<Item = (BlockStateRecordKey, Box<[u8]>)> + '_ {
+        let start_key = BlockStateRecordKey::new(&block_hash, 0u32, 0u8);
         self.get_iter(
             COLUMN_BLOCK_STATE_RECORD,
-            IteratorMode::From(start_key.as_ref(), Forward),
+            IteratorMode::From(start_key.as_slice(), Forward),
         )
-        .take_while(move |(key, _)| BlockStateRecordKey::is_same_block(key, block_hash))
+        .map(|(key, value)| (BlockStateRecordKey::from_slice(&key), value))
+        .take_while(move |(key, _)| key.is_same_block(block_hash))
     }
 }
 
@@ -548,23 +549,33 @@ struct CustodianChange {
     amount: u128,
 }
 
-struct BlockStateRecordKey;
+// block_hash(32 bytes) | tx_index(4 bytes) | col (1 byte)
+struct BlockStateRecordKey([u8; 37]);
 
 impl BlockStateRecordKey {
-    fn get_record_key(block_hash: &H256, tx_index: u32, col: Col) -> Vec<u8> {
-        [
-            block_hash.as_slice(),
-            &tx_index.to_be_bytes()[..],
-            &col.to_be_bytes()[..],
-        ]
-        .concat()
+    fn new(block_hash: &H256, tx_index: u32, col: Col) -> Self {
+        let mut key = [0; 37];
+        key[..32].copy_from_slice(block_hash.as_slice());
+        key[32..36].copy_from_slice(&tx_index.to_be_bytes());
+        key[36] = col;
+        BlockStateRecordKey(key)
     }
 
-    fn get_column(record_key: &[u8]) -> u8 {
-        record_key[size_of::<H256>() + size_of::<u32>()]
+    fn from_slice(record_key: &[u8]) -> Self {
+        let mut key = [0; 37];
+        key.copy_from_slice(record_key);
+        BlockStateRecordKey(key)
     }
 
-    fn is_same_block(record_key: &[u8], block_hash: H256) -> bool {
-        &record_key[..size_of::<H256>()] == block_hash.as_slice()
+    fn get_column(&self) -> u8 {
+        self.0[36]
+    }
+
+    fn is_same_block(&self, block_hash: H256) -> bool {
+        &self.0[..32] == block_hash.as_slice()
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
     }
 }
