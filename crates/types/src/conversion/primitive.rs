@@ -1,6 +1,12 @@
 use crate::{borrow::ToOwned, str, string::String, vec::Vec};
 use crate::{bytes::Bytes, packed, prelude::*};
 
+impl Pack<packed::Uint16> for u16 {
+    fn pack(&self) -> packed::Uint16 {
+        packed::Uint16::new_unchecked(Bytes::from(self.to_le_bytes().to_vec()))
+    }
+}
+
 impl Pack<packed::Uint32> for u32 {
     fn pack(&self) -> packed::Uint32 {
         packed::Uint32::new_unchecked(Bytes::from(self.to_le_bytes().to_vec()))
@@ -24,6 +30,15 @@ impl Pack<packed::Uint32> for usize {
         (*self as u32).pack()
     }
 }
+
+impl<'r> Unpack<u16> for packed::Uint16Reader<'r> {
+    #[allow(clippy::cast_ptr_alignment)]
+    fn unpack(&self) -> u16 {
+        let le = self.as_slice().as_ptr() as *const u16;
+        u16::from_le(unsafe { *le })
+    }
+}
+impl_conversion_for_entity_unpack!(u16, Uint16);
 
 impl<'r> Unpack<u32> for packed::Uint32Reader<'r> {
     #[allow(clippy::cast_ptr_alignment)]

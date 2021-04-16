@@ -1,6 +1,7 @@
 /* ckb 27a86a61d940defec4a95e30a3a47936505d6cfd */
 /* Basic Types */
 
+array Uint16 [byte; 2];
 array Uint32 [byte; 4];
 array Uint64 [byte; 8];
 array Uint128 [byte; 16];

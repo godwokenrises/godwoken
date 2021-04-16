@@ -50,6 +50,6 @@ fn main() {
     #[cfg(feature = "std")]
     {
         build::check_molecule_version();
-        build::generate_molecule(&["blockchain", "godwoken", "store"]);
+        build::generate_molecule(&["blockchain", "godwoken", "store", "poa"]);
     }
 }

@@ -62,8 +62,12 @@ pub fn generate_config(
         let script: ckb_types::packed::Script = genesis.rollup_type_script.into();
         gw_types::packed::Script::new_unchecked(script.as_bytes()).into()
     };
-    let rollup_cell_lock_dep = {
+    let poa_lock_dep = {
         let dep: ckb_types::packed::CellDep = scripts.state_validator_lock.cell_dep.clone().into();
+        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
+    };
+    let poa_state_dep = {
+        let dep: ckb_types::packed::CellDep = scripts.poa_state.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let rollup_cell_type_dep = {
@@ -120,7 +124,8 @@ pub fn generate_config(
     let block_producer: Option<BlockProducerConfig> = Some(BlockProducerConfig {
         account_id,
         // cell deps
-        rollup_cell_lock_dep,
+        poa_lock_dep,
+        poa_state_dep,
         rollup_cell_type_dep,
         deposit_cell_lock_dep,
         stake_cell_lock_dep,
