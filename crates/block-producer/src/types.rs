@@ -10,6 +10,7 @@ pub struct CellInfo {
     pub data: Bytes,
 }
 
+#[derive(Debug, Clone)]
 pub struct InputCellInfo {
     pub input: CellInput,
     pub cell: CellInfo,

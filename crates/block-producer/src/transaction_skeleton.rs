@@ -1,8 +1,8 @@
-use crate::types::{InputCellInfo, SignatureEntry};
+use crate::types::{CellInfo, InputCellInfo, SignatureEntry};
 use anyhow::{anyhow, Result};
 use gw_types::{
     bytes::Bytes,
-    packed::{CellDep, CellOutput, RawTransaction, Transaction, WitnessArgs},
+    packed::{CellDep, CellInput, CellOutput, RawTransaction, Transaction, WitnessArgs},
     prelude::*,
 };
 use std::collections::HashMap;
@@ -60,6 +60,19 @@ impl TransactionSkeleton {
 
     pub fn witnesses_mut(&mut self) -> &mut Vec<WitnessArgs> {
         &mut self.witnesses
+    }
+
+    pub fn add_owner_cell(&mut self, owner_cell: CellInfo) {
+        self.inputs_mut().push({
+            InputCellInfo {
+                input: CellInput::new_builder()
+                    .previous_output(owner_cell.out_point.clone())
+                    .build(),
+                cell: owner_cell.clone(),
+            }
+        });
+        self.outputs_mut()
+            .push((owner_cell.output, owner_cell.data));
     }
 
     pub fn signature_entries(&self) -> Vec<SignatureEntry> {

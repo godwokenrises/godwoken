@@ -1894,6 +1894,7 @@ dependencies = [
  "gw-rpc-server",
  "gw-store",
  "gw-types",
+ "lazy_static",
  "log",
  "parking_lot 0.11.1",
  "serde",
