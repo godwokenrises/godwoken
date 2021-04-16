@@ -1,7 +1,5 @@
 //! State DB
 
-use std::{cell::RefCell, collections::HashSet, fmt, mem::size_of_val};
-
 use crate::{smt_store_impl::SMTStore, traits::KVStore, transaction::StoreTransaction};
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_db::schema::{
@@ -14,6 +12,7 @@ use gw_types::{
     packed::{self, AccountMerkleState},
     prelude::*,
 };
+use std::{cell::RefCell, collections::HashSet, fmt, mem::size_of_val};
 
 const FLAG_DELETE_VALUE: u8 = 0;
 
@@ -101,7 +100,9 @@ impl<'db> KVStore for StateDBTransaction<'db> {
             "forbid inserting the delete flag"
         );
         let raw_key = self.get_key_with_suffix(key);
-        self.inner.insert_raw(col, &raw_key, value)
+        self.inner
+            .insert_raw(col, &raw_key, value)
+            .and(self.record_block_state(col, &raw_key))
     }
 
     fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
@@ -162,34 +163,11 @@ impl<'db> StateDBTransaction<'db> {
         ))
     }
 
-    /// TODO refacotring with version based DB
-    /// clear account state tree, delete leaves and branches from DB
-    pub fn clear_account_state_tree(&self) -> Result<(), Error> {
-        self.inner.set_account_smt_root(H256::zero())?;
-        self.inner.set_account_count(0)?;
-        for col in &[COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ACCOUNT_SMT_BRANCH] {
-            for (k, _v) in self.get_iter(col, IteratorMode::Start) {
-                self.delete(col, k.as_ref())?;
-            }
-        }
-        Ok(())
-    }
-
     fn get_current_account_merkle_state(&self) -> Result<AccountMerkleState, Error> {
-        let block_hash = match self.version.block_hash {
-            Some(hash) => hash,
-            None => {
-                if self.version.is_genesis_version() {
-                    match self.inner.get_block_hash_by_number(self.block_number)? {
-                        Some(hash) => hash,
-                        None => {
-                            return Ok(AccountMerkleState::default());
-                        }
-                    }
-                } else {
-                    return Err(Error::from("Invalid block hash".to_owned()));
-                }
-            }
+        let block_hash = self.get_valid_block_hash()?;
+        let block_hash = match block_hash {
+            Some(block_hash) => block_hash,
+            None => return Ok(AccountMerkleState::default()),
         };
         let account_merkle_state = self
             .inner
@@ -229,6 +207,29 @@ impl<'db> StateDBTransaction<'db> {
                 }
             }
             _ => None,
+        }
+    }
+
+    fn record_block_state(&self, col: Col, raw_key: &[u8]) -> Result<(), Error> {
+        let block_hash = self.get_valid_block_hash()?;
+        let block_hash = match block_hash {
+            Some(block_hash) => block_hash,
+            None => return Ok(()),
+        };
+        self.inner
+            .record_block_state(&block_hash, self.tx_index, col, raw_key)
+    }
+
+    fn get_valid_block_hash(&self) -> Result<Option<H256>, Error> {
+        match self.version.block_hash {
+            Some(block_hash) => Ok(Some(block_hash)),
+            None => {
+                if self.version.is_genesis_version() {
+                    self.inner.get_block_hash_by_number(self.block_number)
+                } else {
+                    Err(Error::from("Invalid block hash".to_owned()))
+                }
+            }
         }
     }
 

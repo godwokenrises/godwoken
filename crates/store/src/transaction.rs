@@ -2,17 +2,22 @@ use crate::{smt_store_impl::SMTStore, traits::KVStore};
 use gw_common::{smt::SMT, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_db::schema::{
     Col, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSITION_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
-    COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_CUSTODIAN_ASSETS, COLUMN_INDEX,
-    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
-    COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY,
-    META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
+    COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD,
+    COLUMN_CUSTODIAN_ASSETS, COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META,
+    COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT,
+    META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY, META_BLOCK_SMT_ROOT_KEY,
+    META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
 };
-use gw_db::{error::Error, iter::DBIter, DBIterator, IteratorMode, RocksDBTransaction};
+use gw_db::{
+    error::Error, iter::DBIter, DBIterator, Direction::Forward, IteratorMode, RocksDBTransaction,
+};
 use gw_types::{
     packed::{self, TransactionKey},
     prelude::*,
 };
 use std::{borrow::BorrowMut, collections::HashMap};
+
+const NUMBER_OF_CONFIRMATION: u64 = 100;
 
 pub struct StoreTransaction {
     pub(crate) inner: RocksDBTransaction,
@@ -423,6 +428,7 @@ impl StoreTransaction {
         self.set_block_smt_root(*root)?;
         // update tip
         self.insert_raw(COLUMN_META, &META_TIP_BLOCK_HASH_KEY, &block_hash)?;
+        self.prune_block_state_record(raw_number.unpack())?;
         Ok(())
     }
 
@@ -476,7 +482,64 @@ impl StoreTransaction {
             &META_TIP_BLOCK_HASH_KEY,
             parent_block_hash.as_slice(),
         )?;
+        self.clear_block_state(block.hash().into())?;
         Ok(())
+    }
+
+    pub fn record_block_state(
+        &self,
+        block_hash: &H256,
+        tx_index: u32,
+        col: Col,
+        raw_key: &[u8],
+    ) -> Result<(), Error> {
+        let record_key = BlockStateRecordKey::new(block_hash, tx_index, col);
+        self.insert_raw(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice(), raw_key)
+    }
+
+    fn prune_block_state_record(&self, current_block_number: u64) -> Result<(), Error> {
+        if current_block_number <= NUMBER_OF_CONFIRMATION {
+            return Ok(());
+        }
+        let to_be_pruned_block_number = current_block_number - NUMBER_OF_CONFIRMATION - 1;
+        let block_hash = self.get_block_hash_by_number(to_be_pruned_block_number)?;
+        let block_hash = match block_hash {
+            Some(block_hash) => block_hash,
+            None if to_be_pruned_block_number == 0 => return Ok(()),
+            _ => return Err(Error::from("Invalid block hash".to_owned())),
+        };
+        self.clear_block_state_record(block_hash)
+    }
+
+    pub(crate) fn clear_block_state_record(&self, block_hash: H256) -> Result<(), Error> {
+        let iter = self.iter_block_state_record(block_hash);
+        for (record_key, _) in iter {
+            self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn clear_block_state(&self, block_hash: H256) -> Result<(), Error> {
+        let iter = self.iter_block_state_record(block_hash);
+        for (record_key, state_key) in iter {
+            let column = record_key.get_column();
+            self.delete(column, &state_key)?;
+            self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
+        }
+        Ok(())
+    }
+
+    fn iter_block_state_record(
+        &self,
+        block_hash: H256,
+    ) -> impl Iterator<Item = (BlockStateRecordKey, Box<[u8]>)> + '_ {
+        let start_key = BlockStateRecordKey::new(&block_hash, 0u32, 0u8);
+        self.get_iter(
+            COLUMN_BLOCK_STATE_RECORD,
+            IteratorMode::From(start_key.as_slice(), Forward),
+        )
+        .map(|(key, value)| (BlockStateRecordKey::from_slice(&key), value))
+        .take_while(move |(key, _)| key.is_same_block(block_hash))
     }
 }
 
@@ -484,4 +547,35 @@ struct CustodianChange {
     capacity: u64,
     sudt_script_hash: H256,
     amount: u128,
+}
+
+// block_hash(32 bytes) | tx_index(4 bytes) | col (1 byte)
+struct BlockStateRecordKey([u8; 37]);
+
+impl BlockStateRecordKey {
+    fn new(block_hash: &H256, tx_index: u32, col: Col) -> Self {
+        let mut key = [0; 37];
+        key[..32].copy_from_slice(block_hash.as_slice());
+        key[32..36].copy_from_slice(&tx_index.to_be_bytes());
+        key[36] = col;
+        BlockStateRecordKey(key)
+    }
+
+    fn from_slice(record_key: &[u8]) -> Self {
+        let mut key = [0; 37];
+        key.copy_from_slice(record_key);
+        BlockStateRecordKey(key)
+    }
+
+    fn get_column(&self) -> u8 {
+        self.0[36]
+    }
+
+    fn is_same_block(&self, block_hash: H256) -> bool {
+        &self.0[..32] == block_hash.as_slice()
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
 }
