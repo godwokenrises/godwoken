@@ -79,10 +79,10 @@ async fn ping() -> Result<String> {
 }
 
 async fn get_block(
-    Params(params): Params<JsonH256>,
+    Params((block_hash,)): Params<(JsonH256,)>,
     store: Data<Store>,
 ) -> Result<Option<L2BlockView>> {
-    let block_hash = to_h256(params);
+    let block_hash = to_h256(block_hash);
     let db = store.begin_transaction();
     let block_opt = db.get_block(&block_hash)?.map(|block| {
         let block_view: L2BlockView = block.into();
@@ -92,10 +92,10 @@ async fn get_block(
 }
 
 async fn get_block_by_number(
-    Params(params): Params<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64>,
+    Params((block_number,)): Params<(gw_jsonrpc_types::ckb_jsonrpc_types::Uint64,)>,
     store: Data<Store>,
 ) -> Result<Option<L2BlockView>> {
-    let block_number = params.value();
+    let block_number = block_number.value();
     let db = store.begin_transaction();
     let block_hash = match db.get_block_hash_by_number(block_number)? {
         Some(hash) => hash,
@@ -109,10 +109,10 @@ async fn get_block_by_number(
 }
 
 async fn get_block_hash(
-    Params(params): Params<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64>,
+    Params((block_number,)): Params<(gw_jsonrpc_types::ckb_jsonrpc_types::Uint64,)>,
     store: Data<Store>,
 ) -> Result<Option<JsonH256>> {
-    let block_number = params.value();
+    let block_number = block_number.value();
     let db = store.begin_transaction();
     let hash_opt = db.get_block_hash_by_number(block_number)?.map(to_jsonh256);
     Ok(hash_opt)
@@ -124,11 +124,11 @@ async fn get_tip_block_hash(store: Data<Store>) -> Result<JsonH256> {
 }
 
 async fn execute_l2transaction(
-    Params(params): Params<JsonBytes>,
+    Params((l2tx,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<RunResult> {
-    let l2tx_bytes = params.into_bytes();
+    let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
 
     let raw_block = store.get_tip_block()?.raw();
@@ -150,20 +150,20 @@ async fn execute_l2transaction(
 }
 
 async fn submit_l2transaction(
-    Params(params): Params<JsonBytes>,
+    Params((l2tx,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
 ) -> Result<()> {
-    let l2tx_bytes = params.into_bytes();
+    let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
     mem_pool.lock().push_transaction(tx)?;
     Ok(())
 }
 
 async fn submit_withdrawal_request(
-    Params(params): Params<JsonBytes>,
+    Params((withdrawal_request,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
 ) -> Result<()> {
-    let withdrawal_bytes = params.into_bytes();
+    let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequest::from_slice(&withdrawal_bytes)?;
 
     mem_pool.lock().push_withdrawal_request(withdrawal)?;
@@ -203,7 +203,7 @@ async fn get_storage_at(
 }
 
 async fn get_account_id_by_script_hash(
-    Params(params): Params<JsonH256>,
+    Params((script_hash,)): Params<(JsonH256,)>,
     store: Data<Store>,
 ) -> Result<Option<AccountID>> {
     let db = store.begin_transaction();
@@ -212,7 +212,7 @@ async fn get_account_id_by_script_hash(
         StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_hash))?;
     let tree = state_db.account_state_tree()?;
 
-    let script_hash = to_h256(params);
+    let script_hash = to_h256(script_hash);
 
     let account_id_opt = tree
         .get_account_id_by_script_hash(&script_hash)?
@@ -221,7 +221,10 @@ async fn get_account_id_by_script_hash(
     Ok(account_id_opt)
 }
 
-async fn get_nonce(Params(account_id): Params<AccountID>, store: Data<Store>) -> Result<Uint32> {
+async fn get_nonce(
+    Params((account_id,)): Params<(AccountID,)>,
+    store: Data<Store>,
+) -> Result<Uint32> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
     let state_db =
@@ -234,7 +237,7 @@ async fn get_nonce(Params(account_id): Params<AccountID>, store: Data<Store>) ->
 }
 
 async fn get_script(
-    Params(params): Params<JsonH256>,
+    Params((script_hash,)): Params<(JsonH256,)>,
     store: Data<Store>,
 ) -> Result<Option<Script>> {
     let db = store.begin_transaction();
@@ -243,14 +246,14 @@ async fn get_script(
         StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_hash))?;
     let tree = state_db.account_state_tree()?;
 
-    let script_hash = to_h256(params);
+    let script_hash = to_h256(script_hash);
     let script_opt = tree.get_script(&script_hash).map(Into::into);
 
     Ok(script_opt)
 }
 
 async fn get_script_hash(
-    Params(account_id): Params<AccountID>,
+    Params((account_id,)): Params<(AccountID,)>,
     store: Data<Store>,
 ) -> Result<JsonH256> {
     let db = store.begin_transaction();
@@ -264,7 +267,7 @@ async fn get_script_hash(
 }
 
 async fn get_data(
-    Params(data_hash): Params<JsonH256>,
+    Params((data_hash,)): Params<(JsonH256,)>,
     store: Data<Store>,
 ) -> Result<Option<JsonBytes>> {
     let db = store.begin_transaction();
