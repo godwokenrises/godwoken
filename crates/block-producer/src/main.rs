@@ -35,10 +35,19 @@ fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
 
 async fn poll_loop(
     rpc_client: RPCClient,
-    mut chain_updater: ChainUpdater,
-    mut block_producer: BlockProducer,
+    chain_updater: ChainUpdater,
+    block_producer: BlockProducer,
     poll_interval: Duration,
 ) -> Result<()> {
+    struct Inner {
+        chain_updater: ChainUpdater,
+        block_producer: BlockProducer,
+    }
+
+    let inner = Arc::new(smol::lock::Mutex::new(Inner {
+        chain_updater,
+        block_producer,
+    }));
     // get tip
     let (mut tip_number, mut tip_hash) = {
         let tip = rpc_client.get_tip().await?;
@@ -52,29 +61,42 @@ async fn poll_loop(
             .await?
         {
             let raw_header = block.header().raw();
-            if &raw_header.parent_hash().raw_data() == tip_hash.as_slice() {
+            let event = if &raw_header.parent_hash().raw_data() == tip_hash.as_slice() {
                 // received new layer1 block
                 println!("received new layer1 block {}, {:?}", tip_number, tip_hash);
-                let event = ChainEvent::NewBlock { block };
-                //  TODO we do not need to wait the result
-                futures::try_join!(
-                    chain_updater.handle_event(event.clone()),
-                    block_producer.handle_event(event.clone())
-                )?;
+                ChainEvent::NewBlock { block }
             } else {
                 // layer1 reverted
                 eprintln!("layer1 reverted {}, {:?}", tip_number, tip_hash);
-                let event = ChainEvent::Reverted {
+                ChainEvent::Reverted {
                     old_tip: NumberHash::new_builder()
                         .number(tip_number.pack())
                         .block_hash(tip_hash.pack())
                         .build(),
                     new_block: block,
-                };
-                // must execute chain update before block producer, otherwise we may run into an invalid chain state
-                chain_updater.handle_event(event.clone()).await?;
-                block_producer.handle_event(event.clone()).await?;
+                }
             };
+            // must execute chain update before block producer, otherwise we may run into an invalid chain state
+            smol::spawn({
+                let event = event.clone();
+                let inner = inner.clone();
+                async move {
+                    let mut inner = inner.lock().await;
+                    if let Err(err) = inner.chain_updater.handle_event(event.clone()).await {
+                        eprintln!(
+                            "Error occured when polling chain_updater, event: {:?}, error: {}",
+                            event, err
+                        );
+                    }
+                    if let Err(err) = inner.block_producer.handle_event(event.clone()).await {
+                        eprintln!(
+                            "Error occured when polling block_producer, event: {:?}, error: {}",
+                            event, err
+                        );
+                    }
+                }
+            })
+            .detach();
             // update tip
             tip_number = raw_header.number().unpack();
             tip_hash = raw_header.hash().into();
