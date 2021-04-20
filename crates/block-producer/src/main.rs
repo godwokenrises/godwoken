@@ -2,10 +2,11 @@ use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use futures::{select, FutureExt};
 use gw_block_producer::{
-    block_producer::BlockProducer, poller::ChainUpdater, rpc_client::RPCClient,
+    block_producer::BlockProducer, poller::ChainUpdater, rpc_client::RPCClient, types::ChainEvent,
     utils::CKBGenesisInfo,
 };
 use gw_chain::chain::Chain;
+use gw_common::H256;
 use gw_config::Config;
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, genesis::init_genesis,
@@ -15,18 +16,72 @@ use gw_mem_pool::pool::MemPool;
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
 use gw_types::{
-    packed::{RollupConfig, Script},
+    packed::{NumberHash, RollupConfig, Script},
     prelude::*,
 };
 use parking_lot::Mutex;
-use std::net::{SocketAddr, ToSocketAddrs};
 use std::{fs, path::Path, process::exit, sync::Arc};
+use std::{
+    net::{SocketAddr, ToSocketAddrs},
+    time::Duration,
+};
 
 fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
     let content = fs::read(&path)
         .with_context(|| format!("read config file from {}", path.as_ref().to_string_lossy()))?;
     let config = toml::from_slice(&content).with_context(|| "parse config file")?;
     Ok(config)
+}
+
+async fn poll_loop(
+    rpc_client: RPCClient,
+    mut chain_updater: ChainUpdater,
+    mut block_producer: BlockProducer,
+    poll_interval: Duration,
+) -> Result<()> {
+    // get tip
+    let (mut tip_number, mut tip_hash) = {
+        let tip = rpc_client.get_tip().await?;
+        let tip_number: u64 = tip.number().unpack();
+        let tip_hash: H256 = tip.block_hash().unpack();
+        (tip_number, tip_hash)
+    };
+    loop {
+        if let Some(block) = rpc_client
+            .get_block_by_number((tip_number + 1).into())
+            .await?
+        {
+            let raw_header = block.header().raw();
+            if &raw_header.parent_hash().raw_data() == tip_hash.as_slice() {
+                // received new layer1 block
+                println!("received new layer1 block {}, {:?}", tip_number, tip_hash);
+                let event = ChainEvent::NewBlock { block };
+                //  TODO we do not need to wait the result
+                futures::try_join!(
+                    chain_updater.handle_event(event.clone()),
+                    block_producer.handle_event(event.clone())
+                )?;
+            } else {
+                // layer1 reverted
+                eprintln!("layer1 reverted {}, {:?}", tip_number, tip_hash);
+                let event = ChainEvent::Reverted {
+                    old_tip: NumberHash::new_builder()
+                        .number(tip_number.pack())
+                        .block_hash(tip_hash.pack())
+                        .build(),
+                    new_block: block,
+                };
+                // must execute chain update before block producer, otherwise we may run into an invalid chain state
+                chain_updater.handle_event(event.clone()).await?;
+                block_producer.handle_event(event.clone()).await?;
+            };
+            // update tip
+            tip_number = raw_header.number().unpack();
+            tip_hash = raw_header.hash().into();
+        } else {
+            async_std::task::sleep(poll_interval).await;
+        }
+    }
 }
 
 fn run() -> Result<()> {
@@ -93,7 +148,7 @@ fn run() -> Result<()> {
     let rpc_registry = Registry::new(mem_pool.clone(), store.clone());
 
     // create chain updater
-    let mut chain_updater = ChainUpdater::new(
+    let chain_updater = ChainUpdater::new(
         Arc::clone(&chain),
         rpc_client.clone(),
         rollup_context,
@@ -107,13 +162,13 @@ fn run() -> Result<()> {
     };
 
     // create block producer
-    let mut block_producer = BlockProducer::create(
+    let block_producer = BlockProducer::create(
         rollup_config_hash,
         store,
         generator,
         chain,
         mem_pool,
-        rpc_client,
+        rpc_client.clone(),
         ckb_genesis_info,
         config
             .block_producer
@@ -141,12 +196,8 @@ fn run() -> Result<()> {
     smol::block_on(async {
         select! {
             _ = ctrl_c.recv().fuse() => println!("Exiting..."),
-            e = chain_updater.poll_loop().fuse() => {
-                eprintln!("Error occurs polling blocks: {:?}", e);
-                exit(1);
-            },
-            e = block_producer.poll_loop().fuse() => {
-                eprintln!("Error occurs produce block: {:?}", e);
+            e = poll_loop(rpc_client, chain_updater, block_producer, Duration::from_secs(3)).fuse() => {
+                eprintln!("Error in main poll loop: {:?}", e);
             }
             e = start_jsonrpc_server(rpc_address, rpc_registry).fuse() => {
                 eprintln!("Error running JSONRPC server: {:?}", e);

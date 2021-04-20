@@ -1,6 +1,5 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
-use crate::transaction_skeleton::TransactionSkeleton;
 use crate::utils::{fill_tx_fee, CKBGenesisInfo};
 use crate::wallet::Wallet;
 use crate::{
@@ -11,6 +10,7 @@ use crate::{
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
     types::{CellInfo, InputCellInfo},
 };
+use crate::{transaction_skeleton::TransactionSkeleton, types::ChainEvent};
 use anyhow::{anyhow, Context, Result};
 use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
@@ -186,46 +186,39 @@ impl BlockProducer {
         Ok(block_producer)
     }
 
-    pub async fn poll_loop(&mut self) -> Result<()> {
-        loop {
-            let tip = self.rpc_client.get_tip().await?;
-            let tip_number: u64 = tip.number().unpack();
-            let tip_hash: H256 = tip.block_hash().unpack();
-            if let Some(block) = self
-                .rpc_client
-                .get_block_by_number((tip_number + 1).into())
-                .await?
-            {
-                let raw_header = block.header().raw();
-                if &raw_header.parent_hash().raw_data() == tip_hash.as_slice() {
-                    // received new layer1 block
-                    let rollup_cell_fut = self.rpc_client.query_rollup_cell();
-                    let median_time_fut = self.rpc_client.get_block_median_time(tip_hash);
-                    let rollup_cell = rollup_cell_fut
-                        .await?
-                        .ok_or(anyhow!("can't found rollup cell"))?;
-                    let median_time = median_time_fut.await?;
-                    let poa_cell_input = InputCellInfo {
-                        input: CellInput::new_builder()
-                            .previous_output(rollup_cell.out_point.clone())
-                            .build(),
-                        cell: rollup_cell.clone(),
-                    };
-                    if self
-                        .poa
-                        .should_issue_next_block(median_time, &poa_cell_input)
-                        .await?
-                    {
-                        self.produce_next_block(median_time, rollup_cell).await?;
-                    }
-                } else {
-                    // TODO handle layer1 revert
-                    println!("layer1 revert {}, {:?}", tip_number, tip_hash);
-                }
-            } else {
-                async_std::task::sleep(std::time::Duration::from_secs(3)).await;
-            }
+    pub async fn handle_event(&mut self, event: ChainEvent) -> Result<()> {
+        // assume the chain is updated
+        let tip_block = match event {
+            ChainEvent::Reverted {
+                old_tip: _,
+                new_block,
+            } => new_block,
+            ChainEvent::NewBlock { block } => block,
+        };
+        let raw_header = tip_block.header().raw();
+        let tip_hash: H256 = raw_header.hash().into();
+
+        // query median time & rollup cell
+        let rollup_cell_fut = self.rpc_client.query_rollup_cell();
+        let median_time_fut = self.rpc_client.get_block_median_time(tip_hash);
+        let (rollup_cell_opt, median_time) = futures::try_join!(rollup_cell_fut, median_time_fut)?;
+        let rollup_cell = rollup_cell_opt.ok_or(anyhow!("can't found rollup cell"))?;
+        let poa_cell_input = InputCellInfo {
+            input: CellInput::new_builder()
+                .previous_output(rollup_cell.out_point.clone())
+                .build(),
+            cell: rollup_cell.clone(),
+        };
+
+        // try issue next block
+        if self
+            .poa
+            .should_issue_next_block(median_time, &poa_cell_input)
+            .await?
+        {
+            self.produce_next_block(median_time, rollup_cell).await?;
         }
+        Ok(())
     }
 
     pub async fn produce_next_block(

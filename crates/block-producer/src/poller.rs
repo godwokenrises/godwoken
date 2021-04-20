@@ -1,8 +1,8 @@
-use crate::utils::to_result;
 use crate::{
     indexer_types::{Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx},
     rpc_client::RPCClient,
 };
+use crate::{types::ChainEvent, utils::to_result};
 use anyhow::Result;
 use async_jsonrpc_client::{Params as ClientParams, Transport};
 use ckb_fixed_hash::H256;
@@ -49,63 +49,60 @@ impl ChainUpdater {
     }
 
     // Start syncing
-    pub async fn poll_loop(&mut self) -> Result<()> {
+    pub async fn handle_event(&mut self, _event: ChainEvent) -> Result<()> {
         // TODO: support for more SQL databases
         // let pool = PgPoolOptions::new()
         //     .max_connections(5)
         //     .connect(&sql_address)
         //     .await?;
         let rollup_type_script = self.rollup_type_script.clone();
+        let tip_l1_block = self.chain.lock().local_state().last_synced().number();
+        let search_key = SearchKey {
+            script: rollup_type_script.clone().into(),
+            script_type: ScriptType::Type,
+            filter: Some(SearchKeyFilter {
+                script: None,
+                output_data_len_range: None,
+                output_capacity_range: None,
+                block_range: Some([
+                    BlockNumber::from(tip_l1_block.unpack() + 1),
+                    BlockNumber::from(u64::max_value()),
+                ]),
+            }),
+        };
+        let order = Order::Asc;
+        let limit = Uint32::from(1000);
+
+        // TODO: right now this logic does not handle forks well, we will need
+        // to tweak this.
+        // TODO: the syncing logic here works under the assumption that a single
+        // L1 CKB block can contain at most one L2 Godwoken block. The logic
+        // here needs revising, once we relax this constraint for more performance.
+        let mut last_cursor = None;
         loop {
-            let tip_l1_block = self.chain.lock().local_state().last_synced().number();
-            let search_key = SearchKey {
-                script: rollup_type_script.clone().into(),
-                script_type: ScriptType::Type,
-                filter: Some(SearchKeyFilter {
-                    script: None,
-                    output_data_len_range: None,
-                    output_capacity_range: None,
-                    block_range: Some([
-                        BlockNumber::from(tip_l1_block.unpack() + 1),
-                        BlockNumber::from(u64::max_value()),
-                    ]),
-                }),
-            };
-            let order = Order::Asc;
-            let limit = Uint32::from(1000);
-
-            // TODO: right now this logic does not handle forks well, we will need
-            // to tweak this.
-            // TODO: the syncing logic here works under the assumption that a single
-            // L1 CKB block can contain at most one L2 Godwoken block. The logic
-            // here needs revising, once we relax this constraint for more performance.
-            let mut last_cursor = None;
-            loop {
-                let txs: Pagination<Tx> = to_result(
-                    self.rpc_client
-                        .indexer_client
-                        .request(
-                            "get_transactions",
-                            Some(ClientParams::Array(vec![
-                                json!(search_key),
-                                json!(order),
-                                json!(limit),
-                                json!(last_cursor),
-                            ])),
-                        )
-                        .await?,
-                )?;
-                if txs.objects.is_empty() {
-                    break;
-                }
-                last_cursor = Some(txs.last_cursor);
-
-                println!("Poll transactions: {}", txs.objects.len());
-                self.update(&txs.objects).await?;
+            let txs: Pagination<Tx> = to_result(
+                self.rpc_client
+                    .indexer_client
+                    .request(
+                        "get_transactions",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(last_cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+            if txs.objects.is_empty() {
+                break;
             }
+            last_cursor = Some(txs.last_cursor);
 
-            async_std::task::sleep(std::time::Duration::from_secs(3)).await;
+            println!("Poll transactions: {}", txs.objects.len());
+            self.update(&txs.objects).await?;
         }
+        Ok(())
     }
 
     pub async fn update(&mut self, txs: &[Tx]) -> anyhow::Result<()> {
