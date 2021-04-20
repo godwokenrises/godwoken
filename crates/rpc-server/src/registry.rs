@@ -267,7 +267,7 @@ async fn get_script_hash(
 }
 
 async fn get_data(
-    Params(data_hash): Params<JsonH256>,
+    Params((data_hash,)): Params<(JsonH256,)>,
     store: Data<Store>,
 ) -> Result<Option<JsonBytes>> {
     let db = store.begin_transaction();
