@@ -4,7 +4,6 @@ use crate::{
     transaction::StoreTransaction,
     Store,
 };
-use anyhow::anyhow;
 use gw_common::H256;
 use gw_types::{
     packed::{GlobalState, L2Block, L2BlockCommittedInfo, L2Transaction, TxReceipt},

@@ -583,7 +583,7 @@ impl BlockStateRecordKey {
     }
 
     fn is_same_block(&self, block_number: u64) -> bool {
-        &self.0[..8] == block_number.to_be_bytes()
+        self.0[..8] == block_number.to_be_bytes()
     }
 
     fn as_slice(&self) -> &[u8] {

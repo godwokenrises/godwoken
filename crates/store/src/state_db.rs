@@ -36,7 +36,7 @@ impl StateDBVersion {
     ) -> Result<Self> {
         let block = db
             .get_block(&block_hash)?
-            .ok_or(anyhow!("block isn't exist"))?;
+            .ok_or_else(|| anyhow!("block isn't exist"))?;
         let block_number: u64 = block.raw().number().unpack();
         let tx_index =
             tx_index.unwrap_or_else(|| block.transactions().len().saturating_sub(1) as u32);
@@ -174,7 +174,7 @@ impl<'db> StateDBTransaction<'db> {
                     let block = self
                         .inner
                         .get_block(&block_hash)?
-                        .ok_or("can't find genesis".to_string())?;
+                        .ok_or_else(|| "can't find genesis".to_string())?;
                     block.raw().post_account()
                 }
                 None => AccountMerkleState::default(),
@@ -186,21 +186,15 @@ impl<'db> StateDBTransaction<'db> {
                 let block_hash = self
                     .inner
                     .get_block_hash_by_number(block_number)?
-                    .ok_or("can't find block hash".to_string())?;
+                    .ok_or_else(|| "can't find block hash".to_string())?;
                 let key = TransactionKey::build_transaction_key(block_hash.pack(), tx_index);
                 match self.inner.get_transaction_receipt_by_key(&key)? {
-                    Some(tx_receipt) => {
-                        tx_receipt.post_state()
-                    }
+                    Some(tx_receipt) => tx_receipt.post_state(),
                     None if tx_index == 0 => {
                         let block = self
                             .inner
                             .get_block(&block_hash)?
-                            .ok_or("can't find block".to_string())?;
-                        let prev_account_root: [u8; 32] =
-                            block.raw().prev_account().merkle_root().unpack();
-                        let count: u32 = block.raw().prev_account().count().unpack();
-                        let number: u64 = block.raw().number().unpack();
+                            .ok_or_else(|| "can't find block".to_string())?;
                         block.raw().post_account()
                     }
                     None => panic!("inconsisted data"),
@@ -216,11 +210,12 @@ impl<'db> StateDBTransaction<'db> {
                     last_block_number -= 1;
                     block_hash_opt = self.inner.get_block_hash_by_number(last_block_number)?;
                 }
-                let block_hash = block_hash_opt.ok_or("can't found block hash".to_string())?;
+                let block_hash =
+                    block_hash_opt.ok_or_else(|| "can't found block hash".to_string())?;
                 let block = self
                     .inner
                     .get_block(&block_hash)?
-                    .ok_or("can't found block".to_string())?;
+                    .ok_or_else(|| "can't found block".to_string())?;
                 let tx_index = if block.raw().number().unpack() == block_number {
                     // return tx_index if current block is future state block & tx exists
                     std::cmp::min(
