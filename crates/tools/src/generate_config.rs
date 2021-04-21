@@ -7,7 +7,7 @@ use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::Entity;
 use gw_config::{
     BackendConfig, BlockProducerConfig, ChainConfig, Config, GenesisConfig, RPCClientConfig,
-    RPCServerConfig, StoreConfig, WalletConfig,
+    RPCServerConfig, StoreConfig, WalletConfig, Web3StoreConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 
@@ -20,6 +20,7 @@ pub fn generate_config(
     ckb_url: String,
     indexer_url: String,
     output_path: &Path,
+    database_url: Option<&str>,
 ) -> Result<()> {
     let genesis: GenesisDeploymentResult = {
         let content = fs::read(genesis_path)?;
@@ -131,6 +132,13 @@ pub fn generate_config(
         meta_contract_validator_type_hash,
         rollup_config,
     };
+    let web3_store: Option<Web3StoreConfig> = match database_url {
+        Some(database_url) => Some(Web3StoreConfig {
+            database_url: database_url.to_string(),
+        }),
+        None => None,
+    };
+
     let config: Config = Config {
         backends,
         store,
@@ -139,6 +147,7 @@ pub fn generate_config(
         rpc_client,
         rpc_server,
         block_producer,
+        web3_store,
     };
     let output_content = toml::to_string_pretty(&config).expect("serde toml to string pretty");
     fs::write(output_path, output_content.as_bytes()).map_err(|err| anyhow!("{}", err))?;
