@@ -1,0 +1,26 @@
+[package]
+name = "gw-web3-indexer"
+version = "0.1.0"
+authors = ["Nervos Network"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+gw-db = { path = "../db" }
+gw-types = { path = "../types" }
+gw-chain = { path = "../chain" }
+gw-store = { path = "../store" }
+gw-config = { path = "../config" }
+gw-common = { path = "../common" }
+gw-generator = { path = "../generator" }
+gw-traits = { path = "../traits" }
+ckb-hash = "0.38.0"
+ckb-types = "0.38.0"
+anyhow = "1.0"
+thiserror = "1.0"
+parking_lot = "0.11"
+sqlx = { version = "0.5", features = [ "runtime-async-std-native-tls", "postgres", "sqlite", "chrono", "decimal" ] }
+rust_decimal = "1.10.3"
+num-bigint = "0.4"
+faster-hex = "0.5.0"

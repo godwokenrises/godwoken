@@ -21,6 +21,7 @@ gw-generator = { path = "../generator" }
 gw-mem-pool = { path = "../mem-pool" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-rpc-server = { path = "../rpc-server" }
+gw-web3-indexer = { path = "../web3-indexer" }
 faster-hex = "0.4"
 ckb-crypto = "0.38.0"
 ckb-fixed-hash = "0.38.0"

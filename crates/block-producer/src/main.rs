@@ -2,7 +2,9 @@ use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use futures::{select, FutureExt};
 use gw_block_producer::{
-    block_producer::BlockProducer, poller::ChainUpdater, rpc_client::RPCClient,
+    block_producer::BlockProducer,
+    poller::{ChainUpdater, Web3Indexer},
+    rpc_client::RPCClient,
     utils::CKBGenesisInfo,
 };
 use gw_chain::chain::Chain;
@@ -21,6 +23,7 @@ use gw_types::{
     prelude::*,
 };
 use parking_lot::Mutex;
+use sqlx::postgres::PgPoolOptions;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::{fs, path::Path, process::exit, sync::Arc};
 
@@ -102,12 +105,30 @@ fn run() -> Result<()> {
     // RPC registry
     let rpc_registry = Registry::new(mem_pool.clone(), store.clone());
 
+    // create web3 indexer
+    let web3_indexer = match config.web3_indexer {
+        Some(web3_indexer_config) => {
+            let pool = smol::block_on(async {
+                PgPoolOptions::new()
+                    .max_connections(5)
+                    .connect(&web3_indexer_config.database_url)
+                    .await
+            })?;
+            let l2_sudt_type_script_hash = web3_indexer_config.l2_sudt_type_script_hash;
+            let polyjuce_type_script_hash = web3_indexer_config.polyjuice_script_type_hash;
+            let web3_indexer =
+                Web3Indexer::new(pool, l2_sudt_type_script_hash, polyjuce_type_script_hash);
+            Some(web3_indexer)
+        }
+        None => None,
+    };
     // create chain updater
     let mut chain_updater = ChainUpdater::new(
         Arc::clone(&chain),
         rpc_client.clone(),
         rollup_context,
-        rollup_type_script.clone(),
+        rollup_type_script,
+        web3_indexer,
     );
 
     let ckb_genesis_info = {
