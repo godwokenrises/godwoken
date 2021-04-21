@@ -1958,7 +1958,13 @@ name = "gw-benches"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "gw-common",
+ "gw-config",
+ "gw-db",
+ "gw-generator",
  "gw-store",
+ "gw-traits",
+ "gw-types",
 ]
 
 [[package]]

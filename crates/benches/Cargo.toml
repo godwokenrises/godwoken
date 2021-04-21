@@ -12,6 +12,12 @@ description = "Godwoken benchmarks."
 [dev-dependencies]
 criterion = { version = "0.3", features = ["html_reports"] }
 gw-store = { path = "../store" }
+gw-common = { path = "../common" }
+gw-generator = { path = "../generator" }
+gw-types = { path = "../types" }
+gw-traits = { path = "../traits" }
+gw-db = { path = "../db" }
+gw-config = { path = "../config" }
 
 [[bench]]
 name = "bench_main"
