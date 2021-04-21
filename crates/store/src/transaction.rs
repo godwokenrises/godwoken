@@ -439,9 +439,11 @@ impl StoreTransaction {
             self.delete(COLUMN_TRANSACTION_INFO, &tx_hash)?;
         }
 
+        let block_hash = block.hash().into();
+
         // update custodian assets
         let deposit_assets = self
-            .get_block_deposition_requests(&block.hash().into())?
+            .get_block_deposition_requests(&block_hash)?
             .expect("deposits")
             .into_iter()
             .map(|deposit| CustodianChange {
@@ -461,7 +463,7 @@ impl StoreTransaction {
 
         let block_number = block.raw().number();
         self.delete(COLUMN_INDEX, block_number.as_slice())?;
-        self.delete(COLUMN_INDEX, &block.hash())?;
+        self.delete(COLUMN_INDEX, block_hash.as_slice())?;
 
         // update block tree
         let mut block_smt = self.block_smt()?;
@@ -482,19 +484,27 @@ impl StoreTransaction {
             &META_TIP_BLOCK_HASH_KEY,
             parent_block_hash.as_slice(),
         )?;
-        self.clear_block_state(block.hash().into())?;
+
+        // clear block state
+        self.clear_block_state(block_number)?;
+
+        // reset account root
+        let block_prev_merkle_state = block.raw().prev_account();
+        self.set_account_count(block_prev_merkle_state.count().unpack())?;
+        self.set_account_smt_root(block_prev_merkle_state.merkle_root().unpack())?;
+
         Ok(())
     }
 
     pub fn record_block_state(
         &self,
-        block_hash: &H256,
+        block_number: u64,
         tx_index: u32,
         col: Col,
         raw_key: &[u8],
     ) -> Result<(), Error> {
-        let record_key = BlockStateRecordKey::new(block_hash, tx_index, col);
-        self.insert_raw(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice(), raw_key)
+        let record_key = BlockStateRecordKey::new(block_number, tx_index, col, raw_key);
+        self.insert_raw(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice(), &[])
     }
 
     fn prune_block_state_record(&self, current_block_number: u64) -> Result<(), Error> {
@@ -502,28 +512,25 @@ impl StoreTransaction {
             return Ok(());
         }
         let to_be_pruned_block_number = current_block_number - NUMBER_OF_CONFIRMATION - 1;
-        let block_hash = self.get_block_hash_by_number(to_be_pruned_block_number)?;
-        let block_hash = match block_hash {
-            Some(block_hash) => block_hash,
-            None if to_be_pruned_block_number == 0 => return Ok(()),
-            _ => return Err(Error::from("Invalid block hash".to_owned())),
-        };
-        self.clear_block_state_record(block_hash)
+        if to_be_pruned_block_number == 0 {
+            return Ok(());
+        }
+        self.clear_block_state_record(to_be_pruned_block_number)
     }
 
-    pub(crate) fn clear_block_state_record(&self, block_hash: H256) -> Result<(), Error> {
-        let iter = self.iter_block_state_record(block_hash);
-        for (record_key, _) in iter {
+    pub(crate) fn clear_block_state_record(&self, block_number: u64) -> Result<(), Error> {
+        let iter = self.iter_block_state_record(block_number);
+        for record_key in iter {
             self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
         }
         Ok(())
     }
 
-    pub(crate) fn clear_block_state(&self, block_hash: H256) -> Result<(), Error> {
-        let iter = self.iter_block_state_record(block_hash);
-        for (record_key, state_key) in iter {
+    pub(crate) fn clear_block_state(&self, block_number: u64) -> Result<(), Error> {
+        let iter = self.iter_block_state_record(block_number);
+        for record_key in iter {
             let column = record_key.get_column();
-            self.delete(column, &state_key)?;
+            self.delete(column, record_key.state_key())?;
             self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
         }
         Ok(())
@@ -531,15 +538,15 @@ impl StoreTransaction {
 
     fn iter_block_state_record(
         &self,
-        block_hash: H256,
-    ) -> impl Iterator<Item = (BlockStateRecordKey, Box<[u8]>)> + '_ {
-        let start_key = BlockStateRecordKey::new(&block_hash, 0u32, 0u8);
+        block_number: u64,
+    ) -> impl Iterator<Item = BlockStateRecordKey> + '_ {
+        let start_key = BlockStateRecordKey::new(block_number, 0u32, 0u8, &[]);
         self.get_iter(
             COLUMN_BLOCK_STATE_RECORD,
             IteratorMode::From(start_key.as_slice(), Forward),
         )
-        .map(|(key, value)| (BlockStateRecordKey::from_slice(&key), value))
-        .take_while(move |(key, _)| key.is_same_block(block_hash))
+        .map(|(key, _value)| BlockStateRecordKey::from_vec(key.to_vec()))
+        .take_while(move |key| key.is_same_block(block_number))
     }
 }
 
@@ -549,33 +556,37 @@ struct CustodianChange {
     amount: u128,
 }
 
-// block_hash(32 bytes) | tx_index(4 bytes) | col (1 byte)
-struct BlockStateRecordKey([u8; 37]);
+// block_number(8 bytes) | tx_index(4 bytes) | col (1 byte) | key (n bytes)
+struct BlockStateRecordKey(Vec<u8>);
 
 impl BlockStateRecordKey {
-    fn new(block_hash: &H256, tx_index: u32, col: Col) -> Self {
-        let mut key = [0; 37];
-        key[..32].copy_from_slice(block_hash.as_slice());
-        key[32..36].copy_from_slice(&tx_index.to_be_bytes());
-        key[36] = col;
-        BlockStateRecordKey(key)
+    fn new(block_number: u64, tx_index: u32, col: Col, key: &[u8]) -> Self {
+        let mut record_key = Vec::new();
+        record_key.resize(13 + key.len(), 0);
+        record_key[..8].copy_from_slice(&block_number.to_be_bytes());
+        record_key[8..12].copy_from_slice(&tx_index.to_be_bytes());
+        record_key[12] = col;
+        record_key[13..].copy_from_slice(key);
+        BlockStateRecordKey(record_key)
     }
 
-    fn from_slice(record_key: &[u8]) -> Self {
-        let mut key = [0; 37];
-        key.copy_from_slice(record_key);
-        BlockStateRecordKey(key)
+    fn state_key(&self) -> &[u8] {
+        &self.0[13..]
+    }
+
+    fn from_vec(record_key: Vec<u8>) -> Self {
+        BlockStateRecordKey(record_key)
     }
 
     fn get_column(&self) -> u8 {
-        self.0[36]
+        self.0[12]
     }
 
-    fn is_same_block(&self, block_hash: H256) -> bool {
-        &self.0[..32] == block_hash.as_slice()
+    fn is_same_block(&self, block_number: u64) -> bool {
+        self.0[..8] == block_number.to_be_bytes()
     }
 
     fn as_slice(&self) -> &[u8] {
-        &self.0[..]
+        self.0.as_slice()
     }
 }

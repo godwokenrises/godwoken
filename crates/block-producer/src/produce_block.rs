@@ -67,7 +67,10 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
     // create overlay storage
     let state_db = {
         let tip_block_hash = db.get_tip_block_hash()?;
-        StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_block_hash))?
+        StateDBTransaction::from_version(
+            &db,
+            StateDBVersion::from_history_state(&db, tip_block_hash, None)?,
+        )?
     };
     let mut state = state_db.account_state_tree()?;
     // track state changes

@@ -15,8 +15,8 @@ fn get_state_db_from_mock_data(
     block_number: u64,
     tx_index: u32,
 ) -> StateDBTransaction {
-    let version = StateDBVersion::from_genesis(); // just as a placeholder
-    StateDBTransaction::from_tx_index(db, version, block_number, tx_index)
+    let version = StateDBVersion::from_future_state(block_number, tx_index); // just as a placeholder
+    StateDBTransaction::from_version(db, version).unwrap()
 }
 
 #[test]
@@ -37,9 +37,9 @@ fn construct_state_db_from_block_hash() {
     store_txn.commit().unwrap();
 
     let raw = block.raw();
-    let block_number = raw.number();
+    let block_number = raw.number().unpack();
     let block_hash = raw.hash();
-    assert_eq!(0u64, block_number.unpack());
+    assert_eq!(0u64, block_number);
 
     let state_db_version = StateDBVersion::from_genesis();
     assert_eq!(true, state_db_version.is_genesis_version());
@@ -47,29 +47,30 @@ fn construct_state_db_from_block_hash() {
     let state_db = StateDBTransaction::from_version(&db, state_db_version);
     assert!(state_db.is_ok());
 
-    let state_db_version = StateDBVersion::from_block_hash(block_hash.into());
+    let state_db_version =
+        StateDBVersion::from_history_state(&db, block_hash.into(), None).unwrap();
     assert_eq!(false, state_db_version.is_genesis_version());
     let db = store.begin_transaction();
     let state_db = StateDBTransaction::from_version(&db, state_db_version);
     assert!(state_db.is_ok());
 
-    let state_db_version = StateDBVersion::from_block_hash(H256::zero());
-    assert_eq!(false, state_db_version.is_genesis_version());
-    let db = store.begin_transaction();
-    let state_db = StateDBTransaction::from_version(&db, state_db_version);
-    assert_eq!(state_db.unwrap_err().message, "Block doesn't exist");
+    let state_db_version = StateDBVersion::from_history_state(&db, H256::zero(), None);
+    assert_eq!(
+        state_db_version.unwrap_err().to_string(),
+        "block isn't exist".to_string()
+    );
 
-    let state_db_version = StateDBVersion::from_tx_index(block_hash.into(), 0u32);
+    let state_db_version = StateDBVersion::from_future_state(block_number.into(), 0u32);
     assert_eq!(false, state_db_version.is_genesis_version());
     let db = store.begin_transaction();
     let state_db = StateDBTransaction::from_version(&db, state_db_version);
     assert!(state_db.is_ok());
 
-    let state_db_version = StateDBVersion::from_tx_index(block_hash.into(), 1u32);
-    assert_eq!(false, state_db_version.is_genesis_version());
-    let db = store.begin_transaction();
-    let state_db = StateDBTransaction::from_version(&db, state_db_version);
-    assert_eq!(state_db.unwrap_err().message, "Invalid tx index");
+    let state_db_version = StateDBVersion::from_history_state(&db, block_hash.into(), Some(1u32));
+    assert_eq!(
+        state_db_version.unwrap_err().to_string(),
+        "Invalid tx index"
+    );
 }
 
 #[test]
@@ -92,27 +93,27 @@ fn construct_state_db_from_tx_index() {
     store_txn.commit().unwrap();
 
     let raw = block.raw();
-    let block_number = raw.number();
+    let block_number = raw.number().unpack();
     let block_hash = raw.hash();
-    assert_eq!(0u64, block_number.unpack());
+    assert_eq!(0u64, block_number);
 
-    let state_db_version = StateDBVersion::from_tx_index(block_hash.into(), 0u32);
+    let state_db_version = StateDBVersion::from_future_state(block_number.into(), 0u32);
     assert_eq!(false, state_db_version.is_genesis_version());
     let db = store.begin_transaction();
     let state_db = StateDBTransaction::from_version(&db, state_db_version);
     assert!(state_db.is_ok());
 
-    let state_db_version = StateDBVersion::from_tx_index(block_hash.into(), 1u32);
+    let state_db_version = StateDBVersion::from_future_state(block_number.into(), 1u32);
     assert_eq!(false, state_db_version.is_genesis_version());
     let db = store.begin_transaction();
     let state_db = StateDBTransaction::from_version(&db, state_db_version);
     assert!(state_db.is_ok());
 
-    let state_db_version = StateDBVersion::from_tx_index(block_hash.into(), 2u32);
-    assert_eq!(false, state_db_version.is_genesis_version());
-    let db = store.begin_transaction();
-    let state_db = StateDBTransaction::from_version(&db, state_db_version);
-    assert_eq!(state_db.unwrap_err().message, "Invalid tx index");
+    let state_db_version = StateDBVersion::from_history_state(&db, block_hash.into(), Some(2u32));
+    assert_eq!(
+        state_db_version.unwrap_err().to_string(),
+        "Invalid tx index"
+    );
 }
 
 #[test]
