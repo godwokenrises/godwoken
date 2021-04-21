@@ -322,6 +322,34 @@ impl Chain {
                     "reverted l2block must be current tip"
                 );
                 db.detach_block(&l2block)?;
+
+                // check reverted state
+                {
+                    // check tip block
+                    let tip = db.get_tip_block()?;
+                    let parent_block_hash: H256 = l2block.raw().parent_block_hash().unpack();
+                    let tip_block_hash = tip.hash().into();
+                    assert_eq!(parent_block_hash, tip_block_hash);
+                    let l2block_number: u64 = l2block.raw().number().unpack();
+                    let tip_number: u64 = tip.raw().number().unpack();
+                    assert_eq!(l2block_number - 1, tip_number);
+
+                    // check current state
+                    let expected_state = l2block.raw().prev_account();
+                    let state_db = StateDBTransaction::from_version(
+                        &db,
+                        StateDBVersion::from_history_state(&db, tip_block_hash, None)?,
+                    )?;
+                    let tree = state_db.account_state_tree()?;
+                    let expected_root: H256 = expected_state.merkle_root().unpack();
+                    let expected_count: u32 = expected_state.count().unpack();
+                    assert_eq!(tree.calculate_root()?, expected_root);
+                    assert_eq!(tree.get_account_count()?, expected_count);
+
+                    // check genesis state still consistent
+                    let script_hash = tree.get_script_hash(0)?;
+                    assert!(!script_hash.is_zero());
+                }
             }
             _ => {
                 // do nothing
@@ -373,7 +401,11 @@ impl Chain {
                 .unpack();
             let state_db = StateDBTransaction::from_version(
                 &db,
-                StateDBVersion::from_block_hash(self.local_state.tip().hash().into()),
+                StateDBVersion::from_history_state(
+                    &db,
+                    self.local_state.tip().hash().into(),
+                    None,
+                )?,
             )?;
             assert_eq!(
                 state_db.account_smt().unwrap().root(),
@@ -400,11 +432,11 @@ impl Chain {
     ) -> Result<Option<ChallengeContext>> {
         let tip_number: u64 = self.local_state.tip.raw().number().unpack();
         let tip_block_hash = self.local_state.tip.raw().hash();
+        let block_number: u64 = l2block.raw().number().unpack();
         assert_eq!(
             {
-                let number: u64 = l2block.raw().number().unpack();
                 let parent_block_hash: [u8; 32] = l2block.raw().parent_block_hash().unpack();
-                (number, parent_block_hash)
+                (block_number, parent_block_hash)
             },
             (tip_number + 1, tip_block_hash),
             "new l2block must be the successor of the tip"
@@ -417,8 +449,10 @@ impl Chain {
         };
         let tip_block_hash = self.local_state.tip().hash().into();
         let chain_view = ChainView::new(db, tip_block_hash);
-        let state_db =
-            StateDBTransaction::from_version(db, StateDBVersion::from_block_hash(tip_block_hash))?;
+        let state_db = StateDBTransaction::from_version(
+            db,
+            StateDBVersion::from_future_state(block_number, 0),
+        )?;
         let mut tree = state_db.account_state_tree()?;
         // process transactions
         let result = match self

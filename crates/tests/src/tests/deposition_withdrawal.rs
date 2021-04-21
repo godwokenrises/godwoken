@@ -96,9 +96,11 @@ fn test_deposition_and_withdrawal() {
     let (user_id, ckb_balance) = {
         let tip_block_hash = chain.store().get_tip_block_hash().unwrap();
         let db = chain.store().begin_transaction();
-        let state_db =
-            StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_block_hash))
-                .unwrap();
+        let state_db = StateDBTransaction::from_version(
+            &db,
+            StateDBVersion::from_history_state(&db, tip_block_hash, None).unwrap(),
+        )
+        .unwrap();
         let tree = state_db.account_state_tree().unwrap();
         // check user account
         assert_eq!(
@@ -149,9 +151,11 @@ fn test_deposition_and_withdrawal() {
     // check status
     let tip_block_hash = chain.store().get_tip_block_hash().unwrap();
     let db = chain.store().begin_transaction();
-    let state_db =
-        StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_block_hash))
-            .unwrap();
+    let state_db = StateDBTransaction::from_version(
+        &db,
+        StateDBVersion::from_history_state(&db, tip_block_hash, None).unwrap(),
+    )
+    .unwrap();
     let tree = state_db.account_state_tree().unwrap();
     let ckb_balance2 = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, user_id).unwrap();
     assert_eq!(ckb_balance, ckb_balance2 + withdraw_capacity as u128);

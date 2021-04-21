@@ -176,8 +176,10 @@ async fn get_balance(
 ) -> Result<Uint128> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db =
-        StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_hash))?;
+    let state_db = StateDBTransaction::from_version(
+        &db,
+        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+    )?;
 
     let tree = state_db.account_state_tree()?;
     let balance = tree.get_sudt_balance(sudt_id.into(), account_id.into())?;
@@ -191,8 +193,10 @@ async fn get_storage_at(
 ) -> Result<JsonH256> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db =
-        StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_hash))?;
+    let state_db = StateDBTransaction::from_version(
+        &db,
+        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+    )?;
 
     let tree = state_db.account_state_tree()?;
     let key: H256 = to_h256(key);
@@ -208,8 +212,10 @@ async fn get_account_id_by_script_hash(
 ) -> Result<Option<AccountID>> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db =
-        StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_hash))?;
+    let state_db = StateDBTransaction::from_version(
+        &db,
+        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+    )?;
     let tree = state_db.account_state_tree()?;
 
     let script_hash = to_h256(script_hash);
@@ -227,8 +233,10 @@ async fn get_nonce(
 ) -> Result<Uint32> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db =
-        StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_hash))?;
+    let state_db = StateDBTransaction::from_version(
+        &db,
+        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+    )?;
     let tree = state_db.account_state_tree()?;
 
     let nonce = tree.get_nonce(account_id.into())?;
@@ -242,8 +250,10 @@ async fn get_script(
 ) -> Result<Option<Script>> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db =
-        StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_hash))?;
+    let state_db = StateDBTransaction::from_version(
+        &db,
+        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+    )?;
     let tree = state_db.account_state_tree()?;
 
     let script_hash = to_h256(script_hash);
@@ -258,8 +268,10 @@ async fn get_script_hash(
 ) -> Result<JsonH256> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db =
-        StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_hash))?;
+    let state_db = StateDBTransaction::from_version(
+        &db,
+        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+    )?;
     let tree = state_db.account_state_tree()?;
 
     let script_hash = tree.get_script_hash(account_id.into())?;
@@ -272,8 +284,10 @@ async fn get_data(
 ) -> Result<Option<JsonBytes>> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db =
-        StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_hash))?;
+    let state_db = StateDBTransaction::from_version(
+        &db,
+        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+    )?;
     let tree = state_db.account_state_tree()?;
 
     let data_opt = tree

@@ -16,12 +16,11 @@ fn insert_to_state_db(
     value: &[u8],
 ) {
     let store_txn = db.begin_transaction();
-    let state_db_txn = StateDBTransaction::from_tx_index(
+    let state_db_txn = StateDBTransaction::from_version(
         &store_txn,
-        StateDBVersion::from_block_hash(bloch_hash),
-        block_number,
-        tx_index,
-    );
+        StateDBVersion::from_future_state(block_number, tx_index),
+    )
+    .unwrap();
     state_db_txn.insert_raw(col, key, value).unwrap();
     state_db_txn.commit().unwrap();
 }
@@ -92,12 +91,11 @@ fn get_from_state_db(
     key: &[u8],
 ) -> Option<Box<[u8]>> {
     let store_txn = db.begin_transaction();
-    let state_db = StateDBTransaction::from_tx_index(
+    let state_db = StateDBTransaction::from_version(
         &store_txn,
-        StateDBVersion::from_block_hash(bloch_hash),
-        block_number,
-        tx_index,
-    );
+        StateDBVersion::from_future_state(block_number, tx_index),
+    )
+    .unwrap();
     state_db.get(col, key)
 }
 
@@ -187,7 +185,7 @@ fn clear_block_account_state() {
 
     // detach block 2
     let store_txn = db.begin_transaction();
-    store_txn.clear_block_state(block_2_hash).unwrap();
+    store_txn.clear_block_state(block_2_number).unwrap();
     store_txn.commit().unwrap();
 
     // check old block 2
@@ -359,12 +357,12 @@ fn clear_block_account_state_record() {
 
     // clear account record
     let store_txn = db.begin_transaction();
-    store_txn.clear_block_state_record(block_1_hash).unwrap();
+    store_txn.clear_block_state_record(block_1_number).unwrap();
     store_txn.commit().unwrap();
 
     // clear account state tree without account record
     let store_txn = db.begin_transaction();
-    store_txn.clear_block_state(block_1_hash).unwrap();
+    store_txn.clear_block_state(block_1_number).unwrap();
     store_txn.commit().unwrap();
 
     // check block 1

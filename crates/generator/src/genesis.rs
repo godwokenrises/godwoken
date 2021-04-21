@@ -89,7 +89,6 @@ pub fn build_genesis_from_store(
     let post_account = {
         let root = tree.calculate_root()?;
         let count = tree.get_account_count()?;
-        let root: [u8; 32] = root.into();
         AccountMerkleState::new_builder()
             .merkle_root(root.pack())
             .count(count.pack())

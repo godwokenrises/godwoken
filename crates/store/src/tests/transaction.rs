@@ -279,20 +279,20 @@ fn seek_for_prev_with_suffix() {
     let mut raw_iter: DBRawIterator = iter.into();
 
     raw_iter.seek_for_prev(key_3_with_ver_257_1);
-    assert_eq!(&key_3_with_ver_256_2, raw_iter.key().unwrap());
+    assert_eq!(&key_3_with_ver_256_2, &raw_iter.key().unwrap());
     assert_eq!(&value_3, raw_iter.value().unwrap());
 
     raw_iter.seek_for_prev(key_3_with_ver_256_9);
-    assert_eq!(&key_3_with_ver_256_2, raw_iter.key().unwrap());
+    assert_eq!(&key_3_with_ver_256_2, &raw_iter.key().unwrap());
     assert_eq!(&value_3, raw_iter.value().unwrap());
 
     raw_iter.seek_for_prev(key_3_with_ver_256_2.clone());
-    assert_eq!(&key_3_with_ver_256_2, raw_iter.key().unwrap());
+    assert_eq!(&key_3_with_ver_256_2, &raw_iter.key().unwrap());
     assert_eq!(&value_3, raw_iter.value().unwrap());
 
     let n = key_3_with_ver_256_1.len();
     raw_iter.seek_for_prev(key_3_with_ver_256_1);
-    assert_eq!(&key_2_with_ver_2_7, raw_iter.key().unwrap());
+    assert_eq!(&key_2_with_ver_2_7, &raw_iter.key().unwrap());
     assert_eq!(
         key_2,
         raw_iter.key().unwrap()[..key_2_with_ver_2_7.len() - 12]
@@ -302,7 +302,7 @@ fn seek_for_prev_with_suffix() {
 
     let n = key_2_with_ver_2_6.len();
     raw_iter.seek_for_prev(key_2_with_ver_2_6);
-    assert_eq!(&key_1_with_ver_1_5, raw_iter.key().unwrap());
+    assert_eq!(&key_1_with_ver_1_5, &raw_iter.key().unwrap());
     assert_eq!(&value_1, raw_iter.value().unwrap());
     assert_ne!(key_1, raw_iter.key().unwrap()[..n - 12]);
 

@@ -124,7 +124,8 @@ impl MemPool {
 
         let tip = store.get_tip_block_hash()?;
 
-        let state_db_version = StateDBVersion::from_block_hash(tip);
+        let state_db_version =
+            StateDBVersion::from_history_state(&store.begin_transaction(), tip, None)?;
 
         let mut mem_pool = MemPool {
             store,
@@ -422,7 +423,11 @@ impl MemPool {
 
         // update current state
         let tip_block_hash = new_tip_block.hash().into();
-        self.state_db_version = StateDBVersion::from_block_hash(tip_block_hash);
+        self.state_db_version = StateDBVersion::from_history_state(
+            &self.store.begin_transaction(),
+            tip_block_hash,
+            None,
+        )?;
 
         // re-inject txs
         for tx in reinject_txs {

@@ -20,7 +20,9 @@ fn test_sync_blocks() {
             construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap()
         };
         let transaction = build_sync_tx(rollup_cell, block_result);
-        let l2block_committed_info = L2BlockCommittedInfo::default();
+        let l2block_committed_info = L2BlockCommittedInfo::new_builder()
+            .number(expected_tip.pack())
+            .build();
 
         let update = L1Action {
             context: L1ActionContext::SubmitTxs {
@@ -85,9 +87,11 @@ fn test_sync_blocks() {
     {
         let db = chain.store().begin_transaction();
         let tip_block_hash = db.get_tip_block_hash().unwrap();
-        let state_db =
-            StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_block_hash))
-                .unwrap();
+        let state_db = StateDBTransaction::from_version(
+            &db,
+            StateDBVersion::from_history_state(&db, tip_block_hash, None).unwrap(),
+        )
+        .unwrap();
         let tree = state_db.account_state_tree().unwrap();
         let id_a = tree
             .get_account_id_by_script_hash(&user_script_a.hash().into())
@@ -220,6 +224,7 @@ fn test_layer1_fork() {
         reverts,
     };
     let event = chain.sync(param).unwrap();
+
     assert_eq!(event, SyncEvent::Success);
     let tip_block = chain.store().get_tip_block().unwrap();
     let tip_block_number: u64 = tip_block.raw().number().unpack();
@@ -230,7 +235,7 @@ fn test_layer1_fork() {
         let db = chain.store().begin_transaction();
         let db = StateDBTransaction::from_version(
             &db,
-            StateDBVersion::from_block_hash(tip_block.hash().into()),
+            StateDBVersion::from_history_state(&db, tip_block.hash().into(), None).unwrap(),
         )
         .unwrap();
         let tree = db.account_state_tree().unwrap();
@@ -240,5 +245,184 @@ fn test_layer1_fork() {
             current_account_root, expected_account_root,
             "check account tree"
         );
+    }
+}
+
+#[test]
+fn test_layer1_revert() {
+    let rollup_type_script = Script::default();
+    let mut chain = setup_chain(rollup_type_script.clone(), Default::default());
+    let rollup_cell = CellOutput::new_builder()
+        .type_(Some(rollup_type_script.clone()).pack())
+        .build();
+
+    // update block 1
+    let alice_script = Script::new_builder().args(vec![42].pack()).build();
+    let deposition = DepositionRequest::new_builder()
+        .capacity(100u64.pack())
+        .script(alice_script.clone())
+        .build();
+    let block_result = {
+        let mem_pool = chain.mem_pool().lock();
+        construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap()
+    };
+    let action1 = L1Action {
+        context: L1ActionContext::SubmitTxs {
+            deposition_requests: vec![deposition.clone()],
+        },
+        transaction: build_sync_tx(rollup_cell.clone(), block_result),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number(1u64.pack())
+            .build(),
+    };
+    let param = SyncParam {
+        updates: vec![action1.clone()],
+        reverts: Default::default(),
+    };
+    let event = chain.sync(param).unwrap();
+    assert_eq!(event, SyncEvent::Success);
+    // update block 2
+    let bob_script = Script::new_builder().args(vec![43].pack()).build();
+    let deposition = DepositionRequest::new_builder()
+        .capacity(500u64.pack())
+        .script(bob_script.clone())
+        .build();
+    let block_result = {
+        let mem_pool = chain.mem_pool().lock();
+        construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap()
+    };
+    let action2 = L1Action {
+        context: L1ActionContext::SubmitTxs {
+            deposition_requests: vec![deposition],
+        },
+        transaction: build_sync_tx(rollup_cell.clone(), block_result),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number(2u64.pack())
+            .build(),
+    };
+    let param = SyncParam {
+        updates: vec![action2.clone()],
+        reverts: Default::default(),
+    };
+    let event = chain.sync(param).unwrap();
+    assert_eq!(event, SyncEvent::Success);
+    let tip_block = chain.store().get_tip_block().unwrap();
+    let tip_block_number: u64 = tip_block.raw().number().unpack();
+    assert_eq!(tip_block_number, 2);
+
+    // revert blocks
+    let updates = vec![action2.clone()];
+    let reverts = updates
+        .into_iter()
+        .rev()
+        .map(|action| {
+            let prev_global_state = GlobalState::default();
+            let L1Action {
+                transaction,
+                l2block_committed_info,
+                context,
+            } = action;
+            RevertedL1Action {
+                prev_global_state,
+                transaction,
+                l2block_committed_info,
+                context,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let param = SyncParam {
+        updates: Default::default(),
+        reverts,
+    };
+    let event = chain.sync(param).unwrap();
+    assert_eq!(event, SyncEvent::Success);
+
+    let tip_block = chain.store().get_tip_block().unwrap();
+    let tip_block_number: u64 = tip_block.raw().number().unpack();
+    assert_eq!(tip_block_number, 1);
+
+    // check account SMT, should be able to calculate account state root
+    {
+        let db = chain.store().begin_transaction();
+        let db = StateDBTransaction::from_version(
+            &db,
+            StateDBVersion::from_history_state(&db, tip_block.hash().into(), None).unwrap(),
+        )
+        .unwrap();
+        let tree = db.account_state_tree().unwrap();
+        let current_account_root = tree.calculate_root().unwrap();
+        let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
+        assert_eq!(
+            current_account_root, expected_account_root,
+            "check account tree"
+        );
+
+        assert_eq!(tree.get_account_count().unwrap(), 3);
+        let alice_id = tree
+            .get_account_id_by_script_hash(&alice_script.hash().into())
+            .unwrap()
+            .unwrap();
+        assert_eq!(alice_id, 2);
+        let alice_balance = tree
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, alice_id)
+            .unwrap();
+        assert_eq!(alice_balance, 100);
+
+        let bob_id_opt = tree
+            .get_account_id_by_script_hash(&bob_script.hash().into())
+            .unwrap();
+        assert!(bob_id_opt.is_none());
+    }
+
+    // execute block2 agnain
+    let updates = vec![action2];
+    let param = SyncParam {
+        updates,
+        reverts: Default::default(),
+    };
+    let event = chain.sync(param).unwrap();
+    assert_eq!(event, SyncEvent::Success);
+
+    // check block2 agnain
+
+    let tip_block = chain.store().get_tip_block().unwrap();
+    let tip_block_number: u64 = tip_block.raw().number().unpack();
+    assert_eq!(tip_block_number, 2);
+
+    {
+        let db = chain.store().begin_transaction();
+        let db = StateDBTransaction::from_version(
+            &db,
+            StateDBVersion::from_history_state(&db, tip_block.hash().into(), None).unwrap(),
+        )
+        .unwrap();
+        let tree = db.account_state_tree().unwrap();
+        let current_account_root = tree.calculate_root().unwrap();
+        let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
+        assert_eq!(
+            current_account_root, expected_account_root,
+            "check account tree"
+        );
+
+        assert_eq!(tree.get_account_count().unwrap(), 4);
+        let alice_id = tree
+            .get_account_id_by_script_hash(&alice_script.hash().into())
+            .unwrap()
+            .unwrap();
+        assert_eq!(alice_id, 2);
+        let alice_balance = tree
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, alice_id)
+            .unwrap();
+        assert_eq!(alice_balance, 100);
+
+        let bob_id = tree
+            .get_account_id_by_script_hash(&bob_script.hash().into())
+            .unwrap()
+            .unwrap();
+        assert_eq!(bob_id, 3);
+
+        let bob_balance = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, bob_id).unwrap();
+        assert_eq!(bob_balance, 500);
     }
 }
