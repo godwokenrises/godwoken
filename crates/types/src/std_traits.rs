@@ -49,6 +49,7 @@ impl_std_eq!(StakeLockArgs);
 impl_std_eq!(L2Transaction);
 impl_std_eq!(WithdrawalRequest);
 impl_std_eq!(VerifyTransactionWitness);
+impl_std_eq!(AccountMerkleState);
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "std")] {

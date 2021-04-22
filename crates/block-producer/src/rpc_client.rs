@@ -268,6 +268,7 @@ impl RPCClient {
             let txs: Vec<ckb_types::packed::Transaction> = block
                 .transactions
                 .into_iter()
+                .skip(1)
                 .map(|tx| tx.inner.into())
                 .collect();
             for tx in txs {

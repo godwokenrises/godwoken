@@ -64,9 +64,12 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         max_withdrawal_capacity,
     } = param;
     let rollup_context = generator.rollup_context();
+    let parent_block_number: u64 = parent_block.raw().number().unpack();
+    let parent_block_hash = parent_block.hash().into();
     // create overlay storage
     let state_db = {
         let tip_block_hash = db.get_tip_block_hash()?;
+        assert_eq!(parent_block_hash, tip_block_hash);
         StateDBTransaction::from_version(
             &db,
             StateDBVersion::from_history_state(&db, tip_block_hash, None)?,
@@ -126,15 +129,13 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
     let mut used_transactions = Vec::with_capacity(txs.len());
     let mut unused_transactions = Vec::with_capacity(txs.len());
     // build block info
-    let parent_block_number: u64 = parent_block.raw().number().unpack();
-    let parent_block_hash = parent_block.hash();
     let number = parent_block_number + 1;
     let block_info = BlockInfo::new_builder()
         .number(number.pack())
         .timestamp(timestamp.pack())
         .block_producer_id(block_producer_id.pack())
         .build();
-    let chain_view = ChainView::new(&db, parent_block_hash.into());
+    let chain_view = ChainView::new(&db, parent_block_hash);
     for tx in txs {
         // 1. verify tx
         if generator.check_transaction_signature(&state, &tx).is_err() {
@@ -240,6 +241,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         .merkle_root(prev_account_state_root.pack())
         .count(prev_account_state_count.pack())
         .build();
+    assert_eq!(parent_block.raw().post_account(), prev_account);
     let post_account = AccountMerkleState::new_builder()
         .merkle_root(post_account_state_root.pack())
         .count(post_account_state_count.pack())
@@ -273,11 +275,11 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         })
         .collect::<Vec<_>>()
         .pack();
-    let account_smt = state_db.account_smt()?;
     let proof = if kv_state.is_empty() {
         // nothing need to prove
         Vec::new()
     } else {
+        let account_smt = state_db.account_smt()?;
         account_smt
             .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?

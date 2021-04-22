@@ -13,7 +13,7 @@ use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     packed::{
-        Byte32, CellOutput, DepositionLockArgs, DepositionRequest, L2BlockCommittedInfo, Script,
+        CellOutput, DepositionLockArgs, DepositionRequest, L2BlockCommittedInfo, Script,
         Transaction,
     },
     prelude::*,
@@ -277,34 +277,18 @@ fn try_parse_deposition_request(
     };
     // NOTE: In readoly mode, we are only loading on chain data here, timeout validation
     // can be skipped. For generator part, timeout validation needs to be introduced.
-    let (amount, sudt_script) = match cell_output.type_().to_opt() {
+    let (amount, sudt_script_hash) = match cell_output.type_().to_opt() {
         Some(script) => {
             if cell_data.len() < 16 {
                 return None;
             }
             let mut data = [0u8; 16];
             data.copy_from_slice(&cell_data[0..16]);
-            (u128::from_le_bytes(data), script)
+            (u128::from_le_bytes(data), script.hash())
         }
-        None => {
-            let script = Script::new_builder()
-                .code_hash(
-                    Byte32::new_builder()
-                        .set([gw_types::packed::Byte::new(0); 32])
-                        .build(),
-                )
-                .hash_type(ScriptHashType::Data.into())
-                .args(
-                    gw_types::packed::Bytes::new_builder()
-                        .extend(vec![gw_types::packed::Byte::new(0); 32])
-                        .build(),
-                )
-                .build();
-            (0u128, script)
-        }
+        None => (0u128, [0u8; 32]),
     };
     let capacity: u64 = cell_output.capacity().unpack();
-    let sudt_script_hash: [u8; 32] = sudt_script.hash();
     let deposition_request = DepositionRequest::new_builder()
         .capacity(capacity.pack())
         .amount(amount.pack())

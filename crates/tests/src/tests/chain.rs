@@ -7,52 +7,53 @@ use gw_types::{
     prelude::*,
 };
 
+fn produce_a_block(
+    chain: &mut Chain,
+    deposition: DepositionRequest,
+    rollup_cell: CellOutput,
+    expected_tip: u64,
+) -> SyncParam {
+    let block_result = {
+        let mem_pool = chain.mem_pool().lock();
+        construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap()
+    };
+    let transaction = build_sync_tx(rollup_cell, block_result);
+    let l2block_committed_info = L2BlockCommittedInfo::new_builder()
+        .number(expected_tip.pack())
+        .build();
+
+    let update = L1Action {
+        context: L1ActionContext::SubmitTxs {
+            deposition_requests: vec![deposition.clone()],
+        },
+        transaction,
+        l2block_committed_info,
+    };
+    let param = SyncParam {
+        updates: vec![update],
+        reverts: Default::default(),
+    };
+    let event = chain.sync(param.clone()).unwrap();
+    assert_eq!(event, SyncEvent::Success);
+
+    assert_eq!(
+        {
+            let tip_block_number: u64 = chain
+                .store()
+                .get_tip_block()
+                .unwrap()
+                .raw()
+                .number()
+                .unpack();
+            tip_block_number
+        },
+        expected_tip
+    );
+    param
+}
+
 #[test]
-fn test_sync_blocks() {
-    fn sync_a_block(
-        chain: &mut Chain,
-        deposition: DepositionRequest,
-        rollup_cell: CellOutput,
-        expected_tip: u64,
-    ) {
-        let block_result = {
-            let mem_pool = chain.mem_pool().lock();
-            construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap()
-        };
-        let transaction = build_sync_tx(rollup_cell, block_result);
-        let l2block_committed_info = L2BlockCommittedInfo::new_builder()
-            .number(expected_tip.pack())
-            .build();
-
-        let update = L1Action {
-            context: L1ActionContext::SubmitTxs {
-                deposition_requests: vec![deposition.clone()],
-            },
-            transaction,
-            l2block_committed_info,
-        };
-        let param = SyncParam {
-            updates: vec![update],
-            reverts: Default::default(),
-        };
-        let event = chain.sync(param).unwrap();
-        assert_eq!(event, SyncEvent::Success);
-
-        assert_eq!(
-            {
-                let tip_block_number: u64 = chain
-                    .store()
-                    .get_tip_block()
-                    .unwrap()
-                    .raw()
-                    .number()
-                    .unpack();
-                tip_block_number
-            },
-            expected_tip
-        );
-    }
-
+fn test_produce_blocks() {
     let rollup_type_script = Script::default();
     let mut chain = setup_chain(rollup_type_script.clone(), Default::default());
 
@@ -66,14 +67,14 @@ fn test_sync_blocks() {
         .capacity(100u64.pack())
         .script(user_script_a.clone())
         .build();
-    sync_a_block(&mut chain, deposition, rollup_cell.clone(), 1);
+    produce_a_block(&mut chain, deposition, rollup_cell.clone(), 1);
 
     // block #2
     let deposition = DepositionRequest::new_builder()
         .capacity(200u64.pack())
         .script(user_script_a.clone())
         .build();
-    sync_a_block(&mut chain, deposition, rollup_cell.clone(), 2);
+    produce_a_block(&mut chain, deposition, rollup_cell.clone(), 2);
 
     // block #3
     let user_script_b = Script::new_builder().args(vec![50].pack()).build();
@@ -81,7 +82,7 @@ fn test_sync_blocks() {
         .capacity(500u64.pack())
         .script(user_script_b.clone())
         .build();
-    sync_a_block(&mut chain, deposition, rollup_cell.clone(), 3);
+    produce_a_block(&mut chain, deposition, rollup_cell.clone(), 3);
 
     // check state
     {
@@ -425,4 +426,81 @@ fn test_layer1_revert() {
         let bob_balance = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, bob_id).unwrap();
         assert_eq!(bob_balance, 500);
     }
+}
+
+#[test]
+fn test_sync_blocks() {
+    let rollup_type_script = Script::default();
+    let mut chain1 = setup_chain(rollup_type_script.clone(), Default::default());
+    let mut chain2 = setup_chain(rollup_type_script.clone(), Default::default());
+
+    let rollup_cell = CellOutput::new_builder()
+        .type_(Some(rollup_type_script).pack())
+        .build();
+
+    // block #1
+    let user_script_a = Script::new_builder().args(vec![42].pack()).build();
+    let sudt_script_hash: H256 = [42u8; 32].into();
+    let deposition = DepositionRequest::new_builder()
+        .capacity(100u64.pack())
+        .script(user_script_a.clone())
+        .sudt_script_hash(sudt_script_hash.pack())
+        .build();
+    let sync_1 = produce_a_block(&mut chain1, deposition, rollup_cell.clone(), 1);
+
+    // block #2
+    let deposition = DepositionRequest::new_builder()
+        .capacity(200u64.pack())
+        .script(user_script_a.clone())
+        .build();
+    let sync_2 = produce_a_block(&mut chain1, deposition, rollup_cell.clone(), 2);
+
+    // block #3
+    let user_script_b = Script::new_builder().args(vec![50].pack()).build();
+    let deposition = DepositionRequest::new_builder()
+        .capacity(500u64.pack())
+        .script(user_script_b.clone())
+        .sudt_script_hash(sudt_script_hash.pack())
+        .build();
+    let sync_3 = produce_a_block(&mut chain1, deposition, rollup_cell.clone(), 3);
+
+    drop(chain1);
+
+    assert_eq!(chain2.sync(sync_1).expect("success"), SyncEvent::Success);
+    assert_eq!(chain2.sync(sync_2).expect("success"), SyncEvent::Success);
+    assert_eq!(chain2.sync(sync_3).expect("success"), SyncEvent::Success);
+
+    // check state
+    {
+        let db = chain2.store().begin_transaction();
+        let tip_block = db.get_tip_block().unwrap();
+        let tip_block_number: u64 = tip_block.raw().number().unpack();
+        let tip_block_hash = db.get_tip_block_hash().unwrap();
+        assert_eq!(tip_block_hash, tip_block.hash().into());
+        assert_eq!(tip_block_number, 3);
+
+        let state_db = StateDBTransaction::from_version(
+            &db,
+            StateDBVersion::from_history_state(&db, tip_block_hash, None).unwrap(),
+        )
+        .unwrap();
+        let tree = state_db.account_state_tree().unwrap();
+        let id_a = tree
+            .get_account_id_by_script_hash(&user_script_a.hash().into())
+            .unwrap()
+            .unwrap();
+        let id_b = tree
+            .get_account_id_by_script_hash(&user_script_b.hash().into())
+            .unwrap()
+            .unwrap();
+        // 0 is meta contract, 1 is ckb sudt, so the user id start from 2
+        assert_eq!(id_a, 2);
+        assert_eq!(id_b, 4);
+        let balance_a = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, id_a).unwrap();
+        let balance_b = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, id_b).unwrap();
+        assert_eq!(balance_a, 300);
+        assert_eq!(balance_b, 500);
+    }
+
+    drop(chain2);
 }
