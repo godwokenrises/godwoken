@@ -20,7 +20,7 @@ pub fn generate_config(
     ckb_url: String,
     indexer_url: String,
     output_path: &Path,
-    database_url: Option<&str>,
+    _database_url: Option<&str>,
 ) -> Result<()> {
     let genesis: GenesisDeploymentResult = {
         let content = fs::read(genesis_path)?;

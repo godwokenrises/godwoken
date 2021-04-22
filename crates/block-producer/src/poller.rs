@@ -7,7 +7,6 @@ use anyhow::Result;
 use async_jsonrpc_client::{Params as ClientParams, Transport};
 use ckb_fixed_hash::H256;
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
-use gw_config::Web3IndexerConfig;
 use gw_generator::RollupContext;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, TransactionWithStatus, Uint32};
 use gw_types::{
@@ -182,7 +181,8 @@ impl ChainUpdater {
                     &tx,
                     indexer.l2_sudt_type_script_hash.clone(),
                     indexer.polyjuice_type_script_hash.clone(),
-                );
+                )
+                .await?;
             }
             None => {}
         }

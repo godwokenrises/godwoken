@@ -6,31 +6,18 @@ use crate::{
     },
 };
 use ckb_hash::blake2b_256;
-use ckb_types::{
-    packed::{self as ckb_packed, WitnessArgs},
-    prelude::Unpack as CkbUnpack,
-    H256,
-};
+use ckb_types::{packed::WitnessArgs, H256};
 use faster_hex;
-use gw_common::state::State;
-use gw_traits::CodeStore;
-// use gw_chain::chain::Chain;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
-// use gw_generator::backend_manage::SUDT_VALIDATOR_CODE_HASH;
-// use gw_generator::traits::CodeStore;
+use gw_common::state::State;
 use gw_store::{
     state_db::{StateDBTransaction, StateDBVersion},
     Store,
 };
+use gw_traits::CodeStore;
+use gw_types::packed::{L2Block, Transaction};
 use gw_types::{
-    packed::{
-        SUDTArgs, SUDTArgsUnion,
-        Script,
-    },
-    prelude::*,
-};
-use gw_types::{
-    packed::{L2Block, Transaction},
+    packed::{SUDTArgs, SUDTArgsUnion, Script},
     prelude::*,
 };
 use rust_decimal::Decimal;
@@ -99,6 +86,7 @@ pub async fn insert_to_sql(
             .bind(web3_tx.status)
             .execute(&mut tx)
             .await?;
+
             let web3_logs = web3_tx_with_logs.logs;
             for log in web3_logs {
                 sqlx::query("INSERT INTO logs
@@ -159,7 +147,7 @@ async fn filter_web3_transactions(
         let from_address = {
             let from_script_hash = get_script_hash(store.clone(), from_id).await?;
             let from_script = get_script(store.clone(), from_script_hash).await?.unwrap();
-            from_script.args()
+            from_script.args().raw_data()
         };
         println!("Check from_address: {:#x}", from_address);
 
@@ -334,7 +322,7 @@ async fn filter_web3_transactions(
                         None => continue,
                     };
 
-                    let to_address = format!("{:#x}", to_script.args());
+                    let to_address = format!("{:#x}", to_script.args().raw_data());
                     let value = amount;
 
                     // Represent SUDTTransfer fee in web3 style, set gas_price as 1 temporary.
