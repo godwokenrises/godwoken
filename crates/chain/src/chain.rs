@@ -27,6 +27,7 @@ use parking_lot::Mutex;
 use std::{convert::TryFrom, sync::Arc};
 
 /// sync params
+#[derive(Clone)]
 pub struct SyncParam {
     /// contains transitions from tip to fork point
     pub reverts: Vec<RevertedL1Action>,
@@ -188,6 +189,10 @@ impl Chain {
 
     pub fn rollup_config_hash(&self) -> &[u8; 32] {
         &self.rollup_config_hash
+    }
+
+    pub fn rollup_type_script_hash(&self) -> &[u8; 32] {
+        &self.rollup_type_script_hash
     }
 
     /// update a layer1 action
@@ -454,6 +459,14 @@ impl Chain {
             StateDBVersion::from_future_state(block_number, 0),
         )?;
         let mut tree = state_db.account_state_tree()?;
+
+        let prev_merkle_root: H256 = l2block.raw().prev_account().merkle_root().unpack();
+        assert_eq!(
+            tree.calculate_root()?,
+            prev_merkle_root,
+            "prev account merkle root must be consistent"
+        );
+
         // process transactions
         let result = match self
             .generator

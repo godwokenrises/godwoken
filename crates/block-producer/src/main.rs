@@ -97,7 +97,7 @@ fn run() -> Result<()> {
         Arc::clone(&chain),
         rpc_client.clone(),
         rollup_context,
-        rollup_type_script,
+        rollup_type_script.clone(),
     );
 
     let ckb_genesis_info = {
@@ -136,6 +136,17 @@ fn run() -> Result<()> {
         }
         addrs.remove(0)
     };
+
+    {
+        let rollup_type_script_hash = {
+            let hash = rollup_type_script.hash();
+            ckb_fixed_hash::H256::from_slice(&hash).unwrap()
+        };
+        let rollup_config_hash =
+            ckb_fixed_hash::H256::from_slice(&rollup_config_hash.as_slice()).unwrap();
+        println!("Rollup type script hash: {}", rollup_type_script_hash);
+        println!("Rollup config hash: {}", rollup_config_hash);
+    }
 
     smol::block_on(async {
         select! {

@@ -356,9 +356,10 @@ impl BlockProducer {
         } = block_result;
         let number: u64 = block.raw().number().unpack();
         println!(
-            "produce new block #{} (txs: {}, unused txs: {}, unused withdrawals: {})",
+            "produce new block #{} (txs: {}, deposits: {}, unused txs: {}, unused withdrawals: {})",
             number,
             block.transactions().len(),
+            deposit_cells.len(),
             unused_transactions.len(),
             unused_withdrawal_requests.len()
         );
