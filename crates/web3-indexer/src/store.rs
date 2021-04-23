@@ -7,7 +7,6 @@ use crate::{
 };
 use ckb_hash::blake2b_256;
 use ckb_types::{packed::WitnessArgs, H256};
-use faster_hex;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_common::state::State;
 use gw_store::{
@@ -409,10 +408,10 @@ async fn build_web3_block(
     let web3_block = Web3Block {
         number: Decimal::from(block_number),
         hash: format!("{:#x}", block_hash),
-        parent_hash: parent_hash,
+        parent_hash,
         logs_bloom: String::from(""),
-        gas_limit: gas_limit,
-        gas_used: gas_used,
+        gas_limit,
+        gas_used,
         miner: format!("{}", l2_block.raw().block_producer_id()),
         size: Decimal::from(0),
         timestamp: DateTime::<Utc>::from_utc(

@@ -28,11 +28,11 @@ impl PolyjuiceArgs {
         let input_size = u32::from_le_bytes(args[58..62].try_into()?);
         let input: Vec<u8> = args[62..(62 + input_size as usize)].to_vec();
         Ok(PolyjuiceArgs {
-            is_create: is_create,
-            is_static: is_static,
-            gas_limit: gas_limit,
-            gas_price: gas_price,
-            value: value,
+            is_create,
+            is_static,
+            gas_limit,
+            gas_price,
+            value,
             input: Some(input),
         })
     }
