@@ -60,8 +60,8 @@ pub async fn insert_to_sql(
             .execute(&mut tx).await?;
         for web3_tx_with_logs in web3_tx_with_logs_vec {
             let web3_tx = web3_tx_with_logs.tx;
-            let  result =
-            sqlx::query("INSERT INTO transactions
+            let  (transaction_id,): (i32,) =
+            sqlx::query_as("INSERT INTO transactions
             (hash, block_number, block_hash, transaction_index, from_address, to_address, value, nonce, gas_limit, gas_price, input, v, r, s, cumulative_gas_used, gas_used, logs_bloom, contract_address, status) 
             VALUES 
             ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING ID")
@@ -84,7 +84,7 @@ pub async fn insert_to_sql(
             .bind(web3_tx.logs_bloom)
             .bind(web3_tx.contract_address)
             .bind(web3_tx.status)
-            .execute(&mut tx)
+            .fetch_one(&mut tx)
             .await?;
 
             let web3_logs = web3_tx_with_logs.logs;
@@ -93,7 +93,7 @@ pub async fn insert_to_sql(
                 (transaction_id, transaction_hash, transaction_index, block_number, block_hash, address, data, log_index, topics)
                 VALUES
                 ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
-                // .bind(result.id)
+                .bind(transaction_id)
                 .bind(log.transaction_hash)
                 .bind(log.transaction_index)
                 .bind(log.block_number)
@@ -106,7 +106,7 @@ pub async fn insert_to_sql(
                 .await?;
             }
         }
-        tx.commit().await.unwrap()
+        tx.commit().await?;
     }
     Ok(())
 }
