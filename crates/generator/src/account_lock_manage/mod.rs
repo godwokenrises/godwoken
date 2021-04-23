@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use gw_common::H256;
 use gw_types::{bytes::Bytes, packed::Signature};
 
-#[cfg(debug_assertions)]
+// #[cfg(debug_assertions)]
 pub mod always_success;
 pub mod secp256k1;
 

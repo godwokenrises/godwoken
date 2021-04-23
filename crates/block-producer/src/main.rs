@@ -6,9 +6,12 @@ use gw_block_producer::{
     utils::CKBGenesisInfo,
 };
 use gw_chain::chain::Chain;
+use gw_common::{h256_ext::H256Ext, H256};
 use gw_config::Config;
 use gw_generator::{
-    account_lock_manage::AccountLockManage, backend_manage::BackendManage, genesis::init_genesis,
+    account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
+    backend_manage::BackendManage,
+    genesis::init_genesis,
     Generator, RollupContext,
 };
 use gw_mem_pool::pool::MemPool;
@@ -54,7 +57,9 @@ fn run() -> Result<()> {
     let generator = {
         let backend_manage = BackendManage::from_config(config.backends.clone())
             .with_context(|| "config backends")?;
-        let account_lock_manage = AccountLockManage::default();
+        let mut account_lock_manage = AccountLockManage::default();
+        account_lock_manage
+            .register_lock_algorithm(H256::one(), Box::new(AlwaysSuccess::default()));
         Arc::new(Generator::new(
             backend_manage,
             account_lock_manage,
