@@ -434,8 +434,10 @@ async fn build_web3_block(
 async fn get_script_hash(store: Store, account_id: u32) -> anyhow::Result<gw_common::H256> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db =
-        StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_hash))?;
+    let state_db = StateDBTransaction::from_version(
+        &db,
+        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+    )?;
     let tree = state_db.account_state_tree()?;
 
     let script_hash = tree.get_script_hash(account_id)?;
@@ -445,8 +447,10 @@ async fn get_script_hash(store: Store, account_id: u32) -> anyhow::Result<gw_com
 async fn get_script(store: Store, script_hash: gw_common::H256) -> anyhow::Result<Option<Script>> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db =
-        StateDBTransaction::from_version(&db, StateDBVersion::from_block_hash(tip_hash))?;
+    let state_db = StateDBTransaction::from_version(
+        &db,
+        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+    )?;
     let tree = state_db.account_state_tree()?;
 
     let script_opt = tree.get_script(&script_hash);

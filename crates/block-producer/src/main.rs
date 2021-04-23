@@ -127,7 +127,7 @@ fn run() -> Result<()> {
         Arc::clone(&chain),
         rpc_client.clone(),
         rollup_context,
-        rollup_type_script,
+        rollup_type_script.clone(),
         web3_indexer,
     );
 
