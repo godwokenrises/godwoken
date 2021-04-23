@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 // type alias
 type RPCServer = Arc<Server<MapRouter>>;
-type MemPool = Arc<Mutex<gw_mem_pool::pool::MemPool>>;
+type MemPool = Mutex<gw_mem_pool::pool::MemPool>;
 type AccountID = Uint32;
 type JsonH256 = ckb_fixed_hash::H256;
 
@@ -36,12 +36,12 @@ fn to_jsonh256(v: H256) -> JsonH256 {
 }
 
 pub struct Registry {
-    mem_pool: MemPool,
+    mem_pool: Arc<MemPool>,
     store: Store,
 }
 
 impl Registry {
-    pub fn new(mem_pool: MemPool, store: Store) -> Self {
+    pub fn new(mem_pool: Arc<MemPool>, store: Store) -> Self {
         Self { mem_pool, store }
     }
 
