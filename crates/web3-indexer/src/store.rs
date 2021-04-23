@@ -32,10 +32,12 @@ pub async fn insert_to_sql(
 ) -> anyhow::Result<()> {
     let l2_block = extract_l2_block(l1_transaction)?;
     let number: u64 = l2_block.raw().number().unpack();
+    println!("block_number: {}", number);
     let row: Option<(Decimal,)> =
         sqlx::query_as("SELECT number FROM blocks ORDER BY number DESC LIMIT 1")
             .fetch_optional(pool)
             .await?;
+    // if row.is_none() || Decimal::from(number) == Decimal::from(row.unwrap().0) + Decimal::from(1) {
     if row.is_none() || Decimal::from(number) == row.unwrap().0 + Decimal::from(1) {
         let web3_tx_with_logs_vec = filter_web3_transactions(
             store.clone(),
@@ -44,7 +46,9 @@ pub async fn insert_to_sql(
             polyjuice_type_script_hash,
         )
         .await?;
+        println!("web3_tx_with_logs_vec: {:?}", web3_tx_with_logs_vec);
         let web3_block = build_web3_block(&pool, &l2_block, &web3_tx_with_logs_vec).await?;
+        println!("web3_block: {:?}", web3_block);
         let mut tx = pool.begin().await?;
         sqlx::query("INSERT INTO blocks (number, hash, parent_hash, logs_bloom, gas_limit, gas_used, timestamp, miner, size) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
             .bind(web3_block.number)
@@ -384,7 +388,7 @@ async fn build_web3_block(
     let block_number = l2_block.raw().number().unpack();
     let block_hash: H256 = blake2b_256(l2_block.raw().as_slice()).into();
     let parent_hash = {
-        if block_number == 0 {
+        if block_number == 1 {
             String::from("0x0000000000000000000000000000000000000000000000000000000000000000")
         } else {
             let row: Option<(String,)> =
@@ -404,16 +408,21 @@ async fn build_web3_block(
         gas_limit += web3_tx_with_logs.tx.gas_limit;
         gas_used += web3_tx_with_logs.tx.gas_used;
     }
+    let block_producer_id: u32 = l2_block.raw().block_producer_id().unpack();
+    let miner_address = account_id_to_eth_address(block_producer_id);
+    let miner_address_hex = format!("0x{}", faster_hex::hex_string(&miner_address[..])?);
     let epoch_time: u64 = l2_block.raw().timestamp().unpack();
+    println!("epoch_time: {}", epoch_time);
+    let size = l2_block.raw().as_slice().len();
     let web3_block = Web3Block {
         number: Decimal::from(block_number),
         hash: format!("{:#x}", block_hash),
         parent_hash,
-        logs_bloom: String::from(""),
+        logs_bloom: String::from("0x"),
         gas_limit,
         gas_used,
-        miner: format!("{}", l2_block.raw().block_producer_id()),
-        size: Decimal::from(0),
+        miner: miner_address_hex,
+        size: Decimal::from(size),
         timestamp: DateTime::<Utc>::from_utc(
             NaiveDateTime::from_timestamp(epoch_time as i64, 0),
             Utc,
