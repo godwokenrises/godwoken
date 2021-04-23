@@ -116,9 +116,10 @@ fn main() {
                         .help("Polyjuice binaries directory path"),
                 )
                 .arg(
-                    Arg::with_name("Web3-store-database-url")
+                    Arg::with_name("database-url")
                         .short("d")
-                        .long("database-url")
+                        .takes_value(true)
+                        .required(true)
                         .help("The web3 store database url"),
                 )
                 .arg(

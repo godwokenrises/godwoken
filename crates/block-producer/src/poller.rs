@@ -173,6 +173,7 @@ impl ChainUpdater {
             updates: vec![update],
         };
         self.chain.lock().sync(sync_param)?;
+        // TODO sync missed block
         match &self.web3_indexer {
             Some(indexer) => {
                 insert_to_sql(
@@ -186,10 +187,6 @@ impl ChainUpdater {
             }
             None => {}
         }
-        // if self.pool.is_some() {
-        // let pool = self.pool.unwrap();
-        // insert_to_sql(&self.pool, self.chain.lock().store().clone(), &tx).await?;
-        // }
         Ok(())
     }
 
