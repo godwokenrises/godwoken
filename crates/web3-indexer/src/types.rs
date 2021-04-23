@@ -37,6 +37,7 @@ pub struct Transaction {
 }
 
 impl Transaction {
+    #[allow(clippy::clippy::too_many_arguments)]
     pub fn new(
         hash: String,
         block_number: Decimal,
@@ -95,6 +96,7 @@ pub struct Log {
 }
 
 impl Log {
+    #[allow(clippy::clippy::too_many_arguments)]
     pub fn new(
         transaction_hash: String,
         transaction_index: i32,

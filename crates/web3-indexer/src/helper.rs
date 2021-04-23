@@ -20,8 +20,8 @@ pub struct PolyjuiceArgs {
 impl PolyjuiceArgs {
     pub fn decode(args: &[u8]) -> anyhow::Result<Self> {
         // https://github.com/nervosnetwork/godwoken-polyjuice/blob/4c9f13d7b89c4e6b833fd90ca68e972d2a7b60f0/polyjuice-tests/src/helper.rs#L183
-        let is_create = if args[0] == 3u8 { true } else { false };
-        let is_static = if args[1] == 1u8 { true } else { false };
+        let is_create = args[0] == 3u8;
+        let is_static = args[1] == 1u8;
         let gas_limit = u64::from_le_bytes(args[2..10].try_into()?);
         let gas_price = u128::from_le_bytes(args[10..26].try_into()?);
         let value = u128::from_be_bytes(args[42..58].try_into()?);
@@ -82,7 +82,7 @@ pub fn parse_log(item: &LogItem) -> GwLog {
 
             let mut u32_bytes = [0u8; 4];
             u32_bytes.copy_from_slice(&data[0..4]);
-            let from_id = u32::from_le_bytes(u32_bytes.clone());
+            let from_id = u32::from_le_bytes(u32_bytes);
 
             u32_bytes.copy_from_slice(&data[4..8]);
             let to_id = u32::from_le_bytes(u32_bytes);
@@ -104,15 +104,15 @@ pub fn parse_log(item: &LogItem) -> GwLog {
 
             let mut u64_bytes = [0u8; 8];
             u64_bytes.copy_from_slice(&data[0..8]);
-            let gas_used = u64::from_le_bytes(u64_bytes.clone());
+            let gas_used = u64::from_le_bytes(u64_bytes);
             u64_bytes.copy_from_slice(&data[8..16]);
-            let cumulative_gas_used = u64::from_le_bytes(u64_bytes.clone());
+            let cumulative_gas_used = u64::from_le_bytes(u64_bytes);
 
             let mut u32_bytes = [0u8; 4];
             u32_bytes.copy_from_slice(&data[16..20]);
-            let created_id = u32::from_le_bytes(u32_bytes.clone());
+            let created_id = u32::from_le_bytes(u32_bytes);
             u32_bytes.copy_from_slice(&data[20..24]);
-            let status_code = u32::from_le_bytes(u32_bytes.clone());
+            let status_code = u32::from_le_bytes(u32_bytes);
             GwLog::PolyjuiceSystem {
                 gas_used,
                 cumulative_gas_used,

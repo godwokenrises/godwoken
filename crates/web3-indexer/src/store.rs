@@ -202,72 +202,66 @@ async fn filter_web3_transactions(
                 let tx_hash = gw_common::H256::from(tx_hash.0);
                 let tx_receipt = db.get_transaction_receipt(&tx_hash)?;
                 let mut logs: Vec<Web3Log> = vec![];
-                match tx_receipt {
-                    Some(tx_receipt) => {
-                        let log_item_vec = tx_receipt.logs();
-                        let mut log_index = 0;
-                        for log_item in log_item_vec {
-                            let log = parse_log(&log_item);
-                            match log {
-                                GwLog::PolyjuiceSystem {
-                                    gas_used,
-                                    cumulative_gas_used: _,
-                                    created_id,
-                                    status_code: _,
-                                } => {
-                                    tx_gas_used = Decimal::from(gas_used);
-                                    cumulative_gas_used += tx_gas_used;
-                                    if polyjuice_args.is_create && created_id != u32::MAX {
-                                        let contract_address =
-                                            account_id_to_eth_address(created_id);
-                                        contract_address_hex = Some(format!(
-                                            "0x{}",
-                                            faster_hex::hex_string(&contract_address[..])?
-                                        ));
-                                    }
+                if let Some(tx_receipt) = tx_receipt {
+                    let log_item_vec = tx_receipt.logs();
+                    let mut log_index = 0;
+                    for log_item in log_item_vec {
+                        let log = parse_log(&log_item);
+                        match log {
+                            GwLog::PolyjuiceSystem {
+                                gas_used,
+                                cumulative_gas_used: _,
+                                created_id,
+                                status_code: _,
+                            } => {
+                                tx_gas_used = Decimal::from(gas_used);
+                                cumulative_gas_used += tx_gas_used;
+                                if polyjuice_args.is_create && created_id != u32::MAX {
+                                    let contract_address = account_id_to_eth_address(created_id);
+                                    contract_address_hex = Some(format!(
+                                        "0x{}",
+                                        faster_hex::hex_string(&contract_address[..])?
+                                    ));
                                 }
-                                GwLog::PolyjuiceUser {
+                            }
+                            GwLog::PolyjuiceUser {
+                                address,
+                                data,
+                                topics,
+                            } => {
+                                let address =
+                                    format!("0x{}", faster_hex::hex_string(&address[..])?);
+                                let data = format!("0x{}", faster_hex::hex_string(&data[..])?);
+                                let mut topics_hex = vec![];
+                                for topic in topics {
+                                    let topic_hex =
+                                        format!("0x{}", faster_hex::hex_string(topic.as_slice())?);
+                                    topics_hex.push(topic_hex);
+                                }
+
+                                let web3_log = Web3Log::new(
+                                    tx_hash_hex.clone(),
+                                    tx_index,
+                                    Decimal::from(block_number),
+                                    block_hash_hex.clone(),
                                     address,
                                     data,
-                                    topics,
-                                } => {
-                                    let address =
-                                        format!("0x{}", faster_hex::hex_string(&address[..])?);
-                                    let data = format!("0x{}", faster_hex::hex_string(&data[..])?);
-                                    let mut topics_hex = vec![];
-                                    for topic in topics {
-                                        let topic_hex = format!(
-                                            "0x{}",
-                                            faster_hex::hex_string(topic.as_slice())?
-                                        );
-                                        topics_hex.push(topic_hex);
-                                    }
-
-                                    let web3_log = Web3Log::new(
-                                        tx_hash_hex.clone(),
-                                        tx_index,
-                                        Decimal::from(block_number),
-                                        block_hash_hex.clone(),
-                                        address,
-                                        data,
-                                        log_index,
-                                        topics_hex,
-                                    );
-                                    logs.push(web3_log);
-                                    log_index += 1;
-                                }
-                                GwLog::SudtTransfer {
-                                    sudt_id: _,
-                                    from_id: _,
-                                    to_id: _,
-                                    amount: _,
-                                } => {
-                                    // TODO: SudtTransfer happened in polyjuice contract will be include in web3 events later.
-                                }
+                                    log_index,
+                                    topics_hex,
+                                );
+                                logs.push(web3_log);
+                                log_index += 1;
+                            }
+                            GwLog::SudtTransfer {
+                                sudt_id: _,
+                                from_id: _,
+                                to_id: _,
+                                amount: _,
+                            } => {
+                                // TODO: SudtTransfer happened in polyjuice contract will be include in web3 events later.
                             }
                         }
                     }
-                    None => {}
                 }
                 logs
             };
@@ -383,7 +377,7 @@ async fn filter_web3_transactions(
 async fn build_web3_block(
     pool: &PgPool,
     l2_block: &L2Block,
-    web3_tx_with_logs_vec: &Vec<Web3TransactionWithLogs>,
+    web3_tx_with_logs_vec: &[Web3TransactionWithLogs],
 ) -> anyhow::Result<Web3Block> {
     let block_number = l2_block.raw().number().unpack();
     let block_hash: H256 = blake2b_256(l2_block.raw().as_slice()).into();
@@ -430,14 +424,6 @@ async fn build_web3_block(
     };
     Ok(web3_block)
 }
-
-// async fn insert_to_block(sql_tx: & , block: Web3Block) {
-// }
-
-// async fn insert_to_transaction(tx: Web3Transaction) {
-// }
-
-// async fn insert_to_log(log: Web3Log) {}
 
 async fn get_script_hash(store: Store, account_id: u32) -> anyhow::Result<gw_common::H256> {
     let db = store.begin_transaction();
