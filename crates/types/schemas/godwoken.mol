@@ -61,9 +61,7 @@ table SubmitTransactions {
     tx_witness_root: Byte32,
     tx_count: Uint32,
     // hash(account_root | account_count) before apply all txs
-    compacted_prev_root_hash: Byte32,
-    // hash(account_root | account_count) of each transaction
-    compacted_post_root_list: Byte32Vec,
+    prev_state_checkpoint: Byte32,
 }
 
 struct SubmitWithdrawals {
@@ -79,8 +77,10 @@ table RawL2Block {
     timestamp: Uint64,
     prev_account: AccountMerkleState,
     post_account: AccountMerkleState,
-    submit_transactions: SubmitTransactions,
+    // hash(account_root | account_count) of each withdrawals & transactions
+    state_checkpoint_list: Byte32Vec,
     submit_withdrawals: SubmitWithdrawals,
+    submit_transactions: SubmitTransactions,
 }
 
 vector RawL2BlockVec <RawL2Block>;
@@ -267,25 +267,47 @@ struct BlockHashEntry {
 
 vector BlockHashEntryVec <BlockHashEntry>;
 
-// witness to cancel a challenge by execute the transaction
-table VerifyTransactionWitness {
-    raw_l2block: RawL2Block,
-    l2tx: L2Transaction,
-    tx_proof: Bytes,
+table VerifyTransactionContext {
+    account_count: Uint32,
     kv_state: KVPairVec,
-    kv_state_proof: Bytes,
     scripts: ScriptVec,
     return_data_hash: Byte32,
-    account_count: Uint32,
     block_hashes: BlockHashEntryVec,
+}
+
+// cancel challenge by execute the transaction
+table VerifyTransactionWitness {
+    l2tx: L2Transaction,
+    raw_l2block: RawL2Block,
+    tx_proof: Bytes,
+    kv_state_proof: Bytes,
     block_hashes_proof: Bytes,
+    context: VerifyTransactionContext,
+}
+
+table VerifySignatureContext {
+    account_count: Uint32,
+    kv_state: KVPairVec,
+    scripts: ScriptVec,
+    signature: Signature,
+}
+
+// cancel challenge by verify tx signature
+table VerifyTransactionSignatureWitness {
+    l2tx: L2Transaction,
+    raw_l2block: RawL2Block,
+    tx_proof: Bytes,
+    kv_state_proof: Bytes,
+    block_hashes_proof: Bytes,
+    context: VerifySignatureContext,
 }
 
 table VerifyWithdrawalWitness {
     raw_l2block: RawL2Block,
-    account_script: Script,
+    kv_state_proof: Bytes,
     withdrawal_request: WithdrawalRequest,
     withdrawal_proof: Bytes,
+    context: VerifySignatureContext,
 }
 
 // --- end of challenge ---

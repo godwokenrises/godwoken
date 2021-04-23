@@ -5,7 +5,7 @@
 use anyhow::{anyhow, Result};
 use gw_common::{
     h256_ext::H256Ext,
-    merkle_utils::{calculate_compacted_account_root, calculate_merkle_root},
+    merkle_utils::{calculate_merkle_root, calculate_state_checkpoint},
     smt::Blake2bHasher,
     state::State,
     H256,
@@ -86,6 +86,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
     let mut used_withdrawal_requests = Vec::with_capacity(withdrawal_requests.len());
     let mut unused_withdrawal_requests = Vec::with_capacity(withdrawal_requests.len());
     let mut total_withdrawal_capacity: u128 = 0;
+    let mut state_checkpoint_list: Vec<H256> = Vec::new();
     for request in withdrawal_requests {
         // check withdrawal request
         if generator
@@ -116,6 +117,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         match state.apply_withdrawal_request(rollup_context, &request) {
             Ok(_) => {
                 used_withdrawal_requests.push(request);
+                state_checkpoint_list.push(state.calculate_state_checkpoint()?);
             }
             Err(_err) => {
                 unused_withdrawal_requests.push(request);
@@ -125,7 +127,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
     // update deposits
     state.apply_deposition_requests(rollup_context, &deposition_requests)?;
     // calculate state after withdrawals & deposits
-    let compacted_prev_root_hash = state.calculate_compacted_account_root()?;
+    let prev_state_check_point = state.calculate_state_checkpoint()?;
     // execute txs
     let mut tx_receipts = Vec::with_capacity(txs.len());
     let mut used_transactions = Vec::with_capacity(txs.len());
@@ -208,28 +210,24 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         )
         .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
         let tx_count = tx_receipts.len() as u32;
-        let compacted_post_root_list: Vec<[u8; 32]> = tx_receipts
-            .iter()
-            .map(|tx_receipt| {
-                let post_state = tx_receipt.post_state();
-                calculate_compacted_account_root(
-                    &post_state.merkle_root().unpack(),
-                    post_state.count().unpack(),
-                )
-            })
-            .collect();
+        state_checkpoint_list.extend(tx_receipts.iter().map(|tx_receipt| {
+            let post_state = tx_receipt.post_state();
+            calculate_state_checkpoint(
+                &post_state.merkle_root().unpack(),
+                post_state.count().unpack(),
+            )
+        }));
         SubmitTransactions::new_builder()
             .tx_witness_root(tx_witness_root.pack())
             .tx_count(tx_count.pack())
-            .compacted_prev_root_hash(compacted_prev_root_hash.pack())
-            .compacted_post_root_list(compacted_post_root_list.pack())
+            .prev_state_checkpoint(prev_state_check_point.pack())
             .build()
     };
     let submit_withdrawals = {
         let withdrawal_witness_root = calculate_merkle_root(
             used_withdrawal_requests
                 .iter()
-                .map(|request| request.witness_hash())
+                .map(|request| request.witness_hash().into())
                 .collect(),
         )
         .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
@@ -248,6 +246,11 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         .merkle_root(post_account_state_root.pack())
         .count(post_account_state_count.pack())
         .build();
+    assert_eq!(
+        state_checkpoint_list.len(),
+        used_withdrawal_requests.len() + used_transactions.len(),
+        "state checkpoint len"
+    );
     let raw_block = RawL2Block::new_builder()
         .number(number.pack())
         .block_producer_id(block_producer_id.pack())
@@ -258,6 +261,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         .prev_account(prev_account)
         .submit_transactions(submit_txs)
         .submit_withdrawals(submit_withdrawals)
+        .state_checkpoint_list(state_checkpoint_list.pack())
         .build();
     // generate block fields from current state
     let kv_state: Vec<(H256, H256)> = touched_keys

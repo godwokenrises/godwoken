@@ -71,8 +71,9 @@ impl TryFrom<Byte> for Status {
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[repr(u8)]
 pub enum ChallengeTargetType {
-    Transaction = 0,
-    Withdrawal = 1,
+    TxStateTransition = 0,
+    TxSignature = 1,
+    Withdrawal = 2,
 }
 
 impl Into<u8> for ChallengeTargetType {
@@ -85,8 +86,9 @@ impl TryFrom<u8> for ChallengeTargetType {
     type Error = u8;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(ChallengeTargetType::Transaction),
-            1 => Ok(ChallengeTargetType::Withdrawal),
+            0 => Ok(ChallengeTargetType::TxStateTransition),
+            1 => Ok(ChallengeTargetType::TxSignature),
+            2 => Ok(ChallengeTargetType::Withdrawal),
             n => Err(n),
         }
     }

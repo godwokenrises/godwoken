@@ -276,7 +276,7 @@ impl Generator {
                 return Err(TransactionErrorWithContext::new(
                     build_challenge_target(
                         block_hash.into(),
-                        ChallengeTargetType::Transaction,
+                        ChallengeTargetType::TxSignature,
                         tx_index as u32,
                     ),
                     TransactionError::Nonce {
@@ -294,7 +294,7 @@ impl Generator {
                     return Err(TransactionErrorWithContext::new(
                         build_challenge_target(
                             block_hash.into(),
-                            ChallengeTargetType::Transaction,
+                            ChallengeTargetType::TxStateTransition,
                             tx_index as u32,
                         ),
                         err,
