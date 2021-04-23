@@ -87,6 +87,28 @@ impl<S: State + CodeStore> StateExt for S {
         ctx: &RollupContext,
         request: &DepositionRequest,
     ) -> Result<(), Error> {
+        let script = request.script();
+        {
+            if script.hash_type() != ScriptHashType::Type.into() {
+                return Err(Error::Deposition(DepositionError::DepositUnknownEoALock));
+            }
+            if ctx
+                .rollup_config
+                .allowed_eoa_type_hashes()
+                .into_iter()
+                .all(|type_hash| script.code_hash() != type_hash)
+            {
+                return Err(Error::Deposition(DepositionError::DepositUnknownEoALock));
+            }
+            let args: Bytes = script.args().unpack();
+            if args.len() < 32 {
+                return Err(Error::Deposition(DepositionError::DepositUnknownEoALock));
+            }
+            if &args[..32] != ctx.rollup_script_hash.as_slice() {
+                return Err(Error::Deposition(DepositionError::DepositUnknownEoALock));
+            }
+        }
+
         // find or create user account
         let account_script_hash = request.script().hash();
         let id = match self.get_account_id_by_script_hash(&account_script_hash.into())? {
