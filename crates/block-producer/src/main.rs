@@ -8,7 +8,9 @@ use gw_block_producer::{
 use gw_chain::chain::Chain;
 use gw_config::Config;
 use gw_generator::{
-    account_lock_manage::AccountLockManage, backend_manage::BackendManage, genesis::init_genesis,
+    account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
+    backend_manage::BackendManage,
+    genesis::init_genesis,
     Generator, RollupContext,
 };
 use gw_mem_pool::pool::MemPool;
@@ -54,7 +56,15 @@ fn run() -> Result<()> {
     let generator = {
         let backend_manage = BackendManage::from_config(config.backends.clone())
             .with_context(|| "config backends")?;
-        let account_lock_manage = AccountLockManage::default();
+        let mut account_lock_manage = AccountLockManage::default();
+        let eth_lock_script_type_hash = rollup_config
+            .allowed_eoa_type_hashes()
+            .get(0)
+            .ok_or(anyhow!("No allowed EoA type hashes in the rollup config"))?;
+        account_lock_manage.register_lock_algorithm(
+            eth_lock_script_type_hash.unpack(),
+            Box::new(Secp256k1Eth::default()),
+        );
         Arc::new(Generator::new(
             backend_manage,
             account_lock_manage,
