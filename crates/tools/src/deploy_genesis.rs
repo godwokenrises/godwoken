@@ -192,6 +192,16 @@ pub fn deploy_genesis(
         GwPack::pack(&deployment_result.l2_sudt_validator.script_type_hash),
         GwPack::pack(&deployment_result.polyjuice_validator.script_type_hash),
     ];
+
+    let mut allowed_eoa_type_hashes: Vec<gw_packed::Byte32> = vec![GwPack::pack(
+        &deployment_result.eth_account_lock.script_type_hash,
+    )];
+    allowed_eoa_type_hashes.extend(
+        user_rollup_config
+            .allowed_eoa_type_hashes
+            .into_iter()
+            .map(|hash| GwPack::pack(&hash)),
+    );
     let rollup_config = RollupConfig::new_builder()
         .l1_sudt_script_type_hash(GwPack::pack(&user_rollup_config.l1_sudt_script_type_hash))
         .custodian_script_type_hash(GwPack::pack(
@@ -215,12 +225,7 @@ pub fn deploy_genesis(
         .challenge_maturity_blocks(GwPack::pack(&user_rollup_config.challenge_maturity_blocks))
         .finality_blocks(GwPack::pack(&user_rollup_config.finality_blocks))
         .reward_burn_rate(user_rollup_config.reward_burn_rate.into())
-        .allowed_eoa_type_hashes(GwPackVec::pack(
-            user_rollup_config
-                .allowed_eoa_type_hashes
-                .into_iter()
-                .map(|hash| GwPack::pack(&hash)),
-        ))
+        .allowed_eoa_type_hashes(GwPackVec::pack(allowed_eoa_type_hashes))
         .allowed_contract_type_hashes(GwPackVec::pack(allowed_contract_type_hashes))
         .build();
     let genesis_config = GenesisConfig {

@@ -60,7 +60,7 @@ fn run() -> Result<()> {
         let eth_lock_script_type_hash = rollup_config
             .allowed_eoa_type_hashes()
             .get(0)
-            .ok_or(anyhow!("No allowed EoA type hashes in the rollup config"))?;
+            .ok_or_else(|| anyhow!("No allowed EoA type hashes in the rollup config"))?;
         account_lock_manage.register_lock_algorithm(
             eth_lock_script_type_hash.unpack(),
             Box::new(Secp256k1Eth::default()),
