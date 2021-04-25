@@ -1,6 +1,11 @@
 //! POA lock off-chain module
 //! Reference implementation: https://github.com/nervosnetwork/clerkb/blob/main/src/generator.ts
 
+use crate::{
+    rpc_client::RPCClient,
+    transaction_skeleton::TransactionSkeleton,
+    types::{CellInfo, InputCellInfo},
+};
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
@@ -12,12 +17,6 @@ use gw_types::{
 };
 use std::convert::TryInto;
 use std::time::Duration;
-
-use crate::{
-    rpc_client::RPCClient,
-    transaction_skeleton::TransactionSkeleton,
-    types::{CellInfo, InputCellInfo},
-};
 
 /// Transaction since flag
 const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
@@ -166,9 +165,7 @@ impl PoA {
                     poa_setup.identity_size
                 ));
             }
-            let mut h = Vec::new();
-            h.copy_from_slice(&script_hash.as_slice()[..poa_setup.identity_size as usize]);
-            h
+            script_hash.as_slice()[..poa_setup.identity_size as usize].to_vec()
         };
         let block_producer_index = poa_setup
             .identities
