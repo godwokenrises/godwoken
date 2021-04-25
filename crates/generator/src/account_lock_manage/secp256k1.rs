@@ -74,7 +74,7 @@ impl LockAlgorithm for Secp256k1Eth {
         signature: Signature,
         message: H256,
     ) -> Result<bool, LockAlgorithmError> {
-        if lock_args.len() != 20 {
+        if lock_args.len() != 52 {
             return Err(LockAlgorithmError::InvalidLockArgs);
         }
         let mut hasher = Keccak256::new();
@@ -86,7 +86,7 @@ impl LockAlgorithm for Secp256k1Eth {
         let signing_message = H256::from(signing_message);
 
         let mut expected_pubkey_hash = [0u8; 20];
-        expected_pubkey_hash.copy_from_slice(&lock_args);
+        expected_pubkey_hash.copy_from_slice(&lock_args[32..52]);
         let signature: RecoverableSignature = {
             let signature: [u8; 65] = signature.unpack();
             let recid = RecoveryId::from_i32(signature[64] as i32)
@@ -123,9 +123,11 @@ fn test_secp256k1_eth() {
         .expect("create signature structure");
     let address =
         Bytes::from(hex::decode("ffafb3db9377769f5b59bfff6cd2cf942a34ab17").expect("hex decode"));
+    let mut lock_args = vec![0u8; 32];
+    lock_args.extend(address);
     let eth = Secp256k1Eth {};
     let result = eth
-        .verify_signature(address, test_signature, message)
+        .verify_signature(lock_args.into(), test_signature, message)
         .expect("verify signature");
     assert!(result);
 }
