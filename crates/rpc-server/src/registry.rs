@@ -4,7 +4,7 @@ use gw_common::{state::State, H256};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
-    godwoken::{L2BlockView, RunResult},
+    godwoken::{L2BlockView, RunResult, TxReceipt},
 };
 use gw_store::{
     state_db::{StateDBTransaction, StateDBVersion},
@@ -66,6 +66,7 @@ impl Registry {
             .with_method("get_script", get_script)
             .with_method("get_script_hash", get_script_hash)
             .with_method("get_data", get_data)
+            .with_method("get_transaction_receipt", get_transaction_receipt)
             .with_method("execute_l2transaction", execute_l2transaction)
             .with_method("submit_l2transaction", submit_l2transaction)
             .with_method("submit_withdrawal_request", submit_withdrawal_request);
@@ -123,6 +124,19 @@ async fn get_tip_block_hash(store: Data<Store>) -> Result<JsonH256> {
     Ok(to_jsonh256(tip_block_hash))
 }
 
+async fn get_transaction_receipt(
+    Params((tx_hash,)): Params<(JsonH256,)>,
+    store: Data<Store>,
+) -> Result<Option<TxReceipt>> {
+    let tx_hash = to_h256(tx_hash);
+    let db = store.begin_transaction();
+    let receipt_opt = db.get_transaction_receipt(&tx_hash)?.map(|receipt| {
+        let receipt: TxReceipt = receipt.into();
+        receipt
+    });
+    Ok(receipt_opt)
+}
+
 async fn execute_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
@@ -152,11 +166,12 @@ async fn execute_l2transaction(
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
-) -> Result<()> {
+) -> Result<JsonH256> {
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
+    let tx_hash = to_jsonh256(tx.hash().into());
     mem_pool.lock().push_transaction(tx)?;
-    Ok(())
+    Ok(tx_hash)
 }
 
 async fn submit_withdrawal_request(
