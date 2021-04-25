@@ -180,10 +180,6 @@ impl RPCClient {
                 "Never returns more than 1 identity cells"
             );
             cell = cells.objects.into_iter().find_map(|cell| {
-                // delete cells with data & type
-                if !cell.output_data.is_empty() || cell.output.type_.is_some() {
-                    return None;
-                }
                 let out_point = {
                     let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
                     OutPoint::new_unchecked(out_point.as_bytes())
@@ -234,10 +230,6 @@ impl RPCClient {
             )?;
             cursor = Some(cells.last_cursor);
             cell = cells.objects.into_iter().find_map(|cell| {
-                // delete cells with data & type
-                if !cell.output_data.is_empty() || cell.output.type_.is_some() {
-                    return None;
-                }
                 let out_point = {
                     let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
                     OutPoint::new_unchecked(out_point.as_bytes())
@@ -299,10 +291,6 @@ impl RPCClient {
             cursor = Some(cells.last_cursor);
 
             let cells = cells.objects.into_iter().filter_map(|cell| {
-                // delete cells with data & type
-                if !cell.output_data.is_empty() || cell.output.type_.is_some() {
-                    return None;
-                }
                 let out_point = {
                     let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
                     OutPoint::new_unchecked(out_point.as_bytes())

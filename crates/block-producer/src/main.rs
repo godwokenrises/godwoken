@@ -63,10 +63,7 @@ async fn poll_loop(
         (tip_number, tip_hash)
     };
     loop {
-        if let Some(block) = rpc_client
-            .get_block_by_number((tip_number + 1).into())
-            .await?
-        {
+        if let Some(block) = rpc_client.get_block_by_number(tip_number + 1).await? {
             let raw_header = block.header().raw();
             let event = if raw_header.parent_hash().as_slice() == tip_hash.as_slice() {
                 // received new layer1 block
