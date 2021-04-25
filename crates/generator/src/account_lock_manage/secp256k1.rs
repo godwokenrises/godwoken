@@ -123,9 +123,11 @@ fn test_secp256k1_eth() {
         .expect("create signature structure");
     let address =
         Bytes::from(hex::decode("ffafb3db9377769f5b59bfff6cd2cf942a34ab17").expect("hex decode"));
+    let mut lock_args = vec![0u8; 32];
+    lock_args.extend(address);
     let eth = Secp256k1Eth {};
     let result = eth
-        .verify_signature(address, test_signature, message)
+        .verify_signature(lock_args.into(), test_signature, message)
         .expect("verify signature");
     assert!(result);
 }

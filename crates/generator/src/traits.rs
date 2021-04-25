@@ -106,7 +106,7 @@ impl<S: State + CodeStore> StateExt for S {
                 return Err(Error::Deposition(DepositionError::DepositUnknownEoALock));
             }
             let args: Bytes = script.args().unpack();
-            if args.len() < 52 {
+            if args.len() < 32 {
                 eprintln!(
                     "Invalid deposit: expect rollup_type_hash in the args but args is too short, len: {}",
                     args.len()
