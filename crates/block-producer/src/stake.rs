@@ -15,8 +15,6 @@ use gw_types::{
     prelude::{Pack, Unpack},
 };
 
-use std::iter::FromIterator;
-
 pub struct GeneratedStake {
     pub deps: Vec<CellDep>,
     pub inputs: Vec<InputCellInfo>,
@@ -33,14 +31,16 @@ pub async fn generate(
     lock_script: Script,
 ) -> Result<GeneratedStake> {
     let owner_lock_hash = lock_script.hash();
-    let lock_args = {
+    let lock_args: Bytes = {
         let stake_lock_args = StakeLockArgs::new_builder()
             .owner_lock_hash(owner_lock_hash.pack())
             .stake_block_number(block.raw().number())
             .build();
 
         let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter().cloned();
-        Bytes::from_iter(rollup_type_hash.chain(stake_lock_args.as_slice().iter().cloned()))
+        rollup_type_hash
+            .chain(stake_lock_args.as_slice().iter().cloned())
+            .collect()
     };
 
     let lock = Script::new_builder()

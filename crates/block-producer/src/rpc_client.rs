@@ -18,8 +18,6 @@ use gw_types::{
 use serde::de::DeserializeOwned;
 use serde_json::{from_value, json};
 
-use std::iter::FromIterator;
-
 const DEFAULT_QUERY_LIMIT: usize = 1000;
 
 #[derive(Debug, Clone)]
@@ -357,10 +355,7 @@ impl RPCClient {
         let lock = Script::new_builder()
             .code_hash(rollup_context.rollup_config.stake_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
-            .args(
-                Bytes::from_iter(rollup_context.rollup_script_hash.as_slice().iter().cloned())
-                    .pack(),
-            )
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
             .build();
 
         let search_key = SearchKey {
@@ -406,7 +401,7 @@ impl RPCClient {
                 };
 
                 stake_lock_args.stake_block_number().unpack() <= last_finalized_block_number
-                    && stake_lock_args.owner_lock_hash().as_slice() == &owner_lock_hash
+                    && stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash
             });
         }
 
