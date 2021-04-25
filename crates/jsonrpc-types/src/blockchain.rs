@@ -253,15 +253,18 @@ pub type Capacity = Uint64;
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct NumberHash {
-    number: Uint64,
+    block_number: Uint64,
     block_hash: H256,
 }
 
 impl From<NumberHash> for packed::NumberHash {
     fn from(v: NumberHash) -> Self {
-        let NumberHash { number, block_hash } = v;
+        let NumberHash {
+            block_number,
+            block_hash,
+        } = v;
         packed::NumberHash::new_builder()
-            .number(number.value().pack())
+            .number(block_number.value().pack())
             .block_hash(block_hash.pack())
             .build()
     }
@@ -272,7 +275,7 @@ impl From<packed::NumberHash> for NumberHash {
         let number: u64 = v.number().unpack();
         let block_hash = v.block_hash().unpack();
         Self {
-            number: number.into(),
+            block_number: number.into(),
             block_hash,
         }
     }

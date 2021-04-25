@@ -374,7 +374,7 @@ impl RPCClient {
 
     pub async fn get_block_median_time(&self, block_hash: H256) -> Result<Duration> {
         let median_time: gw_jsonrpc_types::ckb_jsonrpc_types::Uint64 = to_result(
-            self.indexer_client
+            self.ckb_client
                 .request(
                     "get_block_median_time",
                     Some(ClientParams::Array(vec![json!(to_jsonh256(block_hash))])),

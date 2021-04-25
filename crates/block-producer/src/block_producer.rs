@@ -194,13 +194,13 @@ impl BlockProducer {
             } => new_block,
             ChainEvent::NewBlock { block } => block,
         };
-        let raw_header = tip_block.header().raw();
-        let tip_hash: H256 = raw_header.hash().into();
+        let header = tip_block.header();
+        let tip_hash: H256 = header.hash().into();
 
         // query median time & rollup cell
-        let rollup_cell_fut = self.rpc_client.query_rollup_cell();
-        let median_time_fut = self.rpc_client.get_block_median_time(tip_hash);
-        let (rollup_cell_opt, median_time) = futures::try_join!(rollup_cell_fut, median_time_fut)?;
+        let rollup_cell_opt = self.rpc_client.query_rollup_cell().await?;
+        let median_time = self.rpc_client.get_block_median_time(tip_hash).await?;
+        // let (rollup_cell_opt, median_time) = futures::try_join!(rollup_cell_fut, median_time_fut)?;
         let rollup_cell = rollup_cell_opt.ok_or(anyhow!("can't found rollup cell"))?;
         let poa_cell_input = InputCellInfo {
             input: CellInput::new_builder()

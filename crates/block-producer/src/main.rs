@@ -68,10 +68,12 @@ async fn poll_loop(
             .await?
         {
             let raw_header = block.header().raw();
-            let event = if &raw_header.parent_hash().raw_data() == tip_hash.as_slice() {
+            let event = if raw_header.parent_hash().as_slice() == tip_hash.as_slice() {
                 // received new layer1 block
                 println!("received new layer1 block {}, {:?}", tip_number, tip_hash);
-                ChainEvent::NewBlock { block }
+                ChainEvent::NewBlock {
+                    block: block.clone(),
+                }
             } else {
                 // layer1 reverted
                 eprintln!("layer1 reverted {}, {:?}", tip_number, tip_hash);
@@ -80,33 +82,33 @@ async fn poll_loop(
                         .number(tip_number.pack())
                         .block_hash(tip_hash.pack())
                         .build(),
-                    new_block: block,
+                    new_block: block.clone(),
                 }
             };
             // must execute chain update before block producer, otherwise we may run into an invalid chain state
-            smol::spawn({
-                let event = event.clone();
-                let inner = inner.clone();
-                async move {
-                    let mut inner = inner.lock().await;
-                    if let Err(err) = inner.chain_updater.handle_event(event.clone()).await {
-                        eprintln!(
-                            "Error occured when polling chain_updater, event: {:?}, error: {}",
-                            event, err
-                        );
-                    }
-                    if let Err(err) = inner.block_producer.handle_event(event.clone()).await {
-                        eprintln!(
-                            "Error occured when polling block_producer, event: {:?}, error: {}",
-                            event, err
-                        );
-                    }
-                }
-            })
-            .detach();
+            // smol::spawn({
+            let event = event.clone();
+            let inner = inner.clone();
+            // async move {
+            let mut inner = inner.lock().await;
+            if let Err(err) = inner.chain_updater.handle_event(event.clone()).await {
+                eprintln!(
+                    "Error occured when polling chain_updater, event: {:?}, error: {}",
+                    event, err
+                );
+            }
+            if let Err(err) = inner.block_producer.handle_event(event.clone()).await {
+                eprintln!(
+                    "Error occured when polling block_producer, event: {:?}, error: {}",
+                    event, err
+                );
+            }
+            // }
+            // })
+            // .detach();
             // update tip
             tip_number = raw_header.number().unpack();
-            tip_hash = raw_header.hash().into();
+            tip_hash = block.header().hash().into();
         } else {
             async_std::task::sleep(poll_interval).await;
         }
