@@ -72,8 +72,11 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
     BackendManage::from_config(configs).expect("default backend")
 }
 
-pub fn setup_chain(rollup_type_script: Script, rollup_config: RollupConfig) -> Chain {
+pub fn setup_chain(rollup_type_script: Script) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
+    let rollup_config = RollupConfig::new_builder()
+        .allowed_eoa_type_hashes(vec![ALWAYS_SUCCESS_CODE_HASH.clone()].pack())
+        .build();
     account_lock_manage.register_lock_algorithm(
         ALWAYS_SUCCESS_CODE_HASH.clone().into(),
         Box::new(AlwaysSuccess),

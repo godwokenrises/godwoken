@@ -6,6 +6,7 @@ use gw_generator::{
 };
 use gw_store::state_db::{StateDBTransaction, StateDBVersion};
 use gw_types::{
+    core::ScriptHashType,
     packed::{CellOutput, DepositionRequest, RawWithdrawalRequest, Script, WithdrawalRequest},
     prelude::*,
 };
@@ -73,11 +74,17 @@ fn withdrawal_from_chain(
 #[test]
 fn test_deposition_and_withdrawal() {
     let rollup_type_script = Script::default();
-    let mut chain = setup_chain(rollup_type_script.clone(), Default::default());
+    let rollup_script_hash = rollup_type_script.hash();
+    let mut chain = setup_chain(rollup_type_script.clone());
     let capacity = 500_00000000;
     let user_script = Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
-        .args(vec![42].pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(42);
+            args.pack()
+        })
         .build();
     let user_script_hash = user_script.hash();
     let rollup_cell = CellOutput::new_builder()
@@ -186,11 +193,17 @@ fn test_deposition_and_withdrawal() {
 #[test]
 fn test_overdraft() {
     let rollup_type_script = Script::default();
-    let mut chain = setup_chain(rollup_type_script.clone(), Default::default());
+    let rollup_script_hash = rollup_type_script.hash();
+    let mut chain = setup_chain(rollup_type_script.clone());
     let capacity = 500_00000000;
     let user_script = Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
-        .args(vec![42].pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(42);
+            args.pack()
+        })
         .build();
     let user_script_hash = user_script.hash();
     let rollup_cell = CellOutput::new_builder()
@@ -224,11 +237,17 @@ fn test_overdraft() {
 #[test]
 fn test_deposit_faked_ckb() {
     let rollup_type_script = Script::default();
-    let mut chain = setup_chain(rollup_type_script.clone(), Default::default());
+    let rollup_script_hash = rollup_type_script.hash();
+    let mut chain = setup_chain(rollup_type_script.clone());
     let capacity = 500_00000000;
     let user_script = Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
-        .args(vec![42].pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(42);
+            args.pack()
+        })
         .build();
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script).pack())
