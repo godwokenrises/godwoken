@@ -157,10 +157,14 @@ async fn filter_web3_transactions(
         // extract to_id corresponding script, check code_hash is either polyjuice contract code_hash or sudt contract code_hash
         let to_id = l2_transaction.raw().to_id().unpack();
         let to_script_hash = get_script_hash(store.clone(), to_id).await?;
-        let to_script = match get_script(store.clone(), to_script_hash).await? {
-            Some(s) => s,
-            None => continue,
-        };
+        let to_script = get_script(store.clone(), to_script_hash)
+            .await?
+            .unwrap_or_else(|| {
+                panic!(
+                    "get_script failed, no script found! script_hash: {:?}",
+                    to_script_hash
+                )
+            });
 
         let mut tx_gas_used = Decimal::from(0u64);
         if to_script.code_hash().as_slice() == polyjuice_type_script_hash.0 {
@@ -299,14 +303,7 @@ async fn filter_web3_transactions(
             && to_script.code_hash().as_slice() == l2_sudt_type_script_hash.0
         {
             // deal with SUDT transfer
-            let sudt_args =
-                match SUDTArgs::from_slice(l2_transaction.raw().args().raw_data().as_ref()) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        println!("SUDArgs error: {:?}", e);
-                        continue;
-                    }
-                };
+            let sudt_args = SUDTArgs::from_slice(l2_transaction.raw().args().raw_data().as_ref())?;
             match sudt_args.to_enum() {
                 SUDTArgsUnion::SUDTTransfer(sudt_transfer) => {
                     let to_id: u32 = sudt_transfer.to().unpack();
@@ -314,10 +311,14 @@ async fn filter_web3_transactions(
                     let fee: u128 = sudt_transfer.fee().unpack();
 
                     let to_script_hash = get_script_hash(store.clone(), to_id).await?;
-                    let to_script = match get_script(store.clone(), to_script_hash).await? {
-                        Some(s) => s,
-                        None => continue,
-                    };
+                    let to_script = get_script(store.clone(), to_script_hash)
+                        .await?
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "get_script failed, no script found! script_hash: {:?}",
+                                to_script_hash
+                            )
+                        });
 
                     let to_address = format!("{:#x}", to_script.args().raw_data());
                     let value = amount;
