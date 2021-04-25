@@ -1,6 +1,7 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
 use crate::rpc_client::{DepositInfo, RPCClient};
+use crate::stake::Stake;
 use crate::transaction_skeleton::TransactionSkeleton;
 use crate::utils::{fill_tx_fee, CKBGenesisInfo};
 use crate::wallet::Wallet;
@@ -144,6 +145,7 @@ async fn complete_tx_skeleton(
     deposit_cells: Vec<DepositInfo>,
     block: L2Block,
     global_state: GlobalState,
+    stake: &Stake,
 ) -> Result<Transaction> {
     let rollup_cell_info = smol::block_on(rpc_client.query_rollup_cell())?
         .ok_or_else(|| anyhow!("can't find rollup cell"))?;
@@ -180,7 +182,7 @@ async fn complete_tx_skeleton(
             .build(),
     );
     // output
-    let output = rollup_cell_info.output;
+    let output = rollup_cell_info.output.clone();
     let output_data = global_state.as_bytes();
     tx_skeleton.outputs_mut().push((output, output_data));
     // deposit cells
@@ -253,12 +255,31 @@ async fn complete_tx_skeleton(
         deps
     };
     tx_skeleton.cell_deps_mut().extend(deposit_type_deps);
+
     // custodian cells
     let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
     tx_skeleton.outputs_mut().extend(custodian_cells);
-    // TODO stake cell
+
+    // stake cell
+    let generated_stake = stake
+        .generate(
+            &rollup_cell_info,
+            rollup_context,
+            &block,
+            &block_producer_config,
+            rpc_client,
+            wallet.lock().to_owned(),
+        )
+        .await?;
+    tx_skeleton.cell_deps_mut().extend(generated_stake.deps);
+    tx_skeleton.inputs_mut().extend(generated_stake.inputs);
+    tx_skeleton
+        .outputs_mut()
+        .push((generated_stake.output, generated_stake.output_data));
+
     // tx fee cell
     fill_tx_fee(&mut tx_skeleton, rpc_client, wallet.lock().to_owned()).await?;
+
     // sign
     let tx = wallet.sign_tx_skeleton(tx_skeleton)?;
     Ok(tx)
@@ -274,6 +295,7 @@ pub struct BlockProducer {
     config: BlockProducerConfig,
     rpc_client: RPCClient,
     ckb_genesis_info: CKBGenesisInfo,
+    stake: Stake,
 }
 
 impl BlockProducer {
@@ -289,6 +311,7 @@ impl BlockProducer {
         config: BlockProducerConfig,
     ) -> Result<Self> {
         let wallet = Wallet::from_config(&config.wallet_config).with_context(|| "init wallet")?;
+        let stake = Stake::new();
 
         let block_producer = BlockProducer {
             rollup_config_hash,
@@ -299,6 +322,7 @@ impl BlockProducer {
             rpc_client,
             wallet,
             ckb_genesis_info,
+            stake,
             config,
         };
         Ok(block_producer)
@@ -375,11 +399,13 @@ impl BlockProducer {
             deposit_cells,
             block,
             global_state,
+            &self.stake,
         )
         .await?;
 
         // send transaction
-        self.rpc_client.send_transaction(tx).await?;
+        self.rpc_client.send_transaction(tx.clone()).await?;
+        self.stake.add_stake(rollup_context, tx);
         Ok(())
     }
 }

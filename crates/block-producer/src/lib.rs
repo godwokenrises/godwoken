@@ -3,6 +3,7 @@ pub mod indexer_types;
 pub mod poller;
 pub mod produce_block;
 pub mod rpc_client;
+pub mod stake;
 pub mod transaction_skeleton;
 pub mod types;
 pub mod utils;
