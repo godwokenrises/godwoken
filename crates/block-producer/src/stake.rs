@@ -37,9 +37,10 @@ pub async fn generate(
             .stake_block_number(block.raw().number())
             .build();
 
-        let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter().cloned();
+        let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
         rollup_type_hash
-            .chain(stake_lock_args.as_slice().iter().cloned())
+            .chain(stake_lock_args.as_slice().iter())
+            .cloned()
             .collect()
     };
 
