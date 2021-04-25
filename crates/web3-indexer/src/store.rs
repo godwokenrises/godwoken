@@ -29,6 +29,7 @@ pub async fn insert_to_sql(
     l1_transaction: &Transaction,
     l2_sudt_type_script_hash: H256,
     polyjuice_type_script_hash: H256,
+    rollup_type_hash: H256,
 ) -> anyhow::Result<()> {
     let l2_block = extract_l2_block(l1_transaction)?;
     let number: u64 = l2_block.raw().number().unpack();
@@ -44,6 +45,7 @@ pub async fn insert_to_sql(
             l2_block.clone(),
             l2_sudt_type_script_hash,
             polyjuice_type_script_hash,
+            rollup_type_hash,
         )
         .await?;
         println!("web3_tx_with_logs_vec: {:?}", web3_tx_with_logs_vec);
@@ -63,7 +65,7 @@ pub async fn insert_to_sql(
             .execute(&mut tx).await?;
         for web3_tx_with_logs in web3_tx_with_logs_vec {
             let web3_tx = web3_tx_with_logs.tx;
-            let  (transaction_id,): (i32,) =
+            let  (transaction_id,): (i64,) =
             sqlx::query_as("INSERT INTO transactions
             (hash, block_number, block_hash, transaction_index, from_address, to_address, value, nonce, gas_limit, gas_price, input, v, r, s, cumulative_gas_used, gas_used, logs_bloom, contract_address, status) 
             VALUES 
@@ -133,6 +135,7 @@ async fn filter_web3_transactions(
     l2_block: L2Block,
     l2_sudt_type_script_hash: H256,
     polyjuice_type_script_hash: H256,
+    rollup_type_hash: H256,
 ) -> anyhow::Result<Vec<Web3TransactionWithLogs>> {
     let block_number = l2_block.raw().number().unpack();
     let block_hash: H256 = blake2b_256(l2_block.raw().as_slice()).into();
@@ -147,12 +150,19 @@ async fn filter_web3_transactions(
         println!("tx_hash: {}", tx_hash);
         // extract from_id correspoding script, from_address is the script's args
         let from_id: u32 = l2_transaction.raw().from_id().unpack();
-        let from_address = {
+        let from_script_args = {
             let from_script_hash = get_script_hash(store.clone(), from_id).await?;
             let from_script = get_script(store.clone(), from_script_hash).await?.unwrap();
             from_script.args().raw_data()
         };
-        println!("Check from_address: {:#x}", from_address);
+        if from_script_args.len() != 52 && &from_script_args[0..32] == rollup_type_hash.0 {
+            panic!(
+                "Wrong from_address's script args length, expected: 52, actual: {}",
+                from_script_args.len()
+            );
+        }
+        let from_address = format!("0x{}", faster_hex::hex_string(&from_script_args[32..52])?);
+        println!("Check from_address: {}", from_address);
 
         // extract to_id corresponding script, check code_hash is either polyjuice contract code_hash or sudt contract code_hash
         let to_id = l2_transaction.raw().to_id().unpack();
@@ -275,7 +285,7 @@ async fn filter_web3_transactions(
                 Decimal::from(block_number),
                 block_hash_hex.clone(),
                 tx_index as i32,
-                format!("{:#x}", from_address),
+                from_address,
                 to_address,
                 Decimal::from(polyjuice_args.value),
                 nonce,
@@ -310,17 +320,21 @@ async fn filter_web3_transactions(
                     let amount: u128 = sudt_transfer.amount().unpack();
                     let fee: u128 = sudt_transfer.fee().unpack();
 
-                    let to_script_hash = get_script_hash(store.clone(), to_id).await?;
-                    let to_script = get_script(store.clone(), to_script_hash)
-                        .await?
-                        .unwrap_or_else(|| {
-                            panic!(
-                                "get_script failed, no script found! script_hash: {:?}",
-                                to_script_hash
-                            )
-                        });
+                    let to_script_args = {
+                        let to_script_hash = get_script_hash(store.clone(), to_id).await?;
+                        let to_script = get_script(store.clone(), to_script_hash).await?.unwrap();
+                        to_script.args().raw_data()
+                    };
+                    if to_script_args.len() != 52 && &to_script_args[0..32] == rollup_type_hash.0 {
+                        panic!(
+                            "Wrong from_address's script args length, expected: 52, actual: {}",
+                            from_script_args.len()
+                        );
+                    }
+                    let to_address =
+                        format!("0x{}", faster_hex::hex_string(&to_script_args[32..52])?);
+                    println!("Check to_address: {}", to_address);
 
-                    let to_address = format!("{:#x}", to_script.args().raw_data());
                     let value = amount;
 
                     // Represent SUDTTransfer fee in web3 style, set gas_price as 1 temporary.
@@ -343,7 +357,7 @@ async fn filter_web3_transactions(
                         Decimal::from(block_number),
                         block_hash_hex.clone(),
                         tx_index as i32,
-                        format!("{:#x}", from_address),
+                        from_address,
                         Some(to_address),
                         Decimal::from(value),
                         nonce,

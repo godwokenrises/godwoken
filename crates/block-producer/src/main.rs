@@ -116,8 +116,13 @@ fn run() -> Result<()> {
             })?;
             let l2_sudt_type_script_hash = web3_indexer_config.l2_sudt_type_script_hash;
             let polyjuce_type_script_hash = web3_indexer_config.polyjuice_script_type_hash;
-            let web3_indexer =
-                Web3Indexer::new(pool, l2_sudt_type_script_hash, polyjuce_type_script_hash);
+            let rollup_type_hash = web3_indexer_config.rollup_type_hash;
+            let web3_indexer = Web3Indexer::new(
+                pool,
+                l2_sudt_type_script_hash,
+                polyjuce_type_script_hash,
+                rollup_type_hash,
+            );
             Some(web3_indexer)
         }
         None => None,

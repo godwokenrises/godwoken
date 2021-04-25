@@ -182,6 +182,7 @@ impl ChainUpdater {
                     &tx,
                     indexer.l2_sudt_type_script_hash.clone(),
                     indexer.polyjuice_type_script_hash.clone(),
+                    indexer.rollup_type_hash.clone(),
                 )
                 .await?;
             }
@@ -242,6 +243,7 @@ pub struct Web3Indexer {
     pool: PgPool,
     l2_sudt_type_script_hash: H256,
     polyjuice_type_script_hash: H256,
+    rollup_type_hash: H256,
 }
 
 impl Web3Indexer {
@@ -249,11 +251,13 @@ impl Web3Indexer {
         pool: PgPool,
         l2_sudt_type_script_hash: H256,
         polyjuice_type_script_hash: H256,
+        rollup_type_hash: H256,
     ) -> Self {
         Web3Indexer {
             pool,
             l2_sudt_type_script_hash,
             polyjuice_type_script_hash,
+            rollup_type_hash,
         }
     }
 }

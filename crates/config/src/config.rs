@@ -79,4 +79,5 @@ pub struct Web3IndexerConfig {
     pub database_url: String,
     pub l2_sudt_type_script_hash: H256,
     pub polyjuice_script_type_hash: H256,
+    pub rollup_type_hash: H256,
 }

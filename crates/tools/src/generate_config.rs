@@ -128,7 +128,7 @@ pub fn generate_config(
     });
     let genesis: GenesisConfig = GenesisConfig {
         timestamp: genesis.timestamp,
-        rollup_type_hash,
+        rollup_type_hash: rollup_type_hash.clone(),
         meta_contract_validator_type_hash,
         rollup_config,
     };
@@ -137,6 +137,7 @@ pub fn generate_config(
             database_url: database_url.to_owned(),
             l2_sudt_type_script_hash: scripts.l2_sudt_validator.script_type_hash,
             polyjuice_script_type_hash: scripts.polyjuice_validator.script_type_hash,
+            rollup_type_hash: rollup_type_hash,
         }),
         None => None,
     };
