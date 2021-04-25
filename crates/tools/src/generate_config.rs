@@ -132,12 +132,18 @@ pub fn generate_config(
         meta_contract_validator_type_hash,
         rollup_config,
     };
+    let eth_account_lock_hash = genesis
+        .rollup_config
+        .allowed_eoa_type_hashes
+        .get(0)
+        .ok_or_else(|| anyhow!("No allowed EoA type hashes in the rollup config"))?;
     let web3_indexer = match database_url {
         Some(database_url) => Some(Web3IndexerConfig {
             database_url: database_url.to_owned(),
             l2_sudt_type_script_hash: scripts.l2_sudt_validator.script_type_hash,
             polyjuice_script_type_hash: scripts.polyjuice_validator.script_type_hash,
-            rollup_type_hash: rollup_type_hash,
+            rollup_type_hash,
+            eth_account_lock_hash: eth_account_lock_hash.to_owned(),
         }),
         None => None,
     };

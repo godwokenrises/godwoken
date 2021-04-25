@@ -2,9 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use futures::{select, FutureExt};
 use gw_block_producer::{
-    block_producer::BlockProducer,
-    poller::{ChainUpdater, Web3Indexer},
-    rpc_client::RPCClient,
+    block_producer::BlockProducer, poller::ChainUpdater, rpc_client::RPCClient,
     utils::CKBGenesisInfo,
 };
 use gw_chain::chain::Chain;
@@ -22,6 +20,7 @@ use gw_types::{
     packed::{RollupConfig, Script},
     prelude::*,
 };
+use gw_web3_indexer::Web3Indexer;
 use parking_lot::Mutex;
 use sqlx::postgres::PgPoolOptions;
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -117,11 +116,13 @@ fn run() -> Result<()> {
             let l2_sudt_type_script_hash = web3_indexer_config.l2_sudt_type_script_hash;
             let polyjuce_type_script_hash = web3_indexer_config.polyjuice_script_type_hash;
             let rollup_type_hash = web3_indexer_config.rollup_type_hash;
+            let eth_account_lock_hash = web3_indexer_config.eth_account_lock_hash;
             let web3_indexer = Web3Indexer::new(
                 pool,
                 l2_sudt_type_script_hash,
                 polyjuce_type_script_hash,
                 rollup_type_hash,
+                eth_account_lock_hash,
             );
             Some(web3_indexer)
         }

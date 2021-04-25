@@ -18,10 +18,9 @@ use gw_types::{
     },
     prelude::*,
 };
-use gw_web3_indexer::store::insert_to_sql;
+use gw_web3_indexer::indexer::Web3Indexer;
 use parking_lot::Mutex;
 use serde_json::json;
-use sqlx::postgres::PgPool;
 use std::sync::Arc;
 
 pub struct ChainUpdater {
@@ -176,15 +175,9 @@ impl ChainUpdater {
         // TODO sync missed block
         match &self.web3_indexer {
             Some(indexer) => {
-                insert_to_sql(
-                    &indexer.pool,
-                    self.chain.lock().store().clone(),
-                    &tx,
-                    indexer.l2_sudt_type_script_hash.clone(),
-                    indexer.polyjuice_type_script_hash.clone(),
-                    indexer.rollup_type_hash.clone(),
-                )
-                .await?;
+                indexer
+                    .insert_to_sql(self.chain.lock().store().clone(), &tx)
+                    .await?;
             }
             None => {}
         }
@@ -236,29 +229,6 @@ impl ChainUpdater {
             }
         }
         Ok(results)
-    }
-}
-
-pub struct Web3Indexer {
-    pool: PgPool,
-    l2_sudt_type_script_hash: H256,
-    polyjuice_type_script_hash: H256,
-    rollup_type_hash: H256,
-}
-
-impl Web3Indexer {
-    pub fn new(
-        pool: PgPool,
-        l2_sudt_type_script_hash: H256,
-        polyjuice_type_script_hash: H256,
-        rollup_type_hash: H256,
-    ) -> Self {
-        Web3Indexer {
-            pool,
-            l2_sudt_type_script_hash,
-            polyjuice_type_script_hash,
-            rollup_type_hash,
-        }
     }
 }
 
