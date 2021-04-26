@@ -1,6 +1,6 @@
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
 use crate::types::CellInfo;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{HttpClient, Output, Params as ClientParams, Transport};
 use ckb_types::prelude::{Entity, Unpack as CKBUnpack};
 use gw_common::H256;
@@ -155,7 +155,12 @@ impl RPCClient {
                     )
                     .await?,
             )?;
+
+            if cells.last_cursor.is_empty() {
+                return Err(anyhow!("no enough payment cells"));
+            }
             cursor = Some(cells.last_cursor);
+
             let cells = cells.objects.into_iter().filter_map(|cell| {
                 // delete cells with data & type
                 if !cell.output_data.is_empty() || cell.output.type_.is_some() {
@@ -391,6 +396,11 @@ impl RPCClient {
                     )
                     .await?,
             )?;
+
+            if cells.last_cursor.is_empty() {
+                println!("no unlocked stake");
+                return Ok(None);
+            }
             cursor = Some(cells.last_cursor);
 
             unlocked_cell = cells.objects.into_iter().find(|cell| {
