@@ -181,7 +181,7 @@ impl Web3Indexer {
             }
             // from_address is the script's args in eth account lock
             let from_script_args = from_script.args().raw_data();
-            if from_script_args.len() != 52 && &from_script_args[0..32] == self.rollup_type_hash.0 {
+            if from_script_args.len() != 52 && from_script_args[0..32] == self.rollup_type_hash.0 {
                 panic!(
                     "Wrong from_address's script args, from_script_args: {:?}",
                     from_script_args
@@ -358,11 +358,11 @@ impl Web3Indexer {
                         let to_address = if to_script_code_hash == self.eth_account_lock_hash {
                             let to_script_args = to_script.args().raw_data();
                             if to_script_args.len() != 52
-                                && &to_script_args[0..32] == self.rollup_type_hash.0
+                                && to_script_args[0..32] == self.rollup_type_hash.0
                             {
                                 panic!(
-                                "Wrong from_address's script args length, expected: 52, actual: {}",
-                                from_script_args.len()
+                                "Wrong to_address's script args length, expected: 52, actual: {}",
+                                to_script_args.len()
                             );
                             }
                             let to_address =
