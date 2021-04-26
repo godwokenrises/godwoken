@@ -155,7 +155,13 @@ impl RPCClient {
                     )
                     .await?,
             )?;
+
+            if cells.last_cursor.is_empty() {
+                println!("no payment cell");
+                return Ok(collected_cells);
+            }
             cursor = Some(cells.last_cursor);
+
             let cells = cells.objects.into_iter().filter_map(|cell| {
                 // delete cells with data & type
                 if !cell.output_data.is_empty() || cell.output.type_.is_some() {
