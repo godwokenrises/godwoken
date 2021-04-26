@@ -44,8 +44,10 @@ impl From<LockAlgorithmError> for Error {
 
 #[derive(Error, Debug, PartialEq, Clone, Eq)]
 pub enum DepositionError {
-    #[error("Deposit Faked CKB")]
+    #[error("Deposit faked CKB")]
     DepositFakedCKB,
+    #[error("Deposit unknown EoA lock")]
+    DepositUnknownEoALock,
 }
 
 impl From<DepositionError> for Error {

@@ -1,8 +1,11 @@
-use crate::testing_tool::chain::{build_sync_tx, construct_block, setup_chain};
+use crate::testing_tool::chain::{
+    build_sync_tx, construct_block, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
+};
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, RevertedL1Action, SyncEvent, SyncParam};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
 use gw_store::state_db::{StateDBTransaction, StateDBVersion};
 use gw_types::{
+    core::ScriptHashType,
     packed::{CellOutput, DepositionRequest, GlobalState, L2BlockCommittedInfo, Script},
     prelude::*,
 };
@@ -55,14 +58,23 @@ fn produce_a_block(
 #[test]
 fn test_produce_blocks() {
     let rollup_type_script = Script::default();
-    let mut chain = setup_chain(rollup_type_script.clone(), Default::default());
+    let rollup_script_hash = rollup_type_script.hash();
+    let mut chain = setup_chain(rollup_type_script.clone());
 
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script).pack())
         .build();
 
     // block #1
-    let user_script_a = Script::new_builder().args(vec![42].pack()).build();
+    let user_script_a = Script::new_builder()
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(42);
+            args.pack()
+        })
+        .build();
     let deposition = DepositionRequest::new_builder()
         .capacity(100u64.pack())
         .script(user_script_a.clone())
@@ -77,7 +89,15 @@ fn test_produce_blocks() {
     produce_a_block(&mut chain, deposition, rollup_cell.clone(), 2);
 
     // block #3
-    let user_script_b = Script::new_builder().args(vec![50].pack()).build();
+    let user_script_b = Script::new_builder()
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(50);
+            args.pack()
+        })
+        .build();
     let deposition = DepositionRequest::new_builder()
         .capacity(500u64.pack())
         .script(user_script_b.clone())
@@ -117,7 +137,8 @@ fn test_produce_blocks() {
 #[test]
 fn test_layer1_fork() {
     let rollup_type_script = Script::default();
-    let mut chain = setup_chain(rollup_type_script.clone(), Default::default());
+    let rollup_script_hash = rollup_type_script.hash();
+    let mut chain = setup_chain(rollup_type_script.clone());
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script.clone()).pack())
         .build();
@@ -125,12 +146,20 @@ fn test_layer1_fork() {
     // build fork block 1
     let fork_action = {
         // build fork from another chain to avoid mess up the tx pool
-        let charlie_script = Script::new_builder().args(vec![7].pack()).build();
+        let charlie_script = Script::new_builder()
+            .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args({
+                let mut args = rollup_script_hash.to_vec();
+                args.push(7);
+                args.pack()
+            })
+            .build();
         let deposition = DepositionRequest::new_builder()
             .capacity(120u64.pack())
             .script(charlie_script)
             .build();
-        let chain = setup_chain(rollup_type_script.clone(), Default::default());
+        let chain = setup_chain(rollup_type_script.clone());
         let mem_pool = chain.mem_pool().lock();
         let block_result = construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap();
 
@@ -145,7 +174,15 @@ fn test_layer1_fork() {
         }
     };
     // update block 1
-    let alice_script = Script::new_builder().args(vec![42].pack()).build();
+    let alice_script = Script::new_builder()
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(42);
+            args.pack()
+        })
+        .build();
     let deposition = DepositionRequest::new_builder()
         .capacity(100u64.pack())
         .script(alice_script)
@@ -170,7 +207,15 @@ fn test_layer1_fork() {
     let event = chain.sync(param).unwrap();
     assert_eq!(event, SyncEvent::Success);
     // update block 2
-    let bob_script = Script::new_builder().args(vec![43].pack()).build();
+    let bob_script = Script::new_builder()
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(43);
+            args.pack()
+        })
+        .build();
     let deposition = DepositionRequest::new_builder()
         .capacity(500u64.pack())
         .script(bob_script)
@@ -252,13 +297,30 @@ fn test_layer1_fork() {
 #[test]
 fn test_layer1_revert() {
     let rollup_type_script = Script::default();
-    let mut chain = setup_chain(rollup_type_script.clone(), Default::default());
+    let rollup_script_hash = rollup_type_script.hash();
+    let mut chain = setup_chain(rollup_type_script.clone());
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script.clone()).pack())
         .build();
 
+    let default_eoa_code_hash = chain
+        .generator()
+        .rollup_context()
+        .rollup_config
+        .allowed_eoa_type_hashes()
+        .get(0)
+        .expect("get default EoA hash");
+
     // update block 1
-    let alice_script = Script::new_builder().args(vec![42].pack()).build();
+    let alice_script = Script::new_builder()
+        .code_hash(default_eoa_code_hash.clone())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(42);
+            args.pack()
+        })
+        .build();
     let deposition = DepositionRequest::new_builder()
         .capacity(100u64.pack())
         .script(alice_script.clone())
@@ -283,7 +345,15 @@ fn test_layer1_revert() {
     let event = chain.sync(param).unwrap();
     assert_eq!(event, SyncEvent::Success);
     // update block 2
-    let bob_script = Script::new_builder().args(vec![43].pack()).build();
+    let bob_script = Script::new_builder()
+        .code_hash(default_eoa_code_hash)
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(43);
+            args.pack()
+        })
+        .build();
     let deposition = DepositionRequest::new_builder()
         .capacity(500u64.pack())
         .script(bob_script.clone())
@@ -431,15 +501,24 @@ fn test_layer1_revert() {
 #[test]
 fn test_sync_blocks() {
     let rollup_type_script = Script::default();
-    let mut chain1 = setup_chain(rollup_type_script.clone(), Default::default());
-    let mut chain2 = setup_chain(rollup_type_script.clone(), Default::default());
+    let rollup_script_hash = rollup_type_script.hash();
+    let mut chain1 = setup_chain(rollup_type_script.clone());
+    let mut chain2 = setup_chain(rollup_type_script.clone());
 
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script).pack())
         .build();
 
     // block #1
-    let user_script_a = Script::new_builder().args(vec![42].pack()).build();
+    let user_script_a = Script::new_builder()
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(42);
+            args.pack()
+        })
+        .build();
     let sudt_script_hash: H256 = [42u8; 32].into();
     let deposition = DepositionRequest::new_builder()
         .capacity(100u64.pack())
@@ -456,7 +535,15 @@ fn test_sync_blocks() {
     let sync_2 = produce_a_block(&mut chain1, deposition, rollup_cell.clone(), 2);
 
     // block #3
-    let user_script_b = Script::new_builder().args(vec![50].pack()).build();
+    let user_script_b = Script::new_builder()
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(50);
+            args.pack()
+        })
+        .build();
     let deposition = DepositionRequest::new_builder()
         .capacity(500u64.pack())
         .script(user_script_b.clone())

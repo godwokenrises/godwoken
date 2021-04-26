@@ -872,7 +872,9 @@ pub struct RollupConfig {
     pub required_staking_capacity: Uint64,
     pub challenge_maturity_blocks: Uint64,
     pub finality_blocks: Uint64,
-    pub reward_burn_rate: Uint32, // * reward_burn_rate / 100
+    pub reward_burn_rate: Uint32,           // * reward_burn_rate / 100
+    pub allowed_eoa_type_hashes: Vec<H256>, // list of script code_hash allowed an EOA(external owned account) to use
+    pub allowed_contract_type_hashes: Vec<H256>, // list of script code_hash allowed a contract account to use
 }
 
 impl From<RollupConfig> for packed::RollupConfig {
@@ -889,7 +891,9 @@ impl From<RollupConfig> for packed::RollupConfig {
             required_staking_capacity,
             challenge_maturity_blocks,
             finality_blocks,
-            reward_burn_rate, // * reward_burn_rate / 100
+            reward_burn_rate,             // * reward_burn_rate / 100
+            allowed_eoa_type_hashes, // list of script code_hash allowed an EOA(external owned account) to use
+            allowed_contract_type_hashes, // list of script code_hash allowed a contract account to use
         } = json;
         let required_staking_capacity: u64 = required_staking_capacity.into();
         let challenge_maturity_blocks: u64 = challenge_maturity_blocks.into();
@@ -909,6 +913,18 @@ impl From<RollupConfig> for packed::RollupConfig {
             .challenge_maturity_blocks(challenge_maturity_blocks.pack())
             .finality_blocks(finality_blocks.pack())
             .reward_burn_rate(reward_burn_rate.into())
+            .allowed_eoa_type_hashes(
+                allowed_eoa_type_hashes
+                    .into_iter()
+                    .map(|hash| hash.pack())
+                    .pack(),
+            )
+            .allowed_contract_type_hashes(
+                allowed_contract_type_hashes
+                    .into_iter()
+                    .map(|hash| hash.pack())
+                    .pack(),
+            )
             .build()
     }
 }
@@ -932,6 +948,16 @@ impl From<packed::RollupConfig> for RollupConfig {
             challenge_maturity_blocks: challenge_maturity_blocks.into(),
             finality_blocks: finality_blocks.into(),
             reward_burn_rate: (reward_burn_date as u32).into(),
+            allowed_eoa_type_hashes: data
+                .allowed_eoa_type_hashes()
+                .into_iter()
+                .map(|hash| hash.unpack())
+                .collect(),
+            allowed_contract_type_hashes: data
+                .allowed_contract_type_hashes()
+                .into_iter()
+                .map(|hash| hash.unpack())
+                .collect(),
         }
     }
 }
