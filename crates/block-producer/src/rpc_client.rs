@@ -391,6 +391,11 @@ impl RPCClient {
                     )
                     .await?,
             )?;
+
+            if cells.last_cursor.is_empty() {
+                println!("no unlocked stake");
+                return Ok(None);
+            }
             cursor = Some(cells.last_cursor);
 
             unlocked_cell = cells.objects.into_iter().find(|cell| {
