@@ -1,6 +1,6 @@
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
 use crate::types::CellInfo;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{HttpClient, Output, Params as ClientParams, Transport};
 use ckb_types::prelude::{Entity, Unpack as CKBUnpack};
 use gw_common::H256;
@@ -157,8 +157,7 @@ impl RPCClient {
             )?;
 
             if cells.last_cursor.is_empty() {
-                println!("no payment cell");
-                return Ok(collected_cells);
+                return Err(anyhow!("no enough payment cells"));
             }
             cursor = Some(cells.last_cursor);
 
