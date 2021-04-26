@@ -57,6 +57,7 @@ pub struct BlockProducerConfig {
     pub rollup_cell_lock_dep: CellDep,
     pub rollup_cell_type_dep: CellDep,
     pub deposit_cell_lock_dep: CellDep,
+    pub stake_cell_lock_dep: CellDep,
     pub wallet_config: WalletConfig,
 }
 

@@ -73,6 +73,10 @@ pub fn generate_config(
         let dep: ckb_types::packed::CellDep = scripts.deposition_lock.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
+    let stake_cell_lock_dep = {
+        let dep: ckb_types::packed::CellDep = scripts.stake_lock.cell_dep.clone().into();
+        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
+    };
 
     let wallet_config: WalletConfig = WalletConfig { privkey_path, lock };
 
@@ -118,6 +122,7 @@ pub fn generate_config(
         rollup_cell_lock_dep,
         rollup_cell_type_dep,
         deposit_cell_lock_dep,
+        stake_cell_lock_dep,
         wallet_config,
     });
     let genesis: GenesisConfig = GenesisConfig {

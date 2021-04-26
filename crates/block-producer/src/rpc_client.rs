@@ -1,6 +1,6 @@
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
 use crate::types::CellInfo;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{HttpClient, Output, Params as ClientParams, Transport};
 use ckb_types::prelude::{Entity, Unpack as CKBUnpack};
 use gw_common::H256;
@@ -11,7 +11,7 @@ use gw_types::{
     core::ScriptHashType,
     packed::{
         Block, CellOutput, DepositionLockArgs, DepositionLockArgsReader, DepositionRequest,
-        OutPoint, Script, Transaction,
+        OutPoint, Script, StakeLockArgs, StakeLockArgsReader, Transaction,
     },
     prelude::*,
 };
@@ -155,7 +155,12 @@ impl RPCClient {
                     )
                     .await?,
             )?;
+
+            if cells.last_cursor.is_empty() {
+                return Err(anyhow!("no enough payment cells"));
+            }
             cursor = Some(cells.last_cursor);
+
             let cells = cells.objects.into_iter().filter_map(|cell| {
                 // delete cells with data & type
                 if !cell.output_data.is_empty() || cell.output.type_.is_some() {
@@ -344,6 +349,91 @@ impl RPCClient {
         }
 
         Ok(deposit_infos)
+    }
+
+    pub async fn query_unlocked_stake(
+        &self,
+        rollup_context: &RollupContext,
+        owner_lock_hash: [u8; 32],
+        last_finalized_block_number: u64,
+    ) -> Result<Option<CellInfo>> {
+        let lock = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.stake_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .build();
+
+        let search_key = SearchKey {
+            script: {
+                let lock = ckb_types::packed::Script::new_unchecked(lock.as_bytes());
+                lock.into()
+            },
+            script_type: ScriptType::Lock,
+            filter: Some(SearchKeyFilter {
+                script: None,
+                output_data_len_range: None,
+                output_capacity_range: None,
+                block_range: None,
+            }),
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut unlocked_cell = None;
+        let mut cursor = None;
+
+        while unlocked_cell.is_none() {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer_client
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            if cells.last_cursor.is_empty() {
+                println!("no unlocked stake");
+                return Ok(None);
+            }
+            cursor = Some(cells.last_cursor);
+
+            unlocked_cell = cells.objects.into_iter().find(|cell| {
+                let args = cell.output.lock.args.clone().into_bytes();
+                let stake_lock_args = match StakeLockArgsReader::verify(&args[32..], false) {
+                    Ok(()) => StakeLockArgs::new_unchecked(args.slice(32..)),
+                    Err(_) => return false,
+                };
+
+                stake_lock_args.stake_block_number().unpack() <= last_finalized_block_number
+                    && stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash
+            });
+        }
+
+        let unlocked_cell_info = |cell: Cell| {
+            let out_point = {
+                let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
+                OutPoint::new_unchecked(out_point.as_bytes())
+            };
+            let output = {
+                let output: ckb_types::packed::CellOutput = cell.output.into();
+                CellOutput::new_unchecked(output.as_bytes())
+            };
+            let data = cell.output_data.into_bytes();
+
+            CellInfo {
+                out_point,
+                output,
+                data,
+            }
+        };
+
+        Ok(unlocked_cell.map(unlocked_cell_info))
     }
 
     pub async fn get_transaction(&self, tx_hash: [u8; 32]) -> Result<Option<Transaction>> {

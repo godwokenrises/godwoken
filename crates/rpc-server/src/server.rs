@@ -7,7 +7,7 @@ use std::task::{Context, Poll};
 
 use anyhow::{Error, Result};
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{body::HttpBody, Body, Request, Response, Server};
+use hyper::{body::HttpBody, Body, Method, Request, Response, Server};
 use smol::{io, prelude::*, Async};
 
 use jsonrpc_v2::{RequestKind, ResponseObjects, Router, Server as JsonrpcServer};
@@ -39,6 +39,15 @@ async fn serve<R: Router + 'static>(
     rpc: Arc<JsonrpcServer<R>>,
     req: Request<Body>,
 ) -> Result<Response<Body>> {
+    if req.method() == Method::OPTIONS {
+        return hyper::Response::builder()
+            .status(hyper::StatusCode::NO_CONTENT)
+            .header("Access-Control-Allow-Origin", "*")
+            .header("Access-Control-Allow-Methods", "*")
+            .header("Access-Control-Allow-Headers", "*")
+            .body(Body::empty())
+            .map_err(|e| anyhow::anyhow!("JSONRPC Preflight Request error: {:?}", e));
+    }
     // Handler here is adapted from https://github.com/kardeiz/jsonrpc-v2/blob/1acf0b911c698413950d0b101ec4255cabd0d4ec/src/lib.rs#L1302
     let mut buf = if let Some(content_length) = req
         .headers()
@@ -68,6 +77,9 @@ async fn serve<R: Router + 'static>(
                 hyper::Response::builder()
                     .status(hyper::StatusCode::OK)
                     .header("Content-Type", "application/json")
+                    .header("Access-Control-Allow-Origin", "*")
+                    .header("Access-Control-Allow-Methods", "*")
+                    .header("Access-Control-Allow-Headers", "*")
                     .body(hyper::Body::from(json))
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
             }),
