@@ -54,6 +54,13 @@ fn main() {
                         .help("The deployment results json file path"),
                 )
                 .arg(
+                    Arg::with_name("genesis-timestamp")
+                        .short("t")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Genesis timestamp in milliseconds"),
+                )
+                .arg(
                     Arg::with_name("user-rollup-config-path")
                         .short("u")
                         .takes_value(true)
@@ -141,12 +148,16 @@ fn main() {
             let user_rollup_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
             let poa_config_path = Path::new(m.value_of("poa-config-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
+            let timestamp = m
+                .value_of("genesis-timestamp")
+                .map(|s| s.parse().expect("timestamp in milliseconds"));
             if let Err(err) = deploy_genesis::deploy_genesis(
                 &privkey_path,
                 ckb_rpc_url,
                 &deployment_results_path,
                 &user_rollup_path,
                 &poa_config_path,
+                timestamp,
                 &output_path,
             ) {
                 log::error!("Deploy genesis error: {}", err);
