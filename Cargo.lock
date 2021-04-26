@@ -1975,6 +1975,7 @@ dependencies = [
  "gw-types",
  "hex",
  "lazy_static",
+ "rlp",
  "secp256k1 0.20.0",
  "sha3",
  "thiserror",
@@ -3726,10 +3727,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust_decimal"
-version = "1.11.1"
+name = "rlp"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ca515aafa02c92f4d3c69b2f4c408f839b51b1aa938d00b15e8c0966bd22d73"
+checksum = "e54369147e3e7796c9b885c7304db87ca3d09a0a98f72843d532868675bbfba8"
+dependencies = [
+ "bytes 1.0.1",
+ "rustc-hex",
+]
+
+[[package]]
+name = "rust_decimal"
+version = "1.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d64bd27418c091ebd539b00f50ad059fc41421c87d5033c217cd76c7506d0d71"
 dependencies = [
  "arrayvec",
  "num-traits",
@@ -3741,6 +3752,12 @@ name = "rustc-demangle"
 version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e3bad0ee36814ca07d7968269dd4b7ec89ec2da10c4bb613928d3077083c232"
+
+[[package]]
+name = "rustc-hex"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e75f6a532d0fd9f7f13144f392b6ad56a32696bfcd9c78f797f16bbb6f072d6"
 
 [[package]]
 name = "rustc_version"

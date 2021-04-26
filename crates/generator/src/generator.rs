@@ -160,7 +160,7 @@ impl Generator {
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
 
         let message = raw.calc_message(&self.rollup_context.rollup_script_hash);
-        let valid_signature = lock_algo.verify_signature(
+        let valid_signature = lock_algo.verify_withdrawal_signature(
             account_script.args().unpack(),
             withdrawal_request.signature(),
             message,
@@ -215,6 +215,9 @@ impl Generator {
             }
             .into());
         }
+        let script = state.get_script(&script_hash).expect("get script");
+        let lock_code_hash: [u8; 32] = script.code_hash().unpack();
+
         let receiver_script_hash = state.get_script_hash(receiver_id)?;
         if receiver_script_hash.is_zero() {
             return Err(AccountError::ScriptNotFound {
@@ -222,21 +225,20 @@ impl Generator {
             }
             .into());
         }
-        let script = state.get_script(&script_hash).expect("get script");
-        let lock_code_hash: [u8; 32] = script.code_hash().unpack();
-
-        let message = raw_tx.calc_message(
-            &self.rollup_context.rollup_script_hash,
-            &script_hash,
-            &receiver_script_hash,
-        );
+        let receiver_script = state
+            .get_script(&receiver_script_hash)
+            .expect("get receiver script");
 
         let lock_algo = self
             .account_lock_manage()
             .get_lock_algorithm(&lock_code_hash.into())
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
-        let valid_signature =
-            lock_algo.verify_signature(script.args().unpack(), tx.signature(), message)?;
+        let valid_signature = lock_algo.verify_tx(
+            self.rollup_context.rollup_script_hash.clone(),
+            script,
+            receiver_script,
+            tx.clone(),
+        )?;
         if !valid_signature {
             return Err(LockAlgorithmError::InvalidSignature.into());
         }

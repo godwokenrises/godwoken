@@ -34,6 +34,8 @@ pub enum LockAlgorithmError {
     InvalidSignature,
     #[error("Unknown account lock")]
     UnknownAccountLock,
+    #[error("Invalid transaction args")]
+    InvalidTransactionArgs,
 }
 
 impl From<LockAlgorithmError> for Error {
