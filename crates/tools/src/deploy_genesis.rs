@@ -35,6 +35,8 @@ use super::deploy_scripts::{
     get_network_type, run_cmd, wait_for_tx, ScriptsDeploymentResult, TYPE_ID_CODE_HASH,
 };
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 pub struct UserRollupConfig {
     pub l1_sudt_script_type_hash: H256,
@@ -118,6 +120,7 @@ pub fn deploy_genesis(
     deployment_result_path: &Path,
     user_rollup_config_path: &Path,
     poa_config_path: &Path,
+    timestamp: Option<u64>,
     output_path: &Path,
 ) -> Result<(), String> {
     let deployment_result_string =
@@ -158,8 +161,13 @@ pub fn deploy_genesis(
         .into();
     let genesis_info = GenesisInfo::from_block(&genesis_block)?;
 
-    // FIXME: millisecond or second?
-    let timestamp = 0;
+    // millisecond
+    let timestamp = timestamp.unwrap_or_else(|| {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_millis() as u64
+    });
 
     let first_cell_input: ckb_packed::CellInput = get_live_cells(
         rpc_client.url(),
