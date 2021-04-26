@@ -166,14 +166,26 @@ impl Web3Indexer {
             let tx_hash_hex = format!("0x{:#x}", tx_hash);
             println!("tx_hash: {}", tx_hash);
             let from_id: u32 = l2_transaction.raw().from_id().unpack();
-            // filter eth account, from_address is the script's args
             let from_script_hash = get_script_hash(store.clone(), from_id).await?;
-            let from_script = get_script(store.clone(), from_script_hash).await?.unwrap();
-            let from_script_args = { from_script.args().raw_data() };
+            let from_script = get_script(store.clone(), from_script_hash)
+                .await?
+                .unwrap_or_else(|| {
+                    panic!(
+                        "get_script failed, no script found! script_hash: {:?}",
+                        from_script_hash
+                    )
+                });
+            let from_script_code_hash: H256 = from_script.code_hash().unpack();
+            // skip tx with non eth_account_lock from_id
+            if from_script_code_hash != self.eth_account_lock_hash {
+                continue;
+            }
+            // from_address is the script's args in eth account lock
+            let from_script_args = from_script.args().raw_data();
             if from_script_args.len() != 52 && &from_script_args[0..32] == self.rollup_type_hash.0 {
                 panic!(
-                    "Wrong from_address's script args length, expected: 52, actual: {}",
-                    from_script_args.len()
+                    "Wrong from_address's script args, from_script_args: {:?}",
+                    from_script_args
                 );
             }
             let from_address = format!("0x{}", faster_hex::hex_string(&from_script_args[32..52])?);
@@ -339,23 +351,33 @@ impl Web3Indexer {
                         let amount: u128 = sudt_transfer.amount().unpack();
                         let fee: u128 = sudt_transfer.fee().unpack();
 
-                        // to_id could be eoa account, polyjuice contract account, or any other types of account,
-                        // only eos/polyjuice contract account would be stored.
-
                         let to_script_hash = get_script_hash(store.clone(), to_id).await?;
                         let to_script = get_script(store.clone(), to_script_hash).await?.unwrap();
-                        let to_script_args = to_script.args().raw_data();
-                        if to_script_args.len() != 52
-                            && &to_script_args[0..32] == self.rollup_type_hash.0
-                        {
-                            panic!(
+                        let to_script_code_hash: H256 = to_script.code_hash().unpack();
+                        // to_id could be eoa account, polyjuice contract account, or any other types of account,
+                        // only eos/polyjuice contract account would be stored.
+                        let to_address = if to_script_code_hash == self.eth_account_lock_hash {
+                            let to_script_args = to_script.args().raw_data();
+                            if to_script_args.len() != 52
+                                && &to_script_args[0..32] == self.rollup_type_hash.0
+                            {
+                                panic!(
                                 "Wrong from_address's script args length, expected: 52, actual: {}",
                                 from_script_args.len()
                             );
-                        }
-                        let to_address =
-                            format!("0x{}", faster_hex::hex_string(&to_script_args[32..52])?);
-                        println!("Check to_address: {}", to_address);
+                            }
+                            let to_address =
+                                format!("0x{}", faster_hex::hex_string(&to_script_args[32..52])?);
+                            println!("Check to_address: {}", to_address);
+                            to_address
+                        } else if to_script_code_hash == self.polyjuice_type_script_hash {
+                            let address = account_id_to_eth_address(to_id);
+                            let address_str = faster_hex::hex_string(&address[..])?;
+                            let address_hex = format!("0x{}", address_str);
+                            address_hex
+                        } else {
+                            continue;
+                        };
 
                         let value = amount;
 
