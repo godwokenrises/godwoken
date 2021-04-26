@@ -291,7 +291,7 @@ impl StoreTransaction {
             .zip(tx_receipts)
             .enumerate()
         {
-            let key = TransactionKey::build_transaction_key(tx.hash().pack(), index as u32);
+            let key = TransactionKey::build_transaction_key(block_hash.pack(), index as u32);
             self.insert_raw(COLUMN_TRANSACTION, &key.as_slice(), tx.as_slice())?;
             self.insert_raw(
                 COLUMN_TRANSACTION_RECEIPT,
