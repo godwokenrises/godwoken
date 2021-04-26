@@ -155,14 +155,14 @@ impl Web3Indexer {
     ) -> anyhow::Result<Vec<Web3TransactionWithLogs>> {
         let block_number = l2_block.raw().number().unpack();
         let block_hash: H256 = blake2b_256(l2_block.raw().as_slice()).into();
-        let block_hash_hex = format!("0x{:#x}", block_hash);
+        let block_hash_hex = format!("{:#x}", block_hash);
         let mut cumulative_gas_used = Decimal::from(0u64);
         let l2_transactions = l2_block.transactions();
         let mut web3_tx_with_logs_vec: Vec<Web3TransactionWithLogs> = vec![];
         let mut tx_index = 0i32;
         for l2_transaction in l2_transactions {
             let tx_hash: H256 = blake2b_256(l2_transaction.raw().as_slice()).into();
-            let tx_hash_hex = format!("0x{:#x}", tx_hash);
+            let tx_hash_hex = format!("{:#x}", tx_hash);
             // println!("tx_hash: {}", tx_hash);
             let from_id: u32 = l2_transaction.raw().from_id().unpack();
             let from_script_hash = get_script_hash(store.clone(), from_id).await?;
@@ -411,7 +411,7 @@ impl Web3Indexer {
                             s,
                             v,
                             cumulative_gas_used,
-                            cumulative_gas_used,
+                            gas_limit,
                             String::from("0x"),
                             None,
                             true,
