@@ -55,21 +55,19 @@ impl Web3Indexer {
     ) -> anyhow::Result<()> {
         let l2_block = self.extract_l2_block(l1_transaction)?;
         let number: u64 = l2_block.raw().number().unpack();
-        println!("block_number: {}", number);
         let row: Option<(Decimal,)> =
             sqlx::query_as("SELECT number FROM blocks ORDER BY number DESC LIMIT 1")
                 .fetch_optional(&self.pool)
                 .await?;
-        // if row.is_none() || Decimal::from(number) == Decimal::from(row.unwrap().0) + Decimal::from(1) {
         if row.is_none() || Decimal::from(number) == row.unwrap().0 + Decimal::from(1) {
             let web3_tx_with_logs_vec = self
                 .filter_web3_transactions(store.clone(), l2_block.clone())
                 .await?;
-            println!("web3_tx_with_logs_vec: {:?}", web3_tx_with_logs_vec);
+            // println!("web3_tx_with_logs_vec: {:?}", web3_tx_with_logs_vec);
             let web3_block = self
                 .build_web3_block(&l2_block, &web3_tx_with_logs_vec)
                 .await?;
-            println!("web3_block: {:?}", web3_block);
+            // println!("web3_block: {:?}", web3_block);
             let mut tx = self.pool.begin().await?;
             sqlx::query("INSERT INTO blocks (number, hash, parent_hash, logs_bloom, gas_limit, gas_used, timestamp, miner, size) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
             .bind(web3_block.number)
@@ -131,6 +129,7 @@ impl Web3Indexer {
                 }
             }
             tx.commit().await?;
+            println!("web3 indexer: sync new block #{}", web3_block.number);
         }
         Ok(())
     }
@@ -164,7 +163,7 @@ impl Web3Indexer {
         for l2_transaction in l2_transactions {
             let tx_hash: H256 = blake2b_256(l2_transaction.raw().as_slice()).into();
             let tx_hash_hex = format!("0x{:#x}", tx_hash);
-            println!("tx_hash: {}", tx_hash);
+            // println!("tx_hash: {}", tx_hash);
             let from_id: u32 = l2_transaction.raw().from_id().unpack();
             let from_script_hash = get_script_hash(store.clone(), from_id).await?;
             let from_script = get_script(store.clone(), from_script_hash)
@@ -189,7 +188,7 @@ impl Web3Indexer {
                 );
             }
             let from_address = format!("0x{}", faster_hex::hex_string(&from_script_args[32..52])?);
-            println!("Check from_address: {}", from_address);
+            // println!("Check from_address: {}", from_address);
 
             // extract to_id corresponding script, check code_hash is either polyjuice contract code_hash or sudt contract code_hash
             let to_id = l2_transaction.raw().to_id().unpack();
@@ -216,12 +215,12 @@ impl Web3Indexer {
                     let address_hex = format!("0x{}", address_str);
                     Some(address_hex)
                 };
-                println!("Check to_address: {:?}", to_address);
+                // println!("Check to_address: {:?}", to_address);
                 let nonce = {
                     let nonce: u32 = l2_transaction.raw().nonce().unpack();
                     Decimal::from(nonce)
                 };
-                println!("Check nonce: {}", nonce);
+                // println!("Check nonce: {}", nonce);
                 let input = match polyjuice_args.input {
                     Some(input) => {
                         let input_str = faster_hex::hex_string(&input[..])?;
@@ -230,7 +229,7 @@ impl Web3Indexer {
                     }
                     None => None,
                 };
-                println!("Check input: {:?}", input);
+                // println!("Check input: {:?}", input);
 
                 let signature: [u8; 65] = l2_transaction.signature().unpack();
                 let r = format!("0x{}", faster_hex::hex_string(&signature[0..31])?);
@@ -332,7 +331,7 @@ impl Web3Indexer {
                     true,
                 );
 
-                println!("web3 transaction: {:?}", web3_transaction);
+                // println!("web3 transaction: {:?}", web3_transaction);
                 let web3_tx_with_logs = Web3TransactionWithLogs {
                     tx: web3_transaction,
                     logs: web3_logs,
@@ -368,7 +367,7 @@ impl Web3Indexer {
                             }
                             let to_address =
                                 format!("0x{}", faster_hex::hex_string(&to_script_args[32..52])?);
-                            println!("Check to_address: {}", to_address);
+                            // println!("Check to_address: {}", to_address);
                             to_address
                         } else if to_script_code_hash == self.polyjuice_type_script_hash {
                             let address = account_id_to_eth_address(to_id);
@@ -418,7 +417,7 @@ impl Web3Indexer {
                             true,
                         );
 
-                        println!("web3 transaction: {:?}", web3_transaction);
+                        // println!("web3 transaction: {:?}", web3_transaction);
                         let web3_tx_with_logs = Web3TransactionWithLogs {
                             tx: web3_transaction,
                             logs: vec![],
@@ -465,7 +464,7 @@ impl Web3Indexer {
         let miner_address = account_id_to_eth_address(block_producer_id);
         let miner_address_hex = format!("0x{}", faster_hex::hex_string(&miner_address[..])?);
         let epoch_time: u64 = l2_block.raw().timestamp().unpack();
-        println!("epoch_time: {}", epoch_time);
+        // println!("epoch_time: {}", epoch_time);
         let size = l2_block.raw().as_slice().len();
         let web3_block = Web3Block {
             number: Decimal::from(block_number),
