@@ -425,6 +425,11 @@ impl BlockProducer {
             self.wallet.lock().to_owned(),
         )
         .await?;
+        debug_assert_eq!(
+            tx_skeleton.taken_outpoints()?.len(),
+            tx_skeleton.inputs().len(),
+            "check duplicated inputs"
+        );
         // sign
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
         Ok(tx)

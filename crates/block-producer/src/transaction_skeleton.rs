@@ -2,10 +2,10 @@ use crate::types::{CellInfo, InputCellInfo, SignatureEntry};
 use anyhow::{anyhow, Result};
 use gw_types::{
     bytes::Bytes,
-    packed::{CellDep, CellInput, CellOutput, RawTransaction, Transaction, WitnessArgs},
+    packed::{CellDep, CellInput, CellOutput, OutPoint, RawTransaction, Transaction, WitnessArgs},
     prelude::*,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct SealedTransaction {
     pub transaction: Transaction,
@@ -189,5 +189,15 @@ impl TransactionSkeleton {
         // tx size + 4 in block serialization cost
         let tx_in_block_size = sealed_tx.transaction.as_slice().len() + 4;
         Ok(tx_in_block_size)
+    }
+
+    pub fn taken_outpoints(&self) -> Result<HashSet<OutPoint>> {
+        let mut taken_outpoints = HashSet::default();
+        for (index, input) in self.inputs().iter().enumerate() {
+            if !taken_outpoints.insert(input.cell.out_point.clone()) {
+                panic!("Duplicated input: {:?}, index: {}", input, index);
+            }
+        }
+        Ok(taken_outpoints)
     }
 }

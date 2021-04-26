@@ -17,7 +17,7 @@ use gw_types::{
 };
 use serde::de::DeserializeOwned;
 use serde_json::{from_value, json};
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 
 const DEFAULT_QUERY_LIMIT: usize = 1000;
 
@@ -259,6 +259,7 @@ impl RPCClient {
         &self,
         lock: Script,
         required_capacity: u64,
+        taken_outpoints: &HashSet<OutPoint>,
     ) -> Result<Vec<CellInfo>> {
         let search_key = SearchKey {
             script: {
@@ -295,14 +296,17 @@ impl RPCClient {
             cursor = Some(cells.last_cursor);
 
             let cells = cells.objects.into_iter().filter_map(|cell| {
-                // delete cells with data & type
-                if !cell.output_data.is_empty() || cell.output.type_.is_some() {
-                    return None;
-                }
                 let out_point = {
                     let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
                     OutPoint::new_unchecked(out_point.as_bytes())
                 };
+                // delete cells with data & type
+                if !cell.output_data.is_empty()
+                    || cell.output.type_.is_some()
+                    || taken_outpoints.contains(&out_point)
+                {
+                    return None;
+                }
                 let output = {
                     let output: ckb_types::packed::CellOutput = cell.output.into();
                     CellOutput::new_unchecked(output.as_bytes())
