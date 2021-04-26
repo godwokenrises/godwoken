@@ -417,6 +417,18 @@ impl BlockProducer {
         self.poa
             .fill_poa(&mut tx_skeleton, rollup_cell_input_index, median_time)
             .await?;
+        println!(
+            "tx outputs : {:?}",
+            tx_skeleton
+                .outputs()
+                .iter()
+                .enumerate()
+                .map(|(i, (o, d))| {
+                    let c: u64 = o.capacity().unpack();
+                    (i, c, d.len())
+                })
+                .collect::<Vec<_>>()
+        );
         // TODO stake cell
         // tx fee cell
         fill_tx_fee(
@@ -432,6 +444,7 @@ impl BlockProducer {
         );
         // sign
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
+        eprintln!("final tx size: {}", tx.as_slice().len());
         Ok(tx)
     }
 }

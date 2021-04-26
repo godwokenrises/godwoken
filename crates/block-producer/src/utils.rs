@@ -23,7 +23,8 @@ pub fn to_result<T: DeserializeOwned>(output: Output) -> Result<T> {
 /// TODO accept fee rate args
 fn calculate_required_tx_fee(tx_size: usize) -> u64 {
     // tx_size * KB / MIN_FEE_RATE
-    tx_size as u64
+    // TODO fix me
+    tx_size as u64 + 1_00000000
 }
 
 /// Add fee cell to tx skeleton
@@ -37,35 +38,44 @@ pub async fn fill_tx_fee(
     let tx_size = tx_skeleton.tx_in_block_size()?;
     let paid_fee: u64 = tx_skeleton.calculate_fee()?;
     let taken_outpoints = tx_skeleton.taken_outpoints()?;
-    // calculate required fee
-    let required_fee = calculate_required_tx_fee(tx_size).saturating_sub(paid_fee);
+    // calculate required fee, we assume always need a change cell to simplify the code
+    let required_fee =
+        (calculate_required_tx_fee(tx_size) + CHANGE_CELL_CAPACITY).saturating_sub(paid_fee);
+    // panic!("paid fee {}, required fee {}, result fee {} inputs len {}", paid_fee, calculate_required_tx_fee(tx_size), required_fee, tx_skeleton.inputs().len());
 
     // get payment cells
-    // we assume always need a change cell to simplify the code
-    let cells = rpc_client
-        .query_payment_cells(
-            lock_script.clone(),
-            required_fee + CHANGE_CELL_CAPACITY,
-            &taken_outpoints,
-        )
-        .await?;
-    assert!(!cells.is_empty(), "need cells to pay fee");
-    // put cells in tx skeleton
-    tx_skeleton
-        .inputs_mut()
-        .extend(cells.into_iter().map(|cell| {
-            let input = CellInput::new_builder()
-                .previous_output(cell.out_point.clone())
-                .build();
-            InputCellInfo { input, cell }
-        }));
+    if required_fee > 0 {
+        let cells = rpc_client
+            .query_payment_cells(lock_script.clone(), required_fee, &taken_outpoints)
+            .await?;
+        assert!(!cells.is_empty(), "need cells to pay fee");
+        // put cells in tx skeleton
+        tx_skeleton
+            .inputs_mut()
+            .extend(cells.into_iter().map(|cell| {
+                let input = CellInput::new_builder()
+                    .previous_output(cell.out_point.clone())
+                    .build();
+                InputCellInfo { input, cell }
+            }));
+    }
 
     // Generate change cell
     let change_capacity = {
         let paid_fee: u64 = tx_skeleton.calculate_fee()?;
+        let tx_size = tx_skeleton.tx_in_block_size()?;
         // calculate required fee
-        let required_fee = calculate_required_tx_fee(tx_size).saturating_sub(paid_fee);
-        paid_fee - required_fee
+        let tx_fee = calculate_required_tx_fee(tx_size);
+
+        // let required_fee = (calculate_required_tx_fee(tx_size)).saturating_sub(paid_fee);
+        eprintln!(
+            "paid fee {}, tx fee {}, result fee {}",
+            paid_fee,
+            calculate_required_tx_fee(tx_size),
+            paid_fee - tx_fee,
+        );
+
+        paid_fee - tx_fee
     };
 
     assert!(

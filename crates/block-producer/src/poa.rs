@@ -236,7 +236,7 @@ impl PoA {
         let initial_time: u64 = poa_data.round_initial_subtime().unpack();
         let next_start_time = initial_time + poa_setup.round_intervals as u64 * steps;
 
-        log::debug!("block producer index: {}, steps: {}, initial time: {}, next start time: {}, median time: {}",
+        eprintln!("block producer index: {}, steps: {}, initial time: {}, next start time: {}, median time: {}",
     block_producer_index, steps, initial_time, next_start_time, median_time.as_secs());
 
         // check next start time again
@@ -336,7 +336,15 @@ impl PoA {
                 .query_owner_cell(self.owner_lock.clone())
                 .await?
                 .ok_or(anyhow!("can't find usable owner cell"))?;
-            tx_skeleton.add_owner_cell(owner_cell);
+            // put owner cell to input, the change cell will complete the output
+            tx_skeleton.inputs_mut().push({
+                InputCellInfo {
+                    input: CellInput::new_builder()
+                        .previous_output(owner_cell.out_point.clone())
+                        .build(),
+                    cell: owner_cell.clone(),
+                }
+            });
         }
 
         Ok(())
