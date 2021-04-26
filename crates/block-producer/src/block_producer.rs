@@ -180,7 +180,7 @@ async fn complete_tx_skeleton(
             .build(),
     );
     // output
-    let output = rollup_cell_info.output;
+    let output = rollup_cell_info.output.clone();
     let output_data = global_state.as_bytes();
     tx_skeleton.outputs_mut().push((output, output_data));
     // deposit cells
@@ -253,12 +253,30 @@ async fn complete_tx_skeleton(
         deps
     };
     tx_skeleton.cell_deps_mut().extend(deposit_type_deps);
+
     // custodian cells
     let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
     tx_skeleton.outputs_mut().extend(custodian_cells);
-    // TODO stake cell
+
+    // stake cell
+    let generated_stake = crate::stake::generate(
+        &rollup_cell_info,
+        rollup_context,
+        &block,
+        &block_producer_config,
+        rpc_client,
+        wallet.lock().to_owned(),
+    )
+    .await?;
+    tx_skeleton.cell_deps_mut().extend(generated_stake.deps);
+    tx_skeleton.inputs_mut().extend(generated_stake.inputs);
+    tx_skeleton
+        .outputs_mut()
+        .push((generated_stake.output, generated_stake.output_data));
+
     // tx fee cell
     fill_tx_fee(&mut tx_skeleton, rpc_client, wallet.lock().to_owned()).await?;
+
     // sign
     let tx = wallet.sign_tx_skeleton(tx_skeleton)?;
     Ok(tx)
@@ -379,7 +397,7 @@ impl BlockProducer {
         .await?;
 
         // send transaction
-        self.rpc_client.send_transaction(tx).await?;
+        self.rpc_client.send_transaction(tx.clone()).await?;
         Ok(())
     }
 }
