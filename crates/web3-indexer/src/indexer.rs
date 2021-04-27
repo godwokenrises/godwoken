@@ -5,6 +5,7 @@ use crate::{
         TransactionWithLogs as Web3TransactionWithLogs,
     },
 };
+use anyhow::{anyhow, Result};
 use ckb_hash::blake2b_256;
 use ckb_types::{packed::WitnessArgs, H256};
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
@@ -48,11 +49,16 @@ impl Web3Indexer {
         }
     }
 
-    pub async fn insert_to_sql(
-        &self,
-        store: Store,
-        l1_transaction: &Transaction,
-    ) -> anyhow::Result<()> {
+    pub async fn store(&self, store: Store, l1_transaction: &Transaction) {
+        match self.insert_to_sql(store, l1_transaction).await {
+            Err(err) => {
+                eprintln!("Web3 indexer store failed: {:?}", err);
+            }
+            Ok(()) => {}
+        }
+    }
+
+    pub async fn insert_to_sql(&self, store: Store, l1_transaction: &Transaction) -> Result<()> {
         let l2_block = self.extract_l2_block(l1_transaction)?;
         let number: u64 = l2_block.raw().number().unpack();
         let row: Option<(Decimal,)> =
@@ -134,16 +140,16 @@ impl Web3Indexer {
         Ok(())
     }
 
-    fn extract_l2_block(&self, l1_transaction: &Transaction) -> anyhow::Result<L2Block> {
+    fn extract_l2_block(&self, l1_transaction: &Transaction) -> Result<L2Block> {
         let witness = l1_transaction
             .witnesses()
             .get(0)
-            .ok_or_else(|| anyhow::anyhow!("Witness missing for L2 block!"))?;
+            .ok_or_else(|| anyhow!("Witness missing for L2 block!"))?;
         let witness_args = WitnessArgs::from_slice(&witness.raw_data())?;
         let l2_block_bytes = witness_args
             .output_type()
             .to_opt()
-            .ok_or_else(|| anyhow::anyhow!("Missing L2 block!"))?;
+            .ok_or_else(|| anyhow!("Missing L2 block!"))?;
         let l2_block = L2Block::from_slice(&l2_block_bytes.raw_data())?;
         Ok(l2_block)
     }
@@ -152,7 +158,7 @@ impl Web3Indexer {
         &self,
         store: Store,
         l2_block: L2Block,
-    ) -> anyhow::Result<Vec<Web3TransactionWithLogs>> {
+    ) -> Result<Vec<Web3TransactionWithLogs>> {
         let block_number = l2_block.raw().number().unpack();
         let block_hash: H256 = blake2b_256(l2_block.raw().as_slice()).into();
         let block_hash_hex = format!("{:#x}", block_hash);
@@ -168,12 +174,9 @@ impl Web3Indexer {
             let from_script_hash = get_script_hash(store.clone(), from_id).await?;
             let from_script = get_script(store.clone(), from_script_hash)
                 .await?
-                .unwrap_or_else(|| {
-                    panic!(
-                        "get_script failed, no script found! script_hash: {:?}",
-                        from_script_hash
-                    )
-                });
+                .ok_or_else(|| {
+                    anyhow!("Can't get script by script_hash: {:?}", from_script_hash)
+                })?;
             let from_script_code_hash: H256 = from_script.code_hash().unpack();
             // skip tx with non eth_account_lock from_id
             if from_script_code_hash != self.eth_account_lock_hash {
@@ -182,10 +185,10 @@ impl Web3Indexer {
             // from_address is the script's args in eth account lock
             let from_script_args = from_script.args().raw_data();
             if from_script_args.len() != 52 && from_script_args[0..32] == self.rollup_type_hash.0 {
-                panic!(
+                return Err(anyhow!(
                     "Wrong from_address's script args, from_script_args: {:?}",
                     from_script_args
-                );
+                ));
             }
             let from_address = format!("0x{}", faster_hex::hex_string(&from_script_args[32..52])?);
             // println!("Check from_address: {}", from_address);
@@ -195,12 +198,7 @@ impl Web3Indexer {
             let to_script_hash = get_script_hash(store.clone(), to_id).await?;
             let to_script = get_script(store.clone(), to_script_hash)
                 .await?
-                .unwrap_or_else(|| {
-                    panic!(
-                        "get_script failed, no script found! script_hash: {:?}",
-                        to_script_hash
-                    )
-                });
+                .ok_or_else(|| anyhow!("Can't get script by script_hash: {:?}", to_script_hash))?;
 
             let mut tx_gas_used = Decimal::from(0u64);
             if to_script.code_hash().as_slice() == self.polyjuice_type_script_hash.0 {
@@ -351,7 +349,11 @@ impl Web3Indexer {
                         let fee: u128 = sudt_transfer.fee().unpack();
 
                         let to_script_hash = get_script_hash(store.clone(), to_id).await?;
-                        let to_script = get_script(store.clone(), to_script_hash).await?.unwrap();
+                        let to_script = get_script(store.clone(), to_script_hash)
+                            .await?
+                            .ok_or_else(|| {
+                                anyhow!("Can't get script by script_hash: {:?}", to_script_hash)
+                            })?;
                         let to_script_code_hash: H256 = to_script.code_hash().unpack();
                         // to_id could be eoa account, polyjuice contract account, or any other types of account,
                         // only eos/polyjuice contract account would be stored.
@@ -360,10 +362,10 @@ impl Web3Indexer {
                             if to_script_args.len() != 52
                                 && to_script_args[0..32] == self.rollup_type_hash.0
                             {
-                                panic!(
+                                return Err(anyhow!(
                                 "Wrong to_address's script args length, expected: 52, actual: {}",
                                 to_script_args.len()
-                            );
+                            ));
                             }
                             let to_address =
                                 format!("0x{}", faster_hex::hex_string(&to_script_args[32..52])?);
@@ -436,7 +438,7 @@ impl Web3Indexer {
         &self,
         l2_block: &L2Block,
         web3_tx_with_logs_vec: &[Web3TransactionWithLogs],
-    ) -> anyhow::Result<Web3Block> {
+    ) -> Result<Web3Block> {
         let block_number = l2_block.raw().number().unpack();
         let block_hash: H256 = blake2b_256(l2_block.raw().as_slice()).into();
         let parent_hash = {
@@ -450,7 +452,7 @@ impl Web3Indexer {
                         .await?;
                 match row {
                     Some(block) => block.0,
-                    None => panic!("No parent hash found!"),
+                    None => return Err(anyhow!("No parent hash found!")),
                 }
             }
         };
@@ -484,7 +486,7 @@ impl Web3Indexer {
     }
 }
 
-async fn get_script_hash(store: Store, account_id: u32) -> anyhow::Result<gw_common::H256> {
+async fn get_script_hash(store: Store, account_id: u32) -> Result<gw_common::H256> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
     let state_db = StateDBTransaction::from_version(
@@ -497,7 +499,7 @@ async fn get_script_hash(store: Store, account_id: u32) -> anyhow::Result<gw_com
     Ok(script_hash)
 }
 
-async fn get_script(store: Store, script_hash: gw_common::H256) -> anyhow::Result<Option<Script>> {
+async fn get_script(store: Store, script_hash: gw_common::H256) -> Result<Option<Script>> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
     let state_db = StateDBTransaction::from_version(
