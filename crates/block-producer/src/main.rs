@@ -195,6 +195,7 @@ fn run() -> Result<()> {
             },
             _ = block_producer.poll_loop().fuse() => {
                 eprintln!("Unexpected block_producer.poll_loop exit");
+                exit(1);
             },
             e = start_jsonrpc_server(rpc_address, rpc_registry).fuse() => {
                 eprintln!("Error running JSONRPC server: {:?}", e);
