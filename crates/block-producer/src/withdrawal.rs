@@ -51,7 +51,6 @@ pub async fn generate(
 
             let sudt_script_hash = withdrawal.raw().sudt_script_hash().unpack();
             let sudt_amount = withdrawal.raw().amount().unpack();
-            if sudt_amount != 0 {
                 match sudt_script_hash {
                     CKB_SUDT_SCRIPT_ARGS => {
                         let account = withdrawal.raw().account_script_hash();
@@ -62,10 +61,9 @@ pub async fn generate(
                         *total_sudt_amount = total_sudt_amount.saturating_add(sudt_amount);
                     }
                 }
-            }
 
             total_amount
-        },
+        }
     );
 
     let custodian_cells = rpc_client
@@ -281,10 +279,9 @@ pub async fn revert(
     }
 
     let withdrawal_lock_dep = block_producer_config.withdrawal_cell_lock_dep.clone();
-    let rollup_config_cell_dep = block_producer_config.rollup_config_cell_dep.clone();
 
     Ok(Some(RevertedWithdrawals {
-        deps: vec![rollup_config_cell_dep.into(), withdrawal_lock_dep.into()],
+        deps: vec![withdrawal_lock_dep.into()],
         inputs: withdrawal_inputs,
         outputs: custodian_outputs,
         witness_args: withdrawal_witness,
