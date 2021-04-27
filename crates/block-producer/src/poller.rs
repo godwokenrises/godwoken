@@ -53,8 +53,16 @@ impl ChainUpdater {
         }
     }
 
+    pub async fn poll_loop(&mut self) -> ! {
+        loop {
+            if let Err(e) = self.inner_poll_loop().await {
+                eprintln!("Error occurs polling blocks: {:?}", e);
+            }
+        }
+    }
+
     // Start syncing
-    pub async fn poll_loop(&mut self) -> Result<()> {
+    async fn inner_poll_loop(&mut self) -> Result<()> {
         let rollup_type_script = self.rollup_type_script.clone();
         loop {
             let tip_l1_block = self.chain.lock().local_state().last_synced().number();

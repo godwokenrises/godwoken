@@ -189,8 +189,8 @@ fn run() -> Result<()> {
     smol::block_on(async {
         select! {
             _ = ctrl_c.recv().fuse() => println!("Exiting..."),
-            e = chain_updater.poll_loop().fuse() => {
-                eprintln!("Error occurs polling blocks: {:?}", e);
+            _ = chain_updater.poll_loop().fuse() => {
+                eprintln!("Unexpected chain_updater.poll_loop exit");
                 exit(1);
             },
             _ = block_producer.poll_loop().fuse() => {
