@@ -172,7 +172,11 @@ impl Web3Indexer {
             // println!("tx_hash: {}", tx_hash);
             let from_id: u32 = l2_transaction.raw().from_id().unpack();
             let from_script_hash = get_script_hash(store.clone(), from_id).await?;
-            let from_script = get_script(store.clone(), from_script_hash).await?.ok_or_else(|| anyhow!("Can't get script by script_hash: {:?}", from_script_hash))?;
+            let from_script = get_script(store.clone(), from_script_hash)
+                .await?
+                .ok_or_else(|| {
+                    anyhow!("Can't get script by script_hash: {:?}", from_script_hash)
+                })?;
             let from_script_code_hash: H256 = from_script.code_hash().unpack();
             // skip tx with non eth_account_lock from_id
             if from_script_code_hash != self.eth_account_lock_hash {
@@ -192,7 +196,9 @@ impl Web3Indexer {
             // extract to_id corresponding script, check code_hash is either polyjuice contract code_hash or sudt contract code_hash
             let to_id = l2_transaction.raw().to_id().unpack();
             let to_script_hash = get_script_hash(store.clone(), to_id).await?;
-            let to_script = get_script(store.clone(), to_script_hash).await?.ok_or_else(|| anyhow!("Can't get script by script_hash: {:?}", to_script_hash))?;
+            let to_script = get_script(store.clone(), to_script_hash)
+                .await?
+                .ok_or_else(|| anyhow!("Can't get script by script_hash: {:?}", to_script_hash))?;
 
             let mut tx_gas_used = Decimal::from(0u64);
             if to_script.code_hash().as_slice() == self.polyjuice_type_script_hash.0 {
@@ -343,7 +349,11 @@ impl Web3Indexer {
                         let fee: u128 = sudt_transfer.fee().unpack();
 
                         let to_script_hash = get_script_hash(store.clone(), to_id).await?;
-                        let to_script = get_script(store.clone(), to_script_hash).await?.ok_or_else(|| anyhow!("Can't get script by script_hash: {:?}", to_script_hash))?;
+                        let to_script = get_script(store.clone(), to_script_hash)
+                            .await?
+                            .ok_or_else(|| {
+                                anyhow!("Can't get script by script_hash: {:?}", to_script_hash)
+                            })?;
                         let to_script_code_hash: H256 = to_script.code_hash().unpack();
                         // to_id could be eoa account, polyjuice contract account, or any other types of account,
                         // only eos/polyjuice contract account would be stored.
