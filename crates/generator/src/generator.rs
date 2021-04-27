@@ -334,12 +334,14 @@ impl Generator {
     }
 
     fn load_backend<S: State + CodeStore>(&self, state: &S, script_hash: &H256) -> Option<Backend> {
+        log::debug!("load_backend for script_hash: {:?}", script_hash);
         state
             .get_script(&script_hash)
             .and_then(|script| {
                 // only accept type script hash type for now
                 if script.hash_type() == ScriptHashType::Type.into() {
                     let code_hash: [u8; 32] = script.code_hash().unpack();
+                    log::debug!("load_backend by code_hash: {:?}", code_hash);
                     self.backend_manage.get_backend(&code_hash.into())
                 } else {
                     log::error!(
