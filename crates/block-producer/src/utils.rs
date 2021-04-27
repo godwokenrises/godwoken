@@ -1,3 +1,5 @@
+#![allow(clippy::clippy::mutable_key_type)]
+
 use crate::types::InputCellInfo;
 use crate::{rpc_client::RPCClient, transaction_skeleton::TransactionSkeleton};
 use anyhow::{anyhow, Result};

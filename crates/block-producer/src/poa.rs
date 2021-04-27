@@ -106,6 +106,12 @@ pub struct PoA {
     round_start_subtime: Option<Duration>,
 }
 
+pub enum ShouldIssueBlock {
+    Yes,
+    YesIfFull,
+    No,
+}
+
 impl PoA {
     pub fn new(
         client: RPCClient,
@@ -146,13 +152,13 @@ impl PoA {
         let poa_data_cell = self
             .query_poa_state_cell(poa_data_cell_type_hash)
             .await?
-            .ok_or(anyhow!("can't find poa data cell"))?;
+            .ok_or_else(|| anyhow!("can't find poa data cell"))?;
         let poa_data = PoAData::from_slice(&poa_data_cell.data)?;
 
         let poa_setup_cell = self
             .query_poa_state_cell(poa_setup_cell_type_hash)
             .await?
-            .ok_or(anyhow!("can't find poa setup cell"))?;
+            .ok_or_else(|| anyhow!("can't find poa setup cell"))?;
         let poa_setup = PoASetup::from_slice(&poa_setup_cell.data)?;
         if !poa_setup.round_interval_uses_seconds {
             return Err(anyhow!("Block interval PoA is unimplemented yet"));
@@ -178,9 +184,7 @@ impl PoA {
                     None
                 }
             })
-            .ok_or(anyhow!(
-                "can't find current block producer in the PoA identities"
-            ))?
+            .ok_or_else(|| anyhow!("can't find current block producer in the PoA identities"))?
             .try_into()?;
         Ok(PoAContext {
             poa_data,
@@ -199,7 +203,7 @@ impl PoA {
         &mut self,
         median_time: Duration,
         poa_cell_input: &InputCellInfo,
-    ) -> Result<bool> {
+    ) -> Result<ShouldIssueBlock> {
         let PoAContext {
             poa_data,
             poa_setup,
@@ -213,7 +217,7 @@ impl PoA {
                 .saturating_add(poa_setup.round_intervals.try_into()?);
             if next_round_time > median_time.as_secs() {
                 // within current block produce round
-                return Ok(true);
+                return Ok(ShouldIssueBlock::YesIfFull);
             } else {
                 // reset current round
                 self.round_start_subtime = None;
@@ -242,9 +246,9 @@ impl PoA {
         // check next start time again
         if next_start_time <= median_time.as_secs() {
             self.round_start_subtime = Some(median_time);
-            return Ok(true);
+            return Ok(ShouldIssueBlock::Yes);
         }
-        Ok(false)
+        Ok(ShouldIssueBlock::No)
     }
 
     pub fn reset_current_round(&mut self) {
@@ -335,14 +339,14 @@ impl PoA {
                 .client
                 .query_owner_cell(self.owner_lock.clone())
                 .await?
-                .ok_or(anyhow!("can't find usable owner cell"))?;
+                .ok_or_else(|| anyhow!("can't find usable owner cell"))?;
             // put owner cell to input, the change cell will complete the output
             tx_skeleton.inputs_mut().push({
                 InputCellInfo {
                     input: CellInput::new_builder()
                         .previous_output(owner_cell.out_point.clone())
                         .build(),
-                    cell: owner_cell.clone(),
+                    cell: owner_cell,
                 }
             });
         }

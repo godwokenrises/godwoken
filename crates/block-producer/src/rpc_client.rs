@@ -1,3 +1,5 @@
+#![allow(clippy::clippy::mutable_key_type)]
+
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
 use crate::types::CellInfo;
 use anyhow::{anyhow, Result};

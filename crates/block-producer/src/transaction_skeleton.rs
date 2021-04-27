@@ -1,3 +1,5 @@
+#![allow(clippy::clippy::mutable_key_type)]
+
 use crate::types::{CellInfo, InputCellInfo, SignatureEntry};
 use anyhow::{anyhow, Result};
 use gw_types::{

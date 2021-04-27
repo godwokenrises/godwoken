@@ -1,7 +1,7 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
 use crate::{
-    poa::PoA,
+    poa::{PoA, ShouldIssueBlock},
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
     rpc_client::{DepositInfo, RPCClient},
     transaction_skeleton::TransactionSkeleton,
@@ -201,7 +201,7 @@ impl BlockProducer {
         let rollup_cell_opt = self.rpc_client.query_rollup_cell().await?;
         let median_time = self.rpc_client.get_block_median_time(tip_hash).await?;
         // let (rollup_cell_opt, median_time) = futures::try_join!(rollup_cell_fut, median_time_fut)?;
-        let rollup_cell = rollup_cell_opt.ok_or(anyhow!("can't found rollup cell"))?;
+        let rollup_cell = rollup_cell_opt.ok_or_else(|| anyhow!("can't found rollup cell"))?;
         let poa_cell_input = InputCellInfo {
             input: CellInput::new_builder()
                 .previous_output(rollup_cell.out_point.clone())
@@ -210,7 +210,7 @@ impl BlockProducer {
         };
 
         // try issue next block
-        if self
+        if let ShouldIssueBlock::Yes = self
             .poa
             .should_issue_next_block(median_time, &poa_cell_input)
             .await?
@@ -287,7 +287,7 @@ impl BlockProducer {
         // send transaction
         match self.rpc_client.send_transaction(tx).await {
             Ok(tx_hash) => {
-                println!("Submitted l2 block in {:?}", tx_hash);
+                println!("\nSubmitted l2 block {} in tx {:?}\n", number, tx_hash);
             }
             Err(err) => {
                 eprintln!("Submitting l2 block error: {}", err);

@@ -219,7 +219,7 @@ fn run() -> Result<()> {
 
     let ckb_genesis_info = {
         let ckb_genesis = smol::block_on(async { rpc_client.get_block_by_number(0).await })?
-            .ok_or(anyhow!("can't found CKB genesis block"))?;
+            .ok_or_else(|| anyhow!("can't found CKB genesis block"))?;
         CKBGenesisInfo::from_block(&ckb_genesis)?
     };
 
