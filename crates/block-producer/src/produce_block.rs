@@ -142,11 +142,13 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
     let chain_view = ChainView::new(&db, parent_block_hash);
     for tx in txs {
         // 1. verify tx
-        if generator.check_transaction_signature(&state, &tx).is_err() {
+        if let Err(err) = generator.check_transaction_signature(&state, &tx) {
+            log::debug!("produce_block.check tx signature error: {:?}", err);
             unused_transactions.push(tx);
             continue;
         }
-        if generator.verify_transaction(&state, &tx).is_err() {
+        if let Err(err) = generator.verify_transaction(&state, &tx) {
+            log::debug!("produce_block.verify tx error: {:?}", err);
             unused_transactions.push(tx);
             continue;
         }
@@ -155,7 +157,8 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         let run_result =
             match generator.execute_transaction(&chain_view, &state, &block_info, &raw_tx) {
                 Ok(run_result) => run_result,
-                Err(_) => {
+                Err(err) => {
+                    log::debug!("produce_block.execute tx error: {:?}", err);
                     unused_transactions.push(tx);
                     continue;
                 }
