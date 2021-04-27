@@ -119,7 +119,6 @@ fn main() {
                     Arg::with_name("database-url")
                         .short("d")
                         .takes_value(true)
-                        .required(true)
                         .help("The web3 store database url"),
                 )
                 .arg(
