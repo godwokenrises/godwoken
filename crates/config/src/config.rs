@@ -15,6 +15,7 @@ pub struct Config {
     pub rpc_client: RPCClientConfig,
     pub rpc_server: RPCServerConfig,
     pub block_producer: Option<BlockProducerConfig>,
+    pub web3_indexer: Option<Web3IndexerConfig>,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -71,4 +72,11 @@ pub struct BackendConfig {
     pub validator_path: PathBuf,
     pub generator_path: PathBuf,
     pub validator_script_type_hash: H256,
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Web3IndexerConfig {
+    pub database_url: String,
+    pub polyjuice_script_type_hash: H256,
+    pub eth_account_lock_hash: H256,
 }

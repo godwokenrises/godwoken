@@ -1559,6 +1559,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "348138dd23e03bb0018caef99647fb1a5befec5ff4b501991de88f09854d4c28"
 
 [[package]]
+name = "faster-hex"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68bae82fd85645631575599a2ebab9807b6d42000083417ac5dc3d2da2ba023"
+
+[[package]]
 name = "fastrand"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1894,6 +1900,7 @@ dependencies = [
  "gw-rpc-server",
  "gw-store",
  "gw-types",
+ "gw-web3-indexer",
  "log",
  "parking_lot 0.11.1",
  "serde",
@@ -2136,6 +2143,29 @@ dependencies = [
  "gw-hash",
  "molecule",
  "sparse-merkle-tree",
+]
+
+[[package]]
+name = "gw-web3-indexer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ckb-hash",
+ "ckb-types",
+ "faster-hex 0.5.0",
+ "gw-chain",
+ "gw-common",
+ "gw-config",
+ "gw-db",
+ "gw-generator",
+ "gw-store",
+ "gw-traits",
+ "gw-types",
+ "num-bigint 0.4.0",
+ "parking_lot 0.11.1",
+ "rust_decimal",
+ "sqlx",
+ "thiserror",
 ]
 
 [[package]]
@@ -2954,6 +2984,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-bigint"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d0a3d5e207573f948a9e5376662aa743a2ea13f7c50a554d7af443a73fbfeba"
+dependencies = [
+ "autocfg 1.0.1",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e0d047c1062aa51e256408c560894e5251f08925980e53cf1aa5bd00eec6512"
+dependencies = [
+ "autocfg 1.0.1",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3673,6 +3725,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rust_decimal"
+version = "1.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ca515aafa02c92f4d3c69b2f4c408f839b51b1aa938d00b15e8c0966bd22d73"
+dependencies = [
+ "arrayvec",
+ "num-traits",
+ "serde",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4124,10 +4187,12 @@ dependencies = [
  "log",
  "md-5",
  "memchr",
+ "num-bigint 0.3.2",
  "once_cell",
  "parking_lot 0.11.1",
  "percent-encoding 2.1.0",
  "rand 0.7.3",
+ "rust_decimal",
  "serde",
  "serde_json",
  "sha-1",

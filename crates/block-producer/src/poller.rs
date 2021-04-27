@@ -18,6 +18,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use gw_web3_indexer::indexer::Web3Indexer;
 use parking_lot::Mutex;
 use serde_json::json;
 use std::sync::Arc;
@@ -28,6 +29,7 @@ pub struct ChainUpdater {
     last_tx_hash: Option<H256>,
     rollup_context: RollupContext,
     rollup_type_script: ckb_types::packed::Script,
+    web3_indexer: Option<Web3Indexer>,
 }
 
 impl ChainUpdater {
@@ -36,25 +38,23 @@ impl ChainUpdater {
         rpc_client: RPCClient,
         rollup_context: RollupContext,
         rollup_type_script: Script,
+        web3_indexer: Option<Web3Indexer>,
     ) -> ChainUpdater {
         let rollup_type_script =
             ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
+
         ChainUpdater {
             chain,
             rpc_client,
             rollup_context,
             rollup_type_script,
             last_tx_hash: None,
+            web3_indexer,
         }
     }
 
     // Start syncing
     pub async fn poll_loop(&mut self) -> Result<()> {
-        // TODO: support for more SQL databases
-        // let pool = PgPoolOptions::new()
-        //     .max_connections(5)
-        //     .connect(&sql_address)
-        //     .await?;
         let rollup_type_script = self.rollup_type_script.clone();
         loop {
             let tip_l1_block = self.chain.lock().local_state().last_synced().number();
@@ -172,38 +172,17 @@ impl ChainUpdater {
             updates: vec![update],
         };
         self.chain.lock().sync(sync_param)?;
-        // self.insert_to_sql(&tx).await?;
+        // TODO sync missed block
+        match &self.web3_indexer {
+            Some(indexer) => {
+                indexer
+                    .insert_to_sql(self.chain.lock().store().clone(), &tx)
+                    .await?;
+            }
+            None => {}
+        }
         Ok(())
     }
-
-    // async fn insert_to_sql(&self, l1_transaction: &Transaction) -> anyhow::Result<()> {
-    //     let witness = l1_transaction
-    //         .witnesses()
-    //         .get(0)
-    //         .ok_or_else(|| anyhow::anyhow!("Witness missing for L2 block!"))?;
-    //     let witness_args = WitnessArgs::from_slice(&witness.raw_data())?;
-    //     let raw_l2_block = witness_args
-    //         .output_type()
-    //         .to_opt()
-    //         .ok_or_else(|| anyhow::anyhow!("Missing L2 block!"))?;
-    //     let l2_block = L2Block::from_slice(&raw_l2_block.raw_data())?;
-    //     let number: u64 = l2_block.raw().number().unpack();
-    //     let hash: H256 = l2_block.raw().hash().into();
-    //     let epoch_time: u64 = l2_block.raw().timestamp().unpack();
-    //     // TODO: this is just a proof of concept work now, we need to fill in more data
-    //     // sqlx::query("INSERT INTO blocks (number, hash, parent_hash, logs_bloom, gas_limit, gas_used, timestamp, miner, size) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
-    //     //     .bind(number as i64)
-    //     //     .bind(format!("{:#x}", hash))
-    //     //     .bind("0x0000000000000000000000000000000000000000000000000000000000000000")
-    //     //     .bind("")
-    //     //     .bind(0i64)
-    //     //     .bind(0i64)
-    //     //     .bind(sqlx::types::chrono::NaiveDateTime::from_timestamp(epoch_time as i64, 0))
-    //     //     .bind(format!("{}", l2_block.raw().block_producer_id()))
-    //     //     .bind(l2_block.as_slice().len() as i64)
-    //     //     .execute(&self.pool).await?;
-    //     Ok(())
-    // }
 
     async fn extract_deposition_requests(
         &self,

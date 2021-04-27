@@ -20,7 +20,9 @@ use gw_types::{
     packed::{RollupConfig, Script},
     prelude::*,
 };
+use gw_web3_indexer::Web3Indexer;
 use parking_lot::Mutex;
+use sqlx::postgres::PgPoolOptions;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::{fs, path::Path, process::exit, sync::Arc};
 
@@ -102,12 +104,38 @@ fn run() -> Result<()> {
     // RPC registry
     let rpc_registry = Registry::new(mem_pool.clone(), store.clone());
 
+    // create web3 indexer
+    let web3_indexer = match config.web3_indexer {
+        Some(web3_indexer_config) => {
+            let pool = smol::block_on(async {
+                PgPoolOptions::new()
+                    .max_connections(5)
+                    .connect(&web3_indexer_config.database_url)
+                    .await
+            })?;
+            let polyjuce_type_script_hash = web3_indexer_config.polyjuice_script_type_hash;
+            let eth_account_lock_hash = web3_indexer_config.eth_account_lock_hash;
+            let web3_indexer = Web3Indexer::new(
+                pool,
+                config
+                    .genesis
+                    .rollup_config
+                    .l2_sudt_validator_script_type_hash,
+                polyjuce_type_script_hash,
+                config.genesis.rollup_type_hash,
+                eth_account_lock_hash,
+            );
+            Some(web3_indexer)
+        }
+        None => None,
+    };
     // create chain updater
     let mut chain_updater = ChainUpdater::new(
         Arc::clone(&chain),
         rpc_client.clone(),
         rollup_context,
         rollup_type_script.clone(),
+        web3_indexer,
     );
 
     let ckb_genesis_info = {

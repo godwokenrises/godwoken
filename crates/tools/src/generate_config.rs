@@ -7,7 +7,7 @@ use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::Entity;
 use gw_config::{
     BackendConfig, BlockProducerConfig, ChainConfig, Config, GenesisConfig, RPCClientConfig,
-    RPCServerConfig, StoreConfig, WalletConfig,
+    RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 
@@ -20,6 +20,7 @@ pub fn generate_config(
     ckb_url: String,
     indexer_url: String,
     output_path: &Path,
+    database_url: Option<&str>,
 ) -> Result<()> {
     let genesis: GenesisDeploymentResult = {
         let content = fs::read(genesis_path)?;
@@ -95,7 +96,7 @@ pub fn generate_config(
     backends.push(BackendConfig {
         validator_path: format!("{}/polyjuice-validator", polyjuice_binaries_dir).into(),
         generator_path: format!("{}/polyjuice-generator", polyjuice_binaries_dir).into(),
-        validator_script_type_hash: scripts.polyjuice_validator.script_type_hash,
+        validator_script_type_hash: scripts.polyjuice_validator.script_type_hash.clone(),
     });
     let store: StoreConfig = StoreConfig {
         path: "./store.db".into(),
@@ -131,6 +132,20 @@ pub fn generate_config(
         meta_contract_validator_type_hash,
         rollup_config,
     };
+    let eth_account_lock_hash = genesis
+        .rollup_config
+        .allowed_eoa_type_hashes
+        .get(0)
+        .ok_or_else(|| anyhow!("No allowed EoA type hashes in the rollup config"))?;
+    let web3_indexer = match database_url {
+        Some(database_url) => Some(Web3IndexerConfig {
+            database_url: database_url.to_owned(),
+            polyjuice_script_type_hash: scripts.polyjuice_validator.script_type_hash,
+            eth_account_lock_hash: eth_account_lock_hash.to_owned(),
+        }),
+        None => None,
+    };
+
     let config: Config = Config {
         backends,
         store,
@@ -139,7 +154,9 @@ pub fn generate_config(
         rpc_client,
         rpc_server,
         block_producer,
+        web3_indexer,
     };
+
     let output_content = toml::to_string_pretty(&config).expect("serde toml to string pretty");
     fs::write(output_path, output_content.as_bytes()).map_err(|err| anyhow!("{}", err))?;
     Ok(())

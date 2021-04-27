@@ -116,6 +116,12 @@ fn main() {
                         .help("Polyjuice binaries directory path"),
                 )
                 .arg(
+                    Arg::with_name("database-url")
+                        .short("d")
+                        .takes_value(true)
+                        .help("The web3 store database url"),
+                )
+                .arg(
                     Arg::with_name("output-path")
                         .short("o")
                         .takes_value(true)
@@ -172,6 +178,7 @@ fn main() {
             let polyjuice_binaries_dir =
                 Path::new(m.value_of("polyjuice-binaries-dir-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
+            let database_url = m.value_of("database-url");
 
             if let Err(err) = generate_config::generate_config(
                 genesis_path,
@@ -180,6 +187,7 @@ fn main() {
                 ckb_url,
                 indexer_url,
                 output_path,
+                database_url,
             ) {
                 log::error!("Deploy genesis error: {}", err);
                 std::process::exit(-1);
