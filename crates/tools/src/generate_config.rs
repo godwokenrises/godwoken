@@ -128,7 +128,7 @@ pub fn generate_config(
     });
     let genesis: GenesisConfig = GenesisConfig {
         timestamp: genesis.timestamp,
-        rollup_type_hash: rollup_type_hash.clone(),
+        rollup_type_hash,
         meta_contract_validator_type_hash,
         rollup_config,
     };
