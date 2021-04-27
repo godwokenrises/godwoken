@@ -193,9 +193,7 @@ fn run() -> Result<()> {
                 eprintln!("Error occurs polling blocks: {:?}", e);
                 exit(1);
             },
-            e = block_producer.poll_loop().fuse() => {
-                eprintln!("Error occurs produce block: {:?}", e);
-            }
+            _ = block_producer.poll_loop().fuse() => unreachable!(),
             e = start_jsonrpc_server(rpc_address, rpc_registry).fuse() => {
                 eprintln!("Error running JSONRPC server: {:?}", e);
                 exit(1);

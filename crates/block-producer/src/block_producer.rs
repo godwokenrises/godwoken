@@ -328,7 +328,9 @@ impl BlockProducer {
     pub async fn poll_loop(&self) -> Result<()> {
         loop {
             async_std::task::sleep(std::time::Duration::from_secs(45)).await;
-            self.produce_next_block().await?;
+            if let Err(e) = self.produce_next_block().await {
+                eprintln!("Error occurs produce block: {:?}", e);
+            }
         }
     }
 
