@@ -21,7 +21,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{from_value, json};
 use std::{collections::HashSet, time::Duration};
 
-const DEFAULT_QUERY_LIMIT: usize = 1000;
+pub const DEFAULT_QUERY_LIMIT: usize = 1000;
 
 lazy_static::lazy_static! {
     /// CKB built-in type ID code hash
@@ -51,7 +51,7 @@ fn to_jsonh256(v: H256) -> JsonH256 {
     h.into()
 }
 
-fn to_result<T: DeserializeOwned>(output: Output) -> anyhow::Result<T> {
+pub fn to_result<T: DeserializeOwned>(output: Output) -> anyhow::Result<T> {
     match output {
         Output::Success(success) => Ok(from_value(success.result)?),
         Output::Failure(failure) => Err(anyhow::anyhow!("JSONRPC error: {}", failure.error)),

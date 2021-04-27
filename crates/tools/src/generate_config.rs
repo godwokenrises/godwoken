@@ -84,6 +84,14 @@ pub fn generate_config(
     };
     let (_data, secp_data_dep) =
         get_secp_data(&mut rpc_client).map_err(|err| anyhow!("{}", err))?;
+    let custodian_cell_lock_dep = {
+        let dep: ckb_types::packed::CellDep = scripts.custodian_lock.cell_dep.clone().into();
+        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
+    };
+    let withdrawal_cell_lock_dep = {
+        let dep: ckb_types::packed::CellDep = scripts.withdrawal_lock.cell_dep.clone().into();
+        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
+    };
 
     let wallet_config: WalletConfig = WalletConfig { privkey_path, lock };
 
@@ -131,6 +139,8 @@ pub fn generate_config(
         rollup_cell_type_dep,
         deposit_cell_lock_dep,
         stake_cell_lock_dep,
+        custodian_cell_lock_dep,
+        withdrawal_cell_lock_dep,
         wallet_config,
     });
     let genesis: GenesisConfig = GenesisConfig {
