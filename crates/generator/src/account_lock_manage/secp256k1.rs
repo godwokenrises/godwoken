@@ -229,14 +229,19 @@ fn try_assemble_polyjuice_args(
         u64::from_le_bytes(data)
     };
     stream.append(&gas_limit);
+    let to_id: u32 = raw_tx.to_id().unpack();
     let to = if args[7] == 3 {
         // 3 for EVMC_CREATE
+        // In case of deploying a polyjuice contract, we require users to use
+        // the same chain ID as polyjuice chain for extra safety.
+        if to_id != chain_id {
+            return None;
+        }
         vec![0u8; 20]
     } else {
         let mut to = vec![0u8; 20];
         let receiver_hash = receiver_script.hash();
         to[0..16].copy_from_slice(&receiver_hash[0..16]);
-        let to_id: u32 = raw_tx.to_id().unpack();
         to[16..20].copy_from_slice(&to_id.to_le_bytes());
         to
     };
