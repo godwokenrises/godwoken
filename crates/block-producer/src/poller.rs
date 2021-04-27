@@ -175,9 +175,7 @@ impl ChainUpdater {
         // TODO sync missed block
         match &self.web3_indexer {
             Some(indexer) => {
-                indexer
-                    .insert_to_sql(self.chain.lock().store().clone(), &tx)
-                    .await?;
+                indexer.store(self.chain.lock().store().clone(), &tx).await;
             }
             None => {}
         }
