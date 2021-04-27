@@ -4,6 +4,9 @@ use crate::packed;
 use core::convert::TryFrom;
 use core::convert::TryInto;
 
+// re-export H256
+pub use sparse_merkle_tree::H256;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ScriptHashType {
     Data = 0,

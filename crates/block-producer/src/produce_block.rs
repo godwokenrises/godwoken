@@ -273,15 +273,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
                 .map_err(|err| anyhow!("can't fetch value error: {:?}", err))
         })
         .collect::<Result<_>>()?;
-    let packed_kv_state = kv_state
-        .iter()
-        .map(|(k, v)| {
-            let k: [u8; 32] = (*k).into();
-            let v: [u8; 32] = (*v).into();
-            (k, v)
-        })
-        .collect::<Vec<_>>()
-        .pack();
+    let packed_kv_state = kv_state.pack();
     let proof = if kv_state.is_empty() {
         // nothing need to prove
         Vec::new()

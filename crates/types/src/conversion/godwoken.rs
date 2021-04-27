@@ -1,4 +1,4 @@
-use crate::{packed, prelude::*, vec::Vec};
+use crate::{core::H256, packed, prelude::*, vec::Vec};
 
 impl Pack<packed::Byte20> for [u8; 20] {
     fn pack(&self) -> packed::Byte20 {
@@ -29,7 +29,7 @@ impl<'r> Unpack<[u8; 65]> for packed::SignatureReader<'r> {
 
 impl_conversion_for_entity_unpack!([u8; 65], Signature);
 
-impl Pack<packed::KVPair> for ([u8; 32], [u8; 32]) {
+impl Pack<packed::KVPair> for (H256, H256) {
     fn pack(&self) -> packed::KVPair {
         packed::KVPair::new_builder()
             .k(self.0.pack())
@@ -38,15 +38,15 @@ impl Pack<packed::KVPair> for ([u8; 32], [u8; 32]) {
     }
 }
 
-impl_conversion_for_entity_unpack!(([u8; 32], [u8; 32]), KVPair);
+impl_conversion_for_entity_unpack!((H256, H256), KVPair);
 
-impl<'r> Unpack<([u8; 32], [u8; 32])> for packed::KVPairReader<'r> {
-    fn unpack(&self) -> ([u8; 32], [u8; 32]) {
+impl<'r> Unpack<(H256, H256)> for packed::KVPairReader<'r> {
+    fn unpack(&self) -> (H256, H256) {
         (self.k().unpack(), self.v().unpack())
     }
 }
 
-impl_conversion_for_vector!(([u8; 32], [u8; 32]), KVPairVec, KVPairVecReader);
+impl_conversion_for_vector!((H256, H256), KVPairVec, KVPairVecReader);
 impl_conversion_for_packed_iterator_pack!(KVPair, KVPairVec);
 impl_conversion_for_packed_iterator_pack!(DepositionRequest, DepositionRequestVec);
 impl_conversion_for_packed_iterator_pack!(WithdrawalRequest, WithdrawalRequestVec);
