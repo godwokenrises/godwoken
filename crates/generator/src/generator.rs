@@ -294,7 +294,7 @@ impl Generator {
                     return Err(TransactionErrorWithContext::new(
                         build_challenge_target(
                             block_hash.into(),
-                            ChallengeTargetType::TxStateTransition,
+                            ChallengeTargetType::TxExecution,
                             tx_index as u32,
                         ),
                         err,
