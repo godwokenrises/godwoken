@@ -68,6 +68,7 @@ impl Registry {
             .with_method("get_data", get_data)
             .with_method("get_transaction_receipt", get_transaction_receipt)
             .with_method("execute_l2transaction", execute_l2transaction)
+            .with_method("execute_raw_l2transaction", execute_raw_l2transaction)
             .with_method("submit_l2transaction", submit_l2transaction)
             .with_method("submit_withdrawal_request", submit_withdrawal_request);
 
@@ -160,6 +161,35 @@ async fn execute_l2transaction(
         .build();
 
     let run_result: RunResult = mem_pool.lock().execute_transaction(tx, &block_info)?.into();
+    Ok(run_result)
+}
+
+async fn execute_raw_l2transaction(
+    Params((raw_l2tx,)): Params<(JsonBytes,)>,
+    mem_pool: Data<MemPool>,
+    store: Data<Store>,
+) -> Result<RunResult> {
+    let raw_l2tx_bytes = raw_l2tx.into_bytes();
+    let raw_l2tx = packed::RawL2Transaction::from_slice(&raw_l2tx_bytes)?;
+
+    let raw_block = store.get_tip_block()?.raw();
+    let block_producer_id = raw_block.block_producer_id();
+    let timestamp = raw_block.timestamp();
+    let number = {
+        let number: u64 = raw_block.number().unpack();
+        number.saturating_add(1)
+    };
+
+    let block_info = BlockInfo::new_builder()
+        .block_producer_id(block_producer_id)
+        .timestamp(timestamp)
+        .number(number.pack())
+        .build();
+
+    let run_result: RunResult = mem_pool
+        .lock()
+        .execute_raw_transaction(raw_l2tx, &block_info)?
+        .into();
     Ok(run_result)
 }
 

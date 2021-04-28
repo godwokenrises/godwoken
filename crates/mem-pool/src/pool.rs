@@ -23,7 +23,7 @@ use gw_store::{
 };
 use gw_types::{
     offchain::RunResult,
-    packed::{BlockInfo, L2Transaction, WithdrawalRequest},
+    packed::{BlockInfo, L2Transaction, RawL2Transaction, WithdrawalRequest},
     prelude::{Entity, Unpack},
 };
 use std::{
@@ -226,6 +226,24 @@ impl MemPool {
         self.generator.verify_transaction(&state, &tx)?;
         // execute tx
         let raw_tx = tx.raw();
+        let run_result =
+            self.generator
+                .execute_transaction(&chain_view, &state, &block_info, &raw_tx)?;
+        Ok(run_result)
+    }
+
+    /// Execute tx without: a) push it into pool; 2) verify signature; 3) check nonce
+    pub fn execute_raw_transaction(
+        &self,
+        raw_tx: RawL2Transaction,
+        block_info: &BlockInfo,
+    ) -> Result<RunResult> {
+        let db = self.store.begin_transaction();
+        let state_db = self.fetch_state_db(&db)?;
+        let state = state_db.account_state_tree()?;
+        let tip_block_hash = self.store.get_tip_block_hash()?;
+        let chain_view = ChainView::new(&db, tip_block_hash);
+        // execute tx
         let run_result =
             self.generator
                 .execute_transaction(&chain_view, &state, &block_info, &raw_tx)?;
