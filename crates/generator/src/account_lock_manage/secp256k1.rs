@@ -212,7 +212,7 @@ fn try_assemble_polyjuice_args(raw_tx: RawL2Transaction, receiver_script: Script
         u64::from_le_bytes(data)
     };
     stream.append(&gas_limit);
-    let (to, chain_id) = if args[7] == 3 {
+    let (to, polyjuice_chain_id) = if args[7] == 3 {
         // 3 for EVMC_CREATE
         // In case of deploying a polyjuice contract, to id(creator account id)
         // is directly used as chain id
@@ -224,7 +224,7 @@ fn try_assemble_polyjuice_args(raw_tx: RawL2Transaction, receiver_script: Script
         if receiver_script.args().len() < 36 {
             return None;
         }
-        let chain_id = {
+        let polyjuice_chain_id = {
             let mut data = [0u8; 4];
             data.copy_from_slice(&receiver_script.args().raw_data()[32..36]);
             u32::from_le_bytes(data)
@@ -234,7 +234,7 @@ fn try_assemble_polyjuice_args(raw_tx: RawL2Transaction, receiver_script: Script
         to[0..16].copy_from_slice(&receiver_hash[0..16]);
         let to_id: u32 = raw_tx.to_id().unpack();
         to[16..20].copy_from_slice(&to_id.to_le_bytes());
-        (to, chain_id)
+        (to, polyjuice_chain_id)
     };
     stream.append(&to);
     let value = {
@@ -252,6 +252,9 @@ fn try_assemble_polyjuice_args(raw_tx: RawL2Transaction, receiver_script: Script
         return None;
     }
     stream.append(&args[52..52 + payload_length].to_vec());
+    // TODO: read rollup chain id from config cell
+    let rollup_chain_id = 0u32;
+    let chain_id: u64 = ((rollup_chain_id as u64) << 32) | (polyjuice_chain_id as u64);
     stream.append(&chain_id);
     stream.append(&0u8);
     stream.append(&0u8);
