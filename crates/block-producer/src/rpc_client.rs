@@ -2,7 +2,7 @@ use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, Searc
 use crate::types::CellInfo;
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{HttpClient, Output, Params as ClientParams, Transport};
-use ckb_types::prelude::{Entity, Unpack as CKBUnpack};
+use ckb_types::prelude::Entity;
 use gw_common::H256;
 use gw_generator::RollupContext;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Uint32};
@@ -254,98 +254,128 @@ impl RPCClient {
 
     /// return all lived deposition requests
     pub async fn query_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
-        // search deposit cells from recent 10 blocks
-        const SEARCH_BLOCKS: u64 = 10;
-
-        let tip_number = self.get_tip_block_number().await?;
         let mut deposit_infos = Vec::new();
-        for number in tip_number.saturating_sub(SEARCH_BLOCKS)..tip_number {
-            let block_number = BlockNumber::from(number);
 
-            let block: ckb_jsonrpc_types::BlockView = to_result(
-                self.ckb_client
-                    .request(
-                        "get_block_by_number",
-                        Some(ClientParams::Array(vec![json!(block_number)])),
-                    )
-                    .await?,
-            )?;
-            let txs: Vec<ckb_types::packed::Transaction> = block
-                .transactions
-                .into_iter()
-                .skip(1)
-                .map(|tx| tx.inner.into())
-                .collect();
-            for tx in txs {
-                let tx_hash: [u8; 32] = tx.calc_tx_hash().unpack();
-                for (index, (output, data)) in tx
-                    .raw()
-                    .outputs()
-                    .into_iter()
-                    .zip(tx.raw().outputs_data().into_iter())
-                    .enumerate()
-                {
-                    let args: Bytes = output.lock().args().unpack();
-                    let is_valid_deposit_cell = output.lock().code_hash().as_slice()
-                        == self
-                            .rollup_context
-                            .rollup_config
-                            .deposition_script_type_hash()
-                            .as_slice()
-                        && output.lock().hash_type() == ScriptHashType::Type.into()
-                        && args.len() >= 32
-                        && &args[..32] == self.rollup_context.rollup_script_hash.as_slice();
-                    if !is_valid_deposit_cell {
-                        continue;
-                    }
+        let rollup_type_hash: Bytes = self
+            .rollup_context
+            .rollup_script_hash
+            .as_slice()
+            .to_vec()
+            .into();
 
-                    // TODO check cell liveness
+        let script = Script::new_builder()
+            .args(rollup_type_hash.pack())
+            .code_hash(
+                self.rollup_context
+                    .rollup_config
+                    .deposition_script_type_hash(),
+            )
+            .hash_type(ScriptHashType::Type.into())
+            .build();
 
-                    // we only allow sUDT as type script
-                    if let Some(script) = output.type_().to_opt() {
-                        let is_valid_sudt = script.code_hash().as_slice()
-                            == self
-                                .rollup_context
-                                .rollup_config
-                                .l1_sudt_script_type_hash()
-                                .as_slice()
-                            && script.hash_type() == ScriptHashType::Type.into();
-                        if !is_valid_sudt {
-                            continue;
-                        }
-                    }
+        let script = {
+            let lock = ckb_types::packed::Script::new_unchecked(script.as_bytes());
+            lock.into()
+        };
 
-                    let output = CellOutput::new_unchecked(output.as_bytes());
-                    let data = data.unpack();
-                    let out_point = OutPoint::new_builder()
-                        .tx_hash(tx_hash.pack())
-                        .index((index as u32).pack())
-                        .build();
-                    let cell = CellInfo {
-                        out_point,
-                        output,
-                        data,
-                    };
-                    let deposit_lock_args =
-                        match DepositionLockArgsReader::verify(&args[32..], false) {
-                            Ok(()) => DepositionLockArgs::new_unchecked(args.slice(32..)),
-                            Err(_) => {
-                                eprintln!("invalid deposit cell args: \n{:?}", args);
-                                continue;
-                            }
-                        };
-                    let request =
-                        match parse_deposit_request(&cell.output, &cell.data, &deposit_lock_args) {
-                            Some(r) => r,
-                            None => {
-                                eprintln!("invalid deposit cell: \n{:?}", cell);
-                                continue;
-                            }
-                        };
-                    let info = DepositInfo { cell, request };
-                    deposit_infos.push(info);
-                }
+        let search_key = SearchKey {
+            script,
+            script_type: ScriptType::Lock,
+            filter: Some(SearchKeyFilter {
+                script: None,
+                output_data_len_range: None,
+                output_capacity_range: None,
+                block_range: None,
+            }),
+        };
+        let order = Order::Asc;
+        let limit = Uint32::from(100);
+
+        let cells: Pagination<Cell> = to_result(
+            self.indexer_client
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                    ])),
+                )
+                .await?,
+        )?;
+
+        let cells = cells.objects.into_iter().map(|cell| {
+            let out_point = {
+                let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
+                OutPoint::new_unchecked(out_point.as_bytes())
+            };
+            let output = {
+                let output: ckb_types::packed::CellOutput = cell.output.into();
+                CellOutput::new_unchecked(output.as_bytes())
+            };
+            let data = cell.output_data.into_bytes();
+            CellInfo {
+                out_point,
+                output,
+                data,
             }
+        });
+
+        for cell in cells {
+            let args: Bytes = cell.output.lock().args().unpack();
+            let deposit_lock_args = match DepositionLockArgsReader::verify(&args[32..], false) {
+                Ok(()) => DepositionLockArgs::new_unchecked(args.slice(32..)),
+                Err(_) => {
+                    eprintln!("invalid deposit cell args: \n{:?}", args);
+                    continue;
+                }
+            };
+            let request = match parse_deposit_request(&cell.output, &cell.data, &deposit_lock_args)
+            {
+                Some(r) => r,
+                None => {
+                    eprintln!("invalid deposit cell: \n{:?}", cell);
+                    continue;
+                }
+            };
+
+            let script = request.script();
+            if script.hash_type() != ScriptHashType::Type.into() {
+                eprintln!("Invalid deposit: unexpected hash_type: Data");
+                continue;
+            }
+            if self
+                .rollup_context
+                .rollup_config
+                .allowed_eoa_type_hashes()
+                .into_iter()
+                .all(|type_hash| script.code_hash() != type_hash)
+            {
+                eprintln!(
+                    "Invalid deposit: unknown code_hash: {:?}",
+                    hex::encode(script.code_hash().as_slice())
+                );
+                continue;
+            }
+            let args: Bytes = script.args().unpack();
+            if args.len() < 32 {
+                eprintln!(
+                    "Invalid deposit: expect rollup_type_hash in the args but args is too short, len: {}",
+                    args.len()
+                );
+                continue;
+            }
+            if &args[..32] != self.rollup_context.rollup_script_hash.as_slice() {
+                eprintln!(
+                    "Invalid deposit: rollup_type_hash mismatch, rollup_script_hash: {}, args[..32]: {}",
+                    hex::encode(self.rollup_context.rollup_script_hash.as_slice()),
+                    hex::encode(&args[..32]),
+                );
+                continue;
+            }
+
+            let info = DepositInfo { cell, request };
+            deposit_infos.push(info);
         }
 
         Ok(deposit_infos)
