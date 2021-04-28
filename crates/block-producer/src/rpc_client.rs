@@ -254,6 +254,9 @@ impl RPCClient {
 
     /// return all lived deposition requests
     pub async fn query_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
+        const BLOCKS_TO_SEARCH: u64 = 100;
+        const LIMIT: u32 = 100;
+
         let tip_l1_block_number: u64 = self.get_tip_block_number().await?;
 
         let mut deposit_infos = Vec::new();
@@ -288,13 +291,13 @@ impl RPCClient {
                 output_data_len_range: None,
                 output_capacity_range: None,
                 block_range: Some([
-                    BlockNumber::from(tip_l1_block_number.saturating_sub(100)),
+                    BlockNumber::from(tip_l1_block_number.saturating_sub(BLOCKS_TO_SEARCH)),
                     BlockNumber::from(u64::max_value()),
                 ]),
             }),
         };
         let order = Order::Asc;
-        let limit = Uint32::from(100);
+        let limit = Uint32::from(LIMIT);
 
         let cells: Pagination<Cell> = to_result(
             self.indexer_client
@@ -331,7 +334,7 @@ impl RPCClient {
             let deposit_lock_args = match DepositionLockArgsReader::verify(&args[32..], false) {
                 Ok(()) => DepositionLockArgs::new_unchecked(args.slice(32..)),
                 Err(_) => {
-                    eprintln!("invalid deposit cell args: \n{:#x}", args);
+                    log::debug!("invalid deposit cell args: \n{:#x}", args);
                     continue;
                 }
             };
@@ -339,14 +342,14 @@ impl RPCClient {
             {
                 Some(r) => r,
                 None => {
-                    eprintln!("invalid deposit cell: \n{:?}", cell);
+                    log::debug!("invalid deposit cell: \n{:?}", cell);
                     continue;
                 }
             };
 
             let script = request.script();
             if script.hash_type() != ScriptHashType::Type.into() {
-                eprintln!("Invalid deposit: unexpected hash_type: Data");
+                log::debug!("Invalid deposit: unexpected hash_type: Data");
                 continue;
             }
             if self
@@ -356,7 +359,7 @@ impl RPCClient {
                 .into_iter()
                 .all(|type_hash| script.code_hash() != type_hash)
             {
-                eprintln!(
+                log::debug!(
                     "Invalid deposit: unknown code_hash: {:?}",
                     hex::encode(script.code_hash().as_slice())
                 );
@@ -364,14 +367,14 @@ impl RPCClient {
             }
             let args: Bytes = script.args().unpack();
             if args.len() < 32 {
-                eprintln!(
+                log::debug!(
                     "Invalid deposit: expect rollup_type_hash in the args but args is too short, len: {}",
                     args.len()
                 );
                 continue;
             }
             if &args[..32] != self.rollup_context.rollup_script_hash.as_slice() {
-                eprintln!(
+                log::debug!(
                     "Invalid deposit: rollup_type_hash mismatch, rollup_script_hash: {}, args[..32]: {}",
                     hex::encode(self.rollup_context.rollup_script_hash.as_slice()),
                     hex::encode(&args[..32]),
