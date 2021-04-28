@@ -1,6 +1,4 @@
-use crate::indexer_types::{
-    Cell, IndexerTip, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter,
-};
+use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
 use crate::types::CellInfo;
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{HttpClient, Output, Params as ClientParams, Transport};
@@ -231,14 +229,13 @@ impl RPCClient {
         Ok(cell_info)
     }
 
-    async fn get_indexer_tip_number(&self) -> Result<u64> {
-        let indexer_tip: IndexerTip = to_result(
-            self.indexer_client
-                .request("get_tip", Some(ClientParams::Array(vec![])))
+    async fn get_tip_block_number(&self) -> Result<u64> {
+        let number: BlockNumber = to_result(
+            self.ckb_client
+                .request("get_tip_block_number", None)
                 .await?,
         )?;
-
-        Ok(indexer_tip.block_number.value())
+        Ok(number.value())
     }
 
     pub async fn get_block_by_number(&self, number: u64) -> Result<Block> {
@@ -256,17 +253,8 @@ impl RPCClient {
     }
 
     /// return all lived deposition requests
-    pub async fn query_deposit_cells(
-        &self,
-        start_block_number: &mut u64,
-    ) -> Result<(Vec<DepositInfo>, u64)> {
-        let tip_indexer_block_number: u64 = self.get_indexer_tip_number().await?;
-
-        log::info!(
-            "query deposit start block: {}, current indexer tip: {}",
-            start_block_number,
-            tip_indexer_block_number
-        );
+    pub async fn query_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
+        let tip_l1_block_number: u64 = self.get_tip_block_number().await?;
 
         let mut deposit_infos = Vec::new();
 
@@ -300,7 +288,7 @@ impl RPCClient {
                 output_data_len_range: None,
                 output_capacity_range: None,
                 block_range: Some([
-                    BlockNumber::from(*start_block_number + 1),
+                    BlockNumber::from(tip_l1_block_number.saturating_sub(100)),
                     BlockNumber::from(u64::max_value()),
                 ]),
             }),
@@ -343,7 +331,7 @@ impl RPCClient {
             let deposit_lock_args = match DepositionLockArgsReader::verify(&args[32..], false) {
                 Ok(()) => DepositionLockArgs::new_unchecked(args.slice(32..)),
                 Err(_) => {
-                    eprintln!("invalid deposit cell args: \n{:?}", args);
+                    eprintln!("invalid deposit cell args: \n{:#x}", args);
                     continue;
                 }
             };
@@ -395,7 +383,7 @@ impl RPCClient {
             deposit_infos.push(info);
         }
 
-        Ok((deposit_infos, tip_indexer_block_number))
+        Ok(deposit_infos)
     }
 
     pub async fn query_unlocked_stake(

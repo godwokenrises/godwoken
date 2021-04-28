@@ -326,16 +326,15 @@ impl BlockProducer {
     }
 
     pub async fn poll_loop(&self) -> ! {
-        let mut start_l1_block_number: u64 = 0_u64;
         loop {
             async_std::task::sleep(std::time::Duration::from_secs(45)).await;
-            if let Err(e) = self.produce_next_block(&mut start_l1_block_number).await {
+            if let Err(e) = self.produce_next_block().await {
                 eprintln!("Error occurs produce block: {:?}", e);
             }
         }
     }
 
-    pub async fn produce_next_block(&self, start_l1_block_number: &mut u64) -> Result<()> {
+    pub async fn produce_next_block(&self) -> Result<()> {
         let block_producer_id = self.config.account_id;
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -343,12 +342,7 @@ impl BlockProducer {
             .as_millis() as u64;
 
         // get deposit cells
-        let deposit_cells_result = self
-            .rpc_client
-            .query_deposit_cells(start_l1_block_number)
-            .await?;
-        let deposit_cells = deposit_cells_result.0;
-        *start_l1_block_number = deposit_cells_result.1;
+        let deposit_cells = self.rpc_client.query_deposit_cells().await?;
 
         // get txs & withdrawal requests from mem pool
         let mut txs = Vec::new();
