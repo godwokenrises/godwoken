@@ -87,42 +87,6 @@ impl<S: State + CodeStore> StateExt for S {
         ctx: &RollupContext,
         request: &DepositionRequest,
     ) -> Result<(), Error> {
-        let script = request.script();
-        {
-            if script.hash_type() != ScriptHashType::Type.into() {
-                eprintln!("Invalid deposit: unexpected hash_type: Data");
-                return Err(Error::Deposition(DepositionError::DepositUnknownEoALock));
-            }
-            if ctx
-                .rollup_config
-                .allowed_eoa_type_hashes()
-                .into_iter()
-                .all(|type_hash| script.code_hash() != type_hash)
-            {
-                eprintln!(
-                    "Invalid deposit: unknown code_hash: {:?}",
-                    hex::encode(script.code_hash().as_slice())
-                );
-                return Err(Error::Deposition(DepositionError::DepositUnknownEoALock));
-            }
-            let args: Bytes = script.args().unpack();
-            if args.len() < 32 {
-                eprintln!(
-                    "Invalid deposit: expect rollup_type_hash in the args but args is too short, len: {}",
-                    args.len()
-                );
-                return Err(Error::Deposition(DepositionError::DepositUnknownEoALock));
-            }
-            if &args[..32] != ctx.rollup_script_hash.as_slice() {
-                eprintln!(
-                    "Invalid deposit: rollup_type_hash mismatch, rollup_script_hash: {}, args[..32]: {}",
-                    hex::encode(ctx.rollup_script_hash.as_slice()),
-                    hex::encode(&args[..32]),
-                );
-                return Err(Error::Deposition(DepositionError::DepositUnknownEoALock));
-            }
-        }
-
         // find or create user account
         let account_script_hash = request.script().hash();
         let id = match self.get_account_id_by_script_hash(&account_script_hash.into())? {

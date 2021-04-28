@@ -218,6 +218,7 @@ fn generate_example_config<P: AsRef<Path>>(path: P) -> Result<()> {
 
 /// Block producer
 fn main() {
+    env_logger::init();
     generate_example_config("./config.example.toml").expect("default config");
     run().expect("run");
 }
