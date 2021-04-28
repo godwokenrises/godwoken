@@ -42,7 +42,7 @@ impl LockAlgorithm for Secp256k1 {
         signature: Signature,
         message: H256,
     ) -> Result<bool, LockAlgorithmError> {
-        if lock_args.len() < 52 {
+        if lock_args.len() != 52 {
             return Err(LockAlgorithmError::InvalidLockArgs);
         }
         let mut expected_pubkey_hash = [0u8; 20];
@@ -86,7 +86,7 @@ impl Secp256k1Eth {
         signature: Signature,
         message: H256,
     ) -> Result<bool, LockAlgorithmError> {
-        if lock_args.len() != 56 {
+        if lock_args.len() != 52 {
             return Err(LockAlgorithmError::InvalidLockArgs);
         }
 
@@ -132,22 +132,18 @@ impl LockAlgorithm for Secp256k1Eth {
         receiver_script: Script,
         tx: L2Transaction,
     ) -> Result<bool, LockAlgorithmError> {
-        if let Some(chain_id) = extract_chain_id(&sender_script.args().unpack()) {
-            if let Some(rlp_data) =
-                try_assemble_polyjuice_args(tx.raw(), receiver_script.clone(), chain_id)
-            {
-                let mut hasher = Keccak256::new();
-                hasher.update(&rlp_data);
-                let buf = hasher.finalize();
-                let mut signing_message = [0u8; 32];
-                signing_message.copy_from_slice(&buf[..]);
-                let signing_message = H256::from(signing_message);
-                return self.verify_alone(
-                    sender_script.args().unpack(),
-                    tx.signature(),
-                    signing_message,
-                );
-            }
+        if let Some(rlp_data) = try_assemble_polyjuice_args(tx.raw(), receiver_script.clone()) {
+            let mut hasher = Keccak256::new();
+            hasher.update(&rlp_data);
+            let buf = hasher.finalize();
+            let mut signing_message = [0u8; 32];
+            signing_message.copy_from_slice(&buf[..]);
+            let signing_message = H256::from(signing_message);
+            return self.verify_alone(
+                sender_script.args().unpack(),
+                tx.signature(),
+                signing_message,
+            );
         }
 
         let message =
@@ -192,20 +188,7 @@ fn calc_godwoken_signing_message(
     )
 }
 
-fn extract_chain_id(args: &Bytes) -> Option<u32> {
-    if args.len() != 56 {
-        return None;
-    }
-    let mut chain_id_bytes = [0u8; 4];
-    chain_id_bytes.copy_from_slice(&args[52..56]);
-    Some(u32::from_le_bytes(chain_id_bytes))
-}
-
-fn try_assemble_polyjuice_args(
-    raw_tx: RawL2Transaction,
-    receiver_script: Script,
-    chain_id: u32,
-) -> Option<Bytes> {
+fn try_assemble_polyjuice_args(raw_tx: RawL2Transaction, receiver_script: Script) -> Option<Bytes> {
     let args: Bytes = raw_tx.args().unpack();
     if args.len() < 52 {
         return None;
@@ -229,21 +212,29 @@ fn try_assemble_polyjuice_args(
         u64::from_le_bytes(data)
     };
     stream.append(&gas_limit);
-    let to_id: u32 = raw_tx.to_id().unpack();
-    let to = if args[7] == 3 {
+    let (to, chain_id) = if args[7] == 3 {
         // 3 for EVMC_CREATE
-        // In case of deploying a polyjuice contract, we require users to use
-        // the same chain ID as polyjuice chain for extra safety.
-        if to_id != chain_id {
+        // In case of deploying a polyjuice contract, to id(creator account id)
+        // is directly used as chain id
+        (vec![0u8; 20], raw_tx.to_id().unpack())
+    } else {
+        // For contract calling, chain id is read from scrpit args of
+        // receiver_script, see the following link for more details:
+        // https://github.com/nervosnetwork/godwoken-polyjuice#normal-contract-account-script
+        if receiver_script.args().len() < 36 {
             return None;
         }
-        vec![0u8; 20]
-    } else {
+        let chain_id = {
+            let mut data = [0u8; 4];
+            data.copy_from_slice(&receiver_script.args().raw_data()[32..36]);
+            u32::from_le_bytes(data)
+        };
         let mut to = vec![0u8; 20];
         let receiver_hash = receiver_script.hash();
         to[0..16].copy_from_slice(&receiver_hash[0..16]);
+        let to_id: u32 = raw_tx.to_id().unpack();
         to[16..20].copy_from_slice(&to_id.to_le_bytes());
-        to
+        (to, chain_id)
     };
     stream.append(&to);
     let value = {
@@ -283,7 +274,6 @@ mod tests {
         );
         let mut lock_args = vec![0u8; 32];
         lock_args.extend(address);
-        lock_args.extend(&1u32.to_le_bytes());
         let eth = Secp256k1Eth {};
         let result = eth
             .verify_withdrawal_signature(lock_args.into(), test_signature, message)
@@ -311,18 +301,83 @@ mod tests {
             .args(Bytes::from(polyjuice_args).pack())
             .build();
         let mut signature = [0u8; 65];
-        signature.copy_from_slice(&hex::decode("2b3011b9ea5c85e611da784207a328b846d46f22f3d19de2aed65e2f9c7dcfed22dee12c97bbf3b79a1848b489fe09d49b4e704bba65f6b3df1997d0e82d052700").expect("hex decode"));
+        signature.copy_from_slice(&hex::decode("239ff31262bb6664d1857ea3bc5eecf3a4f74e32537c81de9fa1df2a2a48ef63115ffd8d6f5b4cc60b0fd4b02ab641106d024e49a9c0a9657c99361b39ce31ec00").expect("hex decode"));
         let signature = Signature::from_slice(&signature[..]).unwrap();
         let tx = L2Transaction::new_builder()
             .raw(raw_tx)
             .signature(signature)
             .build();
         let eth = Secp256k1Eth {};
+
+        let rollup_type_hash = vec![0u8; 32];
+
+        let mut sender_args = vec![];
+        sender_args.extend(&rollup_type_hash);
+        sender_args
+            .extend(&hex::decode("9d8A62f656a8d1615C1294fd71e9CFb3E4855A4F").expect("hex decode"));
         let sender_script = Script::new_builder()
-            .args(Bytes::from(hex::decode("00000000000000000000000000000000000000000000000000000000000000009d8A62f656a8d1615C1294fd71e9CFb3E4855A4F17000000").expect("hex decode")).pack())
+            .args(Bytes::from(sender_args).pack())
+            .build();
+
+        let mut receiver_args = vec![];
+        receiver_args.extend(&rollup_type_hash);
+        receiver_args.extend(&23u32.to_le_bytes());
+        let receiver_script = Script::new_builder()
+            .args(Bytes::from(receiver_args).pack())
             .build();
         let result = eth
-            .verify_tx(H256::zero(), sender_script, Script::default(), tx)
+            .verify_tx(H256::zero(), sender_script, receiver_script, tx)
+            .expect("verify signature");
+        assert!(result);
+    }
+
+    #[test]
+    fn test_secp256k1_eth_polyjuice_create() {
+        let mut polyjuice_args = vec![0u8; 69];
+        polyjuice_args[0..7].copy_from_slice(b"\xFF\xFF\xFFPOLY");
+        polyjuice_args[7] = 3;
+        let gas_limit: u64 = 21000;
+        polyjuice_args[8..16].copy_from_slice(&gas_limit.to_le_bytes());
+        let gas_price: u128 = 20000000000;
+        polyjuice_args[16..32].copy_from_slice(&gas_price.to_le_bytes());
+        let value: u128 = 3000000;
+        polyjuice_args[32..48].copy_from_slice(&value.to_le_bytes());
+        let payload_length: u32 = 17;
+        polyjuice_args[48..52].copy_from_slice(&payload_length.to_le_bytes());
+        polyjuice_args[52..69].copy_from_slice(b"POLYJUICEcontract");
+
+        let raw_tx = RawL2Transaction::new_builder()
+            .nonce(9u32.pack())
+            .to_id(23u32.pack())
+            .args(Bytes::from(polyjuice_args).pack())
+            .build();
+        let mut signature = [0u8; 65];
+        signature.copy_from_slice(&hex::decode("0774c42f2bb449a33d42cfd55bf03d500d2f20a9f04fabe3b6295256caff5109349f7dc9d5ef49afaf7ad7e96de188c067fa9203b862fe401baad9d14560c71301").expect("hex decode"));
+        let signature = Signature::from_slice(&signature[..]).unwrap();
+        let tx = L2Transaction::new_builder()
+            .raw(raw_tx)
+            .signature(signature)
+            .build();
+        let eth = Secp256k1Eth {};
+
+        let rollup_type_hash = vec![0u8; 32];
+
+        let mut sender_args = vec![];
+        sender_args.extend(&rollup_type_hash);
+        sender_args
+            .extend(&hex::decode("9d8A62f656a8d1615C1294fd71e9CFb3E4855A4F").expect("hex decode"));
+        let sender_script = Script::new_builder()
+            .args(Bytes::from(sender_args).pack())
+            .build();
+
+        let mut receiver_args = vec![];
+        receiver_args.extend(&rollup_type_hash);
+        receiver_args.extend(&23u32.to_le_bytes());
+        let receiver_script = Script::new_builder()
+            .args(Bytes::from(receiver_args).pack())
+            .build();
+        let result = eth
+            .verify_tx(H256::zero(), sender_script, receiver_script, tx)
             .expect("verify signature");
         assert!(result);
     }
@@ -334,18 +389,32 @@ mod tests {
             .to_id(1234u32.pack())
             .build();
         let mut signature = [0u8; 65];
-        signature.copy_from_slice(&hex::decode("4d6c6e1273cd2f77b1ee9c1cbb195812d13fb1d3ebdc07f0b4819b522535764a1a6b16c7efa2fb2b4140198790ee51d6e065c8ddc5fa1c063dc279126be0525d01").expect("hex decode"));
+        signature.copy_from_slice(&hex::decode("680e9afc606f3555d75fedb41f201ade6a5f270c3a2223730e25d93e764acc6a49ee917f9e3af4727286ae4bf3ce19a5b15f71ae359cf8c0c3fabc212cccca1e00").expect("hex decode"));
         let signature = Signature::from_slice(&signature[..]).unwrap();
         let tx = L2Transaction::new_builder()
             .raw(raw_tx)
             .signature(signature)
             .build();
         let eth = Secp256k1Eth {};
+
+        let rollup_type_hash = vec![0u8; 32];
+
+        let mut sender_args = vec![];
+        sender_args.extend(&rollup_type_hash);
+        sender_args
+            .extend(&hex::decode("9d8A62f656a8d1615C1294fd71e9CFb3E4855A4F").expect("hex decode"));
         let sender_script = Script::new_builder()
-            .args(Bytes::from(hex::decode("00000000000000000000000000000000000000000000000000000000000000009d8A62f656a8d1615C1294fd71e9CFb3E4855A4F17000000").expect("hex decode")).pack())
+            .args(Bytes::from(sender_args).pack())
+            .build();
+
+        let mut receiver_args = vec![];
+        receiver_args.extend(&rollup_type_hash);
+        receiver_args.extend(&23u32.to_le_bytes());
+        let receiver_script = Script::new_builder()
+            .args(Bytes::from(receiver_args).pack())
             .build();
         let result = eth
-            .verify_tx(H256::zero(), sender_script, Script::default(), tx)
+            .verify_tx(H256::zero(), sender_script, receiver_script, tx)
             .expect("verify signature");
         assert!(result);
     }
