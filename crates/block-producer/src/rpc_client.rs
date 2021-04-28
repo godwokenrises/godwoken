@@ -1,4 +1,6 @@
-use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
+use crate::indexer_types::{
+    Cell, IndexerTip, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter,
+};
 use crate::types::CellInfo;
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{HttpClient, Output, Params as ClientParams, Transport};
@@ -229,13 +231,14 @@ impl RPCClient {
         Ok(cell_info)
     }
 
-    async fn get_tip_block_number(&self) -> Result<u64> {
-        let number: BlockNumber = to_result(
-            self.ckb_client
-                .request("get_tip_block_number", None)
+    async fn get_indexer_tip_number(&self) -> Result<u64> {
+        let indexer_tip: IndexerTip = to_result(
+            self.indexer_client
+                .request("get_tip", Some(ClientParams::Array(vec![])))
                 .await?,
         )?;
-        Ok(number.value())
+
+        Ok(indexer_tip.block_number.value())
     }
 
     pub async fn get_block_by_number(&self, number: u64) -> Result<Block> {
@@ -253,7 +256,18 @@ impl RPCClient {
     }
 
     /// return all lived deposition requests
-    pub async fn query_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
+    pub async fn query_deposit_cells(
+        &self,
+        start_block_number: &mut u64,
+    ) -> Result<(Vec<DepositInfo>, u64)> {
+        let tip_indexer_block_number: u64 = self.get_indexer_tip_number().await?;
+
+        log::info!(
+            "query deposit start block: {}, current indexer tip: {}",
+            start_block_number,
+            tip_indexer_block_number
+        );
+
         let mut deposit_infos = Vec::new();
 
         let rollup_type_hash: Bytes = self
@@ -285,7 +299,10 @@ impl RPCClient {
                 script: None,
                 output_data_len_range: None,
                 output_capacity_range: None,
-                block_range: None,
+                block_range: Some([
+                    BlockNumber::from(*start_block_number + 1),
+                    BlockNumber::from(u64::max_value()),
+                ]),
             }),
         };
         let order = Order::Asc;
@@ -378,7 +395,7 @@ impl RPCClient {
             deposit_infos.push(info);
         }
 
-        Ok(deposit_infos)
+        Ok((deposit_infos, tip_indexer_block_number))
     }
 
     pub async fn query_unlocked_stake(

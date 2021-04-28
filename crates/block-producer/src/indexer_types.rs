@@ -65,3 +65,9 @@ pub struct Pagination<T> {
     pub objects: Vec<T>,
     pub last_cursor: JsonBytes,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct IndexerTip {
+    pub block_number: BlockNumber,
+    pub block_hash: H256,
+}
