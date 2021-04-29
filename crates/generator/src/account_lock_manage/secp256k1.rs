@@ -179,7 +179,7 @@ impl LockAlgorithm for Secp256k1Eth {
 pub struct Secp256k1Tron;
 
 /// Usage
-/// register AlwaysSuccess to AccountLockManage
+/// register Secp256k1Tron to AccountLockManage
 ///
 /// manage.register_lock_algorithm(code_hash, Box::new(Secp256k1Tron::default()));
 impl LockAlgorithm for Secp256k1Tron {
@@ -202,7 +202,7 @@ impl LockAlgorithm for Secp256k1Tron {
         signature: Signature,
         message: H256,
     ) -> Result<bool, LockAlgorithmError> {
-        if lock_args.len() != 20 {
+        if lock_args.len() != 52 {
             return Err(LockAlgorithmError::InvalidLockArgs);
         }
         let mut hasher = Keccak256::new();
@@ -213,8 +213,7 @@ impl LockAlgorithm for Secp256k1Tron {
         signing_message.copy_from_slice(&buf[..]);
         let signing_message = H256::from(signing_message);
         let mut expected_pubkey_hash = [0u8; 20];
-
-        expected_pubkey_hash.copy_from_slice(&lock_args);
+        expected_pubkey_hash.copy_from_slice(&lock_args[32..52]);
         let signature: RecoverableSignature = {
             let signature: [u8; 65] = signature.unpack();
             let recid = {
@@ -561,9 +560,11 @@ mod tests {
         let address = Bytes::from(
             hex::decode("d0ebb370429e1cc8a7da1f7aeb2447083e15298b").expect("hex decode"),
         );
+        let mut lock_args = vec![0u8; 32];
+        lock_args.extend(address);
         let tron = Secp256k1Tron {};
         let result = tron
-            .verify_withdrawal_signature(address, test_signature, message)
+            .verify_withdrawal_signature(lock_args.into(), test_signature, message)
             .expect("verify signature");
         assert!(result);
     }
