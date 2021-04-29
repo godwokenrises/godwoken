@@ -201,9 +201,10 @@ pub fn deploy_genesis(
         GwPack::pack(&deployment_result.polyjuice_validator.script_type_hash),
     ];
 
-    let mut allowed_eoa_type_hashes: Vec<gw_packed::Byte32> = vec![GwPack::pack(
-        &deployment_result.eth_account_lock.script_type_hash,
-    )];
+    let mut allowed_eoa_type_hashes: Vec<gw_packed::Byte32> = vec![
+        GwPack::pack(&deployment_result.eth_account_lock.script_type_hash),
+        GwPack::pack(&deployment_result.tron_account_lock.script_type_hash),
+    ];
     allowed_eoa_type_hashes.extend(
         user_rollup_config
             .allowed_eoa_type_hashes
