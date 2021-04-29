@@ -51,12 +51,18 @@ pub async fn generate(
                 .saturating_add(withdrawal.raw().capacity().unpack());
 
             let sudt_script_hash = withdrawal.raw().sudt_script_hash().unpack();
-            if sudt_script_hash != CKB_SUDT_SCRIPT_ARGS {
-                let sudt_amount = total_amount.sudt.entry(sudt_script_hash).or_insert(0u128);
-                *sudt_amount = sudt_amount.saturating_add(withdrawal.raw().amount().unpack());
-            } else {
-                let account = withdrawal.raw().account_script_hash();
-                eprintln!("{} withdrawal request non-zero sudt amount but it's type hash is all zero, ignore this amount", account);
+            let sudt_amount = withdrawal.raw().amount().unpack();
+            if sudt_amount != 0 {
+                match sudt_script_hash {
+                    CKB_SUDT_SCRIPT_ARGS => {
+                        let account = withdrawal.raw().account_script_hash();
+                        eprintln!("{} withdrawal request non-zero sudt amount but it's type hash ckb, ignore this amount", account);
+                    }
+                    _ => {
+                        let total_sudt_amount = total_amount.sudt.entry(sudt_script_hash).or_insert(0u128);
+                        *total_sudt_amount = total_sudt_amount.saturating_add(sudt_amount);
+                    }
+                }
             }
 
             total_amount
