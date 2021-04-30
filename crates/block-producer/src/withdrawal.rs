@@ -22,7 +22,10 @@ use gw_types::{
 };
 use serde_json::json;
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 pub struct GeneratedWithdrawals {
     pub deps: Vec<CellDep>,
@@ -222,13 +225,22 @@ pub async fn revert(
     let mut withdrawal_witness = vec![];
     let mut custodian_outputs = vec![];
 
-    // NOTE: We use idx to create different custodian lock hash for every reverted withdrawal
-    // input. Withdrawal lock use custodian lock hash to index corresponding custodian output.
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("unexpected timestamp")
+        .as_millis() as u64;
+
+    // We use timestamp plus idx and rollup_type_hash to create different custodian lock
+    // hash for every reverted withdrawal input. Withdrawal lock use custodian lock hash to
+    // index corresponding custodian output.
+    // NOTE: These locks must also be different from custodian change cells created by
+    // withdrawal requests processing.
     let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
     for (idx, withdrawal) in reverted_withdrawal_cells.into_iter().enumerate() {
         let custodian_lock = {
             let deposition_lock_args = DepositionLockArgs::new_builder()
-                .cancel_timeout((idx as u64).pack())
+                .owner_lock_hash(rollup_context.rollup_script_hash.pack())
+                .cancel_timeout((idx as u64 + timestamp).pack())
                 .build();
 
             let custodian_lock_args = CustodianLockArgs::new_builder()
