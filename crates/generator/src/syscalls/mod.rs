@@ -42,6 +42,7 @@ const SYS_STORE_DATA: u64 = 4056;
 const SYS_LOAD_DATA: u64 = 4057;
 const SYS_GET_BLOCK_HASH: u64 = 4058;
 const SYS_LOG: u64 = 4061;
+const SYS_LOAD_ROLLUP_CONFIG: u64 = 4062;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
@@ -401,6 +402,12 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                         .data(Bytes::from(data).pack())
                         .build(),
                 );
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_LOAD_ROLLUP_CONFIG => {
+                let data = self.rollup_context.rollup_config.as_slice();
+                store_data(machine, data)?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
