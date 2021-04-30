@@ -216,7 +216,7 @@ fn try_assemble_polyjuice_args(raw_tx: RawL2Transaction, receiver_script: Script
         // 3 for EVMC_CREATE
         // In case of deploying a polyjuice contract, to id(creator account id)
         // is directly used as chain id
-        (vec![0u8; 20], raw_tx.to_id().unpack())
+        (vec![0u8; 0], raw_tx.to_id().unpack())
     } else {
         // For contract calling, chain id is read from scrpit args of
         // receiver_script, see the following link for more details:
