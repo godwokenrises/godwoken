@@ -113,6 +113,7 @@ pub struct GenesisDeploymentResult {
     pub rollup_type_hash: H256,
     pub rollup_type_script: ckb_jsonrpc_types::Script,
     pub rollup_config: gw_jsonrpc_types::godwoken::RollupConfig,
+    pub rollup_config_type_script: ckb_jsonrpc_types::Script,
 }
 
 pub fn deploy_genesis(
@@ -184,13 +185,19 @@ pub fn deploy_genesis(
     .ok_or_else(|| format!("No live cell found for address: {}", owner_address_string))?;
 
     let rollup_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 0);
-    let poa_setup_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 1);
-    let poa_data_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 2);
+    let rollup_config_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 1);
+    let poa_setup_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 2);
+    let poa_data_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 3);
     // calculate by: blake2b_hash(firstInput + rullupCell.outputIndex)
     let rollup_type_script = ckb_packed::Script::new_builder()
         .code_hash(CKBPack::pack(&TYPE_ID_CODE_HASH))
         .hash_type(ScriptHashType::Type.into())
         .args(CKBPack::pack(&rollup_cell_type_id))
+        .build();
+    let rollup_config_type_script = ckb_packed::Script::new_builder()
+        .code_hash(CKBPack::pack(&TYPE_ID_CODE_HASH))
+        .hash_type(ScriptHashType::Type.into())
+        .args(CKBPack::pack(&rollup_config_cell_type_id))
         .build();
     let rollup_script_hash: H256 = CKBUnpack::unpack(&rollup_type_script.calc_script_hash());
     log::info!("rollup_script_hash: {:#x}", rollup_script_hash);
@@ -276,6 +283,30 @@ pub fn deploy_genesis(
         let output = fit_output_capacity(output, data.len());
         (output, data)
     };
+    let (rollup_config_output, rollup_config_data): (ckb_packed::CellOutput, Bytes) = {
+        let data = rollup_config.clone().as_bytes();
+        let lock_args = Bytes::from(
+            [
+                poa_setup_cell_type_id.deref(),
+                poa_data_cell_type_id.deref(),
+            ]
+            .concat()
+            .to_vec(),
+        );
+        let lock_script = ckb_packed::Script::new_builder()
+            .code_hash(CKBPack::pack(
+                &deployment_result.state_validator_lock.script_type_hash,
+            ))
+            .hash_type(ScriptHashType::Type.into())
+            .args(CKBPack::pack(&lock_args))
+            .build();
+        let output = ckb_packed::CellOutput::new_builder()
+            .lock(lock_script)
+            .type_(CKBPack::pack(&Some(rollup_config_type_script.clone())))
+            .build();
+        let output = fit_output_capacity(output, data.len());
+        (output, data)
+    };
 
     // 3. build PoA setup cell (with type id)
     let (poa_setup_output, poa_setup_data): (ckb_packed::CellOutput, Bytes) = {
@@ -338,13 +369,18 @@ pub fn deploy_genesis(
 
     // 6. build transaction
     let tx_fee = ONE_CKB;
-    let total_output_capacity: u64 = [&rollup_output, &poa_setup_output, &poa_data_output]
-        .iter()
-        .map(|output| {
-            let value: u64 = CKBUnpack::unpack(&output.capacity());
-            value
-        })
-        .sum();
+    let total_output_capacity: u64 = [
+        &rollup_output,
+        &rollup_config_output,
+        &poa_setup_output,
+        &poa_data_output,
+    ]
+    .iter()
+    .map(|output| {
+        let value: u64 = CKBUnpack::unpack(&output.capacity());
+        value
+    })
+    .sum();
     let total_capacity = total_output_capacity + tx_fee;
     let (inputs, total_input_capacity) = collect_live_cells(
         rpc_client.url(),
@@ -356,8 +392,18 @@ pub fn deploy_genesis(
     if inputs[0].as_slice() != first_cell_input.as_slice() {
         return Err("first input cell changed".to_string());
     }
-    let mut raw_outputs_data = vec![rollup_data, poa_setup_data, poa_data_data];
-    let mut outputs = vec![rollup_output, poa_setup_output, poa_data_output];
+    let mut raw_outputs_data = vec![
+        rollup_data,
+        rollup_config_data,
+        poa_setup_data,
+        poa_data_data,
+    ];
+    let mut outputs = vec![
+        rollup_output,
+        rollup_config_output,
+        poa_setup_output,
+        poa_data_output,
+    ];
     // collect_live_cells will ensure `total_input_capacity >= total_capacity`.
     let rest_capacity = total_input_capacity - total_capacity;
     let max_tx_fee_str = if rest_capacity >= MIN_SECP_CELL_CAPACITY {
@@ -439,6 +485,7 @@ pub fn deploy_genesis(
         rollup_type_hash: rollup_script_hash,
         rollup_type_script: rollup_type_script.into(),
         rollup_config: rollup_config.into(),
+        rollup_config_type_script: rollup_config_type_script.into(),
     };
     let output_content = serde_json::to_string_pretty(&genesis_deployment_result)
         .expect("serde json to string pretty");

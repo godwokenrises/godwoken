@@ -4,7 +4,10 @@ use crate::deploy_genesis::{get_secp_data, GenesisDeploymentResult};
 use crate::deploy_scripts::ScriptsDeploymentResult;
 use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
-use ckb_types::prelude::Entity;
+use ckb_types::{
+    core::DepType,
+    prelude::{Builder, Entity, Pack},
+};
 use gw_config::{
     BackendConfig, BlockProducerConfig, ChainConfig, Config, GenesisConfig, RPCClientConfig,
     RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
@@ -60,6 +63,10 @@ pub fn generate_config(
         scripts.meta_contract_validator.script_type_hash.clone();
     let rollup_type_script = {
         let script: ckb_types::packed::Script = genesis.rollup_type_script.into();
+        gw_types::packed::Script::new_unchecked(script.as_bytes()).into()
+    };
+    let rollup_config_type_script = {
+        let script: ckb_types::packed::Script = genesis.rollup_config_type_script.into();
         gw_types::packed::Script::new_unchecked(script.as_bytes()).into()
     };
     let poa_lock_dep = {
@@ -123,6 +130,7 @@ pub fn generate_config(
     let chain: ChainConfig = ChainConfig {
         genesis_committed_info,
         rollup_type_script,
+        rollup_config_type_script,
     };
     let rpc_client: RPCClientConfig = RPCClientConfig {
         indexer_url,

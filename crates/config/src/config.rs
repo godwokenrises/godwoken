@@ -34,6 +34,7 @@ pub struct RPCClientConfig {
 pub struct ChainConfig {
     pub genesis_committed_info: L2BlockCommittedInfo,
     pub rollup_type_script: Script,
+    pub rollup_config_type_script: Script,
 }
 
 /// Genesis config
