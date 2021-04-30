@@ -284,7 +284,7 @@ pub fn deploy_genesis(
         (output, data)
     };
     let (rollup_config_output, rollup_config_data): (ckb_packed::CellOutput, Bytes) = {
-        let data = rollup_config.clone().as_bytes();
+        let data = rollup_config.as_bytes();
         let lock_args = Bytes::from(
             [
                 poa_setup_cell_type_id.deref(),

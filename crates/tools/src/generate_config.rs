@@ -4,10 +4,7 @@ use crate::deploy_genesis::{get_secp_data, GenesisDeploymentResult};
 use crate::deploy_scripts::ScriptsDeploymentResult;
 use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
-use ckb_types::{
-    core::DepType,
-    prelude::{Builder, Entity, Pack},
-};
+use ckb_types::prelude::Entity;
 use gw_config::{
     BackendConfig, BlockProducerConfig, ChainConfig, Config, GenesisConfig, RPCClientConfig,
     RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,

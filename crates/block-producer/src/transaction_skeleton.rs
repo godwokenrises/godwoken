@@ -86,7 +86,7 @@ impl TransactionSkeleton {
         for (index, input) in self.inputs.iter().enumerate() {
             // Skip withdrawal lock witness args
             if let Some(witness_args) = self.witnesses().get(index) {
-                if let Some(_) = witness_args.lock().to_opt() {
+                if witness_args.lock().to_opt().is_some() {
                     continue;
                 }
             }

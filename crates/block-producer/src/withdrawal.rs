@@ -207,7 +207,7 @@ pub async fn revert(
 
     let rollup_config_cell_dep = match query_rollup_config_cell(rpc_client).await? {
         Some(rollup_config_cell) => CellDep::new_builder()
-            .out_point(rollup_config_cell.out_point.to_owned())
+            .out_point(rollup_config_cell.out_point)
             .dep_type(DepType::Code.into())
             .build(),
         None => {
@@ -299,7 +299,7 @@ pub async fn revert(
     let withdrawal_lock_dep = block_producer_config.withdrawal_cell_lock_dep.clone();
 
     Ok(Some(RevertedWithdrawals {
-        deps: vec![rollup_config_cell_dep.into(), withdrawal_lock_dep.into()],
+        deps: vec![rollup_config_cell_dep, withdrawal_lock_dep.into()],
         inputs: withdrawal_inputs,
         outputs: custodian_outputs,
         witness_args: withdrawal_witness,
