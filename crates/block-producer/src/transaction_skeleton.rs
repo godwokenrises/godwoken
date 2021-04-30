@@ -60,6 +60,10 @@ impl TransactionSkeleton {
         &mut self.cell_outputs
     }
 
+    pub fn witnesses(&self) -> &Vec<WitnessArgs> {
+        &self.witnesses
+    }
+
     pub fn witnesses_mut(&mut self) -> &mut Vec<WitnessArgs> {
         &mut self.witnesses
     }
@@ -80,6 +84,13 @@ impl TransactionSkeleton {
     pub fn signature_entries(&self) -> Vec<SignatureEntry> {
         let mut entries: HashMap<[u8; 32], SignatureEntry> = Default::default();
         for (index, input) in self.inputs.iter().enumerate() {
+            // Skip withdrawal lock witness args
+            if let Some(witness_args) = self.witnesses().get(index) {
+                if let Some(_) = witness_args.lock().to_opt() {
+                    continue;
+                }
+            }
+
             let lock_hash = input.cell.output.lock().hash();
             let entry = entries.entry(lock_hash).or_insert_with(|| SignatureEntry {
                 lock_hash,
