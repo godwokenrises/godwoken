@@ -477,6 +477,18 @@ impl BlockProducer {
             tx_skeleton
                 .cell_deps_mut()
                 .extend(reverted_withdrawals.deps);
+
+            let input_len = tx_skeleton.inputs().len();
+            let witness_len = tx_skeleton.witnesses_mut().len();
+            if input_len != witness_len {
+                // append dummy witness args to align our reverted withdrawal witness args
+                let dummy_witness_argses = (0..input_len - witness_len)
+                    .into_iter()
+                    .map(|_| WitnessArgs::default())
+                    .collect::<Vec<_>>();
+                tx_skeleton.witnesses_mut().extend(dummy_witness_argses);
+            }
+
             tx_skeleton.inputs_mut().extend(reverted_withdrawals.inputs);
             tx_skeleton
                 .witnesses_mut()
