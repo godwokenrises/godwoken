@@ -585,7 +585,7 @@ impl RPCClient {
             )?;
 
             if cells.last_cursor.is_empty() {
-                println!("no unlocked stake");
+                log::debug!("no unlocked stake");
                 return Ok(None);
             }
             cursor = Some(cells.last_cursor);

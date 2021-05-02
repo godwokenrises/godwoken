@@ -240,7 +240,7 @@ impl PoA {
         let initial_time: u64 = poa_data.round_initial_subtime().unpack();
         let next_start_time = initial_time + poa_setup.round_intervals as u64 * steps;
 
-        eprintln!("block producer index: {}, steps: {}, initial time: {}, next start time: {}, median time: {}",
+        log::debug!("block producer index: {}, steps: {}, initial time: {}, next start time: {}, median time: {}",
     block_producer_index, steps, initial_time, next_start_time, median_time.as_secs());
 
         // check next start time again

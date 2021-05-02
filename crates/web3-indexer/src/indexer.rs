@@ -53,7 +53,7 @@ impl Web3Indexer {
     pub async fn store(&self, store: Store, l1_transaction: &Transaction) {
         match self.insert_to_sql(store, l1_transaction).await {
             Err(err) => {
-                eprintln!("Web3 indexer store failed: {:?}", err);
+                log::error!("Web3 indexer store failed: {:?}", err);
             }
             Ok(()) => {}
         }
@@ -134,7 +134,7 @@ impl Web3Indexer {
                 }
             }
             tx.commit().await?;
-            println!("web3 indexer: sync new block #{}", web3_block.number);
+            log::info!("web3 indexer: sync new block #{}", web3_block.number);
         }
         Ok(())
     }
@@ -238,7 +238,7 @@ impl Web3Indexer {
                         let log_item_vec = tx_receipt.logs();
                         let mut log_index = 0;
                         for log_item in log_item_vec {
-                            let log = parse_log(&log_item);
+                            let log = parse_log(&log_item)?;
                             match log {
                                 GwLog::PolyjuiceSystem {
                                     gas_used,

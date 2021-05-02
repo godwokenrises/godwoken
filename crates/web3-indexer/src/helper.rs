@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result};
 use gw_common::H256;
 use gw_types::packed::LogItem;
 use gw_types::prelude::*;
@@ -65,18 +66,18 @@ pub enum GwLog {
     },
 }
 
-pub fn parse_log(item: &LogItem) -> GwLog {
+pub fn parse_log(item: &LogItem) -> Result<GwLog> {
     let service_flag: u8 = item.service_flag().into();
     let raw_data = item.data().raw_data();
     let data = raw_data.as_ref();
     match service_flag {
         GW_LOG_SUDT_OPERATION => {
             if data[0] != SUDT_OPERATION_TRANSFER {
-                panic!("Not a sudt transfer prefix: {}", data[1]);
+                return Err(anyhow!("Not a sudt transfer prefix: {}", data[1]));
             }
             let sudt_id: u32 = item.account_id().unpack();
             if data.len() != (1 + 4 + 4 + 16) {
-                panic!("Invalid data length: {}", data.len());
+                return Err(anyhow!("Invalid data length: {}", data.len()));
             }
             let data = &data[1..];
 
@@ -90,16 +91,19 @@ pub fn parse_log(item: &LogItem) -> GwLog {
             let mut u128_bytes = [0u8; 16];
             u128_bytes.copy_from_slice(&data[8..24]);
             let amount = u128::from_le_bytes(u128_bytes);
-            GwLog::SudtTransfer {
+            Ok(GwLog::SudtTransfer {
                 sudt_id,
                 from_id,
                 to_id,
                 amount,
-            }
+            })
         }
         GW_LOG_POLYJUICE_SYSTEM => {
             if data.len() != (8 + 8 + 4 + 4 + 4) {
-                panic!("invalid system log raw data length: {}", data.len());
+                return Err(anyhow!(
+                    "invalid system log raw data length: {}",
+                    data.len()
+                ));
             }
 
             let mut u64_bytes = [0u8; 8];
@@ -113,12 +117,12 @@ pub fn parse_log(item: &LogItem) -> GwLog {
             let created_id = u32::from_le_bytes(u32_bytes);
             u32_bytes.copy_from_slice(&data[20..24]);
             let status_code = u32::from_le_bytes(u32_bytes);
-            GwLog::PolyjuiceSystem {
+            Ok(GwLog::PolyjuiceSystem {
                 gas_used,
                 cumulative_gas_used,
                 created_id,
                 status_code,
-            }
+            })
         }
         GW_LOG_POLYJUICE_USER => {
             let mut offset: usize = 0;
@@ -132,14 +136,14 @@ pub fn parse_log(item: &LogItem) -> GwLog {
             let mut log_data = vec![0u8; data_size as usize];
             log_data.copy_from_slice(&data[offset..offset + (data_size as usize)]);
             offset += data_size as usize;
-            println!("data_size: {}", data_size);
+            log::debug!("data_size: {}", data_size);
 
             let mut topics_count_bytes = [0u8; 4];
             topics_count_bytes.copy_from_slice(&data[offset..offset + 4]);
             offset += 4;
             let topics_count: u32 = u32::from_le_bytes(topics_count_bytes);
             let mut topics = Vec::new();
-            println!("topics_count: {}", topics_count);
+            log::debug!("topics_count: {}", topics_count);
             for _ in 0..topics_count {
                 let mut topic = [0u8; 32];
                 topic.copy_from_slice(&data[offset..offset + 32]);
@@ -147,20 +151,18 @@ pub fn parse_log(item: &LogItem) -> GwLog {
                 topics.push(topic.into());
             }
             if offset != data.len() {
-                panic!(
+                return Err(anyhow!(
                     "Too many bytes for polyjuice user log data: offset={}, data.len()={}",
                     offset,
                     data.len()
-                );
+                ));
             }
-            GwLog::PolyjuiceUser {
+            Ok(GwLog::PolyjuiceUser {
                 address,
                 data: log_data,
                 topics,
-            }
+            })
         }
-        _ => {
-            panic!("invalid log service flag: {}", service_flag);
-        }
+        _ => Err(anyhow!("invalid log service flag: {}", service_flag)),
     }
 }

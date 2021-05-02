@@ -43,7 +43,6 @@ pub async fn fill_tx_fee(
     // calculate required fee, we assume always need a change cell to simplify the code
     let required_fee =
         (calculate_required_tx_fee(tx_size) + CHANGE_CELL_CAPACITY).saturating_sub(paid_fee);
-    // panic!("paid fee {}, required fee {}, result fee {} inputs len {}", paid_fee, calculate_required_tx_fee(tx_size), required_fee, tx_skeleton.inputs().len());
 
     // get payment cells
     if required_fee > 0 {
@@ -69,8 +68,7 @@ pub async fn fill_tx_fee(
         // calculate required fee
         let tx_fee = calculate_required_tx_fee(tx_size);
 
-        // let required_fee = (calculate_required_tx_fee(tx_size)).saturating_sub(paid_fee);
-        eprintln!(
+        log::debug!(
             "paid fee {}, tx fee {}, result fee {}",
             paid_fee,
             calculate_required_tx_fee(tx_size),
