@@ -91,13 +91,15 @@ async fn poll_loop(
             if let Err(err) = inner.chain_updater.handle_event(event.clone()).await {
                 log::error!(
                     "Error occured when polling chain_updater, event: {:?}, error: {}",
-                    event, err
+                    event,
+                    err
                 );
             }
             if let Err(err) = inner.block_producer.handle_event(event.clone()).await {
                 log::error!(
                     "Error occured when polling block_producer, event: {:?}, error: {}",
-                    event, err
+                    event,
+                    err
                 );
             }
             // }

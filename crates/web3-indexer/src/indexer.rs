@@ -238,7 +238,7 @@ impl Web3Indexer {
                         let log_item_vec = tx_receipt.logs();
                         let mut log_index = 0;
                         for log_item in log_item_vec {
-                            let log = parse_log(&log_item);
+                            let log = parse_log(&log_item)?;
                             match log {
                                 GwLog::PolyjuiceSystem {
                                     gas_used,

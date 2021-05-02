@@ -373,7 +373,8 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     self.chain.get_block_hash_by_number(number).map_err(|err| {
                         log::error!(
                             "syscall error: get block hash by number: {}, error: {:?}",
-                            number, err
+                            number,
+                            err
                         );
                         VMError::Unexpected
                     })?;
