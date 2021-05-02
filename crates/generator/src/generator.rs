@@ -340,7 +340,7 @@ impl Generator {
                     let code_hash: [u8; 32] = script.code_hash().unpack();
                     self.backend_manage.get_backend(&code_hash.into())
                 } else {
-                    eprintln!(
+                    log::error!(
                         "Found a invalid account script which hash_type is data: {:?}",
                         script
                     );

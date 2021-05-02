@@ -24,3 +24,4 @@ sqlx = { version = "0.5", features = [ "runtime-async-std-native-tls", "postgres
 rust_decimal = "1.10.3"
 num-bigint = "0.4"
 faster-hex = "0.5.0"
+log = "0.4"

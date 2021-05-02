@@ -239,7 +239,7 @@ impl Chain {
                     self.bad_block_context = Some(challenge_context.target.clone());
                     SyncEvent::BadBlock(challenge_context)
                 } else {
-                    println!("sync new block #{} success", number);
+                    log::info!("sync new block #{} success", number);
                     SyncEvent::Success
                 }
             }

@@ -56,7 +56,7 @@ impl<'a> Store {
 
     pub fn write(&self, write_batch: &StoreWriteBatch) -> Result<(), Error> {
         if let Err(err) = self.db.write(&write_batch.inner) {
-            eprintln!("Store error: {}", err);
+            log::error!("Store error: {}", err);
             return Err(Error::Store);
         }
         Ok(())

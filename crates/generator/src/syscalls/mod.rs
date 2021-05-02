@@ -164,7 +164,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
 
                 let script_data = load_bytes(machine, script_addr, script_len as usize)?;
                 let script = Script::from_slice(&script_data[..]).map_err(|err| {
-                    eprintln!("syscall error: invalid script to create : {:?}", err);
+                    log::error!("syscall error: invalid script to create : {:?}", err);
                     VMError::Unexpected
                 })?;
                 let script_hash = script.hash();
@@ -256,7 +256,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     .get_account_id_by_script_hash(&script_hash)
                     .map_err(|_err| VMError::Unexpected)?
                     .ok_or_else(|| {
-                        eprintln!("returned zero account id");
+                        log::error!("returned zero account id");
                         VMError::Unexpected
                     })?;
                 machine
@@ -269,7 +269,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 let account_id = machine.registers()[A0].to_u32();
                 let script_hash_addr = machine.registers()[A1].to_u64();
                 let script_hash = self.get_script_hash(account_id).map_err(|err| {
-                    eprintln!("syscall error: get script hash by account id: {:?}", err);
+                    log::error!("syscall error: get script hash by account id: {:?}", err);
                     VMError::Unexpected
                 })?;
                 machine
@@ -285,12 +285,12 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 let script_addr = machine.registers()[A3].to_u64();
 
                 let script_hash = self.get_script_hash(account_id).map_err(|err| {
-                    eprintln!("syscall error: get script hash by account id: {:?}", err);
+                    log::error!("syscall error: get script hash by account id: {:?}", err);
                     VMError::Unexpected
                 })?;
                 let len = load_data_u32(machine, len_addr)? as usize;
                 let script = self.get_script(&script_hash).ok_or_else(|| {
-                    eprintln!(
+                    log::error!(
                         "syscall error: script not found by script hash: {:?}",
                         script_hash
                     );
@@ -339,7 +339,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 let data_hash = load_data_h256(machine, data_hash_addr)?;
                 let len = load_data_u32(machine, len_addr)? as usize;
                 let data = self.get_data(&data_hash).ok_or_else(|| {
-                    eprintln!(
+                    log::error!(
                         "syscall error: data not found by data hash: {:?}",
                         data_hash
                     );
@@ -371,7 +371,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
 
                 let block_hash_opt =
                     self.chain.get_block_hash_by_number(number).map_err(|err| {
-                        eprintln!(
+                        log::error!(
                             "syscall error: get block hash by number: {}, error: {:?}",
                             number, err
                         );
@@ -437,7 +437,7 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
             Ok(id)
         } else {
             self.state.get_account_count().map_err(|err| {
-                eprintln!("syscall error: get account count : {:?}", err);
+                log::error!("syscall error: get account count : {:?}", err);
                 VMError::Unexpected
             })
         }
@@ -463,7 +463,7 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
         let value = self
             .get_raw(&build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH))
             .map_err(|err| {
-                eprintln!("syscall error: get script hash by account id : {:?}", err);
+                log::error!("syscall error: get script hash by account id : {:?}", err);
                 VMError::Unexpected
             })?;
         Ok(value)
@@ -475,7 +475,7 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
         let value = self
             .get_raw(&build_script_hash_to_account_id_key(script_hash.as_slice()))
             .map_err(|err| {
-                eprintln!("syscall error: get account id by script hash : {:?}", err);
+                log::error!("syscall error: get account id by script hash : {:?}", err);
                 VMError::Unexpected
             })?;
         if value.is_zero() {
@@ -502,7 +502,7 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
         }
 
         let s = String::from_utf8(buffer).map_err(|_| VMError::ParseError)?;
-        println!("[contract debug]: {}", s);
+        log::debug!("[contract debug]: {}", s);
         Ok(())
     }
 }

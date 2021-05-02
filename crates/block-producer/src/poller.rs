@@ -55,11 +55,6 @@ impl ChainUpdater {
 
     // Start syncing
     pub async fn handle_event(&mut self, _event: ChainEvent) -> Result<()> {
-        // TODO: support for more SQL databases
-        // let pool = PgPoolOptions::new()
-        //     .max_connections(5)
-        //     .connect(&sql_address)
-        //     .await?;
         let rollup_type_script = self.rollup_type_script.clone();
         let tip_l1_block = self.chain.lock().local_state().last_synced().number();
         let search_key = SearchKey {
@@ -104,7 +99,7 @@ impl ChainUpdater {
             }
             last_cursor = Some(txs.last_cursor);
 
-            println!("Poll transactions: {}", txs.objects.len());
+            log::debug!("Poll transactions: {}", txs.objects.len());
             self.update(&txs.objects).await?;
         }
         Ok(())

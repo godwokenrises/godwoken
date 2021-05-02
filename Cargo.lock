@@ -1927,6 +1927,7 @@ dependencies = [
  "gw-traits",
  "gw-types",
  "lazy_static",
+ "log",
  "parking_lot 0.11.1",
  "thiserror",
  "toml",
@@ -1976,6 +1977,7 @@ dependencies = [
  "gw-types",
  "hex",
  "lazy_static",
+ "log",
  "secp256k1 0.20.0",
  "sha3",
  "thiserror",
@@ -2011,6 +2013,7 @@ dependencies = [
  "gw-store",
  "gw-traits",
  "gw-types",
+ "log",
 ]
 
 [[package]]
@@ -2061,6 +2064,7 @@ dependencies = [
  "gw-db",
  "gw-traits",
  "gw-types",
+ "log",
  "parking_lot 0.11.1",
  "thiserror",
 ]
@@ -2163,6 +2167,7 @@ dependencies = [
  "gw-store",
  "gw-traits",
  "gw-types",
+ "log",
  "num-bigint 0.4.0",
  "parking_lot 0.11.1",
  "rust_decimal",

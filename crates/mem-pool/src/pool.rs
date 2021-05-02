@@ -388,7 +388,7 @@ impl MemPool {
             let old_number: u64 = old_tip_block.raw().number().unpack();
             let depth = max(new_number, old_number) - min(new_number, old_number);
             if depth > 64 {
-                eprintln!("skipping deep transaction reorg: depth {}", depth);
+                log::error!("skipping deep transaction reorg: depth {}", depth);
             } else {
                 let mut rem = old_tip_block;
                 let mut add = new_tip_block.clone();
@@ -450,13 +450,13 @@ impl MemPool {
         // re-inject txs
         for tx in reinject_txs {
             if self.push_transaction(tx.clone()).is_err() {
-                eprintln!("MemPool: drop tx {:?}", tx.hash());
+                log::info!("MemPool: drop tx {:?}", tx.hash());
             }
         }
         // re-inject withdrawals
         for withdrawal in reinject_withdrawals {
             if self.push_withdrawal_request(withdrawal.clone()).is_err() {
-                eprintln!("MemPool: drop withdrawal {:?}", withdrawal);
+                log::info!("MemPool: drop withdrawal {:?}", withdrawal);
             }
         }
         Ok(())

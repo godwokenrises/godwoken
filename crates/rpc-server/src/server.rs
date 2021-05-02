@@ -20,7 +20,7 @@ pub async fn start_jsonrpc_server(listen_addr: SocketAddr, registry: Registry) -
 
     // Format the full address.
     let url = format!("http://{}", listener.get_ref().local_addr()?);
-    println!("JSONRPC server listening on {}", url);
+    log::info!("JSONRPC server listening on {}", url);
 
     // Start a hyper server.
     Server::builder(SmolListener::new(&listener))

@@ -132,14 +132,14 @@ pub fn parse_log(item: &LogItem) -> GwLog {
             let mut log_data = vec![0u8; data_size as usize];
             log_data.copy_from_slice(&data[offset..offset + (data_size as usize)]);
             offset += data_size as usize;
-            println!("data_size: {}", data_size);
+            log::debug!("data_size: {}", data_size);
 
             let mut topics_count_bytes = [0u8; 4];
             topics_count_bytes.copy_from_slice(&data[offset..offset + 4]);
             offset += 4;
             let topics_count: u32 = u32::from_le_bytes(topics_count_bytes);
             let mut topics = Vec::new();
-            println!("topics_count: {}", topics_count);
+            log::debug!("topics_count: {}", topics_count);
             for _ in 0..topics_count {
                 let mut topic = [0u8; 32];
                 topic.copy_from_slice(&data[offset..offset + 32]);
