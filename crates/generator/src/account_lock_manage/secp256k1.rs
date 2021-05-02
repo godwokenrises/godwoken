@@ -355,7 +355,7 @@ mod tests {
             .args(Bytes::from(polyjuice_args).pack())
             .build();
         let mut signature = [0u8; 65];
-        signature.copy_from_slice(&hex::decode("0774c42f2bb449a33d42cfd55bf03d500d2f20a9f04fabe3b6295256caff5109349f7dc9d5ef49afaf7ad7e96de188c067fa9203b862fe401baad9d14560c71301").expect("hex decode"));
+        signature.copy_from_slice(&hex::decode("5289a4c910f143a97ce6d8ce55a970863c115bb95b404518a183ec470734ce0c10594e911d54d8894d05381fbc0f052b7397cd25217f6f102d297387a4cb15d700").expect("hex decode"));
         let signature = Signature::from_slice(&signature[..]).unwrap();
         let tx = L2Transaction::new_builder()
             .raw(raw_tx)
