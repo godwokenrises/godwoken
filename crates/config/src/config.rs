@@ -55,10 +55,11 @@ pub struct WalletConfig {
 pub struct BlockProducerConfig {
     pub account_id: u32,
     // cell deps
-    pub rollup_cell_lock_dep: CellDep,
     pub rollup_cell_type_dep: CellDep,
     pub deposit_cell_lock_dep: CellDep,
     pub stake_cell_lock_dep: CellDep,
+    pub poa_lock_dep: CellDep,
+    pub poa_state_dep: CellDep,
     pub wallet_config: WalletConfig,
 }
 

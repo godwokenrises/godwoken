@@ -1902,6 +1902,7 @@ dependencies = [
  "gw-types",
  "gw-web3-indexer",
  "hex",
+ "lazy_static",
  "log",
  "parking_lot 0.11.1",
  "serde",

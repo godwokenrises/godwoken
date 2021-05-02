@@ -1,0 +1,8 @@
+import blockchain;
+
+struct PoAData {
+    round_initial_subtime: Uint64,
+    subblock_subtime: Uint64,
+    subblock_index: Uint32,
+    block_producer_index: Uint16,
+}

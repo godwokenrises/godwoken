@@ -1,7 +1,7 @@
-use crate::rpc_client::RPCClient;
-use crate::types::CellInfo;
-use crate::types::InputCellInfo;
-
+use crate::{
+    rpc_client::RPCClient,
+    types::{CellInfo, InputCellInfo},
+};
 use anyhow::{anyhow, Result};
 use ckb_types::{
     bytes::Bytes,
@@ -102,23 +102,6 @@ pub async fn generate(
         }
     };
 
-    let payment_cells = rpc_client
-        .query_payment_cells(lock_script.clone(), stake_capacity)
-        .await?;
-    if payment_cells.is_empty() {
-        return Err(anyhow!("no cells to generate stake cell"));
-    }
-
-    let input_cells = payment_cells
-        .into_iter()
-        .map(|cell| {
-            let input = CellInput::new_builder()
-                .previous_output(cell.out_point.clone())
-                .build();
-            InputCellInfo { input, cell }
-        })
-        .collect();
-
     let stake_cell = CellOutput::new_builder()
         .capacity(stake_capacity.pack())
         .lock(lock)
@@ -126,7 +109,7 @@ pub async fn generate(
 
     let generated_stake = GeneratedStake {
         deps: vec![],
-        inputs: input_cells,
+        inputs: vec![],
         output: stake_cell,
         output_data: Bytes::new(),
     };

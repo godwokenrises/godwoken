@@ -1,11 +1,13 @@
-use crate::types::{InputCellInfo, SignatureEntry};
+#![allow(clippy::clippy::mutable_key_type)]
+
+use crate::types::{CellInfo, InputCellInfo, SignatureEntry};
 use anyhow::{anyhow, Result};
 use gw_types::{
     bytes::Bytes,
-    packed::{CellDep, CellOutput, RawTransaction, Transaction, WitnessArgs},
+    packed::{CellDep, CellInput, CellOutput, OutPoint, RawTransaction, Transaction, WitnessArgs},
     prelude::*,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct SealedTransaction {
     pub transaction: Transaction,
@@ -60,6 +62,19 @@ impl TransactionSkeleton {
 
     pub fn witnesses_mut(&mut self) -> &mut Vec<WitnessArgs> {
         &mut self.witnesses
+    }
+
+    pub fn add_owner_cell(&mut self, owner_cell: CellInfo) {
+        self.inputs_mut().push({
+            InputCellInfo {
+                input: CellInput::new_builder()
+                    .previous_output(owner_cell.out_point.clone())
+                    .build(),
+                cell: owner_cell.clone(),
+            }
+        });
+        self.outputs_mut()
+            .push((owner_cell.output, owner_cell.data));
     }
 
     pub fn signature_entries(&self) -> Vec<SignatureEntry> {
@@ -176,5 +191,15 @@ impl TransactionSkeleton {
         // tx size + 4 in block serialization cost
         let tx_in_block_size = sealed_tx.transaction.as_slice().len() + 4;
         Ok(tx_in_block_size)
+    }
+
+    pub fn taken_outpoints(&self) -> Result<HashSet<OutPoint>> {
+        let mut taken_outpoints = HashSet::default();
+        for (index, input) in self.inputs().iter().enumerate() {
+            if !taken_outpoints.insert(input.cell.out_point.clone()) {
+                panic!("Duplicated input: {:?}, index: {}", input, index);
+            }
+        }
+        Ok(taken_outpoints)
     }
 }

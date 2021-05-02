@@ -57,7 +57,7 @@ pub struct PoAConfig {
 pub struct PoASetup {
     pub identity_size: u8,
     pub round_interval_uses_seconds: bool,
-    pub identities: Vec<Bytes>,
+    pub identities: Vec<rpc_types::JsonBytes>,
     pub aggregator_change_threshold: u8,
     pub round_intervals: u32,
     pub subblocks_per_round: u32,
@@ -84,7 +84,7 @@ pub fn serialize_poa_setup(setup: &PoASetup) -> Bytes {
         if identity.len() < setup.identity_size as usize {
             panic!("Invalid identity!");
         }
-        buffer.extend_from_slice(&identity.slice(0..setup.identity_size as usize));
+        buffer.extend_from_slice(&identity.as_bytes()[..setup.identity_size as usize]);
     }
     buffer.freeze()
 }

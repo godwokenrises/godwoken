@@ -1,3 +1,5 @@
+#![allow(clippy::clippy::mutable_key_type)]
+
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
 use crate::types::CellInfo;
 use anyhow::{anyhow, Result};
@@ -11,19 +13,42 @@ use gw_types::{
     core::ScriptHashType,
     packed::{
         Block, CellOutput, DepositionLockArgs, DepositionLockArgsReader, DepositionRequest,
-        OutPoint, Script, StakeLockArgs, StakeLockArgsReader, Transaction,
+        NumberHash, OutPoint, Script, StakeLockArgs, StakeLockArgsReader, Transaction,
     },
     prelude::*,
 };
 use serde::de::DeserializeOwned;
 use serde_json::{from_value, json};
+use std::{collections::HashSet, time::Duration};
 
 const DEFAULT_QUERY_LIMIT: usize = 1000;
+
+lazy_static::lazy_static! {
+    /// CKB built-in type ID code hash
+    static ref TYPE_ID_CODE_HASH: [u8; 32] = {
+        let hexed_type_id_code_hash: &str = "00000000000000000000000000000000000000000000000000545950455f4944";
+        let mut code_hash = [0u8; 32];
+        faster_hex::hex_decode(hexed_type_id_code_hash.as_bytes(), &mut code_hash).expect("dehex type id code_hash");
+        code_hash
+    };
+}
 
 #[derive(Debug, Clone)]
 pub struct DepositInfo {
     pub request: DepositionRequest,
     pub cell: CellInfo,
+}
+
+type JsonH256 = ckb_fixed_hash::H256;
+
+fn to_h256(v: JsonH256) -> H256 {
+    let h: [u8; 32] = v.into();
+    h.into()
+}
+
+fn to_jsonh256(v: H256) -> JsonH256 {
+    let h: [u8; 32] = v.into();
+    h.into()
 }
 
 fn to_result<T: DeserializeOwned>(output: Output) -> anyhow::Result<T> {
@@ -120,12 +145,123 @@ impl RPCClient {
         Ok(None)
     }
 
+    /// this function queries identity cell by args
+    pub async fn query_identity_cell(&self, args: Bytes) -> Result<Option<CellInfo>> {
+        let search_key = SearchKey {
+            script: ckb_types::packed::Script::new_builder()
+                .code_hash(ckb_types::prelude::Pack::pack(&*TYPE_ID_CODE_HASH))
+                .hash_type(ScriptHashType::Type.into())
+                .args(ckb_types::prelude::Pack::pack(&args))
+                .build()
+                .into(),
+            script_type: ScriptType::Type,
+            filter: None,
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut cell = None;
+        let mut cursor = None;
+        while cell.is_none() {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer_client
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+            cursor = Some(cells.last_cursor);
+            assert!(
+                cells.objects.len() <= 1,
+                "Never returns more than 1 identity cells"
+            );
+            cell = cells.objects.into_iter().find_map(|cell| {
+                let out_point = {
+                    let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
+                    OutPoint::new_unchecked(out_point.as_bytes())
+                };
+                let output = {
+                    let output: ckb_types::packed::CellOutput = cell.output.into();
+                    CellOutput::new_unchecked(output.as_bytes())
+                };
+                let data = cell.output_data.into_bytes();
+                Some(CellInfo {
+                    out_point,
+                    output,
+                    data,
+                })
+            });
+        }
+        Ok(cell)
+    }
+
+    /// this function return a cell that do not has data & _type fields
+    pub async fn query_owner_cell(&self, lock: Script) -> Result<Option<CellInfo>> {
+        let search_key = SearchKey {
+            script: {
+                let lock = ckb_types::packed::Script::new_unchecked(lock.as_bytes());
+                lock.into()
+            },
+            script_type: ScriptType::Lock,
+            filter: None,
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut cell = None;
+        let mut cursor = None;
+        while cell.is_none() {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer_client
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+            cursor = Some(cells.last_cursor);
+            cell = cells.objects.into_iter().find_map(|cell| {
+                // delete cells with data & type
+                if !cell.output_data.is_empty() || cell.output.type_.is_some() {
+                    return None;
+                }
+                let out_point = {
+                    let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
+                    OutPoint::new_unchecked(out_point.as_bytes())
+                };
+                let output = {
+                    let output: ckb_types::packed::CellOutput = cell.output.into();
+                    CellOutput::new_unchecked(output.as_bytes())
+                };
+                let data = cell.output_data.into_bytes();
+                Some(CellInfo {
+                    out_point,
+                    output,
+                    data,
+                })
+            });
+        }
+        Ok(cell)
+    }
+
     /// query payment cells, the returned cells should provide at least required_capacity fee,
     /// and the remained fees should be enough to cover a charge cell
     pub async fn query_payment_cells(
         &self,
         lock: Script,
         required_capacity: u64,
+        taken_outpoints: &HashSet<OutPoint>,
     ) -> Result<Vec<CellInfo>> {
         let search_key = SearchKey {
             script: {
@@ -162,14 +298,17 @@ impl RPCClient {
             cursor = Some(cells.last_cursor);
 
             let cells = cells.objects.into_iter().filter_map(|cell| {
-                // delete cells with data & type
-                if !cell.output_data.is_empty() || cell.output.type_.is_some() {
-                    return None;
-                }
                 let out_point = {
                     let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
                     OutPoint::new_unchecked(out_point.as_bytes())
                 };
+                // delete cells with data & type
+                if !cell.output_data.is_empty()
+                    || cell.output.type_.is_some()
+                    || taken_outpoints.contains(&out_point)
+                {
+                    return None;
+                }
                 let output = {
                     let output: ckb_types::packed::CellOutput = cell.output.into();
                     CellOutput::new_unchecked(output.as_bytes())
@@ -229,18 +368,27 @@ impl RPCClient {
         Ok(cell_info)
     }
 
-    async fn get_tip_block_number(&self) -> Result<u64> {
-        let number: BlockNumber = to_result(
-            self.ckb_client
-                .request("get_tip_block_number", None)
-                .await?,
-        )?;
-        Ok(number.value())
+    pub async fn get_tip(&self) -> Result<NumberHash> {
+        let number_hash: gw_jsonrpc_types::blockchain::NumberHash =
+            to_result(self.indexer_client.request("get_tip", None).await?)?;
+        Ok(number_hash.into())
     }
 
-    pub async fn get_block_by_number(&self, number: u64) -> Result<Block> {
+    pub async fn get_block_median_time(&self, block_hash: H256) -> Result<Duration> {
+        let median_time: gw_jsonrpc_types::ckb_jsonrpc_types::Uint64 = to_result(
+            self.ckb_client
+                .request(
+                    "get_block_median_time",
+                    Some(ClientParams::Array(vec![json!(to_jsonh256(block_hash))])),
+                )
+                .await?,
+        )?;
+        Ok(Duration::from_millis(median_time.into()))
+    }
+
+    pub async fn get_block_by_number(&self, number: u64) -> Result<Option<Block>> {
         let block_number = BlockNumber::from(number);
-        let block: ckb_jsonrpc_types::BlockView = to_result(
+        let block_opt: Option<ckb_jsonrpc_types::BlockView> = to_result(
             self.ckb_client
                 .request(
                     "get_block_by_number",
@@ -248,8 +396,10 @@ impl RPCClient {
                 )
                 .await?,
         )?;
-        let block: ckb_types::core::BlockView = block.into();
-        Ok(Block::new_unchecked(block.data().as_bytes()))
+        Ok(block_opt.map(|b| {
+            let block: ckb_types::core::BlockView = b.into();
+            Block::new_unchecked(block.data().as_bytes())
+        }))
     }
 
     /// return all lived deposition requests
@@ -257,8 +407,7 @@ impl RPCClient {
         const BLOCKS_TO_SEARCH: u64 = 100;
         const LIMIT: u32 = 100;
 
-        let tip_l1_block_number: u64 = self.get_tip_block_number().await?;
-
+        let tip_number = self.get_tip().await?.number().unpack();
         let mut deposit_infos = Vec::new();
 
         let rollup_type_hash: Bytes = self
@@ -291,7 +440,7 @@ impl RPCClient {
                 output_data_len_range: None,
                 output_capacity_range: None,
                 block_range: Some([
-                    BlockNumber::from(tip_l1_block_number.saturating_sub(BLOCKS_TO_SEARCH)),
+                    BlockNumber::from(tip_number.saturating_sub(BLOCKS_TO_SEARCH)),
                     BlockNumber::from(u64::max_value()),
                 ]),
             }),
@@ -474,13 +623,12 @@ impl RPCClient {
         Ok(unlocked_cell.map(unlocked_cell_info))
     }
 
-    pub async fn get_transaction(&self, tx_hash: [u8; 32]) -> Result<Option<Transaction>> {
-        let tx_hash: ckb_types::H256 = tx_hash.into();
+    pub async fn get_transaction(&self, tx_hash: H256) -> Result<Option<Transaction>> {
         let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = to_result(
             self.ckb_client
                 .request(
                     "get_transaction",
-                    Some(ClientParams::Array(vec![json!(tx_hash)])),
+                    Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
                 )
                 .await?,
         )?;
@@ -503,7 +651,6 @@ impl RPCClient {
                 )
                 .await?,
         )?;
-        let hash: [u8; 32] = tx_hash.into();
-        Ok(hash.into())
+        Ok(to_h256(tx_hash))
     }
 }

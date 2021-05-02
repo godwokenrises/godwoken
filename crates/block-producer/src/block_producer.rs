@@ -1,14 +1,15 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
-use crate::rpc_client::{DepositInfo, RPCClient};
-use crate::transaction_skeleton::TransactionSkeleton;
-use crate::utils::{fill_tx_fee, CKBGenesisInfo};
-use crate::wallet::Wallet;
 use crate::{
+    poa::{PoA, ShouldIssueBlock},
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
+    rpc_client::{DepositInfo, RPCClient},
+    transaction_skeleton::TransactionSkeleton,
+    types::ChainEvent,
     types::{CellInfo, InputCellInfo},
+    utils::{fill_tx_fee, CKBGenesisInfo},
+    wallet::Wallet,
 };
-
 use anyhow::{anyhow, Context, Result};
 use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
@@ -28,12 +29,11 @@ use gw_types::{
     prelude::*,
 };
 use parking_lot::Mutex;
-
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 fn generate_custodian_cells(
@@ -104,7 +104,7 @@ async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Ve
 
     // get deposit cells txs
     let tx = rpc_client
-        .get_transaction(tx_hash)
+        .get_transaction(tx_hash.into())
         .await?
         .ok_or_else(|| anyhow!("can't get deposit tx"))?;
     let mut resolve_dep_futs: Vec<_> = tx
@@ -137,160 +137,13 @@ async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Ve
     Ok(cells)
 }
 
-#[allow(clippy::clippy::too_many_arguments)]
-async fn complete_tx_skeleton(
-    block_producer_config: &BlockProducerConfig,
-    rollup_context: &RollupContext,
-    ckb_genesis_info: &CKBGenesisInfo,
-    rpc_client: &RPCClient,
-    wallet: &Wallet,
-    deposit_cells: Vec<DepositInfo>,
-    block: L2Block,
-    global_state: GlobalState,
-) -> Result<Transaction> {
-    let rollup_cell_info = smol::block_on(rpc_client.query_rollup_cell())?
-        .ok_or_else(|| anyhow!("can't find rollup cell"))?;
-    let mut tx_skeleton = TransactionSkeleton::default();
-    // rollup cell
-    tx_skeleton.inputs_mut().push(InputCellInfo {
-        input: CellInput::new_builder()
-            .previous_output(rollup_cell_info.out_point.clone())
-            .build(),
-        cell: rollup_cell_info.clone(),
-    });
-    // rollup deps
-    tx_skeleton
-        .cell_deps_mut()
-        .push(block_producer_config.rollup_cell_type_dep.clone().into());
-    tx_skeleton
-        .cell_deps_mut()
-        .push(block_producer_config.rollup_cell_lock_dep.clone().into());
-    // deposit lock dep
-    if !deposit_cells.is_empty() {
-        let cell_dep: CellDep = block_producer_config.deposit_cell_lock_dep.clone().into();
-        tx_skeleton
-            .cell_deps_mut()
-            .push(CellDep::new_unchecked(cell_dep.as_bytes()));
-    }
-    // secp256k1 lock, used for unlock tx fee payment cells
-    tx_skeleton
-        .cell_deps_mut()
-        .push(ckb_genesis_info.sighash_dep());
-    // witnesses
-    tx_skeleton.witnesses_mut().push(
-        WitnessArgs::new_builder()
-            .output_type(Some(block.as_bytes()).pack())
-            .build(),
-    );
-    // output
-    let output = rollup_cell_info.output.clone();
-    let output_data = global_state.as_bytes();
-    tx_skeleton.outputs_mut().push((output, output_data));
-    // deposit cells
-    for deposit in &deposit_cells {
-        let input = CellInput::new_builder()
-            .previous_output(deposit.cell.out_point.clone())
-            .build();
-        tx_skeleton.inputs_mut().push(InputCellInfo {
-            input,
-            cell: deposit.cell.clone(),
-        });
-    }
-
-    // Some deposition cells might have type scripts for sUDTs, handle cell deps
-    // here.
-    let deposit_type_deps: HashSet<CellDep> = {
-        // fetch deposit cells deps
-        let dep_cell_futs: Vec<_> = deposit_cells
-            .iter()
-            .filter_map(|deposit| {
-                deposit.cell.output.type_().to_opt().map(|_type_| {
-                    resolve_tx_deps(rpc_client, deposit.cell.out_point.tx_hash().unpack())
-                })
-            })
-            .collect();
-
-        // wait futures
-        let mut dep_cells: Vec<CellInfo> = Vec::new();
-        for fut in dep_cell_futs {
-            dep_cells.extend(fut.await?);
-        }
-
-        // resolve deposit cells deps
-        let dep_cell_by_data: HashMap<[u8; 32], OutPoint> = dep_cells
-            .iter()
-            .map(|cell| {
-                let data_hash = ckb_types::packed::CellOutput::calc_data_hash(&cell.data).unpack();
-                (data_hash, cell.out_point.clone())
-            })
-            .collect();
-        let dep_cell_by_type: HashMap<[u8; 32], OutPoint> = dep_cells
-            .iter()
-            .filter_map(|cell| {
-                cell.output
-                    .type_()
-                    .to_opt()
-                    .map(|type_| (type_.hash(), cell.out_point.clone()))
-            })
-            .collect();
-
-        let mut deps: HashSet<CellDep> = Default::default();
-        for deposit in &deposit_cells {
-            if let Some(type_) = deposit.cell.output.type_().to_opt() {
-                let code_hash: [u8; 32] = type_.code_hash().unpack();
-                let out_point_opt = match ScriptHashType::try_from(type_.hash_type())
-                    .map_err(|n| anyhow!("invalid hash_type {}", n))?
-                {
-                    ScriptHashType::Data => dep_cell_by_data.get(&code_hash),
-                    ScriptHashType::Type => dep_cell_by_type.get(&code_hash),
-                };
-                let out_point = out_point_opt
-                    .ok_or_else(|| anyhow!("can't find deps code_hash: {:?}", code_hash))?;
-                let cell_dep = CellDep::new_builder()
-                    .out_point(out_point.to_owned())
-                    .dep_type(DepType::Code.into())
-                    .build();
-                deps.insert(cell_dep);
-            }
-        }
-        deps
-    };
-    tx_skeleton.cell_deps_mut().extend(deposit_type_deps);
-
-    // custodian cells
-    let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
-    tx_skeleton.outputs_mut().extend(custodian_cells);
-
-    // stake cell
-    let generated_stake = crate::stake::generate(
-        &rollup_cell_info,
-        rollup_context,
-        &block,
-        &block_producer_config,
-        rpc_client,
-        wallet.lock().to_owned(),
-    )
-    .await?;
-    tx_skeleton.cell_deps_mut().extend(generated_stake.deps);
-    tx_skeleton.inputs_mut().extend(generated_stake.inputs);
-    tx_skeleton
-        .outputs_mut()
-        .push((generated_stake.output, generated_stake.output_data));
-
-    // tx fee cell
-    fill_tx_fee(&mut tx_skeleton, rpc_client, wallet.lock().to_owned()).await?;
-
-    // sign
-    let tx = wallet.sign_tx_skeleton(tx_skeleton)?;
-    Ok(tx)
-}
-
 pub struct BlockProducer {
     rollup_config_hash: H256,
     store: Store,
     chain: Arc<Mutex<Chain>>,
     mem_pool: Arc<Mutex<MemPool>>,
     generator: Arc<Generator>,
+    poa: PoA,
     wallet: Wallet,
     config: BlockProducerConfig,
     rpc_client: RPCClient,
@@ -310,6 +163,12 @@ impl BlockProducer {
         config: BlockProducerConfig,
     ) -> Result<Self> {
         let wallet = Wallet::from_config(&config.wallet_config).with_context(|| "init wallet")?;
+        let poa = PoA::new(
+            rpc_client.clone(),
+            wallet.lock().clone(),
+            config.poa_lock_dep.clone().into(),
+            config.poa_state_dep.clone().into(),
+        );
 
         let block_producer = BlockProducer {
             rollup_config_hash,
@@ -319,22 +178,53 @@ impl BlockProducer {
             mem_pool,
             rpc_client,
             wallet,
+            poa,
             ckb_genesis_info,
             config,
         };
         Ok(block_producer)
     }
 
-    pub async fn poll_loop(&self) -> ! {
-        loop {
-            async_std::task::sleep(std::time::Duration::from_secs(45)).await;
-            if let Err(e) = self.produce_next_block().await {
-                eprintln!("Error occurs produce block: {:?}", e);
-            }
+    pub async fn handle_event(&mut self, event: ChainEvent) -> Result<()> {
+        // assume the chain is updated
+        let tip_block = match event {
+            ChainEvent::Reverted {
+                old_tip: _,
+                new_block,
+            } => new_block,
+            ChainEvent::NewBlock { block } => block,
+        };
+        let header = tip_block.header();
+        let tip_hash: H256 = header.hash().into();
+
+        // query median time & rollup cell
+        let rollup_cell_opt = self.rpc_client.query_rollup_cell().await?;
+        let median_time = self.rpc_client.get_block_median_time(tip_hash).await?;
+        // let (rollup_cell_opt, median_time) = futures::try_join!(rollup_cell_fut, median_time_fut)?;
+        let rollup_cell = rollup_cell_opt.ok_or_else(|| anyhow!("can't found rollup cell"))?;
+        let poa_cell_input = InputCellInfo {
+            input: CellInput::new_builder()
+                .previous_output(rollup_cell.out_point.clone())
+                .build(),
+            cell: rollup_cell.clone(),
+        };
+
+        // try issue next block
+        if let ShouldIssueBlock::Yes = self
+            .poa
+            .should_issue_next_block(median_time, &poa_cell_input)
+            .await?
+        {
+            self.produce_next_block(median_time, rollup_cell).await?;
         }
+        Ok(())
     }
 
-    pub async fn produce_next_block(&self) -> Result<()> {
+    pub async fn produce_next_block(
+        &mut self,
+        median_time: Duration,
+        rollup_cell: CellInfo,
+    ) -> Result<()> {
         let block_producer_id = self.config.account_id;
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -390,21 +280,171 @@ impl BlockProducer {
         );
 
         // composit tx
-        let rollup_context = self.generator.rollup_context();
-        let tx = complete_tx_skeleton(
-            &self.config,
-            rollup_context,
-            &self.ckb_genesis_info,
-            &self.rpc_client,
-            &self.wallet,
-            deposit_cells,
-            block,
-            global_state,
-        )
-        .await?;
+        let tx = self
+            .complete_tx_skeleton(deposit_cells, block, global_state, median_time, rollup_cell)
+            .await?;
 
         // send transaction
-        self.rpc_client.send_transaction(tx.clone()).await?;
+        match self.rpc_client.send_transaction(tx).await {
+            Ok(tx_hash) => {
+                println!("\nSubmitted l2 block {} in tx {:?}\n", number, tx_hash);
+            }
+            Err(err) => {
+                eprintln!("Submitting l2 block error: {}", err);
+                self.poa.reset_current_round();
+            }
+        }
         Ok(())
+    }
+
+    async fn complete_tx_skeleton(
+        &self,
+        deposit_cells: Vec<DepositInfo>,
+        block: L2Block,
+        global_state: GlobalState,
+        median_time: Duration,
+        rollup_cell: CellInfo,
+    ) -> Result<Transaction> {
+        let rollup_context = self.generator.rollup_context();
+        let mut tx_skeleton = TransactionSkeleton::default();
+        let rollup_cell_input_index = tx_skeleton.inputs().len();
+        // rollup cell
+        tx_skeleton.inputs_mut().push(InputCellInfo {
+            input: CellInput::new_builder()
+                .previous_output(rollup_cell.out_point.clone())
+                .build(),
+            cell: rollup_cell.clone(),
+        });
+        // rollup deps
+        tx_skeleton
+            .cell_deps_mut()
+            .push(self.config.rollup_cell_type_dep.clone().into());
+        // deposit lock dep
+        if !deposit_cells.is_empty() {
+            let cell_dep: CellDep = self.config.deposit_cell_lock_dep.clone().into();
+            tx_skeleton
+                .cell_deps_mut()
+                .push(CellDep::new_unchecked(cell_dep.as_bytes()));
+        }
+        // secp256k1 lock, used for unlock tx fee payment cells
+        tx_skeleton
+            .cell_deps_mut()
+            .push(self.ckb_genesis_info.sighash_dep());
+        // witnesses
+        tx_skeleton.witnesses_mut().push(
+            WitnessArgs::new_builder()
+                .output_type(Some(block.as_bytes()).pack())
+                .build(),
+        );
+        // output
+        let output = rollup_cell.output;
+        let output_data = global_state.as_bytes();
+        tx_skeleton.outputs_mut().push((output, output_data));
+        // deposit cells
+        for deposit in &deposit_cells {
+            let input = CellInput::new_builder()
+                .previous_output(deposit.cell.out_point.clone())
+                .build();
+            tx_skeleton.inputs_mut().push(InputCellInfo {
+                input,
+                cell: deposit.cell.clone(),
+            });
+        }
+
+        // Some deposition cells might have type scripts for sUDTs, handle cell deps
+        // here.
+        let deposit_type_deps: HashSet<CellDep> = {
+            // fetch deposit cells deps
+            let dep_cell_futs: Vec<_> = deposit_cells
+                .iter()
+                .filter_map(|deposit| {
+                    deposit.cell.output.type_().to_opt().map(|_type_| {
+                        resolve_tx_deps(&self.rpc_client, deposit.cell.out_point.tx_hash().unpack())
+                    })
+                })
+                .collect();
+
+            // wait futures
+            let mut dep_cells: Vec<CellInfo> = Vec::new();
+            for fut in dep_cell_futs {
+                dep_cells.extend(fut.await?);
+            }
+
+            // resolve deposit cells deps
+            let dep_cell_by_data: HashMap<[u8; 32], OutPoint> = dep_cells
+                .iter()
+                .map(|cell| {
+                    let data_hash =
+                        ckb_types::packed::CellOutput::calc_data_hash(&cell.data).unpack();
+                    (data_hash, cell.out_point.clone())
+                })
+                .collect();
+            let dep_cell_by_type: HashMap<[u8; 32], OutPoint> = dep_cells
+                .iter()
+                .filter_map(|cell| {
+                    cell.output
+                        .type_()
+                        .to_opt()
+                        .map(|type_| (type_.hash(), cell.out_point.clone()))
+                })
+                .collect();
+
+            let mut deps: HashSet<CellDep> = Default::default();
+            for deposit in &deposit_cells {
+                if let Some(type_) = deposit.cell.output.type_().to_opt() {
+                    let code_hash: [u8; 32] = type_.code_hash().unpack();
+                    let out_point_opt = match ScriptHashType::try_from(type_.hash_type())
+                        .map_err(|n| anyhow!("invalid hash_type {}", n))?
+                    {
+                        ScriptHashType::Data => dep_cell_by_data.get(&code_hash),
+                        ScriptHashType::Type => dep_cell_by_type.get(&code_hash),
+                    };
+                    let out_point = out_point_opt
+                        .ok_or_else(|| anyhow!("can't find deps code_hash: {:?}", code_hash))?;
+                    let cell_dep = CellDep::new_builder()
+                        .out_point(out_point.to_owned())
+                        .dep_type(DepType::Code.into())
+                        .build();
+                    deps.insert(cell_dep);
+                }
+            }
+            deps
+        };
+        tx_skeleton.cell_deps_mut().extend(deposit_type_deps);
+        // custodian cells
+        let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
+        tx_skeleton.outputs_mut().extend(custodian_cells);
+        self.poa
+            .fill_poa(&mut tx_skeleton, rollup_cell_input_index, median_time)
+            .await?;
+        println!(
+            "tx outputs : {:?}",
+            tx_skeleton
+                .outputs()
+                .iter()
+                .enumerate()
+                .map(|(i, (o, d))| {
+                    let c: u64 = o.capacity().unpack();
+                    (i, c, d.len())
+                })
+                .collect::<Vec<_>>()
+        );
+        // TODO stake cell
+        // tx fee cell
+        fill_tx_fee(
+            &mut tx_skeleton,
+            &self.rpc_client,
+            self.wallet.lock().to_owned(),
+        )
+        .await?;
+        debug_assert_eq!(
+            tx_skeleton.taken_outpoints()?.len(),
+            tx_skeleton.inputs().len(),
+            "check duplicated inputs"
+        );
+        // sign
+        let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
+        eprintln!("final tx size: {}", tx.as_slice().len());
+        Ok(tx)
     }
 }
