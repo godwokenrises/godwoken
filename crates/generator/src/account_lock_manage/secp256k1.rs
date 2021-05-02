@@ -335,6 +335,63 @@ mod tests {
     }
 
     #[test]
+    fn test_secp256k1_eth_polyjuice_call_with_to_containing_leading_zeros() {
+        let mut polyjuice_args = vec![0u8; 52];
+        polyjuice_args[0..7].copy_from_slice(b"\xFF\xFF\xFFPOLY");
+        polyjuice_args[7] = 0;
+        let gas_limit: u64 = 21000;
+        polyjuice_args[8..16].copy_from_slice(&gas_limit.to_le_bytes());
+        let gas_price: u128 = 20000000000;
+        polyjuice_args[16..32].copy_from_slice(&gas_price.to_le_bytes());
+        let value: u128 = 3000000;
+        polyjuice_args[32..48].copy_from_slice(&value.to_le_bytes());
+        let payload_length: u32 = 0;
+        polyjuice_args[48..52].copy_from_slice(&payload_length.to_le_bytes());
+
+        let raw_tx = RawL2Transaction::new_builder()
+            .nonce(9u32.pack())
+            .to_id(1234u32.pack())
+            .args(Bytes::from(polyjuice_args).pack())
+            .build();
+        let mut signature = [0u8; 65];
+        signature.copy_from_slice(&hex::decode("c49f65d9aad3b417f7d04a5e9c458b3308556bdff5a625bf65bfdadd11a18bb004bdb522991ae8648d6a1332a09576c90c93e6f9ea101bf8b5b3a7523958b50800").expect("hex decode"));
+        let signature = Signature::from_slice(&signature[..]).unwrap();
+        let tx = L2Transaction::new_builder()
+            .raw(raw_tx)
+            .signature(signature)
+            .build();
+        let eth = Secp256k1Eth {};
+
+        // This rollup type hash is used, so the receiver script hash is:
+        // 00002b003de527c1d67f2a2a348683ecc9598647c30884c89c5dcf6da1afbddd,
+        // which contains leading zeros to ensure RLP behavior.
+        let rollup_type_hash =
+            hex::decode("cfdefce91f70f53167971f74bf1074b6b889be270306aabd34e67404b75dacab")
+                .expect("hex decode");
+
+        let mut sender_args = vec![];
+        sender_args.extend(&rollup_type_hash);
+        // Private key: dc88f509cab7f30ea36fd1aeb203403ce284e587bedecba73ba2fadf688acd19
+        // Please do not use this private key elsewhere!
+        sender_args
+            .extend(&hex::decode("0000A7CE68e7328eCF2C83b103b50C68CF60Ae3a").expect("hex decode"));
+        let sender_script = Script::new_builder()
+            .args(Bytes::from(sender_args).pack())
+            .build();
+
+        let mut receiver_args = vec![];
+        receiver_args.extend(&rollup_type_hash);
+        receiver_args.extend(&23u32.to_le_bytes());
+        let receiver_script = Script::new_builder()
+            .args(Bytes::from(receiver_args).pack())
+            .build();
+        let result = eth
+            .verify_tx(H256::zero(), sender_script, receiver_script, tx)
+            .expect("verify signature");
+        assert!(result);
+    }
+
+    #[test]
     fn test_secp256k1_eth_polyjuice_create() {
         let mut polyjuice_args = vec![0u8; 69];
         polyjuice_args[0..7].copy_from_slice(b"\xFF\xFF\xFFPOLY");
