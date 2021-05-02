@@ -270,7 +270,7 @@ impl BlockProducer {
             unused_withdrawal_requests,
         } = block_result;
         let number: u64 = block.raw().number().unpack();
-        println!(
+        log::info!(
             "produce new block #{} (txs: {}, deposits: {}, staled txs: {}, staled withdrawals: {})",
             number,
             block.transactions().len(),
@@ -287,10 +287,10 @@ impl BlockProducer {
         // send transaction
         match self.rpc_client.send_transaction(tx).await {
             Ok(tx_hash) => {
-                println!("\nSubmitted l2 block {} in tx {:?}\n", number, tx_hash);
+                log::info!("\nSubmitted l2 block {} in tx {:?}\n", number, tx_hash);
             }
             Err(err) => {
-                eprintln!("Submitting l2 block error: {}", err);
+                log::error!("Submitting l2 block error: {}", err);
                 self.poa.reset_current_round();
             }
         }
@@ -337,7 +337,7 @@ impl BlockProducer {
                 .build(),
         );
         // output
-        let output = rollup_cell.output;
+        let output = rollup_cell.output.clone();
         let output_data = global_state.as_bytes();
         tx_skeleton.outputs_mut().push((output, output_data));
         // deposit cells
@@ -417,19 +417,21 @@ impl BlockProducer {
         self.poa
             .fill_poa(&mut tx_skeleton, rollup_cell_input_index, median_time)
             .await?;
-        println!(
-            "tx outputs : {:?}",
-            tx_skeleton
-                .outputs()
-                .iter()
-                .enumerate()
-                .map(|(i, (o, d))| {
-                    let c: u64 = o.capacity().unpack();
-                    (i, c, d.len())
-                })
-                .collect::<Vec<_>>()
-        );
-        // TODO stake cell
+        // stake cell
+        let generated_stake = crate::stake::generate(
+            &rollup_cell,
+            rollup_context,
+            &block,
+            &self.config,
+            &self.rpc_client,
+            self.wallet.lock().to_owned(),
+        )
+        .await?;
+        tx_skeleton.cell_deps_mut().extend(generated_stake.deps);
+        tx_skeleton.inputs_mut().extend(generated_stake.inputs);
+        tx_skeleton
+            .outputs_mut()
+            .push((generated_stake.output, generated_stake.output_data));
         // tx fee cell
         fill_tx_fee(
             &mut tx_skeleton,
@@ -444,7 +446,7 @@ impl BlockProducer {
         );
         // sign
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
-        eprintln!("final tx size: {}", tx.as_slice().len());
+        log::debug!("final tx size: {}", tx.as_slice().len());
         Ok(tx)
     }
 }
