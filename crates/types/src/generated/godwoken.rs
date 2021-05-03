@@ -13303,7 +13303,6 @@ impl ::core::fmt::Display for VerifySignatureContext {
         write!(f, "{}: {}", "account_count", self.account_count())?;
         write!(f, ", {}: {}", "kv_state", self.kv_state())?;
         write!(f, ", {}: {}", "scripts", self.scripts())?;
-        write!(f, ", {}: {}", "signature", self.signature())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -13314,16 +13313,13 @@ impl ::core::fmt::Display for VerifySignatureContext {
 impl ::core::default::Default for VerifySignatureContext {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            97, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0,
-            0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            28, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0,
         ];
         VerifySignatureContext::new_unchecked(v.into())
     }
 }
 impl VerifySignatureContext {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -13355,17 +13351,11 @@ impl VerifySignatureContext {
     pub fn scripts(&self) -> ScriptVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
-        ScriptVec::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn signature(&self) -> Signature {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[20..]) as usize;
-            Signature::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            ScriptVec::new_unchecked(self.0.slice(start..end))
         } else {
-            Signature::new_unchecked(self.0.slice(start..))
+            ScriptVec::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> VerifySignatureContextReader<'r> {
@@ -13398,7 +13388,6 @@ impl molecule::prelude::Entity for VerifySignatureContext {
             .account_count(self.account_count())
             .kv_state(self.kv_state())
             .scripts(self.scripts())
-            .signature(self.signature())
     }
 }
 #[derive(Clone, Copy)]
@@ -13423,7 +13412,6 @@ impl<'r> ::core::fmt::Display for VerifySignatureContextReader<'r> {
         write!(f, "{}: {}", "account_count", self.account_count())?;
         write!(f, ", {}: {}", "kv_state", self.kv_state())?;
         write!(f, ", {}: {}", "scripts", self.scripts())?;
-        write!(f, ", {}: {}", "signature", self.signature())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -13432,7 +13420,7 @@ impl<'r> ::core::fmt::Display for VerifySignatureContextReader<'r> {
     }
 }
 impl<'r> VerifySignatureContextReader<'r> {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -13464,17 +13452,11 @@ impl<'r> VerifySignatureContextReader<'r> {
     pub fn scripts(&self) -> ScriptVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
-        ScriptVecReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn signature(&self) -> SignatureReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[20..]) as usize;
-            SignatureReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            ScriptVecReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            SignatureReader::new_unchecked(&self.as_slice()[start..])
+            ScriptVecReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -13532,7 +13514,6 @@ impl<'r> molecule::prelude::Reader<'r> for VerifySignatureContextReader<'r> {
         Uint32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         KVPairVecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         ScriptVecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        SignatureReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         Ok(())
     }
 }
@@ -13541,10 +13522,9 @@ pub struct VerifySignatureContextBuilder {
     pub(crate) account_count: Uint32,
     pub(crate) kv_state: KVPairVec,
     pub(crate) scripts: ScriptVec,
-    pub(crate) signature: Signature,
 }
 impl VerifySignatureContextBuilder {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 3;
     pub fn account_count(mut self, v: Uint32) -> Self {
         self.account_count = v;
         self
@@ -13557,10 +13537,6 @@ impl VerifySignatureContextBuilder {
         self.scripts = v;
         self
     }
-    pub fn signature(mut self, v: Signature) -> Self {
-        self.signature = v;
-        self
-    }
 }
 impl molecule::prelude::Builder for VerifySignatureContextBuilder {
     type Entity = VerifySignatureContext;
@@ -13570,7 +13546,6 @@ impl molecule::prelude::Builder for VerifySignatureContextBuilder {
             + self.account_count.as_slice().len()
             + self.kv_state.as_slice().len()
             + self.scripts.as_slice().len()
-            + self.signature.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -13581,8 +13556,6 @@ impl molecule::prelude::Builder for VerifySignatureContextBuilder {
         total_size += self.kv_state.as_slice().len();
         offsets.push(total_size);
         total_size += self.scripts.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.signature.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -13590,7 +13563,6 @@ impl molecule::prelude::Builder for VerifySignatureContextBuilder {
         writer.write_all(self.account_count.as_slice())?;
         writer.write_all(self.kv_state.as_slice())?;
         writer.write_all(self.scripts.as_slice())?;
-        writer.write_all(self.signature.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -13640,7 +13612,7 @@ impl ::core::fmt::Display for VerifyTransactionSignatureWitness {
 impl ::core::default::Default for VerifyTransactionSignatureWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            62, 2, 0, 0, 28, 0, 0, 0, 141, 0, 0, 0, 209, 1, 0, 0, 213, 1, 0, 0, 217, 1, 0, 0, 221,
+            249, 1, 0, 0, 28, 0, 0, 0, 141, 0, 0, 0, 209, 1, 0, 0, 213, 1, 0, 0, 217, 1, 0, 0, 221,
             1, 0, 0, 113, 0, 0, 0, 12, 0, 0, 0, 48, 0, 0, 0, 36, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0,
             28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -13656,11 +13628,8 @@ impl ::core::default::Default for VerifyTransactionSignatureWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 84, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0,
             52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 97, 0, 0,
-            0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 28, 0, 0,
+            0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0,
         ];
         VerifyTransactionSignatureWitness::new_unchecked(v.into())
     }
@@ -14036,7 +14005,7 @@ impl ::core::fmt::Display for VerifyWithdrawalWitness {
 impl ::core::default::Default for VerifyWithdrawalWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            186, 2, 0, 0, 24, 0, 0, 0, 92, 1, 0, 0, 96, 1, 0, 0, 85, 2, 0, 0, 89, 2, 0, 0, 68, 1,
+            117, 2, 0, 0, 24, 0, 0, 0, 92, 1, 0, 0, 96, 1, 0, 0, 85, 2, 0, 0, 89, 2, 0, 0, 68, 1,
             0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0, 0, 0, 128, 0, 0, 0,
             164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -14057,10 +14026,8 @@ impl ::core::default::Default for VerifyWithdrawalWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 97, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 4,
-            0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 28, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0,
+            0, 0,
         ];
         VerifyWithdrawalWitness::new_unchecked(v.into())
     }

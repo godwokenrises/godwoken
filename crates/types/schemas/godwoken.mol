@@ -289,7 +289,6 @@ table VerifySignatureContext {
     account_count: Uint32,
     kv_state: KVPairVec,
     scripts: ScriptVec,
-    signature: Signature,
 }
 
 // cancel challenge by verify tx signature
