@@ -448,11 +448,11 @@ impl BlockProducer {
 
         // withdrawal cells
         let generated_withdrawal_cells = crate::withdrawal::generate(
-            &rollup_cell_info,
+            &rollup_cell,
             rollup_context,
             &block,
-            &block_producer_config,
-            rpc_client,
+            &self.config,
+            &self.rpc_client,
         )
         .await?;
         tx_skeleton
@@ -469,8 +469,8 @@ impl BlockProducer {
         if let Some(reverted_withdrawals) = crate::withdrawal::revert(
             &rollup_action,
             rollup_context,
-            &block_producer_config,
-            rpc_client,
+            &self.config,
+            &self.rpc_client,
         )
         .await?
         {
