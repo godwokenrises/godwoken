@@ -59,7 +59,7 @@ pub async fn generate(
                 match sudt_script_hash {
                     CKB_SUDT_SCRIPT_ARGS => {
                         let account = withdrawal.raw().account_script_hash();
-                        eprintln!("{} withdrawal request non-zero sudt amount but it's type hash ckb, ignore this amount", account);
+                        log::warn!("{} withdrawal request non-zero sudt amount but it's type hash ckb, ignore this amount", account);
                     }
                     _ => {
                         let total_sudt_amount = total_amount.sudt.entry(sudt_script_hash).or_insert(0u128);
@@ -353,7 +353,7 @@ fn generate_change_custodian_outputs(
 
         // Withdrawal all collected sudt amount
         if collected_amount == withdrawal_amount {
-            println!(
+            log::debug!(
                 "collected {:?} amount equal to withdrawal amount",
                 sudt_type_hash
             );
@@ -524,7 +524,7 @@ async fn query_finalized_custodian_cells(
                     let sudt_amount = match parse_sudt_amount(&cell) {
                         Ok(amount) => amount,
                         Err(_) => {
-                            eprintln!("invalid sudt amount, out_point: {:?}", cell.out_point);
+                            log::error!("invalid sudt amount, out_point: {:?}", cell.out_point);
                             continue;
                         }
                     };
