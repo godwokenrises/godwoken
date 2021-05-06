@@ -121,16 +121,20 @@ pub fn run(config: Config) -> Result<()> {
         },
     };
     let rollup_type_script: Script = config.chain.rollup_type_script.clone().into();
+    let rollup_config_type_script: Script = config.chain.rollup_config_type_script.into();
     let rpc_client = {
         let indexer_client = HttpClient::new(config.rpc_client.indexer_url)?;
         let ckb_client = HttpClient::new(config.rpc_client.ckb_url)?;
         let rollup_type_script =
             ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
+        let rollup_config_type_script =
+            ckb_types::packed::Script::new_unchecked(rollup_config_type_script.as_bytes());
         RPCClient {
             indexer_client,
             ckb_client,
             rollup_context: rollup_context.clone(),
             rollup_type_script,
+            rollup_config_type_script,
         }
     };
 
