@@ -4,6 +4,7 @@ pub mod poa;
 pub mod poller;
 pub mod produce_block;
 pub mod rpc_client;
+pub mod runner;
 pub mod stake;
 pub mod transaction_skeleton;
 pub mod types;
