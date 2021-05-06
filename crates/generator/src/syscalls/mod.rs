@@ -62,17 +62,6 @@ pub(crate) struct L2Syscalls<'a, S, C> {
     pub(crate) result: &'a mut RunResult,
 }
 
-fn load_data_u32<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<u32, VMError> {
-    let mut data = [0u8; 4];
-    for (i, c) in data.iter_mut().enumerate() {
-        *c = machine
-            .memory_mut()
-            .load8(&Mac::REG::from_u64(addr).overflowing_add(&Mac::REG::from_u64(i as u64)))?
-            .to_u8();
-    }
-    Ok(u32::from_le_bytes(data))
-}
-
 fn load_data_h256<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<H256, VMError> {
     let mut data = [0u8; 32];
     for (i, c) in data.iter_mut().enumerate() {
@@ -159,7 +148,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
             }
             SYS_CREATE => {
                 let script_addr = machine.registers()[A0].to_u64();
-                let script_len = machine.registers()[A1].to_u32();
+                let script_len = machine.registers()[A1].to_u64();
                 let account_id_addr = machine.registers()[A2].clone();
 
                 let script_data = load_bytes(machine, script_addr, script_len as usize)?;
@@ -279,16 +268,11 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 Ok(true)
             }
             SYS_LOAD_ACCOUNT_SCRIPT => {
-                let account_id = machine.registers()[A0].to_u32();
-                let len_addr = machine.registers()[A1].to_u64();
-                let offset = machine.registers()[A2].to_u32() as usize;
-                let script_addr = machine.registers()[A3].to_u64();
-
+                let account_id = machine.registers()[A3].to_u32();
                 let script_hash = self.get_script_hash(account_id).map_err(|err| {
                     log::error!("syscall error: get script hash by account id: {:?}", err);
                     VMError::Unexpected
                 })?;
-                let len = load_data_u32(machine, len_addr)? as usize;
                 let script = self.get_script(&script_hash).ok_or_else(|| {
                     log::error!(
                         "syscall error: script not found by script hash: {:?}",
@@ -297,26 +281,12 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     VMError::Unexpected
                 })?;
                 let data = script.as_slice();
-                let new_len = if offset >= data.len() {
-                    0
-                } else if (offset + len) > data.len() {
-                    data.len() - offset
-                } else {
-                    len
-                };
-                if new_len > 0 {
-                    machine
-                        .memory_mut()
-                        .store_bytes(script_addr, &data[offset..offset + new_len])?;
-                }
-                machine
-                    .memory_mut()
-                    .store_bytes(len_addr, &(new_len as u32).to_le_bytes())?;
+                store_data(machine, data)?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
             SYS_STORE_DATA => {
-                let data_len = machine.registers()[A0].to_u32();
+                let data_len = machine.registers()[A0].to_u64();
                 let data_addr = machine.registers()[A1].to_u64();
 
                 let data = load_bytes(machine, data_addr, data_len as usize)?;
@@ -331,13 +301,8 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 Ok(true)
             }
             SYS_LOAD_DATA => {
-                let data_hash_addr = machine.registers()[A0].to_u64();
-                let len_addr = machine.registers()[A1].to_u64();
-                let offset = machine.registers()[A2].to_u32() as usize;
-                let data_addr = machine.registers()[A3].to_u64();
-
+                let data_hash_addr = machine.registers()[A3].to_u64();
                 let data_hash = load_data_h256(machine, data_hash_addr)?;
-                let len = load_data_u32(machine, len_addr)? as usize;
                 let data = self.get_data(&data_hash).ok_or_else(|| {
                     log::error!(
                         "syscall error: data not found by data hash: {:?}",
@@ -345,22 +310,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     );
                     VMError::Unexpected
                 })?;
-                let data_ref = data.as_ref();
-                let new_len = if offset >= data_ref.len() {
-                    0
-                } else if (offset + len) > data_ref.len() {
-                    data_ref.len() - offset
-                } else {
-                    len
-                };
-                if new_len > 0 {
-                    machine
-                        .memory_mut()
-                        .store_bytes(data_addr, &data_ref[offset..offset + new_len])?;
-                }
-                machine
-                    .memory_mut()
-                    .store_bytes(len_addr, &(new_len as u32).to_le_bytes())?;
+                store_data(machine, data.as_ref())?;
                 self.result.read_data.insert(data_hash, data.len());
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
@@ -392,7 +342,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
             SYS_LOG => {
                 let account_id = machine.registers()[A0].to_u32();
                 let service_flag = machine.registers()[A1].to_u8();
-                let data_len = machine.registers()[A2].to_u32();
+                let data_len = machine.registers()[A2].to_u64();
                 let data_addr = machine.registers()[A3].to_u64();
 
                 let data = load_bytes(machine, data_addr, data_len as usize)?;
