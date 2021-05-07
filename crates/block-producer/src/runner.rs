@@ -19,7 +19,7 @@ use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
-    packed::{CellDep, NumberHash, RollupConfig, Script},
+    packed::{NumberHash, RollupConfig, Script},
     prelude::*,
 };
 use gw_web3_indexer::Web3Indexer;
