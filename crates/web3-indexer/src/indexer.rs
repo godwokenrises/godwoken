@@ -71,7 +71,7 @@ impl Web3Indexer {
                 .filter_web3_transactions(store.clone(), l2_block.clone())
                 .await?;
             let web3_block = self
-                .build_web3_block(&l2_block, &web3_tx_with_logs_vec)
+                .build_web3_block(store.clone(), &l2_block, &web3_tx_with_logs_vec)
                 .await?;
             let mut tx = self.pool.begin().await?;
             sqlx::query("INSERT INTO blocks (number, hash, parent_hash, logs_bloom, gas_limit, gas_used, timestamp, miner, size) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
@@ -205,7 +205,7 @@ impl Web3Indexer {
                 let to_address = if polyjuice_args.is_create {
                     None
                 } else {
-                    let address = account_id_to_eth_address(to_id);
+                    let address = account_id_to_eth_address(to_script_hash, to_id, false);
                     let address_str = faster_hex::hex_string(&address[..])?;
                     let address_hex = format!("0x{}", address_str);
                     Some(address_hex)
@@ -249,8 +249,13 @@ impl Web3Indexer {
                                     tx_gas_used = Decimal::from(gas_used);
                                     cumulative_gas_used += tx_gas_used;
                                     if polyjuice_args.is_create && created_id != u32::MAX {
-                                        let contract_address =
-                                            account_id_to_eth_address(created_id);
+                                        let created_script_hash =
+                                            get_script_hash(store.clone(), created_id).await?;
+                                        let contract_address = account_id_to_eth_address(
+                                            created_script_hash,
+                                            created_id,
+                                            false,
+                                        );
                                         contract_address_hex = Some(format!(
                                             "0x{}",
                                             faster_hex::hex_string(&contract_address[..])?
@@ -287,14 +292,19 @@ impl Web3Indexer {
                                     logs.push(web3_log);
                                     log_index += 1;
                                 }
+                                // TODO: Given the fact that Ethereum doesn't emit event for native ether transfer at system level, the SudtTransfer/SudtPayFee logs in polyjuice provide more info than we need here and could be ignored so far.
                                 GwLog::SudtTransfer {
                                     sudt_id: _,
                                     from_id: _,
                                     to_id: _,
                                     amount: _,
-                                } => {
-                                    // TODO: SudtTransfer happened in polyjuice contract will be include in web3 events later.
-                                }
+                                } => {}
+                                GwLog::SudtPayFee {
+                                    sudt_id: _,
+                                    from_id: _,
+                                    block_producer_id: _,
+                                    amount: _,
+                                } => {}
                             }
                         }
                     }
@@ -364,7 +374,7 @@ impl Web3Indexer {
                                 format!("0x{}", faster_hex::hex_string(&to_script_args[32..52])?);
                             to_address
                         } else if to_script_code_hash == self.polyjuice_type_script_hash {
-                            let address = account_id_to_eth_address(to_id);
+                            let address = account_id_to_eth_address(to_script_hash, to_id, false);
                             let address_str = faster_hex::hex_string(&address[..])?;
                             let address_hex = format!("0x{}", address_str);
                             address_hex
@@ -427,6 +437,7 @@ impl Web3Indexer {
 
     async fn build_web3_block(
         &self,
+        store: Store,
         l2_block: &L2Block,
         web3_tx_with_logs_vec: &[Web3TransactionWithLogs],
     ) -> Result<Web3Block> {
@@ -454,7 +465,9 @@ impl Web3Indexer {
             gas_used += web3_tx_with_logs.tx.gas_used;
         }
         let block_producer_id: u32 = l2_block.raw().block_producer_id().unpack();
-        let miner_address = account_id_to_eth_address(block_producer_id);
+        let block_producer_script_hash = get_script_hash(store.clone(), block_producer_id).await?;
+        let miner_address =
+            account_id_to_eth_address(block_producer_script_hash, block_producer_id, false);
         let miner_address_hex = format!("0x{}", faster_hex::hex_string(&miner_address[..])?);
         let epoch_time_as_millis: u64 = l2_block.raw().timestamp().unpack();
         let timestamp =
