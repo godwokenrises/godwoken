@@ -29,12 +29,12 @@ fn test_init_genesis() {
         rollup_config: RollupConfig::default().into(),
         rollup_type_hash: rollup_script_hash.into(),
     };
-    let genesis = build_genesis(&config).unwrap();
+    let genesis = build_genesis(&config, Bytes::default()).unwrap();
     let genesis_block_hash: [u8; 32] = genesis.genesis.hash();
     assert_eq!(genesis_block_hash, GENESIS_BLOCK_HASH);
     let genesis_committed_info = L2BlockCommittedInfo::default();
     let store: Store = Store::open_tmp().unwrap();
-    init_genesis(&store, &config, genesis_committed_info).unwrap();
+    init_genesis(&store, &config, genesis_committed_info, Bytes::default()).unwrap();
     let db = store.begin_transaction();
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());

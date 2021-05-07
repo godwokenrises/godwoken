@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use crate::deploy_genesis::GenesisDeploymentResult;
+use crate::deploy_genesis::{get_secp_data, GenesisDeploymentResult};
 use crate::deploy_scripts::ScriptsDeploymentResult;
 use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
@@ -82,6 +82,8 @@ pub fn generate_config(
         let dep: ckb_types::packed::CellDep = scripts.stake_lock.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
+    let (_data, secp_data_dep) =
+        get_secp_data(&mut rpc_client).map_err(|err| anyhow!("{}", err))?;
 
     let wallet_config: WalletConfig = WalletConfig { privkey_path, lock };
 
@@ -129,6 +131,7 @@ pub fn generate_config(
         rollup_cell_type_dep,
         deposit_cell_lock_dep,
         stake_cell_lock_dep,
+        secp_data_dep,
         wallet_config,
     });
     let genesis: GenesisConfig = GenesisConfig {

@@ -60,6 +60,8 @@ pub struct BlockProducerConfig {
     pub stake_cell_lock_dep: CellDep,
     pub poa_lock_dep: CellDep,
     pub poa_state_dep: CellDep,
+    // For load secp data and use in challenge transaction
+    pub secp_data_dep: CellDep,
     pub wallet_config: WalletConfig,
 }
 

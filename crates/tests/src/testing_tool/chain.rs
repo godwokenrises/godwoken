@@ -108,7 +108,13 @@ pub fn setup_chain_with_account_lock_manage(
         account_lock_manage,
         rollup_context.clone(),
     ));
-    init_genesis(&store, &genesis_config, genesis_committed_info).unwrap();
+    init_genesis(
+        &store,
+        &genesis_config,
+        genesis_committed_info,
+        Bytes::default(),
+    )
+    .unwrap();
     let mem_pool = MemPool::create(store.clone(), Arc::clone(&generator)).unwrap();
     Chain::create(
         &rollup_config,
