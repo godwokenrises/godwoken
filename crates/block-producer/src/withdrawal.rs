@@ -279,7 +279,6 @@ pub async fn revert(
     }
 
     let withdrawal_lock_dep = block_producer_config.withdrawal_cell_lock_dep.clone();
-
     Ok(Some(RevertedWithdrawals {
         deps: vec![withdrawal_lock_dep.into()],
         inputs: withdrawal_inputs,
