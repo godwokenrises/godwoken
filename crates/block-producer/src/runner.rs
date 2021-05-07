@@ -9,10 +9,7 @@ use gw_chain::chain::Chain;
 use gw_common::H256;
 use gw_config::Config;
 use gw_generator::{
-    account_lock_manage::{
-        secp256k1::{Secp256k1Eth, Secp256k1Tron},
-        AccountLockManage,
-    },
+    account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
     backend_manage::BackendManage,
     genesis::init_genesis,
     Generator, RollupContext,
