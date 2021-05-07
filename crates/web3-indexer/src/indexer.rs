@@ -292,22 +292,19 @@ impl Web3Indexer {
                                     logs.push(web3_log);
                                     log_index += 1;
                                 }
+                                // TODO: Given the fact that Ethereum doesn't emit event for native ether transfer at system level, the SudtTransfer/SudtPayFee logs in polyjuice provide more info than we need here and could be ignored so far.
                                 GwLog::SudtTransfer {
                                     sudt_id: _,
                                     from_id: _,
                                     to_id: _,
                                     amount: _,
-                                } => {
-                                    // TODO: SudtTransfer happened in polyjuice contract will be include in web3 events later.
-                                }
+                                } => {}
                                 GwLog::SudtPayFee {
                                     sudt_id: _,
                                     from_id: _,
                                     block_producer_id: _,
                                     amount: _,
-                                } => {
-                                    // TODO:
-                                }
+                                } => {}
                             }
                         }
                     }
