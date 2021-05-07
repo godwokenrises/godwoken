@@ -175,6 +175,78 @@ impl LockAlgorithm for Secp256k1Eth {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct Secp256k1Tron;
+
+/// Usage
+/// register Secp256k1Tron to AccountLockManage
+///
+/// manage.register_lock_algorithm(code_hash, Box::new(Secp256k1Tron::default()));
+impl LockAlgorithm for Secp256k1Tron {
+    fn verify_tx(
+        &self,
+        rollup_type_hash: H256,
+        sender_script: Script,
+        receiver_script: Script,
+        tx: L2Transaction,
+    ) -> Result<bool, LockAlgorithmError> {
+        let message =
+            calc_godwoken_signing_message(&rollup_type_hash, &sender_script, &receiver_script, &tx);
+
+        self.verify_withdrawal_signature(sender_script.args().unpack(), tx.signature(), message)
+    }
+
+    fn verify_withdrawal_signature(
+        &self,
+        lock_args: Bytes,
+        signature: Signature,
+        message: H256,
+    ) -> Result<bool, LockAlgorithmError> {
+        if lock_args.len() != 52 {
+            return Err(LockAlgorithmError::InvalidLockArgs);
+        }
+        let mut hasher = Keccak256::new();
+        hasher.update("\x19TRON Signed Message:\n32");
+        hasher.update(message.as_slice());
+        let buf = hasher.finalize();
+        let mut signing_message = [0u8; 32];
+        signing_message.copy_from_slice(&buf[..]);
+        let signing_message = H256::from(signing_message);
+        let mut expected_pubkey_hash = [0u8; 20];
+        expected_pubkey_hash.copy_from_slice(&lock_args[32..52]);
+        let signature: RecoverableSignature = {
+            let signature: [u8; 65] = signature.unpack();
+            let recid = {
+                let rec_param: i32 = match signature[64] {
+                    28 => 1,
+                    _ => 0,
+                };
+                RecoveryId::from_i32(rec_param).map_err(|_| LockAlgorithmError::InvalidSignature)?
+            };
+            let data = &signature[..64];
+            RecoverableSignature::from_compact(data, recid)
+                .map_err(|_| LockAlgorithmError::InvalidSignature)?
+        };
+        let msg = secp256k1::Message::from_slice(signing_message.as_slice())
+            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+        let pubkey = SECP256K1
+            .recover(&msg, &signature)
+            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+        let pubkey_hash = {
+            let mut hasher = Keccak256::new();
+            hasher.update(&pubkey.serialize_uncompressed()[1..]);
+            let buf = hasher.finalize();
+            let mut pubkey_hash = [0u8; 20];
+            pubkey_hash.copy_from_slice(&buf[12..]);
+            pubkey_hash
+        };
+        if pubkey_hash != expected_pubkey_hash {
+            return Ok(false);
+        }
+        Ok(true)
+    }
+}
+
 fn calc_godwoken_signing_message(
     rollup_type_hash: &H256,
     sender_script: &Script,
@@ -475,6 +547,24 @@ mod tests {
             .build();
         let result = eth
             .verify_tx(H256::zero(), sender_script, receiver_script, tx)
+            .expect("verify signature");
+        assert!(result);
+    }
+
+    #[test]
+    fn test_secp256k1_tron() {
+        let message = H256::from([0u8; 32]);
+        let test_signature = Signature::from_slice(
+        &hex::decode("702ec8cd52a61093519de11433595ee7177bc8beaef2836714efe23e01bbb45f7f4a51c079f16cc742a261fe53fa3d731704a7687054764d424bd92963a82a241b").expect("hex decode"))
+        .expect("create signature structure");
+        let address = Bytes::from(
+            hex::decode("d0ebb370429e1cc8a7da1f7aeb2447083e15298b").expect("hex decode"),
+        );
+        let mut lock_args = vec![0u8; 32];
+        lock_args.extend(address);
+        let tron = Secp256k1Tron {};
+        let result = tron
+            .verify_withdrawal_signature(lock_args.into(), test_signature, message)
             .expect("verify signature");
         assert!(result);
     }
