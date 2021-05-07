@@ -204,7 +204,7 @@ pub async fn revert(
         .map(|h| h.unpack())
         .collect();
 
-    let rollup_config_cell_dep = match query_rollup_config_cell(rpc_client).await? {
+    let rollup_config_cell_dep = match rpc_client.query_rollup_config_cell().await? {
         Some(rollup_config_cell) => CellDep::new_builder()
             .out_point(rollup_config_cell.out_point)
             .dep_type(DepType::Code.into())
@@ -404,48 +404,6 @@ fn generate_change_custodian_outputs(
 
     change_outputs.push((ckb_change_custodian_output, Bytes::new()));
     Ok(change_outputs)
-}
-
-async fn query_rollup_config_cell(rpc_client: &RPCClient) -> Result<Option<CellInfo>> {
-    let search_key = SearchKey {
-        script: rpc_client.rollup_config_type_script.clone().into(),
-        script_type: ScriptType::Type,
-        filter: None,
-    };
-    let order = Order::Desc;
-    let limit = Uint32::from(1);
-
-    let mut cells: Pagination<Cell> = to_result(
-        rpc_client
-            .indexer_client
-            .request(
-                "get_cells",
-                Some(ClientParams::Array(vec![
-                    json!(search_key),
-                    json!(order),
-                    json!(limit),
-                ])),
-            )
-            .await?,
-    )?;
-    if let Some(cell) = cells.objects.pop() {
-        let out_point = {
-            let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-            OutPoint::new_unchecked(out_point.as_bytes())
-        };
-        let output = {
-            let output: ckb_types::packed::CellOutput = cell.output.into();
-            CellOutput::new_unchecked(output.as_bytes())
-        };
-        let data = cell.output_data.into_bytes();
-        let cell_info = CellInfo {
-            out_point,
-            output,
-            data,
-        };
-        return Ok(Some(cell_info));
-    }
-    Ok(None)
 }
 
 async fn query_reverted_withdrawal_cells(
