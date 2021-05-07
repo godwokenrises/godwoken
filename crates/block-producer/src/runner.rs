@@ -139,10 +139,6 @@ pub fn run(config: Config) -> Result<()> {
             eth_lock_script_type_hash.unpack(),
             Box::new(Secp256k1Eth::default()),
         );
-        account_lock_manage.register_lock_algorithm(
-            eth_lock_script_type_hash.unpack(),
-            Box::new(Secp256k1Tron::default()),
-        );
         Arc::new(Generator::new(
             backend_manage,
             account_lock_manage,
