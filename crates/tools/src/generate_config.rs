@@ -127,7 +127,6 @@ pub fn generate_config(
     let chain: ChainConfig = ChainConfig {
         genesis_committed_info,
         rollup_type_script,
-        rollup_config_cell_dep,
     };
     let rpc_client: RPCClientConfig = RPCClientConfig {
         indexer_url,
@@ -142,6 +141,7 @@ pub fn generate_config(
         poa_lock_dep,
         poa_state_dep,
         rollup_cell_type_dep,
+        rollup_config_cell_dep,
         deposit_cell_lock_dep,
         stake_cell_lock_dep,
         custodian_cell_lock_dep,

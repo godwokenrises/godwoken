@@ -34,7 +34,6 @@ pub struct RPCClientConfig {
 pub struct ChainConfig {
     pub genesis_committed_info: L2BlockCommittedInfo,
     pub rollup_type_script: Script,
-    pub rollup_config_cell_dep: CellDep,
 }
 
 /// Genesis config
@@ -59,6 +58,7 @@ pub struct BlockProducerConfig {
     pub account_id: u32,
     // cell deps
     pub rollup_cell_type_dep: CellDep,
+    pub rollup_config_cell_dep: CellDep,
     pub deposit_cell_lock_dep: CellDep,
     pub stake_cell_lock_dep: CellDep,
     pub poa_lock_dep: CellDep,

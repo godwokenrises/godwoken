@@ -121,7 +121,6 @@ pub fn run(config: Config) -> Result<()> {
         },
     };
     let rollup_type_script: Script = config.chain.rollup_type_script.clone().into();
-    let rollup_config_cell_dep: CellDep = config.chain.rollup_config_cell_dep.into();
     let rpc_client = {
         let indexer_client = HttpClient::new(config.rpc_client.indexer_url)?;
         let ckb_client = HttpClient::new(config.rpc_client.ckb_url)?;
@@ -132,7 +131,6 @@ pub fn run(config: Config) -> Result<()> {
             ckb_client,
             rollup_context: rollup_context.clone(),
             rollup_type_script,
-            rollup_config_cell_dep,
         }
     };
 

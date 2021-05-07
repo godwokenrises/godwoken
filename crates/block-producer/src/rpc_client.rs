@@ -133,7 +133,6 @@ pub struct RPCClient {
     pub indexer_client: HttpClient,
     pub ckb_client: HttpClient,
     pub rollup_type_script: ckb_types::packed::Script,
-    pub rollup_config_cell_dep: gw_types::packed::CellDep,
     pub rollup_context: RollupContext,
 }
 
