@@ -62,9 +62,9 @@ pub fn generate_config(
         let script: ckb_types::packed::Script = genesis.rollup_type_script.into();
         gw_types::packed::Script::new_unchecked(script.as_bytes()).into()
     };
-    let rollup_config_type_script = {
-        let script: ckb_types::packed::Script = genesis.rollup_config_type_script.into();
-        gw_types::packed::Script::new_unchecked(script.as_bytes()).into()
+    let rollup_config_cell_dep = {
+        let cell_dep: ckb_types::packed::CellDep = genesis.rollup_config_cell_dep.into();
+        gw_types::packed::CellDep::new_unchecked(cell_dep.as_bytes()).into()
     };
     let poa_lock_dep = {
         let dep: ckb_types::packed::CellDep = scripts.state_validator_lock.cell_dep.clone().into();
@@ -127,7 +127,7 @@ pub fn generate_config(
     let chain: ChainConfig = ChainConfig {
         genesis_committed_info,
         rollup_type_script,
-        rollup_config_type_script,
+        rollup_config_cell_dep,
     };
     let rpc_client: RPCClientConfig = RPCClientConfig {
         indexer_url,

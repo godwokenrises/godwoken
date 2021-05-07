@@ -133,7 +133,7 @@ pub struct RPCClient {
     pub indexer_client: HttpClient,
     pub ckb_client: HttpClient,
     pub rollup_type_script: ckb_types::packed::Script,
-    pub rollup_config_type_script: ckb_types::packed::Script,
+    pub rollup_config_cell_dep: gw_types::packed::CellDep,
     pub rollup_context: RollupContext,
 }
 
@@ -878,47 +878,6 @@ impl RPCClient {
         }
 
         Ok(collected)
-    }
-
-    pub async fn query_rollup_config_cell(&self) -> Result<Option<CellInfo>> {
-        let search_key = SearchKey {
-            script: self.rollup_config_type_script.clone().into(),
-            script_type: ScriptType::Type,
-            filter: None,
-        };
-        let order = Order::Desc;
-        let limit = Uint32::from(1);
-
-        let mut cells: Pagination<Cell> = to_result(
-            self.indexer_client
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                    ])),
-                )
-                .await?,
-        )?;
-        if let Some(cell) = cells.objects.pop() {
-            let out_point = {
-                let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-                OutPoint::new_unchecked(out_point.as_bytes())
-            };
-            let output = {
-                let output: ckb_types::packed::CellOutput = cell.output.into();
-                CellOutput::new_unchecked(output.as_bytes())
-            };
-            let data = cell.output_data.into_bytes();
-            let cell_info = CellInfo {
-                out_point,
-                output,
-                data,
-            };
-            return Ok(Some(cell_info));
-        }
-        Ok(None)
     }
 
     pub async fn get_transaction(&self, tx_hash: H256) -> Result<Option<Transaction>> {

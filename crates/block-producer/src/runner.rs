@@ -19,7 +19,7 @@ use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
-    packed::{NumberHash, RollupConfig, Script},
+    packed::{CellDep, NumberHash, RollupConfig, Script},
     prelude::*,
 };
 use gw_web3_indexer::Web3Indexer;
@@ -121,20 +121,18 @@ pub fn run(config: Config) -> Result<()> {
         },
     };
     let rollup_type_script: Script = config.chain.rollup_type_script.clone().into();
-    let rollup_config_type_script: Script = config.chain.rollup_config_type_script.into();
+    let rollup_config_cell_dep: CellDep = config.chain.rollup_config_cell_dep.into();
     let rpc_client = {
         let indexer_client = HttpClient::new(config.rpc_client.indexer_url)?;
         let ckb_client = HttpClient::new(config.rpc_client.ckb_url)?;
         let rollup_type_script =
             ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
-        let rollup_config_type_script =
-            ckb_types::packed::Script::new_unchecked(rollup_config_type_script.as_bytes());
         RPCClient {
             indexer_client,
             ckb_client,
             rollup_context: rollup_context.clone(),
             rollup_type_script,
-            rollup_config_type_script,
+            rollup_config_cell_dep,
         }
     };
 

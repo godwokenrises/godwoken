@@ -8,7 +8,7 @@ use gw_config::BlockProducerConfig;
 use gw_generator::RollupContext;
 use gw_types::{
     bytes::Bytes,
-    core::{DepType, ScriptHashType},
+    core::ScriptHashType,
     packed::{
         CellDep, CellInput, CellOutput, CustodianLockArgs, DepositionLockArgs, GlobalState,
         L2Block, RollupAction, RollupActionUnion, Script, ScriptOpt, Uint128,
@@ -198,16 +198,6 @@ pub async fn revert(
         .map(|h| h.unpack())
         .collect();
 
-    let rollup_config_cell_dep = match rpc_client.query_rollup_config_cell().await? {
-        Some(rollup_config_cell) => CellDep::new_builder()
-            .out_point(rollup_config_cell.out_point)
-            .dep_type(DepType::Code.into())
-            .build(),
-        None => {
-            return Err(anyhow::anyhow!("rollup config cell not found"));
-        }
-    };
-
     let reverted_withdrawal_cells = rpc_client
         .query_withdrawal_cells_by_block_hashes(&reverted_block_hashes)
         .await?;
@@ -291,6 +281,7 @@ pub async fn revert(
     }
 
     let withdrawal_lock_dep = block_producer_config.withdrawal_cell_lock_dep.clone();
+    let rollup_config_cell_dep = rpc_client.rollup_config_cell_dep.clone();
 
     Ok(Some(RevertedWithdrawals {
         deps: vec![rollup_config_cell_dep, withdrawal_lock_dep.into()],
