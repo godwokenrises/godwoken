@@ -1,6 +1,9 @@
-use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey};
-use crate::rpc_client::{to_result, RPCClient, DEFAULT_QUERY_LIMIT};
+use crate::rpc_client::{to_result, CollectedCustodianCells, RPCClient, DEFAULT_QUERY_LIMIT};
 use crate::types::{CellInfo, InputCellInfo};
+use crate::{
+    indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey},
+    rpc_client::WithdrawalsAmount,
+};
 
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{Params as ClientParams, Transport};
@@ -12,18 +15,17 @@ use gw_types::{
     bytes::Bytes,
     core::{DepType, ScriptHashType},
     packed::{
-        CellDep, CellInput, CellOutput, CustodianLockArgs, CustodianLockArgsReader,
-        DepositionLockArgs, GlobalState, L2Block, OutPoint, RollupAction, RollupActionUnion,
-        Script, ScriptOpt, Uint128, UnlockWithdrawalViaRevert, UnlockWithdrawalWitness,
-        UnlockWithdrawalWitnessUnion, WithdrawalLockArgs, WithdrawalLockArgsReader,
-        WithdrawalRequest, WitnessArgs,
+        CellDep, CellInput, CellOutput, CustodianLockArgs, DepositionLockArgs, GlobalState,
+        L2Block, OutPoint, RollupAction, RollupActionUnion, Script, ScriptOpt, Uint128,
+        UnlockWithdrawalViaRevert, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
+        WithdrawalLockArgs, WithdrawalLockArgsReader, WithdrawalRequest, WitnessArgs,
     },
     prelude::*,
 };
 use serde_json::json;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -72,12 +74,9 @@ pub async fn generate(
         },
     );
 
-    let custodian_cells = query_finalized_custodian_cells(
-        rpc_client,
-        &total_withdrawals_amount,
-        last_finalized_block_number,
-    )
-    .await?;
+    let custodian_cells = rpc_client
+        .query_finalized_custodian_cells(&total_withdrawals_amount, last_finalized_block_number)
+        .await?;
     assert!(custodian_cells.fullfilled_sudt_script.len() == total_withdrawals_amount.sudt.len());
 
     let build_withdraw_output = |req: WithdrawalRequest| -> Result<(CellOutput, Bytes)> {
@@ -407,165 +406,6 @@ fn generate_change_custodian_outputs(
     Ok(change_outputs)
 }
 
-#[derive(Debug)]
-struct WithdrawalsAmount {
-    pub capacity: u64,
-    pub sudt: HashMap<[u8; 32], u128>,
-}
-
-impl Default for WithdrawalsAmount {
-    fn default() -> Self {
-        WithdrawalsAmount {
-            capacity: 0,
-            sudt: Default::default(),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct CollectedCustodianCells {
-    pub cells_info: Vec<CellInfo>,
-    pub capacity: u64,
-    pub sudt: HashMap<[u8; 32], u128>,
-    pub fullfilled_sudt_script: HashMap<[u8; 32], Script>,
-}
-
-impl Default for CollectedCustodianCells {
-    fn default() -> Self {
-        CollectedCustodianCells {
-            cells_info: Default::default(),
-            capacity: 0,
-            sudt: Default::default(),
-            fullfilled_sudt_script: Default::default(),
-        }
-    }
-}
-
-async fn query_finalized_custodian_cells(
-    rpc_client: &RPCClient,
-    withdrawals_amount: &WithdrawalsAmount,
-    last_finalized_block_number: u64,
-) -> Result<CollectedCustodianCells> {
-    let rollup_context = &rpc_client.rollup_context;
-
-    let custodian_lock = Script::new_builder()
-        .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
-        .hash_type(ScriptHashType::Type.into())
-        .args(rollup_context.rollup_script_hash.as_slice().pack())
-        .build();
-
-    let search_key = SearchKey {
-        script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
-        script_type: ScriptType::Lock,
-        filter: None,
-    };
-    let order = Order::Desc;
-    let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
-
-    let mut collected = CollectedCustodianCells::default();
-    let mut cursor = None;
-
-    while collected.capacity < withdrawals_amount.capacity
-        || collected.fullfilled_sudt_script.len() < withdrawals_amount.sudt.len()
-    {
-        let cells: Pagination<Cell> = to_result(
-            rpc_client
-                .indexer_client
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
-                .await?,
-        )?;
-
-        if cells.last_cursor.is_empty() {
-            return Err(anyhow!("no finalized custodian cell"));
-        }
-        cursor = Some(cells.last_cursor);
-
-        for cell in cells.objects.into_iter() {
-            let args = cell.output.lock.args.clone().into_bytes();
-            let custodian_lock_args = match CustodianLockArgsReader::verify(&args[32..], false) {
-                Ok(()) => CustodianLockArgs::new_unchecked(args.slice(32..)),
-                Err(_) => continue,
-            };
-
-            if custodian_lock_args.deposition_block_number().unpack() > last_finalized_block_number
-            {
-                continue;
-            }
-
-            // Collect sudt
-            if let Some(json_script) = cell.output.type_.clone() {
-                let sudt_type_script = {
-                    let script = ckb_types::packed::Script::from(json_script);
-                    Script::new_unchecked(script.as_bytes())
-                };
-
-                let sudt_type_hash = sudt_type_script.hash();
-                if sudt_type_hash != CKB_SUDT_SCRIPT_ARGS {
-                    // Already collected enough sudt amount
-                    let fullfilled_sudt_script = &mut collected.fullfilled_sudt_script;
-                    if fullfilled_sudt_script.contains_key(&sudt_type_hash) {
-                        continue;
-                    }
-
-                    // Not targed withdrawal sudt
-                    let withdrawal_amount = match withdrawals_amount.sudt.get(&sudt_type_hash) {
-                        Some(amount) => amount,
-                        None => continue,
-                    };
-
-                    let sudt_amount = match parse_sudt_amount(&cell) {
-                        Ok(amount) => amount,
-                        Err(_) => {
-                            log::error!("invalid sudt amount, out_point: {:?}", cell.out_point);
-                            continue;
-                        }
-                    };
-
-                    let collected_amount = collected.sudt.entry(sudt_type_hash).or_insert(0);
-                    *collected_amount = collected_amount.saturating_add(sudt_amount);
-
-                    if *collected_amount >= *withdrawal_amount {
-                        fullfilled_sudt_script.insert(sudt_type_hash.to_owned(), sudt_type_script);
-                    }
-                }
-            }
-
-            // Collect capacity
-            let out_point = {
-                let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-                OutPoint::new_unchecked(out_point.as_bytes())
-            };
-
-            let output = {
-                let output: ckb_types::packed::CellOutput = cell.output.into();
-                CellOutput::new_unchecked(output.as_bytes())
-            };
-
-            collected.capacity = collected
-                .capacity
-                .saturating_add(output.capacity().unpack());
-
-            let info = CellInfo {
-                out_point,
-                output,
-                data: cell.output_data.into_bytes(),
-            };
-
-            collected.cells_info.push(info);
-        }
-    }
-
-    Ok(collected)
-}
-
 async fn query_rollup_config_cell(rpc_client: &RPCClient) -> Result<Option<CellInfo>> {
     let search_key = SearchKey {
         script: rpc_client.rollup_config_type_script.clone().into(),
@@ -686,14 +526,4 @@ async fn query_reverted_withdrawal_cells(
     }
 
     Ok(collected)
-}
-
-fn parse_sudt_amount(cell: &Cell) -> Result<u128> {
-    if cell.output.type_.is_none() {
-        return Err(anyhow!("no a sudt cell"));
-    }
-
-    gw_types::packed::Uint128::from_slice(&cell.output_data.as_bytes())
-        .map(|a| a.unpack())
-        .map_err(|e| anyhow!("invalid sudt amount {}", e))
 }
