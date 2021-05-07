@@ -14,7 +14,7 @@ use gw_types::{
     packed::{
         Block, CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositionLockArgs,
         DepositionLockArgsReader, DepositionRequest, NumberHash, OutPoint, Script, StakeLockArgs,
-        StakeLockArgsReader, Transaction,
+        StakeLockArgsReader, Transaction, WithdrawalLockArgs, WithdrawalLockArgsReader,
     },
     prelude::*,
 };
@@ -794,6 +794,86 @@ impl RPCClient {
                 };
 
                 collected.cells_info.push(info);
+            }
+        }
+
+        Ok(collected)
+    }
+
+    pub async fn query_withdrawal_cells_by_block_hashes(
+        &self,
+        block_hashes: &HashSet<[u8; 32]>,
+    ) -> Result<Vec<CellInfo>> {
+        let rollup_context = &self.rollup_context;
+
+        let withdrawal_lock = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.withdrawal_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .build();
+
+        let search_key = SearchKey {
+            script: ckb_types::packed::Script::new_unchecked(withdrawal_lock.as_bytes()).into(),
+            script_type: ScriptType::Lock,
+            filter: None,
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut collected = vec![];
+        let mut cursor = None;
+
+        while collected.is_empty() {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer_client
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            if cells.last_cursor.is_empty() {
+                return Ok(vec![]);
+            }
+            cursor = Some(cells.last_cursor);
+
+            for cell in cells.objects.into_iter() {
+                let args = cell.output.lock.args.clone().into_bytes();
+                let withdrawal_lock_args =
+                    match WithdrawalLockArgsReader::verify(&args[32..], false) {
+                        Ok(()) => WithdrawalLockArgs::new_unchecked(args.slice(32..)),
+                        Err(_) => continue,
+                    };
+
+                let withdrawal_block_hash: [u8; 32] =
+                    withdrawal_lock_args.withdrawal_block_hash().unpack();
+                if !block_hashes.contains(&withdrawal_block_hash) {
+                    continue;
+                }
+
+                let out_point = {
+                    let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
+                    OutPoint::new_unchecked(out_point.as_bytes())
+                };
+
+                let output = {
+                    let output: ckb_types::packed::CellOutput = cell.output.into();
+                    CellOutput::new_unchecked(output.as_bytes())
+                };
+
+                let info = CellInfo {
+                    out_point,
+                    output,
+                    data: cell.output_data.into_bytes(),
+                };
+
+                collected.push(info);
             }
         }
 

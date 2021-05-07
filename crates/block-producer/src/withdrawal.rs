@@ -1,28 +1,22 @@
-use crate::rpc_client::{to_result, CollectedCustodianCells, RPCClient, DEFAULT_QUERY_LIMIT};
+use crate::rpc_client::WithdrawalsAmount;
+use crate::rpc_client::{CollectedCustodianCells, RPCClient};
 use crate::types::{CellInfo, InputCellInfo};
-use crate::{
-    indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey},
-    rpc_client::WithdrawalsAmount,
-};
 
 use anyhow::{anyhow, Result};
-use async_jsonrpc_client::{Params as ClientParams, Transport};
 use gw_common::CKB_SUDT_SCRIPT_ARGS;
 use gw_config::BlockProducerConfig;
 use gw_generator::RollupContext;
-use gw_jsonrpc_types::ckb_jsonrpc_types::Uint32;
 use gw_types::{
     bytes::Bytes,
     core::{DepType, ScriptHashType},
     packed::{
         CellDep, CellInput, CellOutput, CustodianLockArgs, DepositionLockArgs, GlobalState,
-        L2Block, OutPoint, RollupAction, RollupActionUnion, Script, ScriptOpt, Uint128,
+        L2Block, RollupAction, RollupActionUnion, Script, ScriptOpt, Uint128,
         UnlockWithdrawalViaRevert, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
-        WithdrawalLockArgs, WithdrawalLockArgsReader, WithdrawalRequest, WitnessArgs,
+        WithdrawalLockArgs, WithdrawalRequest, WitnessArgs,
     },
     prelude::*,
 };
-use serde_json::json;
 
 use std::{
     collections::HashSet,
@@ -214,8 +208,9 @@ pub async fn revert(
         }
     };
 
-    let reverted_withdrawal_cells =
-        query_reverted_withdrawal_cells(rpc_client, &reverted_block_hashes).await?;
+    let reverted_withdrawal_cells = rpc_client
+        .query_withdrawal_cells_by_block_hashes(&reverted_block_hashes)
+        .await?;
     if reverted_withdrawal_cells.is_empty() {
         return Ok(None);
     }
@@ -404,84 +399,4 @@ fn generate_change_custodian_outputs(
 
     change_outputs.push((ckb_change_custodian_output, Bytes::new()));
     Ok(change_outputs)
-}
-
-async fn query_reverted_withdrawal_cells(
-    rpc_client: &RPCClient,
-    reverted_block_hashes: &HashSet<[u8; 32]>,
-) -> Result<Vec<CellInfo>> {
-    let rollup_context = &rpc_client.rollup_context;
-
-    let withdrawal_lock = Script::new_builder()
-        .code_hash(rollup_context.rollup_config.withdrawal_script_type_hash())
-        .hash_type(ScriptHashType::Type.into())
-        .args(rollup_context.rollup_script_hash.as_slice().pack())
-        .build();
-
-    let search_key = SearchKey {
-        script: ckb_types::packed::Script::new_unchecked(withdrawal_lock.as_bytes()).into(),
-        script_type: ScriptType::Lock,
-        filter: None,
-    };
-    let order = Order::Desc;
-    let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
-
-    let mut collected = vec![];
-    let mut cursor = None;
-
-    while collected.is_empty() {
-        let cells: Pagination<Cell> = to_result(
-            rpc_client
-                .indexer_client
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                        json!(cursor),
-                    ])),
-                )
-                .await?,
-        )?;
-
-        if cells.last_cursor.is_empty() {
-            return Ok(vec![]);
-        }
-        cursor = Some(cells.last_cursor);
-
-        for cell in cells.objects.into_iter() {
-            let args = cell.output.lock.args.clone().into_bytes();
-            let withdrawal_lock_args = match WithdrawalLockArgsReader::verify(&args[32..], false) {
-                Ok(()) => WithdrawalLockArgs::new_unchecked(args.slice(32..)),
-                Err(_) => continue,
-            };
-
-            let withdrawal_block_hash: [u8; 32] =
-                withdrawal_lock_args.withdrawal_block_hash().unpack();
-            if !reverted_block_hashes.contains(&withdrawal_block_hash) {
-                continue;
-            }
-
-            let out_point = {
-                let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-                OutPoint::new_unchecked(out_point.as_bytes())
-            };
-
-            let output = {
-                let output: ckb_types::packed::CellOutput = cell.output.into();
-                CellOutput::new_unchecked(output.as_bytes())
-            };
-
-            let info = CellInfo {
-                out_point,
-                output,
-                data: cell.output_data.into_bytes(),
-            };
-
-            collected.push(info);
-        }
-    }
-
-    Ok(collected)
 }
