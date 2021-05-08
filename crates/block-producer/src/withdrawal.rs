@@ -51,6 +51,7 @@ pub async fn generate(
 
             let sudt_script_hash = withdrawal.raw().sudt_script_hash().unpack();
             let sudt_amount = withdrawal.raw().amount().unpack();
+            if sudt_amount != 0 {
                 match sudt_script_hash {
                     CKB_SUDT_SCRIPT_ARGS => {
                         let account = withdrawal.raw().account_script_hash();
@@ -61,6 +62,7 @@ pub async fn generate(
                         *total_sudt_amount = total_sudt_amount.saturating_add(sudt_amount);
                     }
                 }
+            }
 
             total_amount
         }
