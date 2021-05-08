@@ -2112,6 +2112,7 @@ dependencies = [
  "ckb-fixed-hash",
  "ckb-hash",
  "ckb-jsonrpc-types",
+ "ckb-resource",
  "ckb-sdk",
  "ckb-types",
  "clap",

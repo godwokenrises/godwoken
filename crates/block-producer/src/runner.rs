@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
-use futures::{select, FutureExt};
+use futures::{executor::block_on, select, FutureExt};
 use gw_chain::chain::Chain;
 use gw_common::H256;
 use gw_config::Config;
@@ -18,6 +18,7 @@ use gw_mem_pool::pool::MemPool;
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
 use gw_types::{
+    bytes::Bytes,
     packed::{NumberHash, RollupConfig, Script},
     prelude::*,
 };
@@ -107,14 +108,11 @@ async fn poll_loop(
 
 pub fn run(config: Config) -> Result<()> {
     let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
-    // TODO: use persistent store later
-    let store = Store::open_tmp().with_context(|| "init store")?;
-    init_genesis(
-        &store,
-        &config.genesis,
-        config.chain.genesis_committed_info.clone().into(),
-    )
-    .with_context(|| "init genesis")?;
+    let block_producer_config = config
+        .block_producer
+        .clone()
+        .ok_or_else(|| anyhow!("not set block producer"))?;
+
     let rollup_context = RollupContext {
         rollup_config: rollup_config.clone(),
         rollup_script_hash: {
@@ -122,6 +120,39 @@ pub fn run(config: Config) -> Result<()> {
             rollup_script_hash.into()
         },
     };
+    let rollup_type_script: Script = config.chain.rollup_type_script.clone().into();
+    let rpc_client = {
+        let indexer_client = HttpClient::new(config.rpc_client.indexer_url)?;
+        let ckb_client = HttpClient::new(config.rpc_client.ckb_url)?;
+        let rollup_type_script =
+            ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
+        RPCClient {
+            indexer_client,
+            ckb_client,
+            rollup_context: rollup_context.clone(),
+            rollup_type_script,
+        }
+    };
+
+    // TODO: use persistent store later
+    let store = Store::open_tmp().with_context(|| "init store")?;
+    let secp_data: Bytes = {
+        let out_point = config.genesis.secp_data_dep.out_point.clone();
+        block_on(rpc_client.get_transaction(out_point.tx_hash.0.into()))?
+            .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?
+            .raw()
+            .outputs_data()
+            .get(out_point.index.value() as usize)
+            .expect("get secp output data")
+            .raw_data()
+    };
+    init_genesis(
+        &store,
+        &config.genesis,
+        config.chain.genesis_committed_info.clone().into(),
+        secp_data,
+    )
+    .with_context(|| "init genesis")?;
 
     let rollup_config_hash = rollup_config.hash().into();
     let generator = {
@@ -155,20 +186,6 @@ pub fn run(config: Config) -> Result<()> {
         )
         .with_context(|| "create chain")?,
     ));
-
-    let rollup_type_script: Script = config.chain.rollup_type_script.into();
-    let rpc_client = {
-        let indexer_client = HttpClient::new(config.rpc_client.indexer_url)?;
-        let ckb_client = HttpClient::new(config.rpc_client.ckb_url)?;
-        let rollup_type_script =
-            ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
-        RPCClient {
-            indexer_client,
-            ckb_client,
-            rollup_context: rollup_context.clone(),
-            rollup_type_script,
-        }
-    };
 
     // RPC registry
     let rpc_registry = Registry::new(mem_pool.clone(), store.clone());
@@ -222,9 +239,7 @@ pub fn run(config: Config) -> Result<()> {
         mem_pool,
         rpc_client.clone(),
         ckb_genesis_info,
-        config
-            .block_producer
-            .ok_or_else(|| anyhow!("not set block producer"))?,
+        block_producer_config,
     )
     .with_context(|| "init block producer")?;
 

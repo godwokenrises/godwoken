@@ -8,6 +8,7 @@ use tempfile::NamedTempFile;
 use ckb_fixed_hash::H256;
 use ckb_hash::new_blake2b;
 use ckb_jsonrpc_types as rpc_types;
+use ckb_resource::CODE_HASH_SECP256K1_DATA;
 use ckb_sdk::{
     calc_max_mature_number,
     constants::{CELLBASE_MATURITY, MIN_SECP_CELL_CAPACITY, ONE_CKB},
@@ -236,6 +237,7 @@ pub fn deploy_genesis(
         .allowed_eoa_type_hashes(GwPackVec::pack(allowed_eoa_type_hashes))
         .allowed_contract_type_hashes(GwPackVec::pack(allowed_contract_type_hashes))
         .build();
+    let (secp_data, secp_data_dep) = get_secp_data(&mut rpc_client)?;
     let genesis_config = GenesisConfig {
         timestamp,
         meta_contract_validator_type_hash: deployment_result
@@ -244,9 +246,10 @@ pub fn deploy_genesis(
             .clone(),
         rollup_type_hash: rollup_script_hash.clone(),
         rollup_config: rollup_config.clone().into(),
+        secp_data_dep,
     };
     let genesis_with_global_state =
-        build_genesis(&genesis_config).map_err(|err| err.to_string())?;
+        build_genesis(&genesis_config, secp_data).map_err(|err| err.to_string())?;
 
     // 2. build rollup cell (with type id)
     let (rollup_output, rollup_data): (ckb_packed::CellOutput, Bytes) = {
@@ -651,4 +654,38 @@ pub fn is_mature(number: u64, tx_index: u64, max_mature_number: u64) -> bool {
     // Live cells in genesis are all mature
         || number == 0
         || number <= max_mature_number
+}
+
+pub fn get_secp_data(
+    rpc_client: &mut HttpRpcClient,
+) -> Result<(Bytes, gw_jsonrpc_types::blockchain::CellDep), String> {
+    let mut cell_dep = None;
+    rpc_client
+        .get_block_by_number(0)?
+        .expect("get CKB genesis block")
+        .transactions
+        .iter()
+        .for_each(|tx| {
+            tx.inner
+                .outputs_data
+                .iter()
+                .enumerate()
+                .for_each(|(output_index, data)| {
+                    let data_hash = ckb_types::packed::CellOutput::calc_data_hash(data.as_bytes());
+                    if data_hash.as_slice() == CODE_HASH_SECP256K1_DATA.as_bytes() {
+                        let out_point = gw_jsonrpc_types::blockchain::OutPoint {
+                            tx_hash: tx.hash.clone(),
+                            index: (output_index as u32).into(),
+                        };
+                        cell_dep = Some((
+                            data.clone().into_bytes(),
+                            gw_jsonrpc_types::blockchain::CellDep {
+                                out_point,
+                                dep_type: gw_jsonrpc_types::blockchain::DepType::Code,
+                            },
+                        ));
+                    }
+                });
+        });
+    cell_dep.ok_or_else(|| "Can not found secp data cell in CKB genesis block".to_string())
 }

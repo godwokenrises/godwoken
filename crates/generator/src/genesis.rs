@@ -13,6 +13,7 @@ use gw_store::{
     transaction::StoreTransaction,
     Store,
 };
+use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::{ScriptHashType, Status},
@@ -24,10 +25,11 @@ use gw_types::{
 };
 
 /// Build genesis block
-pub fn build_genesis(config: &GenesisConfig) -> Result<GenesisWithGlobalState> {
+pub fn build_genesis(config: &GenesisConfig, secp_data: Bytes) -> Result<GenesisWithGlobalState> {
     let store = Store::open_tmp()?;
     let db = store.begin_transaction();
-    build_genesis_from_store(db, config).map(|(_db, genesis_with_state)| genesis_with_state)
+    build_genesis_from_store(db, config, secp_data)
+        .map(|(_db, genesis_with_state)| genesis_with_state)
 }
 
 pub struct GenesisWithGlobalState {
@@ -40,6 +42,7 @@ pub struct GenesisWithGlobalState {
 pub fn build_genesis_from_store(
     db: StoreTransaction,
     config: &GenesisConfig,
+    secp_data: Bytes,
 ) -> Result<(StoreTransaction, GenesisWithGlobalState)> {
     let rollup_context = RollupContext {
         rollup_script_hash: {
@@ -144,6 +147,17 @@ pub fn build_genesis_from_store(
             .tip_block_hash(genesis.hash().pack())
             .build()
     };
+
+    // insert secp256k1 data
+    let secp_data_hash = {
+        let mut hasher = new_blake2b();
+        hasher.update(secp_data.as_ref());
+        let mut hash = [0u8; 32];
+        hasher.finalize(&mut hash);
+        hash
+    };
+    tree.insert_data(secp_data_hash.into(), secp_data);
+
     tree.submit_tree()?;
     db.set_block_smt_root(global_state.block().merkle_root().unpack())?;
     let genesis_with_global_state = GenesisWithGlobalState {
@@ -157,6 +171,7 @@ pub fn init_genesis(
     store: &Store,
     config: &GenesisConfig,
     genesis_committed_info: L2BlockCommittedInfo,
+    secp_data: Bytes,
 ) -> Result<()> {
     if store.has_genesis()? {
         panic!("The store is already initialized!");
@@ -173,7 +188,7 @@ pub fn init_genesis(
             genesis,
             global_state,
         },
-    ) = build_genesis_from_store(db, config)?;
+    ) = build_genesis_from_store(db, config, secp_data)?;
     db.insert_block(
         genesis.clone(),
         genesis_committed_info,
