@@ -275,7 +275,7 @@ pub fn deploy_genesis(
         .map_err(|err| format!("Invalid secp256k1 secret key format, error: {}", err))?;
     let pubkey = secp256k1::PublicKey::from_secret_key(&SECP256K1, &privkey);
     let owner_address_payload = AddressPayload::from_pubkey(&pubkey);
-    let owner_address = Address::new(network_type, owner_address_payload.clone());
+    let owner_address = Address::new(network_type, owner_address_payload);
     let owner_address_string = owner_address.to_string();
     let max_mature_number = get_max_mature_number(&mut rpc_client)?;
     let genesis_block: BlockView = rpc_client
