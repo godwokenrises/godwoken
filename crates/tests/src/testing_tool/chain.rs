@@ -14,8 +14,8 @@ use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     packed::{
-        CellOutput, DepositionRequest, L2BlockCommittedInfo, RawTransaction, RollupConfig, Script,
-        Transaction, WitnessArgs,
+        CellOutput, DepositionRequest, L2BlockCommittedInfo, RawTransaction, RollupAction,
+        RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, Transaction, WitnessArgs,
     },
     prelude::*,
 };
@@ -139,8 +139,14 @@ pub fn build_sync_tx(
     } = produce_block_result;
     assert!(unused_transactions.is_empty());
     assert!(unused_withdrawal_requests.is_empty());
+    let rollup_action = {
+        let submit_block = RollupSubmitBlock::new_builder().block(block).build();
+        RollupAction::new_builder()
+            .set(RollupActionUnion::RollupSubmitBlock(submit_block))
+            .build()
+    };
     let witness = WitnessArgs::new_builder()
-        .output_type(Pack::<_>::pack(&Some(block.as_bytes())))
+        .output_type(Pack::<_>::pack(&Some(rollup_action.as_bytes())))
         .build();
     let raw = RawTransaction::new_builder()
         .outputs(vec![rollup_cell].pack())

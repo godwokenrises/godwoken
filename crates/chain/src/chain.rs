@@ -15,8 +15,8 @@ use gw_types::{
     core::Status,
     packed::{
         ChallengeTarget, ChallengeWitness, DepositionRequest, GlobalState, L2Block,
-        L2BlockCommittedInfo, L2BlockReader, RollupConfig, Script, Transaction, TxReceipt,
-        VerifyTransactionWitness, WitnessArgs, WitnessArgsReader,
+        L2BlockCommittedInfo, RollupAction, RollupActionReader, RollupActionUnion, RollupConfig,
+        Script, Transaction, TxReceipt, VerifyTransactionWitness, WitnessArgs, WitnessArgsReader,
     },
     prelude::{
         Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Reader as GWReader,
@@ -568,8 +568,11 @@ fn parse_l2block(tx: &Transaction, rollup_id: &[u8; 32]) -> Result<L2Block> {
         .to_opt()
         .ok_or_else(|| anyhow!("output_type field is none"))?
         .unpack();
-    match L2BlockReader::verify(&output_type, false) {
-        Ok(_) => Ok(L2Block::new_unchecked(output_type)),
-        Err(_) => Err(anyhow!("invalid l2block")),
+    match RollupActionReader::verify(&output_type, false) {
+        Ok(_) => match RollupAction::new_unchecked(output_type).to_enum() {
+            RollupActionUnion::RollupSubmitBlock(args) => Ok(args.block()),
+            _ => unimplemented!(),
+        },
+        Err(_) => Err(anyhow!("invalid rollup action")),
     }
 }
