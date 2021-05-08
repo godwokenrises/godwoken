@@ -2257,6 +2257,12 @@ impl ::core::fmt::Display for RollupConfig {
             self.challenge_maturity_blocks()
         )?;
         write!(f, ", {}: {}", "finality_blocks", self.finality_blocks())?;
+        write!(
+            f,
+            ", {}: {}",
+            "compatible_chain_id",
+            self.compatible_chain_id()
+        )?;
         write!(f, ", {}: {}", "reward_burn_rate", self.reward_burn_rate())?;
         write!(
             f,
@@ -2280,9 +2286,9 @@ impl ::core::fmt::Display for RollupConfig {
 impl ::core::default::Default for RollupConfig {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            93, 1, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 124, 0, 0, 0, 156, 0, 0, 0, 188, 0, 0, 0, 220,
-            0, 0, 0, 252, 0, 0, 0, 28, 1, 0, 0, 60, 1, 0, 0, 68, 1, 0, 0, 76, 1, 0, 0, 84, 1, 0, 0,
-            85, 1, 0, 0, 89, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            101, 1, 0, 0, 64, 0, 0, 0, 96, 0, 0, 0, 128, 0, 0, 0, 160, 0, 0, 0, 192, 0, 0, 0, 224,
+            0, 0, 0, 0, 1, 0, 0, 32, 1, 0, 0, 64, 1, 0, 0, 72, 1, 0, 0, 80, 1, 0, 0, 88, 1, 0, 0,
+            92, 1, 0, 0, 93, 1, 0, 0, 97, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -2292,13 +2298,13 @@ impl ::core::default::Default for RollupConfig {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RollupConfig::new_unchecked(v.into())
     }
 }
 impl RollupConfig {
-    pub const FIELD_COUNT: usize = 14;
+    pub const FIELD_COUNT: usize = 15;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -2381,23 +2387,29 @@ impl RollupConfig {
         let end = molecule::unpack_number(&slice[48..]) as usize;
         Uint64::new_unchecked(self.0.slice(start..end))
     }
-    pub fn reward_burn_rate(&self) -> Byte {
+    pub fn compatible_chain_id(&self) -> Uint32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[48..]) as usize;
         let end = molecule::unpack_number(&slice[52..]) as usize;
+        Uint32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn reward_burn_rate(&self) -> Byte {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[52..]) as usize;
+        let end = molecule::unpack_number(&slice[56..]) as usize;
         Byte::new_unchecked(self.0.slice(start..end))
     }
     pub fn allowed_eoa_type_hashes(&self) -> Byte32Vec {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[52..]) as usize;
-        let end = molecule::unpack_number(&slice[56..]) as usize;
+        let start = molecule::unpack_number(&slice[56..]) as usize;
+        let end = molecule::unpack_number(&slice[60..]) as usize;
         Byte32Vec::new_unchecked(self.0.slice(start..end))
     }
     pub fn allowed_contract_type_hashes(&self) -> Byte32Vec {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[56..]) as usize;
+        let start = molecule::unpack_number(&slice[60..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[60..]) as usize;
+            let end = molecule::unpack_number(&slice[64..]) as usize;
             Byte32Vec::new_unchecked(self.0.slice(start..end))
         } else {
             Byte32Vec::new_unchecked(self.0.slice(start..))
@@ -2441,6 +2453,7 @@ impl molecule::prelude::Entity for RollupConfig {
             .required_staking_capacity(self.required_staking_capacity())
             .challenge_maturity_blocks(self.challenge_maturity_blocks())
             .finality_blocks(self.finality_blocks())
+            .compatible_chain_id(self.compatible_chain_id())
             .reward_burn_rate(self.reward_burn_rate())
             .allowed_eoa_type_hashes(self.allowed_eoa_type_hashes())
             .allowed_contract_type_hashes(self.allowed_contract_type_hashes())
@@ -2521,6 +2534,12 @@ impl<'r> ::core::fmt::Display for RollupConfigReader<'r> {
             self.challenge_maturity_blocks()
         )?;
         write!(f, ", {}: {}", "finality_blocks", self.finality_blocks())?;
+        write!(
+            f,
+            ", {}: {}",
+            "compatible_chain_id",
+            self.compatible_chain_id()
+        )?;
         write!(f, ", {}: {}", "reward_burn_rate", self.reward_burn_rate())?;
         write!(
             f,
@@ -2542,7 +2561,7 @@ impl<'r> ::core::fmt::Display for RollupConfigReader<'r> {
     }
 }
 impl<'r> RollupConfigReader<'r> {
-    pub const FIELD_COUNT: usize = 14;
+    pub const FIELD_COUNT: usize = 15;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -2625,23 +2644,29 @@ impl<'r> RollupConfigReader<'r> {
         let end = molecule::unpack_number(&slice[48..]) as usize;
         Uint64Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn reward_burn_rate(&self) -> ByteReader<'r> {
+    pub fn compatible_chain_id(&self) -> Uint32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[48..]) as usize;
         let end = molecule::unpack_number(&slice[52..]) as usize;
+        Uint32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn reward_burn_rate(&self) -> ByteReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[52..]) as usize;
+        let end = molecule::unpack_number(&slice[56..]) as usize;
         ByteReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn allowed_eoa_type_hashes(&self) -> Byte32VecReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[52..]) as usize;
-        let end = molecule::unpack_number(&slice[56..]) as usize;
+        let start = molecule::unpack_number(&slice[56..]) as usize;
+        let end = molecule::unpack_number(&slice[60..]) as usize;
         Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn allowed_contract_type_hashes(&self) -> Byte32VecReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[56..]) as usize;
+        let start = molecule::unpack_number(&slice[60..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[60..]) as usize;
+            let end = molecule::unpack_number(&slice[64..]) as usize;
             Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             Byte32VecReader::new_unchecked(&self.as_slice()[start..])
@@ -2710,9 +2735,10 @@ impl<'r> molecule::prelude::Reader<'r> for RollupConfigReader<'r> {
         Uint64Reader::verify(&slice[offsets[8]..offsets[9]], compatible)?;
         Uint64Reader::verify(&slice[offsets[9]..offsets[10]], compatible)?;
         Uint64Reader::verify(&slice[offsets[10]..offsets[11]], compatible)?;
-        ByteReader::verify(&slice[offsets[11]..offsets[12]], compatible)?;
-        Byte32VecReader::verify(&slice[offsets[12]..offsets[13]], compatible)?;
+        Uint32Reader::verify(&slice[offsets[11]..offsets[12]], compatible)?;
+        ByteReader::verify(&slice[offsets[12]..offsets[13]], compatible)?;
         Byte32VecReader::verify(&slice[offsets[13]..offsets[14]], compatible)?;
+        Byte32VecReader::verify(&slice[offsets[14]..offsets[15]], compatible)?;
         Ok(())
     }
 }
@@ -2729,12 +2755,13 @@ pub struct RollupConfigBuilder {
     pub(crate) required_staking_capacity: Uint64,
     pub(crate) challenge_maturity_blocks: Uint64,
     pub(crate) finality_blocks: Uint64,
+    pub(crate) compatible_chain_id: Uint32,
     pub(crate) reward_burn_rate: Byte,
     pub(crate) allowed_eoa_type_hashes: Byte32Vec,
     pub(crate) allowed_contract_type_hashes: Byte32Vec,
 }
 impl RollupConfigBuilder {
-    pub const FIELD_COUNT: usize = 14;
+    pub const FIELD_COUNT: usize = 15;
     pub fn l1_sudt_script_type_hash(mut self, v: Byte32) -> Self {
         self.l1_sudt_script_type_hash = v;
         self
@@ -2779,6 +2806,10 @@ impl RollupConfigBuilder {
         self.finality_blocks = v;
         self
     }
+    pub fn compatible_chain_id(mut self, v: Uint32) -> Self {
+        self.compatible_chain_id = v;
+        self
+    }
     pub fn reward_burn_rate(mut self, v: Byte) -> Self {
         self.reward_burn_rate = v;
         self
@@ -2808,6 +2839,7 @@ impl molecule::prelude::Builder for RollupConfigBuilder {
             + self.required_staking_capacity.as_slice().len()
             + self.challenge_maturity_blocks.as_slice().len()
             + self.finality_blocks.as_slice().len()
+            + self.compatible_chain_id.as_slice().len()
             + self.reward_burn_rate.as_slice().len()
             + self.allowed_eoa_type_hashes.as_slice().len()
             + self.allowed_contract_type_hashes.as_slice().len()
@@ -2838,6 +2870,8 @@ impl molecule::prelude::Builder for RollupConfigBuilder {
         offsets.push(total_size);
         total_size += self.finality_blocks.as_slice().len();
         offsets.push(total_size);
+        total_size += self.compatible_chain_id.as_slice().len();
+        offsets.push(total_size);
         total_size += self.reward_burn_rate.as_slice().len();
         offsets.push(total_size);
         total_size += self.allowed_eoa_type_hashes.as_slice().len();
@@ -2858,6 +2892,7 @@ impl molecule::prelude::Builder for RollupConfigBuilder {
         writer.write_all(self.required_staking_capacity.as_slice())?;
         writer.write_all(self.challenge_maturity_blocks.as_slice())?;
         writer.write_all(self.finality_blocks.as_slice())?;
+        writer.write_all(self.compatible_chain_id.as_slice())?;
         writer.write_all(self.reward_burn_rate.as_slice())?;
         writer.write_all(self.allowed_eoa_type_hashes.as_slice())?;
         writer.write_all(self.allowed_contract_type_hashes.as_slice())?;

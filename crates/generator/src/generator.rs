@@ -233,12 +233,8 @@ impl Generator {
             .account_lock_manage()
             .get_lock_algorithm(&lock_code_hash.into())
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
-        let valid_signature = lock_algo.verify_tx(
-            self.rollup_context.rollup_script_hash,
-            script,
-            receiver_script,
-            tx.clone(),
-        )?;
+        let valid_signature =
+            lock_algo.verify_tx(&self.rollup_context, script, receiver_script, tx.clone())?;
         if !valid_signature {
             return Err(LockAlgorithmError::InvalidSignature.into());
         }

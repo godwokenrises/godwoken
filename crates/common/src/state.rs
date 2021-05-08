@@ -182,6 +182,6 @@ pub trait State {
     fn calculate_state_checkpoint(&self) -> Result<H256, Error> {
         let account_root = self.calculate_root()?;
         let account_count = self.get_account_count()?;
-        Ok(calculate_state_checkpoint(&account_root, account_count).into())
+        Ok(calculate_state_checkpoint(&account_root, account_count))
     }
 }

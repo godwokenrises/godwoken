@@ -10,7 +10,7 @@ use gw_types::{
 pub mod always_success;
 pub mod secp256k1;
 
-use crate::error::LockAlgorithmError;
+use crate::{error::LockAlgorithmError, RollupContext};
 
 pub trait LockAlgorithm {
     fn verify_withdrawal_signature(
@@ -22,7 +22,7 @@ pub trait LockAlgorithm {
 
     fn verify_tx(
         &self,
-        rollup_type_hash: H256,
+        ctx: &RollupContext,
         sender_script: Script,
         receiver_script: Script,
         tx: L2Transaction,

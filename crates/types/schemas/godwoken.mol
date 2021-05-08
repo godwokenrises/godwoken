@@ -38,6 +38,7 @@ table RollupConfig {
     required_staking_capacity: Uint64,
     challenge_maturity_blocks: Uint64,
     finality_blocks: Uint64,
+    compatible_chain_id: Uint32,
     reward_burn_rate: byte, // * reward_burn_rate / 100
     allowed_eoa_type_hashes: Byte32Vec, // list of script code_hash allowed an EOA(external owned account) to use
     allowed_contract_type_hashes: Byte32Vec, // list of script code_hash allowed a contract account to use

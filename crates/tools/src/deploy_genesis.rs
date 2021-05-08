@@ -45,7 +45,8 @@ pub struct UserRollupConfig {
     pub required_staking_capacity: u64,
     pub challenge_maturity_blocks: u64,
     pub finality_blocks: u64,
-    pub reward_burn_rate: u8, // * reward_burn_rate / 100
+    pub reward_burn_rate: u8,     // * reward_burn_rate / 100
+    pub compatible_chain_id: u32, // chain id for this rollup
     pub allowed_eoa_type_hashes: Vec<H256>,
 }
 
@@ -301,6 +302,7 @@ pub fn deploy_genesis(
             .map(|hash| GwPack::pack(&hash)),
     );
     let rollup_config = RollupConfig::new_builder()
+        .compatible_chain_id(GwPack::pack(&user_rollup_config.compatible_chain_id))
         .l1_sudt_script_type_hash(GwPack::pack(&user_rollup_config.l1_sudt_script_type_hash))
         .custodian_script_type_hash(GwPack::pack(
             &deployment_result.custodian_lock.script_type_hash,

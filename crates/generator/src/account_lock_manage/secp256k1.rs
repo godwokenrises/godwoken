@@ -1,5 +1,5 @@
 use super::LockAlgorithm;
-use crate::error::LockAlgorithmError;
+use crate::{error::LockAlgorithmError, RollupContext};
 use gw_common::blake2b::new_blake2b;
 use gw_common::H256;
 use gw_types::prelude::*;
@@ -25,13 +25,17 @@ pub struct Secp256k1;
 impl LockAlgorithm for Secp256k1 {
     fn verify_tx(
         &self,
-        rollup_type_hash: H256,
+        ctx: &RollupContext,
         sender_script: Script,
         receiver_script: Script,
         tx: L2Transaction,
     ) -> Result<bool, LockAlgorithmError> {
-        let message =
-            calc_godwoken_signing_message(&rollup_type_hash, &sender_script, &receiver_script, &tx);
+        let message = calc_godwoken_signing_message(
+            &ctx.rollup_script_hash,
+            &sender_script,
+            &receiver_script,
+            &tx,
+        );
 
         self.verify_withdrawal_signature(sender_script.args().unpack(), tx.signature(), message)
     }
@@ -127,12 +131,16 @@ impl Secp256k1Eth {
 impl LockAlgorithm for Secp256k1Eth {
     fn verify_tx(
         &self,
-        rollup_type_hash: H256,
+        ctx: &RollupContext,
         sender_script: Script,
         receiver_script: Script,
         tx: L2Transaction,
     ) -> Result<bool, LockAlgorithmError> {
-        if let Some(rlp_data) = try_assemble_polyjuice_args(tx.raw(), receiver_script.clone()) {
+        if let Some(rlp_data) = try_assemble_polyjuice_args(
+            ctx.rollup_config.compatible_chain_id().unpack(),
+            tx.raw(),
+            receiver_script.clone(),
+        ) {
             let mut hasher = Keccak256::new();
             hasher.update(&rlp_data);
             let buf = hasher.finalize();
@@ -146,8 +154,12 @@ impl LockAlgorithm for Secp256k1Eth {
             );
         }
 
-        let message =
-            calc_godwoken_signing_message(&rollup_type_hash, &sender_script, &receiver_script, &tx);
+        let message = calc_godwoken_signing_message(
+            &ctx.rollup_script_hash,
+            &sender_script,
+            &receiver_script,
+            &tx,
+        );
         self.verify_withdrawal_signature(sender_script.args().unpack(), tx.signature(), message)
     }
 
@@ -185,13 +197,17 @@ pub struct Secp256k1Tron;
 impl LockAlgorithm for Secp256k1Tron {
     fn verify_tx(
         &self,
-        rollup_type_hash: H256,
+        ctx: &RollupContext,
         sender_script: Script,
         receiver_script: Script,
         tx: L2Transaction,
     ) -> Result<bool, LockAlgorithmError> {
-        let message =
-            calc_godwoken_signing_message(&rollup_type_hash, &sender_script, &receiver_script, &tx);
+        let message = calc_godwoken_signing_message(
+            &ctx.rollup_script_hash,
+            &sender_script,
+            &receiver_script,
+            &tx,
+        );
 
         self.verify_withdrawal_signature(sender_script.args().unpack(), tx.signature(), message)
     }
@@ -260,7 +276,11 @@ fn calc_godwoken_signing_message(
     )
 }
 
-fn try_assemble_polyjuice_args(raw_tx: RawL2Transaction, receiver_script: Script) -> Option<Bytes> {
+fn try_assemble_polyjuice_args(
+    rollup_chain_id: u32,
+    raw_tx: RawL2Transaction,
+    receiver_script: Script,
+) -> Option<Bytes> {
     let args: Bytes = raw_tx.args().unpack();
     if args.len() < 52 {
         return None;
@@ -324,8 +344,6 @@ fn try_assemble_polyjuice_args(raw_tx: RawL2Transaction, receiver_script: Script
         return None;
     }
     stream.append(&args[52..52 + payload_length].to_vec());
-    // TODO: read rollup chain id from config cell
-    let rollup_chain_id = 0u32;
     let chain_id: u64 = ((rollup_chain_id as u64) << 32) | (polyjuice_chain_id as u64);
     stream.append(&chain_id);
     stream.append(&0u8);
@@ -400,8 +418,12 @@ mod tests {
         let receiver_script = Script::new_builder()
             .args(Bytes::from(receiver_args).pack())
             .build();
+        let ctx = RollupContext {
+            rollup_script_hash: Default::default(),
+            rollup_config: Default::default(),
+        };
         let result = eth
-            .verify_tx(H256::zero(), sender_script, receiver_script, tx)
+            .verify_tx(&ctx, sender_script, receiver_script, tx)
             .expect("verify signature");
         assert!(result);
     }
@@ -457,8 +479,12 @@ mod tests {
         let receiver_script = Script::new_builder()
             .args(Bytes::from(receiver_args).pack())
             .build();
+        let ctx = RollupContext {
+            rollup_script_hash: Default::default(),
+            rollup_config: Default::default(),
+        };
         let result = eth
-            .verify_tx(H256::zero(), sender_script, receiver_script, tx)
+            .verify_tx(&ctx, sender_script, receiver_script, tx)
             .expect("verify signature");
         assert!(result);
     }
@@ -508,8 +534,12 @@ mod tests {
         let receiver_script = Script::new_builder()
             .args(Bytes::from(receiver_args).pack())
             .build();
+        let ctx = RollupContext {
+            rollup_script_hash: Default::default(),
+            rollup_config: Default::default(),
+        };
         let result = eth
-            .verify_tx(H256::zero(), sender_script, receiver_script, tx)
+            .verify_tx(&ctx, sender_script, receiver_script, tx)
             .expect("verify signature");
         assert!(result);
     }
@@ -545,8 +575,12 @@ mod tests {
         let receiver_script = Script::new_builder()
             .args(Bytes::from(receiver_args).pack())
             .build();
+        let ctx = RollupContext {
+            rollup_script_hash: Default::default(),
+            rollup_config: Default::default(),
+        };
         let result = eth
-            .verify_tx(H256::zero(), sender_script, receiver_script, tx)
+            .verify_tx(&ctx, sender_script, receiver_script, tx)
             .expect("verify signature");
         assert!(result);
     }
