@@ -25,8 +25,7 @@ pub fn to_result<T: DeserializeOwned>(output: Output) -> Result<T> {
 /// TODO accept fee rate args
 fn calculate_required_tx_fee(tx_size: usize) -> u64 {
     // tx_size * KB / MIN_FEE_RATE
-    // TODO fix me
-    tx_size as u64 + 1_00000000
+    tx_size as u64
 }
 
 /// Add fee cell to tx skeleton
@@ -39,17 +38,40 @@ pub async fn fill_tx_fee(
 
     let tx_size = tx_skeleton.tx_in_block_size()?;
     let paid_fee: u64 = tx_skeleton.calculate_fee()?;
-    let taken_outpoints = tx_skeleton.taken_outpoints()?;
-    // calculate required fee, we assume always need a change cell to simplify the code
-    let required_fee =
-        (calculate_required_tx_fee(tx_size) + CHANGE_CELL_CAPACITY).saturating_sub(paid_fee);
+    let mut required_fee = calculate_required_tx_fee(tx_size).saturating_sub(paid_fee);
+    if 0 == required_fee {
+        return Ok(());
+    }
 
-    // get payment cells
-    if required_fee > 0 {
+    let estimate_tx_size_with_change = |tx_skeleton: &mut TransactionSkeleton| -> Result<usize> {
+        let change_cell = CellOutput::new_builder()
+            .lock(lock_script.clone())
+            .capacity(CHANGE_CELL_CAPACITY.pack())
+            .build();
+
+        tx_skeleton
+            .outputs_mut()
+            .push((change_cell, Default::default()));
+
+        let tx_size = tx_skeleton.tx_in_block_size()?;
+        tx_skeleton.outputs_mut().pop();
+
+        Ok(tx_size)
+    };
+
+    // calculate required fee, we assume always need a change cell to simplify the code
+    required_fee += CHANGE_CELL_CAPACITY;
+
+    let mut change_capacity = 0;
+    while required_fee > 0 {
+        // to filter used input cells
+        let taken_outpoints = tx_skeleton.taken_outpoints()?;
+        // get payment cells
         let cells = rpc_client
             .query_payment_cells(lock_script.clone(), required_fee, &taken_outpoints)
             .await?;
         assert!(!cells.is_empty(), "need cells to pay fee");
+
         // put cells in tx skeleton
         tx_skeleton
             .inputs_mut()
@@ -59,29 +81,16 @@ pub async fn fill_tx_fee(
                     .build();
                 InputCellInfo { input, cell }
             }));
-    }
 
-    // Generate change cell
-    let change_capacity = {
-        let paid_fee: u64 = tx_skeleton.calculate_fee()?;
-        let tx_size = tx_skeleton.tx_in_block_size()?;
-        // calculate required fee
+        let tx_size = estimate_tx_size_with_change(tx_skeleton)?;
         let tx_fee = calculate_required_tx_fee(tx_size);
+        let max_paid_fee = tx_skeleton
+            .calculate_fee()?
+            .saturating_sub(CHANGE_CELL_CAPACITY);
 
-        log::debug!(
-            "paid fee {}, tx fee {}, result fee {}",
-            paid_fee,
-            calculate_required_tx_fee(tx_size),
-            paid_fee - tx_fee,
-        );
-
-        paid_fee - tx_fee
-    };
-
-    assert!(
-        change_capacity > CHANGE_CELL_CAPACITY,
-        "change capacity must cover the change cell"
-    );
+        required_fee = tx_fee.saturating_sub(max_paid_fee);
+        change_capacity = max_paid_fee + CHANGE_CELL_CAPACITY - tx_fee;
+    }
 
     let change_cell = CellOutput::new_builder()
         .lock(lock_script)
@@ -91,6 +100,7 @@ pub async fn fill_tx_fee(
     tx_skeleton
         .outputs_mut()
         .push((change_cell, Default::default()));
+
     Ok(())
 }
 
