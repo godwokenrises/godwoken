@@ -43,6 +43,8 @@ pub struct GenesisConfig {
     pub rollup_type_hash: H256,
     pub meta_contract_validator_type_hash: H256,
     pub rollup_config: RollupConfig,
+    // For load secp data and use in challenge transaction
+    pub secp_data_dep: CellDep,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -60,8 +62,6 @@ pub struct BlockProducerConfig {
     pub stake_cell_lock_dep: CellDep,
     pub poa_lock_dep: CellDep,
     pub poa_state_dep: CellDep,
-    // For load secp data and use in challenge transaction
-    pub secp_data_dep: CellDep,
     pub wallet_config: WalletConfig,
 }
 

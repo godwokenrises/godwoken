@@ -237,6 +237,7 @@ pub fn deploy_genesis(
         .allowed_eoa_type_hashes(GwPackVec::pack(allowed_eoa_type_hashes))
         .allowed_contract_type_hashes(GwPackVec::pack(allowed_contract_type_hashes))
         .build();
+    let (secp_data, secp_data_dep) = get_secp_data(&mut rpc_client)?;
     let genesis_config = GenesisConfig {
         timestamp,
         meta_contract_validator_type_hash: deployment_result
@@ -245,8 +246,8 @@ pub fn deploy_genesis(
             .clone(),
         rollup_type_hash: rollup_script_hash.clone(),
         rollup_config: rollup_config.clone().into(),
+        secp_data_dep,
     };
-    let (secp_data, _cell_dep) = get_secp_data(&mut rpc_client)?;
     let genesis_with_global_state =
         build_genesis(&genesis_config, secp_data).map_err(|err| err.to_string())?;
 

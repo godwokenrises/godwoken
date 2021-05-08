@@ -96,6 +96,7 @@ pub fn setup_chain_with_account_lock_manage(
         meta_contract_validator_type_hash: Default::default(),
         rollup_config: rollup_config.clone().into(),
         rollup_type_hash: rollup_script_hash.into(),
+        secp_data_dep: Default::default(),
     };
     let genesis_committed_info = L2BlockCommittedInfo::default();
     let backend_manage = build_backend_manage(&rollup_config);

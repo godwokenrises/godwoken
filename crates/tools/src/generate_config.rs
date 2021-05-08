@@ -131,7 +131,6 @@ pub fn generate_config(
         rollup_cell_type_dep,
         deposit_cell_lock_dep,
         stake_cell_lock_dep,
-        secp_data_dep,
         wallet_config,
     });
     let genesis: GenesisConfig = GenesisConfig {
@@ -139,6 +138,7 @@ pub fn generate_config(
         rollup_type_hash,
         meta_contract_validator_type_hash,
         rollup_config,
+        secp_data_dep,
     };
     let eth_account_lock_hash = genesis
         .rollup_config
