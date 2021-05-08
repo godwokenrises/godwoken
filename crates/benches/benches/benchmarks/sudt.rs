@@ -9,6 +9,7 @@ use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    offchain::RunResult,
     packed::BlockInfo,
     packed::{RawL2Transaction, RollupConfig, SUDTArgs, SUDTTransfer, Script},
     prelude::*,
@@ -59,14 +60,14 @@ fn new_block_info(block_producer_id: u32, number: u64, timestamp: u64) -> BlockI
         .build()
 }
 
-fn run_contract<S: State + CodeStore>(
+pub fn run_contract_get_result<S: State + CodeStore>(
     rollup_config: &RollupConfig,
     tree: &mut S,
     from_id: u32,
     to_id: u32,
     args: Bytes,
     block_info: &BlockInfo,
-) -> Result<Vec<u8>, TransactionError> {
+) -> Result<RunResult, TransactionError> {
     let raw_tx = RawL2Transaction::new_builder()
         .from_id(from_id.pack())
         .to_id(to_id.pack())
@@ -82,6 +83,19 @@ fn run_contract<S: State + CodeStore>(
     let chain_view = DummyChainStore;
     let run_result = generator.execute_transaction(&chain_view, tree, block_info, &raw_tx)?;
     tree.apply_run_result(&run_result).expect("update state");
+    Ok(run_result)
+}
+
+pub fn run_contract<S: State + CodeStore>(
+    rollup_config: &RollupConfig,
+    tree: &mut S,
+    from_id: u32,
+    to_id: u32,
+    args: Bytes,
+    block_info: &BlockInfo,
+) -> Result<Vec<u8>, TransactionError> {
+    let run_result =
+        run_contract_get_result(rollup_config, tree, from_id, to_id, args, block_info)?;
     Ok(run_result.return_data)
 }
 
@@ -148,6 +162,7 @@ pub fn bench(c: &mut Criterion) {
                 (tree, rollup_config, sudt_id, a_id, b_id, block_info)
             },
             |(mut tree, rollup_config, sudt_id, a_id, b_id, block_info)| {
+                // transfer from A to B
                 let value = 4000u128;
                 let fee = 42u128;
                 let args = SUDTArgs::new_builder()
