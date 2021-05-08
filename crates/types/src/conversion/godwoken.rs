@@ -51,5 +51,4 @@ impl_conversion_for_packed_iterator_pack!(KVPair, KVPairVec);
 impl_conversion_for_packed_iterator_pack!(DepositionRequest, DepositionRequestVec);
 impl_conversion_for_packed_iterator_pack!(WithdrawalRequest, WithdrawalRequestVec);
 impl_conversion_for_packed_iterator_pack!(L2Transaction, L2TransactionVec);
-impl_conversion_for_packed_iterator_pack!(LogItem, LogItemVec);
 impl_conversion_for_packed_iterator_pack!(RawL2Block, RawL2BlockVec);

@@ -71,3 +71,5 @@ impl<'r> Unpack<LeafNode<SMTH256>> for packed::SMTLeafNodeReader<'r> {
     }
 }
 impl_conversion_for_entity_unpack!(LeafNode<SMTH256>, SMTLeafNode);
+
+impl_conversion_for_packed_iterator_pack!(LogItem, LogItemVec);
