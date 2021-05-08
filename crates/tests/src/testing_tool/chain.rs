@@ -1,6 +1,6 @@
 use gw_block_producer::produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult};
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncEvent, SyncParam};
-use gw_common::blake2b::new_blake2b;
+use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BackendConfig, GenesisConfig};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
@@ -189,6 +189,7 @@ pub fn construct_block(
 ) -> anyhow::Result<ProduceBlockResult> {
     let block_producer_id = 0u32;
     let timestamp = 0;
+    let stake_cell_owner_lock_hash = H256::zero();
     let max_withdrawal_capacity = std::u128::MAX;
     let db = chain.store().begin_transaction();
     let generator = chain.generator();
@@ -209,6 +210,7 @@ pub fn construct_block(
         db,
         generator,
         block_producer_id,
+        stake_cell_owner_lock_hash,
         timestamp,
         txs,
         deposition_requests,

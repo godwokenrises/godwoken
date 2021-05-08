@@ -65,7 +65,7 @@ pub async fn generate(
             }
 
             total_amount
-        },
+        }
     );
 
     let custodian_cells = rpc_client
@@ -281,10 +281,8 @@ pub async fn revert(
     }
 
     let withdrawal_lock_dep = block_producer_config.withdrawal_cell_lock_dep.clone();
-    let rollup_config_cell_dep = block_producer_config.rollup_config_cell_dep.clone();
-
     Ok(Some(RevertedWithdrawals {
-        deps: vec![rollup_config_cell_dep.into(), withdrawal_lock_dep.into()],
+        deps: vec![withdrawal_lock_dep.into()],
         inputs: withdrawal_inputs,
         outputs: custodian_outputs,
         witness_args: withdrawal_witness,

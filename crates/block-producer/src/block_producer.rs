@@ -166,7 +166,7 @@ impl BlockProducer {
         let wallet = Wallet::from_config(&config.wallet_config).with_context(|| "init wallet")?;
         let poa = PoA::new(
             rpc_client.clone(),
-            wallet.lock().clone(),
+            wallet.lock_script().clone(),
             config.poa_lock_dep.clone().into(),
             config.poa_state_dep.clone().into(),
         );
@@ -255,6 +255,7 @@ impl BlockProducer {
             db: self.store.begin_transaction(),
             generator: &self.generator,
             block_producer_id,
+            stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
             timestamp,
             txs,
             deposition_requests: deposit_cells.iter().map(|d| &d.request).cloned().collect(),
@@ -288,7 +289,11 @@ impl BlockProducer {
         // send transaction
         match self.rpc_client.send_transaction(tx).await {
             Ok(tx_hash) => {
-                log::info!("\nSubmitted l2 block {} in tx {:?}\n", number, tx_hash);
+                log::info!(
+                    "\nSubmitted l2 block {} in tx {}\n",
+                    number,
+                    hex::encode(tx_hash.as_slice())
+                );
             }
             Err(err) => {
                 log::error!("Submitting l2 block error: {}", err);
@@ -320,6 +325,10 @@ impl BlockProducer {
         tx_skeleton
             .cell_deps_mut()
             .push(self.config.rollup_cell_type_dep.clone().into());
+        // rollup config cell
+        tx_skeleton
+            .cell_deps_mut()
+            .push(self.config.rollup_config_cell_dep.clone().into());
         // deposit lock dep
         if !deposit_cells.is_empty() {
             let cell_dep: CellDep = self.config.deposit_cell_lock_dep.clone().into();
@@ -437,7 +446,7 @@ impl BlockProducer {
             &block,
             &self.config,
             &self.rpc_client,
-            self.wallet.lock().to_owned(),
+            self.wallet.lock_script().to_owned(),
         )
         .await?;
         tx_skeleton.cell_deps_mut().extend(generated_stake.deps);
@@ -502,7 +511,7 @@ impl BlockProducer {
         fill_tx_fee(
             &mut tx_skeleton,
             &self.rpc_client,
-            self.wallet.lock().to_owned(),
+            self.wallet.lock_script().to_owned(),
         )
         .await?;
         debug_assert_eq!(

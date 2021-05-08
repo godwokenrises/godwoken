@@ -36,7 +36,7 @@ impl Wallet {
         Ok(wallet)
     }
 
-    pub fn lock(&self) -> &Script {
+    pub fn lock_script(&self) -> &Script {
         &self.lock
     }
 

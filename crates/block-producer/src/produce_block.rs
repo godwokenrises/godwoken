@@ -37,6 +37,7 @@ pub struct ProduceBlockParam<'a> {
     pub db: StoreTransaction,
     pub generator: &'a Generator,
     pub block_producer_id: u32,
+    pub stake_cell_owner_lock_hash: H256,
     pub timestamp: u64,
     pub txs: Vec<L2Transaction>,
     pub deposition_requests: Vec<DepositionRequest>,
@@ -62,6 +63,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         parent_block,
         rollup_config_hash,
         max_withdrawal_capacity,
+        stake_cell_owner_lock_hash,
     } = param;
     let rollup_context = generator.rollup_context();
     let parent_block_number: u64 = parent_block.raw().number().unpack();
@@ -249,6 +251,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
     let raw_block = RawL2Block::new_builder()
         .number(number.pack())
         .block_producer_id(block_producer_id.pack())
+        .stake_cell_owner_lock_hash(stake_cell_owner_lock_hash.pack())
         .timestamp(timestamp.pack())
         .parent_block_hash(parent_block_hash.pack())
         .post_account(post_account.clone())
