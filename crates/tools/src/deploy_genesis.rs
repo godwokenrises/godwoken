@@ -116,6 +116,128 @@ pub struct GenesisDeploymentResult {
     pub rollup_config_cell_dep: ckb_jsonrpc_types::CellDep,
 }
 
+struct DeployContext<'a> {
+    privkey_path: &'a Path,
+    owner_address: &'a Address,
+    genesis_info: &'a GenesisInfo,
+    deployment_result: &'a ScriptsDeploymentResult,
+}
+
+impl<'a> DeployContext<'a> {
+    fn deploy(
+        &mut self,
+        rpc_client: &mut HttpRpcClient,
+        mut outputs: Vec<ckb_packed::CellOutput>,
+        mut outputs_data: Vec<Bytes>,
+        mut deps: Vec<ckb_packed::CellDep>,
+        first_cell_input: Option<&ckb_packed::CellInput>,
+        witness_0: ckb_packed::WitnessArgs,
+    ) -> Result<H256, String> {
+        let tx_fee = ONE_CKB;
+        let total_output_capacity: u64 = outputs
+            .iter()
+            .map(|output| {
+                let value: u64 = CKBUnpack::unpack(&output.capacity());
+                value
+            })
+            .sum();
+        let total_capacity = total_output_capacity + tx_fee;
+        let tip_number = rpc_client.get_tip_block_number()?;
+        let max_mature_number = get_max_mature_number(rpc_client)?;
+        let (inputs, total_input_capacity) = collect_live_cells(
+            rpc_client.url(),
+            self.owner_address.to_string().as_str(),
+            max_mature_number,
+            tip_number,
+            total_capacity,
+        )?;
+        if let Some(first_input) = first_cell_input {
+            if inputs[0].as_slice() != first_input.as_slice() {
+                return Err("first input cell changed".to_string());
+            }
+        }
+        // collect_live_cells will ensure `total_input_capacity >= total_capacity`.
+        let rest_capacity = total_input_capacity - total_capacity;
+        let max_tx_fee_str = if rest_capacity >= MIN_SECP_CELL_CAPACITY {
+            outputs.push(
+                ckb_packed::CellOutput::new_builder()
+                    .lock(ckb_packed::Script::from(self.owner_address.payload()))
+                    .capacity(CKBPack::pack(&rest_capacity))
+                    .build(),
+            );
+            outputs_data.push(Default::default());
+            "1.0"
+        } else {
+            "62.0"
+        };
+        let outputs_data: Vec<ckb_packed::Bytes> = outputs_data
+            .iter()
+            .map(|data| CKBPack::pack(data))
+            .collect();
+        deps.extend_from_slice(&[
+            self.deployment_result
+                .state_validator
+                .cell_dep
+                .clone()
+                .into(),
+            self.genesis_info.sighash_dep(),
+        ]);
+        let tx: TransactionView = TransactionBuilder::default()
+            .cell_deps(deps)
+            .set_inputs(inputs)
+            .set_outputs(outputs)
+            .set_outputs_data(outputs_data)
+            .set_witnesses(vec![CKBPack::pack(&witness_0.as_bytes())])
+            .build();
+
+        // 7. build ckb-cli tx and sign
+        let tx_file = NamedTempFile::new().map_err(|err| err.to_string())?;
+        let tx_path_str = tx_file.path().to_str().unwrap();
+        let _output = run_cmd(&[
+            "--url",
+            rpc_client.url(),
+            "tx",
+            "init",
+            "--tx-file",
+            tx_path_str,
+        ])?;
+        let tx_json = rpc_types::Transaction::from(tx.data());
+        let tx_body: serde_json::Value = serde_json::to_value(&tx_json).unwrap();
+        let cli_tx_content = std::fs::read_to_string(tx_path_str).unwrap();
+        let mut cli_tx: serde_json::Value = serde_json::from_str(&cli_tx_content).unwrap();
+        cli_tx["transaction"] = tx_body;
+        let cli_tx_content = serde_json::to_string_pretty(&cli_tx).unwrap();
+        std::fs::write(tx_path_str, cli_tx_content.as_bytes()).map_err(|err| err.to_string())?;
+        let _output = run_cmd(&[
+            "--url",
+            rpc_client.url(),
+            "tx",
+            "sign-inputs",
+            "--privkey-path",
+            self.privkey_path.to_str().expect("non-utf8 file path"),
+            "--tx-file",
+            tx_path_str,
+            "--add-signatures",
+        ])?;
+
+        // 8. send and then wait for tx
+        let send_output = run_cmd(&[
+            "--url",
+            rpc_client.url(),
+            "tx",
+            "send",
+            "--tx-file",
+            tx_path_str,
+            "--max-tx-fee",
+            max_tx_fee_str,
+            "--skip-check",
+        ])?;
+        let tx_hash = H256::from_str(&send_output.trim()[2..]).map_err(|err| err.to_string())?;
+        wait_for_tx(rpc_client, &tx_hash, 120)?;
+        Ok(tx_hash)
+    }
+}
+
 pub fn deploy_genesis(
     privkey_path: &Path,
     ckb_rpc_url: &str,
@@ -156,47 +278,13 @@ pub fn deploy_genesis(
     let owner_address = Address::new(network_type, owner_address_payload.clone());
     let owner_address_string = owner_address.to_string();
     let max_mature_number = get_max_mature_number(&mut rpc_client)?;
-    let tip_number = rpc_client.get_tip_block_number()?;
     let genesis_block: BlockView = rpc_client
         .get_block_by_number(0)?
         .expect("Can not get genesis block?")
         .into();
     let genesis_info = GenesisInfo::from_block(&genesis_block)?;
 
-    // millisecond
-    let timestamp = timestamp.unwrap_or_else(|| {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("timestamp")
-            .as_millis() as u64
-    });
-
-    let first_cell_input: ckb_packed::CellInput = get_live_cells(
-        rpc_client.url(),
-        owner_address_string.as_str(),
-        max_mature_number,
-        None,
-        None,
-        Some(1),
-    )?
-    .into_iter()
-    .next()
-    .map(|(input, _)| input)
-    .ok_or_else(|| format!("No live cell found for address: {}", owner_address_string))?;
-
-    let rollup_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 0);
-    let poa_setup_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 2);
-    let poa_data_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 3);
-    // calculate by: blake2b_hash(firstInput + rullupCell.outputIndex)
-    let rollup_type_script = ckb_packed::Script::new_builder()
-        .code_hash(CKBPack::pack(&TYPE_ID_CODE_HASH))
-        .hash_type(ScriptHashType::Type.into())
-        .args(CKBPack::pack(&rollup_cell_type_id))
-        .build();
-    let rollup_script_hash: H256 = CKBUnpack::unpack(&rollup_type_script.calc_script_hash());
-    log::info!("rollup_script_hash: {:#x}", rollup_script_hash);
-
-    // 1. build genesis block
+    // deploy rollup config cell
     let allowed_contract_type_hashes: Vec<gw_packed::Byte32> = vec![
         GwPack::pack(&deployment_result.meta_contract_validator.script_type_hash),
         GwPack::pack(&deployment_result.l2_sudt_validator.script_type_hash),
@@ -239,6 +327,81 @@ pub fn deploy_genesis(
         .allowed_contract_type_hashes(GwPackVec::pack(allowed_contract_type_hashes))
         .build();
     let (secp_data, secp_data_dep) = get_secp_data(&mut rpc_client)?;
+    let mut deploy_context = DeployContext {
+        privkey_path: &privkey_path,
+        owner_address: &owner_address,
+        genesis_info: &genesis_info,
+        deployment_result: &deployment_result,
+    };
+    // FIXME: Right now, to update a rollup config, deploy an new one.
+    let (rollup_config_output, rollup_config_data): (ckb_packed::CellOutput, Bytes) = {
+        let data = rollup_config.as_bytes();
+        let lock_script = ckb_packed::Script::new_builder()
+            .code_hash(CKBPack::pack(&[0u8; 32]))
+            .hash_type(ScriptHashType::Data.into())
+            .build();
+        let output = ckb_packed::CellOutput::new_builder()
+            .lock(lock_script)
+            .build();
+        let output = fit_output_capacity(output, data.len());
+        (output, data)
+    };
+    let rollup_config_cell_dep = {
+        let tx_hash = deploy_context.deploy(
+            &mut rpc_client,
+            vec![rollup_config_output],
+            vec![rollup_config_data],
+            Default::default(),
+            None,
+            Default::default(),
+        )?;
+        let out_point = ckb_packed::OutPoint::new_builder()
+            .tx_hash(CKBPack::pack(&tx_hash))
+            .index(CKBPack::pack(&0u32))
+            .build();
+
+        ckb_packed::CellDep::new_builder()
+            .out_point(out_point)
+            .dep_type(DepType::Code.into())
+            .build()
+    };
+
+    // millisecond
+    let timestamp = timestamp.unwrap_or_else(|| {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_millis() as u64
+    });
+
+    let first_cell_input: ckb_packed::CellInput = get_live_cells(
+        rpc_client.url(),
+        owner_address_string.as_str(),
+        max_mature_number,
+        None,
+        None,
+        Some(1),
+    )?
+    .into_iter()
+    .next()
+    .map(|(input, _)| input)
+    .ok_or_else(|| format!("No live cell found for address: {}", owner_address_string))?;
+
+    let rollup_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 0);
+    let poa_setup_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 1);
+    let poa_data_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 2);
+    // calculate by: blake2b_hash(firstInput + rullupCell.outputIndex)
+    let rollup_type_script = ckb_packed::Script::new_builder()
+        .code_hash(CKBPack::pack(
+            &deployment_result.state_validator.script_type_hash,
+        ))
+        .hash_type(ScriptHashType::Type.into())
+        .args(CKBPack::pack(&rollup_cell_type_id))
+        .build();
+    let rollup_script_hash: H256 = CKBUnpack::unpack(&rollup_type_script.calc_script_hash());
+    log::info!("rollup_script_hash: {:#x}", rollup_script_hash);
+
+    // 1. build genesis block
     let genesis_config = GenesisConfig {
         timestamp,
         meta_contract_validator_type_hash: deployment_result
@@ -273,19 +436,6 @@ pub fn deploy_genesis(
         let output = ckb_packed::CellOutput::new_builder()
             .lock(lock_script)
             .type_(CKBPack::pack(&Some(rollup_type_script.clone())))
-            .build();
-        let output = fit_output_capacity(output, data.len());
-        (output, data)
-    };
-    // FIXME: Right now, to update a rollup config, deploy an new one.
-    let (rollup_config_output, rollup_config_data): (ckb_packed::CellOutput, Bytes) = {
-        let data = rollup_config.as_bytes();
-        let lock_script = ckb_packed::Script::new_builder()
-            .code_hash(CKBPack::pack(&[0u8; 32]))
-            .hash_type(ScriptHashType::Data.into())
-            .build();
-        let output = ckb_packed::CellOutput::new_builder()
-            .lock(lock_script)
             .build();
         let output = fit_output_capacity(output, data.len());
         (output, data)
@@ -342,6 +492,7 @@ pub fn deploy_genesis(
         let output = fit_output_capacity(output, data.len());
         (output, data)
     };
+
     // 5. put genesis block in rollup'cell witness
     let witness_0: ckb_packed::WitnessArgs = {
         let output_type = genesis_with_global_state.genesis.as_bytes();
@@ -350,129 +501,19 @@ pub fn deploy_genesis(
             .build()
     };
 
-    // 6. build transaction
-    let tx_fee = ONE_CKB;
-    let total_output_capacity: u64 = [
-        &rollup_output,
-        &rollup_config_output,
-        &poa_setup_output,
-        &poa_data_output,
-    ]
-    .iter()
-    .map(|output| {
-        let value: u64 = CKBUnpack::unpack(&output.capacity());
-        value
-    })
-    .sum();
-    let total_capacity = total_output_capacity + tx_fee;
-    let (inputs, total_input_capacity) = collect_live_cells(
-        rpc_client.url(),
-        owner_address_string.as_str(),
-        max_mature_number,
-        tip_number,
-        total_capacity,
+    // 6. deploy genesis rollup cell
+    let outputs_data = vec![rollup_data, poa_setup_data, poa_data_data];
+    let outputs = vec![rollup_output, poa_setup_output, poa_data_output];
+    let tx_hash = deploy_context.deploy(
+        &mut rpc_client,
+        outputs,
+        outputs_data,
+        vec![rollup_config_cell_dep.clone()],
+        Some(&first_cell_input),
+        witness_0,
     )?;
-    if inputs[0].as_slice() != first_cell_input.as_slice() {
-        return Err("first input cell changed".to_string());
-    }
-    let mut raw_outputs_data = vec![
-        rollup_data,
-        rollup_config_data,
-        poa_setup_data,
-        poa_data_data,
-    ];
-    let mut outputs = vec![
-        rollup_output,
-        rollup_config_output,
-        poa_setup_output,
-        poa_data_output,
-    ];
-    // collect_live_cells will ensure `total_input_capacity >= total_capacity`.
-    let rest_capacity = total_input_capacity - total_capacity;
-    let max_tx_fee_str = if rest_capacity >= MIN_SECP_CELL_CAPACITY {
-        outputs.push(
-            ckb_packed::CellOutput::new_builder()
-                .lock(ckb_packed::Script::from(&owner_address_payload))
-                .capacity(CKBPack::pack(&rest_capacity))
-                .build(),
-        );
-        raw_outputs_data.push(Default::default());
-        "1.0"
-    } else {
-        "62.0"
-    };
-    let outputs_data: Vec<ckb_packed::Bytes> = raw_outputs_data
-        .iter()
-        .map(|data| CKBPack::pack(data))
-        .collect();
-    let tx: TransactionView = TransactionBuilder::default()
-        .cell_deps(vec![
-            deployment_result.state_validator.cell_dep.into(),
-            genesis_info.sighash_dep(),
-        ])
-        .set_inputs(inputs)
-        .set_outputs(outputs)
-        .set_outputs_data(outputs_data)
-        .set_witnesses(vec![CKBPack::pack(&witness_0.as_bytes())])
-        .build();
 
-    // 7. build ckb-cli tx and sign
-    let tx_file = NamedTempFile::new().map_err(|err| err.to_string())?;
-    let tx_path_str = tx_file.path().to_str().unwrap();
-    let _output = run_cmd(&[
-        "--url",
-        rpc_client.url(),
-        "tx",
-        "init",
-        "--tx-file",
-        tx_path_str,
-    ])?;
-    let tx_json = rpc_types::Transaction::from(tx.data());
-    let tx_body: serde_json::Value = serde_json::to_value(&tx_json).unwrap();
-    let cli_tx_content = std::fs::read_to_string(tx_path_str).unwrap();
-    let mut cli_tx: serde_json::Value = serde_json::from_str(&cli_tx_content).unwrap();
-    cli_tx["transaction"] = tx_body;
-    let cli_tx_content = serde_json::to_string_pretty(&cli_tx).unwrap();
-    std::fs::write(tx_path_str, cli_tx_content.as_bytes()).map_err(|err| err.to_string())?;
-    let _output = run_cmd(&[
-        "--url",
-        rpc_client.url(),
-        "tx",
-        "sign-inputs",
-        "--privkey-path",
-        privkey_path.to_str().expect("non-utf8 file path"),
-        "--tx-file",
-        tx_path_str,
-        "--add-signatures",
-    ])?;
-
-    // 8. send and then wait for tx
-    let send_output = run_cmd(&[
-        "--url",
-        rpc_client.url(),
-        "tx",
-        "send",
-        "--tx-file",
-        tx_path_str,
-        "--max-tx-fee",
-        max_tx_fee_str,
-        "--skip-check",
-    ])?;
-    let tx_hash = H256::from_str(&send_output.trim()[2..]).map_err(|err| err.to_string())?;
-    wait_for_tx(&mut rpc_client, &tx_hash, 120)?;
-
-    // 9. write genesis deployment result
-    let rollup_config_cell_dep = {
-        let out_point = ckb_packed::OutPoint::new_builder()
-            .tx_hash(CKBPack::pack(&tx_hash))
-            .index(CKBPack::pack(&1u32))
-            .build();
-
-        ckb_packed::CellDep::new_builder()
-            .out_point(out_point)
-            .dep_type(DepType::Code.into())
-            .build()
-    };
+    // 7. write genesis deployment result
     let genesis_deployment_result = GenesisDeploymentResult {
         tx_hash,
         timestamp,
