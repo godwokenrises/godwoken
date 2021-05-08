@@ -23,7 +23,7 @@ impl PolyjuiceArgs {
         let is_create = args[7] == 3u8;
         let gas_limit = u64::from_le_bytes(args[8..16].try_into()?);
         let gas_price = u128::from_le_bytes(args[16..32].try_into()?);
-        let value = u128::from_be_bytes(args[32..48].try_into()?);
+        let value = u128::from_le_bytes(args[32..48].try_into()?);
         let input_size = u32::from_le_bytes(args[48..52].try_into()?);
         let input: Vec<u8> = args[52..(52 + input_size as usize)].to_vec();
         Ok(PolyjuiceArgs {
