@@ -59,13 +59,21 @@ async fn poll_loop(
             let raw_header = block.header().raw();
             let event = if raw_header.parent_hash().as_slice() == tip_hash.as_slice() {
                 // received new layer1 block
-                log::info!("received new layer1 block {}, {:?}", tip_number, tip_hash);
+                log::info!(
+                    "received new layer1 block {}, {}",
+                    tip_number,
+                    hex::encode(tip_hash.as_slice())
+                );
                 ChainEvent::NewBlock {
                     block: block.clone(),
                 }
             } else {
                 // layer1 reverted
-                log::info!("layer1 reverted {}, {:?}", tip_number, tip_hash);
+                log::info!(
+                    "layer1 reverted {}, {}",
+                    tip_number,
+                    hex::encode(tip_hash.as_slice())
+                );
                 ChainEvent::Reverted {
                     old_tip: NumberHash::new_builder()
                         .number(tip_number.pack())
