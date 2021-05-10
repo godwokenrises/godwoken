@@ -403,6 +403,7 @@ impl RPCClient {
     }
 
     /// return all lived deposition requests
+    /// NOTICE the returned cells may contains invalid cells.
     pub async fn query_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
         const BLOCKS_TO_SEARCH: u64 = 100;
         const LIMIT: u32 = 100;
@@ -495,41 +496,6 @@ impl RPCClient {
                     continue;
                 }
             };
-
-            let script = request.script();
-            if script.hash_type() != ScriptHashType::Type.into() {
-                log::debug!("Invalid deposit: unexpected hash_type: Data");
-                continue;
-            }
-            if self
-                .rollup_context
-                .rollup_config
-                .allowed_eoa_type_hashes()
-                .into_iter()
-                .all(|type_hash| script.code_hash() != type_hash)
-            {
-                log::debug!(
-                    "Invalid deposit: unknown code_hash: {:?}",
-                    hex::encode(script.code_hash().as_slice())
-                );
-                continue;
-            }
-            let args: Bytes = script.args().unpack();
-            if args.len() < 32 {
-                log::debug!(
-                    "Invalid deposit: expect rollup_type_hash in the args but args is too short, len: {}",
-                    args.len()
-                );
-                continue;
-            }
-            if &args[..32] != self.rollup_context.rollup_script_hash.as_slice() {
-                log::debug!(
-                    "Invalid deposit: rollup_type_hash mismatch, rollup_script_hash: {}, args[..32]: {}",
-                    hex::encode(self.rollup_context.rollup_script_hash.as_slice()),
-                    hex::encode(&args[..32]),
-                );
-                continue;
-            }
 
             let info = DepositInfo { cell, request };
             deposit_infos.push(info);

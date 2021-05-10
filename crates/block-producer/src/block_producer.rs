@@ -232,7 +232,9 @@ impl BlockProducer {
             .as_millis() as u64;
 
         // get deposit cells
-        let deposit_cells = self.rpc_client.query_deposit_cells().await?;
+        // check deposit cells again to prevent upstream components errors.
+        let deposit_cells =
+            self.sanitize_deposit_cells(self.rpc_client.query_deposit_cells().await?);
 
         // get txs & withdrawal requests from mem pool
         let mut txs = Vec::new();
@@ -448,5 +450,98 @@ impl BlockProducer {
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
         log::debug!("final tx size: {}", tx.as_slice().len());
         Ok(tx)
+    }
+
+    // check deposit cells again to prevent upstream components errors.
+    fn sanitize_deposit_cells(&self, unsanitize_deposits: Vec<DepositInfo>) -> Vec<DepositInfo> {
+        let ctx = self.generator.rollup_context();
+        let hash_type = ScriptHashType::Type.into();
+        let mut deposit_cells = Vec::with_capacity(unsanitize_deposits.len());
+        for cell in unsanitize_deposits {
+            // check deposit lock
+            // the lock should be correct unless the upstream ckb-indexer has bugs
+            {
+                let lock = cell.cell.output.lock();
+                if lock.code_hash() != ctx.rollup_config.deposition_script_type_hash()
+                    || lock.hash_type() != hash_type
+                {
+                    log::error!(
+                        "Invalid deposit lock, expect code_hash: {}, hash_type: Type, got: {}, {}",
+                        ctx.rollup_config.deposition_script_type_hash(),
+                        lock.code_hash(),
+                        lock.hash_type()
+                    );
+                    continue;
+                }
+                let args: Bytes = lock.args().unpack();
+                if args.len() < 32 {
+                    log::error!("Invalid deposit args, expect len: 32, got: {}", args.len());
+                    continue;
+                }
+                if &args[..32] != ctx.rollup_script_hash.as_slice() {
+                    log::error!(
+                        "Invalid deposit args, expect rollup_script_hash: {}, got: {}",
+                        hex::encode(ctx.rollup_script_hash.as_slice()),
+                        hex::encode(&args[..32])
+                    );
+                    continue;
+                }
+            }
+            // check sUDT
+            // sUDT may be invalid, this may caused by malicious user
+            if let Some(type_) = cell.cell.output.type_().to_opt() {
+                if type_.code_hash() != ctx.rollup_config.l1_sudt_script_type_hash()
+                    || type_.hash_type() != hash_type
+                {
+                    log::debug!(
+                        "Invalid deposit sUDT, expect code_hash: {}, hash_type: Type, got: {}, {}",
+                        ctx.rollup_config.l1_sudt_script_type_hash(),
+                        type_.code_hash(),
+                        type_.hash_type()
+                    );
+                    continue;
+                }
+            }
+
+            // check request
+            // request deposit account maybe invalid, this may caused by malicious user
+            {
+                let script = cell.request.script();
+                if script.hash_type() != ScriptHashType::Type.into() {
+                    log::debug!("Invalid deposit account script: unexpected hash_type: Data");
+                    continue;
+                }
+                if ctx
+                    .rollup_config
+                    .allowed_eoa_type_hashes()
+                    .into_iter()
+                    .all(|type_hash| script.code_hash() != type_hash)
+                {
+                    log::debug!(
+                        "Invalid deposit account script: unknown code_hash: {:?}",
+                        hex::encode(script.code_hash().as_slice())
+                    );
+                    continue;
+                }
+                let args: Bytes = script.args().unpack();
+                if args.len() < 32 {
+                    log::debug!(
+                        "Invalid deposit account args, expect len: 32, got: {}",
+                        args.len()
+                    );
+                    continue;
+                }
+                if &args[..32] != ctx.rollup_script_hash.as_slice() {
+                    log::debug!(
+                        "Invalid deposit account args, expect rollup_script_hash: {}, got: {}",
+                        hex::encode(ctx.rollup_script_hash.as_slice()),
+                        hex::encode(&args[..32])
+                    );
+                    continue;
+                }
+            }
+            deposit_cells.push(cell);
+        }
+        deposit_cells
     }
 }
