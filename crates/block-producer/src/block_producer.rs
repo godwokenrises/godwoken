@@ -289,7 +289,11 @@ impl BlockProducer {
         // send transaction
         match self.rpc_client.send_transaction(tx).await {
             Ok(tx_hash) => {
-                log::info!("\nSubmitted l2 block {} in tx {:?}\n", number, tx_hash);
+                log::info!(
+                    "\nSubmitted l2 block {} in tx {}\n",
+                    number,
+                    hex::encode(tx_hash.as_slice())
+                );
             }
             Err(err) => {
                 log::error!("Submitting l2 block error: {}", err);
