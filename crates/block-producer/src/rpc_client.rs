@@ -680,7 +680,7 @@ impl RPCClient {
             )?;
 
             if cells.last_cursor.is_empty() {
-                return Err(anyhow!("no finalized custodian cell"));
+                return Err(anyhow!("no custodian cell found"));
             }
             cursor = Some(cells.last_cursor);
 
