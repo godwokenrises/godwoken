@@ -46,21 +46,27 @@ fn generate_custodian_cells(
     deposit_cells
         .iter()
         .map(|deposit_info| {
-            let lock_args = {
+            let lock_args: Bytes = {
                 let deposition_lock_args = DepositionLockArgs::new_unchecked(
                     deposit_info.cell.output.lock().args().unpack(),
                 );
 
-                CustodianLockArgs::new_builder()
+                let custodian_lock_args = CustodianLockArgs::new_builder()
                     .deposition_block_hash(block_hash.clone())
                     .deposition_block_number(block_number.clone())
                     .deposition_lock_args(deposition_lock_args)
-                    .build()
+                    .build();
+
+                let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
+                rollup_type_hash
+                    .chain(custodian_lock_args.as_slice().iter())
+                    .cloned()
+                    .collect()
             };
             let lock = Script::new_builder()
                 .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
                 .hash_type(ScriptHashType::Type.into())
-                .args(lock_args.as_bytes().pack())
+                .args(lock_args.pack())
                 .build();
 
             // use custodian lock
