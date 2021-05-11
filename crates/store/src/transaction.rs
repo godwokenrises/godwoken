@@ -51,6 +51,10 @@ impl StoreTransaction {
         self.inner.commit()
     }
 
+    pub fn rollback(&self) -> Result<(), Error> {
+        self.inner.rollback()
+    }
+
     pub fn setup_chain_id(&self, chain_id: H256) -> Result<(), Error> {
         self.insert_raw(COLUMN_META, META_CHAIN_ID_KEY, chain_id.as_slice())?;
         Ok(())

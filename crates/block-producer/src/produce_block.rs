@@ -202,6 +202,9 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         .collect();
     let post_account_state_root = state.calculate_root()?;
     let post_account_state_count = state.get_account_count()?;
+    // discard all changes
+    drop(state);
+    db.rollback()?;
 
     // assemble block
     let submit_txs = {
@@ -267,6 +270,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         .state_checkpoint_list(state_checkpoint_list.pack())
         .build();
     // generate block fields from current state
+    let state = state_db.account_state_tree()?;
     let kv_state: Vec<(H256, H256)> = touched_keys
         .iter()
         .map(|k| {
@@ -282,6 +286,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         Vec::new()
     } else {
         let account_smt = state_db.account_smt()?;
+
         account_smt
             .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
             .map_err(|err| anyhow!("merkle proof error: {:?}", err))?

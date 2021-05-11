@@ -3,7 +3,7 @@ use anyhow::Result;
 use gw_common::{
     blake2b::new_blake2b,
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
-    smt::{default_store::DefaultStore, H256, SMT},
+    smt::H256,
     state::State,
     CKB_SUDT_SCRIPT_ARGS,
 };
@@ -110,7 +110,7 @@ pub fn build_genesis_from_store(
     let genesis_hash = raw_genesis.hash();
     let (block_root, block_proof) = {
         let block_key = RawL2Block::compute_smt_key(0);
-        let mut smt: SMT<DefaultStore<H256>> = Default::default();
+        let mut smt = db.block_smt()?;
         smt.update(block_key.into(), genesis_hash.into())?;
         let block_proof = smt
             .merkle_proof(vec![block_key.into()])?

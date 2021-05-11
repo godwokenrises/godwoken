@@ -1,6 +1,10 @@
-use crate::{packed, prelude::*};
+use crate::{
+    bytes::Bytes,
+    packed::{self},
+    prelude::*,
+};
 use sparse_merkle_tree::{
-    tree::{BranchNode, LeafNode},
+    tree::{BranchNode, LeafNode, NodeType},
     H256 as SMTH256,
 };
 
@@ -22,13 +26,18 @@ impl Pack<packed::SMTBranchNode> for BranchNode {
     fn pack(&self) -> packed::SMTBranchNode {
         let fork_height = self.fork_height.into();
         let key: [u8; 32] = self.key.into();
-        let node: [u8; 32] = self.node.into();
-        let sibling: [u8; 32] = self.sibling.into();
+        let node_bytes = match self.node_type {
+            NodeType::Pair(l, r) => {
+                let mut buf = l.as_slice().to_vec();
+                buf.extend_from_slice(r.as_slice());
+                Bytes::from(buf)
+            }
+            NodeType::Single(node) => Bytes::from(node.as_slice().to_vec()),
+        };
         packed::SMTBranchNode::new_builder()
             .fork_height(fork_height)
             .key(key.pack())
-            .node(node.pack())
-            .sibling(sibling.pack())
+            .node(node_bytes.pack())
             .build()
     }
 }
@@ -37,13 +46,24 @@ impl<'r> Unpack<BranchNode> for packed::SMTBranchNodeReader<'r> {
     fn unpack(&self) -> BranchNode {
         let fork_height = self.fork_height().into();
         let key: [u8; 32] = self.key().unpack();
-        let node: [u8; 32] = self.node().unpack();
-        let sibling: [u8; 32] = self.sibling().unpack();
+        let node_bytes: Bytes = self.node().unpack();
+        let node_type = if node_bytes.len() == 32 {
+            let mut h: [u8; 32] = [0u8; 32];
+            h.copy_from_slice(&node_bytes);
+            NodeType::Single(h.into())
+        } else if node_bytes.len() == 64 {
+            let mut l = [0u8; 32];
+            let mut r = [0u8; 32];
+            l.copy_from_slice(&node_bytes[..32]);
+            r.copy_from_slice(&node_bytes[32..]);
+            NodeType::Pair(l.into(), r.into())
+        } else {
+            panic!("Invalid BranchNode data");
+        };
         BranchNode {
             fork_height,
             key: key.into(),
-            node: node.into(),
-            sibling: sibling.into(),
+            node_type,
         }
     }
 }
