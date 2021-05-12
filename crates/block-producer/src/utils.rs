@@ -36,13 +36,6 @@ pub async fn fill_tx_fee(
 ) -> Result<()> {
     const CHANGE_CELL_CAPACITY: u64 = 61_00000000;
 
-    let tx_size = tx_skeleton.tx_in_block_size()?;
-    let paid_fee: u64 = tx_skeleton.calculate_fee()?;
-    let mut required_fee = calculate_required_tx_fee(tx_size).saturating_sub(paid_fee);
-    if 0 == required_fee {
-        return Ok(());
-    }
-
     let estimate_tx_size_with_change = |tx_skeleton: &mut TransactionSkeleton| -> Result<usize> {
         let change_cell = CellOutput::new_builder()
             .lock(lock_script.clone())
@@ -59,7 +52,31 @@ pub async fn fill_tx_fee(
         Ok(tx_size)
     };
 
-    // calculate required fee, we assume always need a change cell to simplify the code
+    // calculate required fee
+    // NOTE: Poa will insert a owner cell to inputs if there isn't one in ```fill_poa()```,
+    // so most of time, paid_fee should already cover tx_fee. The first thing we need to do
+    // is try to generate a change output cell.
+    let tx_size = estimate_tx_size_with_change(tx_skeleton)?;
+    let tx_fee = calculate_required_tx_fee(tx_size);
+    let max_paid_fee = tx_skeleton
+        .calculate_fee()?
+        .saturating_sub(CHANGE_CELL_CAPACITY);
+
+    let mut required_fee = tx_fee.saturating_sub(max_paid_fee);
+    if 0 == required_fee {
+        let change_capacity = max_paid_fee + CHANGE_CELL_CAPACITY - tx_fee;
+        let change_cell = CellOutput::new_builder()
+            .lock(lock_script.clone())
+            .capacity(change_capacity.pack())
+            .build();
+
+        tx_skeleton
+            .outputs_mut()
+            .push((change_cell, Default::default()));
+
+        return Ok(());
+    }
+
     required_fee += CHANGE_CELL_CAPACITY;
 
     let mut change_capacity = 0;
