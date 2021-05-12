@@ -287,66 +287,6 @@ impl From<packed::ChallengeWitness> for ChallengeWitness {
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
-pub struct VerifyTransactionWitness {
-    pub raw_l2block: RawL2Block,
-    pub l2tx: L2Transaction,
-    pub kv_state: Vec<KVPair>,
-    pub kv_state_proof: JsonBytes,
-    pub scripts: Vec<Script>,
-    pub return_data_hash: H256,
-    pub tx_proof: JsonBytes,
-}
-
-impl From<VerifyTransactionWitness> for packed::VerifyTransactionWitness {
-    fn from(json: VerifyTransactionWitness) -> packed::VerifyTransactionWitness {
-        let VerifyTransactionWitness {
-            raw_l2block,
-            l2tx,
-            kv_state,
-            kv_state_proof,
-            scripts,
-            return_data_hash,
-            tx_proof,
-        } = json;
-        let kv_pair_vec: Vec<packed::KVPair> = kv_state.into_iter().map(|k| k.into()).collect();
-        let packed_kv_state_vec = packed::KVPairVec::new_builder().set(kv_pair_vec).build();
-        let script_vec: Vec<packed::Script> = scripts.into_iter().map(|s| s.into()).collect();
-        let packed_script_vec = packed::ScriptVec::new_builder().set(script_vec).build();
-
-        packed::VerifyTransactionWitness::new_builder()
-            .raw_l2block(raw_l2block.into())
-            .l2tx(l2tx.into())
-            .kv_state(packed_kv_state_vec)
-            .kv_state_proof(kv_state_proof.into_bytes().pack())
-            .scripts(packed_script_vec)
-            .return_data_hash(return_data_hash.pack())
-            .tx_proof(tx_proof.into_bytes().pack())
-            .build()
-    }
-}
-
-impl From<packed::VerifyTransactionWitness> for VerifyTransactionWitness {
-    fn from(data: packed::VerifyTransactionWitness) -> VerifyTransactionWitness {
-        let kv_state: Vec<KVPair> = data.kv_state().into_iter().map(|k| k.into()).collect();
-        let scripts: Vec<Script> = data.scripts().into_iter().map(|s| s.into()).collect();
-
-        VerifyTransactionWitness {
-            raw_l2block: data.raw_l2block().into(),
-            l2tx: data.l2tx().into(),
-            kv_state,
-            kv_state_proof: JsonBytes::from_bytes(data.kv_state_proof().unpack()),
-            scripts,
-            return_data_hash: {
-                let return_data_hash: [u8; 32] = data.return_data_hash().unpack();
-                return_data_hash.into()
-            },
-            tx_proof: JsonBytes::from_bytes(data.tx_proof().unpack()),
-        }
-    }
-}
-
-#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
-#[serde(rename_all = "snake_case")]
 pub struct L2Block {
     pub raw: RawL2Block,
     pub kv_state: Vec<KVPair>,
@@ -422,6 +362,8 @@ pub struct RawL2Block {
     pub post_account: AccountMerkleState,
     pub submit_transactions: SubmitTransactions,
     pub submit_withdrawals: SubmitWithdrawals,
+    // hash(account_root | account_count) of each withdrawals & transactions
+    pub state_checkpoint_list: Vec<H256>,
 }
 
 impl From<RawL2Block> for packed::RawL2Block {
@@ -436,7 +378,13 @@ impl From<RawL2Block> for packed::RawL2Block {
             post_account,
             submit_transactions,
             submit_withdrawals,
+            state_checkpoint_list,
         } = json;
+
+        let state_checkpoint_list = state_checkpoint_list
+            .into_iter()
+            .map(|checkpoint| checkpoint.pack())
+            .pack();
         packed::RawL2Block::new_builder()
             .number(u64::from(number).pack())
             .parent_block_hash(parent_block_hash.pack())
@@ -447,6 +395,7 @@ impl From<RawL2Block> for packed::RawL2Block {
             .post_account(post_account.into())
             .submit_transactions(submit_transactions.into())
             .submit_withdrawals(submit_withdrawals.into())
+            .state_checkpoint_list(state_checkpoint_list)
             .build()
     }
 }
@@ -456,6 +405,11 @@ impl From<packed::RawL2Block> for RawL2Block {
         let number: u64 = raw_l2_block.number().unpack();
         let block_producer_id: u32 = raw_l2_block.block_producer_id().unpack();
         let timestamp: u64 = raw_l2_block.timestamp().unpack();
+        let state_checkpoint_list = raw_l2_block
+            .state_checkpoint_list()
+            .into_iter()
+            .map(|checkpoint| checkpoint.unpack())
+            .collect();
         Self {
             number: number.into(),
             parent_block_hash: raw_l2_block.parent_block_hash().unpack(),
@@ -466,6 +420,7 @@ impl From<packed::RawL2Block> for RawL2Block {
             post_account: raw_l2_block.post_account().into(),
             submit_transactions: raw_l2_block.submit_transactions().into(),
             submit_withdrawals: raw_l2_block.submit_withdrawals().into(),
+            state_checkpoint_list,
         }
     }
 }
@@ -509,8 +464,8 @@ impl From<packed::L2Block> for L2BlockView {
 pub struct SubmitTransactions {
     pub tx_witness_root: H256,
     pub tx_count: Uint32,
-    // hash(account_root | account_count) before each transaction
-    pub compacted_post_root_list: Vec<H256>,
+    // hash(account_root | account_count) before apply all transactions
+    pub prev_state_checkpoint: H256,
 }
 
 impl From<SubmitTransactions> for packed::SubmitTransactions {
@@ -518,20 +473,12 @@ impl From<SubmitTransactions> for packed::SubmitTransactions {
         let SubmitTransactions {
             tx_witness_root,
             tx_count,
-            compacted_post_root_list,
+            prev_state_checkpoint,
         } = json;
-        let compacted_post_root_list_vec: Vec<packed::Byte32> = compacted_post_root_list
-            .into_iter()
-            .map(|c| c.pack())
-            .collect();
         packed::SubmitTransactions::new_builder()
             .tx_witness_root(tx_witness_root.pack())
             .tx_count(u32::from(tx_count).pack())
-            .compacted_post_root_list(
-                packed::Byte32Vec::new_builder()
-                    .set(compacted_post_root_list_vec)
-                    .build(),
-            )
+            .prev_state_checkpoint(prev_state_checkpoint.pack())
             .build()
     }
 }
@@ -542,11 +489,7 @@ impl From<packed::SubmitTransactions> for SubmitTransactions {
         Self {
             tx_witness_root: submit_transactions.tx_witness_root().unpack(),
             tx_count: tx_count.into(),
-            compacted_post_root_list: submit_transactions
-                .compacted_post_root_list()
-                .into_iter()
-                .map(|c| c.unpack())
-                .collect(),
+            prev_state_checkpoint: submit_transactions.prev_state_checkpoint().unpack(),
         }
     }
 }

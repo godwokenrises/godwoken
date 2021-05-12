@@ -35,11 +35,9 @@ macro_rules! impl_std_ord {
 impl_std_eq!(Byte32);
 impl_std_ord!(Byte32);
 impl_std_eq!(Script);
-impl_std_eq!(TxReceipt);
 impl_std_eq!(ChallengeLockArgs);
 impl_std_eq!(ChallengeWitness);
 impl_std_eq!(ChallengeTarget);
-impl_std_eq!(L2BlockCommittedInfo);
 impl_std_eq!(Transaction);
 impl_std_eq!(DepositionRequest);
 impl_std_eq!(DepositionLockArgs);
@@ -70,5 +68,7 @@ cfg_if::cfg_if! {
         impl_std_hash!(OutPoint);
         impl_std_eq!(OutPoint);
         impl_std_eq!(WitnessArgs);
+        impl_std_eq!(TxReceipt);
+        impl_std_eq!(L2BlockCommittedInfo);
     }
 }

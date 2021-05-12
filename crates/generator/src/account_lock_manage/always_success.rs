@@ -4,7 +4,7 @@ use gw_types::{
     packed::{L2Transaction, Script, Signature},
 };
 
-use crate::error::LockAlgorithmError;
+use crate::{error::LockAlgorithmError, RollupContext};
 
 use super::LockAlgorithm;
 
@@ -27,7 +27,7 @@ impl LockAlgorithm for AlwaysSuccess {
 
     fn verify_tx(
         &self,
-        _rollup_type_hash: H256,
+        _ctx: &RollupContext,
         _sender_script: Script,
         _receiver_script: Script,
         _tx: L2Transaction,

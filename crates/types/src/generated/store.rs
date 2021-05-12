@@ -2378,36 +2378,61 @@ impl ::core::fmt::Display for SMTBranchNode {
         write!(f, "{}: {}", "fork_height", self.fork_height())?;
         write!(f, ", {}: {}", "key", self.key())?;
         write!(f, ", {}: {}", "node", self.node())?;
-        write!(f, ", {}: {}", "sibling", self.sibling())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
         write!(f, " }}")
     }
 }
 impl ::core::default::Default for SMTBranchNode {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            53, 0, 0, 0, 16, 0, 0, 0, 17, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         SMTBranchNode::new_unchecked(v.into())
     }
 }
 impl SMTBranchNode {
-    pub const TOTAL_SIZE: usize = 97;
-    pub const FIELD_SIZES: [usize; 4] = [1, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 3;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
     pub fn fork_height(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(0..1))
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Byte::new_unchecked(self.0.slice(start..end))
     }
     pub fn key(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(1..33))
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Byte32::new_unchecked(self.0.slice(start..end))
     }
-    pub fn node(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(33..65))
-    }
-    pub fn sibling(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(65..97))
+    pub fn node(&self) -> Bytes {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            Bytes::new_unchecked(self.0.slice(start..end))
+        } else {
+            Bytes::new_unchecked(self.0.slice(start..))
+        }
     }
     pub fn as_reader<'r>(&'r self) -> SMTBranchNodeReader<'r> {
         SMTBranchNodeReader::new_unchecked(self.as_slice())
@@ -2439,7 +2464,6 @@ impl molecule::prelude::Entity for SMTBranchNode {
             .fork_height(self.fork_height())
             .key(self.key())
             .node(self.node())
-            .sibling(self.sibling())
     }
 }
 #[derive(Clone, Copy)]
@@ -2464,25 +2488,52 @@ impl<'r> ::core::fmt::Display for SMTBranchNodeReader<'r> {
         write!(f, "{}: {}", "fork_height", self.fork_height())?;
         write!(f, ", {}: {}", "key", self.key())?;
         write!(f, ", {}: {}", "node", self.node())?;
-        write!(f, ", {}: {}", "sibling", self.sibling())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
         write!(f, " }}")
     }
 }
 impl<'r> SMTBranchNodeReader<'r> {
-    pub const TOTAL_SIZE: usize = 97;
-    pub const FIELD_SIZES: [usize; 4] = [1, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 3;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
     pub fn fork_height(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[0..1])
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        ByteReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn key(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[1..33])
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn node(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[33..65])
-    }
-    pub fn sibling(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[65..97])
+    pub fn node(&self) -> BytesReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            BytesReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            BytesReader::new_unchecked(&self.as_slice()[start..])
+        }
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for SMTBranchNodeReader<'r> {
@@ -2497,12 +2548,48 @@ impl<'r> molecule::prelude::Reader<'r> for SMTBranchNodeReader<'r> {
     fn as_slice(&self) -> &'r [u8] {
         self.0
     }
-    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
         use molecule::verification_error as ve;
         let slice_len = slice.len();
-        if slice_len != Self::TOTAL_SIZE {
-            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
         }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        let field_count = offset_first / 4 - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
+        if slice_len < header_size {
+            return ve!(Self, HeaderIsBroken, header_size, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
+            .chunks(molecule::NUMBER_SIZE)
+            .take(field_count)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        ByteReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        BytesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
@@ -2510,13 +2597,10 @@ impl<'r> molecule::prelude::Reader<'r> for SMTBranchNodeReader<'r> {
 pub struct SMTBranchNodeBuilder {
     pub(crate) fork_height: Byte,
     pub(crate) key: Byte32,
-    pub(crate) node: Byte32,
-    pub(crate) sibling: Byte32,
+    pub(crate) node: Bytes,
 }
 impl SMTBranchNodeBuilder {
-    pub const TOTAL_SIZE: usize = 97;
-    pub const FIELD_SIZES: [usize; 4] = [1, 32, 32, 32];
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 3;
     pub fn fork_height(mut self, v: Byte) -> Self {
         self.fork_height = v;
         self
@@ -2525,12 +2609,8 @@ impl SMTBranchNodeBuilder {
         self.key = v;
         self
     }
-    pub fn node(mut self, v: Byte32) -> Self {
+    pub fn node(mut self, v: Bytes) -> Self {
         self.node = v;
-        self
-    }
-    pub fn sibling(mut self, v: Byte32) -> Self {
-        self.sibling = v;
         self
     }
 }
@@ -2538,13 +2618,27 @@ impl molecule::prelude::Builder for SMTBranchNodeBuilder {
     type Entity = SMTBranchNode;
     const NAME: &'static str = "SMTBranchNodeBuilder";
     fn expected_length(&self) -> usize {
-        Self::TOTAL_SIZE
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.fork_height.as_slice().len()
+            + self.key.as_slice().len()
+            + self.node.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.fork_height.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.key.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.node.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
         writer.write_all(self.fork_height.as_slice())?;
         writer.write_all(self.key.as_slice())?;
         writer.write_all(self.node.as_slice())?;
-        writer.write_all(self.sibling.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

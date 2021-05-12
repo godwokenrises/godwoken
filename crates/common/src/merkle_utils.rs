@@ -6,23 +6,23 @@ use crate::{
 };
 
 // Calculate compacted account root
-pub fn calculate_compacted_account_root(root: &[u8; 32], count: u32) -> [u8; 32] {
-    let mut buf = [0u8; 32];
+pub fn calculate_state_checkpoint(root: &H256, count: u32) -> H256 {
+    let mut hash = [0u8; 32];
     let mut hasher = new_blake2b();
-    hasher.update(root);
+    hasher.update(root.as_slice());
     hasher.update(&count.to_le_bytes());
-    hasher.finalize(&mut buf);
-    buf
+    hasher.finalize(&mut hash);
+    hash.into()
 }
 
 /// Compute merkle root from vectors
-pub fn calculate_merkle_root(leaves: Vec<[u8; 32]>) -> Result<[u8; 32], Error> {
+pub fn calculate_merkle_root(leaves: Vec<H256>) -> Result<H256, Error> {
     if leaves.is_empty() {
-        return Ok(H256::zero().into());
+        return Ok(H256::zero());
     }
     let mut tree = SMT::<DefaultStore<H256>>::default();
     for (i, leaf) in leaves.into_iter().enumerate() {
-        tree.update(H256::from_u32(i as u32), leaf.into())?;
+        tree.update(H256::from_u32(i as u32), leaf)?;
     }
-    Ok((*tree.root()).into())
+    Ok(*tree.root())
 }

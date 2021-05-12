@@ -6,4 +6,5 @@ mod ckb_h256;
 mod godwoken;
 mod primitive;
 mod smt_h256;
+#[cfg(feature = "std")]
 mod store;

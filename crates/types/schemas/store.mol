@@ -36,11 +36,10 @@ table TxReceipt {
     logs: LogItemVec,
 }
 
-struct SMTBranchNode {
+table SMTBranchNode {
     fork_height: byte,
     key: Byte32,
-    node: Byte32,
-    sibling: Byte32,
+    node: Bytes,
 }
 
 struct SMTLeafNode {

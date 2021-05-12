@@ -1,5 +1,5 @@
+use crate::core::H256;
 use crate::{packed, prelude::*, vec::Vec};
-use sparse_merkle_tree::H256;
 
 impl Pack<packed::Byte32> for H256 {
     fn pack(&self) -> packed::Byte32 {
