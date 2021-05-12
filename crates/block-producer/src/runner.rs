@@ -201,7 +201,7 @@ pub fn run(config: Config) -> Result<()> {
     ));
 
     // RPC registry
-    let rpc_registry = Registry::new(mem_pool.clone(), store.clone());
+    let rpc_registry = Registry::new(store.clone(), mem_pool.clone(), generator.clone());
 
     // create web3 indexer
     let web3_indexer = match config.web3_indexer {
