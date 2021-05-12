@@ -37,7 +37,9 @@ use ckb_vm::{
 // TODO ensure this value
 const MIN_WITHDRAWAL_CAPACITY: u64 = 100_00000000;
 // 25 KB
-const MAX_DATA_BYTES_LIMIT: usize = 25_000;
+const MAX_WRITE_DATA_BYTES_LIMIT: usize = 25_000;
+// 2MB
+const MAX_READ_DATA_BYTES_LIMIT: usize = 1024 * 1024 * 2;
 
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
@@ -399,17 +401,17 @@ impl Generator {
 
         // check write data bytes
         let write_data_bytes: usize = run_result.write_data.values().map(|data| data.len()).sum();
-        if write_data_bytes > MAX_DATA_BYTES_LIMIT {
+        if write_data_bytes > MAX_WRITE_DATA_BYTES_LIMIT {
             return Err(TransactionError::ExceededMaxWriteData {
-                max_bytes: MAX_DATA_BYTES_LIMIT,
+                max_bytes: MAX_WRITE_DATA_BYTES_LIMIT,
                 used_bytes: write_data_bytes,
             });
         }
         // check read data bytes
         let read_data_bytes: usize = run_result.read_data.values().sum();
-        if read_data_bytes > MAX_DATA_BYTES_LIMIT {
-            return Err(TransactionError::ExceededMaxWriteData {
-                max_bytes: MAX_DATA_BYTES_LIMIT,
+        if read_data_bytes > MAX_READ_DATA_BYTES_LIMIT {
+            return Err(TransactionError::ExceededMaxReadData {
+                max_bytes: MAX_READ_DATA_BYTES_LIMIT,
                 used_bytes: read_data_bytes,
             });
         }
