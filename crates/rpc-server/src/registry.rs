@@ -1,6 +1,7 @@
 use anyhow::Result;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{state::State, H256};
+use gw_generator::{sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
@@ -36,13 +37,18 @@ fn to_jsonh256(v: H256) -> JsonH256 {
 }
 
 pub struct Registry {
+    generator: Arc<Generator>,
     mem_pool: Arc<MemPool>,
     store: Store,
 }
 
 impl Registry {
-    pub fn new(mem_pool: Arc<MemPool>, store: Store) -> Self {
-        Self { mem_pool, store }
+    pub fn new(store: Store, mem_pool: Arc<MemPool>, generator: Arc<Generator>) -> Self {
+        Self {
+            mem_pool,
+            store,
+            generator,
+        }
     }
 
     pub fn build_rpc_server(self) -> Result<RPCServer> {
@@ -50,6 +56,7 @@ impl Registry {
 
         server = server
             .with_data(Data(self.mem_pool.clone()))
+            .with_data(Data(self.generator.clone()))
             .with_data(Data::new(self.store))
             .with_method("ping", ping)
             .with_method("get_tip_block_hash", get_tip_block_hash)
@@ -70,7 +77,8 @@ impl Registry {
             .with_method("execute_l2transaction", execute_l2transaction)
             .with_method("execute_raw_l2transaction", execute_raw_l2transaction)
             .with_method("submit_l2transaction", submit_l2transaction)
-            .with_method("submit_withdrawal_request", submit_withdrawal_request);
+            .with_method("submit_withdrawal_request", submit_withdrawal_request)
+            .with_method("compute_l2_sudt_script_hash", compute_l2_sudt_script_hash);
 
         Ok(server.finish())
     }
@@ -340,4 +348,13 @@ async fn get_data(
         .map(JsonBytes::from_bytes);
 
     Ok(data_opt)
+}
+
+async fn compute_l2_sudt_script_hash(
+    Params((l1_sudt_script_hash,)): Params<(JsonH256,)>,
+    generator: Data<Generator>,
+) -> Result<JsonH256> {
+    let l2_sudt_script =
+        build_l2_sudt_script(generator.rollup_context(), &to_h256(l1_sudt_script_hash));
+    Ok(to_jsonh256(l2_sudt_script.hash().into()))
 }
