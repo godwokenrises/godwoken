@@ -48,9 +48,10 @@ fn generate_custodian_cells(
         .iter()
         .map(|deposit_info| {
             let lock_args: Bytes = {
-                let deposition_lock_args = DepositionLockArgs::new_unchecked(
-                    deposit_info.cell.output.lock().args().unpack(),
-                );
+                let deposition_lock_args = {
+                    let lock_args: Bytes = deposit_info.cell.output.lock().args().unpack();
+                    DepositionLockArgs::new_unchecked(lock_args.slice(32..))
+                };
 
                 let custodian_lock_args = CustodianLockArgs::new_builder()
                     .deposition_block_hash(block_hash.clone())
