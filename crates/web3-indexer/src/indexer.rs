@@ -15,7 +15,7 @@ use gw_store::{
     Store,
 };
 use gw_traits::CodeStore;
-use gw_types::packed::{L2Block, Transaction};
+use gw_types::packed::{L2Block, RollupAction, RollupActionReader, RollupActionUnion, Transaction};
 use gw_types::{
     packed::{SUDTArgs, SUDTArgsUnion, Script},
     prelude::*,
@@ -145,12 +145,18 @@ impl Web3Indexer {
             .get(0)
             .ok_or_else(|| anyhow!("Witness missing for L2 block!"))?;
         let witness_args = WitnessArgs::from_slice(&witness.raw_data())?;
-        let l2_block_bytes = witness_args
+        let rollup_action_bytes = witness_args
             .output_type()
             .to_opt()
-            .ok_or_else(|| anyhow!("Missing L2 block!"))?;
-        let l2_block = L2Block::from_slice(&l2_block_bytes.raw_data())?;
-        Ok(l2_block)
+            .ok_or_else(|| anyhow!("Missing L2 block!"))?
+            .as_bytes();
+        match RollupActionReader::verify(&rollup_action_bytes, false) {
+            Ok(_) => match RollupAction::new_unchecked(rollup_action_bytes).to_enum() {
+                RollupActionUnion::RollupSubmitBlock(args) => Ok(args.block()),
+                _ => unimplemented!(),
+            },
+            Err(_) => Err(anyhow!("invalid rollup action")),
+        }
     }
 
     async fn filter_web3_transactions(
