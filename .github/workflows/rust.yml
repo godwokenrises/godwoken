@@ -49,4 +49,4 @@ jobs:
       if: steps.fetch-capsule-cache.outputs.cache-hit != 'true'
       run: cd godwoken-scripts && tools/backup-capsule-cache.sh
     - name: Tests
-      run: cargo test
+      run: cargo test --all-targets
