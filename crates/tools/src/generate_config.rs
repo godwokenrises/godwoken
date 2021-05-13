@@ -62,6 +62,10 @@ pub fn generate_config(
         let script: ckb_types::packed::Script = genesis.rollup_type_script.into();
         gw_types::packed::Script::new_unchecked(script.as_bytes()).into()
     };
+    let rollup_config_cell_dep = {
+        let cell_dep: ckb_types::packed::CellDep = genesis.rollup_config_cell_dep.into();
+        gw_types::packed::CellDep::new_unchecked(cell_dep.as_bytes()).into()
+    };
     let poa_lock_dep = {
         let dep: ckb_types::packed::CellDep = scripts.state_validator_lock.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
@@ -84,6 +88,14 @@ pub fn generate_config(
     };
     let (_data, secp_data_dep) =
         get_secp_data(&mut rpc_client).map_err(|err| anyhow!("{}", err))?;
+    let custodian_cell_lock_dep = {
+        let dep: ckb_types::packed::CellDep = scripts.custodian_lock.cell_dep.clone().into();
+        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
+    };
+    let withdrawal_cell_lock_dep = {
+        let dep: ckb_types::packed::CellDep = scripts.withdrawal_lock.cell_dep.clone().into();
+        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
+    };
 
     let wallet_config: WalletConfig = WalletConfig { privkey_path, lock };
 
@@ -129,8 +141,11 @@ pub fn generate_config(
         poa_lock_dep,
         poa_state_dep,
         rollup_cell_type_dep,
+        rollup_config_cell_dep,
         deposit_cell_lock_dep,
         stake_cell_lock_dep,
+        custodian_cell_lock_dep,
+        withdrawal_cell_lock_dep,
         wallet_config,
     });
     let genesis: GenesisConfig = GenesisConfig {

@@ -10,3 +10,4 @@ pub mod transaction_skeleton;
 pub mod types;
 pub mod utils;
 pub mod wallet;
+pub mod withdrawal;
