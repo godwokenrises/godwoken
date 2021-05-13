@@ -29,7 +29,7 @@ const SUDT_GENERATOR_PATH: &str = "../../godwoken-scripts/c/build/sudt-generator
 fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
     let sudt_validator_script_type_hash: [u8; 32] =
         rollup_config.l2_sudt_validator_script_type_hash().unpack();
-    let config = vec![
+    let configs = vec![
         BackendConfig {
             validator_path: META_VALIDATOR_PATH.into(),
             generator_path: META_GENERATOR_PATH.into(),
@@ -41,7 +41,7 @@ fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
             validator_script_type_hash: sudt_validator_script_type_hash.into(),
         },
     ];
-    BackendManage::from_config(config).expect("default backend")
+    BackendManage::from_config(configs).expect("default backend")
 }
 
 struct DummyChainStore;
@@ -60,7 +60,7 @@ fn new_block_info(block_producer_id: u32, number: u64, timestamp: u64) -> BlockI
         .build()
 }
 
-pub fn run_contract_get_result<S: State + CodeStore>(
+fn run_contract_get_result<S: State + CodeStore>(
     rollup_config: &RollupConfig,
     tree: &mut S,
     from_id: u32,
@@ -86,7 +86,7 @@ pub fn run_contract_get_result<S: State + CodeStore>(
     Ok(run_result)
 }
 
-pub fn run_contract<S: State + CodeStore>(
+fn run_contract<S: State + CodeStore>(
     rollup_config: &RollupConfig,
     tree: &mut S,
     from_id: u32,
@@ -100,7 +100,9 @@ pub fn run_contract<S: State + CodeStore>(
 }
 
 pub fn bench(c: &mut Criterion) {
-    c.bench_function("sudt", move |b| {
+    let mut group = c.benchmark_group("throughput");
+    group.throughput(Throughput::Elements(1u64));
+    group.bench_function("sudt", move |b| {
         b.iter_batched(
             || {
                 let mut tree = DummyState::default();
