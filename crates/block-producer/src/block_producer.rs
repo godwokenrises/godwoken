@@ -24,7 +24,8 @@ use gw_types::{
     core::{DepType, ScriptHashType},
     packed::{
         Byte32, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositionLockArgs, GlobalState,
-        L2Block, OutPoint, OutPointVec, Script, Transaction, WitnessArgs,
+        L2Block, OutPoint, OutPointVec, RollupAction, RollupActionUnion, RollupSubmitBlock, Script,
+        Transaction, WitnessArgs,
     },
     prelude::*,
 };
@@ -47,9 +48,10 @@ fn generate_custodian_cells(
         .iter()
         .map(|deposit_info| {
             let lock_args: Bytes = {
-                let deposition_lock_args = DepositionLockArgs::new_unchecked(
-                    deposit_info.cell.output.lock().args().unpack(),
-                );
+                let deposition_lock_args = {
+                    let lock_args: Bytes = deposit_info.cell.output.lock().args().unpack();
+                    DepositionLockArgs::new_unchecked(lock_args.slice(32..))
+                };
 
                 let custodian_lock_args = CustodianLockArgs::new_builder()
                     .deposition_block_hash(block_hash.clone())
@@ -331,6 +333,10 @@ impl BlockProducer {
         tx_skeleton
             .cell_deps_mut()
             .push(self.config.rollup_cell_type_dep.clone().into());
+        // rollup config cell
+        tx_skeleton
+            .cell_deps_mut()
+            .push(self.config.rollup_config_cell_dep.clone().into());
         // deposit lock dep
         if !deposit_cells.is_empty() {
             let cell_dep: CellDep = self.config.deposit_cell_lock_dep.clone().into();
@@ -342,10 +348,22 @@ impl BlockProducer {
         tx_skeleton
             .cell_deps_mut()
             .push(self.ckb_genesis_info.sighash_dep());
+
+        // rollup action
+        // FIXME: rollup action
+        let rollup_action = {
+            let submit_block = RollupSubmitBlock::new_builder()
+                .block(block.clone())
+                .build();
+            RollupAction::new_builder()
+                .set(RollupActionUnion::RollupSubmitBlock(submit_block))
+                .build()
+        };
+
         // witnesses
         tx_skeleton.witnesses_mut().push(
             WitnessArgs::new_builder()
-                .output_type(Some(block.as_bytes()).pack())
+                .output_type(Some(rollup_action.as_bytes()).pack())
                 .build(),
         );
         // output
@@ -444,6 +462,59 @@ impl BlockProducer {
         tx_skeleton
             .outputs_mut()
             .push((generated_stake.output, generated_stake.output_data));
+
+        // withdrawal cells
+        let generated_withdrawal_cells = crate::withdrawal::generate(
+            &rollup_cell,
+            rollup_context,
+            &block,
+            &self.config,
+            &self.rpc_client,
+        )
+        .await?;
+        tx_skeleton
+            .cell_deps_mut()
+            .extend(generated_withdrawal_cells.deps);
+        tx_skeleton
+            .inputs_mut()
+            .extend(generated_withdrawal_cells.inputs);
+        tx_skeleton
+            .outputs_mut()
+            .extend(generated_withdrawal_cells.outputs);
+
+        // reverted withdrawal cells
+        if let Some(reverted_withdrawals) = crate::withdrawal::revert(
+            &rollup_action,
+            rollup_context,
+            &self.config,
+            &self.rpc_client,
+        )
+        .await?
+        {
+            tx_skeleton
+                .cell_deps_mut()
+                .extend(reverted_withdrawals.deps);
+
+            let input_len = tx_skeleton.inputs().len();
+            let witness_len = tx_skeleton.witnesses_mut().len();
+            if input_len != witness_len {
+                // append dummy witness args to align our reverted withdrawal witness args
+                let dummy_witness_argses = (0..input_len - witness_len)
+                    .into_iter()
+                    .map(|_| WitnessArgs::default())
+                    .collect::<Vec<_>>();
+                tx_skeleton.witnesses_mut().extend(dummy_witness_argses);
+            }
+
+            tx_skeleton.inputs_mut().extend(reverted_withdrawals.inputs);
+            tx_skeleton
+                .witnesses_mut()
+                .extend(reverted_withdrawals.witness_args);
+            tx_skeleton
+                .outputs_mut()
+                .extend(reverted_withdrawals.outputs);
+        }
+
         // tx fee cell
         fill_tx_fee(
             &mut tx_skeleton,
