@@ -240,7 +240,10 @@ impl MemPool {
         block_hash: H256,
     ) -> Result<RunResult> {
         let db = self.store.begin_transaction();
-        let state_db = self.fetch_state_db(&db)?;
+        let state_db = StateDBTransaction::from_version(
+            &db,
+            StateDBVersion::from_history_state(&db, block_hash, None)?,
+        )?;
         let state = state_db.account_state_tree()?;
         let chain_view = ChainView::new(&db, block_hash);
         // execute tx
