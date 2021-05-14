@@ -182,7 +182,6 @@ async fn execute_raw_l2transaction(
     let raw_l2tx_bytes = raw_l2tx.into_bytes();
     let raw_l2tx = packed::RawL2Transaction::from_slice(&raw_l2tx_bytes)?;
 
-    // let raw_block = store.get_tip_block()?.raw();
     let raw_block = match db.get_block(&block_hash)? {
         Some(block) => block.raw(),
         None => return Ok(None),
