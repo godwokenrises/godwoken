@@ -237,12 +237,12 @@ impl MemPool {
         &self,
         raw_tx: RawL2Transaction,
         block_info: &BlockInfo,
+        block_hash: H256,
     ) -> Result<RunResult> {
         let db = self.store.begin_transaction();
         let state_db = self.fetch_state_db(&db)?;
         let state = state_db.account_state_tree()?;
-        let tip_block_hash = self.store.get_tip_block_hash()?;
-        let chain_view = ChainView::new(&db, tip_block_hash);
+        let chain_view = ChainView::new(&db, block_hash);
         // execute tx
         let run_result =
             self.generator

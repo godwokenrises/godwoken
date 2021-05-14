@@ -165,32 +165,44 @@ async fn execute_l2transaction(
 }
 
 async fn execute_raw_l2transaction(
-    Params((raw_l2tx,)): Params<(JsonBytes,)>,
+    Params((raw_l2tx, block_number)): Params<(
+        JsonBytes,
+        gw_jsonrpc_types::ckb_jsonrpc_types::Uint64,
+    )>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<RunResult> {
+) -> Result<Option<RunResult>> {
+    let block_number = block_number.value();
+    let db = store.begin_transaction();
+    let block_hash = match db.get_block_hash_by_number(block_number)? {
+        Some(block_hash) => block_hash,
+        None => return Ok(None),
+    };
+
     let raw_l2tx_bytes = raw_l2tx.into_bytes();
     let raw_l2tx = packed::RawL2Transaction::from_slice(&raw_l2tx_bytes)?;
 
-    let raw_block = store.get_tip_block()?.raw();
+    // let raw_block = store.get_tip_block()?.raw();
+    let raw_block = match db.get_block(&block_hash)? {
+        Some(block) => block.raw(),
+        None => return Ok(None),
+    };
     let block_producer_id = raw_block.block_producer_id();
     let timestamp = raw_block.timestamp();
     let number = {
         let number: u64 = raw_block.number().unpack();
         number.saturating_add(1)
     };
-
     let block_info = BlockInfo::new_builder()
         .block_producer_id(block_producer_id)
         .timestamp(timestamp)
         .number(number.pack())
         .build();
-
     let run_result: RunResult = mem_pool
         .lock()
-        .execute_raw_transaction(raw_l2tx, &block_info)?
+        .execute_raw_transaction(raw_l2tx, &block_info, block_hash)?
         .into();
-    Ok(run_result)
+    Ok(Some(run_result))
 }
 
 async fn submit_l2transaction(
