@@ -1,0 +1,130 @@
+# {workspaceDir}/docker/docker-compose.yml
+version: '3.8'
+
+volumes:
+  cargo-cache:
+
+services:
+  postgres:
+    image: postgres:alpine
+    ports: 
+      - 5432:5432
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_DB: lumos
+      POSTGRES_PASSWORD: password
+    volumes:
+      - ../postgres-data:/var/lib/postgresql/data
+      # copy the sql script to create tables
+      - ../web3-sql/create_tables.sql:/docker-entrypoint-initdb.d/create_tables.sql
+
+  ckb:
+    # image: nervos/godwoken-prebuilds:v0.2.0-rc2
+    build:
+      context: layer1
+    ports: 
+    - 8114:8114
+    - 8115:8115 # 8115 is not using for now, but we may need it when extend kicker in the future
+    volumes:
+    - ../ckb-data/:/ckb-data
+    environment:
+      # env of layer 1:
+      CKB_CHAIN: dev
+      BA_ARG: 0x43d509d97f26007a285f39241cffcd411157196c
+      BA_CODE_HASH: 0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8
+      BA_HASH_TYPE: type
+      BA_MESSAGE: 0x1234
+      # - SE_OPTS="log ckb-log.txt"
+    # logging:
+      # driver: "none"
+
+  godwoken:
+    image: nervos/godwoken-prebuilds:v0.2.0-rc2
+    volumes:
+    - ../:/code
+    - cargo-cache:/usr/local/cargo
+    - ../ckb-cli-data:/root/.ckb-cli
+    environment:
+      FORCH_GODWOKEN_REDEPLOY: ${FORCH_GODWOKEN_REDEPLOY}
+    command: bash /code/godwoken_entrypoint.sh
+    ports:
+      - 8116:8116
+      - 8119:8119
+    depends_on:
+      - ckb
+      - postgres
+      
+  polyjuice:
+    image: nervos/godwoken-prebuilds:v0.2.0-rc2
+    volumes:
+    - ../godwoken-examples:/godwoken-examples
+    working_dir: /godwoken-examples
+    command: sh -c "
+      yarn workspace @godwoken-examples/runner clean &&
+      yarn workspace @godwoken-examples/runner start"
+    ports:
+      - 6101:6101
+      - 6100:6100
+    depends_on:
+      - ckb
+      - postgres
+
+  web3:
+    build: # base image: nervos/godwoken-prebuilds:v0.2.0-rc2
+      context: ../godwoken-web3
+    volumes: 
+    - ../godwoken/:/godwoken
+    - ../web3_entrypoint.sh:/web3_entrypoint.sh
+    command: bash /web3_entrypoint.sh
+    environment: 
+      PORT: 8024
+    ports:
+      - 8024:8024
+    depends_on: 
+      - postgres
+      - godwoken
+  
+  gen-godwoken-schema:
+    image: retricsu/gowoken-build_dev:ubuntu20
+    profiles: ["cli-only"]
+    volumes: 
+      - ../:/code
+    command: bash /code/docker/gen-godwoken-schema/entrypoint.sh
+    
+######## TODO: clean these? #########################################
+
+  # ckb-indexer:
+  #   build: 
+  #     context: ckb-indexer
+  #   ports:
+  #     - 8116:8116
+  #   network_mode: 'bridge'
+  #   volumes:
+  #     - ../indexer-data/:/code
+  #   depends_on:
+  #     - ckb
+
+#  compile-lock: 
+#    build: 
+#      context: compile-lock
+#    volumes: 
+#      - common_file:/code
+
+#  lumos-config:
+#    build: 
+#      context: lumos-config
+#    networks: 
+#      - layer1
+#      - layer2
+#    volumes: 
+#      - common_file:/code/lumos-config-generator
+#    depends_on: 
+#      - chain
+
+#   lumos:
+#     image: retricsu/gowoken-build_dev:ubuntu20
+#     volumes:
+#       - ../:/code
+#     command: bash /code/lumos_entrypoint.sh
+#     depends_on: 
+#       - postgres

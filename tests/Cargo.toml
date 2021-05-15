@@ -1,0 +1,35 @@
+[package]
+name = "godwoken-test"
+version = "0.0.1"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "2" }
+lazy_static = "1.4.0"
+crossbeam-channel = "0.5"
+parking_lot = "0.11"
+log = "0.4.14"
+
+
+# an excellent crate for displaying useful and pretty errors
+anyhow = "1.0"
+# # home directories vary depending on the user's operating system
+# home = "0.5"
+# # Parse command line arguments by defining a struct. It combines clap with custom derive.
+# structopt = "0.3"
+# # The Rust community recommends the serde crate for handling most serialization and deserialization of Rust data structures efficiently and generically
+# serde_json = "1.0"
+
+# [dependencies.serde]
+# version = "1.0"
+# features = ["derive"] # we only need the derive feature.
+
+# [dependencies.chrono] # Chrono: Date and Time for Rust
+# version = "0.4" 			# chrono is a good crate to use if you need to handle date and time data in Rust. It provides an easy API for representing a moment in time.
+# features = ["serde"]	# We need the serde feature for the chrono crate, so we can serialize the DateTime field.
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]

@@ -1954,6 +1954,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "godwoken-test"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "crossbeam-channel 0.5.0",
+ "lazy_static",
+]
+
+[[package]]
 name = "gw-benches"
 version = "0.1.0"
 dependencies = [
