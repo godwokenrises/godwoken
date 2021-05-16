@@ -113,8 +113,7 @@ impl Default for WithdrawalsAmount {
 pub struct CollectedCustodianCells {
     pub cells_info: Vec<CellInfo>,
     pub capacity: u64,
-    pub sudt: HashMap<[u8; 32], u128>,
-    pub fullfilled_sudt_script: HashMap<[u8; 32], Script>,
+    pub sudt: HashMap<[u8; 32], (u128, Script)>,
 }
 
 impl Default for CollectedCustodianCells {
@@ -123,7 +122,6 @@ impl Default for CollectedCustodianCells {
             cells_info: Default::default(),
             capacity: 0,
             sudt: Default::default(),
-            fullfilled_sudt_script: Default::default(),
         }
     }
 }
@@ -660,10 +658,11 @@ impl RPCClient {
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
 
         let mut collected = CollectedCustodianCells::default();
+        let mut collected_fullfilled_sudt = HashSet::new();
         let mut cursor = None;
 
         while collected.capacity < withdrawals_amount.capacity
-            || collected.fullfilled_sudt_script.len() < withdrawals_amount.sudt.len()
+            || collected_fullfilled_sudt.len() < withdrawals_amount.sudt.len()
         {
             let cells: Pagination<Cell> = to_result(
                 self.indexer_client
@@ -680,7 +679,7 @@ impl RPCClient {
             )?;
 
             if cells.last_cursor.is_empty() {
-                return Err(anyhow!("no enough custodian cells"));
+                return Ok(collected);
             }
             cursor = Some(cells.last_cursor);
 
@@ -708,8 +707,7 @@ impl RPCClient {
                     let sudt_type_hash = sudt_type_script.hash();
                     if sudt_type_hash != CKB_SUDT_SCRIPT_ARGS {
                         // Already collected enough sudt amount
-                        let fullfilled_sudt_script = &mut collected.fullfilled_sudt_script;
-                        if fullfilled_sudt_script.contains_key(&sudt_type_hash) {
+                        if collected_fullfilled_sudt.contains(&sudt_type_hash) {
                             continue;
                         }
 
@@ -727,12 +725,15 @@ impl RPCClient {
                             }
                         };
 
-                        let collected_amount = collected.sudt.entry(sudt_type_hash).or_insert(0);
+                        let (collected_amount, type_script) = {
+                            let sudt = collected.sudt.entry(sudt_type_hash);
+                            sudt.or_insert((0, Script::default()))
+                        };
                         *collected_amount = collected_amount.saturating_add(sudt_amount);
+                        *type_script = sudt_type_script;
 
                         if *collected_amount >= *withdrawal_amount {
-                            fullfilled_sudt_script
-                                .insert(sudt_type_hash.to_owned(), sudt_type_script);
+                            collected_fullfilled_sudt.insert(sudt_type_hash);
                         }
                     }
                 }

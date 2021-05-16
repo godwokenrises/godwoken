@@ -3,7 +3,7 @@
 use crate::{
     poa::{PoA, ShouldIssueBlock},
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
-    rpc_client::{DepositInfo, RPCClient},
+    rpc_client::{CollectedCustodianCells, DepositInfo, RPCClient},
     transaction_skeleton::TransactionSkeleton,
     types::ChainEvent,
     types::{CellInfo, InputCellInfo},
@@ -259,6 +259,23 @@ impl BlockProducer {
         };
         let parent_block = self.chain.lock().local_state().tip().clone();
         let max_withdrawal_capacity = std::u128::MAX;
+
+        let total_withdrawal_amounts = crate::withdrawal::sum(withdrawal_requests.iter());
+        let collected_custodians = if 0 == total_withdrawal_amounts.capacity {
+            CollectedCustodianCells::default()
+        } else {
+            let rollup_context = self.generator.rollup_context();
+            let last_finalized_block_number =
+                rollup_context.rollup_config.finality_blocks().unpack();
+
+            self.rpc_client
+                .query_finalized_custodian_cells(
+                    &total_withdrawal_amounts,
+                    last_finalized_block_number,
+                )
+                .await?
+        };
+
         // produce block
         let param = ProduceBlockParam {
             db: self.store.begin_transaction(),
@@ -291,7 +308,14 @@ impl BlockProducer {
 
         // composit tx
         let tx = self
-            .complete_tx_skeleton(deposit_cells, block, global_state, median_time, rollup_cell)
+            .complete_tx_skeleton(
+                deposit_cells,
+                block,
+                global_state,
+                median_time,
+                rollup_cell,
+                collected_custodians,
+            )
             .await?;
 
         // send transaction
@@ -318,6 +342,7 @@ impl BlockProducer {
         global_state: GlobalState,
         median_time: Duration,
         rollup_cell: CellInfo,
+        collected_custodians: CollectedCustodianCells,
     ) -> Result<Transaction> {
         let rollup_context = self.generator.rollup_context();
         let mut tx_skeleton = TransactionSkeleton::default();
@@ -465,13 +490,11 @@ impl BlockProducer {
 
         // withdrawal cells
         let generated_withdrawal_cells = crate::withdrawal::generate(
-            &rollup_cell,
             rollup_context,
             &block,
             &self.config,
-            &self.rpc_client,
-        )
-        .await?;
+            collected_custodians,
+        )?;
         tx_skeleton
             .cell_deps_mut()
             .extend(generated_withdrawal_cells.deps);
