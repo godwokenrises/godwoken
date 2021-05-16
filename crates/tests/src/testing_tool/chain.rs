@@ -1,4 +1,5 @@
 use gw_block_producer::produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult};
+use gw_block_producer::withdrawal::AvailableCustodians;
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncEvent, SyncParam};
 use gw_common::blake2b::new_blake2b;
 use gw_config::{BackendConfig, GenesisConfig};
@@ -196,6 +197,7 @@ pub fn construct_block(
     let rollup_config_hash = chain.rollup_config_hash().clone().into();
     let mut txs = Vec::new();
     let mut withdrawal_requests = Vec::new();
+    let mut available_custodians = AvailableCustodians::default();
     for (_, entry) in mem_pool.pending() {
         // notice we either choice txs or withdrawals from an entry to avoid nonce conflict
         if !entry.txs.is_empty() {
@@ -203,6 +205,18 @@ pub fn construct_block(
         } else if !entry.withdrawals.is_empty() {
             withdrawal_requests.extend(entry.withdrawals.iter().cloned());
         }
+    }
+
+    available_custodians.capacity = std::u64::MAX;
+    for req in withdrawal_requests.iter() {
+        if 0 == req.raw().amount().unpack() {
+            continue;
+        }
+
+        let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
+        available_custodians
+            .sudt
+            .insert(sudt_script_hash, (std::u128::MAX, Script::default()));
     }
 
     let param = ProduceBlockParam {
@@ -216,6 +230,7 @@ pub fn construct_block(
         parent_block: &parent_block,
         rollup_config_hash: &rollup_config_hash,
         max_withdrawal_capacity,
+        available_custodians,
     };
     produce_block(param)
 }

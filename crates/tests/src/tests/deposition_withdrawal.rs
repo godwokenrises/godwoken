@@ -76,7 +76,7 @@ fn test_deposition_and_withdrawal() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
     let mut chain = setup_chain(rollup_type_script.clone());
-    let capacity = 500_00000000;
+    let capacity = 600_00000000;
     let user_script = Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
         .hash_type(ScriptHashType::Type.into())
@@ -145,7 +145,7 @@ fn test_deposition_and_withdrawal() {
         );
     }
     // withdrawal
-    let withdraw_capacity = 200_00000000u64;
+    let withdraw_capacity = 300_00000000u64;
     withdrawal_from_chain(
         &mut chain,
         rollup_cell,

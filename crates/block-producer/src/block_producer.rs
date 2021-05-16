@@ -288,6 +288,7 @@ impl BlockProducer {
             parent_block: &parent_block,
             rollup_config_hash: &self.rollup_config_hash,
             max_withdrawal_capacity,
+            available_custodians: (&collected_custodians).into(),
         };
         let block_result = produce_block(param)?;
         let ProduceBlockResult {

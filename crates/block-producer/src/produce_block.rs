@@ -2,6 +2,8 @@
 //! Block producer assemble serveral Godwoken components into a single executor.
 //! A block producer can act without the ability of produce block.
 
+use crate::withdrawal::AvailableCustodians;
+
 use anyhow::{anyhow, Result};
 use gw_common::{
     h256_ext::H256Ext,
@@ -44,6 +46,7 @@ pub struct ProduceBlockParam<'a> {
     pub parent_block: &'a L2Block,
     pub rollup_config_hash: &'a H256,
     pub max_withdrawal_capacity: u128,
+    pub available_custodians: AvailableCustodians,
 }
 
 /// Produce block
@@ -62,6 +65,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         parent_block,
         rollup_config_hash,
         max_withdrawal_capacity,
+        available_custodians,
     } = param;
     let rollup_context = generator.rollup_context();
     let parent_block_number: u64 = parent_block.raw().number().unpack();
@@ -84,6 +88,8 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
     let mut used_withdrawal_requests = Vec::with_capacity(withdrawal_requests.len());
     let mut unused_withdrawal_requests = Vec::with_capacity(withdrawal_requests.len());
     let mut total_withdrawal_capacity: u128 = 0;
+    let mut withdrawal_verifier =
+        crate::withdrawal::Generator::new(rollup_context, available_custodians);
     for request in withdrawal_requests {
         // check withdrawal request
         if generator
@@ -110,6 +116,13 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
             continue;
         }
         total_withdrawal_capacity = new_total_withdrwal_capacity;
+
+        if let Err(err) = withdrawal_verifier.insert(&request, &L2Block::default()) {
+            log::debug!("skip withdrawal: {}", err);
+            unused_withdrawal_requests.push(request);
+            continue;
+        }
+
         // update the state
         match state.apply_withdrawal_request(rollup_context, &request) {
             Ok(_) => {
