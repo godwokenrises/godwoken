@@ -14,7 +14,7 @@ use anyhow::{anyhow, Context, Result};
 use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
 use gw_chain::chain::Chain;
-use gw_common::H256;
+use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_config::BlockProducerConfig;
 use gw_generator::{Generator, RollupContext};
 use gw_mem_pool::pool::MemPool;
@@ -259,6 +259,68 @@ impl BlockProducer {
         };
         let parent_block = self.chain.lock().local_state().tip().clone();
         let max_withdrawal_capacity = std::u128::MAX;
+
+        let available_custodians = if withdrawal_requests.is_empty() {
+            crate::withdrawal::AvailableCustodians::default()
+        } else {
+            let db = self.store.begin_transaction();
+            let mut sudt_scripts: HashMap<[u8; 32], Script> = HashMap::new();
+            let sudt_custodians = {
+                let reqs = withdrawal_requests.iter();
+                let sudt_reqs = reqs.filter(|req| {
+                    let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
+                    0 != req.raw().amount().unpack() && CKB_SUDT_SCRIPT_ARGS != sudt_script_hash
+                });
+
+                let to_hash = sudt_reqs.map(|req| req.raw().sudt_script_hash().unpack());
+                let has_script = to_hash.filter_map(|hash: [u8; 32]| {
+                    if let Some(script) = sudt_scripts.get(&hash).cloned() {
+                        return Some((hash, script));
+                    }
+
+                    // Try rpc
+                    match smol::block_on(
+                        self.rpc_client.query_verified_custodian_type_script(&hash),
+                    ) {
+                        Ok(opt_script) => opt_script.map(|script| {
+                            sudt_scripts.insert(hash, script.clone());
+                            (hash, script)
+                        }),
+                        Err(err) => {
+                            log::debug!("get custodian type script err {}", err);
+                            None
+                        }
+                    }
+                });
+
+                let to_custodian = has_script.filter_map(|(hash, script)| {
+                    match db.get_finalized_custodian_asset(hash.into()) {
+                        Ok(custodian_balance) => Some((hash, (custodian_balance, script))),
+                        Err(err) => {
+                            log::warn!("get custodian err {}", err);
+                            None
+                        }
+                    }
+                });
+                to_custodian.collect::<HashMap<[u8; 32], (u128, Script)>>()
+            };
+
+            let ckb_custodian = match db.get_finalized_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
+            {
+                Ok(balance) => balance,
+                Err(err) => {
+                    log::warn!("get ckb custodian err {}", err);
+                    0
+                }
+            };
+
+            crate::withdrawal::AvailableCustodians {
+                capacity: ckb_custodian,
+                sudt: sudt_custodians,
+            }
+        };
+        log::debug!("available custodians {:?}", available_custodians);
+
         // produce block
         let param = ProduceBlockParam {
             db: self.store.begin_transaction(),
@@ -272,6 +334,7 @@ impl BlockProducer {
             parent_block: &parent_block,
             rollup_config_hash: &self.rollup_config_hash,
             max_withdrawal_capacity,
+            available_custodians,
         };
         let block_result = produce_block(param)?;
         let ProduceBlockResult {
@@ -465,23 +528,25 @@ impl BlockProducer {
             .push((generated_stake.output, generated_stake.output_data));
 
         // withdrawal cells
-        let generated_withdrawal_cells = crate::withdrawal::generate(
+        if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
             &rollup_cell,
             rollup_context,
             &block,
             &self.config,
             &self.rpc_client,
         )
-        .await?;
-        tx_skeleton
-            .cell_deps_mut()
-            .extend(generated_withdrawal_cells.deps);
-        tx_skeleton
-            .inputs_mut()
-            .extend(generated_withdrawal_cells.inputs);
-        tx_skeleton
-            .outputs_mut()
-            .extend(generated_withdrawal_cells.outputs);
+        .await?
+        {
+            tx_skeleton
+                .cell_deps_mut()
+                .extend(generated_withdrawal_cells.deps);
+            tx_skeleton
+                .inputs_mut()
+                .extend(generated_withdrawal_cells.inputs);
+            tx_skeleton
+                .outputs_mut()
+                .extend(generated_withdrawal_cells.outputs);
+        }
 
         // reverted withdrawal cells
         if let Some(reverted_withdrawals) = crate::withdrawal::revert(

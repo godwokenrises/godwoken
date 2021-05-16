@@ -96,6 +96,8 @@ pub fn generate_config(
         let dep: ckb_types::packed::CellDep = scripts.withdrawal_lock.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
+    // TODO: automatic generation
+    let l1_sudt_type_dep = gw_types::packed::CellDep::default().into();
 
     let wallet_config: WalletConfig = WalletConfig { privkey_path, lock };
 
@@ -146,6 +148,7 @@ pub fn generate_config(
         stake_cell_lock_dep,
         custodian_cell_lock_dep,
         withdrawal_cell_lock_dep,
+        l1_sudt_type_dep,
         wallet_config,
     });
     let genesis: GenesisConfig = GenesisConfig {
