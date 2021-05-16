@@ -766,6 +766,68 @@ impl RPCClient {
         Ok(collected)
     }
 
+    pub async fn query_custodian_type_script(
+        &self,
+        sudt_script_hash: [u8; 32],
+    ) -> Result<Option<Script>> {
+        let rollup_context = &self.rollup_context;
+
+        let custodian_lock = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .build();
+
+        let search_key = SearchKey {
+            script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
+            script_type: ScriptType::Lock,
+            filter: None,
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut sudt_script = None;
+        let mut cursor = None;
+
+        while sudt_script.is_none() {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer_client
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            if cells.last_cursor.is_empty() {
+                return Ok(None);
+            }
+            cursor = Some(cells.last_cursor);
+
+            for cell in cells.objects.into_iter() {
+                let sudt_type_script = match cell.output.type_.clone() {
+                    Some(json_script) => {
+                        let script = ckb_types::packed::Script::from(json_script);
+                        Script::new_unchecked(script.as_bytes())
+                    }
+                    None => continue,
+                };
+
+                if sudt_type_script.hash() == sudt_script_hash {
+                    sudt_script = Some(sudt_type_script);
+                    break;
+                }
+            }
+        }
+
+        Ok(sudt_script)
+    }
+
     pub async fn query_withdrawal_cells_by_block_hashes(
         &self,
         block_hashes: &HashSet<[u8; 32]>,

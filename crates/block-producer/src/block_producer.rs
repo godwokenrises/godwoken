@@ -178,6 +178,13 @@ impl BlockProducer {
             config.poa_state_dep.clone().into(),
         );
 
+        let rollup_context = generator.rollup_context().to_owned();
+        let minimal_capacity_verifier =
+            crate::withdrawal::minimal_capacity_verifier(rollup_context, rpc_client.clone());
+        mem_pool
+            .lock()
+            .register_withdrawal_verifier(minimal_capacity_verifier);
+
         let block_producer = BlockProducer {
             rollup_config_hash,
             store,

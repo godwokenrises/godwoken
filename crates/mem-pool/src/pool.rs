@@ -114,6 +114,7 @@ pub struct MemPool {
     all_txs: HashMap<H256, L2Transaction>,
     /// all withdrawals in the pool
     all_withdrawals: HashMap<H256, WithdrawalRequest>,
+    withdrawal_verifiers: Vec<Box<dyn Fn(&WithdrawalRequest) -> Result<()> + Send>>,
 }
 
 impl MemPool {
@@ -121,6 +122,7 @@ impl MemPool {
         let pending = Default::default();
         let all_txs = Default::default();
         let all_withdrawals = Default::default();
+        let withdrawal_verifiers = Default::default();
 
         let tip = store.get_tip_block_hash()?;
 
@@ -135,6 +137,7 @@ impl MemPool {
             pending,
             all_txs,
             all_withdrawals,
+            withdrawal_verifiers,
         };
 
         // set tip
@@ -277,6 +280,10 @@ impl MemPool {
         // Check replace-by-fee
         // TODO
 
+        for verifier in self.withdrawal_verifiers.iter() {
+            verifier(&withdrawal)?;
+        }
+
         // Add to pool
         // TODO check nonce conflict
         self.all_withdrawals
@@ -305,6 +312,13 @@ impl MemPool {
         self.generator
             .verify_withdrawal_request(&state, withdrawal_request)
             .map_err(Into::into)
+    }
+
+    pub fn register_withdrawal_verifier(
+        &mut self,
+        verifier: Box<dyn Fn(&WithdrawalRequest) -> Result<()> + Send>,
+    ) {
+        self.withdrawal_verifiers.push(verifier);
     }
 
     /// Return pending contents

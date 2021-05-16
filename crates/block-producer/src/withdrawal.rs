@@ -16,12 +16,15 @@ use gw_types::{
     },
     prelude::*,
 };
+use parking_lot::Mutex;
 
 use std::{
     collections::{HashMap, HashSet},
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
+#[derive(Debug)]
 pub struct AvailableCustodians {
     pub capacity: u64,
     pub sudt: HashMap<[u8; 32], (u128, Script)>,
@@ -101,28 +104,12 @@ impl<'a> Generator<'a> {
 
         // Verify minimal capacity
         let req_ckb: u64 = req.raw().capacity().unpack();
-        let (min_capacity, output) = {
-            let lock = build_withdrawal_lock(req, self.rollup_context, block);
+        let sudt_script = {
             let sudt_custodain = self.sudt_custodians.get(&sudt_type_hash);
-            let (type_, data) = match sudt_custodain.map(|(_, _, script)| script.to_owned()) {
-                Some(type_) => (Some(type_).pack(), req.raw().amount().as_bytes()),
-                None => (None::<Script>.pack(), Bytes::new()),
-            };
-
-            let size = 8 + data.len() + type_.as_slice().len() + lock.as_slice().len();
-            let min_capacity = size as u64 * 100_000_000;
-
-            let withdrawal = CellOutput::new_builder()
-                .capacity(req_ckb.pack())
-                .lock(lock)
-                .type_(type_)
-                .build();
-
-            (min_capacity, (withdrawal, data))
+            sudt_custodain.map(|(_, _, script)| script.to_owned())
         };
-        if req_ckb < min_capacity {
-            return Err(anyhow!("{} is minimal capacity for {}", min_capacity, req));
-        }
+        let output = generate_withdrawal_output(req, self.rollup_context, block, sudt_script)
+            .map_err(|min_capacity| anyhow!("{} minimal capacity for {}", min_capacity, req))?;
 
         // Verify remaind sudt
         if 0 != req_sudt {
@@ -391,6 +378,46 @@ pub fn sum<'a, Iter: Iterator<Item = &'a WithdrawalRequest>>(reqs: Iter) -> With
     )
 }
 
+pub fn minimal_capacity_verifier(
+    rollup_context: RollupContext,
+    rpc_client: RPCClient,
+) -> Box<dyn Fn(&WithdrawalRequest) -> Result<()> + Send> {
+    let sudt_scripts = Arc::new(Mutex::new(HashMap::new()));
+    let verifier = move |req: &WithdrawalRequest| -> Result<()> {
+        let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
+
+        // Fetch sudt script
+        {
+            let has_script = { sudt_scripts.lock().contains_key(&sudt_script_hash) };
+
+            if 0 != req.raw().amount().unpack()
+                && sudt_script_hash != CKB_SUDT_SCRIPT_ARGS
+                && !has_script
+            {
+                let sudt_script = match smol::block_on(async {
+                    rpc_client
+                        .query_custodian_type_script(sudt_script_hash)
+                        .await
+                })? {
+                    Some(script) => script,
+                    None => return Err(anyhow!("sudt script not found")),
+                };
+
+                sudt_scripts.lock().insert(sudt_script_hash, sudt_script);
+            }
+        }
+
+        let type_script = { sudt_scripts.lock().get(&sudt_script_hash).cloned() };
+
+        generate_withdrawal_output(req, &rollup_context, &L2Block::default(), type_script)
+            .map_err(|min_capacity| anyhow!("{} minimal capacity required", min_capacity))?;
+
+        Ok(())
+    };
+
+    Box::new(verifier)
+}
+
 fn build_withdrawal_lock(
     req: &WithdrawalRequest,
     rollup_context: &RollupContext,
@@ -437,6 +464,35 @@ fn build_finalized_custodian_lock(rollup_context: &RollupContext) -> Script {
         .hash_type(ScriptHashType::Type.into())
         .args(args.pack())
         .build()
+}
+
+fn generate_withdrawal_output(
+    req: &WithdrawalRequest,
+    rollup_context: &RollupContext,
+    block: &L2Block,
+    type_script: Option<Script>,
+) -> std::result::Result<(CellOutput, Bytes), u64> {
+    let req_ckb: u64 = req.raw().capacity().unpack();
+    let lock = build_withdrawal_lock(req, rollup_context, block);
+    let (type_, data) = match type_script {
+        Some(type_) => (Some(type_).pack(), req.raw().amount().as_bytes()),
+        None => (None::<Script>.pack(), Bytes::new()),
+    };
+
+    let size = 8 + data.len() + type_.as_slice().len() + lock.as_slice().len();
+    let min_capacity = size as u64 * 100_000_000;
+
+    if req_ckb < min_capacity {
+        return Err(min_capacity);
+    }
+
+    let withdrawal = CellOutput::new_builder()
+        .capacity(req_ckb.pack())
+        .lock(lock)
+        .type_(type_)
+        .build();
+
+    Ok((withdrawal, data))
 }
 
 fn generate_finalized_custodian(
