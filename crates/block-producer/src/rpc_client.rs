@@ -96,7 +96,7 @@ fn parse_deposit_request(
 
 #[derive(Debug)]
 pub struct WithdrawalsAmount {
-    pub capacity: u64,
+    pub capacity: u128,
     pub sudt: HashMap<[u8; 32], u128>,
 }
 
@@ -112,7 +112,7 @@ impl Default for WithdrawalsAmount {
 #[derive(Debug)]
 pub struct CollectedCustodianCells {
     pub cells_info: Vec<CellInfo>,
-    pub capacity: u64,
+    pub capacity: u128,
     pub sudt: HashMap<[u8; 32], (u128, Script)>,
 }
 
@@ -751,7 +751,7 @@ impl RPCClient {
 
                 collected.capacity = collected
                     .capacity
-                    .saturating_add(output.capacity().unpack());
+                    .saturating_add(output.capacity().unpack() as u128);
 
                 let info = CellInfo {
                     out_point,

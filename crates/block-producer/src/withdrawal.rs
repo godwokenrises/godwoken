@@ -26,7 +26,7 @@ use std::{
 
 #[derive(Debug)]
 pub struct AvailableCustodians {
-    pub capacity: u64,
+    pub capacity: u128,
     pub sudt: HashMap<[u8; 32], (u128, Script)>,
 }
 
@@ -50,7 +50,7 @@ impl<'a> From<&'a CollectedCustodianCells> for AvailableCustodians {
 
 pub struct Generator<'a> {
     rollup_context: &'a RollupContext,
-    ckb_custodian: (u64, u64, u64), // (capacity, balance, min_capacity)
+    ckb_custodian: (u128, u128, u64), // (capacity, balance, min_capacity)
     sudt_custodians: HashMap<[u8; 32], (u64, u128, Script)>, // (capacity, balance, script)
     withdrawals: Vec<(CellOutput, Bytes)>,
 }
@@ -60,14 +60,14 @@ impl<'a> Generator<'a> {
         rollup_context: &'a RollupContext,
         available_custodians: AvailableCustodians,
     ) -> Self {
-        let mut total_sudt_capacity = 0u64;
+        let mut total_sudt_capacity = 0u128;
         let mut sudt_custodians = HashMap::new();
 
         for (sudt_type_hash, (balance, type_script)) in available_custodians.sudt.into_iter() {
             let (change, _data) =
                 generate_finalized_custodian(rollup_context, balance, type_script.clone());
             let change_capacity: u64 = change.capacity().unpack();
-            total_sudt_capacity = total_sudt_capacity.saturating_add(change_capacity);
+            total_sudt_capacity = total_sudt_capacity.saturating_add(change_capacity as u128);
             sudt_custodians.insert(sudt_type_hash, (change_capacity, balance, type_script));
         }
 
@@ -79,7 +79,7 @@ impl<'a> Generator<'a> {
         let ckb_custodian_capacity = available_custodians
             .capacity
             .saturating_sub(total_sudt_capacity);
-        let ckb_balance = ckb_custodian_capacity.saturating_sub(ckb_custodian_min_capacity);
+        let ckb_balance = ckb_custodian_capacity.saturating_sub(ckb_custodian_min_capacity as u128);
         let ckb_custodian = (
             ckb_custodian_capacity,
             ckb_balance,
@@ -103,7 +103,6 @@ impl<'a> Generator<'a> {
         }
 
         // Verify minimal capacity
-        let req_ckb: u64 = req.raw().capacity().unpack();
         let sudt_script = {
             let sudt_custodain = self.sudt_custodians.get(&sudt_type_hash);
             sudt_custodain.map(|(_, _, script)| script.to_owned())
@@ -131,17 +130,18 @@ impl<'a> Generator<'a> {
 
                 // If ckb custodian is already consumed
                 if 0 == *ckb_custodian_capacity {
-                    *ckb_custodian_capacity = *sudt_custodian_capacity;
-                    *ckb_balance = *sudt_custodian_capacity - *ckb_custodian_min_capacity;
+                    *ckb_custodian_capacity = *sudt_custodian_capacity as u128;
+                    *ckb_balance = (*sudt_custodian_capacity - *ckb_custodian_min_capacity) as u128;
                 } else {
-                    *ckb_custodian_capacity += *sudt_custodian_capacity;
-                    *ckb_balance += *sudt_custodian_capacity;
+                    *ckb_custodian_capacity += *sudt_custodian_capacity as u128;
+                    *ckb_balance += *sudt_custodian_capacity as u128;
                 }
                 *sudt_custodian_capacity = 0;
             }
         }
 
         // Verify remaind ckb (capacity, available_amount, min_capacity)
+        let req_ckb = req.raw().capacity().unpack() as u128;
         let (ckb_custodian_capacity, ckb_balance, _) = &mut self.ckb_custodian;
         match ckb_balance.checked_sub(req_ckb) {
             Some(remaind) => {
@@ -180,14 +180,41 @@ impl<'a> Generator<'a> {
         }
 
         // Generate ckb custodian change
-        let (ckb_custodian_capacity, ..) = self.ckb_custodian;
-        if 0 != ckb_custodian_capacity {
+        let build_ckb_output = |capacity: u64| -> (CellOutput, Bytes) {
             let output = CellOutput::new_builder()
-                .capacity(ckb_custodian_capacity.pack())
-                .lock(custodian_lock)
+                .capacity(capacity.pack())
+                .lock(custodian_lock.clone())
                 .build();
+            (output, Bytes::new())
+        };
+        let (ckb_custodian_capacity, _, min_capacity) = self.ckb_custodian;
+        if 0 != ckb_custodian_capacity {
+            if ckb_custodian_capacity < u64::MAX as u128 {
+                outputs.push(build_ckb_output(ckb_custodian_capacity as u64));
+                return outputs;
+            }
 
-            outputs.push((output, Bytes::new()));
+            let mut remaind = ckb_custodian_capacity;
+            while remaind > 0 {
+                let max = remaind.saturating_sub(min_capacity as u128);
+                match max.checked_sub(u64::MAX as u128) {
+                    Some(cap) => {
+                        outputs.push(build_ckb_output(u64::MAX));
+                        remaind = cap.saturating_add(min_capacity as u128);
+                    }
+                    None if max.saturating_add(min_capacity as u128) > u64::MAX as u128 => {
+                        let max = max.saturating_add(min_capacity as u128);
+                        let half = max / 2;
+                        outputs.push(build_ckb_output(half as u64));
+                        outputs.push(build_ckb_output(max.saturating_sub(half) as u64));
+                        remaind = 0;
+                    }
+                    None => {
+                        outputs.push(build_ckb_output((max as u64).saturating_add(min_capacity)));
+                        remaind = 0;
+                    }
+                }
+            }
         }
 
         outputs
@@ -356,7 +383,7 @@ pub fn sum<'a, Iter: Iterator<Item = &'a WithdrawalRequest>>(reqs: Iter) -> With
         |mut total_amount, withdrawal| {
             total_amount.capacity = total_amount
                 .capacity
-                .saturating_add(withdrawal.raw().capacity().unpack());
+                .saturating_add(withdrawal.raw().capacity().unpack() as u128);
 
             let sudt_script_hash = withdrawal.raw().sudt_script_hash().unpack();
             let sudt_amount = withdrawal.raw().amount().unpack();
