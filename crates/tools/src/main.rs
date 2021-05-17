@@ -6,7 +6,7 @@ use clap::{App, Arg, SubCommand};
 use std::path::Path;
 
 fn main() {
-    env_logger::init();
+    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
 
     let arg_privkey_path = Arg::with_name("privkey-path")
         .short("k")
