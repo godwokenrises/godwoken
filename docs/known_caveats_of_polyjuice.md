@@ -58,8 +58,8 @@ We do understand the hassles of adding a new address concept here, but we are co
 Based on these changes, a few suggestions on building a polyjuice application are as follows:
 
 1. The utilities you have in place to deploy Ethereum contracts are expected to remain working. Polyjuice addresses will be returned as Ethereum contract addresses. CContracts will not be considered as user accounts, there is no corresponding identity address for them.
-2. We recommend to use the identity address as widely as possible on the UI side of the app, and thus users will be able to have the same address in the app and in their wallets.
+2. We do recommend to use the identity address as widely as possible on the UI side of the app, and thus users will be able to have the same address in the app and in their wallets.
 3. To make a contract call with an address in one of the call parameters, it is suggested to use the RPC provided to transform the identity address into a polyjuice address before passing the polyjuice address to the contract call as parameters.
 4. You will probably need to make RPC calls to convert the polyjuice addresses back to identity addresses so as to present them to the users in case you need to query the on-chain storage to obtain the addresses.
 
-Briefly, it is recommended to use the identity address as often as possible and undertake the conversion to the identity address if that is absolutely necessary.
+In General, it is recommended to use the identity address as often as possible and undertake the conversion to the identity address if that is absolutely necessary.
