@@ -24,7 +24,10 @@ use gw_types::{
 };
 use gw_web3_indexer::Web3Indexer;
 use parking_lot::Mutex;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{
+    postgres::{PgConnectOptions, PgPoolOptions},
+    ConnectOptions,
+};
 use std::{
     net::{SocketAddr, ToSocketAddrs},
     process::exit,
@@ -207,9 +210,12 @@ pub fn run(config: Config) -> Result<()> {
     let web3_indexer = match config.web3_indexer {
         Some(web3_indexer_config) => {
             let pool = smol::block_on(async {
+                let mut opts: PgConnectOptions = web3_indexer_config.database_url.parse()?;
+                opts.log_statements(log::LevelFilter::Debug)
+                    .log_slow_statements(log::LevelFilter::Warn, Duration::from_secs(5));
                 PgPoolOptions::new()
                     .max_connections(5)
-                    .connect(&web3_indexer_config.database_url)
+                    .connect_with(opts)
                     .await
             })?;
             let polyjuce_type_script_hash = web3_indexer_config.polyjuice_script_type_hash;
