@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use ckb_hash::blake2b_256;
-use ckb_types::{packed::WitnessArgs, H256};
+use ckb_types::H256;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_common::state::State;
 use gw_store::{
@@ -15,8 +15,11 @@ use gw_store::{
     Store,
 };
 use gw_traits::CodeStore;
-use gw_types::packed::{L2Block, RollupAction, RollupActionReader, RollupActionUnion, Transaction};
+use gw_types::packed::{
+    L2Block, RollupAction, RollupActionReader, RollupActionUnion, Transaction, WitnessArgs,
+};
 use gw_types::{
+    bytes::Bytes,
     packed::{SUDTArgs, SUDTArgsUnion, Script},
     prelude::*,
 };
@@ -145,11 +148,11 @@ impl Web3Indexer {
             .get(0)
             .ok_or_else(|| anyhow!("Witness missing for L2 block!"))?;
         let witness_args = WitnessArgs::from_slice(&witness.raw_data())?;
-        let rollup_action_bytes = witness_args
+        let rollup_action_bytes: Bytes = witness_args
             .output_type()
             .to_opt()
             .ok_or_else(|| anyhow!("Missing L2 block!"))?
-            .as_bytes();
+            .unpack();
         match RollupActionReader::verify(&rollup_action_bytes, false) {
             Ok(_) => match RollupAction::new_unchecked(rollup_action_bytes).to_enum() {
                 RollupActionUnion::RollupSubmitBlock(args) => Ok(args.block()),
