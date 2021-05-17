@@ -94,7 +94,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn insert(&mut self, req: &WithdrawalRequest, block: &L2Block) -> Result<()> {
+    pub fn include_and_verify(&mut self, req: &WithdrawalRequest, block: &L2Block) -> Result<()> {
         // Verify finalized custodian exists
         let req_sudt: u128 = req.raw().amount().unpack();
         let sudt_type_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
@@ -210,7 +210,7 @@ pub fn generate(
     let mut generator = Generator::new(rollup_context, (&custodian_cells).into());
 
     for req in block.withdrawals().into_iter() {
-        generator.insert(&req, block)?;
+        generator.include_and_verify(&req, block)?;
     }
 
     let custodian_lock_dep = block_producer_config.custodian_cell_lock_dep.clone();
