@@ -330,9 +330,9 @@ impl BlockProducer {
         let collected_custodians = if 0 == total_withdrawal_amounts.capacity {
             CollectedCustodianCells::default()
         } else {
-            let rollup_context = self.generator.rollup_context();
-            let last_finalized_block_number =
-                rollup_context.rollup_config.finality_blocks().unpack();
+            let global_state = GlobalState::from_slice(&rollup_cell.data)
+                .map_err(|_| anyhow!("parse rollup cell global state"))?;
+            let last_finalized_block_number = global_state.last_finalized_block_number().unpack();
 
             self.rpc_client
                 .query_finalized_custodian_cells(
