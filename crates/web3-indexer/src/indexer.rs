@@ -137,7 +137,7 @@ impl Web3Indexer {
                 }
             }
             tx.commit().await?;
-            log::info!("web3 indexer: sync new block #{}", web3_block.number);
+            log::debug!("web3 indexer: sync new block #{}", web3_block.number);
         }
         Ok(())
     }
