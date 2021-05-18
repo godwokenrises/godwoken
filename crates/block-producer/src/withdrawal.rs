@@ -443,7 +443,7 @@ pub async fn revert(
     }))
 }
 
-pub async fn get_custodian_type_script(
+pub async fn get_verified_custodian_type_script(
     hash: &[u8; 32],
     rpc_client: &RPCClient,
 ) -> Result<Option<Script>> {
@@ -453,7 +453,10 @@ pub async fn get_custodian_type_script(
         }
     }
 
-    if let Some(script) = rpc_client.query_custodian_type_script(hash).await? {
+    if let Some(script) = rpc_client
+        .query_verified_custodian_type_script(hash)
+        .await?
+    {
         CUSTODIAN_TYPE_SCRIPTS
             .lock()
             .insert(hash.to_owned(), script.clone());
@@ -468,34 +471,16 @@ pub fn minimal_capacity_verifier(
     rollup_context: RollupContext,
     rpc_client: RPCClient,
 ) -> Box<dyn Fn(&WithdrawalRequest) -> Result<()> + Send> {
-    let sudt_scripts = Arc::new(Mutex::new(HashMap::new()));
     let verifier = move |req: &WithdrawalRequest| -> Result<()> {
         let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
 
-        // Fetch sudt script
-        {
-            let has_script = { sudt_scripts.lock().contains_key(&sudt_script_hash) };
+        let sudt_script = smol::block_on(get_verified_custodian_type_script(
+            &sudt_script_hash,
+            &rpc_client,
+        ))?
+        .ok_or_else(|| anyhow!("sudt script not found"))?;
 
-            if 0 != req.raw().amount().unpack()
-                && sudt_script_hash != CKB_SUDT_SCRIPT_ARGS
-                && !has_script
-            {
-                let sudt_script = match smol::block_on(async {
-                    rpc_client
-                        .query_custodian_type_script(&sudt_script_hash)
-                        .await
-                })? {
-                    Some(script) => script,
-                    None => return Err(anyhow!("sudt script not found")),
-                };
-
-                sudt_scripts.lock().insert(sudt_script_hash, sudt_script);
-            }
-        }
-
-        let type_script = { sudt_scripts.lock().get(&sudt_script_hash).cloned() };
-
-        generate_withdrawal_output(req, &rollup_context, &L2Block::default(), type_script)
+        generate_withdrawal_output(req, &rollup_context, &L2Block::default(), Some(sudt_script))
             .map_err(|min_capacity| anyhow!("{} minimal capacity required", min_capacity))?;
 
         Ok(())

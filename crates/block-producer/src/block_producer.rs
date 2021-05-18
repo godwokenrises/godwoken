@@ -339,7 +339,7 @@ impl BlockProducer {
 
                 let to_hash = sudt_reqs.map(|req| req.raw().sudt_script_hash().unpack());
                 let has_script = to_hash.filter_map(|hash: [u8; 32]| {
-                    match smol::block_on(crate::withdrawal::get_custodian_type_script(
+                    match smol::block_on(crate::withdrawal::get_verified_custodian_type_script(
                         &hash,
                         &self.rpc_client,
                     )) {

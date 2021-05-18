@@ -766,7 +766,7 @@ impl RPCClient {
         Ok(collected)
     }
 
-    pub async fn query_custodian_type_script(
+    pub async fn query_verified_custodian_type_script(
         &self,
         sudt_script_hash: &[u8; 32],
     ) -> Result<Option<Script>> {
