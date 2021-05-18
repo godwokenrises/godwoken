@@ -309,6 +309,11 @@ pub async fn generate(
 
     let custodian_lock_dep = block_producer_config.custodian_cell_lock_dep.clone();
     let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
+    let mut cell_deps = vec![custodian_lock_dep.into()];
+    if !total_withdrawal_amount.sudt.is_empty() {
+        cell_deps.push(sudt_type_dep.into());
+    }
+
     let custodian_inputs = custodian_cells.cells_info.into_iter().map(|cell| {
         let input = CellInput::new_builder()
             .previous_output(cell.out_point.clone())
@@ -317,7 +322,7 @@ pub async fn generate(
     });
 
     let generated_withdrawals = GeneratedWithdrawals {
-        deps: vec![custodian_lock_dep.into(), sudt_type_dep.into()],
+        deps: cell_deps,
         inputs: custodian_inputs.collect(),
         outputs: generator.finish(),
     };
@@ -437,8 +442,16 @@ pub async fn revert(
 
     let withdrawal_lock_dep = block_producer_config.withdrawal_cell_lock_dep.clone();
     let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
+    let mut cell_deps = vec![withdrawal_lock_dep.into()];
+    if withdrawal_inputs
+        .iter()
+        .any(|info| info.cell.output.type_().to_opt().is_some())
+    {
+        cell_deps.push(sudt_type_dep.into())
+    }
+
     Ok(Some(RevertedWithdrawals {
-        deps: vec![withdrawal_lock_dep.into(), sudt_type_dep.into()],
+        deps: cell_deps,
         inputs: withdrawal_inputs,
         outputs: custodian_outputs,
         witness_args: withdrawal_witness,
