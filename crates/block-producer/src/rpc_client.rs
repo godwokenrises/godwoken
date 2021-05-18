@@ -768,7 +768,7 @@ impl RPCClient {
 
     pub async fn query_custodian_type_script(
         &self,
-        sudt_script_hash: [u8; 32],
+        sudt_script_hash: &[u8; 32],
     ) -> Result<Option<Script>> {
         let rollup_context = &self.rollup_context;
 
@@ -778,18 +778,28 @@ impl RPCClient {
             .args(rollup_context.rollup_script_hash.as_slice().pack())
             .build();
 
+        let l1_sudt_type = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.l1_sudt_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .build();
+
         let search_key = SearchKey {
             script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
             script_type: ScriptType::Lock,
-            filter: None,
+            filter: Some(SearchKeyFilter {
+                script: Some(
+                    ckb_types::packed::Script::new_unchecked(l1_sudt_type.as_bytes()).into(),
+                ),
+                output_data_len_range: None,
+                output_capacity_range: None,
+                block_range: None,
+            }),
         };
         let order = Order::Desc;
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
 
-        let mut sudt_script = None;
         let mut cursor = None;
-
-        while sudt_script.is_none() {
+        loop {
             let cells: Pagination<Cell> = to_result(
                 self.indexer_client
                     .request(
@@ -810,6 +820,11 @@ impl RPCClient {
             cursor = Some(cells.last_cursor);
 
             for cell in cells.objects.into_iter() {
+                let args = cell.output.lock.args.clone().into_bytes();
+                if CustodianLockArgsReader::verify(&args[32..], false).is_err() {
+                    continue;
+                }
+
                 let sudt_type_script = match cell.output.type_.clone() {
                     Some(json_script) => {
                         let script = ckb_types::packed::Script::from(json_script);
@@ -818,14 +833,11 @@ impl RPCClient {
                     None => continue,
                 };
 
-                if sudt_type_script.hash() == sudt_script_hash {
-                    sudt_script = Some(sudt_type_script);
-                    break;
+                if sudt_script_hash == &sudt_type_script.hash() {
+                    return Ok(Some(sudt_type_script));
                 }
             }
         }
-
-        Ok(sudt_script)
     }
 
     pub async fn query_withdrawal_cells_by_block_hashes(

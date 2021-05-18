@@ -326,19 +326,34 @@ impl BlockProducer {
         let parent_block = self.chain.lock().local_state().tip().clone();
         let max_withdrawal_capacity = std::u128::MAX;
 
-        let available_custodians = {
+        let available_custodians = if withdrawal_requests.is_empty() {
+            crate::withdrawal::AvailableCustodians::default()
+        } else {
             let db = self.store.begin_transaction();
             let sudt_custodians = {
                 let reqs = withdrawal_requests.iter();
                 let sudt_reqs = reqs.filter(|req| {
-                    0 != req.raw().amount().unpack()
-                        && CKB_SUDT_SCRIPT_ARGS != req.raw().sudt_script_hash().unpack()
+                    let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
+                    0 != req.raw().amount().unpack() && CKB_SUDT_SCRIPT_ARGS != sudt_script_hash
                 });
+
                 let to_hash = sudt_reqs.map(|req| req.raw().sudt_script_hash().unpack());
-                let to_custodian = to_hash.filter_map(|hash: [u8; 32]| {
+                let has_script = to_hash.filter_map(|hash: [u8; 32]| {
+                    match smol::block_on(crate::withdrawal::get_custodian_type_script(
+                        &hash,
+                        &self.rpc_client,
+                    )) {
+                        Ok(opt_script) => opt_script.map(|script| (hash, script)),
+                        Err(err) => {
+                            log::debug!("get custodian type script err {}", err);
+                            None
+                        }
+                    }
+                });
+
+                let to_custodian = has_script.filter_map(|(hash, script)| {
                     match db.get_custodian_asset(hash.into()) {
-                        // FIXME:
-                        Ok(custodian) => Some((hash, (custodian, Script::default()))),
+                        Ok(custodian_balance) => Some((hash, (custodian_balance, script))),
                         Err(err) => {
                             log::warn!("get custodian err {}", err);
                             None
@@ -348,9 +363,13 @@ impl BlockProducer {
                 to_custodian.collect::<HashMap<[u8; 32], (u128, Script)>>()
             };
 
-            let ckb_custodian = db
-                .get_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
-                .unwrap_or_else(|_| 0);
+            let ckb_custodian = match db.get_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into()) {
+                Ok(balance) => balance,
+                Err(err) => {
+                    log::warn!("get ckb custodian err {}", err);
+                    0
+                }
+            };
 
             crate::withdrawal::AvailableCustodians {
                 capacity: ckb_custodian,

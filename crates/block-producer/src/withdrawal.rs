@@ -27,6 +27,10 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+lazy_static::lazy_static! {
+    static ref CUSTODIAN_TYPE_SCRIPTS: Arc<Mutex<HashMap<[u8; 32], Script>>> = Arc::new(Mutex::new(Default::default()));
+}
+
 #[derive(Debug)]
 pub struct AvailableCustodians {
     pub capacity: u128,
@@ -439,6 +443,27 @@ pub async fn revert(
     }))
 }
 
+pub async fn get_custodian_type_script(
+    hash: &[u8; 32],
+    rpc_client: &RPCClient,
+) -> Result<Option<Script>> {
+    {
+        if let Some(script) = CUSTODIAN_TYPE_SCRIPTS.lock().get(hash) {
+            return Ok(Some(script.to_owned()));
+        }
+    }
+
+    if let Some(script) = rpc_client.query_custodian_type_script(hash).await? {
+        CUSTODIAN_TYPE_SCRIPTS
+            .lock()
+            .insert(hash.to_owned(), script.clone());
+
+        Ok(Some(script))
+    } else {
+        Ok(None)
+    }
+}
+
 pub fn minimal_capacity_verifier(
     rollup_context: RollupContext,
     rpc_client: RPCClient,
@@ -457,7 +482,7 @@ pub fn minimal_capacity_verifier(
             {
                 let sudt_script = match smol::block_on(async {
                     rpc_client
-                        .query_custodian_type_script(sudt_script_hash)
+                        .query_custodian_type_script(&sudt_script_hash)
                         .await
                 })? {
                     Some(script) => script,
