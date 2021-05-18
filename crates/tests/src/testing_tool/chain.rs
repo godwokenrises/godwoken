@@ -208,7 +208,7 @@ pub fn construct_block(
         }
     }
 
-    available_custodians.capacity = std::u64::MAX;
+    available_custodians.capacity = std::u128::MAX;
     for req in withdrawal_requests.iter() {
         if 0 == req.raw().amount().unpack() {
             continue;
