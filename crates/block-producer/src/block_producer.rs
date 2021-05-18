@@ -3,7 +3,7 @@
 use crate::{
     poa::{PoA, ShouldIssueBlock},
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
-    rpc_client::{CollectedCustodianCells, DepositInfo, RPCClient},
+    rpc_client::{DepositInfo, RPCClient},
     transaction_skeleton::TransactionSkeleton,
     types::ChainEvent,
     types::{CellInfo, InputCellInfo},
@@ -143,65 +143,6 @@ async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Ve
         cells.push(cell);
     }
     Ok(cells)
-}
-
-async fn resolve_type_deps(
-    rpc_client: &RPCClient,
-    cell_inputs: &[InputCellInfo],
-) -> Result<HashSet<CellDep>> {
-    let type_tx_hash = {
-        let filter_type = cell_inputs.iter().filter_map(|info| {
-            let opt_type_ = info.cell.output.type_().to_opt();
-            opt_type_.map(|script| {
-                let code_hash: [u8; 32] = script.code_hash().unpack();
-                let tx_hash: [u8; 32] = info.input.previous_output().tx_hash().unpack();
-                (code_hash, (tx_hash, script))
-            })
-        });
-        filter_type.collect::<HashMap<_, _>>()
-    };
-
-    let mut dep_cells: Vec<CellInfo> = Vec::new();
-    for (tx_hash, _) in type_tx_hash.values() {
-        dep_cells.extend(resolve_tx_deps(rpc_client, tx_hash.to_owned()).await?);
-    }
-
-    let dep_by_data: HashMap<[u8; 32], OutPoint> = {
-        let calc_data_hash = dep_cells.iter().map(|cell| {
-            let data_hash = ckb_types::packed::CellOutput::calc_data_hash(&cell.data).unpack();
-            (data_hash, cell.out_point.clone())
-        });
-        calc_data_hash.collect()
-    };
-    let dep_by_type: HashMap<[u8; 32], OutPoint> = {
-        let calc_type_hash = dep_cells.iter().filter_map(|cell| {
-            let type_ = cell.output.type_().to_opt();
-            type_.map(|script| (script.hash(), cell.out_point.clone()))
-        });
-        calc_type_hash.collect()
-    };
-
-    let mut deps: HashSet<CellDep> = HashSet::new();
-    for (_, (_, script)) in type_tx_hash {
-        let hash_type = ScriptHashType::try_from(script.hash_type())
-            .map_err(|e| anyhow!("invalid hash_type {}", e))?;
-
-        let code_hash: [u8; 32] = script.code_hash().unpack();
-        let out_point = match hash_type {
-            ScriptHashType::Data => dep_by_data.get(&code_hash),
-            ScriptHashType::Type => dep_by_type.get(&code_hash),
-        }
-        .ok_or_else(|| anyhow!("can't find deps code_hash {:?}", code_hash))?;
-
-        let cell_dep = CellDep::new_builder()
-            .out_point(out_point.to_owned())
-            .dep_type(DepType::Code.into())
-            .build();
-
-        deps.insert(cell_dep);
-    }
-
-    Ok(deps)
 }
 
 pub struct BlockProducer {
@@ -584,7 +525,7 @@ impl BlockProducer {
             .push((generated_stake.output, generated_stake.output_data));
 
         // withdrawal cells
-        if let Some(mut generated_withdrawal_cells) = crate::withdrawal::generate(
+        if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
             &rollup_cell,
             rollup_context,
             &block,
@@ -593,12 +534,9 @@ impl BlockProducer {
         )
         .await?
         {
-            let mut resolved_deps =
-                resolve_type_deps(&self.rpc_client, &generated_withdrawal_cells.inputs).await?;
-            resolved_deps.extend(tx_skeleton.cell_deps_mut().drain(..));
-            resolved_deps.extend(generated_withdrawal_cells.deps.drain(..));
-
-            *tx_skeleton.cell_deps_mut() = resolved_deps.into_iter().collect();
+            tx_skeleton
+                .cell_deps_mut()
+                .extend(generated_withdrawal_cells.deps);
             tx_skeleton
                 .inputs_mut()
                 .extend(generated_withdrawal_cells.inputs);
@@ -613,7 +551,7 @@ impl BlockProducer {
         }
 
         // reverted withdrawal cells
-        if let Some(mut reverted_withdrawals) = crate::withdrawal::revert(
+        if let Some(reverted_withdrawals) = crate::withdrawal::revert(
             &rollup_action,
             rollup_context,
             &self.config,
@@ -621,12 +559,9 @@ impl BlockProducer {
         )
         .await?
         {
-            let mut resolved_deps =
-                resolve_type_deps(&self.rpc_client, &reverted_withdrawals.inputs).await?;
-            resolved_deps.extend(tx_skeleton.cell_deps_mut().drain(..));
-            resolved_deps.extend(reverted_withdrawals.deps.drain(..));
-
-            *tx_skeleton.cell_deps_mut() = resolved_deps.into_iter().collect();
+            tx_skeleton
+                .cell_deps_mut()
+                .extend(reverted_withdrawals.deps);
 
             let input_len = tx_skeleton.inputs().len();
             let witness_len = tx_skeleton.witnesses_mut().len();
