@@ -489,13 +489,19 @@ pub fn minimal_capacity_verifier(
     let verifier = move |req: &WithdrawalRequest| -> Result<()> {
         let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
 
-        let sudt_script = smol::block_on(get_verified_custodian_type_script(
-            &sudt_script_hash,
-            &rpc_client,
-        ))?
-        .ok_or_else(|| anyhow!("sudt script not found"))?;
+        let sudt_script = if sudt_script_hash == CKB_SUDT_SCRIPT_ARGS {
+            None
+        } else {
+            let script = smol::block_on(get_verified_custodian_type_script(
+                &sudt_script_hash,
+                &rpc_client,
+            ))?
+            .ok_or_else(|| anyhow!("sudt script not found"))?;
 
-        generate_withdrawal_output(req, &rollup_context, &L2Block::default(), Some(sudt_script))
+            Some(script)
+        };
+
+        generate_withdrawal_output(req, &rollup_context, &L2Block::default(), sudt_script)
             .map_err(|min_capacity| anyhow!("{} minimal capacity required", min_capacity))?;
 
         Ok(())
