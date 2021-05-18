@@ -649,10 +649,22 @@ impl RPCClient {
             .args(rollup_context.rollup_script_hash.as_slice().pack())
             .build();
 
+        let l1_sudt_type = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.l1_sudt_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .build();
+
         let search_key = SearchKey {
             script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
             script_type: ScriptType::Lock,
-            filter: None,
+            filter: Some(SearchKeyFilter {
+                script: Some(
+                    ckb_types::packed::Script::new_unchecked(l1_sudt_type.as_bytes()).into(),
+                ),
+                output_data_len_range: None,
+                output_capacity_range: None,
+                block_range: None,
+            }),
         };
         let order = Order::Desc;
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
