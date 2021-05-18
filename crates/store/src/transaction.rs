@@ -12,7 +12,7 @@ use gw_db::{
     error::Error, iter::DBIter, DBIterator, Direction::Forward, IteratorMode, RocksDBTransaction,
 };
 use gw_types::{
-    packed::{self, TransactionKey},
+    packed::{self, RollupConfig, TransactionKey},
     prelude::*,
 };
 use std::{borrow::BorrowMut, collections::HashMap};
@@ -379,7 +379,11 @@ impl StoreTransaction {
     }
 
     /// Attach block to the rollup main chain
-    pub fn attach_block(&self, block: packed::L2Block) -> Result<(), Error> {
+    pub fn attach_block(
+        &self,
+        block: packed::L2Block,
+        rollup_config: &RollupConfig,
+    ) -> Result<(), Error> {
         let raw = block.raw();
         let raw_number = raw.number();
         let block_hash = raw.hash();
@@ -395,25 +399,48 @@ impl StoreTransaction {
             self.insert_raw(COLUMN_TRANSACTION_INFO, &tx_hash, info.as_slice())?;
         }
 
-        // update custodian assets
-        let deposit_assets = self
-            .get_block_deposition_requests(&block_hash.into())?
-            .expect("deposits")
-            .into_iter()
-            .map(|deposit| CustodianChange {
-                sudt_script_hash: deposit.sudt_script_hash().unpack(),
-                amount: deposit.amount().unpack(),
-                capacity: deposit.capacity().unpack(),
-            });
-        let withdrawal_assets = block.withdrawals().into_iter().map(|withdrawal| {
-            let raw = withdrawal.raw();
-            CustodianChange {
-                sudt_script_hash: raw.sudt_script_hash().unpack(),
-                amount: raw.amount().unpack(),
-                capacity: raw.capacity().unpack(),
-            }
-        });
-        self.update_custodian_assets(deposit_assets, withdrawal_assets)?;
+        // update finalized custodian assets
+        let finality_blocks = rollup_config.finality_blocks().unpack();
+        let last_finalized_block_number = raw_number.unpack().saturating_sub(finality_blocks);
+        if last_finalized_block_number > 0 {
+            let last_finalized_block_hash = self
+                .get_block_hash_by_number(last_finalized_block_number)?
+                .ok_or_else(|| {
+                    Error::from(format!(
+                        "last finalized block {} hash not found",
+                        last_finalized_block_number
+                    ))
+                })?;
+            let last_finalized_block =
+                self.get_block(&last_finalized_block_hash)?.ok_or_else(|| {
+                    Error::from(format!(
+                        "last finalized block {} not found",
+                        last_finalized_block_number
+                    ))
+                })?;
+
+            let deposit_assets = self
+                .get_block_deposition_requests(&last_finalized_block_hash)?
+                .expect("finalized deposits")
+                .into_iter()
+                .map(|deposit| CustodianChange {
+                    sudt_script_hash: deposit.sudt_script_hash().unpack(),
+                    amount: deposit.amount().unpack(),
+                    capacity: deposit.capacity().unpack(),
+                });
+            let withdrawal_assets = {
+                let last_finalized_withdrawals = last_finalized_block.withdrawals().into_iter();
+                last_finalized_withdrawals.map(|withdrawal| {
+                    let raw = withdrawal.raw();
+                    CustodianChange {
+                        sudt_script_hash: raw.sudt_script_hash().unpack(),
+                        amount: raw.amount().unpack(),
+                        capacity: raw.capacity().unpack(),
+                    }
+                })
+            };
+            self.update_custodian_assets(deposit_assets, withdrawal_assets)?;
+        }
 
         // build main chain index
         self.insert_raw(COLUMN_INDEX, raw_number.as_slice(), &block_hash)?;
@@ -432,34 +459,64 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn detach_block(&self, block: &packed::L2Block) -> Result<(), Error> {
+    pub fn detach_block(
+        &self,
+        block: &packed::L2Block,
+        rollup_config: &RollupConfig,
+    ) -> Result<(), Error> {
         // remove transaction info
         for tx in block.transactions().into_iter() {
             let tx_hash = tx.hash();
             self.delete(COLUMN_TRANSACTION_INFO, &tx_hash)?;
         }
 
-        let block_hash = block.hash().into();
+        let block_hash: H256 = block.hash().into();
 
-        // update custodian assets
-        let deposit_assets = self
-            .get_block_deposition_requests(&block_hash)?
-            .expect("deposits")
-            .into_iter()
-            .map(|deposit| CustodianChange {
-                sudt_script_hash: deposit.sudt_script_hash().unpack(),
-                amount: deposit.amount().unpack(),
-                capacity: deposit.capacity().unpack(),
-            });
-        let withdrawal_assets = block.withdrawals().into_iter().map(|withdrawal| {
-            let raw = withdrawal.raw();
-            CustodianChange {
-                sudt_script_hash: raw.sudt_script_hash().unpack(),
-                amount: raw.amount().unpack(),
-                capacity: raw.capacity().unpack(),
-            }
-        });
-        self.update_custodian_assets(withdrawal_assets, deposit_assets)?;
+        // update finalized custodian assets
+        let finality_blocks = rollup_config.finality_blocks().unpack();
+        let last_finalized_block_number = {
+            let block_number = block.raw().number().unpack();
+            block_number.saturating_sub(finality_blocks)
+        };
+        if last_finalized_block_number > 0 {
+            let last_finalized_block_hash = self
+                .get_block_hash_by_number(last_finalized_block_number)?
+                .ok_or_else(|| {
+                    Error::from(format!(
+                        "last finalized block {} hash not found",
+                        last_finalized_block_number
+                    ))
+                })?;
+            let last_finalized_block =
+                self.get_block(&last_finalized_block_hash)?.ok_or_else(|| {
+                    Error::from(format!(
+                        "last finalized block {} not found",
+                        last_finalized_block_number
+                    ))
+                })?;
+
+            let deposit_assets = self
+                .get_block_deposition_requests(&last_finalized_block_hash)?
+                .expect("finalized deposits")
+                .into_iter()
+                .map(|deposit| CustodianChange {
+                    sudt_script_hash: deposit.sudt_script_hash().unpack(),
+                    amount: deposit.amount().unpack(),
+                    capacity: deposit.capacity().unpack(),
+                });
+            let withdrawal_assets = {
+                let last_finalized_withdrawals = last_finalized_block.withdrawals().into_iter();
+                last_finalized_withdrawals.map(|withdrawal| {
+                    let raw = withdrawal.raw();
+                    CustodianChange {
+                        sudt_script_hash: raw.sudt_script_hash().unpack(),
+                        amount: raw.amount().unpack(),
+                        capacity: raw.capacity().unpack(),
+                    }
+                })
+            };
+            self.update_custodian_assets(withdrawal_assets, deposit_assets)?;
+        }
 
         let block_number = block.raw().number();
         self.delete(COLUMN_INDEX, block_number.as_slice())?;

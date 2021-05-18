@@ -77,6 +77,7 @@ pub fn setup_chain(rollup_type_script: Script) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
     let rollup_config = RollupConfig::new_builder()
         .allowed_eoa_type_hashes(vec![ALWAYS_SUCCESS_CODE_HASH.clone()].pack())
+        .finality_blocks(6.pack())
         .build();
     account_lock_manage.register_lock_algorithm(
         ALWAYS_SUCCESS_CODE_HASH.clone().into(),

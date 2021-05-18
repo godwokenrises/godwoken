@@ -326,7 +326,8 @@ impl Chain {
                     self.local_state.tip.hash(),
                     "reverted l2block must be current tip"
                 );
-                db.detach_block(&l2block)?;
+                let rollup_config = &self.generator().rollup_context().rollup_config;
+                db.detach_block(&l2block, rollup_config)?;
 
                 // check reverted state
                 {
@@ -506,7 +507,8 @@ impl Chain {
             result.receipts,
             deposition_requests,
         )?;
-        db.attach_block(l2block.clone())?;
+        let rollup_config = &self.generator.rollup_context().rollup_config;
+        db.attach_block(l2block.clone(), rollup_config)?;
         tree.submit_tree()?;
         let post_merkle_root: H256 = l2block.raw().post_account().merkle_root().unpack();
         assert_eq!(
