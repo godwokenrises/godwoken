@@ -556,24 +556,27 @@ impl BlockProducer {
             .push((generated_stake.output, generated_stake.output_data));
 
         // withdrawal cells
-        let mut generated_withdrawal_cells = crate::withdrawal::generate(
-            rollup_context,
-            &block,
-            &self.config,
-            collected_custodians,
-        )?;
-        let mut resolved_deps =
-            resolve_type_deps(&self.rpc_client, &generated_withdrawal_cells.inputs).await?;
-        resolved_deps.extend(tx_skeleton.cell_deps_mut().drain(..));
-        resolved_deps.extend(generated_withdrawal_cells.deps.drain(..));
+        if let Some(mut generated_withdrawal_cells) =
+            crate::withdrawal::generate(rollup_context, &block, &self.config, collected_custodians)?
+        {
+            let mut resolved_deps =
+                resolve_type_deps(&self.rpc_client, &generated_withdrawal_cells.inputs).await?;
+            resolved_deps.extend(tx_skeleton.cell_deps_mut().drain(..));
+            resolved_deps.extend(generated_withdrawal_cells.deps.drain(..));
 
-        *tx_skeleton.cell_deps_mut() = resolved_deps.into_iter().collect();
-        tx_skeleton
-            .inputs_mut()
-            .extend(generated_withdrawal_cells.inputs);
-        tx_skeleton
-            .outputs_mut()
-            .extend(generated_withdrawal_cells.outputs);
+            *tx_skeleton.cell_deps_mut() = resolved_deps.into_iter().collect();
+            tx_skeleton
+                .inputs_mut()
+                .extend(generated_withdrawal_cells.inputs);
+            println!(
+                "generated withdrawal outputs {}",
+                generated_withdrawal_cells.outputs.len()
+            );
+
+            tx_skeleton
+                .outputs_mut()
+                .extend(generated_withdrawal_cells.outputs);
+        }
 
         // reverted withdrawal cells
         if let Some(mut reverted_withdrawals) = crate::withdrawal::revert(

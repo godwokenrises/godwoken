@@ -276,29 +276,58 @@ pub fn generate(
     block: &L2Block,
     block_producer_config: &BlockProducerConfig,
     custodian_cells: CollectedCustodianCells,
-) -> Result<GeneratedWithdrawals> {
-    let mut generator = Generator::new(rollup_context, (&custodian_cells).into());
+) -> Result<Option<GeneratedWithdrawals>> {
+    if block.withdrawals().is_empty() {
+        return Ok(None);
+    }
 
+    let mut generator = Generator::new(rollup_context, (&custodian_cells).into());
     for req in block.withdrawals().into_iter() {
         generator.include_and_verify(&req, block)?;
     }
+    if generator.withdrawals.is_empty() {
+        return Ok(None);
+    }
+
+    log::debug!("custodian inputs {:?}", custodian_cells);
+    log::debug!("included withdrawals {}", generator.withdrawals.len());
+    let withdrawal_outputs = generator.finish();
+
+    // Filter unused collected custodians
+    let used_sudt_custodian_type_hashes = {
+        let outputs = withdrawal_outputs.iter();
+        let filter_sudt_hash =
+            outputs.filter_map(|(output, _data)| output.type_().to_opt().map(|s| s.hash()));
+        filter_sudt_hash.collect::<HashSet<_>>()
+    };
+    // Should include sudt custodians and ckb custodians
+    let used_custodian_inputs = {
+        let inputs = custodian_cells.cells_info.into_iter();
+        let filter_used =
+            inputs.filter_map(
+                |cell| match cell.output.type_().to_opt().map(|s| s.hash()) {
+                    Some(hash) if used_sudt_custodian_type_hashes.contains(&hash) => Some(cell),
+                    None => Some(cell), // ckb custodian
+                    _ => None,
+                },
+            );
+        filter_used.map(|cell| {
+            let input = CellInput::new_builder()
+                .previous_output(cell.out_point.clone())
+                .build();
+            InputCellInfo { input, cell }
+        })
+    };
+    log::debug!("used sudt custodian {:?}", used_sudt_custodian_type_hashes);
 
     let custodian_lock_dep = block_producer_config.custodian_cell_lock_dep.clone();
-    let custodian_inputs = custodian_cells.cells_info.into_iter().map(|cell| {
-        let input = CellInput::new_builder()
-            .previous_output(cell.out_point.clone())
-            .build();
-        InputCellInfo { input, cell }
-    });
-
-    let withdrawal_outputs = generator.finish();
     let generated_withdrawals = GeneratedWithdrawals {
         deps: vec![custodian_lock_dep.into()],
-        inputs: custodian_inputs.collect(),
+        inputs: used_custodian_inputs.collect(),
         outputs: withdrawal_outputs,
     };
 
-    Ok(generated_withdrawals)
+    Ok(Some(generated_withdrawals))
 }
 
 pub struct RevertedWithdrawals {
