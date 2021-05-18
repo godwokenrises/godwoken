@@ -14,7 +14,7 @@ use anyhow::{anyhow, Context, Result};
 use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
 use gw_chain::chain::Chain;
-use gw_common::H256;
+use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_config::BlockProducerConfig;
 use gw_generator::{Generator, RollupContext};
 use gw_mem_pool::pool::MemPool;
@@ -326,21 +326,38 @@ impl BlockProducer {
         let parent_block = self.chain.lock().local_state().tip().clone();
         let max_withdrawal_capacity = std::u128::MAX;
 
-        let total_withdrawal_amounts = crate::withdrawal::sum(withdrawal_requests.iter());
-        let collected_custodians = if 0 == total_withdrawal_amounts.capacity {
-            CollectedCustodianCells::default()
-        } else {
-            let global_state = GlobalState::from_slice(&rollup_cell.data)
-                .map_err(|_| anyhow!("parse rollup cell global state"))?;
-            let last_finalized_block_number = global_state.last_finalized_block_number().unpack();
+        let available_custodians = {
+            let db = self.store.begin_transaction();
+            let sudt_custodians = {
+                let reqs = withdrawal_requests.iter();
+                let sudt_reqs = reqs.filter(|req| {
+                    0 != req.raw().amount().unpack()
+                        && CKB_SUDT_SCRIPT_ARGS != req.raw().sudt_script_hash().unpack()
+                });
+                let to_hash = sudt_reqs.map(|req| req.raw().sudt_script_hash().unpack());
+                let to_custodian = to_hash.filter_map(|hash: [u8; 32]| {
+                    match db.get_custodian_asset(hash.into()) {
+                        // FIXME:
+                        Ok(custodian) => Some((hash, (custodian, Script::default()))),
+                        Err(err) => {
+                            log::warn!("get custodian err {}", err);
+                            None
+                        }
+                    }
+                });
+                to_custodian.collect::<HashMap<[u8; 32], (u128, Script)>>()
+            };
 
-            self.rpc_client
-                .query_finalized_custodian_cells(
-                    &total_withdrawal_amounts,
-                    last_finalized_block_number,
-                )
-                .await?
+            let ckb_custodian = db
+                .get_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
+                .unwrap_or_else(|_| 0);
+
+            crate::withdrawal::AvailableCustodians {
+                capacity: ckb_custodian,
+                sudt: sudt_custodians,
+            }
         };
+        log::debug!("available custodians {:?}", available_custodians);
 
         // produce block
         let param = ProduceBlockParam {
@@ -354,7 +371,7 @@ impl BlockProducer {
             parent_block: &parent_block,
             rollup_config_hash: &self.rollup_config_hash,
             max_withdrawal_capacity,
-            available_custodians: (&collected_custodians).into(),
+            available_custodians,
         };
         let block_result = produce_block(param)?;
         let ProduceBlockResult {
@@ -375,14 +392,7 @@ impl BlockProducer {
 
         // composit tx
         let tx = self
-            .complete_tx_skeleton(
-                deposit_cells,
-                block,
-                global_state,
-                median_time,
-                rollup_cell,
-                collected_custodians,
-            )
+            .complete_tx_skeleton(deposit_cells, block, global_state, median_time, rollup_cell)
             .await?;
 
         // send transaction
@@ -409,7 +419,6 @@ impl BlockProducer {
         global_state: GlobalState,
         median_time: Duration,
         rollup_cell: CellInfo,
-        collected_custodians: CollectedCustodianCells,
     ) -> Result<Transaction> {
         let rollup_context = self.generator.rollup_context();
         let mut tx_skeleton = TransactionSkeleton::default();
@@ -556,8 +565,14 @@ impl BlockProducer {
             .push((generated_stake.output, generated_stake.output_data));
 
         // withdrawal cells
-        if let Some(mut generated_withdrawal_cells) =
-            crate::withdrawal::generate(rollup_context, &block, &self.config, collected_custodians)?
+        if let Some(mut generated_withdrawal_cells) = crate::withdrawal::generate(
+            &rollup_cell,
+            rollup_context,
+            &block,
+            &self.config,
+            &self.rpc_client,
+        )
+        .await?
         {
             let mut resolved_deps =
                 resolve_type_deps(&self.rpc_client, &generated_withdrawal_cells.inputs).await?;

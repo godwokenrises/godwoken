@@ -1,5 +1,8 @@
-use crate::rpc_client::{CollectedCustodianCells, RPCClient, WithdrawalsAmount};
 use crate::types::InputCellInfo;
+use crate::{
+    rpc_client::{CollectedCustodianCells, RPCClient, WithdrawalsAmount},
+    types::CellInfo,
+};
 
 use anyhow::{anyhow, Result};
 use gw_common::CKB_SUDT_SCRIPT_ARGS;
@@ -9,8 +12,8 @@ use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     packed::{
-        CellDep, CellInput, CellOutput, CustodianLockArgs, DepositionLockArgs, L2Block,
-        RollupAction, RollupActionUnion, Script, UnlockWithdrawalViaRevert,
+        CellDep, CellInput, CellOutput, CustodianLockArgs, DepositionLockArgs, GlobalState,
+        L2Block, RollupAction, RollupActionUnion, Script, UnlockWithdrawalViaRevert,
         UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion, WithdrawalLockArgs,
         WithdrawalRequest, WitnessArgs,
     },
@@ -271,60 +274,47 @@ pub struct GeneratedWithdrawals {
 }
 
 // Note: custodian lock search rollup cell in inputs
-pub fn generate(
+pub async fn generate(
+    input_rollup_cell: &CellInfo,
     rollup_context: &RollupContext,
     block: &L2Block,
     block_producer_config: &BlockProducerConfig,
-    custodian_cells: CollectedCustodianCells,
+    rpc_client: &RPCClient,
 ) -> Result<Option<GeneratedWithdrawals>> {
     if block.withdrawals().is_empty() {
         return Ok(None);
     }
 
+    let global_state = GlobalState::from_slice(&input_rollup_cell.data)
+        .map_err(|_| anyhow!("parse rollup cell global state"))?;
+    let last_finalized_block_number = global_state.last_finalized_block_number().unpack();
+
+    let total_withdrawal_amount = sum(block.withdrawals().into_iter());
+    let custodian_cells = rpc_client
+        .query_finalized_custodian_cells(&total_withdrawal_amount, last_finalized_block_number)
+        .await?;
+    log::debug!("custodian inputs {:?}", custodian_cells);
+
     let mut generator = Generator::new(rollup_context, (&custodian_cells).into());
     for req in block.withdrawals().into_iter() {
-        generator.include_and_verify(&req, block)?;
+        generator
+            .include_and_verify(&req, block)
+            .map_err(|err| anyhow!("unexpected withdrawal err {}", err))?
     }
-    if generator.withdrawals.is_empty() {
-        return Ok(None);
-    }
-
-    log::debug!("custodian inputs {:?}", custodian_cells);
     log::debug!("included withdrawals {}", generator.withdrawals.len());
-    let withdrawal_outputs = generator.finish();
-
-    // Filter unused collected custodians
-    let used_sudt_custodian_type_hashes = {
-        let outputs = withdrawal_outputs.iter();
-        let filter_sudt_hash =
-            outputs.filter_map(|(output, _data)| output.type_().to_opt().map(|s| s.hash()));
-        filter_sudt_hash.collect::<HashSet<_>>()
-    };
-    // Should include sudt custodians and ckb custodians
-    let used_custodian_inputs = {
-        let inputs = custodian_cells.cells_info.into_iter();
-        let filter_used =
-            inputs.filter_map(
-                |cell| match cell.output.type_().to_opt().map(|s| s.hash()) {
-                    Some(hash) if used_sudt_custodian_type_hashes.contains(&hash) => Some(cell),
-                    None => Some(cell), // ckb custodian
-                    _ => None,
-                },
-            );
-        filter_used.map(|cell| {
-            let input = CellInput::new_builder()
-                .previous_output(cell.out_point.clone())
-                .build();
-            InputCellInfo { input, cell }
-        })
-    };
-    log::debug!("used sudt custodian {:?}", used_sudt_custodian_type_hashes);
 
     let custodian_lock_dep = block_producer_config.custodian_cell_lock_dep.clone();
+    let custodian_inputs = custodian_cells.cells_info.into_iter().map(|cell| {
+        let input = CellInput::new_builder()
+            .previous_output(cell.out_point.clone())
+            .build();
+        InputCellInfo { input, cell }
+    });
+
     let generated_withdrawals = GeneratedWithdrawals {
         deps: vec![custodian_lock_dep.into()],
-        inputs: used_custodian_inputs.collect(),
-        outputs: withdrawal_outputs,
+        inputs: custodian_inputs.collect(),
+        outputs: generator.finish(),
     };
 
     Ok(Some(generated_withdrawals))
@@ -449,34 +439,6 @@ pub async fn revert(
     }))
 }
 
-pub fn sum<'a, Iter: Iterator<Item = &'a WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmount {
-    reqs.fold(
-        WithdrawalsAmount::default(),
-        |mut total_amount, withdrawal| {
-            total_amount.capacity = total_amount
-                .capacity
-                .saturating_add(withdrawal.raw().capacity().unpack() as u128);
-
-            let sudt_script_hash = withdrawal.raw().sudt_script_hash().unpack();
-            let sudt_amount = withdrawal.raw().amount().unpack();
-            if sudt_amount != 0 {
-                match sudt_script_hash {
-                    CKB_SUDT_SCRIPT_ARGS => {
-                        let account = withdrawal.raw().account_script_hash();
-                        log::warn!("{} withdrawal request non-zero sudt amount but it's type hash ckb, ignore this amount", account);
-                    }
-                    _ => {
-                        let total_sudt_amount = total_amount.sudt.entry(sudt_script_hash).or_insert(0u128);
-                        *total_sudt_amount = total_sudt_amount.saturating_add(sudt_amount);
-                    }
-                }
-            }
-
-            total_amount
-        }
-    )
-}
-
 pub fn minimal_capacity_verifier(
     rollup_context: RollupContext,
     rpc_client: RPCClient,
@@ -515,6 +477,34 @@ pub fn minimal_capacity_verifier(
     };
 
     Box::new(verifier)
+}
+
+fn sum<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmount {
+    reqs.fold(
+        WithdrawalsAmount::default(),
+        |mut total_amount, withdrawal| {
+            total_amount.capacity = total_amount
+                .capacity
+                .saturating_add(withdrawal.raw().capacity().unpack() as u128);
+
+            let sudt_script_hash = withdrawal.raw().sudt_script_hash().unpack();
+            let sudt_amount = withdrawal.raw().amount().unpack();
+            if sudt_amount != 0 {
+                match sudt_script_hash {
+                    CKB_SUDT_SCRIPT_ARGS => {
+                        let account = withdrawal.raw().account_script_hash();
+                        log::warn!("{} withdrawal request non-zero sudt amount but it's type hash ckb, ignore this amount", account);
+                    }
+                    _ => {
+                        let total_sudt_amount = total_amount.sudt.entry(sudt_script_hash).or_insert(0u128);
+                        *total_sudt_amount = total_sudt_amount.saturating_add(sudt_amount);
+                    }
+                }
+            }
+
+            total_amount
+        }
+    )
 }
 
 fn build_withdrawal_lock(
