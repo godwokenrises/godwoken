@@ -94,7 +94,11 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn include_and_verify(&mut self, req: &WithdrawalRequest, block: &L2Block) -> Result<()> {
+    pub fn verified_output(
+        &self,
+        req: &WithdrawalRequest,
+        block: &L2Block,
+    ) -> Result<(CellOutput, Bytes)> {
         // Verify finalized custodian exists
         let req_sudt: u128 = req.raw().amount().unpack();
         let sudt_type_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
@@ -111,24 +115,66 @@ impl<'a> Generator<'a> {
             .map_err(|min_capacity| anyhow!("{} minimal capacity for {}", min_capacity, req))?;
 
         // Verify remaind sudt
+        let (mut ckb_custodian_capacity, mut ckb_balance, ckb_custodian_min_capacity) =
+            self.ckb_custodian;
         if 0 != req_sudt {
             let (sudt_custodian_capacity, sudt_balance, _) =
-                match self.sudt_custodians.get_mut(&sudt_type_hash) {
+                match self.sudt_custodians.get(&sudt_type_hash) {
                     Some(custodian) => custodian,
                     None => return Err(anyhow!("no finalized sudt custodian for {}", req)),
                 };
 
+            let remaind = sudt_balance
+                .checked_sub(req_sudt)
+                .ok_or_else(|| anyhow!("no enough custodian sudt for {}", req))?;
+
+            // Consume all remaind sudt, give sudt custodian capacity back to ckb custodian
+            if 0 == remaind {
+                // If ckb custodian is already consumed
+                if 0 == ckb_custodian_capacity {
+                    ckb_custodian_capacity = *sudt_custodian_capacity as u128;
+                    ckb_balance = (*sudt_custodian_capacity - ckb_custodian_min_capacity) as u128;
+                } else {
+                    ckb_custodian_capacity += *sudt_custodian_capacity as u128;
+                    ckb_balance += *sudt_custodian_capacity as u128;
+                }
+                // *sudt_custodian_capacity = 0;
+            }
+        }
+
+        // Verify remaind ckb
+        let req_ckb = req.raw().capacity().unpack() as u128;
+        match ckb_balance.checked_sub(req_ckb) {
+            Some(_) => Ok(output),
+            // Consume all remaind ckb
+            None if req_ckb == ckb_custodian_capacity => Ok(output),
+            // No able to cover withdrawal cell and ckb custodian change
+            None => Err(anyhow!("no enough custodian capacity(*change) for {}", req)),
+        }
+    }
+
+    pub fn include_and_verify(&mut self, req: &WithdrawalRequest, block: &L2Block) -> Result<()> {
+        let verified_output = self.verified_output(req, block)?;
+        let (ckb_custodian_capacity, ckb_balance, ckb_custodian_min_capacity) =
+            &mut self.ckb_custodian;
+
+        // Update custodians according to verified output
+        let req_sudt: u128 = req.raw().amount().unpack();
+        if 0 != req_sudt {
+            let sudt_type_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
+            let (sudt_custodian_capacity, sudt_balance, _) =
+                match self.sudt_custodians.get_mut(&sudt_type_hash) {
+                    Some(custodian) => custodian,
+                    None => return Err(anyhow!("unexpected sudt not found for verified {}", req)),
+                };
+
             match sudt_balance.checked_sub(req_sudt) {
                 Some(remaind) => *sudt_balance = remaind,
-                None => return Err(anyhow!("no enough custodian sudt for {}", req)),
+                None => return Err(anyhow!("unexpected sudt overflow for verified {}", req)),
             }
 
             // Consume all remaind sudt, give sudt custodian capacity back to ckb custodian
             if 0 == *sudt_balance {
-                let (ckb_custodian_capacity, ckb_balance, ckb_custodian_min_capacity) =
-                    &mut self.ckb_custodian;
-
-                // If ckb custodian is already consumed
                 if 0 == *ckb_custodian_capacity {
                     *ckb_custodian_capacity = *sudt_custodian_capacity as u128;
                     *ckb_balance = (*sudt_custodian_capacity - *ckb_custodian_min_capacity) as u128;
@@ -136,13 +182,10 @@ impl<'a> Generator<'a> {
                     *ckb_custodian_capacity += *sudt_custodian_capacity as u128;
                     *ckb_balance += *sudt_custodian_capacity as u128;
                 }
-                *sudt_custodian_capacity = 0;
             }
         }
 
-        // Verify remaind ckb (capacity, available_amount, min_capacity)
         let req_ckb = req.raw().capacity().unpack() as u128;
-        let (ckb_custodian_capacity, ckb_balance, _) = &mut self.ckb_custodian;
         match ckb_balance.checked_sub(req_ckb) {
             Some(remaind) => {
                 *ckb_custodian_capacity -= req_ckb;
@@ -153,10 +196,10 @@ impl<'a> Generator<'a> {
                 *ckb_custodian_capacity = 0;
                 *ckb_balance = 0;
             }
-            None => return Err(anyhow!("no enough custodian capacity for {}", req)),
+            None => return Err(anyhow!("unexpected capacity overflow for verified {}", req)),
         }
 
-        self.withdrawals.push(output);
+        self.withdrawals.push(verified_output);
         Ok(())
     }
 
