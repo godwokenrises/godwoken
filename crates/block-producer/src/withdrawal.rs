@@ -308,6 +308,7 @@ pub async fn generate(
     log::debug!("included withdrawals {}", generator.withdrawals.len());
 
     let custodian_lock_dep = block_producer_config.custodian_cell_lock_dep.clone();
+    let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
     let custodian_inputs = custodian_cells.cells_info.into_iter().map(|cell| {
         let input = CellInput::new_builder()
             .previous_output(cell.out_point.clone())
@@ -316,7 +317,7 @@ pub async fn generate(
     });
 
     let generated_withdrawals = GeneratedWithdrawals {
-        deps: vec![custodian_lock_dep.into()],
+        deps: vec![custodian_lock_dep.into(), sudt_type_dep.into()],
         inputs: custodian_inputs.collect(),
         outputs: generator.finish(),
     };
@@ -435,8 +436,9 @@ pub async fn revert(
     }
 
     let withdrawal_lock_dep = block_producer_config.withdrawal_cell_lock_dep.clone();
+    let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
     Ok(Some(RevertedWithdrawals {
-        deps: vec![withdrawal_lock_dep.into()],
+        deps: vec![withdrawal_lock_dep.into(), sudt_type_dep.into()],
         inputs: withdrawal_inputs,
         outputs: custodian_outputs,
         witness_args: withdrawal_witness,

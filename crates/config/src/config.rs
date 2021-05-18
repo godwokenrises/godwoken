@@ -65,6 +65,7 @@ pub struct BlockProducerConfig {
     pub poa_state_dep: CellDep,
     pub custodian_cell_lock_dep: CellDep,
     pub withdrawal_cell_lock_dep: CellDep,
+    pub l1_sudt_type_dep: CellDep,
     pub wallet_config: WalletConfig,
 }
 
