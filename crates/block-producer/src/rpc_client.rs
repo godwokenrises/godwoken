@@ -649,22 +649,10 @@ impl RPCClient {
             .args(rollup_context.rollup_script_hash.as_slice().pack())
             .build();
 
-        let l1_sudt_type = Script::new_builder()
-            .code_hash(rollup_context.rollup_config.l1_sudt_script_type_hash())
-            .hash_type(ScriptHashType::Type.into())
-            .build();
-
         let search_key = SearchKey {
             script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
             script_type: ScriptType::Lock,
-            filter: Some(SearchKeyFilter {
-                script: Some(
-                    ckb_types::packed::Script::new_unchecked(l1_sudt_type.as_bytes()).into(),
-                ),
-                output_data_len_range: None,
-                output_capacity_range: None,
-                block_range: None,
-            }),
+            filter: None,
         };
         let order = Order::Desc;
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
@@ -715,6 +703,15 @@ impl RPCClient {
                         let script = ckb_types::packed::Script::from(json_script);
                         Script::new_unchecked(script.as_bytes())
                     };
+
+                    // Invalid custodian type script
+                    let l1_sudt_script_type_hash =
+                        rollup_context.rollup_config.l1_sudt_script_type_hash();
+                    if sudt_type_script.code_hash() != l1_sudt_script_type_hash
+                        || sudt_type_script.hash_type() != ScriptHashType::Type.into()
+                    {
+                        continue;
+                    }
 
                     let sudt_type_hash = sudt_type_script.hash();
                     if sudt_type_hash != CKB_SUDT_SCRIPT_ARGS {
