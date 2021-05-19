@@ -6,6 +6,7 @@ Please update your godwoken configs into `tests/configs`, including `godwoken-co
 
 ```bash
 ./init.sh
+source <example.env> # use your own env file containing RPC URLs and private keys etc.
 cargo run
 ```
 

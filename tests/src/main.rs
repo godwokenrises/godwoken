@@ -168,7 +168,7 @@ fn main() {
   test_results.push(TestResult {
     spec_name: "other test case could be added into [tests/src/specs/]".to_string(),
     status: TestResultStatus::Failed,
-    duration: 999,
+    duration: 0,
   });
   print_results(test_results);
   println!("Total elapsed time: {:?}", start_time.elapsed());
@@ -177,7 +177,8 @@ fn main() {
 /// all test cases
 fn all_specs() -> Vec<Box<dyn Spec>> {
   vec![
-    Box::new(SimpleCase)
+    Box::new(SimpleCase),
+    // Box::new(ReadConfig)
   ]
   //TODO: shuffle
 }
@@ -276,7 +277,7 @@ fn clap_app() -> App<'static, 'static> {
 
 fn print_results(mut test_results: Vec<TestResult>) {
   println!("{}", "-".repeat(80));
-  println!("{:600} | {:10} | {:10}", "TEST", "STATUS", "DURATION");
+  println!("{:60} | {:10} | {:10}", "TEST", "STATUS", "DURATION");
 
   test_results.sort_by(|a, b| a.status.cmp(&b.status));
 
