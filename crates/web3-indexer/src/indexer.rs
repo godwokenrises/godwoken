@@ -225,7 +225,6 @@ impl Web3Indexer {
                 .await?
                 .ok_or_else(|| anyhow!("Can't get script by script_hash: {:?}", to_script_hash))?;
 
-            let mut tx_gas_used = 0;
             if to_script.code_hash().as_slice() == self.polyjuice_type_script_hash.0 {
                 let l2_tx_args = l2_transaction.raw().args();
                 let polyjuice_args = PolyjuiceArgs::decode(l2_tx_args.raw_data().as_ref())?;
@@ -273,28 +272,34 @@ impl Web3Indexer {
                 // read polyjuice system log
                 let polyjuice_system_log = parse_log(
                     log_item_vec
-                        .get(log_item_vec.len().saturating_sub(1))
+                        .get(0)
                         .as_ref()
                         .ok_or(anyhow!("no system logs"))?,
                 )?;
 
-                let mut contract_address = None;
-                if let GwLog::PolyjuiceSystem {
+                let (contract_address, tx_gas_used) = if let GwLog::PolyjuiceSystem {
                     gas_used,
                     cumulative_gas_used: _,
                     created_id,
                     status_code: _,
                 } = polyjuice_system_log
                 {
-                    tx_gas_used = gas_used.into();
+                    let tx_gas_used = gas_used.into();
                     cumulative_gas_used += tx_gas_used;
-                    if polyjuice_args.is_create && created_id != u32::MAX {
+                    let contract_address = if polyjuice_args.is_create && created_id != u32::MAX {
                         let created_script_hash =
                             get_script_hash(store.clone(), created_id).await?;
-                        contract_address =
-                            Some(account_id_to_eth_address(created_script_hash, created_id));
-                    }
-                }
+                        Some(account_id_to_eth_address(created_script_hash, created_id))
+                    } else {
+                        None
+                    };
+                    (contract_address, tx_gas_used)
+                } else {
+                    return Err(anyhow!(
+                        "can't find polyjuice system log from logs: tx_hash: {}",
+                        hex(gw_tx_hash.as_slice())?
+                    ));
+                };
 
                 let web3_transaction = Web3Transaction::new(
                     gw_tx_hash.clone(),
