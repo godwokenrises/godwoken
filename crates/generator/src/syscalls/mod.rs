@@ -50,6 +50,7 @@ const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 pub const SUCCESS: u8 = 0;
 pub const ERROR_DUPLICATED_SCRIPT_HASH: u8 = std::i8::MAX as u8;
 pub const ERROR_UNKNOWN_SCRIPT_CODE_HASH: u8 = 50;
+pub const ERROR_UNKNOWN_SCRIPT_HASH: u8 = 51;
 pub const ERROR_INVALID_CONTRACT_SCRIPT: u8 = 53;
 
 pub(crate) struct L2Syscalls<'a, S, C> {
@@ -241,17 +242,17 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 let script_hash_addr = machine.registers()[A0].to_u64();
                 let account_id_addr = machine.registers()[A1].to_u64();
                 let script_hash = load_data_h256(machine, script_hash_addr)?;
-                let account_id = self
+                if let Some(account_id) = self
                     .get_account_id_by_script_hash(&script_hash)
                     .map_err(|_err| VMError::Unexpected)?
-                    .ok_or_else(|| {
-                        log::error!("returned zero account id");
-                        VMError::Unexpected
-                    })?;
-                machine
-                    .memory_mut()
-                    .store_bytes(account_id_addr, &account_id.to_le_bytes()[..])?;
-                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                {
+                    machine
+                        .memory_mut()
+                        .store_bytes(account_id_addr, &account_id.to_le_bytes()[..])?;
+                    machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                } else {
+                    machine.set_register(A0, Mac::REG::from_u8(ERROR_UNKNOWN_SCRIPT_HASH));
+                }
                 Ok(true)
             }
             SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID => {
