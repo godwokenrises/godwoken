@@ -229,6 +229,7 @@ pub fn run(config: Config) -> Result<()> {
                 polyjuce_type_script_hash,
                 config.genesis.rollup_type_hash,
                 eth_account_lock_hash,
+                config.genesis.rollup_config.compatible_chain_id.into(),
             );
             Some(web3_indexer)
         }

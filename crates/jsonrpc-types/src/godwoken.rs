@@ -818,6 +818,7 @@ pub struct RollupConfig {
     pub reward_burn_rate: Uint32,           // * reward_burn_rate / 100
     pub allowed_eoa_type_hashes: Vec<H256>, // list of script code_hash allowed an EOA(external owned account) to use
     pub allowed_contract_type_hashes: Vec<H256>, // list of script code_hash allowed a contract account to use
+    pub compatible_chain_id: Uint32,
 }
 
 impl From<RollupConfig> for packed::RollupConfig {
@@ -837,6 +838,7 @@ impl From<RollupConfig> for packed::RollupConfig {
             reward_burn_rate,             // * reward_burn_rate / 100
             allowed_eoa_type_hashes, // list of script code_hash allowed an EOA(external owned account) to use
             allowed_contract_type_hashes, // list of script code_hash allowed a contract account to use
+            compatible_chain_id,
         } = json;
         let required_staking_capacity: u64 = required_staking_capacity.into();
         let challenge_maturity_blocks: u64 = challenge_maturity_blocks.into();
@@ -868,6 +870,7 @@ impl From<RollupConfig> for packed::RollupConfig {
                     .map(|hash| hash.pack())
                     .pack(),
             )
+            .compatible_chain_id(compatible_chain_id.value().pack())
             .build()
     }
 }
@@ -878,6 +881,7 @@ impl From<packed::RollupConfig> for RollupConfig {
         let challenge_maturity_blocks: u64 = data.challenge_maturity_blocks().unpack();
         let finality_blocks: u64 = data.finality_blocks().unpack();
         let reward_burn_date: u8 = data.reward_burn_rate().into();
+        let compatible_chain_id: u32 = data.compatible_chain_id().unpack();
         RollupConfig {
             l1_sudt_script_type_hash: data.l1_sudt_script_type_hash().unpack(),
             custodian_script_type_hash: data.custodian_script_type_hash().unpack(),
@@ -901,6 +905,7 @@ impl From<packed::RollupConfig> for RollupConfig {
                 .into_iter()
                 .map(|hash| hash.unpack())
                 .collect(),
+            compatible_chain_id: compatible_chain_id.into(),
         }
     }
 }
