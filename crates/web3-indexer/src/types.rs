@@ -1,66 +1,73 @@
-use rust_decimal::Decimal;
+use gw_common::H256;
+use sha3::{Digest, Keccak256};
 use sqlx::types::chrono::{DateTime, Utc};
+
+type Address = [u8; 20];
+
 #[derive(Debug)]
 pub struct Block {
-    pub number: Decimal,
-    pub hash: String,
-    pub parent_hash: String,
-    pub logs_bloom: String,
-    pub gas_limit: Decimal,
-    pub gas_used: Decimal,
-    pub miner: String,
-    pub size: Decimal,
+    pub number: u64,
+    pub hash: H256,
+    pub parent_hash: H256,
+    pub logs_bloom: Vec<u8>,
+    pub gas_limit: u128,
+    pub gas_used: u128,
+    pub miner: Address,
+    pub size: usize,
     pub timestamp: DateTime<Utc>,
 }
 
 #[derive(Debug)]
 pub struct Transaction {
-    pub hash: String,
-    pub block_number: Decimal,
-    pub block_hash: String,
-    pub transaction_index: i32,
-    pub from_address: String,
-    pub to_address: Option<String>,
-    pub value: Decimal,
-    pub nonce: Decimal,
-    pub gas_limit: Decimal,
-    pub gas_price: Decimal,
-    pub input: Option<String>,
-    pub v: String,
-    pub r: String,
-    pub s: String,
-    pub cumulative_gas_used: Decimal,
-    pub gas_used: Decimal,
-    pub logs_bloom: String,
-    pub contract_address: Option<String>,
+    pub gw_tx_hash: H256,
+    pub chain_id: Option<u64>,
+    pub block_number: u64,
+    pub block_hash: H256,
+    pub transaction_index: u32,
+    pub from_address: Address,
+    pub to_address: Option<Address>,
+    pub value: u128,
+    pub nonce: u32,
+    pub gas_limit: u128,
+    pub gas_price: u128,
+    pub data: Vec<u8>,
+    pub v: u64,
+    pub r: [u8; 32],
+    pub s: [u8; 32],
+    pub cumulative_gas_used: u128,
+    pub gas_used: u128,
+    pub logs_bloom: Vec<u8>,
+    pub contract_address: Option<Address>,
     pub status: bool,
 }
 
 impl Transaction {
     #[allow(clippy::clippy::too_many_arguments)]
     pub fn new(
-        hash: String,
-        block_number: Decimal,
-        block_hash: String,
-        transaction_index: i32,
-        from_address: String,
-        to_address: Option<String>,
-        value: Decimal,
-        nonce: Decimal,
-        gas_limit: Decimal,
-        gas_price: Decimal,
-        input: Option<String>,
-        v: String,
-        r: String,
-        s: String,
-        cumulative_gas_used: Decimal,
-        gas_used: Decimal,
-        logs_bloom: String,
-        contract_address: Option<String>,
+        gw_tx_hash: H256,
+        chain_id: Option<u64>,
+        block_number: u64,
+        block_hash: H256,
+        transaction_index: u32,
+        from_address: Address,
+        to_address: Option<Address>,
+        value: u128,
+        nonce: u32,
+        gas_limit: u128,
+        gas_price: u128,
+        data: Vec<u8>,
+        r: [u8; 32],
+        s: [u8; 32],
+        v: u64,
+        cumulative_gas_used: u128,
+        gas_used: u128,
+        logs_bloom: Vec<u8>,
+        contract_address: Option<Address>,
         status: bool,
     ) -> Transaction {
         Transaction {
-            hash,
+            gw_tx_hash,
+            chain_id,
             block_number,
             block_hash,
             transaction_index,
@@ -70,7 +77,7 @@ impl Transaction {
             nonce,
             gas_limit,
             gas_price,
-            input,
+            data,
             v,
             r,
             s,
@@ -81,31 +88,66 @@ impl Transaction {
             status,
         }
     }
+
+    pub fn to_rlp(&self) -> Vec<u8> {
+        // RLP encode
+        let mut s = rlp::RlpStream::new();
+        s.begin_unbounded_list()
+            .append(&self.nonce)
+            .append(&self.gas_price)
+            .append(&self.gas_limit);
+        match self.to_address.as_ref() {
+            Some(addr) => {
+                s.append(&addr.to_vec());
+            }
+            None => {
+                s.append(&vec![0u8; 0]);
+            }
+        };
+        s.append(&self.value)
+            .append(&self.data)
+            .append(&self.v)
+            .append(&self.r.to_vec())
+            .append(&self.s.to_vec());
+        s.finalize_unbounded_list();
+        s.out().freeze().to_vec()
+    }
+
+    pub fn compute_eth_tx_hash(&self) -> gw_common::H256 {
+        // RLP encode
+        let rlp_data = self.to_rlp();
+        let mut hasher = Keccak256::new();
+        hasher.update(&rlp_data);
+        let buf = hasher.finalize();
+        let mut tx_hash = [0u8; 32];
+        tx_hash.copy_from_slice(&buf);
+        tx_hash.into()
+    }
 }
 
 #[derive(Debug)]
 pub struct Log {
-    pub transaction_hash: String,
-    pub transaction_index: i32,
-    pub block_number: Decimal,
-    pub block_hash: String,
-    pub address: String,
-    pub data: String,
-    pub log_index: i32,
-    pub topics: Vec<String>,
+    pub transaction_hash: H256,
+    pub transaction_index: u32,
+    pub block_number: u64,
+    pub block_hash: H256,
+    pub address: Address,
+    pub data: Vec<u8>,
+    pub log_index: u32,
+    pub topics: Vec<H256>,
 }
 
 impl Log {
     #[allow(clippy::clippy::too_many_arguments)]
     pub fn new(
-        transaction_hash: String,
-        transaction_index: i32,
-        block_number: Decimal,
-        block_hash: String,
-        address: String,
-        data: String,
-        log_index: i32,
-        topics: Vec<String>,
+        transaction_hash: H256,
+        transaction_index: u32,
+        block_number: u64,
+        block_hash: H256,
+        address: Address,
+        data: Vec<u8>,
+        log_index: u32,
+        topics: Vec<H256>,
     ) -> Log {
         Log {
             transaction_hash,

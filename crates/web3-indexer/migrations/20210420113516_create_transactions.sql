@@ -2,6 +2,7 @@
 CREATE TABLE transactions (
     id BIGSERIAL PRIMARY KEY,
     hash TEXT UNIQUE NOT NULL,
+    gw_tx_hash TEXT UNIQUE NOT NULL,
     block_number NUMERIC REFERENCES blocks(number) NOT NULL,
     block_hash TEXT NOT NULL,
     transaction_index INTEGER NOT NULL,
