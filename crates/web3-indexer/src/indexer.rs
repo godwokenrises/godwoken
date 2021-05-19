@@ -262,10 +262,9 @@ impl Web3Indexer {
                 // read logs
                 let db = store.begin_transaction();
                 let tx_receipt = {
-                    db.get_transaction_receipt(&gw_tx_hash)?.ok_or(anyhow!(
-                        "can't find receipt for transaction: {:?}",
-                        gw_tx_hash
-                    ))?
+                    db.get_transaction_receipt(&gw_tx_hash)?.ok_or_else(|| {
+                        anyhow!("can't find receipt for transaction: {:?}", gw_tx_hash)
+                    })?
                 };
                 let log_item_vec = tx_receipt.logs();
 
@@ -274,7 +273,7 @@ impl Web3Indexer {
                     log_item_vec
                         .get(0)
                         .as_ref()
-                        .ok_or(anyhow!("no system logs"))?,
+                        .ok_or_else(|| anyhow!("no system logs"))?,
                 )?;
 
                 let (contract_address, tx_gas_used) = if let GwLog::PolyjuiceSystem {
@@ -302,10 +301,10 @@ impl Web3Indexer {
                 };
 
                 let web3_transaction = Web3Transaction::new(
-                    gw_tx_hash.clone(),
+                    gw_tx_hash,
                     Some(chain_id),
                     block_number,
-                    block_hash.clone(),
+                    block_hash,
                     tx_index,
                     from_address,
                     to_address,
@@ -398,11 +397,8 @@ impl Web3Indexer {
                                 to_script_args.len()
                             ));
                             }
-                            let to_address = {
-                                let mut buf = [0u8; 20];
-                                buf.copy_from_slice(&to_script_args[32..52]);
-                                buf
-                            };
+                            let mut to_address = [0u8; 20];
+                            to_address.copy_from_slice(&to_script_args[32..52]);
                             to_address
                         } else if to_script_code_hash == self.polyjuice_type_script_hash {
                             account_id_to_eth_address(to_script_hash, to_id)
@@ -432,10 +428,10 @@ impl Web3Indexer {
                         let v: u64 = signature[64].into();
 
                         let web3_transaction = Web3Transaction::new(
-                            gw_tx_hash.clone(),
+                            gw_tx_hash,
                             None,
                             block_number,
-                            block_hash.clone(),
+                            block_hash,
                             tx_index,
                             from_address,
                             Some(to_address),
@@ -448,7 +444,7 @@ impl Web3Indexer {
                             s,
                             v,
                             cumulative_gas_used,
-                            gas_limit.into(),
+                            gas_limit,
                             Vec::new(),
                             None,
                             true,
