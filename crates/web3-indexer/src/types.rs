@@ -89,6 +89,15 @@ impl Transaction {
         }
     }
 
+    fn add_chain_replay_protection(&self) -> u64 {
+        self.v as u64
+            + if let Some(n) = self.chain_id {
+                35 + n * 2
+            } else {
+                27
+            }
+    }
+
     pub fn to_rlp(&self) -> Vec<u8> {
         // RLP encode
         let mut s = rlp::RlpStream::new();
@@ -106,7 +115,7 @@ impl Transaction {
         };
         s.append(&self.value)
             .append(&self.data)
-            .append(&self.v)
+            .append(&self.add_chain_replay_protection())
             .append(&self.r.to_vec())
             .append(&self.s.to_vec());
         s.finalize_unbounded_list();
