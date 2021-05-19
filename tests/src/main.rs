@@ -26,11 +26,6 @@ struct TestResult {
 fn main() {
   env::set_var("RUST_BACKTRACE", "full");
 
-  if cfg!(target_os = "windows") {
-    println!("windows is not supported yet.");
-    return;
-  }
-
   let clap_app = clap_app();
   let matches = clap_app.get_matches();
 
@@ -171,7 +166,7 @@ fn main() {
   }
 
   test_results.push(TestResult {
-    spec_name: "first spec: spec_name.clone()".to_string(),
+    spec_name: "other test case could be added into [tests/src/specs/]".to_string(),
     status: TestResultStatus::Failed,
     duration: 999,
   });
@@ -280,14 +275,14 @@ fn clap_app() -> App<'static, 'static> {
 
 
 fn print_results(mut test_results: Vec<TestResult>) {
-  println!("{}", "-".repeat(20));
-  println!("{:50} | {:10} | {:10}", "TEST", "STATUS", "DURATION");
+  println!("{}", "-".repeat(80));
+  println!("{:600} | {:10} | {:10}", "TEST", "STATUS", "DURATION");
 
   test_results.sort_by(|a, b| a.status.cmp(&b.status));
 
   for result in test_results.iter() {
     println!(
-      "{:50} | {:10} | {:<10}",
+      "{:60} | {:10} | {:<10}",
       result.spec_name,
       format!("{:?}", result.status),
       format!("{} s", result.duration),
