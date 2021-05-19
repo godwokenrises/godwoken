@@ -59,8 +59,8 @@ impl<S: State + CodeStore> StateExt for S {
             return Err(AccountError::UnknownScript.into());
         }
         let script_hash = script.hash();
-        self.insert_script(script_hash.into(), script);
-        let id = self.create_account(script_hash.into())?;
+        self.insert_script(script_hash.into(), script.clone());
+        let id = self.create_account(script_hash.into(), script.args().raw_data().as_ref())?;
         Ok(id)
     }
 
@@ -93,7 +93,10 @@ impl<S: State + CodeStore> StateExt for S {
             Some(id) => id,
             None => {
                 self.insert_script(account_script_hash.into(), request.script());
-                self.create_account(account_script_hash.into())?
+                self.create_account(
+                    account_script_hash.into(),
+                    request.script().args().raw_data().as_ref(),
+                )?
             }
         };
         // mint CKB
@@ -108,8 +111,11 @@ impl<S: State + CodeStore> StateExt for S {
             let sudt_id = match self.get_account_id_by_script_hash(&l2_sudt_script_hash.into())? {
                 Some(id) => id,
                 None => {
-                    self.insert_script(l2_sudt_script_hash.into(), l2_sudt_script);
-                    self.create_account(l2_sudt_script_hash.into())?
+                    self.insert_script(l2_sudt_script_hash.into(), l2_sudt_script.clone());
+                    self.create_account(
+                        l2_sudt_script_hash.into(),
+                        l2_sudt_script.args().raw_data().as_ref(),
+                    )?
                 }
             };
             // prevent fake CKB SUDT, the caller should filter these invalid depositions

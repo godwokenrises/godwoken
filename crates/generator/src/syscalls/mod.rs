@@ -8,8 +8,9 @@ use gw_common::{
     blake2b::new_blake2b,
     h256_ext::H256Ext,
     state::{
-        build_account_field_key, build_script_hash_to_account_id_key, State, GW_ACCOUNT_NONCE,
-        GW_ACCOUNT_SCRIPT_HASH,
+        build_account_field_key, build_script_hash_to_account_id_key,
+        build_short_address_to_account_id_key, script_args_to_short_address, State,
+        GW_ACCOUNT_NONCE, GW_ACCOUNT_SCRIPT_HASH,
     },
     H256,
 };
@@ -26,6 +27,8 @@ use std::{cmp, convert::TryInto};
 /* Constants */
 // 24KB is max ethereum contract code size
 const MAX_SET_RETURN_DATA_SIZE: u64 = 1024 * 24;
+// The value of short address is script.args[32..52]
+const SHORT_ADDRESS_SIZE: usize = 20;
 
 /* Syscall numbers */
 const SYS_STORE: u64 = 3051;
@@ -43,6 +46,7 @@ const SYS_LOAD_DATA: u64 = 4057;
 const SYS_GET_BLOCK_HASH: u64 = 4058;
 const SYS_LOG: u64 = 4061;
 const SYS_LOAD_ROLLUP_CONFIG: u64 = 4062;
+const SYS_LOAD_ACCOUNT_ID_BY_SHORT_ADDRESS: u64 = 4063;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
@@ -51,6 +55,7 @@ pub const SUCCESS: u8 = 0;
 pub const ERROR_DUPLICATED_SCRIPT_HASH: u8 = std::i8::MAX as u8;
 pub const ERROR_UNKNOWN_SCRIPT_CODE_HASH: u8 = 50;
 pub const ERROR_UNKNOWN_SCRIPT_HASH: u8 = 51;
+pub const ERROR_UNKNOWN_SHORT_ADDRESS: u8 = 52;
 pub const ERROR_INVALID_CONTRACT_SCRIPT: u8 = 53;
 
 pub(crate) struct L2Syscalls<'a, S, C> {
@@ -191,15 +196,15 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                         machine.set_register(A0, Mac::REG::from_u8(ERROR_UNKNOWN_SCRIPT_CODE_HASH));
                         return Ok(true);
                     }
+                }
 
-                    // check contract script prefix
-                    let args: Bytes = script.args().unpack();
-                    if args.len() < 32
-                        || !args.starts_with(self.rollup_context.rollup_script_hash.as_slice())
-                    {
-                        machine.set_register(A0, Mac::REG::from_u8(ERROR_INVALID_CONTRACT_SCRIPT));
-                        return Ok(true);
-                    }
+                // Check EoA/contract script prefix
+                let args: Bytes = script.args().unpack();
+                if args.len() < 32
+                    || !args.starts_with(self.rollup_context.rollup_script_hash.as_slice())
+                {
+                    machine.set_register(A0, Mac::REG::from_u8(ERROR_INVALID_CONTRACT_SCRIPT));
+                    return Ok(true);
                 }
 
                 // Same logic from State::create_account()
@@ -216,6 +221,13 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     build_script_hash_to_account_id_key(&script_hash[..]),
                     H256::from_u32(id),
                 );
+                // short address to id
+                if let Some(short_address) = script_args_to_short_address(args.as_ref()) {
+                    self.result.write_values.insert(
+                        build_short_address_to_account_id_key(&short_address[..]),
+                        H256::from_u32(id),
+                    );
+                }
                 self.result
                     .new_scripts
                     .insert(script_hash.into(), script.as_slice().to_vec());
@@ -363,6 +375,23 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
+            SYS_LOAD_ACCOUNT_ID_BY_SHORT_ADDRESS => {
+                let short_address_addr = machine.registers()[A0].to_u64();
+                let account_id_addr = machine.registers()[A1].to_u64();
+                let short_address = load_bytes(machine, short_address_addr, SHORT_ADDRESS_SIZE)?;
+                if let Some(account_id) = self
+                    .get_account_id_by_short_address(&short_address[..])
+                    .map_err(|_err| VMError::Unexpected)?
+                {
+                    machine
+                        .memory_mut()
+                        .store_bytes(account_id_addr, &account_id.to_le_bytes()[..])?;
+                    machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                } else {
+                    machine.set_register(A0, Mac::REG::from_u8(ERROR_UNKNOWN_SHORT_ADDRESS));
+                }
+                Ok(true)
+            }
             DEBUG_PRINT_SYSCALL_NUMBER => {
                 self.output_debug(machine)?;
                 Ok(true)
@@ -419,6 +448,22 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
                 VMError::Unexpected
             })?;
         Ok(value)
+    }
+    fn get_account_id_by_short_address(
+        &mut self,
+        short_address: &[u8],
+    ) -> Result<Option<u32>, VMError> {
+        let value = self
+            .get_raw(&build_short_address_to_account_id_key(short_address))
+            .map_err(|err| {
+                log::error!("syscall error: get account id by short address : {:?}", err);
+                VMError::Unexpected
+            })?;
+        if value.is_zero() {
+            return Ok(None);
+        }
+        let id = value.to_u32();
+        Ok(Some(id))
     }
     fn get_account_id_by_script_hash(
         &mut self,

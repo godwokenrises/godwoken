@@ -28,6 +28,7 @@ pub const GW_ACCOUNT_SCRIPT_HASH: u8 = 2;
 /* Non-account types */
 pub const GW_SCRIPT_HASH_TO_ID_PREFIX: [u8; 5] = [0, 0, 0, 0, 3];
 pub const GW_DATA_HASH_PREFIX: [u8; 5] = [0, 0, 0, 0, 4];
+pub const GW_SHORT_ADDRESS_TO_ID_PREFIX: [u8; 5] = [0, 0, 0, 0, 5];
 
 /* Generate a SMT key
  * raw_key: blake2b(id | type | key)
@@ -51,6 +52,17 @@ pub fn build_account_field_key(id: u32, type_: u8) -> H256 {
     key.into()
 }
 
+// Script short address: script.args[32..52]
+// if script.args.length < 52 there is no corresponding account id.
+pub fn build_short_address_to_account_id_key(short_address: &[u8]) -> H256 {
+    let mut key: [u8; 32] = H256::zero().into();
+    let mut hasher = new_blake2b();
+    hasher.update(&GW_SHORT_ADDRESS_TO_ID_PREFIX);
+    hasher.update(short_address);
+    hasher.finalize(&mut key);
+    key.into()
+}
+
 pub fn build_script_hash_to_account_id_key(script_hash: &[u8]) -> H256 {
     let mut key: [u8; 32] = H256::zero().into();
     let mut hasher = new_blake2b();
@@ -67,6 +79,15 @@ pub fn build_data_hash_key(data_hash: &[u8]) -> H256 {
     hasher.update(data_hash);
     hasher.finalize(&mut key);
     key.into()
+}
+
+pub fn script_args_to_short_address(script_args: &[u8]) -> Option<Vec<u8>> {
+    let rest_args = &script_args[32..];
+    if rest_args.len() >= 20 {
+        Some(rest_args[..20].to_vec())
+    } else {
+        None
+    }
 }
 
 pub struct PrepareWithdrawalRecord {
@@ -94,7 +115,7 @@ pub trait State {
         Ok(())
     }
     /// Create a new account
-    fn create_account(&mut self, script_hash: H256) -> Result<u32, Error> {
+    fn create_account(&mut self, script_hash: H256, script_args: &[u8]) -> Result<u32, Error> {
         let id = self.get_account_count()?;
         // nonce
         self.set_nonce(id, 0)?;
@@ -108,6 +129,13 @@ pub trait State {
             build_script_hash_to_account_id_key(&script_hash.as_slice()),
             H256::from_u32(id),
         )?;
+        // short address to id
+        if let Some(short_address) = script_args_to_short_address(script_args) {
+            self.update_raw(
+                build_short_address_to_account_id_key(&short_address),
+                H256::from_u32(id),
+            )?;
+        }
         // update account count
         self.set_account_count(id + 1)?;
         Ok(id)
@@ -129,6 +157,15 @@ pub trait State {
             H256::from_u32(nonce),
         )?;
         Ok(())
+    }
+
+    fn get_account_id_by_short_address(&self, short_address: &[u8]) -> Result<Option<u32>, Error> {
+        let value = self.get_raw(&build_short_address_to_account_id_key(short_address))?;
+        if value.is_zero() {
+            return Ok(None);
+        }
+        let id = value.to_u32();
+        Ok(Some(id))
     }
 
     fn get_account_id_by_script_hash(&self, script_hash: &H256) -> Result<Option<u32>, Error> {
