@@ -226,11 +226,11 @@ union SUDTArgs {
 }
 
 struct SUDTQuery {
-    account_id: Uint32,
+    short_address: Byte20,
 }
 
 struct SUDTTransfer {
-    to: Uint32,
+    to: Byte20,
     amount: Uint128,
     fee: Uint128,
 }

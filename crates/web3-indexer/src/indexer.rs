@@ -356,7 +356,16 @@ impl Web3Indexer {
                     SUDTArgs::from_slice(l2_transaction.raw().args().raw_data().as_ref())?;
                 match sudt_args.to_enum() {
                     SUDTArgsUnion::SUDTTransfer(sudt_transfer) => {
-                        let to_id: u32 = sudt_transfer.to().unpack();
+                        let to_short_addr: [u8; 20] = sudt_transfer.to().unpack();
+                        let to_id =
+                            get_account_id_by_short_address(store.clone(), &to_short_addr[..])
+                                .await?
+                                .ok_or_else(|| {
+                                    anyhow!(
+                                        "Can't get account id by short address: {:?}",
+                                        to_short_addr
+                                    )
+                                })?;
                         let amount: u128 = sudt_transfer.amount().unpack();
                         let fee: u128 = sudt_transfer.fee().unpack();
 
@@ -495,6 +504,22 @@ impl Web3Indexer {
         };
         Ok(web3_block)
     }
+}
+
+async fn get_account_id_by_short_address(
+    store: Store,
+    short_address: &[u8],
+) -> Result<Option<u32>> {
+    let db = store.begin_transaction();
+    let tip_hash = db.get_tip_block_hash()?;
+    let state_db = StateDBTransaction::from_version(
+        &db,
+        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+    )?;
+    let tree = state_db.account_state_tree()?;
+
+    let short_address_opt = tree.get_account_id_by_short_address(short_address)?;
+    Ok(short_address_opt)
 }
 
 async fn get_script_hash(store: Store, account_id: u32) -> Result<gw_common::H256> {
