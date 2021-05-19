@@ -36,11 +36,10 @@ impl PolyjuiceArgs {
     }
 }
 
-pub fn account_id_to_eth_address(account_script_hash: H256, id: u32, ethabi: bool) -> Vec<u8> {
-    let offset = if ethabi { 12 } else { 0 };
-    let mut data = vec![0u8; offset + 20];
-    data[offset..offset + 16].copy_from_slice(&account_script_hash.as_slice()[0..16]);
-    data[offset + 16..offset + 20].copy_from_slice(&id.to_le_bytes()[..]);
+pub fn account_id_to_eth_address(account_script_hash: H256, id: u32) -> [u8; 20] {
+    let mut data = [0u8; 20];
+    data[..16].copy_from_slice(&account_script_hash.as_slice()[0..16]);
+    data[16..20].copy_from_slice(&id.to_le_bytes()[..]);
     data
 }
 
@@ -183,4 +182,8 @@ pub fn parse_log(item: &LogItem) -> Result<GwLog> {
         }
         _ => Err(anyhow!("invalid log service flag: {}", service_flag)),
     }
+}
+
+pub fn hex(raw: &[u8]) -> Result<String> {
+    Ok(format!("0x{}", faster_hex::hex_string(raw)?))
 }

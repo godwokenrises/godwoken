@@ -1,5 +1,5 @@
 use crate::{
-    helper::{account_id_to_eth_address, parse_log, GwLog, PolyjuiceArgs},
+    helper::{account_id_to_eth_address, hex, parse_log, GwLog, PolyjuiceArgs},
     types::{
         Block as Web3Block, Log as Web3Log, Transaction as Web3Transaction,
         TransactionWithLogs as Web3TransactionWithLogs,
@@ -34,6 +34,7 @@ pub struct Web3Indexer {
     polyjuice_type_script_hash: H256,
     rollup_type_hash: H256,
     eth_account_lock_hash: H256,
+    compatible_chain_id: u32,
 }
 
 impl Web3Indexer {
@@ -43,6 +44,7 @@ impl Web3Indexer {
         polyjuice_type_script_hash: H256,
         rollup_type_hash: H256,
         eth_account_lock_hash: H256,
+        compatible_chain_id: u32,
     ) -> Self {
         Web3Indexer {
             pool,
@@ -50,6 +52,7 @@ impl Web3Indexer {
             polyjuice_type_script_hash,
             rollup_type_hash,
             eth_account_lock_hash,
+            compatible_chain_id,
         }
     }
 
@@ -78,60 +81,74 @@ impl Web3Indexer {
                 .await?;
             let mut tx = self.pool.begin().await?;
             sqlx::query("INSERT INTO blocks (number, hash, parent_hash, logs_bloom, gas_limit, gas_used, timestamp, miner, size) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
-            .bind(web3_block.number)
-            .bind(web3_block.hash)
-            .bind(web3_block.parent_hash)
-            .bind(web3_block.logs_bloom)
-            .bind(web3_block.gas_limit)
-            .bind(web3_block.gas_used)
+            .bind(Decimal::from(web3_block.number))
+            .bind(hex(web3_block.hash.as_slice())?)
+            .bind(hex(web3_block.parent_hash.as_slice())?)
+            .bind(hex(&web3_block.logs_bloom)?)
+            .bind(Decimal::from(web3_block.gas_limit))
+            .bind(Decimal::from(web3_block.gas_used))
             .bind(web3_block.timestamp)
-            .bind(web3_block.miner)
-            .bind(web3_block.size)
+            .bind(hex(&web3_block.miner)?)
+            .bind(Decimal::from(web3_block.size))
             .execute(&mut tx).await?;
             for web3_tx_with_logs in web3_tx_with_logs_vec {
                 let web3_tx = web3_tx_with_logs.tx;
+                let web3_to_address_hex = match web3_tx.to_address {
+                    Some(addr) => Some(hex(&addr)?),
+                    None => None,
+                };
+                let web3_contract_address_hex = match web3_tx.contract_address {
+                    Some(addr) => Some(hex(&addr)?),
+                    None => None,
+                };
                 let  (transaction_id,): (i64,) =
             sqlx::query_as("INSERT INTO transactions
-            (hash, block_number, block_hash, transaction_index, from_address, to_address, value, nonce, gas_limit, gas_price, input, v, r, s, cumulative_gas_used, gas_used, logs_bloom, contract_address, status) 
+            (hash, gw_tx_hash, block_number, block_hash, transaction_index, from_address, to_address, value, nonce, gas_limit, gas_price, input, v, r, s, cumulative_gas_used, gas_used, logs_bloom, contract_address, status) 
             VALUES 
-            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING ID")
-            .bind(web3_tx.hash)
-            .bind(web3_tx.block_number)
-            .bind(web3_tx.block_hash)
+            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING ID")
+            .bind(hex(web3_tx.compute_eth_tx_hash().as_slice())?)
+            .bind(hex(web3_tx.gw_tx_hash.as_slice())?)
+            .bind(Decimal::from(web3_tx.block_number))
+            .bind(hex(web3_tx.block_hash.as_slice())?)
             .bind(web3_tx.transaction_index)
-            .bind(web3_tx.from_address)
-            .bind(web3_tx.to_address)
-            .bind(web3_tx.value)
-            .bind(web3_tx.nonce)
-            .bind(web3_tx.gas_limit)
-            .bind(web3_tx.gas_price)
-            .bind(web3_tx.input)
-            .bind(web3_tx.v)
-            .bind(web3_tx.r)
-            .bind(web3_tx.s)
-            .bind(web3_tx.cumulative_gas_used)
-            .bind(web3_tx.gas_used)
-            .bind(web3_tx.logs_bloom)
-            .bind(web3_tx.contract_address)
+            .bind(hex(&web3_tx.from_address)?)
+            .bind(web3_to_address_hex)
+            .bind(Decimal::from(web3_tx.value))
+            .bind(Decimal::from(web3_tx.nonce))
+            .bind(Decimal::from(web3_tx.gas_limit))
+            .bind(Decimal::from(web3_tx.gas_price))
+            .bind(web3_tx.data)
+            .bind(hex(&web3_tx.v.to_be_bytes())?)
+            .bind(hex(&web3_tx.r)?)
+            .bind(hex(&web3_tx.s)?)
+            .bind(Decimal::from(web3_tx.cumulative_gas_used))
+            .bind(Decimal::from(web3_tx.gas_used))
+            .bind(hex(&web3_tx.logs_bloom)?)
+            .bind(web3_contract_address_hex)
             .bind(web3_tx.status)
             .fetch_one(&mut tx)
             .await?;
 
                 let web3_logs = web3_tx_with_logs.logs;
                 for log in web3_logs {
+                    let mut topics_hex = vec![];
+                    for topic in log.topics {
+                        let topic_hex = hex(topic.as_slice())?;
+                        topics_hex.push(topic_hex);
+                    }
                     sqlx::query("INSERT INTO logs
                 (transaction_id, transaction_hash, transaction_index, block_number, block_hash, address, data, log_index, topics)
                 VALUES
                 ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
                 .bind(transaction_id)
-                .bind(log.transaction_hash)
+                .bind(hex(log.transaction_hash.as_slice())?)
                 .bind(log.transaction_index)
-                .bind(log.block_number)
-                .bind(log.block_hash)
-                .bind(log.address)
-                .bind(log.data)
+                .bind(Decimal::from(log.block_number))
+                .bind(hex(log.block_hash.as_slice())?)
+                .bind(hex(&log.address)?)
+                .bind(hex(&log.data)?)
                 .bind(log.log_index)
-                .bind(log.topics)
+                .bind(topics_hex)
                 .execute(&mut tx)
                 .await?;
                 }
@@ -168,15 +185,13 @@ impl Web3Indexer {
         l2_block: L2Block,
     ) -> Result<Vec<Web3TransactionWithLogs>> {
         let block_number = l2_block.raw().number().unpack();
-        let block_hash: H256 = blake2b_256(l2_block.raw().as_slice()).into();
-        let block_hash_hex = format!("{:#x}", block_hash);
-        let mut cumulative_gas_used = Decimal::from(0u64);
+        let block_hash: gw_common::H256 = blake2b_256(l2_block.raw().as_slice()).into();
+        let mut cumulative_gas_used = 0;
         let l2_transactions = l2_block.transactions();
         let mut web3_tx_with_logs_vec: Vec<Web3TransactionWithLogs> = vec![];
-        let mut tx_index = 0i32;
+        let mut tx_index = 0u32;
         for l2_transaction in l2_transactions {
-            let tx_hash: H256 = blake2b_256(l2_transaction.raw().as_slice()).into();
-            let tx_hash_hex = format!("{:#x}", tx_hash);
+            let gw_tx_hash: gw_common::H256 = l2_transaction.hash().into();
             let from_id: u32 = l2_transaction.raw().from_id().unpack();
             let from_script_hash = get_script_hash(store.clone(), from_id).await?;
             let from_script = get_script(store.clone(), from_script_hash)
@@ -197,7 +212,11 @@ impl Web3Indexer {
                     from_script_args
                 ));
             }
-            let from_address = format!("0x{}", faster_hex::hex_string(&from_script_args[32..52])?);
+            let from_address = {
+                let mut buf = [0u8; 20];
+                buf.copy_from_slice(&from_script_args[32..52]);
+                buf
+            };
 
             // extract to_id corresponding script, check code_hash is either polyjuice contract code_hash or sudt contract code_hash
             let to_id = l2_transaction.raw().to_id().unpack();
@@ -206,141 +225,140 @@ impl Web3Indexer {
                 .await?
                 .ok_or_else(|| anyhow!("Can't get script by script_hash: {:?}", to_script_hash))?;
 
-            let mut tx_gas_used = Decimal::from(0u64);
             if to_script.code_hash().as_slice() == self.polyjuice_type_script_hash.0 {
                 let l2_tx_args = l2_transaction.raw().args();
                 let polyjuice_args = PolyjuiceArgs::decode(l2_tx_args.raw_data().as_ref())?;
                 // to_address is null if it's a contract deployment transaction
-                let to_address = if polyjuice_args.is_create {
-                    None
+                let (to_address, polyjuice_chain_id) = if polyjuice_args.is_create {
+                    (None, to_id)
                 } else {
-                    let address = account_id_to_eth_address(to_script_hash, to_id, false);
-                    let address_str = faster_hex::hex_string(&address[..])?;
-                    let address_hex = format!("0x{}", address_str);
-                    Some(address_hex)
+                    let address = account_id_to_eth_address(to_script_hash, to_id);
+                    let polyjuice_chain_id = {
+                        let mut data = [0u8; 4];
+                        data.copy_from_slice(&to_script.args().raw_data()[32..36]);
+                        u32::from_le_bytes(data)
+                    };
+                    (Some(address), polyjuice_chain_id)
                 };
-                let nonce = {
-                    let nonce: u32 = l2_transaction.raw().nonce().unpack();
-                    Decimal::from(nonce)
-                };
-                let input = match polyjuice_args.input {
-                    Some(input) => {
-                        let input_str = faster_hex::hex_string(&input[..])?;
-                        let input_hex = format!("0x{}", input_str);
-                        Some(input_hex)
-                    }
-                    None => None,
-                };
+                // calculate chain_id
+                let chain_id: u64 =
+                    ((self.compatible_chain_id as u64) << 32) | (polyjuice_chain_id as u64);
+                let nonce: u32 = l2_transaction.raw().nonce().unpack();
+                let input = polyjuice_args.input.clone().unwrap_or_default();
 
                 let signature: [u8; 65] = l2_transaction.signature().unpack();
-                let r = format!("0x{}", faster_hex::hex_string(&signature[0..31])?);
-                let s = format!("0x{}", faster_hex::hex_string(&signature[32..63])?);
-                let v = format!("0x{}", faster_hex::hex_string(&[signature[64]])?);
-                let mut contract_address_hex = None;
+                let r = {
+                    let mut buf = [0u8; 32];
+                    buf.copy_from_slice(&signature[0..32]);
+                    buf
+                };
+                let s = {
+                    let mut buf = [0u8; 32];
+                    buf.copy_from_slice(&signature[32..64]);
+                    buf
+                };
+                let v: u64 = signature[64].into();
 
-                let web3_logs = {
-                    let db = store.begin_transaction();
-                    let tx_hash = gw_common::H256::from(tx_hash.0);
-                    let tx_receipt = db.get_transaction_receipt(&tx_hash)?;
-                    let mut logs: Vec<Web3Log> = vec![];
-                    if let Some(tx_receipt) = tx_receipt {
-                        let log_item_vec = tx_receipt.logs();
-                        let mut log_index = 0;
-                        for log_item in log_item_vec {
-                            let log = parse_log(&log_item)?;
-                            match log {
-                                GwLog::PolyjuiceSystem {
-                                    gas_used,
-                                    cumulative_gas_used: _,
-                                    created_id,
-                                    status_code: _,
-                                } => {
-                                    tx_gas_used = Decimal::from(gas_used);
-                                    cumulative_gas_used += tx_gas_used;
-                                    if polyjuice_args.is_create && created_id != u32::MAX {
-                                        let created_script_hash =
-                                            get_script_hash(store.clone(), created_id).await?;
-                                        let contract_address = account_id_to_eth_address(
-                                            created_script_hash,
-                                            created_id,
-                                            false,
-                                        );
-                                        contract_address_hex = Some(format!(
-                                            "0x{}",
-                                            faster_hex::hex_string(&contract_address[..])?
-                                        ));
-                                    }
-                                }
-                                GwLog::PolyjuiceUser {
-                                    address,
-                                    data,
-                                    topics,
-                                } => {
-                                    let address =
-                                        format!("0x{}", faster_hex::hex_string(&address[..])?);
-                                    let data = format!("0x{}", faster_hex::hex_string(&data[..])?);
-                                    let mut topics_hex = vec![];
-                                    for topic in topics {
-                                        let topic_hex = format!(
-                                            "0x{}",
-                                            faster_hex::hex_string(topic.as_slice())?
-                                        );
-                                        topics_hex.push(topic_hex);
-                                    }
+                // read logs
+                let db = store.begin_transaction();
+                let tx_receipt = {
+                    db.get_transaction_receipt(&gw_tx_hash)?.ok_or_else(|| {
+                        anyhow!("can't find receipt for transaction: {:?}", gw_tx_hash)
+                    })?
+                };
+                let log_item_vec = tx_receipt.logs();
 
-                                    let web3_log = Web3Log::new(
-                                        tx_hash_hex.clone(),
-                                        tx_index,
-                                        Decimal::from(block_number),
-                                        block_hash_hex.clone(),
-                                        address,
-                                        data,
-                                        log_index,
-                                        topics_hex,
-                                    );
-                                    logs.push(web3_log);
-                                    log_index += 1;
-                                }
-                                // TODO: Given the fact that Ethereum doesn't emit event for native ether transfer at system level, the SudtTransfer/SudtPayFee logs in polyjuice provide more info than we need here and could be ignored so far.
-                                GwLog::SudtTransfer {
-                                    sudt_id: _,
-                                    from_id: _,
-                                    to_id: _,
-                                    amount: _,
-                                } => {}
-                                GwLog::SudtPayFee {
-                                    sudt_id: _,
-                                    from_id: _,
-                                    block_producer_id: _,
-                                    amount: _,
-                                } => {}
-                            }
-                        }
-                    }
-                    logs
+                // read polyjuice system log
+                let polyjuice_system_log = parse_log(
+                    log_item_vec
+                        .get(0)
+                        .as_ref()
+                        .ok_or_else(|| anyhow!("no system logs"))?,
+                )?;
+
+                let (contract_address, tx_gas_used) = if let GwLog::PolyjuiceSystem {
+                    gas_used,
+                    cumulative_gas_used: _,
+                    created_id,
+                    status_code: _,
+                } = polyjuice_system_log
+                {
+                    let tx_gas_used = gas_used.into();
+                    cumulative_gas_used += tx_gas_used;
+                    let contract_address = if polyjuice_args.is_create && created_id != u32::MAX {
+                        let created_script_hash =
+                            get_script_hash(store.clone(), created_id).await?;
+                        Some(account_id_to_eth_address(created_script_hash, created_id))
+                    } else {
+                        None
+                    };
+                    (contract_address, tx_gas_used)
+                } else {
+                    return Err(anyhow!(
+                        "can't find polyjuice system log from logs: tx_hash: {}",
+                        hex(gw_tx_hash.as_slice())?
+                    ));
                 };
 
                 let web3_transaction = Web3Transaction::new(
-                    tx_hash_hex.clone(),
-                    Decimal::from(block_number),
-                    block_hash_hex.clone(),
-                    tx_index as i32,
+                    gw_tx_hash,
+                    Some(chain_id),
+                    block_number,
+                    block_hash,
+                    tx_index,
                     from_address,
                     to_address,
-                    Decimal::from(polyjuice_args.value),
+                    polyjuice_args.value,
                     nonce,
-                    Decimal::from(polyjuice_args.gas_limit),
-                    Decimal::from(polyjuice_args.gas_price),
+                    polyjuice_args.gas_limit.into(),
+                    polyjuice_args.gas_price,
                     input,
                     r,
                     s,
                     v,
                     cumulative_gas_used,
                     tx_gas_used,
-                    String::from("0x"),
-                    contract_address_hex,
+                    Vec::new(),
+                    contract_address,
                     true,
                 );
+
+                let eth_tx_hash = web3_transaction.compute_eth_tx_hash();
+
+                let web3_logs = {
+                    let mut logs: Vec<Web3Log> = vec![];
+                    let mut log_index = 0;
+                    for log_item in log_item_vec {
+                        let log = parse_log(&log_item)?;
+                        match log {
+                            GwLog::PolyjuiceSystem { .. } => {
+                                // we already handled this
+                            }
+                            GwLog::PolyjuiceUser {
+                                address,
+                                data,
+                                topics,
+                            } => {
+                                let web3_log = Web3Log::new(
+                                    eth_tx_hash,
+                                    tx_index,
+                                    block_number,
+                                    block_hash,
+                                    address,
+                                    data,
+                                    log_index,
+                                    topics,
+                                );
+                                logs.push(web3_log);
+                                log_index += 1;
+                            }
+                            // TODO: Given the fact that Ethereum doesn't emit event for native ether transfer at system level, the SudtTransfer/SudtPayFee logs in polyjuice provide more info than we need here and could be ignored so far.
+                            GwLog::SudtTransfer { .. } => {}
+                            GwLog::SudtPayFee { .. } => {}
+                        }
+                    }
+                    logs
+                };
 
                 let web3_tx_with_logs = Web3TransactionWithLogs {
                     tx: web3_transaction,
@@ -379,14 +397,11 @@ impl Web3Indexer {
                                 to_script_args.len()
                             ));
                             }
-                            let to_address =
-                                format!("0x{}", faster_hex::hex_string(&to_script_args[32..52])?);
+                            let mut to_address = [0u8; 20];
+                            to_address.copy_from_slice(&to_script_args[32..52]);
                             to_address
                         } else if to_script_code_hash == self.polyjuice_type_script_hash {
-                            let address = account_id_to_eth_address(to_script_hash, to_id, false);
-                            let address_str = faster_hex::hex_string(&address[..])?;
-                            let address_hex = format!("0x{}", address_str);
-                            address_hex
+                            account_id_to_eth_address(to_script_hash, to_id)
                         } else {
                             continue;
                         };
@@ -394,38 +409,43 @@ impl Web3Indexer {
                         let value = amount;
 
                         // Represent SUDTTransfer fee in web3 style, set gas_price as 1 temporary.
-                        let gas_price = Decimal::from(1);
-                        let gas_limit = Decimal::from(fee);
+                        let gas_price = 1;
+                        let gas_limit = fee;
                         cumulative_gas_used += gas_limit;
 
-                        let nonce = {
-                            let nonce: u32 = l2_transaction.raw().nonce().unpack();
-                            Decimal::from(nonce)
-                        };
-
+                        let nonce: u32 = l2_transaction.raw().nonce().unpack();
                         let signature: [u8; 65] = l2_transaction.signature().unpack();
-                        let r = format!("0x{}", faster_hex::hex_string(&signature[0..31])?);
-                        let s = format!("0x{}", faster_hex::hex_string(&signature[32..63])?);
-                        let v = format!("0x{}", faster_hex::hex_string(&[signature[64]])?);
+                        let r = {
+                            let mut buf = [0u8; 32];
+                            buf.copy_from_slice(&signature[0..32]);
+                            buf
+                        };
+                        let s = {
+                            let mut buf = [0u8; 32];
+                            buf.copy_from_slice(&signature[32..64]);
+                            buf
+                        };
+                        let v: u64 = signature[64].into();
 
                         let web3_transaction = Web3Transaction::new(
-                            tx_hash_hex.clone(),
-                            Decimal::from(block_number),
-                            block_hash_hex.clone(),
-                            tx_index as i32,
+                            gw_tx_hash,
+                            None,
+                            block_number,
+                            block_hash,
+                            tx_index,
                             from_address,
                             Some(to_address),
-                            Decimal::from(value),
+                            value,
                             nonce,
                             gas_limit,
                             gas_price,
-                            None,
+                            Vec::new(),
                             r,
                             s,
                             v,
                             cumulative_gas_used,
                             gas_limit,
-                            String::from("0x"),
+                            Vec::new(),
                             None,
                             true,
                         );
@@ -451,24 +471,10 @@ impl Web3Indexer {
         web3_tx_with_logs_vec: &[Web3TransactionWithLogs],
     ) -> Result<Web3Block> {
         let block_number = l2_block.raw().number().unpack();
-        let block_hash: H256 = blake2b_256(l2_block.raw().as_slice()).into();
-        let parent_hash = {
-            if block_number == 1 {
-                String::from("0x0000000000000000000000000000000000000000000000000000000000000000")
-            } else {
-                let row: Option<(String,)> =
-                    sqlx::query_as("SELECT hash FROM blocks WHERE number = $1")
-                        .bind(Decimal::from(block_number - 1))
-                        .fetch_optional(&self.pool)
-                        .await?;
-                match row {
-                    Some(block) => block.0,
-                    None => return Err(anyhow!("No parent hash found!")),
-                }
-            }
-        };
-        let mut gas_limit = Decimal::from(0);
-        let mut gas_used = Decimal::from(0);
+        let block_hash: gw_common::H256 = l2_block.hash().into();
+        let parent_hash: gw_common::H256 = l2_block.raw().parent_block_hash().unpack();
+        let mut gas_limit = 0;
+        let mut gas_used = 0;
         for web3_tx_with_logs in web3_tx_with_logs_vec {
             gas_limit += web3_tx_with_logs.tx.gas_limit;
             gas_used += web3_tx_with_logs.tx.gas_used;
@@ -476,21 +482,20 @@ impl Web3Indexer {
         let block_producer_id: u32 = l2_block.raw().block_producer_id().unpack();
         let block_producer_script_hash = get_script_hash(store.clone(), block_producer_id).await?;
         let miner_address =
-            account_id_to_eth_address(block_producer_script_hash, block_producer_id, false);
-        let miner_address_hex = format!("0x{}", faster_hex::hex_string(&miner_address[..])?);
+            account_id_to_eth_address(block_producer_script_hash, block_producer_id);
         let epoch_time_as_millis: u64 = l2_block.raw().timestamp().unpack();
         let timestamp =
             NaiveDateTime::from_timestamp((epoch_time_as_millis / MILLIS_PER_SEC) as i64, 0);
         let size = l2_block.raw().as_slice().len();
         let web3_block = Web3Block {
-            number: Decimal::from(block_number),
-            hash: format!("{:#x}", block_hash),
+            number: block_number,
+            hash: block_hash,
             parent_hash,
-            logs_bloom: String::from("0x"),
+            logs_bloom: Vec::new(),
             gas_limit,
             gas_used,
-            miner: miner_address_hex,
-            size: Decimal::from(size),
+            miner: miner_address,
+            size,
             timestamp: DateTime::<Utc>::from_utc(timestamp, Utc),
         };
         Ok(web3_block)
