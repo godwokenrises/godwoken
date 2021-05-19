@@ -264,6 +264,7 @@ impl BlockProducer {
             crate::withdrawal::AvailableCustodians::default()
         } else {
             let db = self.store.begin_transaction();
+            let mut sudt_scripts: HashMap<[u8; 32], Script> = HashMap::new();
             let sudt_custodians = {
                 let reqs = withdrawal_requests.iter();
                 let sudt_reqs = reqs.filter(|req| {
@@ -273,11 +274,18 @@ impl BlockProducer {
 
                 let to_hash = sudt_reqs.map(|req| req.raw().sudt_script_hash().unpack());
                 let has_script = to_hash.filter_map(|hash: [u8; 32]| {
-                    match smol::block_on(crate::withdrawal::get_verified_custodian_type_script(
-                        &hash,
-                        &self.rpc_client,
-                    )) {
-                        Ok(opt_script) => opt_script.map(|script| (hash, script)),
+                    if let Some(script) = sudt_scripts.get(&hash).cloned() {
+                        return Some((hash, script));
+                    }
+
+                    // Try rpc
+                    match smol::block_on(
+                        self.rpc_client.query_verified_custodian_type_script(&hash),
+                    ) {
+                        Ok(opt_script) => opt_script.map(|script| {
+                            sudt_scripts.insert(hash, script.clone());
+                            (hash, script)
+                        }),
                         Err(err) => {
                             log::debug!("get custodian type script err {}", err);
                             None
