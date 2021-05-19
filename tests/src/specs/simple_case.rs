@@ -10,7 +10,7 @@ impl Spec for SimpleCase {
 	fn run(&self) {
 		// call account-cli
 		println!("\ncall account-cli to deposit -> transfer -> withdraw");
-		let _exit_status: std::process::ExitStatus = Command::new("./account-cli")
+		let _exit_status: std::process::ExitStatus = Command::new("./godwoken-examples/account-cli-macos")
 			.env("LUMOS_CONFIG_FILE", "configs/lumos-config.json")
 			.args(&["--godwoken-rpc", "http://192.168.5.102:8119"])
 			.arg("deposit")

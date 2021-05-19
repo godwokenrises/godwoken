@@ -1,13 +1,18 @@
 This directory contains integration tests that test godwoken binary.
 
 ## Running tests locally
-Before tests can be run locally, godwoken binary must be built.
-
-The following command assumes that godwoken binary is built as `../target/debug/godwoken` and starting node on port 8119:
+Before tests can be run locally, a godwoken dev chain should be runing.
+Please update your godwoken configs into `tests/configs`, including `godwoken-config.toml`, `scripts-deploy-result.json` and `lumos-config.json`.
 
 ```bash
+./init.sh
 cargo run
 ```
+
+
+---
+### TODO:
+- [ ] design ./src/node.rs 
 
 Run specified specs:
 
