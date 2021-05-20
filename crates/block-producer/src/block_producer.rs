@@ -305,7 +305,8 @@ impl BlockProducer {
                 to_custodian.collect::<HashMap<[u8; 32], (u128, Script)>>()
             };
 
-            let ckb_custodian = match db.get_finalized_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into()) {
+            let ckb_custodian = match db.get_finalized_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
+            {
                 Ok(balance) => balance,
                 Err(err) => {
                     log::warn!("get ckb custodian err {}", err);
