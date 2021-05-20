@@ -11,74 +11,112 @@ use gw_db::{error::Error, iter::DBIter, DBRawIterator, IteratorMode};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
-    packed::{self, AccountMerkleState, TransactionKey},
+    packed::{self, AccountMerkleState, Byte32, L2Block},
     prelude::*,
 };
 use std::{cell::RefCell, collections::HashSet, fmt, mem::size_of_val};
 
 const FLAG_DELETE_VALUE: u8 = 0;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StateDBVersion {
+#[derive(Debug)]
+pub enum StateDBMode {
     Genesis,
-    HistoryState { block_number: u64, tx_index: u32 },
-    FutureState { block_number: u64, tx_index: u32 },
+    ReadOnly,
+    Write,
 }
 
-impl StateDBVersion {
-    pub fn from_genesis() -> Self {
-        StateDBVersion::Genesis
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum SubState {
+    Withdrawal(u32),
+    Tx(u32),
+    Block, // Block post state
+}
+
+impl SubState {
+    fn extract_checkpoint_from_block(&self, block: &L2Block) -> Result<Option<Byte32>, Error> {
+        if SubState::Block == *self {
+            return Ok(None);
+        }
+
+        let withdrawal_len = block.withdrawals().len();
+
+        // Check out of bound
+        if let SubState::Withdrawal(index) = *self {
+            if index as usize >= withdrawal_len {
+                return Err(Error::from(format!("invalid {:?} in block", self)));
+            }
+        }
+        if let SubState::Tx(index) = *self {
+            if index as usize >= block.transactions().len() {
+                return Err(Error::from(format!("invalid {:?} in block", self)));
+            }
+        }
+
+        let checkpoint_idx = match *self {
+            SubState::Withdrawal(index) => index as usize,
+            SubState::Tx(index) => withdrawal_len + index as usize,
+            _ => return Ok(None),
+        };
+
+        let checkpoints = block.raw().state_checkpoint_list();
+        Ok(checkpoints.get(checkpoint_idx))
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CheckPoint {
+    block_number: u64,
+    sub_state: SubState,
+}
+
+impl CheckPoint {
+    pub fn new(block_number: u64, sub_state: SubState) -> Self {
+        Self {
+            block_number,
+            sub_state,
+        }
     }
 
-    pub fn from_history_state(
+    pub fn genesis() -> Self {
+        Self {
+            block_number: 0,
+            sub_state: SubState::Block,
+        }
+    }
+
+    pub fn is_genesis(&self) -> bool {
+        0 == self.block_number && SubState::Block == self.sub_state
+    }
+
+    pub fn from_block_hash(
         db: &StoreTransaction,
         block_hash: H256,
-        tx_index: Option<u32>,
+        sub_state: SubState,
     ) -> Result<Self> {
         let block = db
             .get_block(&block_hash)?
             .ok_or_else(|| anyhow!("block isn't exist"))?;
-        let block_number: u64 = block.raw().number().unpack();
-        let tx_index =
-            tx_index.unwrap_or_else(|| block.transactions().len().saturating_sub(1) as u32);
-        if tx_index != 0 && tx_index as usize >= block.transactions().len() {
-            return Err(anyhow!("Invalid tx index"));
-        }
-        Ok(StateDBVersion::HistoryState {
-            block_number,
-            tx_index,
+
+        let _valid_checkpoint = sub_state.extract_checkpoint_from_block(&block)?;
+
+        Ok(CheckPoint {
+            block_number: block.raw().number().unpack(),
+            sub_state,
         })
     }
 
-    pub fn from_future_state(block_number: u64, tx_index: u32) -> Self {
-        StateDBVersion::FutureState {
-            block_number,
-            tx_index,
-        }
-    }
-
-    pub fn is_genesis_version(&self) -> bool {
-        self == &Self::Genesis
-    }
-
     fn extract_block_number_and_index_number(&self) -> (u64, u32) {
-        match self {
-            Self::Genesis => (0, 0),
-            Self::HistoryState {
-                block_number,
-                tx_index,
-            } => (*block_number, *tx_index),
-            Self::FutureState {
-                block_number,
-                tx_index,
-            } => (*block_number, *tx_index),
+        match self.sub_state {
+            SubState::Withdrawal(index) | SubState::Tx(index) => (self.block_number, index),
+            SubState::Block => (self.block_number, 0),
         }
     }
 }
 
 pub struct StateDBTransaction<'db> {
     inner: &'db StoreTransaction,
-    version: StateDBVersion,
+    checkpoint: CheckPoint,
+    mode: StateDBMode,
 }
 
 impl<'db> KVStore for StateDBTransaction<'db> {
@@ -117,17 +155,23 @@ impl<'db> KVStore for StateDBTransaction<'db> {
 impl<'db> fmt::Debug for StateDBTransaction<'db> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StateDBTransaction")
-            .field("version", &self.version)
+            .field("checkpoint", &self.checkpoint)
+            .field("mode", &self.mode)
             .finish()
     }
 }
 
 impl<'db> StateDBTransaction<'db> {
-    pub fn from_version(
+    pub fn from_checkpoint(
         inner: &'db StoreTransaction,
-        version: StateDBVersion,
+        checkpoint: CheckPoint,
+        mode: StateDBMode,
     ) -> Result<Self, Error> {
-        Ok(StateDBTransaction { inner, version })
+        Ok(StateDBTransaction {
+            inner,
+            checkpoint,
+            mode,
+        })
     }
 
     pub fn commit(&self) -> Result<(), Error> {
@@ -163,93 +207,96 @@ impl<'db> StateDBTransaction<'db> {
     // The ReadOnly is for fetching history state, and the write only is for writing new state.
     // This function should only be added on the ReadOnly state.
     pub fn account_smt(&self) -> Result<SMT<SMTStore<'_, Self>>, Error> {
-        let merkle_state = self.get_history_merkle_state()?;
+        let merkle_state = self.get_checkpoint_merkle_state()?;
         self.account_smt_with_merkle_state(merkle_state)
     }
 
     pub fn account_state_tree(&self) -> Result<StateTree<'_, 'db>, Error> {
-        let merkle_state = self.get_history_merkle_state()?;
+        let merkle_state = self.get_checkpoint_merkle_state()?;
         self.account_state_tree_with_merkle_state(merkle_state)
     }
 
-    fn get_history_merkle_state(&self) -> Result<AccountMerkleState, Error> {
-        let account_merkle_state = match self.version {
-            StateDBVersion::Genesis => match self.inner.get_block_hash_by_number(0)? {
-                Some(block_hash) => {
-                    let block = self
-                        .inner
-                        .get_block(&block_hash)?
-                        .ok_or_else(|| "can't find genesis".to_string())?;
-                    block.raw().post_account()
+    fn get_checkpoint_merkle_state(&self) -> Result<AccountMerkleState, Error> {
+        let inner_db = self.inner;
+
+        let account_merkle_state = match self.mode {
+            StateDBMode::Genesis => {
+                if CheckPoint::genesis() != self.checkpoint {
+                    return Err(Error::from(format!(
+                        "invalid genesis check point {:?}",
+                        self.checkpoint
+                    )));
                 }
-                None => AccountMerkleState::default(),
-            },
-            StateDBVersion::HistoryState {
-                block_number,
-                tx_index,
-            } => {
-                let block_hash = self
-                    .inner
-                    .get_block_hash_by_number(block_number)?
-                    .ok_or_else(|| "can't find block hash".to_string())?;
-                let key = TransactionKey::build_transaction_key(block_hash.pack(), tx_index);
-                match self.inner.get_transaction_receipt_by_key(&key)? {
-                    Some(tx_receipt) => tx_receipt.post_state(),
-                    None if tx_index == 0 => {
-                        let block = self
-                            .inner
+
+                match self.inner.get_block_hash_by_number(0)? {
+                    Some(block_hash) => {
+                        let block = inner_db
                             .get_block(&block_hash)?
-                            .ok_or_else(|| "can't find block".to_string())?;
+                            .ok_or_else(|| "can't find genesis".to_string())?;
                         block.raw().post_account()
                     }
-                    None => panic!("inconsisted data"),
+                    None => AccountMerkleState::default(),
                 }
             }
-            StateDBVersion::FutureState {
-                block_number,
-                tx_index,
-            } => {
-                let mut last_block_number = block_number;
-                let mut block_hash_opt = self.inner.get_block_hash_by_number(last_block_number)?;
-                while block_hash_opt.is_none() {
-                    last_block_number -= 1;
-                    block_hash_opt = self.inner.get_block_hash_by_number(last_block_number)?;
-                }
-                let block_hash =
-                    block_hash_opt.ok_or_else(|| "can't found block hash".to_string())?;
-                let block = self
-                    .inner
-                    .get_block(&block_hash)?
-                    .ok_or_else(|| "can't found block".to_string())?;
-                let tx_index = if block.raw().number().unpack() == block_number {
-                    // return tx_index if current block is future state block & tx exists
-                    std::cmp::min(
-                        block.transactions().len().saturating_sub(1) as u32,
-                        tx_index,
-                    )
-                } else {
-                    // otherwise return nearest block and tx_index
-                    block.transactions().len().saturating_sub(1) as u32
+            StateDBMode::ReadOnly => {
+                let block = {
+                    let block_hash = inner_db
+                        .get_block_hash_by_number(self.checkpoint.block_number)?
+                        .ok_or_else(|| "can't find block hash".to_string())?;
+
+                    inner_db
+                        .get_block(&block_hash)?
+                        .ok_or_else(|| "can't find block".to_string())?
                 };
 
-                let key = TransactionKey::build_transaction_key(block_hash.pack(), tx_index);
-                match self.inner.get_transaction_receipt_by_key(&key)? {
-                    Some(tx_receipt) => tx_receipt.post_state(),
-                    None if tx_index == 0 => block.raw().post_account(),
-                    None => panic!("inconsisted data"),
+                let sub_state = &self.checkpoint.sub_state;
+                match sub_state.extract_checkpoint_from_block(&block)? {
+                    Some(checkpoint) => inner_db
+                        .get_checkpoint_post_state(&checkpoint)?
+                        .ok_or_else(|| "can't find checkpoint".to_string())?,
+                    None => block.raw().post_account(),
+                }
+            }
+            StateDBMode::Write => {
+                let mut last_block_number = self.checkpoint.block_number;
+                let mut opt_block_hash = None;
+                while opt_block_hash.is_none() {
+                    opt_block_hash = inner_db.get_block_hash_by_number(last_block_number)?;
+                    if opt_block_hash.is_none() && 0 == last_block_number {
+                        panic!("genesis block not found in StateDBMode::Write");
+                    }
+                    last_block_number = last_block_number.saturating_sub(1);
+                }
+
+                let block = inner_db
+                    .get_block(&opt_block_hash.expect("block exists"))?
+                    .ok_or_else(|| "can't find block".to_string())?;
+
+                let sub_state = if block.raw().number().unpack() == self.checkpoint.block_number {
+                    &self.checkpoint.sub_state
+                } else {
+                    &SubState::Block
+                };
+
+                match sub_state.extract_checkpoint_from_block(&block)? {
+                    Some(checkpoint) => inner_db
+                        .get_checkpoint_post_state(&checkpoint)?
+                        .ok_or_else(|| "can't find checkpoint".to_string())?,
+                    None => block.raw().post_account(),
                 }
             }
         };
+
         Ok(account_merkle_state)
     }
 
     fn get_key_with_suffix(&self, key: &[u8]) -> Vec<u8> {
-        let (block_number, tx_index) = self.version.extract_block_number_and_index_number();
+        let (block_number, tx_index) = self.checkpoint.extract_block_number_and_index_number();
         [key, &block_number.to_be_bytes(), &tx_index.to_be_bytes()].concat()
     }
 
     fn get_original_key<'a>(&self, raw_key: &'a [u8]) -> &'a [u8] {
-        let (block_number, tx_index) = self.version.extract_block_number_and_index_number();
+        let (block_number, tx_index) = self.checkpoint.extract_block_number_and_index_number();
         &raw_key[..raw_key.len() - size_of_val(&block_number) - size_of_val(&tx_index)]
     }
 
@@ -273,11 +320,12 @@ impl<'db> StateDBTransaction<'db> {
     }
 
     fn record_block_state(&self, col: Col, raw_key: &[u8]) -> Result<(), Error> {
-        let (block_number, tx_index) = self.version.extract_block_number_and_index_number();
         // skip genesis
-        if self.version.is_genesis_version() {
+        if self.checkpoint.is_genesis() {
             return Ok(());
         }
+
+        let (block_number, tx_index) = self.checkpoint.extract_block_number_and_index_number();
         self.inner
             .record_block_state(block_number, tx_index, col, raw_key)?;
         Ok(())

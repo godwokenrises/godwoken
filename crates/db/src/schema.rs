@@ -3,7 +3,7 @@
 /// Column families alias type
 pub type Col = u8;
 /// Total column number
-pub const COLUMNS: u32 = 20;
+pub const COLUMNS: u32 = 21;
 /// Column store meta data
 pub const COLUMN_META: Col = 0;
 /// Column store chain index
@@ -44,6 +44,8 @@ pub const COLUMN_CUSTODIAN_ASSETS: Col = 17;
 pub const COLUMN_BLOCK_STATE_RECORD: Col = 18;
 /// Column script prefix
 pub const COLUMN_SCRIPT_PREFIX: Col = 19;
+/// Column checkpoint
+pub const COLUMN_CHECKPOINT: Col = 20;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";

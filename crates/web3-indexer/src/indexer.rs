@@ -13,7 +13,7 @@ use ckb_types::H256;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_common::state::State;
 use gw_store::{
-    state_db::{StateDBTransaction, StateDBVersion},
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
     Store,
 };
 use gw_traits::CodeStore;
@@ -509,9 +509,10 @@ impl Web3Indexer {
 async fn get_script_hash(store: Store, account_id: u32) -> Result<gw_common::H256> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_version(
+    let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        StateDBMode::ReadOnly,
     )?;
     let tree = state_db.account_state_tree()?;
 
@@ -522,9 +523,10 @@ async fn get_script_hash(store: Store, account_id: u32) -> Result<gw_common::H25
 async fn get_script(store: Store, script_hash: gw_common::H256) -> Result<Option<Script>> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_version(
+    let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        StateDBMode::ReadOnly,
     )?;
     let tree = state_db.account_state_tree()?;
 

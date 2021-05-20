@@ -1,8 +1,8 @@
 use crate::{smt_store_impl::SMTStore, traits::KVStore};
-use gw_common::{smt::SMT, CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_db::schema::{
     Col, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSITION_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
-    COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD,
+    COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD, COLUMN_CHECKPOINT,
     COLUMN_CUSTODIAN_ASSETS, COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META,
     COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT,
     META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY, META_BLOCK_SMT_ROOT_KEY,
@@ -12,7 +12,7 @@ use gw_db::{
     error::Error, iter::DBIter, DBIterator, Direction::Forward, IteratorMode, RocksDBTransaction,
 };
 use gw_types::{
-    packed::{self, RollupConfig, TransactionKey},
+    packed::{self, Byte32, RollupConfig, TransactionKey},
     prelude::*,
 };
 use std::{borrow::BorrowMut, collections::HashMap};
@@ -200,6 +200,18 @@ impl StoreTransaction {
             }))
     }
 
+    pub fn get_checkpoint_post_state(
+        &self,
+        checkpoint: &Byte32,
+    ) -> Result<Option<packed::AccountMerkleState>, Error> {
+        Ok(self
+            .get(COLUMN_CHECKPOINT, checkpoint.as_slice())
+            .map(|slice| {
+                packed::AccountMerkleStateReader::from_slice_should_be_ok(&slice.as_ref())
+                    .to_entity()
+            }))
+    }
+
     pub fn get_l2block_committed_info(
         &self,
         block_hash: &H256,
@@ -267,6 +279,7 @@ impl StoreTransaction {
         committed_info: packed::L2BlockCommittedInfo,
         global_state: packed::GlobalState,
         tx_receipts: Vec<packed::TxReceipt>,
+        post_states: Vec<packed::AccountMerkleState>,
         deposition_requests: Vec<packed::DepositionRequest>,
     ) -> Result<(), Error> {
         debug_assert_eq!(block.transactions().len(), tx_receipts.len());
@@ -303,6 +316,30 @@ impl StoreTransaction {
                 tx_receipt.as_slice(),
             )?;
         }
+
+        let state_checkpoint_list = block.raw().state_checkpoint_list().into_iter();
+        if post_states.len() != state_checkpoint_list.len() {
+            return Err(Error::from("unexpected block post state length".to_owned()));
+        }
+        for (index, (checkpoint, post_state)) in state_checkpoint_list.zip(post_states).enumerate()
+        {
+            let root: [u8; 32] = post_state.merkle_root().unpack();
+            let state_checkpoint: Byte32 = {
+                let checkpoint: [u8; 32] =
+                    calculate_state_checkpoint(&root.into(), post_state.count().unpack()).into();
+                checkpoint.pack()
+            };
+            if state_checkpoint != checkpoint {
+                return Err(Error::from(format!("unexpected post state {}", index)));
+            }
+
+            self.insert_raw(
+                COLUMN_CHECKPOINT,
+                checkpoint.as_slice(),
+                post_state.as_slice(),
+            )?;
+        }
+
         Ok(())
     }
 

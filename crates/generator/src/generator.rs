@@ -41,12 +41,17 @@ const MAX_WRITE_DATA_BYTES_LIMIT: usize = 25_000;
 // 2MB
 const MAX_READ_DATA_BYTES_LIMIT: usize = 1024 * 1024 * 2;
 
+pub struct WithdrawalReceipt {
+    pub post_state: AccountMerkleState,
+}
+
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
     pub deposition_requests: Vec<DepositionRequest>,
 }
 
 pub struct StateTransitionResult {
+    pub post_states: Vec<AccountMerkleState>,
     pub receipts: Vec<TxReceipt>,
 }
 
@@ -257,7 +262,8 @@ impl Generator {
         let raw_block = args.l2block.raw();
         let withdrawal_requests: Vec<_> = args.l2block.withdrawals().into_iter().collect();
         // apply withdrawal to state
-        state.apply_withdrawal_requests(&self.rollup_context, &withdrawal_requests)?;
+        let withdrawal_receipts =
+            state.apply_withdrawal_requests(&self.rollup_context, &withdrawal_requests)?;
         // apply deposition to state
         state.apply_deposition_requests(&self.rollup_context, &args.deposition_requests)?;
 
@@ -326,7 +332,16 @@ impl Generator {
             receipts.push(tx_receipt);
         }
 
-        let result = StateTransitionResult { receipts };
+        let post_states: Vec<AccountMerkleState> = {
+            let withdrawal_post_states = withdrawal_receipts.into_iter().map(|w| w.post_state);
+            let tx_post_states = receipts.iter().map(|t| t.post_state());
+            withdrawal_post_states.chain(tx_post_states).collect()
+        };
+
+        let result = StateTransitionResult {
+            post_states,
+            receipts,
+        };
 
         Ok(result)
     }
