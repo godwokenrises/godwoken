@@ -96,7 +96,7 @@ fn parse_deposit_request(
 
 #[derive(Debug)]
 pub struct WithdrawalsAmount {
-    pub capacity: u64,
+    pub capacity: u128,
     pub sudt: HashMap<[u8; 32], u128>,
 }
 
@@ -112,9 +112,8 @@ impl Default for WithdrawalsAmount {
 #[derive(Debug)]
 pub struct CollectedCustodianCells {
     pub cells_info: Vec<CellInfo>,
-    pub capacity: u64,
-    pub sudt: HashMap<[u8; 32], u128>,
-    pub fullfilled_sudt_script: HashMap<[u8; 32], Script>,
+    pub capacity: u128,
+    pub sudt: HashMap<[u8; 32], (u128, Script)>,
 }
 
 impl Default for CollectedCustodianCells {
@@ -123,7 +122,6 @@ impl Default for CollectedCustodianCells {
             cells_info: Default::default(),
             capacity: 0,
             sudt: Default::default(),
-            fullfilled_sudt_script: Default::default(),
         }
     }
 }
@@ -660,10 +658,11 @@ impl RPCClient {
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
 
         let mut collected = CollectedCustodianCells::default();
+        let mut collected_fullfilled_sudt = HashSet::new();
         let mut cursor = None;
 
         while collected.capacity < withdrawals_amount.capacity
-            || collected.fullfilled_sudt_script.len() < withdrawals_amount.sudt.len()
+            || collected_fullfilled_sudt.len() < withdrawals_amount.sudt.len()
         {
             let cells: Pagination<Cell> = to_result(
                 self.indexer_client
@@ -680,7 +679,7 @@ impl RPCClient {
             )?;
 
             if cells.last_cursor.is_empty() {
-                return Err(anyhow!("no enough custodian cells"));
+                return Err(anyhow!("no enough finalized custodians"));
             }
             cursor = Some(cells.last_cursor);
 
@@ -705,11 +704,19 @@ impl RPCClient {
                         Script::new_unchecked(script.as_bytes())
                     };
 
+                    // Invalid custodian type script
+                    let l1_sudt_script_type_hash =
+                        rollup_context.rollup_config.l1_sudt_script_type_hash();
+                    if sudt_type_script.code_hash() != l1_sudt_script_type_hash
+                        || sudt_type_script.hash_type() != ScriptHashType::Type.into()
+                    {
+                        continue;
+                    }
+
                     let sudt_type_hash = sudt_type_script.hash();
                     if sudt_type_hash != CKB_SUDT_SCRIPT_ARGS {
                         // Already collected enough sudt amount
-                        let fullfilled_sudt_script = &mut collected.fullfilled_sudt_script;
-                        if fullfilled_sudt_script.contains_key(&sudt_type_hash) {
+                        if collected_fullfilled_sudt.contains(&sudt_type_hash) {
                             continue;
                         }
 
@@ -727,12 +734,15 @@ impl RPCClient {
                             }
                         };
 
-                        let collected_amount = collected.sudt.entry(sudt_type_hash).or_insert(0);
+                        let (collected_amount, type_script) = {
+                            let sudt = collected.sudt.entry(sudt_type_hash);
+                            sudt.or_insert((0, Script::default()))
+                        };
                         *collected_amount = collected_amount.saturating_add(sudt_amount);
+                        *type_script = sudt_type_script;
 
                         if *collected_amount >= *withdrawal_amount {
-                            fullfilled_sudt_script
-                                .insert(sudt_type_hash.to_owned(), sudt_type_script);
+                            collected_fullfilled_sudt.insert(sudt_type_hash);
                         }
                     }
                 }
@@ -750,7 +760,7 @@ impl RPCClient {
 
                 collected.capacity = collected
                     .capacity
-                    .saturating_add(output.capacity().unpack());
+                    .saturating_add(output.capacity().unpack() as u128);
 
                 let info = CellInfo {
                     out_point,
@@ -763,6 +773,80 @@ impl RPCClient {
         }
 
         Ok(collected)
+    }
+
+    pub async fn query_verified_custodian_type_script(
+        &self,
+        sudt_script_hash: &[u8; 32],
+    ) -> Result<Option<Script>> {
+        let rollup_context = &self.rollup_context;
+
+        let custodian_lock = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .build();
+
+        let l1_sudt_type = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.l1_sudt_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .build();
+
+        let search_key = SearchKey {
+            script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
+            script_type: ScriptType::Lock,
+            filter: Some(SearchKeyFilter {
+                script: Some(
+                    ckb_types::packed::Script::new_unchecked(l1_sudt_type.as_bytes()).into(),
+                ),
+                output_data_len_range: None,
+                output_capacity_range: None,
+                block_range: None,
+            }),
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut cursor = None;
+        loop {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer_client
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            if cells.last_cursor.is_empty() {
+                return Ok(None);
+            }
+            cursor = Some(cells.last_cursor);
+
+            for cell in cells.objects.into_iter() {
+                let args = cell.output.lock.args.clone().into_bytes();
+                if CustodianLockArgsReader::verify(&args[32..], false).is_err() {
+                    continue;
+                }
+
+                let sudt_type_script = match cell.output.type_.clone() {
+                    Some(json_script) => {
+                        let script = ckb_types::packed::Script::from(json_script);
+                        Script::new_unchecked(script.as_bytes())
+                    }
+                    None => continue,
+                };
+
+                if sudt_script_hash == &sudt_type_script.hash() {
+                    return Ok(Some(sudt_type_script));
+                }
+            }
+        }
     }
 
     pub async fn query_withdrawal_cells_by_block_hashes(
