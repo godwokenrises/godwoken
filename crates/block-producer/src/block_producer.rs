@@ -294,7 +294,7 @@ impl BlockProducer {
                 });
 
                 let to_custodian = has_script.filter_map(|(hash, script)| {
-                    match db.get_custodian_asset(hash.into()) {
+                    match db.get_finalized_custodian_asset(hash.into()) {
                         Ok(custodian_balance) => Some((hash, (custodian_balance, script))),
                         Err(err) => {
                             log::warn!("get custodian err {}", err);
@@ -305,7 +305,7 @@ impl BlockProducer {
                 to_custodian.collect::<HashMap<[u8; 32], (u128, Script)>>()
             };
 
-            let ckb_custodian = match db.get_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into()) {
+            let ckb_custodian = match db.get_finalized_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into()) {
                 Ok(balance) => balance,
                 Err(err) => {
                     log::warn!("get ckb custodian err {}", err);
@@ -541,11 +541,6 @@ impl BlockProducer {
             tx_skeleton
                 .inputs_mut()
                 .extend(generated_withdrawal_cells.inputs);
-            println!(
-                "generated withdrawal outputs {}",
-                generated_withdrawal_cells.outputs.len()
-            );
-
             tx_skeleton
                 .outputs_mut()
                 .extend(generated_withdrawal_cells.outputs);

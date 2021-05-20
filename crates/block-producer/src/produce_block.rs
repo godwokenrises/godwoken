@@ -118,7 +118,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         total_withdrawal_capacity = new_total_withdrwal_capacity;
 
         if let Err(err) = withdrawal_verifier.include_and_verify(&request, &L2Block::default()) {
-            println!("skip withdrawal: {}", err);
+            log::debug!("skip withdrawal: {}", err);
             unused_withdrawal_requests.push(request);
             continue;
         }

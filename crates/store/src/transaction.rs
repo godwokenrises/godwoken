@@ -246,7 +246,7 @@ impl StoreTransaction {
     }
 
     /// key: sudt_script_hash
-    pub fn get_custodian_asset(&self, key: H256) -> Result<u128, Error> {
+    pub fn get_finalized_custodian_asset(&self, key: H256) -> Result<u128, Error> {
         match self.get(COLUMN_CUSTODIAN_ASSETS, key.as_slice()) {
             Some(slice) => {
                 let mut buf = [0u8; 16];
@@ -302,8 +302,8 @@ impl StoreTransaction {
         Ok(())
     }
 
-    /// Update custodian assets
-    fn update_custodian_assets<
+    /// Update finalized custodian assets
+    fn update_finalized_custodian_assets<
         AddIter: Iterator<Item = CustodianChange>,
         RemIter: Iterator<Item = CustodianChange>,
     >(
@@ -323,7 +323,7 @@ impl StoreTransaction {
             let ckb_balance = touched_custodian_assets
                 .entry(CKB_SUDT_SCRIPT_ARGS.into())
                 .or_insert_with(|| {
-                    self.get_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
+                    self.get_finalized_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
                         .expect("get custodian asset")
                 })
                 .borrow_mut();
@@ -335,7 +335,7 @@ impl StoreTransaction {
             let balance = touched_custodian_assets
                 .entry(sudt_script_hash)
                 .or_insert_with(|| {
-                    self.get_custodian_asset(sudt_script_hash)
+                    self.get_finalized_custodian_asset(sudt_script_hash)
                         .expect("get custodian asset")
                 })
                 .borrow_mut();
@@ -352,7 +352,7 @@ impl StoreTransaction {
             let ckb_balance = touched_custodian_assets
                 .entry(CKB_SUDT_SCRIPT_ARGS.into())
                 .or_insert_with(|| {
-                    self.get_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
+                    self.get_finalized_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
                         .expect("get custodian asset")
                 })
                 .borrow_mut();
@@ -365,7 +365,7 @@ impl StoreTransaction {
             let balance = touched_custodian_assets
                 .entry(sudt_script_hash)
                 .or_insert_with(|| {
-                    self.get_custodian_asset(sudt_script_hash)
+                    self.get_finalized_custodian_asset(sudt_script_hash)
                         .expect("get custodian asset")
                 })
                 .borrow_mut();
@@ -439,7 +439,7 @@ impl StoreTransaction {
                     }
                 })
             };
-            self.update_custodian_assets(deposit_assets, withdrawal_assets)?;
+            self.update_finalized_custodian_assets(deposit_assets, withdrawal_assets)?;
         }
 
         // build main chain index
@@ -515,7 +515,7 @@ impl StoreTransaction {
                     }
                 })
             };
-            self.update_custodian_assets(withdrawal_assets, deposit_assets)?;
+            self.update_finalized_custodian_assets(withdrawal_assets, deposit_assets)?;
         }
 
         let block_number = block.raw().number();
