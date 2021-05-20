@@ -1987,6 +1987,7 @@ dependencies = [
  "gw-chain",
  "gw-common",
  "gw-config",
+ "gw-db",
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",

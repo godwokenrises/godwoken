@@ -8,6 +8,7 @@ use futures::{executor::block_on, select, FutureExt};
 use gw_chain::chain::Chain;
 use gw_common::H256;
 use gw_config::Config;
+use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
     backend_manage::BackendManage,
@@ -150,8 +151,18 @@ pub fn run(config: Config) -> Result<()> {
         }
     };
 
-    // TODO: use persistent store later
-    let store = Store::open_tmp().with_context(|| "init store")?;
+    // Open store
+    let store = if config.store.path.as_os_str().is_empty() {
+        log::warn!("config.store.path is blank, using temporary store");
+        Store::open_tmp().with_context(|| "init store")?
+    } else {
+        let db_config = DBConfig {
+            path: config.store.path,
+            options: Default::default(),
+            options_file: Default::default(),
+        };
+        Store::new(RocksDB::open(&db_config, COLUMNS))
+    };
     let secp_data: Bytes = {
         let out_point = config.genesis.secp_data_dep.out_point.clone();
         block_on(rpc_client.get_transaction(out_point.tx_hash.0.into()))?
