@@ -1,5 +1,7 @@
 use crate::{
-    helper::{account_id_to_eth_address, hex, parse_log, GwLog, PolyjuiceArgs},
+    helper::{
+        account_id_to_eth_address, hex, parse_log, GwLog, PolyjuiceArgs, GW_LOG_POLYJUICE_SYSTEM,
+    },
     types::{
         Block as Web3Block, Log as Web3Log, Transaction as Web3Transaction,
         TransactionWithLogs as Web3TransactionWithLogs,
@@ -271,7 +273,9 @@ impl Web3Indexer {
                 // read polyjuice system log
                 let polyjuice_system_log = parse_log(
                     log_item_vec
-                        .get(0)
+                        .clone()
+                        .into_iter()
+                        .find(|item| u8::from(item.service_flag()) == GW_LOG_POLYJUICE_SYSTEM)
                         .as_ref()
                         .ok_or_else(|| anyhow!("no system logs"))?,
                 )?;
