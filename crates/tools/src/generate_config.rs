@@ -116,9 +116,8 @@ pub fn generate_config(
         generator_path: format!("{}/polyjuice-generator", polyjuice_binaries_dir).into(),
         validator_script_type_hash: scripts.polyjuice_validator.script_type_hash.clone(),
     });
-    let store: StoreConfig = StoreConfig {
-        path: "./store.db".into(),
-    };
+    // FIXME change to a directory path after we tested the persist storage
+    let store: StoreConfig = StoreConfig { path: "".into() };
     let genesis_committed_info = L2BlockCommittedInfo {
         block_hash,
         number,
