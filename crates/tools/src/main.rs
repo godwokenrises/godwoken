@@ -1,8 +1,9 @@
 mod deploy_genesis;
 mod deploy_scripts;
 mod generate_config;
+mod prepare_scripts;
 
-use clap::{App, Arg, SubCommand};
+use clap::{value_t, App, Arg, SubCommand};
 use std::path::Path;
 
 fn main() {
@@ -128,6 +129,48 @@ fn main() {
                         .required(true)
                         .help("The output json file path"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("prepare-scripts")
+                .about("Prepare scripts used by godwoken")
+                .arg(
+                    Arg::with_name("mode")
+                        .short("m")
+                        .takes_value(true)
+                        .default_value("copy")
+                        .required(true)
+                        .help("Scripts generation mode: build or copy"),
+                )
+                .arg(
+                    Arg::with_name("input-path")
+                        .short("i")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The input json file path"),
+                )
+                .arg(
+                    Arg::with_name("tmp-dir-path")
+                        .short("t")
+                        .takes_value(true)
+                        .default_value("scripts-build-tmp/")
+                        .required(true)
+                        .help("The tmp dir path"),
+                )
+                .arg(
+                    Arg::with_name("scripts-dir-path")
+                        .short("s")
+                        .takes_value(true)
+                        .default_value("scripts/")
+                        .required(true)
+                        .help("Scripts directory path"),
+                )
+                .arg(
+                    Arg::with_name("output-path")
+                        .short("o")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The output scripts deploy json file path"),
+                ),
         );
 
     let matches = app.clone().get_matches();
@@ -190,6 +233,23 @@ fn main() {
                 database_url,
             ) {
                 log::error!("Deploy genesis error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("prepare-scripts", Some(m)) => {
+            let mode = value_t!(m, "mode", prepare_scripts::ScriptsBuildMode).unwrap();
+            let input_path = Path::new(m.value_of("input-path").unwrap());
+            let tmp_dir = Path::new(m.value_of("tmp-dir-path").unwrap());
+            let scripts_dir = Path::new(m.value_of("scripts-dir-path").unwrap());
+            let output_path = Path::new(m.value_of("output-path").unwrap());
+            if let Err(err) = prepare_scripts::prepare_scripts(
+                mode,
+                input_path,
+                tmp_dir,
+                scripts_dir,
+                output_path,
+            ) {
+                log::error!("Prepare scripts error: {}", err);
                 std::process::exit(-1);
             };
         }
