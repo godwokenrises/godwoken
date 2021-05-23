@@ -2,7 +2,9 @@ use anyhow::Result;
 use clap::arg_enum;
 use serde::{Deserialize, Serialize};
 use std::{
-    env, fs,
+    env,
+    ffi::OsStr,
+    fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -57,28 +59,26 @@ fn build_scripts(repos: Repos, root_dir: &Path, _scripts_dir: &Path) -> Result<(
     Ok(())
 }
 
+fn copy_scripts(_prebuild_image: &PathBuf, _scripts_dir: &Path) {}
+
+fn generate_script_deploy_config(_output_path: &Path) {}
+
 fn build_godwoken_scripts(repo_url: Url, root_dir: &Path, repo_name: &str) -> Result<()> {
-    // run_pull_code(repo_url, root_dir, repo_name)?;
+    run_pull_code(repo_url, root_dir, repo_name)?;
 
-    let current_dir = env::current_dir()?;
+    let mut target_dir = PathBuf::new();
+    target_dir.push(root_dir);
+    target_dir.push(repo_name);
+    target_dir.push("c");
 
-    let mut path = PathBuf::new();
-    path.push(root_dir);
-    path.push(repo_name);
-    path.push("c");
-    env::set_current_dir(&path)?;
-    let status = Command::new("make").status()?;
-    log::debug!("make: {}", status);
+    let working_dir = env::current_dir().expect("Get working dir failed");
+    env::set_current_dir(&target_dir).expect("Set target dir failed");
+    run_command("make", vec!["-w"]).expect("Run make failed");
 
-    env::set_current_dir("../")?;
-    let status = Command::new("capsule")
-        .arg("build")
-        .arg("--release")
-        .arg("--debug-output")
-        .status()?;
-    log::debug!("capsule build: {}", status);
-
-    env::set_current_dir(&current_dir)?;
+    env::set_current_dir("../").expect("Set target dir failed");
+    run_command("capsule", vec!["build", "--release", "--debug-output"])
+        .expect("Run capsule build failed");
+    env::set_current_dir(&working_dir).expect("Set working dir failed");
 
     Ok(())
 }
@@ -96,39 +96,64 @@ fn build_clerkb(repo_url: Url, root_dir: &Path, repo_name: &str) -> Result<()> {
 fn run_pull_code(mut repo: Url, root_dir: &Path, repo_name: &str) -> Result<()> {
     log::info!("Pull code of {} ...", repo_name);
 
-    let mut path = PathBuf::new();
-    path.push(root_dir);
-    path.push(repo_name);
-    let status = Command::new("rm")
-        .arg("-rf")
-        .arg(path.display().to_string())
-        .status()?;
-    fs::create_dir_all(&path)?;
-    log::debug!("Clear repo: {}", status);
-
     let commit = repo
         .fragment()
         .ok_or_else(|| anyhow::anyhow!("Invalid commit"))?
         .to_owned();
     repo.set_fragment(None);
 
-    let status = Command::new("git")
-        .arg("clone")
-        .arg("--recursive")
-        .arg(repo.as_str())
-        .arg(path.display().to_string())
-        .status()?;
-    log::debug!("git clone repo: {}", status);
+    let mut target_dir = PathBuf::new();
+    target_dir.push(root_dir);
+    target_dir.push(repo_name);
 
-    let current_dir = env::current_dir()?;
-    env::set_current_dir(&path)?;
-    let status = Command::new("git").arg("checkout").arg(commit).status()?;
-    log::debug!("git checkout commit: {}", status);
-    env::set_current_dir(&current_dir)?;
-
+    if target_dir.exists() && run_git_checkout(&target_dir, &commit).is_ok() {
+        return Ok(());
+    }
+    run_command("rm", vec!["-rf", &target_dir.display().to_string()]).expect("Run rm dir failed");
+    fs::create_dir_all(&target_dir).expect("Create dir failed");
+    run_git_clone(repo, true, &target_dir).expect("Run git clone failed");
+    run_git_checkout(&target_dir, &commit).expect("Run git checkout failed");
     Ok(())
 }
 
-fn copy_scripts(_prebuild_image: &PathBuf, _scripts_dir: &Path) {}
+fn run_git_clone(repo_url: Url, is_recursive: bool, path: &Path) -> Result<()> {
+    let arg_recursive = if is_recursive { "--recursive" } else { "" };
+    run_command(
+        "git",
+        vec![
+            "clone",
+            arg_recursive,
+            repo_url.as_str(),
+            &path.display().to_string(),
+        ],
+    )
+}
 
-fn generate_script_deploy_config(_output_path: &Path) {}
+fn run_git_checkout(repo_relative_path: &Path, commit: &str) -> Result<()> {
+    let current_dir = env::current_dir().expect("Get current dir failed");
+    env::set_current_dir(&repo_relative_path).expect("Set current dir failed");
+    let result = run_command("git", vec!["checkout", commit]);
+    env::set_current_dir(&current_dir).expect("Set current dir failed");
+    result
+}
+
+pub fn run_command<I, S>(bin: &str, args: I) -> Result<()>
+where
+    I: IntoIterator<Item = S> + std::fmt::Debug,
+    S: AsRef<OsStr>,
+{
+    log::info!("[Execute]: {} {:?}", bin, args);
+    let status = Command::new(bin.to_owned())
+        .env("RUST_BACKTRACE", "full")
+        .args(args)
+        .status()
+        .expect("Run command failed");
+    if !status.success() {
+        Err(anyhow::anyhow!(
+            "Exited with status code: {:?}",
+            status.code()
+        ))
+    } else {
+        Ok(())
+    }
+}
