@@ -44,6 +44,16 @@ impl CodeStore for DummyState {
     fn get_script(&self, script_hash: &H256) -> Option<Script> {
         self.scripts.get(&script_hash).cloned()
     }
+    fn get_script_hash_by_prefix(&self, script_hash_prefix: &[u8]) -> Option<H256> {
+        self.scripts.iter().find_map(|(script_hash, _script)| {
+            let prefix_len = script_hash_prefix.len();
+            if &script_hash.as_slice()[..prefix_len] == script_hash_prefix {
+                Some(*script_hash)
+            } else {
+                None
+            }
+        })
+    }
     fn insert_data(&mut self, script_hash: H256, code: Bytes) {
         self.codes.insert(script_hash, code);
     }
