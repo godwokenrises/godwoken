@@ -13,7 +13,7 @@ CREATE TABLE transactions (
     gas_limit NUMERIC,
     gas_price NUMERIC,
     input TEXT,
-    v TEXT NOT NULL,
+    v NUMERIC NOT NULL,
     r TEXT NOT NULL,
     s TEXT NOT NULL,
     cumulative_gas_used NUMERIC,
