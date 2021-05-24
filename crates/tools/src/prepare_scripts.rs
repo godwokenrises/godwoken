@@ -70,7 +70,6 @@ fn build_godwoken_scripts(repo_url: Url, root_dir: &Path, repo_name: &str) -> Re
     target_dir.push(root_dir);
     target_dir.push(repo_name);
     target_dir.push("c");
-
     run_command("make", vec!["-C", &target_dir.display().to_string()]).expect("Run make failed");
 
     target_dir.pop();
@@ -86,11 +85,28 @@ fn build_godwoken_scripts(repo_url: Url, root_dir: &Path, repo_name: &str) -> Re
 
 fn build_godwoken_polyjuice(repo_url: Url, root_dir: &Path, repo_name: &str) -> Result<()> {
     run_pull_code(repo_url, true, root_dir, repo_name)?;
+    let mut target_dir = PathBuf::new();
+    target_dir.push(root_dir);
+    target_dir.push(repo_name);
+    run_command(
+        "make",
+        vec!["-C", &target_dir.display().to_string(), "all-via-docker"],
+    )
+    .expect("Run make failed");
     Ok(())
 }
 
 fn build_clerkb(repo_url: Url, root_dir: &Path, repo_name: &str) -> Result<()> {
     run_pull_code(repo_url, true, root_dir, repo_name)?;
+    let mut target_dir = PathBuf::new();
+    target_dir.push(root_dir);
+    target_dir.push(repo_name);
+    run_command("yarn", vec!["--cwd", &target_dir.display().to_string()]).expect("Run yarn failed");
+    run_command(
+        "make",
+        vec!["-C", &target_dir.display().to_string(), "all-via-docker"],
+    )
+    .expect("Run make failed");
     Ok(())
 }
 
