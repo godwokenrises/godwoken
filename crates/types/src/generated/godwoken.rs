@@ -2183,6 +2183,697 @@ impl molecule::prelude::Builder for GlobalStateBuilder {
     }
 }
 #[derive(Clone)]
+pub struct Symbol(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for Symbol {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for Symbol {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for Symbol {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        let raw_data = hex_string(&self.raw_data());
+        write!(f, "{}(0x{})", Self::NAME, raw_data)
+    }
+}
+impl ::core::default::Default for Symbol {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0];
+        Symbol::new_unchecked(v.into())
+    }
+}
+impl Symbol {
+    pub const TOTAL_SIZE: usize = 8;
+    pub const ITEM_SIZE: usize = 1;
+    pub const ITEM_COUNT: usize = 8;
+    pub fn nth0(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(0..1))
+    }
+    pub fn nth1(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(1..2))
+    }
+    pub fn nth2(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(2..3))
+    }
+    pub fn nth3(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(3..4))
+    }
+    pub fn nth4(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(4..5))
+    }
+    pub fn nth5(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(5..6))
+    }
+    pub fn nth6(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(6..7))
+    }
+    pub fn nth7(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(7..8))
+    }
+    pub fn raw_data(&self) -> molecule::bytes::Bytes {
+        self.as_bytes()
+    }
+    pub fn as_reader<'r>(&'r self) -> SymbolReader<'r> {
+        SymbolReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for Symbol {
+    type Builder = SymbolBuilder;
+    const NAME: &'static str = "Symbol";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        Symbol(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SymbolReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SymbolReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().set([
+            self.nth0(),
+            self.nth1(),
+            self.nth2(),
+            self.nth3(),
+            self.nth4(),
+            self.nth5(),
+            self.nth6(),
+            self.nth7(),
+        ])
+    }
+}
+#[derive(Clone, Copy)]
+pub struct SymbolReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for SymbolReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for SymbolReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for SymbolReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        let raw_data = hex_string(&self.raw_data());
+        write!(f, "{}(0x{})", Self::NAME, raw_data)
+    }
+}
+impl<'r> SymbolReader<'r> {
+    pub const TOTAL_SIZE: usize = 8;
+    pub const ITEM_SIZE: usize = 1;
+    pub const ITEM_COUNT: usize = 8;
+    pub fn nth0(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[0..1])
+    }
+    pub fn nth1(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[1..2])
+    }
+    pub fn nth2(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[2..3])
+    }
+    pub fn nth3(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[3..4])
+    }
+    pub fn nth4(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[4..5])
+    }
+    pub fn nth5(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[5..6])
+    }
+    pub fn nth6(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[6..7])
+    }
+    pub fn nth7(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[7..8])
+    }
+    pub fn raw_data(&self) -> &'r [u8] {
+        self.as_slice()
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for SymbolReader<'r> {
+    type Entity = Symbol;
+    const NAME: &'static str = "SymbolReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        SymbolReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+pub struct SymbolBuilder(pub(crate) [Byte; 8]);
+impl ::core::fmt::Debug for SymbolBuilder {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:?})", Self::NAME, &self.0[..])
+    }
+}
+impl ::core::default::Default for SymbolBuilder {
+    fn default() -> Self {
+        SymbolBuilder([
+            Byte::default(),
+            Byte::default(),
+            Byte::default(),
+            Byte::default(),
+            Byte::default(),
+            Byte::default(),
+            Byte::default(),
+            Byte::default(),
+        ])
+    }
+}
+impl SymbolBuilder {
+    pub const TOTAL_SIZE: usize = 8;
+    pub const ITEM_SIZE: usize = 1;
+    pub const ITEM_COUNT: usize = 8;
+    pub fn set(mut self, v: [Byte; 8]) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn nth0(mut self, v: Byte) -> Self {
+        self.0[0] = v;
+        self
+    }
+    pub fn nth1(mut self, v: Byte) -> Self {
+        self.0[1] = v;
+        self
+    }
+    pub fn nth2(mut self, v: Byte) -> Self {
+        self.0[2] = v;
+        self
+    }
+    pub fn nth3(mut self, v: Byte) -> Self {
+        self.0[3] = v;
+        self
+    }
+    pub fn nth4(mut self, v: Byte) -> Self {
+        self.0[4] = v;
+        self
+    }
+    pub fn nth5(mut self, v: Byte) -> Self {
+        self.0[5] = v;
+        self
+    }
+    pub fn nth6(mut self, v: Byte) -> Self {
+        self.0[6] = v;
+        self
+    }
+    pub fn nth7(mut self, v: Byte) -> Self {
+        self.0[7] = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for SymbolBuilder {
+    type Entity = Symbol;
+    const NAME: &'static str = "SymbolBuilder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(self.0[0].as_slice())?;
+        writer.write_all(self.0[1].as_slice())?;
+        writer.write_all(self.0[2].as_slice())?;
+        writer.write_all(self.0[3].as_slice())?;
+        writer.write_all(self.0[4].as_slice())?;
+        writer.write_all(self.0[5].as_slice())?;
+        writer.write_all(self.0[6].as_slice())?;
+        writer.write_all(self.0[7].as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        Symbol::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct AllowedScript(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for AllowedScript {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for AllowedScript {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for AllowedScript {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "type_hash", self.type_hash())?;
+        write!(f, ", {}: {}", "symbol", self.symbol())?;
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for AllowedScript {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        AllowedScript::new_unchecked(v.into())
+    }
+}
+impl AllowedScript {
+    pub const TOTAL_SIZE: usize = 40;
+    pub const FIELD_SIZES: [usize; 2] = [32, 8];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn type_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(0..32))
+    }
+    pub fn symbol(&self) -> Symbol {
+        Symbol::new_unchecked(self.0.slice(32..40))
+    }
+    pub fn as_reader<'r>(&'r self) -> AllowedScriptReader<'r> {
+        AllowedScriptReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for AllowedScript {
+    type Builder = AllowedScriptBuilder;
+    const NAME: &'static str = "AllowedScript";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        AllowedScript(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        AllowedScriptReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        AllowedScriptReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .type_hash(self.type_hash())
+            .symbol(self.symbol())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct AllowedScriptReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for AllowedScriptReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for AllowedScriptReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for AllowedScriptReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "type_hash", self.type_hash())?;
+        write!(f, ", {}: {}", "symbol", self.symbol())?;
+        write!(f, " }}")
+    }
+}
+impl<'r> AllowedScriptReader<'r> {
+    pub const TOTAL_SIZE: usize = 40;
+    pub const FIELD_SIZES: [usize; 2] = [32, 8];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn type_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
+    }
+    pub fn symbol(&self) -> SymbolReader<'r> {
+        SymbolReader::new_unchecked(&self.as_slice()[32..40])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for AllowedScriptReader<'r> {
+    type Entity = AllowedScript;
+    const NAME: &'static str = "AllowedScriptReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        AllowedScriptReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct AllowedScriptBuilder {
+    pub(crate) type_hash: Byte32,
+    pub(crate) symbol: Symbol,
+}
+impl AllowedScriptBuilder {
+    pub const TOTAL_SIZE: usize = 40;
+    pub const FIELD_SIZES: [usize; 2] = [32, 8];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn type_hash(mut self, v: Byte32) -> Self {
+        self.type_hash = v;
+        self
+    }
+    pub fn symbol(mut self, v: Symbol) -> Self {
+        self.symbol = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for AllowedScriptBuilder {
+    type Entity = AllowedScript;
+    const NAME: &'static str = "AllowedScriptBuilder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(self.type_hash.as_slice())?;
+        writer.write_all(self.symbol.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        AllowedScript::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct AllowedScriptVec(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for AllowedScriptVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for AllowedScriptVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for AllowedScriptVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl ::core::default::Default for AllowedScriptVec {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![0, 0, 0, 0];
+        AllowedScriptVec::new_unchecked(v.into())
+    }
+}
+impl AllowedScriptVec {
+    pub const ITEM_SIZE: usize = 40;
+    pub fn total_size(&self) -> usize {
+        molecule::NUMBER_SIZE * (self.item_count() + 1)
+    }
+    pub fn item_count(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<AllowedScript> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> AllowedScript {
+        let start = molecule::NUMBER_SIZE + Self::ITEM_SIZE * idx;
+        let end = start + Self::ITEM_SIZE;
+        AllowedScript::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn as_reader<'r>(&'r self) -> AllowedScriptVecReader<'r> {
+        AllowedScriptVecReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for AllowedScriptVec {
+    type Builder = AllowedScriptVecBuilder;
+    const NAME: &'static str = "AllowedScriptVec";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        AllowedScriptVec(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        AllowedScriptVecReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        AllowedScriptVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().extend(self.into_iter())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct AllowedScriptVecReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for AllowedScriptVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for AllowedScriptVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for AllowedScriptVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl<'r> AllowedScriptVecReader<'r> {
+    pub const ITEM_SIZE: usize = 40;
+    pub fn total_size(&self) -> usize {
+        molecule::NUMBER_SIZE * (self.item_count() + 1)
+    }
+    pub fn item_count(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<AllowedScriptReader<'r>> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> AllowedScriptReader<'r> {
+        let start = molecule::NUMBER_SIZE + Self::ITEM_SIZE * idx;
+        let end = start + Self::ITEM_SIZE;
+        AllowedScriptReader::new_unchecked(&self.as_slice()[start..end])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for AllowedScriptVecReader<'r> {
+    type Entity = AllowedScriptVec;
+    const NAME: &'static str = "AllowedScriptVecReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        AllowedScriptVecReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let item_count = molecule::unpack_number(slice) as usize;
+        if item_count == 0 {
+            if slice_len != molecule::NUMBER_SIZE {
+                return ve!(Self, TotalSizeNotMatch, molecule::NUMBER_SIZE, slice_len);
+            }
+            return Ok(());
+        }
+        let total_size = molecule::NUMBER_SIZE + Self::ITEM_SIZE * item_count;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct AllowedScriptVecBuilder(pub(crate) Vec<AllowedScript>);
+impl AllowedScriptVecBuilder {
+    pub const ITEM_SIZE: usize = 40;
+    pub fn set(mut self, v: Vec<AllowedScript>) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn push(mut self, v: AllowedScript) -> Self {
+        self.0.push(v);
+        self
+    }
+    pub fn extend<T: ::core::iter::IntoIterator<Item = AllowedScript>>(mut self, iter: T) -> Self {
+        for elem in iter {
+            self.0.push(elem);
+        }
+        self
+    }
+}
+impl molecule::prelude::Builder for AllowedScriptVecBuilder {
+    type Entity = AllowedScriptVec;
+    const NAME: &'static str = "AllowedScriptVecBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE + Self::ITEM_SIZE * self.0.len()
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(&molecule::pack_number(self.0.len() as molecule::Number))?;
+        for inner in &self.0[..] {
+            writer.write_all(inner.as_slice())?;
+        }
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        AllowedScriptVec::new_unchecked(inner.into())
+    }
+}
+pub struct AllowedScriptVecIterator(AllowedScriptVec, usize, usize);
+impl ::core::iter::Iterator for AllowedScriptVecIterator {
+    type Item = AllowedScript;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl ::core::iter::ExactSizeIterator for AllowedScriptVecIterator {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+impl ::core::iter::IntoIterator for AllowedScriptVec {
+    type Item = AllowedScript;
+    type IntoIter = AllowedScriptVecIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        let len = self.len();
+        AllowedScriptVecIterator(self, 0, len)
+    }
+}
+impl<'r> AllowedScriptVecReader<'r> {
+    pub fn iter<'t>(&'t self) -> AllowedScriptVecReaderIterator<'t, 'r> {
+        AllowedScriptVecReaderIterator(&self, 0, self.len())
+    }
+}
+pub struct AllowedScriptVecReaderIterator<'t, 'r>(&'t AllowedScriptVecReader<'r>, usize, usize);
+impl<'t: 'r, 'r> ::core::iter::Iterator for AllowedScriptVecReaderIterator<'t, 'r> {
+    type Item = AllowedScriptReader<'t>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for AllowedScriptVecReaderIterator<'t, 'r> {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+#[derive(Clone)]
 pub struct RollupConfig(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for RollupConfig {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -2267,14 +2958,14 @@ impl ::core::fmt::Display for RollupConfig {
         write!(
             f,
             ", {}: {}",
-            "allowed_eoa_type_hashes",
-            self.allowed_eoa_type_hashes()
+            "allowed_eoa_scripts",
+            self.allowed_eoa_scripts()
         )?;
         write!(
             f,
             ", {}: {}",
-            "allowed_contract_type_hashes",
-            self.allowed_contract_type_hashes()
+            "allowed_contract_scripts",
+            self.allowed_contract_scripts()
         )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -2399,20 +3090,20 @@ impl RollupConfig {
         let end = molecule::unpack_number(&slice[56..]) as usize;
         Byte::new_unchecked(self.0.slice(start..end))
     }
-    pub fn allowed_eoa_type_hashes(&self) -> Byte32Vec {
+    pub fn allowed_eoa_scripts(&self) -> AllowedScriptVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[56..]) as usize;
         let end = molecule::unpack_number(&slice[60..]) as usize;
-        Byte32Vec::new_unchecked(self.0.slice(start..end))
+        AllowedScriptVec::new_unchecked(self.0.slice(start..end))
     }
-    pub fn allowed_contract_type_hashes(&self) -> Byte32Vec {
+    pub fn allowed_contract_scripts(&self) -> AllowedScriptVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[60..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[64..]) as usize;
-            Byte32Vec::new_unchecked(self.0.slice(start..end))
+            AllowedScriptVec::new_unchecked(self.0.slice(start..end))
         } else {
-            Byte32Vec::new_unchecked(self.0.slice(start..))
+            AllowedScriptVec::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> RollupConfigReader<'r> {
@@ -2455,8 +3146,8 @@ impl molecule::prelude::Entity for RollupConfig {
             .finality_blocks(self.finality_blocks())
             .compatible_chain_id(self.compatible_chain_id())
             .reward_burn_rate(self.reward_burn_rate())
-            .allowed_eoa_type_hashes(self.allowed_eoa_type_hashes())
-            .allowed_contract_type_hashes(self.allowed_contract_type_hashes())
+            .allowed_eoa_scripts(self.allowed_eoa_scripts())
+            .allowed_contract_scripts(self.allowed_contract_scripts())
     }
 }
 #[derive(Clone, Copy)]
@@ -2544,14 +3235,14 @@ impl<'r> ::core::fmt::Display for RollupConfigReader<'r> {
         write!(
             f,
             ", {}: {}",
-            "allowed_eoa_type_hashes",
-            self.allowed_eoa_type_hashes()
+            "allowed_eoa_scripts",
+            self.allowed_eoa_scripts()
         )?;
         write!(
             f,
             ", {}: {}",
-            "allowed_contract_type_hashes",
-            self.allowed_contract_type_hashes()
+            "allowed_contract_scripts",
+            self.allowed_contract_scripts()
         )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -2656,20 +3347,20 @@ impl<'r> RollupConfigReader<'r> {
         let end = molecule::unpack_number(&slice[56..]) as usize;
         ByteReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn allowed_eoa_type_hashes(&self) -> Byte32VecReader<'r> {
+    pub fn allowed_eoa_scripts(&self) -> AllowedScriptVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[56..]) as usize;
         let end = molecule::unpack_number(&slice[60..]) as usize;
-        Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
+        AllowedScriptVecReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn allowed_contract_type_hashes(&self) -> Byte32VecReader<'r> {
+    pub fn allowed_contract_scripts(&self) -> AllowedScriptVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[60..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[64..]) as usize;
-            Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
+            AllowedScriptVecReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            Byte32VecReader::new_unchecked(&self.as_slice()[start..])
+            AllowedScriptVecReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -2737,8 +3428,8 @@ impl<'r> molecule::prelude::Reader<'r> for RollupConfigReader<'r> {
         Uint64Reader::verify(&slice[offsets[10]..offsets[11]], compatible)?;
         Uint32Reader::verify(&slice[offsets[11]..offsets[12]], compatible)?;
         ByteReader::verify(&slice[offsets[12]..offsets[13]], compatible)?;
-        Byte32VecReader::verify(&slice[offsets[13]..offsets[14]], compatible)?;
-        Byte32VecReader::verify(&slice[offsets[14]..offsets[15]], compatible)?;
+        AllowedScriptVecReader::verify(&slice[offsets[13]..offsets[14]], compatible)?;
+        AllowedScriptVecReader::verify(&slice[offsets[14]..offsets[15]], compatible)?;
         Ok(())
     }
 }
@@ -2757,8 +3448,8 @@ pub struct RollupConfigBuilder {
     pub(crate) finality_blocks: Uint64,
     pub(crate) compatible_chain_id: Uint32,
     pub(crate) reward_burn_rate: Byte,
-    pub(crate) allowed_eoa_type_hashes: Byte32Vec,
-    pub(crate) allowed_contract_type_hashes: Byte32Vec,
+    pub(crate) allowed_eoa_scripts: AllowedScriptVec,
+    pub(crate) allowed_contract_scripts: AllowedScriptVec,
 }
 impl RollupConfigBuilder {
     pub const FIELD_COUNT: usize = 15;
@@ -2814,12 +3505,12 @@ impl RollupConfigBuilder {
         self.reward_burn_rate = v;
         self
     }
-    pub fn allowed_eoa_type_hashes(mut self, v: Byte32Vec) -> Self {
-        self.allowed_eoa_type_hashes = v;
+    pub fn allowed_eoa_scripts(mut self, v: AllowedScriptVec) -> Self {
+        self.allowed_eoa_scripts = v;
         self
     }
-    pub fn allowed_contract_type_hashes(mut self, v: Byte32Vec) -> Self {
-        self.allowed_contract_type_hashes = v;
+    pub fn allowed_contract_scripts(mut self, v: AllowedScriptVec) -> Self {
+        self.allowed_contract_scripts = v;
         self
     }
 }
@@ -2841,8 +3532,8 @@ impl molecule::prelude::Builder for RollupConfigBuilder {
             + self.finality_blocks.as_slice().len()
             + self.compatible_chain_id.as_slice().len()
             + self.reward_burn_rate.as_slice().len()
-            + self.allowed_eoa_type_hashes.as_slice().len()
-            + self.allowed_contract_type_hashes.as_slice().len()
+            + self.allowed_eoa_scripts.as_slice().len()
+            + self.allowed_contract_scripts.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -2874,9 +3565,9 @@ impl molecule::prelude::Builder for RollupConfigBuilder {
         offsets.push(total_size);
         total_size += self.reward_burn_rate.as_slice().len();
         offsets.push(total_size);
-        total_size += self.allowed_eoa_type_hashes.as_slice().len();
+        total_size += self.allowed_eoa_scripts.as_slice().len();
         offsets.push(total_size);
-        total_size += self.allowed_contract_type_hashes.as_slice().len();
+        total_size += self.allowed_contract_scripts.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -2894,8 +3585,8 @@ impl molecule::prelude::Builder for RollupConfigBuilder {
         writer.write_all(self.finality_blocks.as_slice())?;
         writer.write_all(self.compatible_chain_id.as_slice())?;
         writer.write_all(self.reward_burn_rate.as_slice())?;
-        writer.write_all(self.allowed_eoa_type_hashes.as_slice())?;
-        writer.write_all(self.allowed_contract_type_hashes.as_slice())?;
+        writer.write_all(self.allowed_eoa_scripts.as_slice())?;
+        writer.write_all(self.allowed_contract_scripts.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

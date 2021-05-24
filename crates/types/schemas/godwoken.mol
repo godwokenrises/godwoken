@@ -26,6 +26,16 @@ struct GlobalState {
     status: byte,
 }
 
+
+array Symbol [byte; 8];
+
+struct AllowedScript {
+  type_hash: Byte32, // type hash
+  symbol: Symbol, // symbol of the script, for example: "eth" (padding with zeros)
+}
+
+vector AllowedScriptVec <AllowedScript>;
+
 table RollupConfig {
     l1_sudt_script_type_hash: Byte32,
     custodian_script_type_hash: Byte32,
@@ -40,8 +50,8 @@ table RollupConfig {
     finality_blocks: Uint64,
     compatible_chain_id: Uint32,
     reward_burn_rate: byte, // * reward_burn_rate / 100
-    allowed_eoa_type_hashes: Byte32Vec, // list of script code_hash allowed an EOA(external owned account) to use
-    allowed_contract_type_hashes: Byte32Vec, // list of script code_hash allowed a contract account to use
+    allowed_eoa_scripts: AllowedScriptVec, // list of EOA(external owned account) scripts
+    allowed_contract_scripts: AllowedScriptVec, // list of contract account scripts
 }
 
 table RawL2Transaction {

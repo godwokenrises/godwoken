@@ -1,6 +1,7 @@
 use gw_block_producer::produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult};
 use gw_block_producer::withdrawal::AvailableCustodians;
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncEvent, SyncParam};
+use gw_common::builtins::ETH_SYMBOL;
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BackendConfig, GenesisConfig};
 use gw_generator::{
@@ -12,6 +13,7 @@ use gw_generator::{
 };
 use gw_mem_pool::pool::MemPool;
 use gw_store::Store;
+use gw_types::packed::AllowedScript;
 use gw_types::{
     bytes::Bytes,
     packed::{
@@ -76,7 +78,13 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
 pub fn setup_chain(rollup_type_script: Script) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
     let rollup_config = RollupConfig::new_builder()
-        .allowed_eoa_type_hashes(vec![ALWAYS_SUCCESS_CODE_HASH.clone()].pack())
+        .allowed_eoa_scripts(
+            vec![AllowedScript::new_builder()
+                .type_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
+                .symbol(ETH_SYMBOL.pack())
+                .build()]
+            .pack(),
+        )
         .finality_blocks(6.pack())
         .build();
     account_lock_manage.register_lock_algorithm(

@@ -180,16 +180,16 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 let is_eoa_account = self
                     .rollup_context
                     .rollup_config
-                    .allowed_eoa_type_hashes()
+                    .allowed_eoa_scripts()
                     .into_iter()
-                    .any(|type_hash| type_hash == script.code_hash());
+                    .any(|allowed| allowed.type_hash() == script.code_hash());
                 if !is_eoa_account {
                     let is_contract_account = self
                         .rollup_context
                         .rollup_config
-                        .allowed_contract_type_hashes()
+                        .allowed_contract_scripts()
                         .into_iter()
-                        .any(|type_hash| type_hash == script.code_hash());
+                        .any(|allowed| allowed.type_hash() == script.code_hash());
                     if !is_contract_account {
                         machine.set_register(A0, Mac::REG::from_u8(ERROR_UNKNOWN_SCRIPT_CODE_HASH));
                         return Ok(true);

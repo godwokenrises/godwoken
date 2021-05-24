@@ -660,9 +660,9 @@ impl BlockProducer {
                 }
                 if ctx
                     .rollup_config
-                    .allowed_eoa_type_hashes()
+                    .allowed_eoa_scripts()
                     .into_iter()
-                    .all(|type_hash| script.code_hash() != type_hash)
+                    .all(|allowed| script.code_hash() != allowed.type_hash())
                 {
                     log::debug!(
                         "Invalid deposit account script: unknown code_hash: {:?}",

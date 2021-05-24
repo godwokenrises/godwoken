@@ -1,7 +1,10 @@
+use std::collections::HashSet;
 use std::path::Path;
 use std::str::FromStr;
 use std::{fs, ops::Deref};
 
+use gw_jsonrpc_types::godwoken::AllowedScript;
+use gw_types::prelude::Unpack;
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 
@@ -32,6 +35,8 @@ use gw_types::{
     prelude::Pack as GwPack, prelude::PackVec as GwPackVec,
 };
 
+use gw_common::builtins::*;
+
 use super::deploy_scripts::{
     get_network_type, run_cmd, wait_for_tx, ScriptsDeploymentResult, TYPE_ID_CODE_HASH,
 };
@@ -47,7 +52,7 @@ pub struct UserRollupConfig {
     pub finality_blocks: u64,
     pub reward_burn_rate: u8,     // * reward_burn_rate / 100
     pub compatible_chain_id: u32, // chain id for this rollup
-    pub allowed_eoa_type_hashes: Vec<H256>,
+    pub allowed_eoa_scripts: Vec<AllowedScript>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
@@ -286,21 +291,66 @@ pub fn deploy_genesis(
     let genesis_info = GenesisInfo::from_block(&genesis_block)?;
 
     // deploy rollup config cell
-    let allowed_contract_type_hashes: Vec<gw_packed::Byte32> = vec![
-        GwPack::pack(&deployment_result.meta_contract_validator.script_type_hash),
-        GwPack::pack(&deployment_result.l2_sudt_validator.script_type_hash),
-        GwPack::pack(&deployment_result.polyjuice_validator.script_type_hash),
+    let allowed_contract_scripts: Vec<gw_packed::AllowedScript> = vec![
+        gw_packed::AllowedScript::new_builder()
+            .type_hash(GwPack::pack(
+                &deployment_result.meta_contract_validator.script_type_hash,
+            ))
+            .symbol(GwPack::pack(GW_META_SYMBOL))
+            .build(),
+        gw_packed::AllowedScript::new_builder()
+            .type_hash(GwPack::pack(
+                &deployment_result.l2_sudt_validator.script_type_hash,
+            ))
+            .symbol(GwPack::pack(GW_L2SUDT_SYMBOL))
+            .build(),
+        gw_packed::AllowedScript::new_builder()
+            .type_hash(GwPack::pack(
+                &deployment_result.polyjuice_validator.script_type_hash,
+            ))
+            .symbol(GwPack::pack(ETH_SYMBOL))
+            .build(),
     ];
+    {
+        let symbol_set: HashSet<_> = allowed_contract_scripts
+            .iter()
+            .map(|s| {
+                let symbol: [u8; 8] = s.symbol().unpack();
+                symbol
+            })
+            .collect();
+        if symbol_set.len() != allowed_contract_scripts.len() {
+            return Err("Contract scripts have duplicated symbols".to_string());
+        }
+    }
 
-    let mut allowed_eoa_type_hashes: Vec<gw_packed::Byte32> = vec![GwPack::pack(
-        &deployment_result.eth_account_lock.script_type_hash,
-    )];
-    allowed_eoa_type_hashes.extend(
+    let mut allowed_eoa_scripts: Vec<gw_packed::AllowedScript> =
+        vec![gw_packed::AllowedScript::new_builder()
+            .type_hash(GwPack::pack(
+                &deployment_result.eth_account_lock.script_type_hash,
+            ))
+            .symbol(GwPack::pack(ETH_SYMBOL))
+            .build()];
+    allowed_eoa_scripts.extend(
         user_rollup_config
-            .allowed_eoa_type_hashes
+            .allowed_eoa_scripts
             .into_iter()
-            .map(|hash| GwPack::pack(&hash)),
+            .map(|s| s.into()),
     );
+
+    {
+        let symbol_set: HashSet<_> = allowed_eoa_scripts
+            .iter()
+            .map(|s| {
+                let symbol: [u8; 8] = s.symbol().unpack();
+                symbol
+            })
+            .collect();
+        if symbol_set.len() != allowed_eoa_scripts.len() {
+            return Err("EoA scripts have duplicated symbols".to_string());
+        }
+    }
+
     let rollup_config = RollupConfig::new_builder()
         .compatible_chain_id(GwPack::pack(&user_rollup_config.compatible_chain_id))
         .l1_sudt_script_type_hash(GwPack::pack(&user_rollup_config.l1_sudt_script_type_hash))
@@ -325,8 +375,8 @@ pub fn deploy_genesis(
         .challenge_maturity_blocks(GwPack::pack(&user_rollup_config.challenge_maturity_blocks))
         .finality_blocks(GwPack::pack(&user_rollup_config.finality_blocks))
         .reward_burn_rate(user_rollup_config.reward_burn_rate.into())
-        .allowed_eoa_type_hashes(GwPackVec::pack(allowed_eoa_type_hashes))
-        .allowed_contract_type_hashes(GwPackVec::pack(allowed_contract_type_hashes))
+        .allowed_eoa_scripts(GwPackVec::pack(allowed_eoa_scripts))
+        .allowed_contract_scripts(GwPackVec::pack(allowed_contract_scripts))
         .build();
     let (secp_data, secp_data_dep) = get_secp_data(&mut rpc_client)?;
     let mut deploy_context = DeployContext {

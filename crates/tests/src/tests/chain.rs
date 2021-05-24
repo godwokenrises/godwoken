@@ -303,17 +303,17 @@ fn test_layer1_revert() {
         .type_(Some(rollup_type_script.clone()).pack())
         .build();
 
-    let default_eoa_code_hash = chain
+    let default_eoa_lock = chain
         .generator()
         .rollup_context()
         .rollup_config
-        .allowed_eoa_type_hashes()
+        .allowed_eoa_scripts()
         .get(0)
         .expect("get default EoA hash");
 
     // update block 1
     let alice_script = Script::new_builder()
-        .code_hash(default_eoa_code_hash.clone())
+        .code_hash(default_eoa_lock.type_hash())
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();
@@ -346,7 +346,7 @@ fn test_layer1_revert() {
     assert_eq!(event, SyncEvent::Success);
     // update block 2
     let bob_script = Script::new_builder()
-        .code_hash(default_eoa_code_hash)
+        .code_hash(default_eoa_lock.type_hash())
         .hash_type(ScriptHashType::Type.into())
         .args({
             let mut args = rollup_script_hash.to_vec();

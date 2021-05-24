@@ -29,6 +29,20 @@ impl<'r> Unpack<[u8; 65]> for packed::SignatureReader<'r> {
 
 impl_conversion_for_entity_unpack!([u8; 65], Signature);
 
+impl Pack<packed::Symbol> for [u8; 8] {
+    fn pack(&self) -> packed::Symbol {
+        packed::Symbol::from_slice(&self[..]).expect("impossible: fail to pack [u8; 8]")
+    }
+}
+
+impl<'r> Unpack<[u8; 8]> for packed::SymbolReader<'r> {
+    fn unpack(&self) -> [u8; 8] {
+        let ptr = self.as_slice().as_ptr() as *const [u8; 8];
+        unsafe { *ptr }
+    }
+}
+impl_conversion_for_entity_unpack!([u8; 8], Symbol);
+
 impl Pack<packed::KVPair> for (H256, H256) {
     fn pack(&self) -> packed::KVPair {
         packed::KVPair::new_builder()
@@ -52,3 +66,4 @@ impl_conversion_for_packed_iterator_pack!(DepositionRequest, DepositionRequestVe
 impl_conversion_for_packed_iterator_pack!(WithdrawalRequest, WithdrawalRequestVec);
 impl_conversion_for_packed_iterator_pack!(L2Transaction, L2TransactionVec);
 impl_conversion_for_packed_iterator_pack!(RawL2Block, RawL2BlockVec);
+impl_conversion_for_packed_iterator_pack!(AllowedScript, AllowedScriptVec);

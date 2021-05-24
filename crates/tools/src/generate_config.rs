@@ -5,6 +5,7 @@ use crate::deploy_scripts::ScriptsDeploymentResult;
 use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::Entity;
+use gw_common::builtins::ETH_SYMBOL;
 use gw_config::{
     BackendConfig, BlockProducerConfig, ChainConfig, Config, GenesisConfig, RPCClientConfig,
     RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
@@ -157,16 +158,17 @@ pub fn generate_config(
         rollup_config,
         secp_data_dep,
     };
-    let eth_account_lock_hash = genesis
+    let eth_account_lock = genesis
         .rollup_config
-        .allowed_eoa_type_hashes
-        .get(0)
+        .allowed_eoa_scripts
+        .iter()
+        .find(|s| &s.symbol.0 == ETH_SYMBOL)
         .ok_or_else(|| anyhow!("No allowed EoA type hashes in the rollup config"))?;
     let web3_indexer = match database_url {
         Some(database_url) => Some(Web3IndexerConfig {
             database_url: database_url.to_owned(),
             polyjuice_script_type_hash: scripts.polyjuice_validator.script_type_hash,
-            eth_account_lock_hash: eth_account_lock_hash.to_owned(),
+            eth_account_lock_hash: eth_account_lock.type_hash.clone(),
         }),
         None => None,
     };

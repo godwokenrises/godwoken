@@ -6,7 +6,7 @@ use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use futures::{executor::block_on, select, FutureExt};
 use gw_chain::chain::Chain;
-use gw_common::H256;
+use gw_common::{builtins::ETH_SYMBOL, H256};
 use gw_config::Config;
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
 use gw_generator::{
@@ -186,12 +186,16 @@ pub fn run(config: Config) -> Result<()> {
         let backend_manage = BackendManage::from_config(config.backends.clone())
             .with_context(|| "config backends")?;
         let mut account_lock_manage = AccountLockManage::default();
-        let eth_lock_script_type_hash = rollup_config
-            .allowed_eoa_type_hashes()
-            .get(0)
+        let eth_lock_script = rollup_config
+            .allowed_eoa_scripts()
+            .into_iter()
+            .find(|s| {
+                let symbol: [u8; 8] = s.symbol().unpack();
+                &symbol == ETH_SYMBOL
+            })
             .ok_or_else(|| anyhow!("No allowed EoA type hashes in the rollup config"))?;
         account_lock_manage.register_lock_algorithm(
-            eth_lock_script_type_hash.unpack(),
+            eth_lock_script.type_hash().unpack(),
             Box::new(Secp256k1Eth::default()),
         );
         Arc::new(Generator::new(
