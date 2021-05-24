@@ -12,8 +12,8 @@ use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     packed::{
-        Block, CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositionLockArgs,
-        DepositionLockArgsReader, DepositionRequest, NumberHash, OutPoint, Script, StakeLockArgs,
+        Block, CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositLockArgs,
+        DepositLockArgsReader, DepositRequest, NumberHash, OutPoint, Script, StakeLockArgs,
         StakeLockArgsReader, Transaction, WithdrawalLockArgs, WithdrawalLockArgsReader,
     },
     prelude::*,
@@ -40,7 +40,7 @@ lazy_static::lazy_static! {
 
 #[derive(Debug, Clone)]
 pub struct DepositInfo {
-    pub request: DepositionRequest,
+    pub request: DepositRequest,
     pub cell: CellInfo,
 }
 
@@ -66,8 +66,8 @@ fn to_result<T: DeserializeOwned>(output: Output) -> anyhow::Result<T> {
 fn parse_deposit_request(
     output: &CellOutput,
     output_data: &Bytes,
-    deposit_lock_args: &DepositionLockArgs,
-) -> Option<DepositionRequest> {
+    deposit_lock_args: &DepositLockArgs,
+) -> Option<DepositRequest> {
     let capacity = output.capacity();
     let script = deposit_lock_args.layer2_lock();
     let (sudt_script_hash, amount) = {
@@ -85,7 +85,7 @@ fn parse_deposit_request(
         }
     };
 
-    let request = DepositionRequest::new_builder()
+    let request = DepositRequest::new_builder()
         .script(script)
         .capacity(capacity)
         .amount(amount.pack())
@@ -439,7 +439,7 @@ impl RPCClient {
         }))
     }
 
-    /// return all lived deposition requests
+    /// return all lived deposit requests
     /// NOTICE the returned cells may contains invalid cells.
     pub async fn query_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
         const BLOCKS_TO_SEARCH: u64 = 100;
@@ -457,11 +457,7 @@ impl RPCClient {
 
         let script = Script::new_builder()
             .args(rollup_type_hash.pack())
-            .code_hash(
-                self.rollup_context
-                    .rollup_config
-                    .deposition_script_type_hash(),
-            )
+            .code_hash(self.rollup_context.rollup_config.deposit_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
             .build();
 
@@ -518,8 +514,8 @@ impl RPCClient {
 
         for cell in cells {
             let args: Bytes = cell.output.lock().args().unpack();
-            let deposit_lock_args = match DepositionLockArgsReader::verify(&args[32..], false) {
-                Ok(()) => DepositionLockArgs::new_unchecked(args.slice(32..)),
+            let deposit_lock_args = match DepositLockArgsReader::verify(&args[32..], false) {
+                Ok(()) => DepositLockArgs::new_unchecked(args.slice(32..)),
                 Err(_) => {
                     log::debug!("invalid deposit cell args: \n{:#x}", args);
                     continue;
@@ -691,8 +687,7 @@ impl RPCClient {
                     Err(_) => continue,
                 };
 
-                if custodian_lock_args.deposition_block_number().unpack()
-                    > last_finalized_block_number
+                if custodian_lock_args.deposit_block_number().unpack() > last_finalized_block_number
                 {
                     continue;
                 }

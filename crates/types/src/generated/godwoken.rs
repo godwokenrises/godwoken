@@ -1638,8 +1638,8 @@ impl ::core::fmt::Display for RollupConfig {
         write!(
             f,
             ", {}: {}",
-            "deposition_script_type_hash",
-            self.deposition_script_type_hash()
+            "deposit_script_type_hash",
+            self.deposit_script_type_hash()
         )?;
         write!(
             f,
@@ -1755,7 +1755,7 @@ impl RollupConfig {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Byte32::new_unchecked(self.0.slice(start..end))
     }
-    pub fn deposition_script_type_hash(&self) -> Byte32 {
+    pub fn deposit_script_type_hash(&self) -> Byte32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         let end = molecule::unpack_number(&slice[16..]) as usize;
@@ -1866,7 +1866,7 @@ impl molecule::prelude::Entity for RollupConfig {
         Self::new_builder()
             .l1_sudt_script_type_hash(self.l1_sudt_script_type_hash())
             .custodian_script_type_hash(self.custodian_script_type_hash())
-            .deposition_script_type_hash(self.deposition_script_type_hash())
+            .deposit_script_type_hash(self.deposit_script_type_hash())
             .withdrawal_script_type_hash(self.withdrawal_script_type_hash())
             .challenge_script_type_hash(self.challenge_script_type_hash())
             .stake_script_type_hash(self.stake_script_type_hash())
@@ -1915,8 +1915,8 @@ impl<'r> ::core::fmt::Display for RollupConfigReader<'r> {
         write!(
             f,
             ", {}: {}",
-            "deposition_script_type_hash",
-            self.deposition_script_type_hash()
+            "deposit_script_type_hash",
+            self.deposit_script_type_hash()
         )?;
         write!(
             f,
@@ -2012,7 +2012,7 @@ impl<'r> RollupConfigReader<'r> {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Byte32Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn deposition_script_type_hash(&self) -> Byte32Reader<'r> {
+    pub fn deposit_script_type_hash(&self) -> Byte32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         let end = molecule::unpack_number(&slice[16..]) as usize;
@@ -2168,7 +2168,7 @@ impl<'r> molecule::prelude::Reader<'r> for RollupConfigReader<'r> {
 pub struct RollupConfigBuilder {
     pub(crate) l1_sudt_script_type_hash: Byte32,
     pub(crate) custodian_script_type_hash: Byte32,
-    pub(crate) deposition_script_type_hash: Byte32,
+    pub(crate) deposit_script_type_hash: Byte32,
     pub(crate) withdrawal_script_type_hash: Byte32,
     pub(crate) challenge_script_type_hash: Byte32,
     pub(crate) stake_script_type_hash: Byte32,
@@ -2192,8 +2192,8 @@ impl RollupConfigBuilder {
         self.custodian_script_type_hash = v;
         self
     }
-    pub fn deposition_script_type_hash(mut self, v: Byte32) -> Self {
-        self.deposition_script_type_hash = v;
+    pub fn deposit_script_type_hash(mut self, v: Byte32) -> Self {
+        self.deposit_script_type_hash = v;
         self
     }
     pub fn withdrawal_script_type_hash(mut self, v: Byte32) -> Self {
@@ -2252,7 +2252,7 @@ impl molecule::prelude::Builder for RollupConfigBuilder {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.l1_sudt_script_type_hash.as_slice().len()
             + self.custodian_script_type_hash.as_slice().len()
-            + self.deposition_script_type_hash.as_slice().len()
+            + self.deposit_script_type_hash.as_slice().len()
             + self.withdrawal_script_type_hash.as_slice().len()
             + self.challenge_script_type_hash.as_slice().len()
             + self.stake_script_type_hash.as_slice().len()
@@ -2274,7 +2274,7 @@ impl molecule::prelude::Builder for RollupConfigBuilder {
         offsets.push(total_size);
         total_size += self.custodian_script_type_hash.as_slice().len();
         offsets.push(total_size);
-        total_size += self.deposition_script_type_hash.as_slice().len();
+        total_size += self.deposit_script_type_hash.as_slice().len();
         offsets.push(total_size);
         total_size += self.withdrawal_script_type_hash.as_slice().len();
         offsets.push(total_size);
@@ -2305,7 +2305,7 @@ impl molecule::prelude::Builder for RollupConfigBuilder {
         }
         writer.write_all(self.l1_sudt_script_type_hash.as_slice())?;
         writer.write_all(self.custodian_script_type_hash.as_slice())?;
-        writer.write_all(self.deposition_script_type_hash.as_slice())?;
+        writer.write_all(self.deposit_script_type_hash.as_slice())?;
         writer.write_all(self.withdrawal_script_type_hash.as_slice())?;
         writer.write_all(self.challenge_script_type_hash.as_slice())?;
         writer.write_all(self.stake_script_type_hash.as_slice())?;
@@ -4963,8 +4963,8 @@ impl molecule::prelude::Builder for L2BlockBuilder {
     }
 }
 #[derive(Clone)]
-pub struct DepositionRequest(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for DepositionRequest {
+pub struct DepositRequest(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for DepositRequest {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -4973,12 +4973,12 @@ impl ::core::fmt::LowerHex for DepositionRequest {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for DepositionRequest {
+impl ::core::fmt::Debug for DepositRequest {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for DepositionRequest {
+impl ::core::fmt::Display for DepositRequest {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "capacity", self.capacity())?;
@@ -4992,7 +4992,7 @@ impl ::core::fmt::Display for DepositionRequest {
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for DepositionRequest {
+impl ::core::default::Default for DepositRequest {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             129, 0, 0, 0, 20, 0, 0, 0, 28, 0, 0, 0, 44, 0, 0, 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -5001,10 +5001,10 @@ impl ::core::default::Default for DepositionRequest {
             48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
-        DepositionRequest::new_unchecked(v.into())
+        DepositRequest::new_unchecked(v.into())
     }
 }
-impl DepositionRequest {
+impl DepositRequest {
     pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
@@ -5050,15 +5050,15 @@ impl DepositionRequest {
             Script::new_unchecked(self.0.slice(start..))
         }
     }
-    pub fn as_reader<'r>(&'r self) -> DepositionRequestReader<'r> {
-        DepositionRequestReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> DepositRequestReader<'r> {
+        DepositRequestReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for DepositionRequest {
-    type Builder = DepositionRequestBuilder;
-    const NAME: &'static str = "DepositionRequest";
+impl molecule::prelude::Entity for DepositRequest {
+    type Builder = DepositRequestBuilder;
+    const NAME: &'static str = "DepositRequest";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        DepositionRequest(data)
+        DepositRequest(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -5067,10 +5067,10 @@ impl molecule::prelude::Entity for DepositionRequest {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        DepositionRequestReader::from_slice(slice).map(|reader| reader.to_entity())
+        DepositRequestReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        DepositionRequestReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        DepositRequestReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -5084,8 +5084,8 @@ impl molecule::prelude::Entity for DepositionRequest {
     }
 }
 #[derive(Clone, Copy)]
-pub struct DepositionRequestReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for DepositionRequestReader<'r> {
+pub struct DepositRequestReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for DepositRequestReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -5094,12 +5094,12 @@ impl<'r> ::core::fmt::LowerHex for DepositionRequestReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for DepositionRequestReader<'r> {
+impl<'r> ::core::fmt::Debug for DepositRequestReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for DepositionRequestReader<'r> {
+impl<'r> ::core::fmt::Display for DepositRequestReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "capacity", self.capacity())?;
@@ -5113,7 +5113,7 @@ impl<'r> ::core::fmt::Display for DepositionRequestReader<'r> {
         write!(f, " }}")
     }
 }
-impl<'r> DepositionRequestReader<'r> {
+impl<'r> DepositRequestReader<'r> {
     pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
@@ -5160,14 +5160,14 @@ impl<'r> DepositionRequestReader<'r> {
         }
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for DepositionRequestReader<'r> {
-    type Entity = DepositionRequest;
-    const NAME: &'static str = "DepositionRequestReader";
+impl<'r> molecule::prelude::Reader<'r> for DepositRequestReader<'r> {
+    type Entity = DepositRequest;
+    const NAME: &'static str = "DepositRequestReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        DepositionRequestReader(slice)
+        DepositRequestReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -5219,13 +5219,13 @@ impl<'r> molecule::prelude::Reader<'r> for DepositionRequestReader<'r> {
     }
 }
 #[derive(Debug, Default)]
-pub struct DepositionRequestBuilder {
+pub struct DepositRequestBuilder {
     pub(crate) capacity: Uint64,
     pub(crate) amount: Uint128,
     pub(crate) sudt_script_hash: Byte32,
     pub(crate) script: Script,
 }
-impl DepositionRequestBuilder {
+impl DepositRequestBuilder {
     pub const FIELD_COUNT: usize = 4;
     pub fn capacity(mut self, v: Uint64) -> Self {
         self.capacity = v;
@@ -5244,9 +5244,9 @@ impl DepositionRequestBuilder {
         self
     }
 }
-impl molecule::prelude::Builder for DepositionRequestBuilder {
-    type Entity = DepositionRequest;
-    const NAME: &'static str = "DepositionRequestBuilder";
+impl molecule::prelude::Builder for DepositRequestBuilder {
+    type Entity = DepositRequest;
+    const NAME: &'static str = "DepositRequestBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.capacity.as_slice().len()
@@ -5279,12 +5279,12 @@ impl molecule::prelude::Builder for DepositionRequestBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        DepositionRequest::new_unchecked(inner.into())
+        DepositRequest::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
-pub struct DepositionRequestVec(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for DepositionRequestVec {
+pub struct DepositRequestVec(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for DepositRequestVec {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -5293,12 +5293,12 @@ impl ::core::fmt::LowerHex for DepositionRequestVec {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for DepositionRequestVec {
+impl ::core::fmt::Debug for DepositRequestVec {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for DepositionRequestVec {
+impl ::core::fmt::Display for DepositRequestVec {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} [", Self::NAME)?;
         for i in 0..self.len() {
@@ -5311,13 +5311,13 @@ impl ::core::fmt::Display for DepositionRequestVec {
         write!(f, "]")
     }
 }
-impl ::core::default::Default for DepositionRequestVec {
+impl ::core::default::Default for DepositRequestVec {
     fn default() -> Self {
         let v: Vec<u8> = vec![4, 0, 0, 0];
-        DepositionRequestVec::new_unchecked(v.into())
+        DepositRequestVec::new_unchecked(v.into())
     }
 }
-impl DepositionRequestVec {
+impl DepositRequestVec {
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -5334,34 +5334,34 @@ impl DepositionRequestVec {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-    pub fn get(&self, idx: usize) -> Option<DepositionRequest> {
+    pub fn get(&self, idx: usize) -> Option<DepositRequest> {
         if idx >= self.len() {
             None
         } else {
             Some(self.get_unchecked(idx))
         }
     }
-    pub fn get_unchecked(&self, idx: usize) -> DepositionRequest {
+    pub fn get_unchecked(&self, idx: usize) -> DepositRequest {
         let slice = self.as_slice();
         let start_idx = molecule::NUMBER_SIZE * (1 + idx);
         let start = molecule::unpack_number(&slice[start_idx..]) as usize;
         if idx == self.len() - 1 {
-            DepositionRequest::new_unchecked(self.0.slice(start..))
+            DepositRequest::new_unchecked(self.0.slice(start..))
         } else {
             let end_idx = start_idx + molecule::NUMBER_SIZE;
             let end = molecule::unpack_number(&slice[end_idx..]) as usize;
-            DepositionRequest::new_unchecked(self.0.slice(start..end))
+            DepositRequest::new_unchecked(self.0.slice(start..end))
         }
     }
-    pub fn as_reader<'r>(&'r self) -> DepositionRequestVecReader<'r> {
-        DepositionRequestVecReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> DepositRequestVecReader<'r> {
+        DepositRequestVecReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for DepositionRequestVec {
-    type Builder = DepositionRequestVecBuilder;
-    const NAME: &'static str = "DepositionRequestVec";
+impl molecule::prelude::Entity for DepositRequestVec {
+    type Builder = DepositRequestVecBuilder;
+    const NAME: &'static str = "DepositRequestVec";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        DepositionRequestVec(data)
+        DepositRequestVec(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -5370,10 +5370,10 @@ impl molecule::prelude::Entity for DepositionRequestVec {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        DepositionRequestVecReader::from_slice(slice).map(|reader| reader.to_entity())
+        DepositRequestVecReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        DepositionRequestVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        DepositRequestVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -5383,8 +5383,8 @@ impl molecule::prelude::Entity for DepositionRequestVec {
     }
 }
 #[derive(Clone, Copy)]
-pub struct DepositionRequestVecReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for DepositionRequestVecReader<'r> {
+pub struct DepositRequestVecReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for DepositRequestVecReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -5393,12 +5393,12 @@ impl<'r> ::core::fmt::LowerHex for DepositionRequestVecReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for DepositionRequestVecReader<'r> {
+impl<'r> ::core::fmt::Debug for DepositRequestVecReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for DepositionRequestVecReader<'r> {
+impl<'r> ::core::fmt::Display for DepositRequestVecReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} [", Self::NAME)?;
         for i in 0..self.len() {
@@ -5411,7 +5411,7 @@ impl<'r> ::core::fmt::Display for DepositionRequestVecReader<'r> {
         write!(f, "]")
     }
 }
-impl<'r> DepositionRequestVecReader<'r> {
+impl<'r> DepositRequestVecReader<'r> {
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -5428,34 +5428,34 @@ impl<'r> DepositionRequestVecReader<'r> {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-    pub fn get(&self, idx: usize) -> Option<DepositionRequestReader<'r>> {
+    pub fn get(&self, idx: usize) -> Option<DepositRequestReader<'r>> {
         if idx >= self.len() {
             None
         } else {
             Some(self.get_unchecked(idx))
         }
     }
-    pub fn get_unchecked(&self, idx: usize) -> DepositionRequestReader<'r> {
+    pub fn get_unchecked(&self, idx: usize) -> DepositRequestReader<'r> {
         let slice = self.as_slice();
         let start_idx = molecule::NUMBER_SIZE * (1 + idx);
         let start = molecule::unpack_number(&slice[start_idx..]) as usize;
         if idx == self.len() - 1 {
-            DepositionRequestReader::new_unchecked(&self.as_slice()[start..])
+            DepositRequestReader::new_unchecked(&self.as_slice()[start..])
         } else {
             let end_idx = start_idx + molecule::NUMBER_SIZE;
             let end = molecule::unpack_number(&slice[end_idx..]) as usize;
-            DepositionRequestReader::new_unchecked(&self.as_slice()[start..end])
+            DepositRequestReader::new_unchecked(&self.as_slice()[start..end])
         }
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for DepositionRequestVecReader<'r> {
-    type Entity = DepositionRequestVec;
-    const NAME: &'static str = "DepositionRequestVecReader";
+impl<'r> molecule::prelude::Reader<'r> for DepositRequestVecReader<'r> {
+    type Entity = DepositRequestVec;
+    const NAME: &'static str = "DepositRequestVecReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        DepositionRequestVecReader(slice)
+        DepositRequestVecReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -5502,35 +5502,32 @@ impl<'r> molecule::prelude::Reader<'r> for DepositionRequestVecReader<'r> {
         for pair in offsets.windows(2) {
             let start = pair[0];
             let end = pair[1];
-            DepositionRequestReader::verify(&slice[start..end], compatible)?;
+            DepositRequestReader::verify(&slice[start..end], compatible)?;
         }
         Ok(())
     }
 }
 #[derive(Debug, Default)]
-pub struct DepositionRequestVecBuilder(pub(crate) Vec<DepositionRequest>);
-impl DepositionRequestVecBuilder {
-    pub fn set(mut self, v: Vec<DepositionRequest>) -> Self {
+pub struct DepositRequestVecBuilder(pub(crate) Vec<DepositRequest>);
+impl DepositRequestVecBuilder {
+    pub fn set(mut self, v: Vec<DepositRequest>) -> Self {
         self.0 = v;
         self
     }
-    pub fn push(mut self, v: DepositionRequest) -> Self {
+    pub fn push(mut self, v: DepositRequest) -> Self {
         self.0.push(v);
         self
     }
-    pub fn extend<T: ::core::iter::IntoIterator<Item = DepositionRequest>>(
-        mut self,
-        iter: T,
-    ) -> Self {
+    pub fn extend<T: ::core::iter::IntoIterator<Item = DepositRequest>>(mut self, iter: T) -> Self {
         for elem in iter {
             self.0.push(elem);
         }
         self
     }
 }
-impl molecule::prelude::Builder for DepositionRequestVecBuilder {
-    type Entity = DepositionRequestVec;
-    const NAME: &'static str = "DepositionRequestVecBuilder";
+impl molecule::prelude::Builder for DepositRequestVecBuilder {
+    type Entity = DepositRequestVec;
+    const NAME: &'static str = "DepositRequestVecBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (self.0.len() + 1)
             + self
@@ -5570,12 +5567,12 @@ impl molecule::prelude::Builder for DepositionRequestVecBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        DepositionRequestVec::new_unchecked(inner.into())
+        DepositRequestVec::new_unchecked(inner.into())
     }
 }
-pub struct DepositionRequestVecIterator(DepositionRequestVec, usize, usize);
-impl ::core::iter::Iterator for DepositionRequestVecIterator {
-    type Item = DepositionRequest;
+pub struct DepositRequestVecIterator(DepositRequestVec, usize, usize);
+impl ::core::iter::Iterator for DepositRequestVecIterator {
+    type Item = DepositRequest;
     fn next(&mut self) -> Option<Self::Item> {
         if self.1 >= self.2 {
             None
@@ -5586,31 +5583,27 @@ impl ::core::iter::Iterator for DepositionRequestVecIterator {
         }
     }
 }
-impl ::core::iter::ExactSizeIterator for DepositionRequestVecIterator {
+impl ::core::iter::ExactSizeIterator for DepositRequestVecIterator {
     fn len(&self) -> usize {
         self.2 - self.1
     }
 }
-impl ::core::iter::IntoIterator for DepositionRequestVec {
-    type Item = DepositionRequest;
-    type IntoIter = DepositionRequestVecIterator;
+impl ::core::iter::IntoIterator for DepositRequestVec {
+    type Item = DepositRequest;
+    type IntoIter = DepositRequestVecIterator;
     fn into_iter(self) -> Self::IntoIter {
         let len = self.len();
-        DepositionRequestVecIterator(self, 0, len)
+        DepositRequestVecIterator(self, 0, len)
     }
 }
-impl<'r> DepositionRequestVecReader<'r> {
-    pub fn iter<'t>(&'t self) -> DepositionRequestVecReaderIterator<'t, 'r> {
-        DepositionRequestVecReaderIterator(&self, 0, self.len())
+impl<'r> DepositRequestVecReader<'r> {
+    pub fn iter<'t>(&'t self) -> DepositRequestVecReaderIterator<'t, 'r> {
+        DepositRequestVecReaderIterator(&self, 0, self.len())
     }
 }
-pub struct DepositionRequestVecReaderIterator<'t, 'r>(
-    &'t DepositionRequestVecReader<'r>,
-    usize,
-    usize,
-);
-impl<'t: 'r, 'r> ::core::iter::Iterator for DepositionRequestVecReaderIterator<'t, 'r> {
-    type Item = DepositionRequestReader<'t>;
+pub struct DepositRequestVecReaderIterator<'t, 'r>(&'t DepositRequestVecReader<'r>, usize, usize);
+impl<'t: 'r, 'r> ::core::iter::Iterator for DepositRequestVecReaderIterator<'t, 'r> {
+    type Item = DepositRequestReader<'t>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.1 >= self.2 {
             None
@@ -5621,7 +5614,7 @@ impl<'t: 'r, 'r> ::core::iter::Iterator for DepositionRequestVecReaderIterator<'
         }
     }
 }
-impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for DepositionRequestVecReaderIterator<'t, 'r> {
+impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for DepositRequestVecReaderIterator<'t, 'r> {
     fn len(&self) -> usize {
         self.2 - self.1
     }
@@ -7140,8 +7133,8 @@ impl molecule::prelude::Builder for BlockInfoBuilder {
     }
 }
 #[derive(Clone)]
-pub struct DepositionLockArgs(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for DepositionLockArgs {
+pub struct DepositLockArgs(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for DepositLockArgs {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -7150,12 +7143,12 @@ impl ::core::fmt::LowerHex for DepositionLockArgs {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for DepositionLockArgs {
+impl ::core::fmt::Debug for DepositLockArgs {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for DepositionLockArgs {
+impl ::core::fmt::Display for DepositLockArgs {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "owner_lock_hash", self.owner_lock_hash())?;
@@ -7168,7 +7161,7 @@ impl ::core::fmt::Display for DepositionLockArgs {
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for DepositionLockArgs {
+impl ::core::default::Default for DepositLockArgs {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             109, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -7176,10 +7169,10 @@ impl ::core::default::Default for DepositionLockArgs {
             0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
-        DepositionLockArgs::new_unchecked(v.into())
+        DepositLockArgs::new_unchecked(v.into())
     }
 }
-impl DepositionLockArgs {
+impl DepositLockArgs {
     pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
@@ -7219,15 +7212,15 @@ impl DepositionLockArgs {
             Uint64::new_unchecked(self.0.slice(start..))
         }
     }
-    pub fn as_reader<'r>(&'r self) -> DepositionLockArgsReader<'r> {
-        DepositionLockArgsReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> DepositLockArgsReader<'r> {
+        DepositLockArgsReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for DepositionLockArgs {
-    type Builder = DepositionLockArgsBuilder;
-    const NAME: &'static str = "DepositionLockArgs";
+impl molecule::prelude::Entity for DepositLockArgs {
+    type Builder = DepositLockArgsBuilder;
+    const NAME: &'static str = "DepositLockArgs";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        DepositionLockArgs(data)
+        DepositLockArgs(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -7236,10 +7229,10 @@ impl molecule::prelude::Entity for DepositionLockArgs {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        DepositionLockArgsReader::from_slice(slice).map(|reader| reader.to_entity())
+        DepositLockArgsReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        DepositionLockArgsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        DepositLockArgsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -7252,8 +7245,8 @@ impl molecule::prelude::Entity for DepositionLockArgs {
     }
 }
 #[derive(Clone, Copy)]
-pub struct DepositionLockArgsReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for DepositionLockArgsReader<'r> {
+pub struct DepositLockArgsReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for DepositLockArgsReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -7262,12 +7255,12 @@ impl<'r> ::core::fmt::LowerHex for DepositionLockArgsReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for DepositionLockArgsReader<'r> {
+impl<'r> ::core::fmt::Debug for DepositLockArgsReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for DepositionLockArgsReader<'r> {
+impl<'r> ::core::fmt::Display for DepositLockArgsReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "owner_lock_hash", self.owner_lock_hash())?;
@@ -7280,7 +7273,7 @@ impl<'r> ::core::fmt::Display for DepositionLockArgsReader<'r> {
         write!(f, " }}")
     }
 }
-impl<'r> DepositionLockArgsReader<'r> {
+impl<'r> DepositLockArgsReader<'r> {
     pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
@@ -7321,14 +7314,14 @@ impl<'r> DepositionLockArgsReader<'r> {
         }
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for DepositionLockArgsReader<'r> {
-    type Entity = DepositionLockArgs;
-    const NAME: &'static str = "DepositionLockArgsReader";
+impl<'r> molecule::prelude::Reader<'r> for DepositLockArgsReader<'r> {
+    type Entity = DepositLockArgs;
+    const NAME: &'static str = "DepositLockArgsReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        DepositionLockArgsReader(slice)
+        DepositLockArgsReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -7379,12 +7372,12 @@ impl<'r> molecule::prelude::Reader<'r> for DepositionLockArgsReader<'r> {
     }
 }
 #[derive(Debug, Default)]
-pub struct DepositionLockArgsBuilder {
+pub struct DepositLockArgsBuilder {
     pub(crate) owner_lock_hash: Byte32,
     pub(crate) layer2_lock: Script,
     pub(crate) cancel_timeout: Uint64,
 }
-impl DepositionLockArgsBuilder {
+impl DepositLockArgsBuilder {
     pub const FIELD_COUNT: usize = 3;
     pub fn owner_lock_hash(mut self, v: Byte32) -> Self {
         self.owner_lock_hash = v;
@@ -7399,9 +7392,9 @@ impl DepositionLockArgsBuilder {
         self
     }
 }
-impl molecule::prelude::Builder for DepositionLockArgsBuilder {
-    type Entity = DepositionLockArgs;
-    const NAME: &'static str = "DepositionLockArgsBuilder";
+impl molecule::prelude::Builder for DepositLockArgsBuilder {
+    type Entity = DepositLockArgs;
+    const NAME: &'static str = "DepositLockArgsBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.owner_lock_hash.as_slice().len()
@@ -7430,7 +7423,7 @@ impl molecule::prelude::Builder for DepositionLockArgsBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        DepositionLockArgs::new_unchecked(inner.into())
+        DepositLockArgs::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -7452,23 +7445,18 @@ impl ::core::fmt::Debug for CustodianLockArgs {
 impl ::core::fmt::Display for CustodianLockArgs {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "deposit_lock_args", self.deposit_lock_args())?;
         write!(
             f,
-            "{}: {}",
-            "deposition_lock_args",
-            self.deposition_lock_args()
+            ", {}: {}",
+            "deposit_block_hash",
+            self.deposit_block_hash()
         )?;
         write!(
             f,
             ", {}: {}",
-            "deposition_block_hash",
-            self.deposition_block_hash()
-        )?;
-        write!(
-            f,
-            ", {}: {}",
-            "deposition_block_number",
-            self.deposition_block_number()
+            "deposit_block_number",
+            self.deposit_block_number()
         )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -7508,19 +7496,19 @@ impl CustodianLockArgs {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn deposition_lock_args(&self) -> DepositionLockArgs {
+    pub fn deposit_lock_args(&self) -> DepositLockArgs {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        DepositionLockArgs::new_unchecked(self.0.slice(start..end))
+        DepositLockArgs::new_unchecked(self.0.slice(start..end))
     }
-    pub fn deposition_block_hash(&self) -> Byte32 {
+    pub fn deposit_block_hash(&self) -> Byte32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Byte32::new_unchecked(self.0.slice(start..end))
     }
-    pub fn deposition_block_number(&self) -> Uint64 {
+    pub fn deposit_block_number(&self) -> Uint64 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
@@ -7557,9 +7545,9 @@ impl molecule::prelude::Entity for CustodianLockArgs {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .deposition_lock_args(self.deposition_lock_args())
-            .deposition_block_hash(self.deposition_block_hash())
-            .deposition_block_number(self.deposition_block_number())
+            .deposit_lock_args(self.deposit_lock_args())
+            .deposit_block_hash(self.deposit_block_hash())
+            .deposit_block_number(self.deposit_block_number())
     }
 }
 #[derive(Clone, Copy)]
@@ -7581,23 +7569,18 @@ impl<'r> ::core::fmt::Debug for CustodianLockArgsReader<'r> {
 impl<'r> ::core::fmt::Display for CustodianLockArgsReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "deposit_lock_args", self.deposit_lock_args())?;
         write!(
             f,
-            "{}: {}",
-            "deposition_lock_args",
-            self.deposition_lock_args()
+            ", {}: {}",
+            "deposit_block_hash",
+            self.deposit_block_hash()
         )?;
         write!(
             f,
             ", {}: {}",
-            "deposition_block_hash",
-            self.deposition_block_hash()
-        )?;
-        write!(
-            f,
-            ", {}: {}",
-            "deposition_block_number",
-            self.deposition_block_number()
+            "deposit_block_number",
+            self.deposit_block_number()
         )?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -7624,19 +7607,19 @@ impl<'r> CustodianLockArgsReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn deposition_lock_args(&self) -> DepositionLockArgsReader<'r> {
+    pub fn deposit_lock_args(&self) -> DepositLockArgsReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        DepositionLockArgsReader::new_unchecked(&self.as_slice()[start..end])
+        DepositLockArgsReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn deposition_block_hash(&self) -> Byte32Reader<'r> {
+    pub fn deposit_block_hash(&self) -> Byte32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Byte32Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn deposition_block_number(&self) -> Uint64Reader<'r> {
+    pub fn deposit_block_number(&self) -> Uint64Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
@@ -7698,7 +7681,7 @@ impl<'r> molecule::prelude::Reader<'r> for CustodianLockArgsReader<'r> {
         if offsets.windows(2).any(|i| i[0] > i[1]) {
             return ve!(Self, OffsetsNotMatch);
         }
-        DepositionLockArgsReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        DepositLockArgsReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         Byte32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Uint64Reader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
@@ -7706,22 +7689,22 @@ impl<'r> molecule::prelude::Reader<'r> for CustodianLockArgsReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct CustodianLockArgsBuilder {
-    pub(crate) deposition_lock_args: DepositionLockArgs,
-    pub(crate) deposition_block_hash: Byte32,
-    pub(crate) deposition_block_number: Uint64,
+    pub(crate) deposit_lock_args: DepositLockArgs,
+    pub(crate) deposit_block_hash: Byte32,
+    pub(crate) deposit_block_number: Uint64,
 }
 impl CustodianLockArgsBuilder {
     pub const FIELD_COUNT: usize = 3;
-    pub fn deposition_lock_args(mut self, v: DepositionLockArgs) -> Self {
-        self.deposition_lock_args = v;
+    pub fn deposit_lock_args(mut self, v: DepositLockArgs) -> Self {
+        self.deposit_lock_args = v;
         self
     }
-    pub fn deposition_block_hash(mut self, v: Byte32) -> Self {
-        self.deposition_block_hash = v;
+    pub fn deposit_block_hash(mut self, v: Byte32) -> Self {
+        self.deposit_block_hash = v;
         self
     }
-    pub fn deposition_block_number(mut self, v: Uint64) -> Self {
-        self.deposition_block_number = v;
+    pub fn deposit_block_number(mut self, v: Uint64) -> Self {
+        self.deposit_block_number = v;
         self
     }
 }
@@ -7730,26 +7713,26 @@ impl molecule::prelude::Builder for CustodianLockArgsBuilder {
     const NAME: &'static str = "CustodianLockArgsBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.deposition_lock_args.as_slice().len()
-            + self.deposition_block_hash.as_slice().len()
-            + self.deposition_block_number.as_slice().len()
+            + self.deposit_lock_args.as_slice().len()
+            + self.deposit_block_hash.as_slice().len()
+            + self.deposit_block_number.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
-        total_size += self.deposition_lock_args.as_slice().len();
+        total_size += self.deposit_lock_args.as_slice().len();
         offsets.push(total_size);
-        total_size += self.deposition_block_hash.as_slice().len();
+        total_size += self.deposit_block_hash.as_slice().len();
         offsets.push(total_size);
-        total_size += self.deposition_block_number.as_slice().len();
+        total_size += self.deposit_block_number.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.deposition_lock_args.as_slice())?;
-        writer.write_all(self.deposition_block_hash.as_slice())?;
-        writer.write_all(self.deposition_block_number.as_slice())?;
+        writer.write_all(self.deposit_lock_args.as_slice())?;
+        writer.write_all(self.deposit_block_hash.as_slice())?;
+        writer.write_all(self.deposit_block_number.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -7778,12 +7761,7 @@ impl ::core::fmt::Debug for UnlockCustodianViaRevertWitness {
 impl ::core::fmt::Display for UnlockCustodianViaRevertWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(
-            f,
-            "{}: {}",
-            "deposition_lock_hash",
-            self.deposition_lock_hash()
-        )?;
+        write!(f, "{}: {}", "deposit_lock_hash", self.deposit_lock_hash())?;
         write!(f, " }}")
     }
 }
@@ -7800,7 +7778,7 @@ impl UnlockCustodianViaRevertWitness {
     pub const TOTAL_SIZE: usize = 32;
     pub const FIELD_SIZES: [usize; 1] = [32];
     pub const FIELD_COUNT: usize = 1;
-    pub fn deposition_lock_hash(&self) -> Byte32 {
+    pub fn deposit_lock_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
     pub fn as_reader<'r>(&'r self) -> UnlockCustodianViaRevertWitnessReader<'r> {
@@ -7830,7 +7808,7 @@ impl molecule::prelude::Entity for UnlockCustodianViaRevertWitness {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder().deposition_lock_hash(self.deposition_lock_hash())
+        Self::new_builder().deposit_lock_hash(self.deposit_lock_hash())
     }
 }
 #[derive(Clone, Copy)]
@@ -7852,12 +7830,7 @@ impl<'r> ::core::fmt::Debug for UnlockCustodianViaRevertWitnessReader<'r> {
 impl<'r> ::core::fmt::Display for UnlockCustodianViaRevertWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(
-            f,
-            "{}: {}",
-            "deposition_lock_hash",
-            self.deposition_lock_hash()
-        )?;
+        write!(f, "{}: {}", "deposit_lock_hash", self.deposit_lock_hash())?;
         write!(f, " }}")
     }
 }
@@ -7865,7 +7838,7 @@ impl<'r> UnlockCustodianViaRevertWitnessReader<'r> {
     pub const TOTAL_SIZE: usize = 32;
     pub const FIELD_SIZES: [usize; 1] = [32];
     pub const FIELD_COUNT: usize = 1;
-    pub fn deposition_lock_hash(&self) -> Byte32Reader<'r> {
+    pub fn deposit_lock_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
 }
@@ -7892,14 +7865,14 @@ impl<'r> molecule::prelude::Reader<'r> for UnlockCustodianViaRevertWitnessReader
 }
 #[derive(Debug, Default)]
 pub struct UnlockCustodianViaRevertWitnessBuilder {
-    pub(crate) deposition_lock_hash: Byte32,
+    pub(crate) deposit_lock_hash: Byte32,
 }
 impl UnlockCustodianViaRevertWitnessBuilder {
     pub const TOTAL_SIZE: usize = 32;
     pub const FIELD_SIZES: [usize; 1] = [32];
     pub const FIELD_COUNT: usize = 1;
-    pub fn deposition_lock_hash(mut self, v: Byte32) -> Self {
-        self.deposition_lock_hash = v;
+    pub fn deposit_lock_hash(mut self, v: Byte32) -> Self {
+        self.deposit_lock_hash = v;
         self
     }
 }
@@ -7910,7 +7883,7 @@ impl molecule::prelude::Builder for UnlockCustodianViaRevertWitnessBuilder {
         Self::TOTAL_SIZE
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        writer.write_all(self.deposition_lock_hash.as_slice())?;
+        writer.write_all(self.deposit_lock_hash.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

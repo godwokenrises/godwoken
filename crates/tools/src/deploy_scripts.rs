@@ -25,8 +25,8 @@ pub const TYPE_ID_CODE_HASH: H256 = h256!("0x545950455f4944");
 pub struct Programs {
     // path: godwoken-scripts/build/release/custodian-lock
     pub custodian_lock: PathBuf,
-    // path: godwoken-scripts/build/release/deposition-lock
-    pub deposition_lock: PathBuf,
+    // path: godwoken-scripts/build/release/deposit-lock
+    pub deposit_lock: PathBuf,
     // path: godwoken-scripts/build/release/withdrawal-lock
     pub withdrawal_lock: PathBuf,
     // path: godwoken-scripts/build/release/challenge-lock
@@ -69,7 +69,7 @@ pub struct DeployItem {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 pub struct ScriptsDeploymentResult {
     pub custodian_lock: DeployItem,
-    pub deposition_lock: DeployItem,
+    pub deposit_lock: DeployItem,
     pub withdrawal_lock: DeployItem,
     pub challenge_lock: DeployItem,
     pub stake_lock: DeployItem,
@@ -254,7 +254,7 @@ pub fn deploy_scripts(
     let mut total_file_size = 0;
     for path in &[
         &deployment_index.programs.custodian_lock,
-        &deployment_index.programs.deposition_lock,
+        &deployment_index.programs.deposit_lock,
         &deployment_index.programs.withdrawal_lock,
         &deployment_index.programs.challenge_lock,
         &deployment_index.programs.stake_lock,
@@ -289,10 +289,10 @@ pub fn deploy_scripts(
         &target_lock,
         &target_address,
     )?;
-    let deposition_lock = deploy_program(
+    let deposit_lock = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.deposition_lock,
+        &deployment_index.programs.deposit_lock,
         &target_lock,
         &target_address,
     )?;
@@ -376,7 +376,7 @@ pub fn deploy_scripts(
     )?;
     let deployment_result = ScriptsDeploymentResult {
         custodian_lock,
-        deposition_lock,
+        deposit_lock,
         withdrawal_lock,
         challenge_lock,
         stake_lock,

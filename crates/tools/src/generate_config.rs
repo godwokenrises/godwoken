@@ -79,7 +79,7 @@ pub fn generate_config(
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let deposit_cell_lock_dep = {
-        let dep: ckb_types::packed::CellDep = scripts.deposition_lock.cell_dep.clone().into();
+        let dep: ckb_types::packed::CellDep = scripts.deposit_lock.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let stake_cell_lock_dep = {

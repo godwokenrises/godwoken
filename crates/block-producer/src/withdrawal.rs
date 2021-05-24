@@ -12,8 +12,8 @@ use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     packed::{
-        CellDep, CellInput, CellOutput, CustodianLockArgs, DepositionLockArgs, GlobalState,
-        L2Block, RollupAction, RollupActionUnion, Script, UnlockWithdrawalViaRevert,
+        CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, GlobalState, L2Block,
+        RollupAction, RollupActionUnion, Script, UnlockWithdrawalViaRevert,
         UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion, WithdrawalLockArgs,
         WithdrawalRequest, WitnessArgs,
     },
@@ -399,13 +399,13 @@ pub async fn revert(
     let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
     for (idx, withdrawal) in reverted_withdrawal_cells.into_iter().enumerate() {
         let custodian_lock = {
-            let deposition_lock_args = DepositionLockArgs::new_builder()
+            let deposit_lock_args = DepositLockArgs::new_builder()
                 .owner_lock_hash(rollup_context.rollup_script_hash.pack())
                 .cancel_timeout((idx as u64 + timestamp).pack())
                 .build();
 
             let custodian_lock_args = CustodianLockArgs::new_builder()
-                .deposition_lock_args(deposition_lock_args)
+                .deposit_lock_args(deposit_lock_args)
                 .build();
 
             let lock_args: Bytes = rollup_type_hash

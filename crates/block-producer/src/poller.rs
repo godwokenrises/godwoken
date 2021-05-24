@@ -13,8 +13,7 @@ use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     packed::{
-        CellOutput, DepositionLockArgs, DepositionRequest, L2BlockCommittedInfo, Script,
-        Transaction,
+        CellOutput, DepositLockArgs, DepositRequest, L2BlockCommittedInfo, Script, Transaction,
     },
     prelude::*,
 };
@@ -149,9 +148,9 @@ impl ChainUpdater {
         )?;
         let header_view =
             header_view.ok_or_else(|| anyhow::anyhow!("Cannot locate block: {:x}", block_hash))?;
-        let requests = self.extract_deposition_requests(&tx).await?;
+        let requests = self.extract_deposit_requests(&tx).await?;
         let context = L1ActionContext::SubmitTxs {
-            deposition_requests: requests,
+            deposit_requests: requests,
         };
         let l2block_committed_info = L2BlockCommittedInfo::new_builder()
             .number(header_view.inner.number.value().pack())
@@ -179,10 +178,10 @@ impl ChainUpdater {
         Ok(())
     }
 
-    async fn extract_deposition_requests(
+    async fn extract_deposit_requests(
         &self,
         tx: &Transaction,
-    ) -> anyhow::Result<Vec<DepositionRequest>> {
+    ) -> anyhow::Result<Vec<DepositRequest>> {
         let mut results = vec![];
         for input in tx.raw().inputs().into_iter() {
             // Load cell denoted by the transaction input
@@ -214,25 +213,23 @@ impl ChainUpdater {
                 .get(index)
                 .ok_or_else(|| anyhow::anyhow!("OutPoint index out of bound"))?;
 
-            // Check if loaded cell is a deposition request
-            if let Some(deposition_request) = try_parse_deposition_request(
-                &cell_output,
-                &cell_data.unpack(),
-                &self.rollup_context,
-            ) {
-                results.push(deposition_request);
+            // Check if loaded cell is a deposit request
+            if let Some(deposit_request) =
+                try_parse_deposit_request(&cell_output, &cell_data.unpack(), &self.rollup_context)
+            {
+                results.push(deposit_request);
             }
         }
         Ok(results)
     }
 }
 
-fn try_parse_deposition_request(
+fn try_parse_deposit_request(
     cell_output: &CellOutput,
     cell_data: &Bytes,
     rollup_context: &RollupContext,
-) -> Option<DepositionRequest> {
-    if cell_output.lock().code_hash() != rollup_context.rollup_config.deposition_script_type_hash()
+) -> Option<DepositRequest> {
+    if cell_output.lock().code_hash() != rollup_context.rollup_config.deposit_script_type_hash()
         || cell_output.lock().hash_type() != ScriptHashType::Type.into()
     {
         return None;
@@ -245,7 +242,7 @@ fn try_parse_deposition_request(
     if args.slice(0..32) != rollup_type_script_hash[..] {
         return None;
     }
-    let lock_args = match DepositionLockArgs::from_slice(&args.slice(32..)) {
+    let lock_args = match DepositLockArgs::from_slice(&args.slice(32..)) {
         Ok(lock_args) => lock_args,
         Err(_) => return None,
     };
@@ -263,11 +260,11 @@ fn try_parse_deposition_request(
         None => (0u128, [0u8; 32]),
     };
     let capacity: u64 = cell_output.capacity().unpack();
-    let deposition_request = DepositionRequest::new_builder()
+    let deposit_request = DepositRequest::new_builder()
         .capacity(capacity.pack())
         .amount(amount.pack())
         .sudt_script_hash(sudt_script_hash.pack())
         .script(lock_args.layer2_lock())
         .build();
-    Some(deposition_request)
+    Some(deposit_request)
 }

@@ -1,6 +1,6 @@
 use crate::sudt::build_l2_sudt_script;
 use crate::{
-    error::{AccountError, DepositionError, Error, WithdrawalError},
+    error::{AccountError, DepositError, Error, WithdrawalError},
     RollupContext,
 };
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS};
@@ -9,17 +9,17 @@ use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     offchain::RunResult,
-    packed::{AccountMerkleState, DepositionRequest, Script, WithdrawalReceipt, WithdrawalRequest},
+    packed::{AccountMerkleState, DepositRequest, Script, WithdrawalReceipt, WithdrawalRequest},
     prelude::*,
 };
 
 pub trait StateExt {
     fn create_account_from_script(&mut self, script: Script) -> Result<u32, Error>;
     fn apply_run_result(&mut self, run_result: &RunResult) -> Result<(), Error>;
-    fn apply_deposition_request(
+    fn apply_deposit_request(
         &mut self,
         ctx: &RollupContext,
-        deposition_request: &DepositionRequest,
+        deposit_request: &DepositRequest,
     ) -> Result<(), Error>;
 
     fn apply_withdrawal_request(
@@ -28,13 +28,13 @@ pub trait StateExt {
         withdrawal_request: &WithdrawalRequest,
     ) -> Result<WithdrawalReceipt, Error>;
 
-    fn apply_deposition_requests(
+    fn apply_deposit_requests(
         &mut self,
         ctx: &RollupContext,
-        deposition_requests: &[DepositionRequest],
+        deposit_requests: &[DepositRequest],
     ) -> Result<(), Error> {
-        for request in deposition_requests {
-            self.apply_deposition_request(ctx, request)?;
+        for request in deposit_requests {
+            self.apply_deposit_request(ctx, request)?;
         }
         Ok(())
     }
@@ -85,10 +85,10 @@ impl<S: State + CodeStore> StateExt for S {
         Ok(())
     }
 
-    fn apply_deposition_request(
+    fn apply_deposit_request(
         &mut self,
         ctx: &RollupContext,
-        request: &DepositionRequest,
+        request: &DepositRequest,
     ) -> Result<(), Error> {
         // find or create user account
         let account_script_hash = request.script().hash();
@@ -115,14 +115,14 @@ impl<S: State + CodeStore> StateExt for S {
                     self.create_account(l2_sudt_script_hash.into())?
                 }
             };
-            // prevent fake CKB SUDT, the caller should filter these invalid depositions
+            // prevent fake CKB SUDT, the caller should filter these invalid deposits
             if sudt_id == CKB_SUDT_ACCOUNT_ID {
                 return Err(AccountError::InvalidSUDTOperation.into());
             }
             // mint SUDT
             self.mint_sudt(sudt_id, id, amount)?;
         } else if amount != 0 {
-            return Err(DepositionError::DepositFakedCKB.into());
+            return Err(DepositError::DepositFakedCKB.into());
         }
 
         Ok(())

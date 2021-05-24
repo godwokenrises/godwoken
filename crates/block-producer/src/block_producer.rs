@@ -23,7 +23,7 @@ use gw_types::{
     bytes::Bytes,
     core::{DepType, ScriptHashType},
     packed::{
-        Byte32, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositionLockArgs, GlobalState,
+        Byte32, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, GlobalState,
         L2Block, OutPoint, OutPointVec, RollupAction, RollupActionUnion, RollupSubmitBlock, Script,
         Transaction, WitnessArgs,
     },
@@ -48,15 +48,15 @@ fn generate_custodian_cells(
         .iter()
         .map(|deposit_info| {
             let lock_args: Bytes = {
-                let deposition_lock_args = {
+                let deposit_lock_args = {
                     let lock_args: Bytes = deposit_info.cell.output.lock().args().unpack();
-                    DepositionLockArgs::new_unchecked(lock_args.slice(32..))
+                    DepositLockArgs::new_unchecked(lock_args.slice(32..))
                 };
 
                 let custodian_lock_args = CustodianLockArgs::new_builder()
-                    .deposition_block_hash(block_hash.clone())
-                    .deposition_block_number(block_number.clone())
-                    .deposition_lock_args(deposition_lock_args)
+                    .deposit_block_hash(block_hash.clone())
+                    .deposit_block_number(block_number.clone())
+                    .deposit_lock_args(deposit_lock_args)
                     .build();
 
                 let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
@@ -329,7 +329,7 @@ impl BlockProducer {
             stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
             timestamp,
             txs,
-            deposition_requests: deposit_cells.iter().map(|d| &d.request).cloned().collect(),
+            deposit_requests: deposit_cells.iter().map(|d| &d.request).cloned().collect(),
             withdrawal_requests,
             parent_block: &parent_block,
             rollup_config_hash: &self.rollup_config_hash,
@@ -445,7 +445,7 @@ impl BlockProducer {
             });
         }
 
-        // Some deposition cells might have type scripts for sUDTs, handle cell deps
+        // Some deposit cells might have type scripts for sUDTs, handle cell deps
         // here.
         let deposit_type_deps: HashSet<CellDep> = {
             // fetch deposit cells deps
@@ -609,12 +609,12 @@ impl BlockProducer {
             // the lock should be correct unless the upstream ckb-indexer has bugs
             {
                 let lock = cell.cell.output.lock();
-                if lock.code_hash() != ctx.rollup_config.deposition_script_type_hash()
+                if lock.code_hash() != ctx.rollup_config.deposit_script_type_hash()
                     || lock.hash_type() != hash_type
                 {
                     log::error!(
                         "Invalid deposit lock, expect code_hash: {}, hash_type: Type, got: {}, {}",
-                        ctx.rollup_config.deposition_script_type_hash(),
+                        ctx.rollup_config.deposit_script_type_hash(),
                         lock.code_hash(),
                         lock.hash_type()
                     );

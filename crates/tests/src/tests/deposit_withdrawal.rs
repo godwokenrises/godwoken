@@ -1,13 +1,13 @@
 use anyhow::Result;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
 use gw_generator::{
-    error::{DepositionError, WithdrawalError},
+    error::{DepositError, WithdrawalError},
     Error,
 };
 use gw_store::state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState};
 use gw_types::{
     core::ScriptHashType,
-    packed::{CellOutput, DepositionRequest, RawWithdrawalRequest, Script, WithdrawalRequest},
+    packed::{CellOutput, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest},
     prelude::*,
 };
 
@@ -24,7 +24,7 @@ fn deposite_to_chain(
     sudt_script_hash: H256,
     amount: u128,
 ) -> Result<()> {
-    let deposition_requests = vec![DepositionRequest::new_builder()
+    let deposit_requests = vec![DepositRequest::new_builder()
         .capacity(capacity.pack())
         .sudt_script_hash(sudt_script_hash.pack())
         .amount(amount.pack())
@@ -32,15 +32,10 @@ fn deposite_to_chain(
         .build()];
     let block_result = {
         let mem_pool = chain.mem_pool().lock();
-        construct_block(chain, &mem_pool, deposition_requests.clone())?
+        construct_block(chain, &mem_pool, deposit_requests.clone())?
     };
     // deposit
-    apply_block_result(
-        chain,
-        rollup_cell.clone(),
-        block_result,
-        deposition_requests,
-    );
+    apply_block_result(chain, rollup_cell.clone(), block_result, deposit_requests);
     Ok(())
 }
 
@@ -72,7 +67,7 @@ fn withdrawal_from_chain(
 }
 
 #[test]
-fn test_deposition_and_withdrawal() {
+fn test_deposit_and_withdrawal() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
     let mut chain = setup_chain(rollup_type_script.clone());
@@ -265,5 +260,5 @@ fn test_deposit_faked_ckb() {
     )
     .unwrap_err();
     let err: Error = err.downcast().unwrap();
-    assert_eq!(err, Error::Deposition(DepositionError::DepositFakedCKB));
+    assert_eq!(err, Error::Deposit(DepositError::DepositFakedCKB));
 }
