@@ -1,7 +1,7 @@
 use crate::RollupContext;
 use ckb_vm::{
     memory::Memory,
-    registers::{A0, A1, A2, A3, A7},
+    registers::{A0, A1, A2, A3, A4, A7},
     Error as VMError, Register, SupportMachine, Syscalls,
 };
 use gw_common::{
@@ -26,6 +26,8 @@ use std::{cmp, convert::TryInto};
 /* Constants */
 // 24KB is max ethereum contract code size
 const MAX_SET_RETURN_DATA_SIZE: u64 = 1024 * 24;
+// 20 Bytes
+const SCRIPT_HASH_PREFIX_LEN: u64 = 20;
 
 /* Syscall numbers */
 const SYS_STORE: u64 = 3051;
@@ -41,6 +43,7 @@ const SYS_LOAD_ACCOUNT_SCRIPT: u64 = 4055;
 const SYS_STORE_DATA: u64 = 4056;
 const SYS_LOAD_DATA: u64 = 4057;
 const SYS_GET_BLOCK_HASH: u64 = 4058;
+const SYS_GET_SCRIPT_HASH_BY_PREFIX: u64 = 4059;
 const SYS_LOG: u64 = 4061;
 const SYS_LOAD_ROLLUP_CONFIG: u64 = 4062;
 /* CKB compatible syscalls */
@@ -48,9 +51,10 @@ const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
 /* Syscall errors */
 pub const SUCCESS: u8 = 0;
-pub const ERROR_DUPLICATED_SCRIPT_HASH: u8 = std::i8::MAX as u8;
-pub const ERROR_UNKNOWN_SCRIPT_CODE_HASH: u8 = 50;
-pub const ERROR_INVALID_CONTRACT_SCRIPT: u8 = 53;
+pub const ERROR_DUPLICATED_SCRIPT_HASH: u8 = 200;
+pub const ERROR_UNKNOWN_SCRIPT_CODE_HASH: u8 = 201;
+pub const ERROR_INVALID_CONTRACT_SCRIPT: u8 = 202;
+pub const ERROR_NOT_FOUND: u8 = 203;
 
 pub(crate) struct L2Syscalls<'a, S, C> {
     pub(crate) chain: &'a C,
@@ -241,13 +245,16 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 let script_hash_addr = machine.registers()[A0].to_u64();
                 let account_id_addr = machine.registers()[A1].to_u64();
                 let script_hash = load_data_h256(machine, script_hash_addr)?;
-                let account_id = self
+                let account_id = match self
                     .get_account_id_by_script_hash(&script_hash)
                     .map_err(|_err| VMError::Unexpected)?
-                    .ok_or_else(|| {
-                        log::error!("returned zero account id");
-                        VMError::Unexpected
-                    })?;
+                {
+                    Some(id) => id,
+                    None => {
+                        machine.set_register(A0, Mac::REG::from_u8(ERROR_NOT_FOUND));
+                        return Ok(true);
+                    }
+                };
                 machine
                     .memory_mut()
                     .store_bytes(account_id_addr, &account_id.to_le_bytes()[..])?;
@@ -303,13 +310,13 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
             SYS_LOAD_DATA => {
                 let data_hash_addr = machine.registers()[A3].to_u64();
                 let data_hash = load_data_h256(machine, data_hash_addr)?;
-                let data = self.get_data(&data_hash).ok_or_else(|| {
-                    log::error!(
-                        "syscall error: data not found by data hash: {:?}",
-                        data_hash
-                    );
-                    VMError::Unexpected
-                })?;
+                let data = match self.get_data(&data_hash) {
+                    Some(data) => data,
+                    None => {
+                        machine.set_register(A0, Mac::REG::from_u8(ERROR_NOT_FOUND));
+                        return Ok(true);
+                    }
+                };
                 store_data(machine, data.as_ref())?;
                 self.result.read_data.insert(data_hash, data.len());
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
@@ -337,6 +344,29 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     // Can not get block hash by number
                     machine.set_register(A0, Mac::REG::from_u8(0xff));
                 }
+                Ok(true)
+            }
+            SYS_GET_SCRIPT_HASH_BY_PREFIX => {
+                // fetch prefix script hash
+                let prefix_addr = machine.registers()[A3].to_u64();
+                let prefix_len = machine.registers()[A4].to_u64();
+                // check prefix len
+                if prefix_len != SCRIPT_HASH_PREFIX_LEN {
+                    return Err(VMError::Unexpected);
+                }
+                let script_hash_prefix = load_bytes(machine, prefix_addr, prefix_len as usize)?;
+                let script_hash = match self
+                    .code_store
+                    .get_script_hash_by_prefix(&script_hash_prefix)
+                {
+                    Some(script_hash) => script_hash,
+                    None => {
+                        machine.set_register(A0, Mac::REG::from_u8(ERROR_NOT_FOUND));
+                        return Ok(true);
+                    }
+                };
+                store_data(machine, script_hash.as_slice())?;
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
             SYS_LOG => {

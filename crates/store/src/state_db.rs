@@ -5,6 +5,7 @@ use anyhow::{anyhow, Result};
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_db::schema::{
     Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_DATA, COLUMN_SCRIPT,
+    COLUMN_SCRIPT_PREFIX,
 };
 use gw_db::{error::Error, iter::DBIter, DBRawIterator, IteratorMode};
 use gw_traits::CodeStore;
@@ -392,12 +393,32 @@ impl<'a, 'db> CodeStore for StateTree<'a, 'db> {
         self.db
             .insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())
             .expect("insert script");
+
+        // build script_hash prefix search index
+        self.db
+            .insert_raw(
+                COLUMN_SCRIPT_PREFIX,
+                &script_hash.as_slice()[..20],
+                script_hash.as_slice(),
+            )
+            .expect("insert script prefix");
     }
 
     fn get_script(&self, script_hash: &H256) -> Option<packed::Script> {
         match self.db.get(COLUMN_SCRIPT, script_hash.as_slice()) {
             Some(slice) => {
                 Some(packed::ScriptReader::from_slice_should_be_ok(&slice.as_ref()).to_entity())
+            }
+            None => None,
+        }
+    }
+
+    fn get_script_hash_by_prefix(&self, script_hash_prefix: &[u8]) -> Option<H256> {
+        match self.db.get(COLUMN_SCRIPT_PREFIX, script_hash_prefix) {
+            Some(slice) => {
+                let mut hash = [0u8; 32];
+                hash.copy_from_slice(&slice.as_ref());
+                Some(hash.into())
             }
             None => None,
         }
