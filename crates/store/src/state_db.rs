@@ -93,10 +93,6 @@ impl CheckPoint {
         }
     }
 
-    pub fn is_genesis(&self) -> bool {
-        0 == self.block_number && SubState::Block == self.sub_state
-    }
-
     pub fn from_block_hash(
         db: &StoreTransaction,
         block_hash: H256,
@@ -176,19 +172,15 @@ impl<'db> StateDBTransaction<'db> {
         checkpoint: CheckPoint,
         mode: StateDBMode,
     ) -> Result<Self, Error> {
-        // Check whether Genesis mode should be used
-        // If genesis block wasn't inserted, will panic on genesis not found
-        if checkpoint.is_genesis() && mode == StateDBMode::Write {
-            return Err(Error::from(
-                "use StateDBMode::Write on genesis checkpoint".to_string(),
-            ));
-        }
-
         Ok(StateDBTransaction {
             inner,
             checkpoint,
             mode,
         })
+    }
+
+    pub fn mode(&self) -> StateDBMode {
+        self.mode
     }
 
     pub fn commit(&self) -> Result<(), Error> {
@@ -238,7 +230,8 @@ impl<'db> StateDBTransaction<'db> {
 
         let account_merkle_state = match self.mode {
             StateDBMode::Genesis => {
-                if !self.checkpoint.is_genesis() {
+                if 0 != self.checkpoint.block_number || SubState::Block != self.checkpoint.sub_state
+                {
                     return Err(Error::from(format!(
                         "invalid check point {:?} for StateDBMode::Genesis",
                         self.checkpoint

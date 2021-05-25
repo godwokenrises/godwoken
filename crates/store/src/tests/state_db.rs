@@ -45,27 +45,19 @@ fn construct_state_db_from_block_hash() {
     let block_hash = raw.hash();
     assert_eq!(0u64, block_number);
 
-    let db = store.begin_transaction();
-    let state_db =
-        StateDBTransaction::from_checkpoint(&db, CheckPoint::from_genesis(), StateDBMode::Write);
-    assert_eq!(
-        state_db.unwrap_err().to_string(),
-        "DB error use StateDBMode::Write on genesis checkpoint"
-    );
-
     let state_checkpoint = CheckPoint::from_genesis();
-    assert_eq!(true, state_checkpoint.is_genesis());
     let db = store.begin_transaction();
     let state_db = StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::Genesis);
     assert!(state_db.is_ok());
+    assert_eq!(true, state_db.unwrap().mode() == StateDBMode::Genesis);
 
     let state_checkpoint =
         CheckPoint::from_block_hash(&db, block_hash.into(), SubState::Block).unwrap();
-    assert_eq!(true, state_checkpoint.is_genesis()); // Since block number is zero
     let db = store.begin_transaction();
     let state_db =
         StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::ReadOnly);
     assert!(state_db.is_ok());
+    assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
 
     let state_checkpoint = CheckPoint::from_block_hash(&db, H256::zero(), SubState::Block);
     assert_eq!(
@@ -74,10 +66,10 @@ fn construct_state_db_from_block_hash() {
     );
 
     let state_checkpoint = CheckPoint::new(block_number.into(), SubState::Tx(0u32));
-    assert_eq!(false, state_checkpoint.is_genesis());
     let db = store.begin_transaction();
     let state_db = StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::Write);
     assert!(state_db.is_ok());
+    assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
 
     let state_checkpoint = CheckPoint::from_block_hash(&db, block_hash.into(), SubState::Tx(1u32));
     assert_eq!(
@@ -133,23 +125,23 @@ fn construct_state_db_from_sub_state() {
     assert_eq!(0u64, block_number);
 
     let state_checkpoint = CheckPoint::new(block_number.into(), SubState::Tx(0u32));
-    assert_eq!(false, state_checkpoint.is_genesis());
     let db = store.begin_transaction();
     let state_db = StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::Write);
     assert!(state_db.is_ok());
+    assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
 
     let state_checkpoint = CheckPoint::new(block_number.into(), SubState::Tx(1u32));
-    assert_eq!(false, state_checkpoint.is_genesis());
     let db = store.begin_transaction();
     let state_db = StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::Write);
     assert!(state_db.is_ok());
+    assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
 
     let state_checkpoint = CheckPoint::new(block_number.into(), SubState::Withdrawal(1u32));
-    assert_eq!(false, state_checkpoint.is_genesis());
     let db = store.begin_transaction();
     let state_db =
         StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::ReadOnly);
     assert!(state_db.is_ok());
+    assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
 
     let state_checkpoint =
         CheckPoint::from_block_hash(&db, block_hash.into(), SubState::Withdrawal(3u32));
