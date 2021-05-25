@@ -33,33 +33,42 @@ pub enum SubState {
 }
 
 impl SubState {
+    fn validate_in_block(&self, block: &L2Block) -> Result<(), Error> {
+        match self {
+            SubState::Withdrawal(index) => {
+                if *index as usize >= block.withdrawals().len() {
+                    return Err(Error::from(format!("invalid {:?} in block", self)));
+                }
+            }
+            SubState::Tx(index) => {
+                if *index as usize >= block.transactions().len() {
+                    return Err(Error::from(format!("invalid {:?} in block", self)));
+                }
+            }
+            _ => (),
+        }
+
+        Ok(())
+    }
+
     fn extract_checkpoint_from_block(&self, block: &L2Block) -> Result<Option<Byte32>, Error> {
         if SubState::Block == *self {
             return Ok(None);
         }
-
-        let withdrawal_len = block.withdrawals().len();
-
-        // Check out of bound
-        if let SubState::Withdrawal(index) = *self {
-            if index as usize >= withdrawal_len {
-                return Err(Error::from(format!("invalid {:?} in block", self)));
-            }
-        }
-        if let SubState::Tx(index) = *self {
-            if index as usize >= block.transactions().len() {
-                return Err(Error::from(format!("invalid {:?} in block", self)));
-            }
-        }
+        self.validate_in_block(block)?;
 
         let checkpoint_idx = match *self {
             SubState::Withdrawal(index) => index as usize,
-            SubState::Tx(index) => withdrawal_len + index as usize,
+            SubState::Tx(index) => block.withdrawals().len() + index as usize,
             _ => return Ok(None),
         };
 
-        let checkpoints = block.raw().state_checkpoint_list();
-        Ok(checkpoints.get(checkpoint_idx))
+        let checkpoint = {
+            let checkpoints = block.raw().state_checkpoint_list();
+            checkpoints.get(checkpoint_idx).expect("checkpoint exists")
+        };
+
+        Ok(Some(checkpoint))
     }
 }
 
@@ -97,7 +106,7 @@ impl CheckPoint {
             .get_block(&block_hash)?
             .ok_or_else(|| anyhow!("block isn't exist"))?;
 
-        let _valid_checkpoint = sub_state.extract_checkpoint_from_block(&block)?;
+        sub_state.validate_in_block(&block)?;
 
         Ok(CheckPoint {
             block_number: block.raw().number().unpack(),
@@ -254,7 +263,8 @@ impl<'db> StateDBTransaction<'db> {
                     Some(checkpoint) => inner_db
                         .get_checkpoint_post_state(&checkpoint)?
                         .ok_or_else(|| "can't find checkpoint".to_string())?,
-                    None => block.raw().post_account(),
+                    None if *sub_state == SubState::Block => block.raw().post_account(),
+                    _ => unreachable!("unknown {:?}", sub_state),
                 }
             }
             StateDBMode::Write => {
@@ -269,20 +279,21 @@ impl<'db> StateDBTransaction<'db> {
                 }
 
                 let block = inner_db
-                    .get_block(&opt_block_hash.expect("block exists"))?
+                    .get_block(&opt_block_hash.expect("block hash exists"))?
                     .ok_or_else(|| "can't find block".to_string())?;
 
                 let sub_state = if block.raw().number().unpack() == self.checkpoint.block_number {
-                    &self.checkpoint.sub_state
+                    self.checkpoint.sub_state.clone()
                 } else {
-                    &SubState::Block
+                    SubState::Block
                 };
 
                 match sub_state.extract_checkpoint_from_block(&block)? {
                     Some(checkpoint) => inner_db
                         .get_checkpoint_post_state(&checkpoint)?
                         .ok_or_else(|| "can't find checkpoint".to_string())?,
-                    None => block.raw().post_account(),
+                    None if sub_state == SubState::Block => block.raw().post_account(),
+                    _ => unreachable!("unknown {:?}", sub_state),
                 }
             }
         };
