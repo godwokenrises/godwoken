@@ -149,12 +149,12 @@ fn main() {
                         .help("The input json file path"),
                 )
                 .arg(
-                    Arg::with_name("tmp-dir-path")
-                        .short("t")
+                    Arg::with_name("repos-dir-path")
+                        .short("r")
                         .takes_value(true)
-                        .default_value("scripts-build-tmp/")
+                        .default_value("scripts-build-repos/")
                         .required(true)
-                        .help("The tmp dir path"),
+                        .help("The repos dir path"),
                 )
                 .arg(
                     Arg::with_name("scripts-dir-path")
@@ -239,13 +239,13 @@ fn main() {
         ("prepare-scripts", Some(m)) => {
             let mode = value_t!(m, "mode", prepare_scripts::ScriptsBuildMode).unwrap();
             let input_path = Path::new(m.value_of("input-path").unwrap());
-            let tmp_dir = Path::new(m.value_of("tmp-dir-path").unwrap());
+            let repos_dir = Path::new(m.value_of("repos-dir-path").unwrap());
             let scripts_dir = Path::new(m.value_of("scripts-dir-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
             if let Err(err) = prepare_scripts::prepare_scripts(
                 mode,
                 input_path,
-                tmp_dir,
+                repos_dir,
                 scripts_dir,
                 output_path,
             ) {
