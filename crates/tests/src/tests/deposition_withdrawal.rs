@@ -4,7 +4,7 @@ use gw_generator::{
     error::{DepositionError, WithdrawalError},
     Error,
 };
-use gw_store::state_db::{StateDBTransaction, StateDBVersion};
+use gw_store::state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState};
 use gw_types::{
     core::ScriptHashType,
     packed::{CellOutput, DepositionRequest, RawWithdrawalRequest, Script, WithdrawalRequest},
@@ -103,9 +103,10 @@ fn test_deposition_and_withdrawal() {
     let (user_id, ckb_balance) = {
         let tip_block_hash = chain.store().get_tip_block_hash().unwrap();
         let db = chain.store().begin_transaction();
-        let state_db = StateDBTransaction::from_version(
+        let state_db = StateDBTransaction::from_checkpoint(
             &db,
-            StateDBVersion::from_history_state(&db, tip_block_hash, None).unwrap(),
+            CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block).unwrap(),
+            StateDBMode::ReadOnly,
         )
         .unwrap();
         let tree = state_db.account_state_tree().unwrap();
@@ -158,9 +159,10 @@ fn test_deposition_and_withdrawal() {
     // check status
     let tip_block_hash = chain.store().get_tip_block_hash().unwrap();
     let db = chain.store().begin_transaction();
-    let state_db = StateDBTransaction::from_version(
+    let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        StateDBVersion::from_history_state(&db, tip_block_hash, None).unwrap(),
+        CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block).unwrap(),
+        StateDBMode::ReadOnly,
     )
     .unwrap();
     let tree = state_db.account_state_tree().unwrap();

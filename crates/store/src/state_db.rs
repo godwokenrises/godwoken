@@ -18,7 +18,7 @@ use std::{cell::RefCell, collections::HashSet, fmt, mem::size_of_val};
 
 const FLAG_DELETE_VALUE: u8 = 0;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum StateDBMode {
     Genesis,
     ReadOnly,
@@ -33,16 +33,16 @@ pub enum SubState {
 }
 
 impl SubState {
-    fn validate_in_block(&self, block: &L2Block) -> Result<(), Error> {
+    fn validate_in_block(&self, block: &L2Block) -> Result<()> {
         match self {
             SubState::Withdrawal(index) => {
                 if *index as usize >= block.withdrawals().len() {
-                    return Err(Error::from(format!("invalid {:?} in block", self)));
+                    return Err(anyhow!("invalid withdrawal substate index"));
                 }
             }
             SubState::Tx(index) => {
                 if *index as usize >= block.transactions().len() {
-                    return Err(Error::from(format!("invalid {:?} in block", self)));
+                    return Err(anyhow!("invalid tx substate index"));
                 }
             }
             _ => (),
@@ -55,7 +55,7 @@ impl SubState {
         if SubState::Block == *self {
             return Ok(None);
         }
-        self.validate_in_block(block)?;
+        self.validate_in_block(block).map_err(|e| e.to_string())?;
 
         let checkpoint_idx = match *self {
             SubState::Withdrawal(index) => index as usize,
@@ -86,7 +86,7 @@ impl CheckPoint {
         }
     }
 
-    pub fn genesis() -> Self {
+    pub fn from_genesis() -> Self {
         Self {
             block_number: 0,
             sub_state: SubState::Block,
@@ -176,6 +176,14 @@ impl<'db> StateDBTransaction<'db> {
         checkpoint: CheckPoint,
         mode: StateDBMode,
     ) -> Result<Self, Error> {
+        // Check whether Genesis mode should be used
+        // If genesis block wasn't inserted, will panic on genesis not found
+        if checkpoint.is_genesis() && mode == StateDBMode::Write {
+            return Err(Error::from(
+                "use StateDBMode::Write on genesis checkpoint".to_string(),
+            ));
+        }
+
         Ok(StateDBTransaction {
             inner,
             checkpoint,
@@ -230,9 +238,9 @@ impl<'db> StateDBTransaction<'db> {
 
         let account_merkle_state = match self.mode {
             StateDBMode::Genesis => {
-                if CheckPoint::genesis() != self.checkpoint {
+                if !self.checkpoint.is_genesis() {
                     return Err(Error::from(format!(
-                        "invalid genesis check point {:?}",
+                        "invalid check point {:?} for StateDBMode::Genesis",
                         self.checkpoint
                     )));
                 }
@@ -332,7 +340,7 @@ impl<'db> StateDBTransaction<'db> {
 
     fn record_block_state(&self, col: Col, raw_key: &[u8]) -> Result<(), Error> {
         // skip genesis
-        if self.checkpoint.is_genesis() {
+        if self.mode == StateDBMode::Genesis {
             return Ok(());
         }
 
