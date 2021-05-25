@@ -158,6 +158,34 @@ fn construct_state_db_from_sub_state() {
 }
 
 #[test]
+fn commit_on_readonly_mode() {
+    let store = Store::open_tmp().unwrap();
+    let store_txn = store.begin_transaction();
+
+    let block = L2Block::default();
+    store_txn
+        .insert_block(
+            block.clone(),
+            L2BlockCommittedInfo::default(),
+            GlobalState::default(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
+    store_txn.commit().unwrap();
+
+    let state_checkpoint = CheckPoint::new(block.raw().number().unpack(), SubState::Block);
+    let db = store.begin_transaction();
+    let state_db =
+        StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::ReadOnly).unwrap();
+    assert_eq!(
+        state_db.commit().unwrap_err().to_string(),
+        "DB error commit on ReadOnly mode"
+    );
+}
+
+#[test]
 fn insert_and_get() {
     let store = Store::open_tmp().unwrap();
 

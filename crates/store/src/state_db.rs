@@ -184,7 +184,11 @@ impl<'db> StateDBTransaction<'db> {
     }
 
     pub fn commit(&self) -> Result<(), Error> {
-        self.inner.commit()
+        if self.mode == StateDBMode::ReadOnly {
+            Err(Error::from("commit on ReadOnly mode".to_string()))
+        } else {
+            self.inner.commit()
+        }
     }
 
     pub fn account_smt_store(&self) -> Result<SMTStore<'_, Self>, Error> {
