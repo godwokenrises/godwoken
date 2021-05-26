@@ -165,14 +165,7 @@ pub struct StateDBTransaction<'db> {
 
 impl<'db> KVStore for StateDBTransaction<'db> {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
-        let raw_key = match self.get_key_with_suffix(key) {
-            Ok(key) => key,
-            Err(e) => {
-                log::debug!("get col {} {:?} {}", col, key, e);
-                return None;
-            }
-        };
-
+        let raw_key = self.get_key_with_suffix(key);
         let mut raw_iter: DBRawIterator = self.inner.get_iter(col, IteratorMode::Start).into();
         raw_iter.seek_for_prev(raw_key);
         self.filter_value_of_seek(key, &raw_iter)
@@ -189,14 +182,14 @@ impl<'db> KVStore for StateDBTransaction<'db> {
             &FLAG_DELETE_VALUE.to_be_bytes(),
             "forbid inserting the delete flag"
         );
-        let raw_key = self.get_key_with_suffix(key)?;
+        let raw_key = self.get_key_with_suffix(key);
         self.inner
             .insert_raw(col, &raw_key, value)
             .and(self.record_block_state(col, &raw_key))
     }
 
     fn delete(&self, col: Col, key: &[u8]) -> Result<(), Error> {
-        let raw_key = self.get_key_with_suffix(key)?;
+        let raw_key = self.get_key_with_suffix(key);
         self.inner
             .insert_raw(col, &raw_key, &FLAG_DELETE_VALUE.to_be_bytes())
             .and(self.record_block_state(col, &raw_key))
@@ -341,18 +334,22 @@ impl<'db> StateDBTransaction<'db> {
         Ok(account_merkle_state)
     }
 
-    fn get_key_with_suffix(&self, key: &[u8]) -> Result<Vec<u8>, Error> {
+    fn get_key_with_suffix(&self, key: &[u8]) -> Vec<u8> {
         let (block_number, index) = self
             .checkpoint
-            .extract_block_number_and_index_number(&self.inner, self.mode)?;
-        Ok([key, &block_number.to_be_bytes(), &index.to_be_bytes()].concat())
+            .extract_block_number_and_index_number(&self.inner, self.mode)
+            .expect("block number and index number");
+
+        [key, &block_number.to_be_bytes(), &index.to_be_bytes()].concat()
     }
 
-    fn get_original_key<'a>(&self, raw_key: &'a [u8]) -> Result<&'a [u8], Error> {
+    fn get_original_key<'a>(&self, raw_key: &'a [u8]) -> &'a [u8] {
         let (block_number, index) = self
             .checkpoint
-            .extract_block_number_and_index_number(&self.inner, self.mode)?;
-        Ok(&raw_key[..raw_key.len() - size_of_val(&block_number) - size_of_val(&index)])
+            .extract_block_number_and_index_number(&self.inner, self.mode)
+            .expect("block number and index number");
+
+        &raw_key[..raw_key.len() - size_of_val(&block_number) - size_of_val(&index)]
     }
 
     fn filter_value_of_seek(&self, ori_key: &[u8], raw_iter: &DBRawIterator) -> Option<Box<[u8]>> {
@@ -361,20 +358,7 @@ impl<'db> StateDBTransaction<'db> {
         }
         match raw_iter.key() {
             Some(raw_key_found) => {
-                let key = match self.get_original_key(raw_key_found) {
-                    Ok(key) => key,
-                    Err(err) => {
-                        log::debug!(
-                            "filter block {} value {:?}: {}",
-                            self.checkpoint.block_number,
-                            ori_key,
-                            err
-                        );
-                        return None;
-                    }
-                };
-
-                if ori_key != key {
+                if ori_key != self.get_original_key(raw_key_found) {
                     return None;
                 }
 
