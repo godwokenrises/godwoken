@@ -13,25 +13,12 @@ use gw_db::{
 };
 use gw_types::packed::AccountMerkleState;
 use gw_types::{
-    packed::{self, Byte32, RollupConfig, TransactionKey},
+    packed::{self, Byte32, RollupConfig, TransactionKey, WithdrawalReceipt},
     prelude::*,
 };
 use std::{borrow::BorrowMut, collections::HashMap};
 
 const NUMBER_OF_CONFIRMATION: u64 = 100;
-
-#[derive(Clone)]
-pub struct WithdrawalReceipt {
-    pub post_state: AccountMerkleState,
-}
-
-impl Default for WithdrawalReceipt {
-    fn default() -> Self {
-        Self {
-            post_state: AccountMerkleState::default(),
-        }
-    }
-}
 
 pub struct StoreTransaction {
     pub(crate) inner: RocksDBTransaction,
@@ -332,7 +319,7 @@ impl StoreTransaction {
         }
 
         let post_states: Vec<AccountMerkleState> = {
-            let withdrawal_post_states = withdrawal_receipts.into_iter().map(|w| w.post_state);
+            let withdrawal_post_states = withdrawal_receipts.into_iter().map(|w| w.post_state());
             let tx_post_states = tx_receipts.iter().map(|t| t.post_state());
             withdrawal_post_states.chain(tx_post_states).collect()
         };

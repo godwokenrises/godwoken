@@ -18,14 +18,13 @@ use gw_common::{
     state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
     H256,
 };
-use gw_store::transaction::WithdrawalReceipt;
 use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     core::{ChallengeTargetType, ScriptHashType},
     offchain::RunResult,
     packed::{
         AccountMerkleState, BlockInfo, ChallengeTarget, DepositionRequest, L2Block, L2Transaction,
-        RawL2Block, RawL2Transaction, TxReceipt, WithdrawalRequest,
+        RawL2Block, RawL2Transaction, TxReceipt, WithdrawalReceipt, WithdrawalRequest,
     },
     prelude::*,
 };

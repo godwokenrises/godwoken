@@ -1,7 +1,7 @@
 use crate::{
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
     traits::KVStore,
-    transaction::{StoreTransaction, WithdrawalReceipt},
+    transaction::StoreTransaction,
     Store,
 };
 use gw_common::{merkle_utils::calculate_state_checkpoint, H256};
@@ -9,7 +9,7 @@ use gw_db::schema::COLUMN_INDEX;
 use gw_types::{
     packed::{
         AccountMerkleState, Byte32, GlobalState, L2Block, L2BlockCommittedInfo, L2Transaction,
-        RawL2Block, TxReceipt, WithdrawalRequest,
+        RawL2Block, TxReceipt, WithdrawalReceipt, WithdrawalRequest,
     },
     prelude::*,
 };

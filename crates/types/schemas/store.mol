@@ -36,6 +36,10 @@ table TxReceipt {
     logs: LogItemVec,
 }
 
+table WithdrawalReceipt {
+    post_state: AccountMerkleState,
+}
+
 table SMTBranchNode {
     fork_height: byte,
     key: Byte32,

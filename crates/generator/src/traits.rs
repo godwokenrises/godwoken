@@ -4,13 +4,12 @@ use crate::{
     RollupContext,
 };
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS};
-use gw_store::transaction::WithdrawalReceipt;
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     offchain::RunResult,
-    packed::{AccountMerkleState, DepositionRequest, Script, WithdrawalRequest},
+    packed::{AccountMerkleState, DepositionRequest, Script, WithdrawalReceipt, WithdrawalRequest},
     prelude::*,
 };
 
@@ -169,6 +168,10 @@ impl<S: State + CodeStore> StateExt for S {
                 .build()
         };
 
-        Ok(WithdrawalReceipt { post_state })
+        let receipt = WithdrawalReceipt::new_builder()
+            .post_state(post_state)
+            .build();
+
+        Ok(receipt)
     }
 }
