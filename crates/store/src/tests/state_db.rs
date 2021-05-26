@@ -5,6 +5,7 @@ use crate::{
     Store,
 };
 use gw_common::{merkle_utils::calculate_state_checkpoint, H256};
+use gw_db::schema::COLUMN_INDEX;
 use gw_types::{
     packed::{
         AccountMerkleState, Byte32, GlobalState, L2Block, L2BlockCommittedInfo, L2Transaction,
@@ -196,6 +197,95 @@ fn commit_on_readonly_mode() {
         state_db.commit().unwrap_err().to_string(),
         "DB error commit on ReadOnly mode"
     );
+}
+
+#[test]
+fn checkpoint_extract_block_number_and_index_number() {
+    let store = Store::open_tmp().unwrap();
+    let block_store = store.begin_transaction();
+
+    let default_state_checkpoint: Byte32 = {
+        let post_state = AccountMerkleState::default();
+        let root: [u8; 32] = post_state.merkle_root().unpack();
+        let checkpoint: [u8; 32] =
+            calculate_state_checkpoint(&root.into(), post_state.count().unpack()).into();
+        checkpoint.pack()
+    };
+
+    let raw_block = RawL2Block::new_builder()
+        .state_checkpoint_list(vec![default_state_checkpoint; 5].pack())
+        .build();
+
+    let block = L2Block::new_builder()
+        .transactions(vec![L2Transaction::default(); 2].pack())
+        .withdrawals(vec![WithdrawalRequest::default(); 3].pack())
+        .raw(raw_block)
+        .build();
+
+    let block_number = block.raw().number().unpack();
+    let block_hash = block.raw().hash();
+    assert_eq!(0u64, block_number);
+
+    block_store
+        .insert_block(
+            block.clone(),
+            L2BlockCommittedInfo::default(),
+            GlobalState::default(),
+            vec![TxReceipt::default(); 2],
+            vec![WithdrawalReceipt::default(); 3],
+            Vec::new(),
+        )
+        .unwrap();
+    block_store
+        .insert_raw(COLUMN_INDEX, 0u64.pack().as_slice(), &block_hash)
+        .unwrap();
+    block_store.commit().unwrap();
+
+    let db = store.begin_transaction();
+
+    let checkpoint = CheckPoint::from_genesis();
+    let maybe_block_idx =
+        checkpoint.do_extract_block_number_and_index_number(&db, StateDBMode::Genesis);
+    assert!(maybe_block_idx.is_ok());
+    assert_eq!(maybe_block_idx.unwrap(), (0, 0));
+
+    let checkpoint = CheckPoint::new(0, SubState::Withdrawal(1));
+    let maybe_block_idx =
+        checkpoint.do_extract_block_number_and_index_number(&db, StateDBMode::ReadOnly);
+    assert!(maybe_block_idx.is_ok());
+    assert_eq!(maybe_block_idx.unwrap(), (0, 1));
+
+    let checkpoint = CheckPoint::new(0, SubState::Tx(1));
+    let maybe_block_idx =
+        checkpoint.do_extract_block_number_and_index_number(&db, StateDBMode::ReadOnly);
+    assert!(maybe_block_idx.is_ok());
+    assert_eq!(maybe_block_idx.unwrap(), (0, 4));
+
+    let checkpoint = CheckPoint::new(1, SubState::Block);
+    let maybe_block_idx =
+        checkpoint.do_extract_block_number_and_index_number(&db, StateDBMode::ReadOnly);
+    assert!(maybe_block_idx.is_ok());
+    assert_eq!(maybe_block_idx.unwrap(), (1, 0));
+
+    let checkpoint = CheckPoint::new(1, SubState::Tx(1));
+    let maybe_block_idx =
+        checkpoint.do_extract_block_number_and_index_number(&db, StateDBMode::ReadOnly);
+    assert_eq!(
+        maybe_block_idx.unwrap_err().to_string(),
+        "DB error can't find block hash"
+    );
+
+    let checkpoint = CheckPoint::new(1, SubState::Withdrawal(1));
+    let maybe_block_idx = checkpoint
+        .do_extract_block_number_and_index_number(&db, StateDBMode::Write(WriteContext::new(2)));
+    assert!(maybe_block_idx.is_ok());
+    assert_eq!(maybe_block_idx.unwrap(), (1, 1));
+
+    let checkpoint = CheckPoint::new(1, SubState::Tx(1));
+    let maybe_block_idx = checkpoint
+        .do_extract_block_number_and_index_number(&db, StateDBMode::Write(WriteContext::new(2)));
+    assert!(maybe_block_idx.is_ok());
+    assert_eq!(maybe_block_idx.unwrap(), (1, 3));
 }
 
 #[test]
