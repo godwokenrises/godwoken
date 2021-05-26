@@ -20,24 +20,18 @@ const FLAG_DELETE_VALUE: u8 = 0;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct WriteContext {
-    pub withdrawal_num: u32,
+    pub tx_offset: u32,
 }
 
 impl WriteContext {
-    pub fn new(withdrawal_num: u32) -> Self {
-        Self { withdrawal_num }
-    }
-
-    pub fn from_block(block: &L2Block) -> Self {
-        Self {
-            withdrawal_num: block.withdrawals().len() as u32,
-        }
+    pub fn new(tx_offset: u32) -> Self {
+        Self { tx_offset }
     }
 }
 
 impl Default for WriteContext {
     fn default() -> Self {
-        Self { withdrawal_num: 0 }
+        Self { tx_offset: 0 }
     }
 }
 
@@ -156,7 +150,7 @@ impl CheckPoint {
 
                     Ok((self.block_number, block.withdrawals().len() as u32 + index))
                 }
-                StateDBMode::Write(ctx) => Ok((self.block_number, ctx.withdrawal_num + index)),
+                StateDBMode::Write(ctx) => Ok((self.block_number, ctx.tx_offset + index)),
             },
             SubState::Block => Ok((self.block_number, 0)),
         }

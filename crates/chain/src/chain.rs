@@ -460,7 +460,7 @@ impl Chain {
         let state_db = StateDBTransaction::from_checkpoint(
             db,
             CheckPoint::new(block_number, SubState::Block),
-            StateDBMode::Write(WriteContext::from_block(&l2block)),
+            StateDBMode::Write(WriteContext::new(l2block.withdrawals().len() as u32)),
         )?;
         let mut tree = state_db.account_state_tree()?;
 
