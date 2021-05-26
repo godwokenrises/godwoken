@@ -11,7 +11,7 @@ use gw_db::{error::Error, iter::DBIter, DBRawIterator, IteratorMode};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
-    packed::{self, AccountMerkleState, Byte32, L2Block},
+    packed::{self, AccountMerkleState, L2Block},
     prelude::*,
 };
 use std::{cell::RefCell, collections::HashSet, fmt, mem::size_of_val};
@@ -51,16 +51,17 @@ impl SubState {
         Ok(())
     }
 
-    fn extract_checkpoint_from_block(&self, block: &L2Block) -> Result<Option<Byte32>, Error> {
-        if SubState::Block == *self {
-            return Ok(None);
-        }
+    fn extract_checkpoint_post_state_from_block(
+        &self,
+        db: &StoreTransaction,
+        block: &L2Block,
+    ) -> Result<AccountMerkleState, Error> {
         self.validate_in_block(block).map_err(|e| e.to_string())?;
 
         let checkpoint_idx = match *self {
             SubState::Withdrawal(index) => index as usize,
             SubState::Tx(index) => block.withdrawals().len() + index as usize,
-            _ => return Ok(None),
+            SubState::Block => return Ok(block.raw().post_account()),
         };
 
         let checkpoint = {
@@ -68,7 +69,8 @@ impl SubState {
             checkpoints.get(checkpoint_idx).expect("checkpoint exists")
         };
 
-        Ok(Some(checkpoint))
+        db.get_checkpoint_post_state(&checkpoint)?
+            .ok_or_else(|| "can't find checkpoint".to_string().into())
     }
 }
 
@@ -263,14 +265,9 @@ impl<'db> StateDBTransaction<'db> {
                         .ok_or_else(|| "can't find block".to_string())?
                 };
 
-                let sub_state = &self.checkpoint.sub_state;
-                match sub_state.extract_checkpoint_from_block(&block)? {
-                    Some(checkpoint) => inner_db
-                        .get_checkpoint_post_state(&checkpoint)?
-                        .ok_or_else(|| "can't find checkpoint".to_string())?,
-                    None if *sub_state == SubState::Block => block.raw().post_account(),
-                    _ => unreachable!("unknown {:?}", sub_state),
-                }
+                self.checkpoint
+                    .sub_state
+                    .extract_checkpoint_post_state_from_block(inner_db, &block)?
             }
             StateDBMode::Write => {
                 let mut last_block_number = self.checkpoint.block_number;
@@ -293,13 +290,7 @@ impl<'db> StateDBTransaction<'db> {
                     SubState::Block
                 };
 
-                match sub_state.extract_checkpoint_from_block(&block)? {
-                    Some(checkpoint) => inner_db
-                        .get_checkpoint_post_state(&checkpoint)?
-                        .ok_or_else(|| "can't find checkpoint".to_string())?,
-                    None if sub_state == SubState::Block => block.raw().post_account(),
-                    _ => unreachable!("unknown {:?}", sub_state),
-                }
+                sub_state.extract_checkpoint_post_state_from_block(inner_db, &block)?
             }
         };
 
