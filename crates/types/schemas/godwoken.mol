@@ -1,8 +1,5 @@
 import blockchain;
 
-option Byte32Opt (Byte32);
-
-array Byte20 [byte; 20];
 array Signature [byte; 65];
 
 struct BlockMerkleState {
