@@ -137,7 +137,7 @@ fn main() {
                     Arg::with_name("mode")
                         .short("m")
                         .takes_value(true)
-                        .default_value("copy")
+                        .default_value("build")
                         .required(true)
                         .help("Scripts generation mode: build or copy"),
                 )
