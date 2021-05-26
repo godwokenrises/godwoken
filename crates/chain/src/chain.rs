@@ -507,8 +507,8 @@ impl Chain {
             l2block.clone(),
             l2block_committed_info,
             global_state,
-            result.receipts,
-            result.post_states,
+            result.tx_receipts,
+            result.withdrawal_receipts,
             deposition_requests,
         )?;
         let rollup_config = &self.generator.rollup_context().rollup_config;

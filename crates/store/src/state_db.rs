@@ -568,7 +568,7 @@ impl<'a, 'db> CodeStore for StateTree<'a, 'db> {
 mod tests {
     use super::{CheckPoint, StateDBMode, SubState, WriteContext};
 
-    use crate::{traits::KVStore, Store};
+    use crate::{traits::KVStore, transaction::WithdrawalReceipt, Store};
 
     use gw_common::merkle_utils::calculate_state_checkpoint;
     use gw_db::schema::COLUMN_INDEX;
@@ -613,7 +613,7 @@ mod tests {
                 L2BlockCommittedInfo::default(),
                 GlobalState::default(),
                 vec![TxReceipt::default(); 2],
-                vec![AccountMerkleState::default(); 5],
+                vec![WithdrawalReceipt::default(); 3],
                 Vec::new(),
             )
             .unwrap();

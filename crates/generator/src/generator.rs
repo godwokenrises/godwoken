@@ -18,6 +18,7 @@ use gw_common::{
     state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
     H256,
 };
+use gw_store::transaction::WithdrawalReceipt;
 use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     core::{ChallengeTargetType, ScriptHashType},
@@ -41,18 +42,14 @@ const MAX_WRITE_DATA_BYTES_LIMIT: usize = 25_000;
 // 2MB
 const MAX_READ_DATA_BYTES_LIMIT: usize = 1024 * 1024 * 2;
 
-pub struct WithdrawalReceipt {
-    pub post_state: AccountMerkleState,
-}
-
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
     pub deposition_requests: Vec<DepositionRequest>,
 }
 
 pub struct StateTransitionResult {
-    pub post_states: Vec<AccountMerkleState>,
-    pub receipts: Vec<TxReceipt>,
+    pub withdrawal_receipts: Vec<WithdrawalReceipt>,
+    pub tx_receipts: Vec<TxReceipt>,
 }
 
 pub struct Generator {
@@ -270,7 +267,7 @@ impl Generator {
         // handle transactions
         let block_info = get_block_info(&raw_block);
         let block_hash = raw_block.hash();
-        let mut receipts = Vec::with_capacity(args.l2block.transactions().len());
+        let mut tx_receipts = Vec::with_capacity(args.l2block.transactions().len());
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
             let raw_tx = tx.raw();
             // check nonce
@@ -329,18 +326,12 @@ impl Generator {
                 )
                 .logs(run_result.logs.pack())
                 .build();
-            receipts.push(tx_receipt);
+            tx_receipts.push(tx_receipt);
         }
 
-        let post_states: Vec<AccountMerkleState> = {
-            let withdrawal_post_states = withdrawal_receipts.into_iter().map(|w| w.post_state);
-            let tx_post_states = receipts.iter().map(|t| t.post_state());
-            withdrawal_post_states.chain(tx_post_states).collect()
-        };
-
         let result = StateTransitionResult {
-            post_states,
-            receipts,
+            withdrawal_receipts,
+            tx_receipts,
         };
 
         Ok(result)

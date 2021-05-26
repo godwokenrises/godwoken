@@ -1,7 +1,7 @@
 use crate::{
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
     traits::KVStore,
-    transaction::StoreTransaction,
+    transaction::{StoreTransaction, WithdrawalReceipt},
     Store,
 };
 use gw_common::{merkle_utils::calculate_state_checkpoint, H256};
@@ -118,7 +118,7 @@ fn construct_state_db_from_sub_state() {
             L2BlockCommittedInfo::default(),
             GlobalState::default(),
             vec![TxReceipt::default(); 2],
-            vec![AccountMerkleState::default(); 5],
+            vec![WithdrawalReceipt::default(); 3],
             Vec::new(),
         )
         .unwrap();

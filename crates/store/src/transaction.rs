@@ -11,6 +11,7 @@ use gw_db::schema::{
 use gw_db::{
     error::Error, iter::DBIter, DBIterator, Direction::Forward, IteratorMode, RocksDBTransaction,
 };
+use gw_types::packed::AccountMerkleState;
 use gw_types::{
     packed::{self, Byte32, RollupConfig, TransactionKey},
     prelude::*,
@@ -18,6 +19,19 @@ use gw_types::{
 use std::{borrow::BorrowMut, collections::HashMap};
 
 const NUMBER_OF_CONFIRMATION: u64 = 100;
+
+#[derive(Clone)]
+pub struct WithdrawalReceipt {
+    pub post_state: AccountMerkleState,
+}
+
+impl Default for WithdrawalReceipt {
+    fn default() -> Self {
+        Self {
+            post_state: AccountMerkleState::default(),
+        }
+    }
+}
 
 pub struct StoreTransaction {
     pub(crate) inner: RocksDBTransaction,
@@ -279,7 +293,7 @@ impl StoreTransaction {
         committed_info: packed::L2BlockCommittedInfo,
         global_state: packed::GlobalState,
         tx_receipts: Vec<packed::TxReceipt>,
-        post_states: Vec<packed::AccountMerkleState>,
+        withdrawal_receipts: Vec<WithdrawalReceipt>,
         deposition_requests: Vec<packed::DepositionRequest>,
     ) -> Result<(), Error> {
         debug_assert_eq!(block.transactions().len(), tx_receipts.len());
@@ -305,7 +319,7 @@ impl StoreTransaction {
         for (index, (tx, tx_receipt)) in block
             .transactions()
             .into_iter()
-            .zip(tx_receipts)
+            .zip(tx_receipts.iter())
             .enumerate()
         {
             let key = TransactionKey::build_transaction_key(block_hash.pack(), index as u32);
@@ -316,6 +330,12 @@ impl StoreTransaction {
                 tx_receipt.as_slice(),
             )?;
         }
+
+        let post_states: Vec<AccountMerkleState> = {
+            let withdrawal_post_states = withdrawal_receipts.into_iter().map(|w| w.post_state);
+            let tx_post_states = tx_receipts.iter().map(|t| t.post_state());
+            withdrawal_post_states.chain(tx_post_states).collect()
+        };
 
         let state_checkpoint_list = block.raw().state_checkpoint_list().into_iter();
         if post_states.len() != state_checkpoint_list.len() {

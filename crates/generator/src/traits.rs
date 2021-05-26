@@ -1,9 +1,10 @@
+use crate::sudt::build_l2_sudt_script;
 use crate::{
     error::{AccountError, DepositionError, Error, WithdrawalError},
     RollupContext,
 };
-use crate::{generator::WithdrawalReceipt, sudt::build_l2_sudt_script};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS};
+use gw_store::transaction::WithdrawalReceipt;
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
