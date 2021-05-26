@@ -1,5 +1,5 @@
 use crate::{
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
     traits::KVStore,
     transaction::StoreTransaction,
     Store,
@@ -19,7 +19,8 @@ fn get_state_db_from_mock_data(
     tx_index: u32,
 ) -> StateDBTransaction {
     let checkpoint = CheckPoint::new(block_number, SubState::Tx(tx_index));
-    StateDBTransaction::from_checkpoint(db, checkpoint, StateDBMode::Write).unwrap()
+    StateDBTransaction::from_checkpoint(db, checkpoint, StateDBMode::Write(WriteContext::new(0)))
+        .unwrap()
 }
 
 #[test]
@@ -67,7 +68,11 @@ fn construct_state_db_from_block_hash() {
 
     let state_checkpoint = CheckPoint::new(block_number.into(), SubState::Tx(0u32));
     let db = store.begin_transaction();
-    let state_db = StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::Write);
+    let state_db = StateDBTransaction::from_checkpoint(
+        &db,
+        state_checkpoint,
+        StateDBMode::Write(WriteContext::new(0)),
+    );
     assert!(state_db.is_ok());
     assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
 
@@ -126,13 +131,21 @@ fn construct_state_db_from_sub_state() {
 
     let state_checkpoint = CheckPoint::new(block_number.into(), SubState::Tx(0u32));
     let db = store.begin_transaction();
-    let state_db = StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::Write);
+    let state_db = StateDBTransaction::from_checkpoint(
+        &db,
+        state_checkpoint,
+        StateDBMode::Write(WriteContext::new(3)),
+    );
     assert!(state_db.is_ok());
     assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
 
     let state_checkpoint = CheckPoint::new(block_number.into(), SubState::Tx(1u32));
     let db = store.begin_transaction();
-    let state_db = StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::Write);
+    let state_db = StateDBTransaction::from_checkpoint(
+        &db,
+        state_checkpoint,
+        StateDBMode::Write(WriteContext::new(3)),
+    );
     assert!(state_db.is_ok());
     assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
 

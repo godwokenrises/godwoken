@@ -6,7 +6,7 @@ use gw_generator::{
 use gw_mem_pool::pool::MemPool;
 use gw_store::{
     chain_view::ChainView,
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
     transaction::StoreTransaction,
     Store,
 };
@@ -460,7 +460,7 @@ impl Chain {
         let state_db = StateDBTransaction::from_checkpoint(
             db,
             CheckPoint::new(block_number, SubState::Block),
-            StateDBMode::Write,
+            StateDBMode::Write(WriteContext::from_block(&l2block)),
         )?;
         let mut tree = state_db.account_state_tree()?;
 

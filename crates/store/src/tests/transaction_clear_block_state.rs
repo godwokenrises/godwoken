@@ -1,5 +1,5 @@
 use crate::{
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
     traits::KVStore,
     Store,
 };
@@ -18,7 +18,7 @@ fn insert_to_state_db(
     let state_db_txn = StateDBTransaction::from_checkpoint(
         &store_txn,
         CheckPoint::new(block_number, SubState::Tx(tx_index)),
-        StateDBMode::Write,
+        StateDBMode::Write(WriteContext::new(0)),
     )
     .unwrap();
     state_db_txn.insert_raw(col, key, value).unwrap();
@@ -30,7 +30,7 @@ fn delete_from_state_db(db: &Store, col: Col, block_number: u64, tx_index: u32, 
     let state_db_txn = StateDBTransaction::from_checkpoint(
         &store_txn,
         CheckPoint::new(block_number, SubState::Tx(tx_index)),
-        StateDBMode::Write,
+        StateDBMode::Write(WriteContext::new(0)),
     )
     .unwrap();
     state_db_txn.delete(col, key).unwrap();
@@ -78,7 +78,7 @@ fn get_from_state_db(
     let state_db = StateDBTransaction::from_checkpoint(
         &store_txn,
         CheckPoint::new(block_number, SubState::Tx(tx_index)),
-        StateDBMode::Write,
+        StateDBMode::Write(WriteContext::new(0)),
     )
     .unwrap();
     state_db.get(col, key)

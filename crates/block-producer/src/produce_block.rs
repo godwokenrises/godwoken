@@ -79,7 +79,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         StateDBTransaction::from_checkpoint(
             &db,
             CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block)?,
-            StateDBMode::Write,
+            StateDBMode::ReadOnly,
         )?
     };
     let mut state = state_db.account_state_tree()?;
