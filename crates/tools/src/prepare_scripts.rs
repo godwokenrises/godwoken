@@ -78,7 +78,7 @@ fn prepare_scripts_in_build_mode(
 fn prepare_scripts_in_copy_mode(prebuild_image: &PathBuf, scripts_dir: &Path) {
     let mut target_dir = env::current_dir().expect("Get working dir failed");
     target_dir.push(scripts_dir);
-    let temp_dir = "temp/";
+    let temp_dir = "temp";
     let volumn_arg = format!("-v{}:/{}", target_dir.display().to_string(), temp_dir);
     run_command(
         "docker",
@@ -135,14 +135,14 @@ fn run_git_clone(repo_url: Url, is_recursive: bool, path: &Path) -> Result<()> {
 }
 
 fn run_git_checkout(repo_relative_path: &Path, commit: &str) -> Result<()> {
-    let git_dir = format!(
-        "--git-dir={}/.git",
-        repo_relative_path.display().to_string()
-    );
-    let work_tree = format!("--work-tree={}", repo_relative_path.display().to_string());
+    let repo_dir = repo_relative_path.display().to_string();
     run_command(
         "git",
-        vec![git_dir.as_ref(), work_tree.as_ref(), "checkout", commit],
+        vec!["-C", &repo_dir, "checkout", commit],
+    )?;
+    run_command(
+        "git",
+        vec!["-C", &repo_dir, "submodule", "update", "--recursive"],
     )
 }
 
