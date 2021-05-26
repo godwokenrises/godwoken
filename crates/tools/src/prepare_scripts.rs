@@ -56,11 +56,7 @@ pub fn prepare_scripts(
     Ok(())
 }
 
-fn prepare_scripts_in_build_mode(
-    repos: Repos,
-    repos_dir: &Path,
-    _scripts_dir: &Path,
-) -> Result<()> {
+fn prepare_scripts_in_build_mode(repos: Repos, repos_dir: &Path, scripts_dir: &Path) -> Result<()> {
     run_pull_code(repos.godwoken_scripts, true, repos_dir, GODWOKEN_SCRIPTS)?;
     run_pull_code(
         repos.godwoken_polyjuice,
@@ -72,14 +68,14 @@ fn prepare_scripts_in_build_mode(
     build_godwoken_scripts(repos_dir, GODWOKEN_SCRIPTS)?;
     build_godwoken_polyjuice(repos_dir, GODWOKEN_POLYJUICE)?;
     build_clerkb(repos_dir, CLERKB)?;
+    copy_scripts_to_target(repos_dir, scripts_dir)?;
     Ok(())
 }
 
 fn prepare_scripts_in_copy_mode(prebuild_image: &PathBuf, scripts_dir: &Path) {
-    let mut target_dir = env::current_dir().expect("Get working dir failed");
-    target_dir.push(scripts_dir);
-    let temp_dir = "temp";
-    let volumn_arg = format!("-v{}:/{}", target_dir.display().to_string(), temp_dir);
+    let current_dir = env::current_dir().expect("Get working dir failed");
+    let target_dir = make_target_dir(&current_dir, &scripts_dir.display().to_string());
+    let volumn_arg = format!("-v{}:/{}", target_dir, "temp");
     run_command(
         "docker",
         vec![
@@ -90,7 +86,7 @@ fn prepare_scripts_in_copy_mode(prebuild_image: &PathBuf, scripts_dir: &Path) {
             "cp",
             "-r",
             "scripts/.",
-            temp_dir,
+            "temp",
         ],
     )
     .expect("Run docker cp failed");
@@ -105,41 +101,32 @@ fn run_pull_code(
     repo_name: &str,
 ) -> Result<()> {
     log::info!("Pull code of {} ...", repo_name);
-
     let commit = repo_url
         .fragment()
         .ok_or_else(|| anyhow::anyhow!("Invalid branch, commit, or tags."))?
         .to_owned();
     repo_url.set_fragment(None);
-
-    let mut target_dir = PathBuf::from(repos_dir);
-    target_dir.push(repo_name);
-
-    if target_dir.exists() && run_git_checkout(&target_dir, &commit).is_ok() {
+    let target_dir = make_target_dir(repos_dir, repo_name);
+    if run_git_checkout(&target_dir, &commit).is_ok() {
         return Ok(());
     }
-    run_command("rm", vec!["-rf", &target_dir.display().to_string()]).expect("Run rm dir failed");
+    run_command("rm", vec!["-rf", &target_dir]).expect("Run rm dir failed");
     fs::create_dir_all(&target_dir).expect("Create dir failed");
     run_git_clone(repo_url, is_recursive, &target_dir).expect("Run git clone failed");
     run_git_checkout(&target_dir, &commit).expect("Run git checkout failed");
     Ok(())
 }
 
-fn run_git_clone(repo_url: Url, is_recursive: bool, path: &Path) -> Result<()> {
-    let path = path.display().to_string();
-    let mut args = vec!["clone", repo_url.as_str(), path.as_str()];
+fn run_git_clone(repo_url: Url, is_recursive: bool, path: &str) -> Result<()> {
+    let mut args = vec!["clone", repo_url.as_str(), path];
     if is_recursive {
         args.push("--recursive");
     }
     run_command("git", args)
 }
 
-fn run_git_checkout(repo_relative_path: &Path, commit: &str) -> Result<()> {
-    let repo_dir = repo_relative_path.display().to_string();
-    run_command(
-        "git",
-        vec!["-C", &repo_dir, "checkout", commit],
-    )?;
+fn run_git_checkout(repo_dir: &str, commit: &str) -> Result<()> {
+    run_command("git", vec!["-C", repo_dir, "checkout", commit])?;
     run_command(
         "git",
         vec!["-C", &repo_dir, "submodule", "update", "--recursive"],
@@ -147,46 +134,69 @@ fn run_git_checkout(repo_relative_path: &Path, commit: &str) -> Result<()> {
 }
 
 fn build_godwoken_scripts(repos_dir: &Path, repo_name: &str) -> Result<()> {
-    let mut target_dir = PathBuf::from(repos_dir);
-    target_dir.push(repo_name);
-    target_dir.push("c");
-    run_command("make", vec!["-C", &target_dir.display().to_string()]).expect("Run make failed");
-
-    target_dir.pop();
+    let repo_dir = make_target_dir(repos_dir, repo_name);
+    let target_dir = format!("{}/c", repo_dir);
+    run_command("make", vec!["-C", &target_dir]).expect("Run make failed");
     run_command_in_dir(
         "capsule",
         vec!["build", "--release", "--debug-output"],
-        &target_dir,
+        &repo_dir,
     )
     .expect("Run capsule build failed");
-
     Ok(())
 }
 
 fn build_godwoken_polyjuice(repos_dir: &Path, repo_name: &str) -> Result<()> {
-    let mut target_dir = PathBuf::from(repos_dir);
-    target_dir.push(repo_name);
-    run_command(
-        "make",
-        vec!["-C", &target_dir.display().to_string(), "all-via-docker"],
-    )
-    .expect("Run make failed");
+    let target_dir = make_target_dir(repos_dir, repo_name);
+    run_command("make", vec!["-C", &target_dir, "all-via-docker"]).expect("Run make failed");
     Ok(())
 }
 
 fn build_clerkb(repos_dir: &Path, repo_name: &str) -> Result<()> {
-    let mut target_dir = PathBuf::from(repos_dir);
-    target_dir.push(repo_name);
-    run_command("yarn", vec!["--cwd", &target_dir.display().to_string()]).expect("Run yarn failed");
-    run_command(
-        "make",
-        vec!["-C", &target_dir.display().to_string(), "all-via-docker"],
-    )
-    .expect("Run make failed");
+    let target_dir = make_target_dir(repos_dir, repo_name);
+    run_command("yarn", vec!["--cwd", &target_dir]).expect("Run yarn failed");
+    run_command("make", vec!["-C", &target_dir, "all-via-docker"]).expect("Run make failed");
     Ok(())
 }
 
-fn run_command_in_dir<I, S>(bin: &str, args: I, target_dir: &Path) -> Result<()>
+fn copy_scripts_to_target(repos_dir: &Path, scripts_dir: &Path) -> Result<()> {
+    // RUN mkdir -p /scripts/godwoken-scripts
+    // cp -a godwoken-scripts/build/release/. /scripts/godwoken-scripts/
+    // cp -a godwoken-scripts/c/build/. /scripts/godwoken-scripts/
+    // cp -a godwoken-scripts/c/build/account_locks/. /scripts/godwoken-scripts/
+    let source_dir = make_target_dir(repos_dir, GODWOKEN_SCRIPTS);
+    let target_dir = make_target_dir(scripts_dir, GODWOKEN_SCRIPTS);
+    run_command("mkdir", vec!["-p", &target_dir])?;
+    let source_file = format!("{}/build/release/.", source_dir);
+    run_command("cp", vec!["-a", &source_file, &target_dir])?;
+    let source_file = format!("{}/c/build/.", source_dir);
+    run_command("cp", vec!["-a", &source_file, &target_dir])?;
+    let source_file = format!("{}/c/build/account_locks/.", source_dir);
+    run_command("cp", vec!["-a", &source_file, &target_dir])?;
+
+    // mkdir -p /scripts/godwoken-polyjuice
+    // cp godwoken-polyjuice/build/generator /scripts/godwoken-polyjuice/
+    // cp godwoken-polyjuice/build/validator /scripts/godwoken-polyjuice/
+    let source_dir = make_target_dir(repos_dir, GODWOKEN_POLYJUICE);
+    let target_dir = make_target_dir(scripts_dir, GODWOKEN_POLYJUICE);
+    run_command("mkdir", vec!["-p", &target_dir])?;
+    let source_file = format!("{}/build/validator", source_dir);
+    run_command("cp", vec![&source_file, &target_dir])?;
+    let source_file = format!("{}/build/generator", source_dir);
+    run_command("cp", vec![&source_file, &target_dir])?;
+
+    // mkdir -p /scripts/clerkb
+    // cp -a clerkb/build/debug/. /scripts/clerkb/
+    let source_dir = make_target_dir(repos_dir, CLERKB);
+    let target_dir = make_target_dir(scripts_dir, CLERKB);
+    run_command("mkdir", vec!["-p", &target_dir])?;
+    let source_file = format!("{}/build/debug/.", source_dir);
+    run_command("cp", vec!["-a", &source_file, &target_dir])?;
+
+    Ok(())
+}
+
+fn run_command_in_dir<I, S>(bin: &str, args: I, target_dir: &str) -> Result<()>
 where
     I: IntoIterator<Item = S> + std::fmt::Debug,
     S: AsRef<OsStr>,
@@ -217,4 +227,10 @@ where
     } else {
         Ok(())
     }
+}
+
+fn make_target_dir(parent_dir_path: &Path, dir_name: &str) -> String {
+    let mut output = PathBuf::from(parent_dir_path);
+    output.push(dir_name);
+    output.display().to_string()
 }
