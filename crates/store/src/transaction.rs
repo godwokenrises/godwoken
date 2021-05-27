@@ -1,7 +1,7 @@
 use crate::{smt_store_impl::SMTStore, traits::KVStore};
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_db::schema::{
-    Col, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSITION_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
+    Col, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
     COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD, COLUMN_CHECKPOINT,
     COLUMN_CUSTODIAN_ASSETS, COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META,
     COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT,
@@ -226,13 +226,13 @@ impl StoreTransaction {
         }
     }
 
-    pub fn get_block_deposition_requests(
+    pub fn get_block_deposit_requests(
         &self,
         block_hash: &H256,
-    ) -> Result<Option<Vec<packed::DepositionRequest>>, Error> {
-        match self.get(COLUMN_BLOCK_DEPOSITION_REQUESTS, block_hash.as_slice()) {
+    ) -> Result<Option<Vec<packed::DepositRequest>>, Error> {
+        match self.get(COLUMN_BLOCK_DEPOSIT_REQUESTS, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::DepositionRequestVecReader::from_slice_should_be_ok(&slice.as_ref())
+                packed::DepositRequestVecReader::from_slice_should_be_ok(&slice.as_ref())
                     .to_entity()
                     .into_iter()
                     .collect(),
@@ -281,7 +281,7 @@ impl StoreTransaction {
         global_state: packed::GlobalState,
         tx_receipts: Vec<packed::TxReceipt>,
         withdrawal_receipts: Vec<WithdrawalReceipt>,
-        deposition_requests: Vec<packed::DepositionRequest>,
+        deposit_requests: Vec<packed::DepositRequest>,
     ) -> Result<(), Error> {
         debug_assert_eq!(block.transactions().len(), tx_receipts.len());
         let block_hash = block.hash();
@@ -296,11 +296,11 @@ impl StoreTransaction {
             &block_hash,
             global_state.as_slice(),
         )?;
-        let deposition_requests_vec: packed::DepositionRequestVec = deposition_requests.pack();
+        let deposit_requests_vec: packed::DepositRequestVec = deposit_requests.pack();
         self.insert_raw(
-            COLUMN_BLOCK_DEPOSITION_REQUESTS,
+            COLUMN_BLOCK_DEPOSIT_REQUESTS,
             &block_hash,
-            deposition_requests_vec.as_slice(),
+            deposit_requests_vec.as_slice(),
         )?;
 
         for (index, (tx, tx_receipt)) in block
@@ -468,7 +468,7 @@ impl StoreTransaction {
                 })?;
 
             let deposit_assets = self
-                .get_block_deposition_requests(&last_finalized_block_hash)?
+                .get_block_deposit_requests(&last_finalized_block_hash)?
                 .expect("finalized deposits")
                 .into_iter()
                 .map(|deposit| CustodianChange {
@@ -544,7 +544,7 @@ impl StoreTransaction {
                 })?;
 
             let deposit_assets = self
-                .get_block_deposition_requests(&last_finalized_block_hash)?
+                .get_block_deposit_requests(&last_finalized_block_hash)?
                 .expect("finalized deposits")
                 .into_iter()
                 .map(|deposit| CustodianChange {

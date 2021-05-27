@@ -36,8 +36,8 @@ pub const COLUMN_NUMBER_HASH: Col = 13;
 pub const COLUMN_SCRIPT: Col = 14;
 /// Column data
 pub const COLUMN_DATA: Col = 15;
-/// Column block deposition requests
-pub const COLUMN_BLOCK_DEPOSITION_REQUESTS: Col = 16;
+/// Column block deposit requests
+pub const COLUMN_BLOCK_DEPOSIT_REQUESTS: Col = 16;
 /// Column custodian assets
 pub const COLUMN_CUSTODIAN_ASSETS: Col = 17;
 /// Column block state record

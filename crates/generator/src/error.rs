@@ -14,8 +14,8 @@ pub enum Error {
     Account(AccountError),
     #[error("Unlock error {0}")]
     Unlock(LockAlgorithmError),
-    #[error("Deposition error {0}")]
-    Deposition(DepositionError),
+    #[error("Deposit error {0}")]
+    Deposit(DepositError),
     #[error("Withdrawal error {0}")]
     Withdrawal(WithdrawalError),
 }
@@ -45,16 +45,16 @@ impl From<LockAlgorithmError> for Error {
 }
 
 #[derive(Error, Debug, PartialEq, Clone, Eq)]
-pub enum DepositionError {
+pub enum DepositError {
     #[error("Deposit faked CKB")]
     DepositFakedCKB,
     #[error("Deposit unknown EoA lock")]
     DepositUnknownEoALock,
 }
 
-impl From<DepositionError> for Error {
-    fn from(err: DepositionError) -> Self {
-        Error::Deposition(err)
+impl From<DepositError> for Error {
+    fn from(err: DepositError) -> Self {
+        Error::Deposit(err)
     }
 }
 

@@ -21,7 +21,7 @@ use gw_store::{
 use gw_types::{
     core::Status,
     packed::{
-        AccountMerkleState, BlockInfo, BlockMerkleState, DepositionRequest, GlobalState, L2Block,
+        AccountMerkleState, BlockInfo, BlockMerkleState, DepositRequest, GlobalState, L2Block,
         L2Transaction, RawL2Block, SubmitTransactions, SubmitWithdrawals, TxReceipt,
         WithdrawalRequest,
     },
@@ -42,7 +42,7 @@ pub struct ProduceBlockParam<'a> {
     pub stake_cell_owner_lock_hash: H256,
     pub timestamp: u64,
     pub txs: Vec<L2Transaction>,
-    pub deposition_requests: Vec<DepositionRequest>,
+    pub deposit_requests: Vec<DepositRequest>,
     pub withdrawal_requests: Vec<WithdrawalRequest>,
     pub parent_block: &'a L2Block,
     pub rollup_config_hash: &'a H256,
@@ -61,7 +61,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         block_producer_id,
         timestamp,
         txs,
-        deposition_requests,
+        deposit_requests,
         withdrawal_requests,
         parent_block,
         rollup_config_hash,
@@ -139,7 +139,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         }
     }
     // update deposits
-    state.apply_deposition_requests(rollup_context, &deposition_requests)?;
+    state.apply_deposit_requests(rollup_context, &deposit_requests)?;
     // calculate state after withdrawals & deposits
     let prev_state_check_point = state.calculate_state_checkpoint()?;
     // execute txs

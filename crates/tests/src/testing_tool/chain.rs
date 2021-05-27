@@ -15,7 +15,7 @@ use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     packed::{
-        CellOutput, DepositionRequest, L2BlockCommittedInfo, RawTransaction, RollupAction,
+        CellOutput, DepositRequest, L2BlockCommittedInfo, RawTransaction, RollupAction,
         RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, Transaction, WitnessArgs,
     },
     prelude::*,
@@ -164,15 +164,13 @@ pub fn apply_block_result(
     chain: &mut Chain,
     rollup_cell: CellOutput,
     block_result: ProduceBlockResult,
-    deposition_requests: Vec<DepositionRequest>,
+    deposit_requests: Vec<DepositRequest>,
 ) {
     let transaction = build_sync_tx(rollup_cell, block_result);
     let l2block_committed_info = L2BlockCommittedInfo::default();
 
     let update = L1Action {
-        context: L1ActionContext::SubmitTxs {
-            deposition_requests,
-        },
+        context: L1ActionContext::SubmitTxs { deposit_requests },
         transaction,
         l2block_committed_info,
     };
@@ -187,7 +185,7 @@ pub fn apply_block_result(
 pub fn construct_block(
     chain: &Chain,
     mem_pool: &MemPool,
-    deposition_requests: Vec<DepositionRequest>,
+    deposit_requests: Vec<DepositRequest>,
 ) -> anyhow::Result<ProduceBlockResult> {
     let block_producer_id = 0u32;
     let timestamp = 0;
@@ -228,7 +226,7 @@ pub fn construct_block(
         stake_cell_owner_lock_hash,
         timestamp,
         txs,
-        deposition_requests,
+        deposit_requests,
         withdrawal_requests,
         parent_block: &parent_block,
         rollup_config_hash: &rollup_config_hash,

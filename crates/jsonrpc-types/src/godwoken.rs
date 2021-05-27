@@ -650,22 +650,22 @@ impl From<packed::GlobalState> for GlobalState {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
-pub struct DepositionRequest {
+pub struct DepositRequest {
     pub script: Script,
     pub sudt_script_hash: H256,
     pub amount: Uint128,
     pub capacity: Uint64,
 }
 
-impl From<DepositionRequest> for packed::DepositionRequest {
-    fn from(json: DepositionRequest) -> packed::DepositionRequest {
-        let DepositionRequest {
+impl From<DepositRequest> for packed::DepositRequest {
+    fn from(json: DepositRequest) -> packed::DepositRequest {
+        let DepositRequest {
             script,
             sudt_script_hash,
             amount,
             capacity,
         } = json;
-        packed::DepositionRequest::new_builder()
+        packed::DepositRequest::new_builder()
             .script(script.into())
             .sudt_script_hash(sudt_script_hash.pack())
             .amount(u128::from(amount).pack())
@@ -674,13 +674,13 @@ impl From<DepositionRequest> for packed::DepositionRequest {
     }
 }
 
-impl From<packed::DepositionRequest> for DepositionRequest {
-    fn from(deposition_request: packed::DepositionRequest) -> DepositionRequest {
-        let amount: u128 = deposition_request.amount().unpack();
-        let capacity: u64 = deposition_request.capacity().unpack();
+impl From<packed::DepositRequest> for DepositRequest {
+    fn from(deposit_request: packed::DepositRequest) -> DepositRequest {
+        let amount: u128 = deposit_request.amount().unpack();
+        let capacity: u64 = deposit_request.capacity().unpack();
         Self {
-            script: deposition_request.script().into(),
-            sudt_script_hash: deposition_request.sudt_script_hash().unpack(),
+            script: deposit_request.script().into(),
+            sudt_script_hash: deposit_request.sudt_script_hash().unpack(),
             amount: amount.into(),
             capacity: capacity.into(),
         }
@@ -806,7 +806,7 @@ impl From<L2BlockCommittedInfo> for packed::L2BlockCommittedInfo {
 pub struct RollupConfig {
     pub l1_sudt_script_type_hash: H256,
     pub custodian_script_type_hash: H256,
-    pub deposition_script_type_hash: H256,
+    pub deposit_script_type_hash: H256,
     pub withdrawal_script_type_hash: H256,
     pub challenge_script_type_hash: H256,
     pub stake_script_type_hash: H256,
@@ -826,7 +826,7 @@ impl From<RollupConfig> for packed::RollupConfig {
         let RollupConfig {
             l1_sudt_script_type_hash,
             custodian_script_type_hash,
-            deposition_script_type_hash,
+            deposit_script_type_hash,
             withdrawal_script_type_hash,
             challenge_script_type_hash,
             stake_script_type_hash,
@@ -848,7 +848,7 @@ impl From<RollupConfig> for packed::RollupConfig {
         packed::RollupConfig::new_builder()
             .l1_sudt_script_type_hash(l1_sudt_script_type_hash.pack())
             .custodian_script_type_hash(custodian_script_type_hash.pack())
-            .deposition_script_type_hash(deposition_script_type_hash.pack())
+            .deposit_script_type_hash(deposit_script_type_hash.pack())
             .withdrawal_script_type_hash(withdrawal_script_type_hash.pack())
             .challenge_script_type_hash(challenge_script_type_hash.pack())
             .stake_script_type_hash(stake_script_type_hash.pack())
@@ -885,7 +885,7 @@ impl From<packed::RollupConfig> for RollupConfig {
         RollupConfig {
             l1_sudt_script_type_hash: data.l1_sudt_script_type_hash().unpack(),
             custodian_script_type_hash: data.custodian_script_type_hash().unpack(),
-            deposition_script_type_hash: data.deposition_script_type_hash().unpack(),
+            deposit_script_type_hash: data.deposit_script_type_hash().unpack(),
             withdrawal_script_type_hash: data.withdrawal_script_type_hash().unpack(),
             challenge_script_type_hash: data.challenge_script_type_hash().unpack(),
             stake_script_type_hash: data.stake_script_type_hash().unpack(),

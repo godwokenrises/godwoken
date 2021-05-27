@@ -14,7 +14,7 @@ use gw_types::{
     bytes::Bytes,
     core::Status,
     packed::{
-        ChallengeTarget, ChallengeWitness, DepositionRequest, GlobalState, L2Block,
+        ChallengeTarget, ChallengeWitness, DepositRequest, GlobalState, L2Block,
         L2BlockCommittedInfo, RollupAction, RollupActionReader, RollupActionUnion, RollupConfig,
         Script, Transaction, TxReceipt, VerifyTransactionWitness, WitnessArgs, WitnessArgsReader,
     },
@@ -38,8 +38,8 @@ pub struct SyncParam {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum L1ActionContext {
     SubmitTxs {
-        /// deposition requests
-        deposition_requests: Vec<DepositionRequest>,
+        /// deposit requests
+        deposit_requests: Vec<DepositRequest>,
     },
     Challenge {
         context: ChallengeTarget,
@@ -218,12 +218,7 @@ impl Chain {
             Status::try_from(status).expect("invalid status")
         };
         let event = match (status, context) {
-            (
-                Status::Running,
-                L1ActionContext::SubmitTxs {
-                    deposition_requests,
-                },
-            ) => {
+            (Status::Running, L1ActionContext::SubmitTxs { deposit_requests }) => {
                 // Submit transactions
                 // parse layer2 block
                 let l2block = parse_l2block(&transaction, &self.rollup_type_script_hash)?;
@@ -233,7 +228,7 @@ impl Chain {
                     l2block,
                     l2block_committed_info.clone(),
                     global_state.clone(),
-                    deposition_requests,
+                    deposit_requests,
                 )? {
                     // stop syncing and return event
                     self.bad_block_context = Some(challenge_context.target.clone());
@@ -317,7 +312,7 @@ impl Chain {
         #[allow(clippy::single_match)]
         match context {
             L1ActionContext::SubmitTxs {
-                deposition_requests: _,
+                deposit_requests: _,
             } => {
                 // parse layer2 block
                 let l2block = parse_l2block(&transaction, &self.rollup_type_script_hash)?;
@@ -436,7 +431,7 @@ impl Chain {
         l2block: L2Block,
         l2block_committed_info: L2BlockCommittedInfo,
         global_state: GlobalState,
-        deposition_requests: Vec<DepositionRequest>,
+        deposit_requests: Vec<DepositRequest>,
     ) -> Result<Option<ChallengeContext>> {
         let tip_number: u64 = self.local_state.tip.raw().number().unpack();
         let tip_block_hash = self.local_state.tip.raw().hash();
@@ -453,7 +448,7 @@ impl Chain {
         // process l2block
         let args = StateTransitionArgs {
             l2block: l2block.clone(),
-            deposition_requests: deposition_requests.clone(),
+            deposit_requests: deposit_requests.clone(),
         };
         let tip_block_hash = self.local_state.tip().hash().into();
         let chain_view = ChainView::new(db, tip_block_hash);
@@ -509,7 +504,7 @@ impl Chain {
             global_state,
             result.tx_receipts,
             result.withdrawal_receipts,
-            deposition_requests,
+            deposit_requests,
         )?;
         let rollup_config = &self.generator.rollup_context().rollup_config;
         db.attach_block(l2block.clone(), rollup_config)?;

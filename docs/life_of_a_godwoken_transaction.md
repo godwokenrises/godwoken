@@ -126,10 +126,10 @@ To use Godwoken, one must first deposit some tokens(either CKB or sUDTs) from la
 }
 ```
 
-`code_hash` and `hash_type` is pre-determined by each Godwoken deployment. `args` contains 2 parts: the first 32 bytes of `args`, contain the **rollup type hash** of the current Godwoken deployment(remember we mentioned earlier, that rollup type hash works like a chain ID?). The second part, is the [DepositionLockArgs](https://github.com/nervosnetwork/godwoken/blob/v0.1.0/crates/types/schemas/godwoken.mol#L121) data structure, serialized in molecule format:
+`code_hash` and `hash_type` is pre-determined by each Godwoken deployment. `args` contains 2 parts: the first 32 bytes of `args`, contain the **rollup type hash** of the current Godwoken deployment(remember we mentioned earlier, that rollup type hash works like a chain ID?). The second part, is the [DepositLockArgs](https://github.com/nervosnetwork/godwoken/blob/v0.1.0/crates/types/schemas/godwoken.mol#L121) data structure, serialized in molecule format:
 
 ```
-table DepositionLockArgs {
+table DepositLockArgs {
     // layer1 lock hash
     owner_lock_hash: Byte32,
     layer2_lock: Script,
@@ -142,7 +142,7 @@ This data structure contains 2 parts of information:
 * `layer2_lock` specifies the lock script to use, when Godwoken transfers the tokens to layer 2.
 * `owner_lock_hash` and `cancel_timeout` provide a way to redeem the token in the case Godwoken ignores this request(e.g., when the network becomes bloated). `cancel_timeout` specifies a timeout parameter in CKB's [since](https://github.com/nervosnetwork/rfcs/blob/master/rfcs/0017-tx-valid-since/0017-tx-valid-since.md) format. When the timeout has reached, the user can create another request to cancel the deposit action, and redeem his/her tokens for other use. `owner_lock_hash` is used to provide the token owner's identity in case of a cancel deposit action.
 
-Godwoken will periodically collect all live deposit cells, and include them in layer 2 blocks. Each deposit cell will be transformed to **custodian cell** by Godwoken, correspondingly, Godwoken will create(if one does not exist) a layer 2 account based on the `layer2_lock` used in `DepositionLockArgs`, then put the newly deposited tokens inside this account.
+Godwoken will periodically collect all live deposit cells, and include them in layer 2 blocks. Each deposit cell will be transformed to **custodian cell** by Godwoken, correspondingly, Godwoken will create(if one does not exist) a layer 2 account based on the `layer2_lock` used in `DepositLockArgs`, then put the newly deposited tokens inside this account.
 
 Custodian cells contain all the tokens that are managed internally in Godwoken. This [transaction](https://explorer.nervos.org/aggron/transaction/0x05fb7fb33b092272a4e259688e21bd1c78320bda641b062a755af9ec2849223c) contains a custodian cell in its output cell #2. Like a deposit cell, a custodian cell is represented by its lock script:
 
@@ -158,15 +158,15 @@ Like deposit cells, custodian cells have pre-determined `code_hash` and `hash_ty
 
 ```
 table CustodianLockArgs {
-    // used for revert this cell to deposition request cell
+    // used for revert this cell to deposit request cell
     // after finalize, this lock is meaningless
-    deposition_lock_args: DepositionLockArgs,
-    deposition_block_hash: Byte32,
-    deposition_block_number: Uint64,
+    deposit_lock_args: DepositLockArgs,
+    deposit_block_hash: Byte32,
+    deposit_block_number: Uint64,
 }
 ```
 
-As noted, custodian cell contains the original deposition information, as well the layer 2 block info in which the original deposit cell is processed.
+As noted, custodian cell contains the original deposit information, as well the layer 2 block info in which the original deposit cell is processed.
 
 **TODO**: cancel deposit action with examples.
 
@@ -233,10 +233,10 @@ In this example, we are transferring 400 shannons(denoted by `to_id` 0x1) from a
 
 ### Account Lock
 
-Account lock controls how a signature for a layer 2 transaction is validated. Recall that a deposit cell actually includes a layer 2 lock script in its `DepositionLockArgs`:
+Account lock controls how a signature for a layer 2 transaction is validated. Recall that a deposit cell actually includes a layer 2 lock script in its `DepositLockArgs`:
 
 ```
-table DepositionLockArgs {
+table DepositLockArgs {
     layer2_lock: Script,
 
     // ...
@@ -244,7 +244,7 @@ table DepositionLockArgs {
 }
 ```
 
-When Godwoken sees a `layer2_lock` in a `DepositionLockArgs` data structure, it first queries its internal storage to locate an account using the particular layer 2 lock script. If there is not one, Godwoken will create a new account for this lock script, and assign an associated 32-bit integer account ID. Note that Godwoken enforces one-to-one mapping between layer 2 lock script, and account ID:
+When Godwoken sees a `layer2_lock` in a `DepositLockArgs` data structure, it first queries its internal storage to locate an account using the particular layer 2 lock script. If there is not one, Godwoken will create a new account for this lock script, and assign an associated 32-bit integer account ID. Note that Godwoken enforces one-to-one mapping between layer 2 lock script, and account ID:
 
 * Given an account ID, one can look up for the layer 2 lock script in Godwoken
 * Given a layer 2 lock script, there can be at most one account ID using that lock script in current Godwoken deployment

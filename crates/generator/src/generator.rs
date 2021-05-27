@@ -23,7 +23,7 @@ use gw_types::{
     core::{ChallengeTargetType, ScriptHashType},
     offchain::RunResult,
     packed::{
-        AccountMerkleState, BlockInfo, ChallengeTarget, DepositionRequest, L2Block, L2Transaction,
+        AccountMerkleState, BlockInfo, ChallengeTarget, DepositRequest, L2Block, L2Transaction,
         RawL2Block, RawL2Transaction, TxReceipt, WithdrawalReceipt, WithdrawalRequest,
     },
     prelude::*,
@@ -43,7 +43,7 @@ const MAX_READ_DATA_BYTES_LIMIT: usize = 1024 * 1024 * 2;
 
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
-    pub deposition_requests: Vec<DepositionRequest>,
+    pub deposit_requests: Vec<DepositRequest>,
 }
 
 pub struct StateTransitionResult {
@@ -261,7 +261,7 @@ impl Generator {
         let withdrawal_receipts =
             state.apply_withdrawal_requests(&self.rollup_context, &withdrawal_requests)?;
         // apply deposition to state
-        state.apply_deposition_requests(&self.rollup_context, &args.deposition_requests)?;
+        state.apply_deposit_requests(&self.rollup_context, &args.deposit_requests)?;
 
         // handle transactions
         let block_info = get_block_info(&raw_block);

@@ -307,8 +307,8 @@ pub fn deploy_genesis(
         .custodian_script_type_hash(GwPack::pack(
             &deployment_result.custodian_lock.script_type_hash,
         ))
-        .deposition_script_type_hash(GwPack::pack(
-            &deployment_result.deposition_lock.script_type_hash,
+        .deposit_script_type_hash(GwPack::pack(
+            &deployment_result.deposit_lock.script_type_hash,
         ))
         .withdrawal_script_type_hash(GwPack::pack(
             &deployment_result.withdrawal_lock.script_type_hash,

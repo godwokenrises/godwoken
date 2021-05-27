@@ -26,7 +26,7 @@ struct GlobalState {
 table RollupConfig {
     l1_sudt_script_type_hash: Byte32,
     custodian_script_type_hash: Byte32,
-    deposition_script_type_hash: Byte32,
+    deposit_script_type_hash: Byte32,
     withdrawal_script_type_hash: Byte32,
     challenge_script_type_hash: Byte32,
     stake_script_type_hash: Byte32,
@@ -92,7 +92,7 @@ table L2Block {
     withdrawals: WithdrawalRequestVec,
 }
 
-table DepositionRequest {
+table DepositRequest {
     // CKB amount
     capacity: Uint64,
     // SUDT amount
@@ -101,7 +101,7 @@ table DepositionRequest {
     script: Script,
 }
 
-vector DepositionRequestVec <DepositionRequest>;
+vector DepositRequestVec <DepositRequest>;
 
 struct RawWithdrawalRequest {
     nonce: Uint32,
@@ -141,28 +141,28 @@ struct BlockInfo {
 
 // --- end of contract execution ---
 
-// --- deposition lock ---
+// --- deposit lock ---
 // a rollup_type_hash exists before this args, to make args friendly to prefix search
-table DepositionLockArgs {
+table DepositLockArgs {
     // layer1 lock hash
     owner_lock_hash: Byte32,
     layer2_lock: Script,
     cancel_timeout: Uint64,
 }
-// --- end of deposition lock ---
+// --- end of deposit lock ---
 
 // --- custodian lock ---
 // a rollup_type_hash exists before this args, to make args friendly to prefix search
 table CustodianLockArgs {
-    // used for revert this cell to deposition request cell
+    // used for revert this cell to deposit request cell
     // after finalize, this lock is meaningless
-    deposition_lock_args: DepositionLockArgs,
-    deposition_block_hash: Byte32,
-    deposition_block_number: Uint64,
+    deposit_lock_args: DepositLockArgs,
+    deposit_block_hash: Byte32,
+    deposit_block_number: Uint64,
 }
 
 struct UnlockCustodianViaRevertWitness {
-    deposition_lock_hash: Byte32,
+    deposit_lock_hash: Byte32,
 }
 
 // --- end of custodian lock ---

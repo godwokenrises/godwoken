@@ -6,19 +6,19 @@ use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
 use gw_store::state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState};
 use gw_types::{
     core::ScriptHashType,
-    packed::{CellOutput, DepositionRequest, GlobalState, L2BlockCommittedInfo, Script},
+    packed::{CellOutput, DepositRequest, GlobalState, L2BlockCommittedInfo, Script},
     prelude::*,
 };
 
 fn produce_a_block(
     chain: &mut Chain,
-    deposition: DepositionRequest,
+    deposit: DepositRequest,
     rollup_cell: CellOutput,
     expected_tip: u64,
 ) -> SyncParam {
     let block_result = {
         let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap()
+        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
     };
     let transaction = build_sync_tx(rollup_cell, block_result);
     let l2block_committed_info = L2BlockCommittedInfo::new_builder()
@@ -27,7 +27,7 @@ fn produce_a_block(
 
     let update = L1Action {
         context: L1ActionContext::SubmitTxs {
-            deposition_requests: vec![deposition.clone()],
+            deposit_requests: vec![deposit.clone()],
         },
         transaction,
         l2block_committed_info,
@@ -75,18 +75,18 @@ fn test_produce_blocks() {
             args.pack()
         })
         .build();
-    let deposition = DepositionRequest::new_builder()
+    let deposit = DepositRequest::new_builder()
         .capacity(100u64.pack())
         .script(user_script_a.clone())
         .build();
-    produce_a_block(&mut chain, deposition, rollup_cell.clone(), 1);
+    produce_a_block(&mut chain, deposit, rollup_cell.clone(), 1);
 
     // block #2
-    let deposition = DepositionRequest::new_builder()
+    let deposit = DepositRequest::new_builder()
         .capacity(200u64.pack())
         .script(user_script_a.clone())
         .build();
-    produce_a_block(&mut chain, deposition, rollup_cell.clone(), 2);
+    produce_a_block(&mut chain, deposit, rollup_cell.clone(), 2);
 
     // block #3
     let user_script_b = Script::new_builder()
@@ -98,11 +98,11 @@ fn test_produce_blocks() {
             args.pack()
         })
         .build();
-    let deposition = DepositionRequest::new_builder()
+    let deposit = DepositRequest::new_builder()
         .capacity(500u64.pack())
         .script(user_script_b.clone())
         .build();
-    produce_a_block(&mut chain, deposition, rollup_cell.clone(), 3);
+    produce_a_block(&mut chain, deposit, rollup_cell.clone(), 3);
 
     // check state
     {
@@ -156,17 +156,17 @@ fn test_layer1_fork() {
                 args.pack()
             })
             .build();
-        let deposition = DepositionRequest::new_builder()
+        let deposit = DepositRequest::new_builder()
             .capacity(120u64.pack())
             .script(charlie_script)
             .build();
         let chain = setup_chain(rollup_type_script.clone());
         let mem_pool = chain.mem_pool().lock();
-        let block_result = construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap();
+        let block_result = construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap();
 
         L1Action {
             context: L1ActionContext::SubmitTxs {
-                deposition_requests: vec![deposition],
+                deposit_requests: vec![deposit],
             },
             transaction: build_sync_tx(rollup_cell.clone(), block_result),
             l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -184,17 +184,17 @@ fn test_layer1_fork() {
             args.pack()
         })
         .build();
-    let deposition = DepositionRequest::new_builder()
+    let deposit = DepositRequest::new_builder()
         .capacity(100u64.pack())
         .script(alice_script)
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap()
+        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitTxs {
-            deposition_requests: vec![deposition.clone()],
+            deposit_requests: vec![deposit.clone()],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -217,17 +217,17 @@ fn test_layer1_fork() {
             args.pack()
         })
         .build();
-    let deposition = DepositionRequest::new_builder()
+    let deposit = DepositRequest::new_builder()
         .capacity(500u64.pack())
         .script(bob_script)
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap()
+        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action2 = L1Action {
         context: L1ActionContext::SubmitTxs {
-            deposition_requests: vec![deposition],
+            deposit_requests: vec![deposit],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -323,17 +323,17 @@ fn test_layer1_revert() {
             args.pack()
         })
         .build();
-    let deposition = DepositionRequest::new_builder()
+    let deposit = DepositRequest::new_builder()
         .capacity(100u64.pack())
         .script(alice_script.clone())
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap()
+        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitTxs {
-            deposition_requests: vec![deposition.clone()],
+            deposit_requests: vec![deposit.clone()],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -356,17 +356,17 @@ fn test_layer1_revert() {
             args.pack()
         })
         .build();
-    let deposition = DepositionRequest::new_builder()
+    let deposit = DepositRequest::new_builder()
         .capacity(500u64.pack())
         .script(bob_script.clone())
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposition.clone()]).unwrap()
+        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action2 = L1Action {
         context: L1ActionContext::SubmitTxs {
-            deposition_requests: vec![deposition],
+            deposit_requests: vec![deposit],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -524,19 +524,19 @@ fn test_sync_blocks() {
         })
         .build();
     let sudt_script_hash: H256 = [42u8; 32].into();
-    let deposition = DepositionRequest::new_builder()
+    let deposit = DepositRequest::new_builder()
         .capacity(100u64.pack())
         .script(user_script_a.clone())
         .sudt_script_hash(sudt_script_hash.pack())
         .build();
-    let sync_1 = produce_a_block(&mut chain1, deposition, rollup_cell.clone(), 1);
+    let sync_1 = produce_a_block(&mut chain1, deposit, rollup_cell.clone(), 1);
 
     // block #2
-    let deposition = DepositionRequest::new_builder()
+    let deposit = DepositRequest::new_builder()
         .capacity(200u64.pack())
         .script(user_script_a.clone())
         .build();
-    let sync_2 = produce_a_block(&mut chain1, deposition, rollup_cell.clone(), 2);
+    let sync_2 = produce_a_block(&mut chain1, deposit, rollup_cell.clone(), 2);
 
     // block #3
     let user_script_b = Script::new_builder()
@@ -548,12 +548,12 @@ fn test_sync_blocks() {
             args.pack()
         })
         .build();
-    let deposition = DepositionRequest::new_builder()
+    let deposit = DepositRequest::new_builder()
         .capacity(500u64.pack())
         .script(user_script_b.clone())
         .sudt_script_hash(sudt_script_hash.pack())
         .build();
-    let sync_3 = produce_a_block(&mut chain1, deposition, rollup_cell.clone(), 3);
+    let sync_3 = produce_a_block(&mut chain1, deposit, rollup_cell.clone(), 3);
 
     drop(chain1);
 
