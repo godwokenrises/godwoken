@@ -17,7 +17,7 @@ use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
 use gw_generator::Generator;
 use gw_store::{
     chain_view::ChainView,
-    state_db::{StateDBTransaction, StateDBVersion},
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
     transaction::StoreTransaction,
     Store,
 };
@@ -99,8 +99,8 @@ impl EntryList {
 }
 
 pub struct MemPool {
-    /// current state db version
-    state_db_version: StateDBVersion,
+    /// current state checkpoint
+    state_checkpoint: CheckPoint,
     /// store
     store: Store,
     /// current tip
@@ -124,12 +124,12 @@ impl MemPool {
 
         let tip = store.get_tip_block_hash()?;
 
-        let state_db_version =
-            StateDBVersion::from_history_state(&store.begin_transaction(), tip, None)?;
+        let state_checkpoint =
+            CheckPoint::from_block_hash(&store.begin_transaction(), tip, SubState::Block)?;
 
         let mut mem_pool = MemPool {
             store,
-            state_db_version,
+            state_checkpoint,
             current_tip: None,
             generator,
             pending,
@@ -143,8 +143,12 @@ impl MemPool {
     }
 
     pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
-        StateDBTransaction::from_version(db, self.state_db_version.clone())
-            .map_err(|err| anyhow!("err: {}", err))
+        StateDBTransaction::from_checkpoint(
+            db,
+            self.state_checkpoint.clone(),
+            StateDBMode::ReadOnly,
+        )
+        .map_err(|err| anyhow!("err: {}", err))
     }
 
     /// Push a layer2 tx into pool
@@ -441,10 +445,10 @@ impl MemPool {
 
         // update current state
         let tip_block_hash = new_tip_block.hash().into();
-        self.state_db_version = StateDBVersion::from_history_state(
+        self.state_checkpoint = CheckPoint::from_block_hash(
             &self.store.begin_transaction(),
             tip_block_hash,
-            None,
+            SubState::Block,
         )?;
 
         // re-inject txs

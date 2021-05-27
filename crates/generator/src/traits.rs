@@ -9,7 +9,7 @@ use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     offchain::RunResult,
-    packed::{DepositionRequest, Script, WithdrawalRequest},
+    packed::{AccountMerkleState, DepositionRequest, Script, WithdrawalReceipt, WithdrawalRequest},
     prelude::*,
 };
 
@@ -26,7 +26,7 @@ pub trait StateExt {
         &mut self,
         ctx: &RollupContext,
         withdrawal_request: &WithdrawalRequest,
-    ) -> Result<(), Error>;
+    ) -> Result<WithdrawalReceipt, Error>;
 
     fn apply_deposition_requests(
         &mut self,
@@ -43,12 +43,15 @@ pub trait StateExt {
         &mut self,
         ctx: &RollupContext,
         withdrawal_requests: &[WithdrawalRequest],
-    ) -> Result<(), Error> {
+    ) -> Result<Vec<WithdrawalReceipt>, Error> {
+        let mut receipts = Vec::with_capacity(withdrawal_requests.len());
+
         for request in withdrawal_requests {
-            self.apply_withdrawal_request(ctx, request)?;
+            let receipt = self.apply_withdrawal_request(ctx, request)?;
+            receipts.push(receipt);
         }
 
-        Ok(())
+        Ok(receipts)
     }
 }
 
@@ -129,7 +132,7 @@ impl<S: State + CodeStore> StateExt for S {
         &mut self,
         ctx: &RollupContext,
         request: &WithdrawalRequest,
-    ) -> Result<(), Error> {
+    ) -> Result<WithdrawalReceipt, Error> {
         let raw = request.raw();
         let account_script_hash: [u8; 32] = raw.account_script_hash().unpack();
         let l2_sudt_script_hash: [u8; 32] =
@@ -155,6 +158,20 @@ impl<S: State + CodeStore> StateExt for S {
         let nonce = self.get_nonce(id)?;
         let new_nonce = nonce.checked_add(1).ok_or(AccountError::NonceOverflow)?;
         self.set_nonce(id, new_nonce)?;
-        Ok(())
+
+        let post_state = {
+            let account_root = self.calculate_root()?;
+            let account_count = self.get_account_count()?;
+            AccountMerkleState::new_builder()
+                .merkle_root(account_root.pack())
+                .count(account_count.pack())
+                .build()
+        };
+
+        let receipt = WithdrawalReceipt::new_builder()
+            .post_state(post_state)
+            .build();
+
+        Ok(receipt)
     }
 }

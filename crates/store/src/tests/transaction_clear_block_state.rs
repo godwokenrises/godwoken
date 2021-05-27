@@ -1,5 +1,5 @@
 use crate::{
-    state_db::{StateDBTransaction, StateDBVersion},
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
     traits::KVStore,
     Store,
 };
@@ -15,9 +15,10 @@ fn insert_to_state_db(
     value: &[u8],
 ) {
     let store_txn = db.begin_transaction();
-    let state_db_txn = StateDBTransaction::from_version(
+    let state_db_txn = StateDBTransaction::from_checkpoint(
         &store_txn,
-        StateDBVersion::from_future_state(block_number, tx_index),
+        CheckPoint::new(block_number, SubState::Tx(tx_index)),
+        StateDBMode::Write(WriteContext::new(0)),
     )
     .unwrap();
     state_db_txn.insert_raw(col, key, value).unwrap();
@@ -26,9 +27,10 @@ fn insert_to_state_db(
 
 fn delete_from_state_db(db: &Store, col: Col, block_number: u64, tx_index: u32, key: &[u8]) {
     let store_txn = db.begin_transaction();
-    let state_db_txn = StateDBTransaction::from_version(
+    let state_db_txn = StateDBTransaction::from_checkpoint(
         &store_txn,
-        StateDBVersion::from_future_state(block_number, tx_index),
+        CheckPoint::new(block_number, SubState::Tx(tx_index)),
+        StateDBMode::Write(WriteContext::new(0)),
     )
     .unwrap();
     state_db_txn.delete(col, key).unwrap();
@@ -73,9 +75,10 @@ fn get_from_state_db(
     key: &[u8],
 ) -> Option<Box<[u8]>> {
     let store_txn = db.begin_transaction();
-    let state_db = StateDBTransaction::from_version(
+    let state_db = StateDBTransaction::from_checkpoint(
         &store_txn,
-        StateDBVersion::from_future_state(block_number, tx_index),
+        CheckPoint::new(block_number, SubState::Tx(tx_index)),
+        StateDBMode::Write(WriteContext::new(0)),
     )
     .unwrap();
     state_db.get(col, key)

@@ -9,7 +9,7 @@ use gw_common::{
 };
 use gw_config::GenesisConfig;
 use gw_store::{
-    state_db::{StateDBTransaction, StateDBVersion},
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction},
     transaction::StoreTransaction,
     Store,
 };
@@ -55,7 +55,8 @@ pub fn build_genesis_from_store(
     db.set_account_smt_root(H256::zero())?;
     db.set_block_smt_root(H256::zero())?;
     db.set_account_count(0)?;
-    let state_db = StateDBTransaction::from_version(&db, StateDBVersion::from_genesis())?;
+    let state_db =
+        StateDBTransaction::from_checkpoint(&db, CheckPoint::from_genesis(), StateDBMode::Genesis)?;
     let mut tree = state_db.account_state_tree()?;
 
     // create a reserved account
@@ -193,6 +194,7 @@ pub fn init_genesis(
         genesis.clone(),
         genesis_committed_info,
         global_state,
+        Vec::new(),
         Vec::new(),
         Vec::new(),
     )?;

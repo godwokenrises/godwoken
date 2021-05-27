@@ -3,7 +3,7 @@ use crate::testing_tool::chain::{
 };
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, RevertedL1Action, SyncEvent, SyncParam};
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
-use gw_store::state_db::{StateDBTransaction, StateDBVersion};
+use gw_store::state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState};
 use gw_types::{
     core::ScriptHashType,
     packed::{CellOutput, DepositionRequest, GlobalState, L2BlockCommittedInfo, Script},
@@ -108,9 +108,10 @@ fn test_produce_blocks() {
     {
         let db = chain.store().begin_transaction();
         let tip_block_hash = db.get_tip_block_hash().unwrap();
-        let state_db = StateDBTransaction::from_version(
+        let state_db = StateDBTransaction::from_checkpoint(
             &db,
-            StateDBVersion::from_history_state(&db, tip_block_hash, None).unwrap(),
+            CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block).unwrap(),
+            StateDBMode::ReadOnly,
         )
         .unwrap();
         let tree = state_db.account_state_tree().unwrap();
@@ -279,9 +280,10 @@ fn test_layer1_fork() {
     // check account SMT, should be able to calculate account state root
     {
         let db = chain.store().begin_transaction();
-        let db = StateDBTransaction::from_version(
+        let db = StateDBTransaction::from_checkpoint(
             &db,
-            StateDBVersion::from_history_state(&db, tip_block.hash().into(), None).unwrap(),
+            CheckPoint::from_block_hash(&db, tip_block.hash().into(), SubState::Block).unwrap(),
+            StateDBMode::ReadOnly,
         )
         .unwrap();
         let tree = db.account_state_tree().unwrap();
@@ -416,9 +418,10 @@ fn test_layer1_revert() {
     // check account SMT, should be able to calculate account state root
     {
         let db = chain.store().begin_transaction();
-        let db = StateDBTransaction::from_version(
+        let db = StateDBTransaction::from_checkpoint(
             &db,
-            StateDBVersion::from_history_state(&db, tip_block.hash().into(), None).unwrap(),
+            CheckPoint::from_block_hash(&db, tip_block.hash().into(), SubState::Block).unwrap(),
+            StateDBMode::ReadOnly,
         )
         .unwrap();
         let tree = db.account_state_tree().unwrap();
@@ -463,9 +466,10 @@ fn test_layer1_revert() {
 
     {
         let db = chain.store().begin_transaction();
-        let db = StateDBTransaction::from_version(
+        let db = StateDBTransaction::from_checkpoint(
             &db,
-            StateDBVersion::from_history_state(&db, tip_block.hash().into(), None).unwrap(),
+            CheckPoint::from_block_hash(&db, tip_block.hash().into(), SubState::Block).unwrap(),
+            StateDBMode::ReadOnly,
         )
         .unwrap();
         let tree = db.account_state_tree().unwrap();
@@ -566,9 +570,10 @@ fn test_sync_blocks() {
         assert_eq!(tip_block_hash, tip_block.hash().into());
         assert_eq!(tip_block_number, 3);
 
-        let state_db = StateDBTransaction::from_version(
+        let state_db = StateDBTransaction::from_checkpoint(
             &db,
-            StateDBVersion::from_history_state(&db, tip_block_hash, None).unwrap(),
+            CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block).unwrap(),
+            StateDBMode::ReadOnly,
         )
         .unwrap();
         let tree = state_db.account_state_tree().unwrap();

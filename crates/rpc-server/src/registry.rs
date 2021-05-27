@@ -8,7 +8,7 @@ use gw_jsonrpc_types::{
     godwoken::{L2BlockView, RunResult, TxReceipt},
 };
 use gw_store::{
-    state_db::{StateDBTransaction, StateDBVersion},
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
     Store,
 };
 use gw_traits::CodeStore;
@@ -229,9 +229,10 @@ async fn get_balance(
 ) -> Result<Uint128> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_version(
+    let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        StateDBMode::ReadOnly,
     )?;
 
     let tree = state_db.account_state_tree()?;
@@ -246,9 +247,10 @@ async fn get_storage_at(
 ) -> Result<JsonH256> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_version(
+    let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        StateDBMode::ReadOnly,
     )?;
 
     let tree = state_db.account_state_tree()?;
@@ -265,9 +267,10 @@ async fn get_account_id_by_script_hash(
 ) -> Result<Option<AccountID>> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_version(
+    let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        StateDBMode::ReadOnly,
     )?;
     let tree = state_db.account_state_tree()?;
 
@@ -286,9 +289,10 @@ async fn get_nonce(
 ) -> Result<Uint32> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_version(
+    let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        StateDBMode::ReadOnly,
     )?;
     let tree = state_db.account_state_tree()?;
 
@@ -303,9 +307,10 @@ async fn get_script(
 ) -> Result<Option<Script>> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_version(
+    let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        StateDBMode::ReadOnly,
     )?;
     let tree = state_db.account_state_tree()?;
 
@@ -321,9 +326,10 @@ async fn get_script_hash(
 ) -> Result<JsonH256> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_version(
+    let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        StateDBMode::ReadOnly,
     )?;
     let tree = state_db.account_state_tree()?;
 
@@ -337,9 +343,10 @@ async fn get_data(
 ) -> Result<Option<JsonBytes>> {
     let db = store.begin_transaction();
     let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_version(
+    let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        StateDBVersion::from_history_state(&db, tip_hash, None)?,
+        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        StateDBMode::ReadOnly,
     )?;
     let tree = state_db.account_state_tree()?;
 

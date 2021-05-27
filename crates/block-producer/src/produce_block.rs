@@ -15,7 +15,7 @@ use gw_common::{
 use gw_generator::{traits::StateExt, Generator};
 use gw_store::{
     chain_view::ChainView,
-    state_db::{StateDBTransaction, StateDBVersion},
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
     transaction::StoreTransaction,
 };
 use gw_types::{
@@ -76,9 +76,10 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
     let state_db = {
         let tip_block_hash = db.get_tip_block_hash()?;
         assert_eq!(parent_block_hash, tip_block_hash);
-        StateDBTransaction::from_version(
+        StateDBTransaction::from_checkpoint(
             &db,
-            StateDBVersion::from_history_state(&db, tip_block_hash, None)?,
+            CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block)?,
+            StateDBMode::ReadOnly,
         )?
     };
     let mut state = state_db.account_state_tree()?;

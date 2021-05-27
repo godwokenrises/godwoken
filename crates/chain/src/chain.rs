@@ -6,7 +6,7 @@ use gw_generator::{
 use gw_mem_pool::pool::MemPool;
 use gw_store::{
     chain_view::ChainView,
-    state_db::{StateDBTransaction, StateDBVersion},
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
     transaction::StoreTransaction,
     Store,
 };
@@ -342,9 +342,10 @@ impl Chain {
 
                     // check current state
                     let expected_state = l2block.raw().prev_account();
-                    let state_db = StateDBTransaction::from_version(
+                    let state_db = StateDBTransaction::from_checkpoint(
                         &db,
-                        StateDBVersion::from_history_state(&db, tip_block_hash, None)?,
+                        CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block)?,
+                        StateDBMode::ReadOnly,
                     )?;
                     let tree = state_db.account_state_tree()?;
                     let expected_root: H256 = expected_state.merkle_root().unpack();
@@ -405,13 +406,14 @@ impl Chain {
                 .post_account()
                 .merkle_root()
                 .unpack();
-            let state_db = StateDBTransaction::from_version(
+            let state_db = StateDBTransaction::from_checkpoint(
                 &db,
-                StateDBVersion::from_history_state(
+                CheckPoint::from_block_hash(
                     &db,
                     self.local_state.tip().hash().into(),
-                    None,
+                    SubState::Block,
                 )?,
+                StateDBMode::ReadOnly,
             )?;
             assert_eq!(
                 state_db.account_smt().unwrap().root(),
@@ -455,9 +457,10 @@ impl Chain {
         };
         let tip_block_hash = self.local_state.tip().hash().into();
         let chain_view = ChainView::new(db, tip_block_hash);
-        let state_db = StateDBTransaction::from_version(
+        let state_db = StateDBTransaction::from_checkpoint(
             db,
-            StateDBVersion::from_future_state(block_number, 0),
+            CheckPoint::new(block_number, SubState::Block),
+            StateDBMode::Write(WriteContext::new(l2block.withdrawals().len() as u32)),
         )?;
         let mut tree = state_db.account_state_tree()?;
 
@@ -504,7 +507,8 @@ impl Chain {
             l2block.clone(),
             l2block_committed_info,
             global_state,
-            result.receipts,
+            result.tx_receipts,
+            result.withdrawal_receipts,
             deposition_requests,
         )?;
         let rollup_config = &self.generator.rollup_context().rollup_config;

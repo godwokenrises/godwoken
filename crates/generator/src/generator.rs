@@ -24,7 +24,7 @@ use gw_types::{
     offchain::RunResult,
     packed::{
         AccountMerkleState, BlockInfo, ChallengeTarget, DepositionRequest, L2Block, L2Transaction,
-        RawL2Block, RawL2Transaction, TxReceipt, WithdrawalRequest,
+        RawL2Block, RawL2Transaction, TxReceipt, WithdrawalReceipt, WithdrawalRequest,
     },
     prelude::*,
 };
@@ -47,7 +47,8 @@ pub struct StateTransitionArgs {
 }
 
 pub struct StateTransitionResult {
-    pub receipts: Vec<TxReceipt>,
+    pub withdrawal_receipts: Vec<WithdrawalReceipt>,
+    pub tx_receipts: Vec<TxReceipt>,
 }
 
 pub struct Generator {
@@ -257,14 +258,15 @@ impl Generator {
         let raw_block = args.l2block.raw();
         let withdrawal_requests: Vec<_> = args.l2block.withdrawals().into_iter().collect();
         // apply withdrawal to state
-        state.apply_withdrawal_requests(&self.rollup_context, &withdrawal_requests)?;
+        let withdrawal_receipts =
+            state.apply_withdrawal_requests(&self.rollup_context, &withdrawal_requests)?;
         // apply deposition to state
         state.apply_deposition_requests(&self.rollup_context, &args.deposition_requests)?;
 
         // handle transactions
         let block_info = get_block_info(&raw_block);
         let block_hash = raw_block.hash();
-        let mut receipts = Vec::with_capacity(args.l2block.transactions().len());
+        let mut tx_receipts = Vec::with_capacity(args.l2block.transactions().len());
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
             let raw_tx = tx.raw();
             // check nonce
@@ -323,10 +325,13 @@ impl Generator {
                 )
                 .logs(run_result.logs.pack())
                 .build();
-            receipts.push(tx_receipt);
+            tx_receipts.push(tx_receipt);
         }
 
-        let result = StateTransitionResult { receipts };
+        let result = StateTransitionResult {
+            withdrawal_receipts,
+            tx_receipts,
+        };
 
         Ok(result)
     }
