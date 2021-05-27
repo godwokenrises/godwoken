@@ -93,6 +93,7 @@ pub fn prepare_scripts(
 }
 
 fn prepare_scripts_in_build_mode(repos: Repos, repos_dir: &Path, scripts_dir: &Path) -> Result<()> {
+    log::info!("Build scripts...");
     run_pull_code(repos.godwoken_scripts, true, repos_dir, GODWOKEN_SCRIPTS)?;
     run_pull_code(
         repos.godwoken_polyjuice,
@@ -109,26 +110,31 @@ fn prepare_scripts_in_build_mode(repos: Repos, repos_dir: &Path, scripts_dir: &P
 }
 
 fn prepare_scripts_in_copy_mode(prebuild_image: &PathBuf, scripts_dir: &Path) {
-    let current_dir = env::current_dir().expect("get working dir");
-    let target_dir = make_path(&current_dir, vec![scripts_dir])
-        .display()
-        .to_string();
-    let temp_dir_in_container = "temp";
-    let volumn_bind = format!("-v{}:/{}", target_dir, temp_dir_in_container);
+    log::info!("Copy scritps from prebuild image...");
+    let dummy = "dummy";
     run_command(
         "docker",
         vec![
-            "run",
-            "--rm",
-            &volumn_bind,
+            "create",
+            "-ti",
+            "--name",
+            dummy,
             &prebuild_image.display().to_string(),
-            "cp",
-            "-r",
-            "scripts/.",
-            temp_dir_in_container,
+            "bash",
         ],
     )
-    .expect("docker run cp scripts");
+    .expect("docker create container");
+    let src_path_container = format!("{}:/scripts/.", dummy);
+    run_command(
+        "docker",
+        vec![
+            "cp",
+            &src_path_container,
+            &scripts_dir.display().to_string(),
+        ],
+    )
+    .expect("docker cp files");
+    run_command("docker", vec!["rm", "-f", dummy]).expect("docker rm container");
 }
 
 fn check_scripts_build_result(scripts_dir: &Path) -> BuildScripts {
@@ -188,6 +194,7 @@ fn check_scripts_build_result(scripts_dir: &Path) -> BuildScripts {
 }
 
 fn generate_script_deploy_config(build_scripts: BuildScripts, output_path: &Path) -> Result<()> {
+    log::info!("Generate scripts-deploy.json...");
     let programs = Programs {
         custodian_lock: build_scripts.custodian_lock.clone(),
         deposit_lock: build_scripts.deposit_lock.clone(),
@@ -219,6 +226,7 @@ fn generate_script_deploy_config(build_scripts: BuildScripts, output_path: &Path
     run_command("mkdir", vec!["-p", &output_dir.display().to_string()])
         .expect("run mkdir output dir");
     fs::write(output_path, output_content.as_bytes())?;
+    log::info!("Finish");
     Ok(())
 }
 
@@ -300,7 +308,6 @@ fn run_pull_code(
     repos_dir: &Path,
     repo_name: &str,
 ) -> Result<()> {
-    log::info!("Pull code of {} ...", repo_name);
     let commit = repo_url
         .fragment()
         .ok_or_else(|| anyhow::anyhow!("Invalid branch, commit, or tags."))?
