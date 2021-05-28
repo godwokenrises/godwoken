@@ -223,8 +223,7 @@ fn generate_script_deploy_config(build_scripts: BuildScripts, output_path: &Path
     let output_content =
         serde_json::to_string_pretty(&build_scripts_result).expect("serde json to string pretty");
     let output_dir = output_path.parent().expect("get output dir");
-    run_command("mkdir", vec!["-p", &output_dir.display().to_string()])
-        .expect("run mkdir output dir");
+    fs::create_dir_all(&output_dir).expect("create output dir");
     fs::write(output_path, output_content.as_bytes())?;
     log::info!("Finish");
     Ok(())
@@ -264,13 +263,13 @@ fn copy_scripts_to_target(repos_dir: &Path, scripts_dir: &Path) -> Result<()> {
     let target_dir = make_path(scripts_dir, vec![GODWOKEN_SCRIPTS])
         .display()
         .to_string();
-    run_command("mkdir", vec!["-p", &target_dir])?;
-    let source_file = format!("{}/build/release/.", source_dir);
-    run_command("cp", vec!["-a", &source_file, &target_dir])?;
-    let source_file = format!("{}/c/build/.", source_dir);
-    run_command("cp", vec!["-a", &source_file, &target_dir])?;
-    let source_file = format!("{}/c/build/account_locks/.", source_dir);
-    run_command("cp", vec!["-a", &source_file, &target_dir])?;
+    fs::create_dir_all(&target_dir).expect("create scripts dir");
+    let source_files = format!("{}/build/release/.", source_dir);
+    run_command("cp", vec!["-a", &source_files, &target_dir])?;
+    let source_files = format!("{}/c/build/.", source_dir);
+    run_command("cp", vec!["-a", &source_files, &target_dir])?;
+    let source_files = format!("{}/c/build/account_locks/.", source_dir);
+    run_command("cp", vec!["-a", &source_files, &target_dir])?;
 
     // mkdir -p /scripts/godwoken-polyjuice
     // cp godwoken-polyjuice/build/generator /scripts/godwoken-polyjuice/
@@ -281,7 +280,7 @@ fn copy_scripts_to_target(repos_dir: &Path, scripts_dir: &Path) -> Result<()> {
     let target_dir = make_path(scripts_dir, vec![REPO_GODWOKEN_POLYJUICE])
         .display()
         .to_string();
-    run_command("mkdir", vec!["-p", &target_dir])?;
+    fs::create_dir_all(&target_dir).expect("create scripts dir");
     let source_file = format!("{}/build/validator", source_dir);
     run_command("cp", vec![&source_file, &target_dir])?;
     let source_file = format!("{}/build/generator", source_dir);
@@ -295,9 +294,9 @@ fn copy_scripts_to_target(repos_dir: &Path, scripts_dir: &Path) -> Result<()> {
     let target_dir = make_path(scripts_dir, vec![REPO_CLERKB])
         .display()
         .to_string();
-    run_command("mkdir", vec!["-p", &target_dir])?;
-    let source_file = format!("{}/build/debug/.", source_dir);
-    run_command("cp", vec!["-a", &source_file, &target_dir])?;
+    fs::create_dir_all(&target_dir).expect("create scripts dir");
+    let source_files = format!("{}/build/debug/.", source_dir);
+    run_command("cp", vec!["-a", &source_files, &target_dir])?;
 
     Ok(())
 }
@@ -313,14 +312,17 @@ fn run_pull_code(
         .ok_or_else(|| anyhow::anyhow!("Invalid branch, commit, or tags."))?
         .to_owned();
     repo_url.set_fragment(None);
-    let target_dir = make_path(repos_dir, vec![repo_name]).display().to_string();
-    if run_git_checkout(&target_dir, &commit).is_ok() {
+    let target_dir = make_path(repos_dir, vec![repo_name]);
+    if run_git_checkout(&target_dir.display().to_string(), &commit).is_ok() {
         return Ok(());
     }
-    run_command("rm", vec!["-rf", &target_dir]).expect("run rm dir");
+    if target_dir.exists() {
+        fs::remove_dir_all(&target_dir).expect("clean repo dir");
+    }
     fs::create_dir_all(&target_dir).expect("create repo dir");
-    run_git_clone(repo_url, is_recursive, &target_dir).expect("run git clone");
-    run_git_checkout(&target_dir, &commit).expect("run git checkout");
+    run_git_clone(repo_url, is_recursive, &target_dir.display().to_string())
+        .expect("run git clone");
+    run_git_checkout(&target_dir.display().to_string(), &commit).expect("run git checkout");
     Ok(())
 }
 
