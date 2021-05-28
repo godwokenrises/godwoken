@@ -5,6 +5,7 @@ use ckb_jsonrpc_types::{JsonBytes, Script, ScriptHashType};
 use clap::arg_enum;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     env,
     ffi::OsStr,
     fs,
@@ -13,9 +14,27 @@ use std::{
 };
 use url::Url;
 
-const GODWOKEN_SCRIPTS: &str = "godwoken-scripts";
-const REPO_GODWOKEN_POLYJUICE: &str = "godwoken-polyjuice";
-const REPO_CLERKB: &str = "clerkb";
+const GODWOKEN_SCRIPTS: &'static str = "godwoken-scripts";
+const GODWOKEN_POLYJUICE: &str = "godwoken-polyjuice";
+const CLERKB: &str = "clerkb";
+
+const SCRIPT_ALWAYS_SUCCESS: &str = "always-success";
+const SCRIPT_CUSTODIAN_LOCK: &str = "custodian-lock";
+const SCRIPT_DEPOSIT_LOCK: &str = "deposition-lock"; // need rename
+const SCRIPT_WITHDRAWAL: &str = "withdrawal-lock";
+const SCRIPT_CHALLENGE_LOCK: &str = "challenge-lock";
+const SCRIPT_STAKE_LOCK: &str = "stake-lock";
+// const SCRIPT_TRON_ACCOUNT_LOCK = "tron-account-lock",
+const SCRIPT_STATE_VALIDATOR: &str = "state-validator";
+const SCRIPT_SUDT_GENERATOR: &str = "sudt-generator";
+const SCRIPT_SUDT_VALIDATOR: &str = "sudt-validator";
+const SCRIPT_META_CONTRACT_GENERATOR: &str = "meta-contract-generator";
+const SCRIPT_META_CONTRACT_VALIDATOR: &str = "meta-contract-validator";
+const SCRIPT_ETH_ACCOUNT_LOCK: &str = "eth-account-lock";
+const SCRIPT_POLYJUICE_GENERATOR: &str = "generator";
+const SCRIPT_POLYJUICE_VALIDATOR: &str = "validator";
+const SCRIPT_POA: &str = "poa";
+const SCRIPT_POA_STATE: &str = "state";
 
 arg_enum! {
     #[derive(Debug)]
@@ -42,33 +61,49 @@ struct Repos {
 struct BuildScriptsResult {
     programs: Programs,
     lock: Script,
-    build_scripts: BuildScripts,
+    build_scripts: HashMap<String, PathBuf>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
-struct BuildScripts {
-    // scripts form godwoken-scripts
-    always_success: PathBuf,
-    custodian_lock: PathBuf,
-    deposit_lock: PathBuf,
-    withdrawal_lock: PathBuf,
-    challenge_lock: PathBuf,
-    stake_lock: PathBuf,
-    // tron_account_lock: PathBuf,
-    state_validator: PathBuf,
-    sudt_generator: PathBuf,
-    sudt_validator: PathBuf,
-    meta_contract_validator: PathBuf,
-    meta_contract_generator: PathBuf,
-    eth_account_lock: PathBuf,
+struct ScriptPath {
+    repos_dir: PathBuf,
+    repo_name: String,
+    source_build_dir: PathBuf,
+    target_root_dir: PathBuf,
+}
 
-    // scripts from godwoken-Polyjuice
-    polyjuice_validator: PathBuf,
-    polyjuice_generator: PathBuf,
+impl ScriptPath {
+    fn new(
+        repos_dir: PathBuf,
+        repo_name: String,
+        source_build_dir: PathBuf,
+        target_root_dir: PathBuf,
+    ) -> Self {
+        ScriptPath {
+            repos_dir,
+            repo_name,
+            source_build_dir,
+            target_root_dir,
+        }
+    }
 
-    // scripts from clerkb
-    state_validator_lock: PathBuf,
-    poa_state: PathBuf,
+    fn source_script_path(&self, script_name: &str) -> PathBuf {
+        make_path(
+            &self.repos_dir,
+            vec![
+                self.repo_name.as_str(),
+                &self.source_build_dir.display().to_string(),
+                script_name,
+            ],
+        )
+    }
+
+    fn target_script_path(&self, script_name: &str) -> PathBuf {
+        make_path(
+            &self.target_root_dir,
+            vec![self.repo_name.as_str(), script_name],
+        )
+    }
 }
 
 pub fn prepare_scripts(
@@ -80,33 +115,186 @@ pub fn prepare_scripts(
 ) -> Result<()> {
     let input = fs::read_to_string(input_path)?;
     let scripts_build_config: ScriptsBuildConfig = serde_json::from_str(input.as_str())?;
+    let scripts_paths = generate_scripts_paths(repos_dir, scripts_dir);
     match mode {
         ScriptsBuildMode::Build => {
-            prepare_scripts_in_build_mode(scripts_build_config.repos, repos_dir, scripts_dir)?
+            prepare_scripts_in_build_mode(scripts_build_config.repos, repos_dir, &scripts_paths);
         }
         ScriptsBuildMode::Copy => {
-            prepare_scripts_in_copy_mode(&scripts_build_config.prebuild_image, scripts_dir)
+            prepare_scripts_in_copy_mode(&scripts_build_config.prebuild_image, scripts_dir);
         }
     }
-    let build_scripts = check_scripts_build_result(scripts_dir);
-    generate_script_deploy_config(build_scripts, output_path)
+    check_scripts(&scripts_paths);
+    generate_script_deploy_config(scripts_paths, output_path)
 }
 
-fn prepare_scripts_in_build_mode(repos: Repos, repos_dir: &Path, scripts_dir: &Path) -> Result<()> {
+fn generate_scripts_paths(repos_dir: &Path, scripts_dir: &Path) -> HashMap<String, ScriptPath> {
+    let mut map = HashMap::new();
+    map.insert(
+        SCRIPT_ALWAYS_SUCCESS.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_SCRIPTS.to_owned(),
+            "build/release/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_CUSTODIAN_LOCK.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_SCRIPTS.to_owned(),
+            "build/release/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_DEPOSIT_LOCK.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_SCRIPTS.to_owned(),
+            "build/release/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_WITHDRAWAL.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_SCRIPTS.to_owned(),
+            "build/release/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_CHALLENGE_LOCK.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_SCRIPTS.to_owned(),
+            "build/release/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_STAKE_LOCK.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_SCRIPTS.to_owned(),
+            "build/release/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_STATE_VALIDATOR.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_SCRIPTS.to_owned(),
+            "build/release/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_META_CONTRACT_GENERATOR.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_SCRIPTS.to_owned(),
+            "c/build/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_META_CONTRACT_VALIDATOR.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_SCRIPTS.to_owned(),
+            "c/build/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_SUDT_GENERATOR.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_SCRIPTS.to_owned(),
+            "c/build/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_SUDT_VALIDATOR.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_SCRIPTS.to_owned(),
+            "c/build/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_ETH_ACCOUNT_LOCK.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_SCRIPTS.to_owned(),
+            "c/build/account_locks/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_POLYJUICE_GENERATOR.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_POLYJUICE.to_owned(),
+            "build/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_POLYJUICE_VALIDATOR.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            GODWOKEN_POLYJUICE.to_owned(),
+            "build/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_POA.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            CLERKB.to_owned(),
+            "build/debug/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map.insert(
+        SCRIPT_POA_STATE.to_owned(),
+        ScriptPath::new(
+            repos_dir.into(),
+            CLERKB.to_owned(),
+            "build/debug/".into(),
+            scripts_dir.into(),
+        ),
+    );
+    map
+}
+
+fn prepare_scripts_in_build_mode(
+    repos: Repos,
+    repos_dir: &Path,
+    scripts_paths: &HashMap<String, ScriptPath>,
+) {
     log::info!("Build scripts...");
-    run_pull_code(repos.godwoken_scripts, true, repos_dir, GODWOKEN_SCRIPTS)?;
+    run_pull_code(repos.godwoken_scripts, true, repos_dir, GODWOKEN_SCRIPTS);
     run_pull_code(
         repos.godwoken_polyjuice,
         true,
         repos_dir,
-        REPO_GODWOKEN_POLYJUICE,
-    )?;
-    run_pull_code(repos.clerkb, true, repos_dir, REPO_CLERKB)?;
+        GODWOKEN_POLYJUICE,
+    );
+    run_pull_code(repos.clerkb, true, repos_dir, CLERKB);
     build_godwoken_scripts(repos_dir, GODWOKEN_SCRIPTS);
-    build_godwoken_polyjuice(repos_dir, REPO_GODWOKEN_POLYJUICE);
-    build_clerkb(repos_dir, REPO_CLERKB);
-    copy_scripts_to_target(repos_dir, scripts_dir)?;
-    Ok(())
+    build_godwoken_polyjuice(repos_dir, GODWOKEN_POLYJUICE);
+    build_clerkb(repos_dir, CLERKB);
+    copy_scripts_to_target(scripts_paths);
 }
 
 fn prepare_scripts_in_copy_mode(prebuild_image: &PathBuf, scripts_dir: &Path) {
@@ -137,78 +325,53 @@ fn prepare_scripts_in_copy_mode(prebuild_image: &PathBuf, scripts_dir: &Path) {
     run_command("docker", vec!["rm", "-f", dummy]).expect("docker rm container");
 }
 
-fn check_scripts_build_result(scripts_dir: &Path) -> BuildScripts {
-    let build_scripts = BuildScripts {
-        // scripts from godwoken-scripts
-        always_success: make_path(scripts_dir, vec![GODWOKEN_SCRIPTS, "always-success"]),
-        custodian_lock: make_path(scripts_dir, vec![GODWOKEN_SCRIPTS, "custodian-lock"]),
-        deposit_lock: make_path(scripts_dir, vec![GODWOKEN_SCRIPTS, "deposition-lock"]),
-        withdrawal_lock: make_path(scripts_dir, vec![GODWOKEN_SCRIPTS, "withdrawal-lock"]),
-        challenge_lock: make_path(scripts_dir, vec![GODWOKEN_SCRIPTS, "challenge-lock"]),
-        stake_lock: make_path(scripts_dir, vec![GODWOKEN_SCRIPTS, "stake-lock"]),
-        state_validator: make_path(scripts_dir, vec![GODWOKEN_SCRIPTS, "state-validator"]),
-        sudt_generator: make_path(scripts_dir, vec![GODWOKEN_SCRIPTS, "sudt-generator"]),
-        sudt_validator: make_path(scripts_dir, vec![GODWOKEN_SCRIPTS, "sudt-validator"]),
-        meta_contract_generator: make_path(
-            scripts_dir,
-            vec![GODWOKEN_SCRIPTS, "meta-contract-generator"],
-        ),
-        meta_contract_validator: make_path(
-            scripts_dir,
-            vec![GODWOKEN_SCRIPTS, "meta-contract-validator"],
-        ),
-        eth_account_lock: make_path(scripts_dir, vec![GODWOKEN_SCRIPTS, "eth-account-lock"]),
-
-        // scripts from godwoken-Polyjuice
-        polyjuice_generator: make_path(scripts_dir, vec![REPO_GODWOKEN_POLYJUICE, "generator"]),
-        polyjuice_validator: make_path(scripts_dir, vec![REPO_GODWOKEN_POLYJUICE, "validator"]),
-
-        // scripts from clerkb
-        state_validator_lock: make_path(scripts_dir, vec![REPO_CLERKB, "poa"]),
-        poa_state: make_path(scripts_dir, vec![REPO_CLERKB, "state"]),
-    };
-
-    // scripts from godwoken-scripts
-    assert!(build_scripts.always_success.exists());
-    assert!(build_scripts.custodian_lock.exists());
-    assert!(build_scripts.deposit_lock.exists());
-    assert!(build_scripts.withdrawal_lock.exists());
-    assert!(build_scripts.challenge_lock.exists());
-    assert!(build_scripts.stake_lock.exists());
-    assert!(build_scripts.state_validator.exists());
-    assert!(build_scripts.sudt_generator.exists());
-    assert!(build_scripts.sudt_validator.exists());
-    assert!(build_scripts.meta_contract_validator.exists());
-    assert!(build_scripts.meta_contract_generator.exists());
-    assert!(build_scripts.eth_account_lock.exists());
-
-    // scripts from godwoken-Polyjuice
-    assert!(build_scripts.polyjuice_generator.exists());
-    assert!(build_scripts.polyjuice_validator.exists());
-
-    // scripts from clerkb
-    assert!(build_scripts.state_validator_lock.exists());
-    assert!(build_scripts.poa_state.exists());
-
-    build_scripts
+fn check_scripts(scripts_paths: &HashMap<String, ScriptPath>) {
+    scripts_paths.iter().for_each(|(k, v)| {
+        assert!(v.target_script_path(k).exists(), "{:?}", v.target_script_path(k));
+    });
 }
 
-fn generate_script_deploy_config(build_scripts: BuildScripts, output_path: &Path) -> Result<()> {
+fn generate_script_deploy_config(
+    build_scripts: HashMap<String, ScriptPath>,
+    output_path: &Path,
+) -> Result<()> {
     log::info!("Generate scripts-deploy.json...");
+    let script_always_success = build_scripts
+        .get(SCRIPT_ALWAYS_SUCCESS)
+        .expect("get script path")
+        .target_script_path(SCRIPT_ALWAYS_SUCCESS);
     let programs = Programs {
-        custodian_lock: build_scripts.custodian_lock.clone(),
-        deposit_lock: build_scripts.deposit_lock.clone(),
-        withdrawal_lock: build_scripts.withdrawal_lock.clone(),
-        challenge_lock: build_scripts.always_success.clone(), // always_success
-        stake_lock: build_scripts.stake_lock.clone(),
-        state_validator: build_scripts.always_success.clone(), // always_success
-        l2_sudt_validator: build_scripts.always_success.clone(), // always_success
-        eth_account_lock: build_scripts.always_success.clone(), // always_success
-        tron_account_lock: build_scripts.always_success.clone(), // always_success
-        meta_contract_validator: build_scripts.always_success.clone(), // always_success
-        polyjuice_validator: build_scripts.always_success.clone(), // always_success
-        state_validator_lock: build_scripts.state_validator_lock.clone(),
-        poa_state: build_scripts.poa_state.clone(),
+        custodian_lock: build_scripts
+            .get(SCRIPT_CUSTODIAN_LOCK)
+            .expect("get script path")
+            .target_script_path(SCRIPT_CUSTODIAN_LOCK),
+        deposit_lock: build_scripts
+            .get(SCRIPT_DEPOSIT_LOCK)
+            .expect("get script path")
+            .target_script_path(SCRIPT_DEPOSIT_LOCK),
+        withdrawal_lock: build_scripts
+            .get(SCRIPT_WITHDRAWAL)
+            .expect("get script path")
+            .target_script_path(SCRIPT_WITHDRAWAL),
+        challenge_lock: script_always_success.clone(), // always_success
+        stake_lock: build_scripts
+            .get(SCRIPT_STAKE_LOCK)
+            .expect("get script path")
+            .target_script_path(SCRIPT_STAKE_LOCK),
+        state_validator: script_always_success.clone(), // always_success
+        l2_sudt_validator: script_always_success.clone(), // always_success
+        eth_account_lock: script_always_success.clone(), // always_success
+        tron_account_lock: script_always_success.clone(), // always_success
+        meta_contract_validator: script_always_success.clone(), // always_success
+        polyjuice_validator: script_always_success.clone(), // always_success
+        state_validator_lock: build_scripts
+            .get(SCRIPT_STATE_VALIDATOR)
+            .expect("get script path")
+            .target_script_path(SCRIPT_STATE_VALIDATOR),
+        poa_state: build_scripts
+            .get(SCRIPT_POA)
+            .expect("get script path")
+            .target_script_path(SCRIPT_POA),
     };
     let lock = Script {
         code_hash: H256::default(),
@@ -218,7 +381,10 @@ fn generate_script_deploy_config(build_scripts: BuildScripts, output_path: &Path
     let build_scripts_result = BuildScriptsResult {
         programs,
         lock,
-        build_scripts,
+        build_scripts: build_scripts
+            .into_iter()
+            .map(|(k, v)| (k.clone(), v.target_script_path(&k)))
+            .collect(),
     };
     let output_content =
         serde_json::to_string_pretty(&build_scripts_result).expect("serde json to string pretty");
@@ -252,69 +418,23 @@ fn build_clerkb(repos_dir: &Path, repo_name: &str) {
     run_command("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
 }
 
-fn copy_scripts_to_target(repos_dir: &Path, scripts_dir: &Path) -> Result<()> {
-    // RUN mkdir -p /scripts/godwoken-scripts
-    // cp -a godwoken-scripts/build/release/. /scripts/godwoken-scripts/
-    // cp -a godwoken-scripts/c/build/. /scripts/godwoken-scripts/
-    // cp -a godwoken-scripts/c/build/account_locks/. /scripts/godwoken-scripts/
-    let source_dir = make_path(repos_dir, vec![GODWOKEN_SCRIPTS])
-        .display()
-        .to_string();
-    let target_dir = make_path(scripts_dir, vec![GODWOKEN_SCRIPTS])
-        .display()
-        .to_string();
-    fs::create_dir_all(&target_dir).expect("create scripts dir");
-    let source_files = format!("{}/build/release/.", source_dir);
-    run_command("cp", vec!["-a", &source_files, &target_dir])?;
-    let source_files = format!("{}/c/build/.", source_dir);
-    run_command("cp", vec!["-a", &source_files, &target_dir])?;
-    let source_files = format!("{}/c/build/account_locks/.", source_dir);
-    run_command("cp", vec!["-a", &source_files, &target_dir])?;
-
-    // mkdir -p /scripts/godwoken-polyjuice
-    // cp godwoken-polyjuice/build/generator /scripts/godwoken-polyjuice/
-    // cp godwoken-polyjuice/build/validator /scripts/godwoken-polyjuice/
-    let source_dir = make_path(repos_dir, vec![REPO_GODWOKEN_POLYJUICE])
-        .display()
-        .to_string();
-    let target_dir = make_path(scripts_dir, vec![REPO_GODWOKEN_POLYJUICE])
-        .display()
-        .to_string();
-    fs::create_dir_all(&target_dir).expect("create scripts dir");
-    let source_file = format!("{}/build/validator", source_dir);
-    run_command("cp", vec![&source_file, &target_dir])?;
-    let source_file = format!("{}/build/generator", source_dir);
-    run_command("cp", vec![&source_file, &target_dir])?;
-
-    // mkdir -p /scripts/clerkb
-    // cp -a clerkb/build/debug/. /scripts/clerkb/
-    let source_dir = make_path(repos_dir, vec![REPO_CLERKB])
-        .display()
-        .to_string();
-    let target_dir = make_path(scripts_dir, vec![REPO_CLERKB])
-        .display()
-        .to_string();
-    fs::create_dir_all(&target_dir).expect("create scripts dir");
-    let source_files = format!("{}/build/debug/.", source_dir);
-    run_command("cp", vec!["-a", &source_files, &target_dir])?;
-
-    Ok(())
+fn copy_scripts_to_target(scripts_paths: &HashMap<String, ScriptPath>) {
+    scripts_paths.iter().for_each(|(k, v)| {
+        let target_path = v.target_script_path(k);
+        fs::create_dir_all(&target_path.parent().expect("get dir")).expect("create scripts dir");
+        fs::copy(v.source_script_path(k), &target_path).expect("copy script");
+    });
 }
 
-fn run_pull_code(
-    mut repo_url: Url,
-    is_recursive: bool,
-    repos_dir: &Path,
-    repo_name: &str,
-) -> Result<()> {
+fn run_pull_code(mut repo_url: Url, is_recursive: bool, repos_dir: &Path, repo_name: &str) {
     let commit = repo_url
         .fragment()
-        .ok_or_else(|| anyhow::anyhow!("Invalid branch, commit, or tags."))?
+        .expect("valid branch, tag, or commit")
         .to_owned();
     repo_url.set_fragment(None);
     let target_dir = make_path(repos_dir, vec![repo_name]);
     if run_git_checkout(&target_dir.display().to_string(), &commit).is_ok() {
-        return Ok(());
+        return;
     }
     if target_dir.exists() {
         fs::remove_dir_all(&target_dir).expect("clean repo dir");
@@ -323,7 +443,6 @@ fn run_pull_code(
     run_git_clone(repo_url, is_recursive, &target_dir.display().to_string())
         .expect("run git clone");
     run_git_checkout(&target_dir.display().to_string(), &commit).expect("run git checkout");
-    Ok(())
 }
 
 fn run_git_clone(repo_url: Url, is_recursive: bool, path: &str) -> Result<()> {
