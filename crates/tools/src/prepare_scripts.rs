@@ -18,6 +18,36 @@ const GODWOKEN_SCRIPTS: &str = "godwoken-scripts";
 const GODWOKEN_POLYJUICE: &str = "godwoken-polyjuice";
 const CLERKB: &str = "clerkb";
 
+static DEFAULT_BUILD_CONFIG: &str = r#" {
+    "prebuild_image": "nervos/godwoken-prebuilds:v0.3.0",
+    "repos": {
+        "godwoken_scripts": "https://github.com/nervosnetwork/godwoken-scripts#v0.5.0-rc1",
+        "godwoken_polyjuice": "https://github.com/nervosnetwork/godwoken-polyjuice#v0.6.0-rc6",
+        "clerkb": "https://github.com/nervosnetwork/clerkb#v0.4.0"
+    },
+    "scripts": {
+        "always_success": { "source": "godwoken-scripts/build/release/always-success" },
+        "custodian_lock": { "source": "godwoken-scripts/build/release/custodian-lock" },
+        "deposit_lock": { "source": "godwoken-scripts/build/release/deposit-lock" },
+        "withdrawal_lock":  {"source": "godwoken-scripts/build/release/withdrawal-lock" },
+        "challenge_lock": { "source": "godwoken-scripts/build/release/challenge-lock" },
+        "stake_lock": { "source": "godwoken-scripts/build/release/stake-lock" },
+        "tron_account_lock": { "source": "godwoken-scripts/build/release/always-success" },
+        "state_validator": { "source": "godwoken-scripts/build/release/state-validator" },
+        "eth_account_lock": { "source": "godwoken-scripts/build/release/eth-account-lock" },
+
+        "l2_sudt_generator": { "source": "godwoken-scripts/c/build/sudt-generator" },
+        "l2_sudt_validator": { "source": "godwoken-scripts/c/build/sudt-validator" },
+        "meta_contract_generator": { "source": "godwoken-scripts/c/build/meta-contract-generator" },
+        "meta_contract_validator": { "source": "godwoken-scripts/c/build/meta-contract-validator" },
+        
+        "polyjuice_generator": { "source": "godwoken-polyjuice/build/generator" },
+        "polyjuice_validator": { "source": "godwoken-polyjuice/build/validator" },
+        "state_validator_lock": { "source": "clerkb/build/debug/poa" },
+        "poa_state": { "source": "clerkb/build/debug/state" }
+    }
+} "#;
+
 arg_enum! {
     #[derive(Debug)]
     pub enum ScriptsBuildMode {
@@ -30,6 +60,8 @@ arg_enum! {
 struct ScriptsBuildConfig {
     prebuild_image: PathBuf,
     repos: ReposUrl,
+
+    #[serde(default)]
     scripts: HashMap<String, ScriptsInfo>,
 }
 
@@ -49,8 +81,11 @@ struct ReposUrl {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
 struct ScriptsInfo {
+    #[serde(default)]
     source: PathBuf,
-    deploy: DeployOption,
+
+    #[serde(default)]
+    always_success: bool,
 }
 
 impl ScriptsInfo {
@@ -70,13 +105,6 @@ impl ScriptsInfo {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
-enum DeployOption {
-    Yes,
-    No,
-    Success,
-}
-
 pub fn prepare_scripts(
     mode: ScriptsBuildMode,
     input_path: &Path,
@@ -84,9 +112,7 @@ pub fn prepare_scripts(
     scripts_dir: &Path,
     output_path: &Path,
 ) -> Result<()> {
-    let input = fs::read_to_string(input_path)?;
-    let scripts_build_config: ScriptsBuildConfig =
-        serde_json::from_str(input.as_str()).expect("parse scripts build config");
+    let scripts_build_config = read_script_build_config(input_path);
     match mode {
         ScriptsBuildMode::Build => {
             prepare_scripts_in_build_mode(&scripts_build_config, repos_dir, scripts_dir);
@@ -97,6 +123,32 @@ pub fn prepare_scripts(
     }
     check_scripts(&scripts_dir, &scripts_build_config.scripts);
     generate_script_deploy_config(scripts_dir, &scripts_build_config.scripts, output_path)
+}
+
+fn read_script_build_config<P: AsRef<Path>>(input_path: P) -> ScriptsBuildConfig {
+    let input = fs::read_to_string(input_path).expect("read config file");
+    let mut scripts_build_config: ScriptsBuildConfig =
+        serde_json::from_str(&input).expect("parse scripts build config");
+    let default_build_config: ScriptsBuildConfig =
+        serde_json::from_str(&DEFAULT_BUILD_CONFIG).expect("parse scripts build config");
+    default_build_config.scripts.iter().for_each(|(k, v)| {
+        match scripts_build_config.scripts.get(k) {
+            Some(value) => {
+                let mut new = value.to_owned();
+                if PathBuf::default() == new.source {
+                    new.source.clone_from(&v.source);
+                }
+                new.always_success = value.always_success;
+                scripts_build_config.scripts.insert(k.to_owned(), new);
+            }
+            None => {
+                scripts_build_config
+                    .scripts
+                    .insert(k.to_owned(), v.to_owned());
+            }
+        }
+    });
+    scripts_build_config
 }
 
 fn prepare_scripts_in_build_mode(
@@ -180,10 +232,10 @@ fn generate_script_deploy_config(
         .target_script_path(target_dir);
     let get_path = |script: &str| {
         let script_info = scripts_info.get(script).expect("get script info");
-        if let DeployOption::Yes = script_info.deploy {
-            script_info.target_script_path(target_dir)
-        } else {
+        if script_info.always_success {
             always_success.to_owned()
+        } else {
+            script_info.target_script_path(target_dir)
         }
     };
     let programs = Programs {
@@ -252,8 +304,10 @@ fn copy_scripts_to_target(
 ) {
     scripts_info.iter().for_each(|(_, v)| {
         let target_path = v.target_script_path(target_dir);
+        let source_path = v.source_script_path(repos_dir);
         fs::create_dir_all(&target_path.parent().expect("get dir")).expect("create scripts dir");
-        fs::copy(v.source_script_path(repos_dir), &target_path).expect("copy script");
+        log::debug!("copy {:?} to {:?}", source_path, target_path);
+        fs::copy(source_path, target_path).expect("copy script");
     });
 }
 
@@ -285,6 +339,7 @@ fn run_git_clone(repo_url: Url, is_recursive: bool, path: &str) -> Result<()> {
 }
 
 fn run_git_checkout(repo_dir: &str, commit: &str) -> Result<()> {
+    run_command("git", vec!["-C", repo_dir, "fetch"])?;
     run_command("git", vec!["-C", repo_dir, "checkout", commit])?;
     run_command(
         "git",
