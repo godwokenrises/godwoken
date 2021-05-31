@@ -14,7 +14,7 @@ use std::{
 };
 use url::Url;
 
-const GODWOKEN_SCRIPTS: &'static str = "godwoken-scripts";
+const GODWOKEN_SCRIPTS: &str = "godwoken-scripts";
 const GODWOKEN_POLYJUICE: &str = "godwoken-polyjuice";
 const CLERKB: &str = "clerkb";
 
@@ -31,6 +31,20 @@ struct ScriptsBuildConfig {
     prebuild_image: PathBuf,
     repos: ReposUrl,
     scripts: HashMap<String, ScriptsInfo>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+struct BuildScriptsResult {
+    programs: Programs,
+    lock: Script,
+    built_scripts: HashMap<String, PathBuf>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+struct ReposUrl {
+    godwoken_scripts: Url,
+    godwoken_polyjuice: Url,
+    clerkb: Url,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
@@ -61,28 +75,6 @@ enum DeployOption {
     Yes,
     No,
     Success,
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
-struct ReposUrl {
-    godwoken_scripts: Url,
-    godwoken_polyjuice: Url,
-    clerkb: Url,
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
-struct BuildScriptsResult {
-    programs: Programs,
-    lock: Script,
-    built_scripts: HashMap<String, PathBuf>,
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
-struct ScriptPath {
-    repos_dir: PathBuf,
-    repo_name: String,
-    source_build_dir: PathBuf,
-    target_root_dir: PathBuf,
 }
 
 pub fn prepare_scripts(
@@ -182,63 +174,32 @@ fn generate_script_deploy_config(
     output_path: &Path,
 ) -> Result<()> {
     log::info!("Generate scripts-deploy.json...");
-    let _always_success = scripts_info
+    let always_success = scripts_info
         .get("always_success")
         .expect("get script info")
         .target_script_path(target_dir);
+    let get_path = |script: &str| {
+        let script_info = scripts_info.get(script).expect("get script info");
+        if let DeployOption::Yes = script_info.deploy {
+            script_info.target_script_path(target_dir)
+        } else {
+            always_success.to_owned()
+        }
+    };
     let programs = Programs {
-        custodian_lock: scripts_info
-            .get("custodian_lock")
-            .expect("get script info")
-            .target_script_path(target_dir),
-        deposit_lock: scripts_info
-            .get("deposit_lock")
-            .expect("get script info")
-            .target_script_path(target_dir),
-        withdrawal_lock: scripts_info
-            .get("withdrawal_lock")
-            .expect("get script info")
-            .target_script_path(target_dir),
-        challenge_lock: scripts_info
-            .get("challenge_lock")
-            .expect("get script info")
-            .target_script_path(target_dir),
-        stake_lock: scripts_info
-            .get("stake_lock")
-            .expect("get script info")
-            .target_script_path(target_dir),
-        state_validator: scripts_info
-            .get("state_validator")
-            .expect("get script info")
-            .target_script_path(target_dir),
-        l2_sudt_validator: scripts_info
-            .get("l2_sudt_validator")
-            .expect("get script info")
-            .target_script_path(target_dir),
-        eth_account_lock: scripts_info
-            .get("eth_account_lock")
-            .expect("get script info")
-            .target_script_path(target_dir),
-        tron_account_lock: scripts_info
-            .get("tron_account_lock")
-            .expect("get script info")
-            .target_script_path(target_dir),
-        meta_contract_validator: scripts_info
-            .get("meta_contract_validator")
-            .expect("get script info")
-            .target_script_path(target_dir),
-        polyjuice_validator: scripts_info
-            .get("polyjuice_validator")
-            .expect("get script info")
-            .target_script_path(target_dir),
-        state_validator_lock: scripts_info
-            .get("state_validator_lock")
-            .expect("get script info")
-            .target_script_path(target_dir),
-        poa_state: scripts_info
-            .get("poa_state")
-            .expect("get script info")
-            .target_script_path(target_dir),
+        custodian_lock: get_path("custodian_lock"),
+        deposit_lock: get_path("deposit_lock"),
+        withdrawal_lock: get_path("withdrawal_lock"),
+        challenge_lock: get_path("challenge_lock"),
+        stake_lock: get_path("stake_lock"),
+        state_validator: get_path("state_validator"),
+        l2_sudt_validator: get_path("l2_sudt_validator"),
+        eth_account_lock: get_path("eth_account_lock"),
+        tron_account_lock: get_path("tron_account_lock"),
+        meta_contract_validator: get_path("meta_contract_validator"),
+        polyjuice_validator: get_path("polyjuice_validator"),
+        state_validator_lock: get_path("state_validator_lock"),
+        poa_state: get_path("poa_state"),
     };
     let build_scripts_result = BuildScriptsResult {
         programs,
