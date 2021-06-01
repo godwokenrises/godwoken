@@ -18,36 +18,6 @@ const GODWOKEN_SCRIPTS: &str = "godwoken-scripts";
 const GODWOKEN_POLYJUICE: &str = "godwoken-polyjuice";
 const CLERKB: &str = "clerkb";
 
-static DEFAULT_BUILD_CONFIG: &str = r#" {
-    "prebuild_image": "nervos/godwoken-prebuilds:v0.3.0",
-    "repos": {
-        "godwoken_scripts": "https://github.com/nervosnetwork/godwoken-scripts#v0.5.0-rc1",
-        "godwoken_polyjuice": "https://github.com/nervosnetwork/godwoken-polyjuice#v0.6.0-rc6",
-        "clerkb": "https://github.com/nervosnetwork/clerkb#v0.4.0"
-    },
-    "scripts": {
-        "always_success": { "source": "godwoken-scripts/build/release/always-success" },
-        "custodian_lock": { "source": "godwoken-scripts/build/release/custodian-lock" },
-        "deposit_lock": { "source": "godwoken-scripts/build/release/deposit-lock" },
-        "withdrawal_lock":  {"source": "godwoken-scripts/build/release/withdrawal-lock" },
-        "challenge_lock": { "source": "godwoken-scripts/build/release/challenge-lock" },
-        "stake_lock": { "source": "godwoken-scripts/build/release/stake-lock" },
-        "tron_account_lock": { "source": "godwoken-scripts/build/release/always-success" },
-        "state_validator": { "source": "godwoken-scripts/build/release/state-validator" },
-        "eth_account_lock": { "source": "godwoken-scripts/build/release/eth-account-lock" },
-
-        "l2_sudt_generator": { "source": "godwoken-scripts/c/build/sudt-generator" },
-        "l2_sudt_validator": { "source": "godwoken-scripts/c/build/sudt-validator" },
-        "meta_contract_generator": { "source": "godwoken-scripts/c/build/meta-contract-generator" },
-        "meta_contract_validator": { "source": "godwoken-scripts/c/build/meta-contract-validator" },
-        
-        "polyjuice_generator": { "source": "godwoken-polyjuice/build/generator" },
-        "polyjuice_validator": { "source": "godwoken-polyjuice/build/validator" },
-        "state_validator_lock": { "source": "clerkb/build/debug/poa" },
-        "poa_state": { "source": "clerkb/build/debug/state" }
-    }
-} "#;
-
 arg_enum! {
     #[derive(Debug)]
     pub enum ScriptsBuildMode {
@@ -63,6 +33,92 @@ struct ScriptsBuildConfig {
 
     #[serde(default)]
     scripts: HashMap<String, ScriptsInfo>,
+}
+
+impl Default for ScriptsBuildConfig {
+    fn default() -> Self {
+        ScriptsBuildConfig {
+            prebuild_image: PathBuf::from("nervos/godwoken-prebuilds:v0.3.0"),
+            repos: ReposUrl {
+                godwoken_scripts: Url::parse(
+                    "https://github.com/nervosnetwork/godwoken-scripts#v0.5.0-rc1",
+                )
+                .expect("url parse"),
+                godwoken_polyjuice: Url::parse(
+                    "https://github.com/nervosnetwork/godwoken-polyjuice#v0.6.0-rc6",
+                )
+                .expect("url parse"),
+                clerkb: Url::parse("https://github.com/nervosnetwork/clerkb#v0.4.0")
+                    .expect("url parse"),
+            },
+            scripts: [
+                (
+                    "always_success",
+                    "godwoken-scripts/build/release/always-success",
+                ),
+                (
+                    "custodian_lock",
+                    "godwoken-scripts/build/release/custodian-lock",
+                ),
+                (
+                    "deposit_lock",
+                    "godwoken-scripts/build/release/deposit-lock",
+                ),
+                (
+                    "withdrawal_lock",
+                    "godwoken-scripts/build/release/withdrawal-lock",
+                ),
+                (
+                    "challenge_lock",
+                    "godwoken-scripts/build/release/challenge-lock",
+                ),
+                ("stake_lock", "godwoken-scripts/build/release/stake-lock"),
+                (
+                    "tron_account_lock",
+                    "godwoken-scripts/build/release/always-success",
+                ),
+                (
+                    "state_validator",
+                    "godwoken-scripts/build/release/state-validator",
+                ),
+                (
+                    "eth_account_lock",
+                    "godwoken-scripts/build/release/eth-account-lock",
+                ),
+                (
+                    "l2_sudt_generator",
+                    "godwoken-scripts/c/build/sudt-generator",
+                ),
+                (
+                    "l2_sudt_validator",
+                    "godwoken-scripts/c/build/sudt-validator",
+                ),
+                (
+                    "meta_contract_generator",
+                    "godwoken-scripts/c/build/meta-contract-generator",
+                ),
+                (
+                    "meta_contract_validator",
+                    "godwoken-scripts/c/build/meta-contract-validator",
+                ),
+                ("polyjuice_generator", "godwoken-polyjuice/build/generator"),
+                ("polyjuice_validator", "godwoken-polyjuice/build/validator"),
+                ("state_validator_lock", "clerkb/build/debug/poa"),
+                ("poa_state", "clerkb/build/debug/state"),
+            ]
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.to_string(),
+                    ScriptsInfo {
+                        source: PathBuf::from(v),
+                        always_success: false,
+                    },
+                )
+            })
+            .collect(),
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
@@ -129,25 +185,26 @@ fn read_script_build_config<P: AsRef<Path>>(input_path: P) -> ScriptsBuildConfig
     let input = fs::read_to_string(input_path).expect("read config file");
     let mut scripts_build_config: ScriptsBuildConfig =
         serde_json::from_str(&input).expect("parse scripts build config");
-    let default_build_config: ScriptsBuildConfig =
-        serde_json::from_str(&DEFAULT_BUILD_CONFIG).expect("parse scripts build config");
-    default_build_config.scripts.iter().for_each(|(k, v)| {
-        match scripts_build_config.scripts.get(k) {
-            Some(value) => {
-                let mut new = value.to_owned();
-                if PathBuf::default() == new.source {
-                    new.source.clone_from(&v.source);
+    let default_build_config: ScriptsBuildConfig = ScriptsBuildConfig::default();
+    default_build_config
+        .scripts
+        .iter()
+        .for_each(
+            |(key, default_value)| match scripts_build_config.scripts.get(key) {
+                Some(value) => {
+                    if PathBuf::default() == value.source {
+                        let mut new = value.to_owned();
+                        new.source.clone_from(&default_value.source);
+                        scripts_build_config.scripts.insert(key.to_owned(), new);
+                    }
                 }
-                new.always_success = value.always_success;
-                scripts_build_config.scripts.insert(k.to_owned(), new);
-            }
-            None => {
-                scripts_build_config
-                    .scripts
-                    .insert(k.to_owned(), v.to_owned());
-            }
-        }
-    });
+                None => {
+                    scripts_build_config
+                        .scripts
+                        .insert(key.to_owned(), default_value.to_owned());
+                }
+            },
+        );
     scripts_build_config
 }
 
@@ -178,7 +235,7 @@ fn prepare_scripts_in_build_mode(
     build_godwoken_scripts(repos_dir, GODWOKEN_SCRIPTS);
     build_godwoken_polyjuice(repos_dir, GODWOKEN_POLYJUICE);
     build_clerkb(repos_dir, CLERKB);
-    copy_scripts_to_target(repos_dir, target_dir, &scripts_build_config.scripts);
+    collect_scripts_to_target(repos_dir, target_dir, &scripts_build_config.scripts);
 }
 
 fn prepare_scripts_in_copy_mode(prebuild_image: &PathBuf, scripts_dir: &Path) {
@@ -297,7 +354,7 @@ fn build_clerkb(repos_dir: &Path, repo_name: &str) {
     run_command("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
 }
 
-fn copy_scripts_to_target(
+fn collect_scripts_to_target(
     repos_dir: &Path,
     target_dir: &Path,
     scripts_info: &HashMap<String, ScriptsInfo>,

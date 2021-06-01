@@ -152,7 +152,7 @@ fn main() {
                     Arg::with_name("repos-dir-path")
                         .short("r")
                         .takes_value(true)
-                        .default_value("scripts-build-repos/")
+                        .default_value("tmp/scripts-build-dir/")
                         .required(true)
                         .help("The repos dir path"),
                 )
