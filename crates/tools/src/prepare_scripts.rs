@@ -375,10 +375,11 @@ fn run_pull_code(mut repo_url: Url, is_recursive: bool, repos_dir: &Path, repo_n
         .to_owned();
     repo_url.set_fragment(None);
     let target_dir = make_path(repos_dir, vec![repo_name]);
-    if run_git_checkout(&target_dir.display().to_string(), &commit).is_ok() {
-        return;
-    }
     if target_dir.exists() {
+        if run_git_checkout(&target_dir.display().to_string(), &commit).is_ok() {
+            return;
+        }
+        log::info!("Run git checkout failed, the repo will re-init...");
         fs::remove_dir_all(&target_dir).expect("clean repo dir");
     }
     fs::create_dir_all(&target_dir).expect("create repo dir");
