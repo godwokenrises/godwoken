@@ -15,13 +15,13 @@ lazy_static! {
     pub static ref SECP256K1: secp256k1::Secp256k1<secp256k1::All> = secp256k1::Secp256k1::new();
 }
 
-fn convert_signature_to_byte65(signature: Bytes) -> Result<[u8; 65], LockAlgorithmError> {
+fn convert_signature_to_byte65(signature: &[u8]) -> Result<[u8; 65], LockAlgorithmError> {
     if signature.len() != 65 {
         return Err(LockAlgorithmError::InvalidSignature);
     }
 
     let mut buf = [0u8; 65];
-    buf.copy_from_slice(&signature);
+    buf.copy_from_slice(signature);
     Ok(buf)
 }
 
@@ -33,6 +33,30 @@ pub struct Secp256k1;
 ///
 /// manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
 impl LockAlgorithm for Secp256k1 {
+    fn recover(&self, message: H256, signature: &[u8]) -> Result<Bytes, LockAlgorithmError> {
+        let signature: RecoverableSignature = {
+            let signature = convert_signature_to_byte65(signature)?;
+            let recid = RecoveryId::from_i32(signature[64] as i32)
+                .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+            let data = &signature[..64];
+            RecoverableSignature::from_compact(data, recid)
+                .map_err(|_| LockAlgorithmError::InvalidSignature)?
+        };
+        let msg = secp256k1::Message::from_slice(message.as_slice())
+            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+        let pubkey = SECP256K1
+            .recover(&msg, &signature)
+            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&pubkey.serialize());
+        hasher.finalize(&mut buf);
+        let mut pubkey_hash = vec![0u8; 20];
+        pubkey_hash.copy_from_slice(&buf[..20]);
+        Ok(Bytes::from(pubkey_hash))
+    }
+
     fn verify_tx(
         &self,
         ctx: &RollupContext,
@@ -65,29 +89,8 @@ impl LockAlgorithm for Secp256k1 {
         }
         let mut expected_pubkey_hash = [0u8; 20];
         expected_pubkey_hash.copy_from_slice(&lock_args[32..52]);
-        let signature: RecoverableSignature = {
-            let signature = convert_signature_to_byte65(signature)?;
-            let recid = RecoveryId::from_i32(signature[64] as i32)
-                .map_err(|_| LockAlgorithmError::InvalidSignature)?;
-            let data = &signature[..64];
-            RecoverableSignature::from_compact(data, recid)
-                .map_err(|_| LockAlgorithmError::InvalidSignature)?
-        };
-        let msg = secp256k1::Message::from_slice(message.as_slice())
-            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
-        let pubkey = SECP256K1
-            .recover(&msg, &signature)
-            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
-        let pubkey_hash = {
-            let mut buf = [0u8; 32];
-            let mut hasher = new_blake2b();
-            hasher.update(&pubkey.serialize());
-            hasher.finalize(&mut buf);
-            let mut pubkey_hash = [0u8; 20];
-            pubkey_hash.copy_from_slice(&buf[..20]);
-            pubkey_hash
-        };
-        if pubkey_hash != expected_pubkey_hash {
+        let pubkey_hash = self.recover(message, signature.as_ref())?;
+        if pubkey_hash.as_ref() != expected_pubkey_hash {
             return Ok(false);
         }
         Ok(true)
@@ -110,6 +113,20 @@ impl Secp256k1Eth {
 
         let mut expected_pubkey_hash = [0u8; 20];
         expected_pubkey_hash.copy_from_slice(&lock_args[32..52]);
+        let pubkey_hash = self.recover(message, signature.as_ref())?;
+        if pubkey_hash.as_ref() != expected_pubkey_hash {
+            return Ok(false);
+        }
+        Ok(true)
+    }
+}
+
+/// Usage
+/// register AlwaysSuccess to AccountLockManage
+///
+/// manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
+impl LockAlgorithm for Secp256k1Eth {
+    fn recover(&self, message: H256, signature: &[u8]) -> Result<Bytes, LockAlgorithmError> {
         let signature: RecoverableSignature = {
             let signature = convert_signature_to_byte65(signature)?;
             let recid = RecoveryId::from_i32(signature[64] as i32)
@@ -123,26 +140,15 @@ impl Secp256k1Eth {
         let pubkey = SECP256K1
             .recover(&msg, &signature)
             .map_err(|_| LockAlgorithmError::InvalidSignature)?;
-        let pubkey_hash = {
-            let mut hasher = Keccak256::new();
-            hasher.update(&pubkey.serialize_uncompressed()[1..]);
-            let buf = hasher.finalize();
-            let mut pubkey_hash = [0u8; 20];
-            pubkey_hash.copy_from_slice(&buf[12..]);
-            pubkey_hash
-        };
-        if pubkey_hash != expected_pubkey_hash {
-            return Ok(false);
-        }
-        Ok(true)
-    }
-}
 
-/// Usage
-/// register AlwaysSuccess to AccountLockManage
-///
-/// manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
-impl LockAlgorithm for Secp256k1Eth {
+        let mut hasher = Keccak256::new();
+        hasher.update(&pubkey.serialize_uncompressed()[1..]);
+        let buf = hasher.finalize();
+        let mut pubkey_hash = vec![0u8; 20];
+        pubkey_hash.copy_from_slice(&buf[12..]);
+        Ok(Bytes::from(pubkey_hash))
+    }
+
     fn verify_tx(
         &self,
         ctx: &RollupContext,
@@ -191,6 +197,34 @@ pub struct Secp256k1Tron;
 ///
 /// manage.register_lock_algorithm(code_hash, Box::new(Secp256k1Tron::default()));
 impl LockAlgorithm for Secp256k1Tron {
+    fn recover(&self, message: H256, signature: &[u8]) -> Result<Bytes, LockAlgorithmError> {
+        let signature: RecoverableSignature = {
+            let signature: [u8; 65] = convert_signature_to_byte65(signature)?;
+            let recid = {
+                let rec_param: i32 = match signature[64] {
+                    28 => 1,
+                    _ => 0,
+                };
+                RecoveryId::from_i32(rec_param).map_err(|_| LockAlgorithmError::InvalidSignature)?
+            };
+            let data = &signature[..64];
+            RecoverableSignature::from_compact(data, recid)
+                .map_err(|_| LockAlgorithmError::InvalidSignature)?
+        };
+        let msg = secp256k1::Message::from_slice(message.as_slice())
+            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+        let pubkey = SECP256K1
+            .recover(&msg, &signature)
+            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+
+        let mut hasher = Keccak256::new();
+        hasher.update(&pubkey.serialize_uncompressed()[1..]);
+        let buf = hasher.finalize();
+        let mut pubkey_hash = vec![0u8; 20];
+        pubkey_hash.copy_from_slice(&buf[12..]);
+        Ok(Bytes::from(pubkey_hash))
+    }
+
     fn verify_tx(
         &self,
         ctx: &RollupContext,
@@ -230,33 +264,8 @@ impl LockAlgorithm for Secp256k1Tron {
         let signing_message = H256::from(signing_message);
         let mut expected_pubkey_hash = [0u8; 20];
         expected_pubkey_hash.copy_from_slice(&lock_args[32..52]);
-        let signature: RecoverableSignature = {
-            let signature: [u8; 65] = convert_signature_to_byte65(signature)?;
-            let recid = {
-                let rec_param: i32 = match signature[64] {
-                    28 => 1,
-                    _ => 0,
-                };
-                RecoveryId::from_i32(rec_param).map_err(|_| LockAlgorithmError::InvalidSignature)?
-            };
-            let data = &signature[..64];
-            RecoverableSignature::from_compact(data, recid)
-                .map_err(|_| LockAlgorithmError::InvalidSignature)?
-        };
-        let msg = secp256k1::Message::from_slice(signing_message.as_slice())
-            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
-        let pubkey = SECP256K1
-            .recover(&msg, &signature)
-            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
-        let pubkey_hash = {
-            let mut hasher = Keccak256::new();
-            hasher.update(&pubkey.serialize_uncompressed()[1..]);
-            let buf = hasher.finalize();
-            let mut pubkey_hash = [0u8; 20];
-            pubkey_hash.copy_from_slice(&buf[12..]);
-            pubkey_hash
-        };
-        if pubkey_hash != expected_pubkey_hash {
+        let pubkey_hash = self.recover(signing_message, signature.as_ref())?;
+        if pubkey_hash.as_ref() != expected_pubkey_hash {
             return Ok(false);
         }
         Ok(true)
