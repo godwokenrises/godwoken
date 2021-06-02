@@ -8999,7 +8999,10 @@ impl ::core::fmt::Display for SUDTArgs {
 }
 impl ::core::default::Default for SUDTArgs {
     fn default() -> Self {
-        let v: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0];
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
+        ];
         SUDTArgs::new_unchecked(v.into())
     }
 }
@@ -9287,22 +9290,25 @@ impl ::core::fmt::Debug for SUDTQuery {
 impl ::core::fmt::Display for SUDTQuery {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "account_id", self.account_id())?;
+        write!(f, "{}: {}", "address", self.address())?;
         write!(f, " }}")
     }
 }
 impl ::core::default::Default for SUDTQuery {
     fn default() -> Self {
-        let v: Vec<u8> = vec![0, 0, 0, 0];
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ];
         SUDTQuery::new_unchecked(v.into())
     }
 }
 impl SUDTQuery {
-    pub const TOTAL_SIZE: usize = 4;
-    pub const FIELD_SIZES: [usize; 1] = [4];
+    pub const TOTAL_SIZE: usize = 32;
+    pub const FIELD_SIZES: [usize; 1] = [32];
     pub const FIELD_COUNT: usize = 1;
-    pub fn account_id(&self) -> Uint32 {
-        Uint32::new_unchecked(self.0.slice(0..4))
+    pub fn address(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(0..32))
     }
     pub fn as_reader<'r>(&'r self) -> SUDTQueryReader<'r> {
         SUDTQueryReader::new_unchecked(self.as_slice())
@@ -9330,7 +9336,7 @@ impl molecule::prelude::Entity for SUDTQuery {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder().account_id(self.account_id())
+        Self::new_builder().address(self.address())
     }
 }
 #[derive(Clone, Copy)]
@@ -9352,16 +9358,16 @@ impl<'r> ::core::fmt::Debug for SUDTQueryReader<'r> {
 impl<'r> ::core::fmt::Display for SUDTQueryReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "account_id", self.account_id())?;
+        write!(f, "{}: {}", "address", self.address())?;
         write!(f, " }}")
     }
 }
 impl<'r> SUDTQueryReader<'r> {
-    pub const TOTAL_SIZE: usize = 4;
-    pub const FIELD_SIZES: [usize; 1] = [4];
+    pub const TOTAL_SIZE: usize = 32;
+    pub const FIELD_SIZES: [usize; 1] = [32];
     pub const FIELD_COUNT: usize = 1;
-    pub fn account_id(&self) -> Uint32Reader<'r> {
-        Uint32Reader::new_unchecked(&self.as_slice()[0..4])
+    pub fn address(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for SUDTQueryReader<'r> {
@@ -9387,14 +9393,14 @@ impl<'r> molecule::prelude::Reader<'r> for SUDTQueryReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct SUDTQueryBuilder {
-    pub(crate) account_id: Uint32,
+    pub(crate) address: Byte32,
 }
 impl SUDTQueryBuilder {
-    pub const TOTAL_SIZE: usize = 4;
-    pub const FIELD_SIZES: [usize; 1] = [4];
+    pub const TOTAL_SIZE: usize = 32;
+    pub const FIELD_SIZES: [usize; 1] = [32];
     pub const FIELD_COUNT: usize = 1;
-    pub fn account_id(mut self, v: Uint32) -> Self {
-        self.account_id = v;
+    pub fn address(mut self, v: Byte32) -> Self {
+        self.address = v;
         self
     }
 }
@@ -9405,7 +9411,7 @@ impl molecule::prelude::Builder for SUDTQueryBuilder {
         Self::TOTAL_SIZE
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
-        writer.write_all(self.account_id.as_slice())?;
+        writer.write_all(self.address.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -9444,23 +9450,24 @@ impl ::core::default::Default for SUDTTransfer {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0,
         ];
         SUDTTransfer::new_unchecked(v.into())
     }
 }
 impl SUDTTransfer {
-    pub const TOTAL_SIZE: usize = 36;
-    pub const FIELD_SIZES: [usize; 3] = [4, 16, 16];
+    pub const TOTAL_SIZE: usize = 64;
+    pub const FIELD_SIZES: [usize; 3] = [32, 16, 16];
     pub const FIELD_COUNT: usize = 3;
-    pub fn to(&self) -> Uint32 {
-        Uint32::new_unchecked(self.0.slice(0..4))
+    pub fn to(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(0..32))
     }
     pub fn amount(&self) -> Uint128 {
-        Uint128::new_unchecked(self.0.slice(4..20))
+        Uint128::new_unchecked(self.0.slice(32..48))
     }
     pub fn fee(&self) -> Uint128 {
-        Uint128::new_unchecked(self.0.slice(20..36))
+        Uint128::new_unchecked(self.0.slice(48..64))
     }
     pub fn as_reader<'r>(&'r self) -> SUDTTransferReader<'r> {
         SUDTTransferReader::new_unchecked(self.as_slice())
@@ -9520,17 +9527,17 @@ impl<'r> ::core::fmt::Display for SUDTTransferReader<'r> {
     }
 }
 impl<'r> SUDTTransferReader<'r> {
-    pub const TOTAL_SIZE: usize = 36;
-    pub const FIELD_SIZES: [usize; 3] = [4, 16, 16];
+    pub const TOTAL_SIZE: usize = 64;
+    pub const FIELD_SIZES: [usize; 3] = [32, 16, 16];
     pub const FIELD_COUNT: usize = 3;
-    pub fn to(&self) -> Uint32Reader<'r> {
-        Uint32Reader::new_unchecked(&self.as_slice()[0..4])
+    pub fn to(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
     pub fn amount(&self) -> Uint128Reader<'r> {
-        Uint128Reader::new_unchecked(&self.as_slice()[4..20])
+        Uint128Reader::new_unchecked(&self.as_slice()[32..48])
     }
     pub fn fee(&self) -> Uint128Reader<'r> {
-        Uint128Reader::new_unchecked(&self.as_slice()[20..36])
+        Uint128Reader::new_unchecked(&self.as_slice()[48..64])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for SUDTTransferReader<'r> {
@@ -9556,15 +9563,15 @@ impl<'r> molecule::prelude::Reader<'r> for SUDTTransferReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct SUDTTransferBuilder {
-    pub(crate) to: Uint32,
+    pub(crate) to: Byte32,
     pub(crate) amount: Uint128,
     pub(crate) fee: Uint128,
 }
 impl SUDTTransferBuilder {
-    pub const TOTAL_SIZE: usize = 36;
-    pub const FIELD_SIZES: [usize; 3] = [4, 16, 16];
+    pub const TOTAL_SIZE: usize = 64;
+    pub const FIELD_SIZES: [usize; 3] = [32, 16, 16];
     pub const FIELD_COUNT: usize = 3;
-    pub fn to(mut self, v: Uint32) -> Self {
+    pub fn to(mut self, v: Byte32) -> Self {
         self.to = v;
         self
     }

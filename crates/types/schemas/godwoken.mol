@@ -220,11 +220,13 @@ union SUDTArgs {
 }
 
 struct SUDTQuery {
-    account_id: Uint32,
+    // godwoken address (script_hash)
+    address: Byte32,
 }
 
 struct SUDTTransfer {
-    to: Uint32,
+    // godwoken address (script_hash)
+    to: Byte32,
     amount: Uint128,
     fee: Uint128,
 }
