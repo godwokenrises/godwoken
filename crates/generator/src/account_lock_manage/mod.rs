@@ -13,6 +13,8 @@ pub mod secp256k1;
 use crate::{error::LockAlgorithmError, RollupContext};
 
 pub trait LockAlgorithm {
+    fn recover(&self, message: H256, signature: &[u8]) -> Result<Bytes, LockAlgorithmError>;
+
     fn verify_withdrawal_signature(
         &self,
         lock_args: Bytes,

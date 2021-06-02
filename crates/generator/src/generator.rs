@@ -375,6 +375,7 @@ impl Generator {
                     block_info,
                     raw_tx,
                     rollup_context: &self.rollup_context,
+                    account_lock_manage: &self.account_lock_manage,
                     result: &mut run_result,
                     code_store: state,
                 }));
