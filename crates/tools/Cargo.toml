@@ -31,3 +31,4 @@ gw-config = { path = "../config" }
 gw-common = { path = "../common" }
 gw-generator = { path = "../generator" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
+url = "2.2"

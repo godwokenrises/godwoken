@@ -2225,6 +2225,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "toml",
+ "url 2.2.1",
 ]
 
 [[package]]
