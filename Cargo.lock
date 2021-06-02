@@ -2223,6 +2223,7 @@ dependencies = [
  "secp256k1 0.17.2",
  "serde",
  "serde_json",
+ "sha3",
  "tempfile",
  "toml",
  "url 2.2.1",

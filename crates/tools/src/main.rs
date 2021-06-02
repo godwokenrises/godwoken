@@ -1,5 +1,6 @@
 mod deploy_genesis;
 mod deploy_scripts;
+mod deposit_ckb;
 mod generate_config;
 mod prepare_scripts;
 
@@ -171,6 +172,53 @@ fn main() {
                         .required(true)
                         .help("The output scripts deploy json file path"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("deposit-ckb")
+                .about("Deposit CKB to godwoken")
+                .arg(arg_ckb_rpc.clone())
+                .arg(arg_privkey_path.clone())
+                .arg(
+                    Arg::with_name("deployment-results-path")
+                        .short("d")
+                        .long("deployment-results-path")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The deployment results json file path"),
+                )
+                .arg(
+                    Arg::with_name("config-path")
+                        .short("o")
+                        .long("config-path")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The config.toml file path"),
+                )
+                .arg(
+                    Arg::with_name("capacity")
+                        .short("c")
+                        .long("capacity")
+                        .takes_value(true)
+                        .required(true)
+                        .help("CKB capacity to deposit"),
+                )
+                .arg(
+                    Arg::with_name("eth-address")
+                        .short("e")
+                        .long("eth-address")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Target eth address, calculated by private key in default"),
+                )
+                .arg(
+                    Arg::with_name("fee")
+                        .short("f")
+                        .long("fee")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value("0.0001")
+                        .help("Transaction fee, default to 0.0001 CKB"),
+                ),
         );
 
     let matches = app.clone().get_matches();
@@ -250,6 +298,28 @@ fn main() {
                 output_path,
             ) {
                 log::error!("Prepare scripts error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("deposit-ckb", Some(m)) => {
+            let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap().to_string();
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let capacity = m.value_of("capacity").unwrap();
+            let fee = m.value_of("fee").unwrap();
+            let eth_address = m.value_of("eth-address");
+            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let config_path = Path::new(m.value_of("config-path").unwrap());
+
+            if let Err(err) = deposit_ckb::deposit_ckb(
+                privkey_path,
+                deployment_results_path,
+                config_path,
+                capacity,
+                fee,
+                ckb_rpc_url.as_str(),
+                eth_address,
+            ) {
+                log::error!("Deposit CKB error: {}", err);
                 std::process::exit(-1);
             };
         }
