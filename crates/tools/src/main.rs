@@ -2,6 +2,7 @@ mod deploy_genesis;
 mod deploy_scripts;
 mod deposit_ckb;
 mod generate_config;
+pub mod godwoken_rpc;
 mod prepare_scripts;
 
 use clap::{value_t, App, Arg, SubCommand};
@@ -218,6 +219,14 @@ fn main() {
                         .required(false)
                         .default_value("0.0001")
                         .help("Transaction fee, default to 0.0001 CKB"),
+                )
+                .arg(
+                    Arg::with_name("godwoken-rpc-url")
+                        .short("g")
+                        .long("godwoken-rpc-url")
+                        .takes_value(true)
+                        .default_value("http://127.0.0.1:8119")
+                        .help("Godwoken jsonrpc rpc sever URL"),
                 ),
         );
 
@@ -309,6 +318,7 @@ fn main() {
             let eth_address = m.value_of("eth-address");
             let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
 
             if let Err(err) = deposit_ckb::deposit_ckb(
                 privkey_path,
@@ -318,6 +328,7 @@ fn main() {
                 fee,
                 ckb_rpc_url.as_str(),
                 eth_address,
+                godwoken_rpc_url,
             ) {
                 log::error!("Deposit CKB error: {}", err);
                 std::process::exit(-1);

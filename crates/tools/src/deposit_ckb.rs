@@ -1,5 +1,6 @@
 use crate::deploy_scripts::wait_for_tx;
 use crate::deploy_scripts::{get_network_type, run_cmd, ScriptsDeploymentResult};
+use crate::godwoken_rpc::GodwokenRpcClient;
 use ckb_fixed_hash::H256;
 use ckb_sdk::{Address, AddressPayload, HttpRpcClient, SECP256K1};
 use ckb_types::{
@@ -7,6 +8,7 @@ use ckb_types::{
     prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity, prelude::Pack as CKBPack,
     prelude::Unpack as CKBUnpack,
 };
+use gw_common::blake2b::new_blake2b;
 use gw_config::Config;
 use gw_types::{
     bytes::Bytes as GwBytes,
@@ -15,6 +17,8 @@ use gw_types::{
 };
 use sha3::{Digest, Keccak256};
 use std::str::FromStr;
+use std::time::{Duration, Instant};
+use std::u128;
 use std::{fs, path::Path};
 
 pub fn deposit_ckb(
@@ -25,6 +29,7 @@ pub fn deposit_ckb(
     fee: &str,
     ckb_rpc_url: &str,
     eth_address: Option<&str>,
+    godwoken_rpc_url: &str,
 ) -> Result<(), String> {
     let deployment_result_string =
         std::fs::read_to_string(deployment_results_path).map_err(|err| err.to_string())?;
@@ -72,6 +77,20 @@ pub fn deposit_ckb(
         .args(l2_lock_args)
         .build();
 
+    let l2_lock_hash: H256 = {
+        let mut hasher = new_blake2b();
+        hasher.update(&l2_lock.as_slice());
+        let mut hash = [0u8; 32];
+        hasher.finalize(&mut hash);
+        hash.into()
+    };
+
+    let l2_lock_hash_str = format!(
+        "0x{}",
+        faster_hex::hex_string(l2_lock_hash.as_bytes()).map_err(|err| err.to_string())?
+    );
+    log::info!("layer2 script hash: {}", l2_lock_hash_str);
+
     // cancel_timeout default to 2 days
     let deposit_lock_args = DepositLockArgs::new_builder()
         .owner_lock_hash(owner_lock_hash)
@@ -91,6 +110,9 @@ pub fn deposit_ckb(
         GwBytes::from(l1_lock_args),
     );
     let address: Address = Address::new(network_type, address_payload);
+
+    let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url.to_string());
+    let init_balance = get_balance_by_script_hash(&mut godwoken_rpc_client, &l2_lock_hash)?;
 
     let output = run_cmd(vec![
         "--url",
@@ -112,7 +134,12 @@ pub fn deposit_ckb(
 
     wait_for_tx(&mut rpc_client, &tx_hash, 180u64)?;
 
-    // TODO: wait for balance changed.
+    wait_for_balance_change(
+        &mut godwoken_rpc_client,
+        &l2_lock_hash,
+        init_balance,
+        180u64,
+    )?;
 
     Ok(())
 }
@@ -152,4 +179,48 @@ fn read_config<P: AsRef<Path>>(path: P) -> Result<Config, String> {
     let content = fs::read(&path).map_err(|err| err.to_string())?;
     let config = toml::from_slice(&content).map_err(|err| err.to_string())?;
     Ok(config)
+}
+
+pub fn wait_for_balance_change(
+    godwoken_rpc_client: &mut GodwokenRpcClient,
+    from_script_hash: &H256,
+    init_balance: u128,
+    timeout_secs: u64,
+) -> Result<(), String> {
+    let retry_timeout = Duration::from_secs(timeout_secs);
+    let start_time = Instant::now();
+    while start_time.elapsed() < retry_timeout {
+        std::thread::sleep(Duration::from_secs(2));
+
+        let balance = get_balance_by_script_hash(godwoken_rpc_client, from_script_hash)?;
+        log::info!(
+            "current balance: {}, waiting for {} secs.",
+            balance,
+            start_time.elapsed().as_secs()
+        );
+
+        if balance != init_balance {
+            log::info!("deposit success!");
+            let account_id = godwoken_rpc_client
+                .get_account_id_by_script_hash(from_script_hash.clone())?
+                .unwrap();
+            log::info!("Your account id: {}", account_id);
+            return Ok(());
+        }
+    }
+    Err(format!("Timeout: {:?}", retry_timeout))
+}
+
+fn get_balance_by_script_hash(
+    godwoken_rpc_client: &mut GodwokenRpcClient,
+    script_hash: &H256,
+) -> Result<u128, String> {
+    let account_id = godwoken_rpc_client.get_account_id_by_script_hash(script_hash.clone())?;
+    match account_id {
+        Some(id) => {
+            let balance = godwoken_rpc_client.get_balance(id, 1)?;
+            Ok(balance)
+        }
+        None => Ok(0u128),
+    }
 }

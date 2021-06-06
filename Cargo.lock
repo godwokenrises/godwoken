@@ -2211,6 +2211,8 @@ dependencies = [
  "ckb-types",
  "clap",
  "env_logger",
+ "failure",
+ "faster-hex 0.5.0",
  "gw-common",
  "gw-config",
  "gw-db",
