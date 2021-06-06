@@ -3,6 +3,7 @@ mod deploy_scripts;
 mod deposit_ckb;
 mod generate_config;
 pub mod godwoken_rpc;
+mod prepare_pk;
 mod prepare_scripts;
 
 use clap::{value_t, App, Arg, SubCommand};
@@ -228,6 +229,50 @@ fn main() {
                         .default_value("http://127.0.0.1:8119")
                         .help("Godwoken jsonrpc rpc sever URL"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("prepare-pk")
+                .about("Generate godwoken nodes private keys, poa and rollup configs")
+                .arg(arg_privkey_path.clone())
+                .arg(arg_ckb_rpc.clone())
+                .arg(
+                    Arg::with_name("ckb-count")
+                        .short("c")
+                        .takes_value(true)
+                        .default_value("500000")
+                        .required(true)
+                        .help("CKB count transferred to every node"),
+                )
+                .arg(
+                    Arg::with_name("nodes-count")
+                        .short("n")
+                        .takes_value(true)
+                        .default_value("2")
+                        .required(true)
+                        .help("The godwoken nodes count"),
+                )
+                .arg(
+                    Arg::with_name("output-dir-path")
+                        .short("o")
+                        .takes_value(true)
+                        .default_value("deploy/")
+                        .required(true)
+                        .help("The godwoken nodes private keys output dir path"),
+                )
+                .arg(
+                    Arg::with_name("poa-config-path")
+                        .short("p")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Output poa config file path"),
+                )
+                .arg(
+                    Arg::with_name("rollup-config-path")
+                        .short("s")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Output rollup config file path"),
+                ),
         );
 
     let matches = app.clone().get_matches();
@@ -331,6 +376,33 @@ fn main() {
                 godwoken_rpc_url,
             ) {
                 log::error!("Deposit CKB error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("prepare-pk", Some(m)) => {
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
+            let ckb_count = m
+                .value_of("ckb-count")
+                .map(|c| c.parse().expect("ckb count"))
+                .unwrap();
+            let nodes_count = m
+                .value_of("nodes-count")
+                .map(|c| c.parse().expect("nodes count"))
+                .unwrap();
+            let output_dir = Path::new(m.value_of("output-dir-path").unwrap());
+            let poa_config_path = Path::new(m.value_of("poa-config-path").unwrap());
+            let rollup_config_path = Path::new(m.value_of("rollup-config-path").unwrap());
+            if let Err(err) = prepare_pk::prepare_pk(
+                privkey_path,
+                ckb_rpc_url,
+                ckb_count,
+                nodes_count,
+                output_dir,
+                poa_config_path,
+                rollup_config_path,
+            ) {
+                log::error!("Prepare nodes private keys error: {}", err);
                 std::process::exit(-1);
             };
         }
