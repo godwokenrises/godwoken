@@ -360,10 +360,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     return Err(VMError::Unexpected);
                 }
                 let script_hash_prefix = load_bytes(machine, prefix_addr, prefix_len as usize)?;
-                if let Some(script_hash) = self
-                    .code_store
-                    .get_script_hash_by_prefix(&script_hash_prefix)
-                {
+                if let Some(script_hash) = self.get_script_hash_by_prefix(&script_hash_prefix) {
                     machine
                         .memory_mut()
                         .store_bytes(script_hash_addr, script_hash.as_slice())?;
@@ -494,6 +491,14 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
                 VMError::Unexpected
             })?;
         Ok(value)
+    }
+    fn get_script_hash_by_prefix(&mut self, prefix: &[u8]) -> Option<H256> {
+        for script_hash in self.result.new_scripts.keys() {
+            if script_hash.as_slice().starts_with(prefix) {
+                return Some(*script_hash);
+            }
+        }
+        self.code_store.get_script_hash_by_prefix(prefix)
     }
     fn get_account_id_by_script_hash(
         &mut self,
