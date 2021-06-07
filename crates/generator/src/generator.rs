@@ -163,7 +163,7 @@ impl Generator {
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
 
         let message = raw.calc_message(&self.rollup_context.rollup_script_hash);
-        let valid_signature = lock_algo.verify_withdrawal_signature(
+        let valid_signature = lock_algo.verify_message(
             account_script.args().unpack(),
             withdrawal_request.signature(),
             message,
@@ -237,7 +237,7 @@ impl Generator {
             .get_lock_algorithm(&lock_code_hash.into())
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
         let valid_signature =
-            lock_algo.verify_tx(&self.rollup_context, script, receiver_script, tx.clone())?;
+            lock_algo.verify_tx(&self.rollup_context, script, receiver_script, &tx)?;
         if !valid_signature {
             return Err(LockAlgorithmError::InvalidSignature.into());
         }

@@ -13,7 +13,7 @@ pub mod secp256k1;
 use crate::{error::LockAlgorithmError, RollupContext};
 
 pub trait LockAlgorithm {
-    fn verify_withdrawal_signature(
+    fn verify_message(
         &self,
         lock_args: Bytes,
         signature: Signature,
@@ -25,7 +25,7 @@ pub trait LockAlgorithm {
         ctx: &RollupContext,
         sender_script: Script,
         receiver_script: Script,
-        tx: L2Transaction,
+        tx: &L2Transaction,
     ) -> Result<bool, LockAlgorithmError>;
 }
 

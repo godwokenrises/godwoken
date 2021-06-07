@@ -16,7 +16,7 @@ pub struct AlwaysSuccess;
 ///
 /// manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
 impl LockAlgorithm for AlwaysSuccess {
-    fn verify_withdrawal_signature(
+    fn verify_message(
         &self,
         _lock_args: Bytes,
         _signature: Signature,
@@ -30,7 +30,7 @@ impl LockAlgorithm for AlwaysSuccess {
         _ctx: &RollupContext,
         _sender_script: Script,
         _receiver_script: Script,
-        _tx: L2Transaction,
+        _tx: &L2Transaction,
     ) -> Result<bool, LockAlgorithmError> {
         Ok(true)
     }
