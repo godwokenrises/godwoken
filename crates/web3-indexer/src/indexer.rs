@@ -36,7 +36,6 @@ pub struct Web3Indexer {
     polyjuice_type_script_hash: H256,
     rollup_type_hash: H256,
     eth_account_lock_hash: H256,
-    compatible_chain_id: u32,
 }
 
 impl Web3Indexer {
@@ -46,7 +45,6 @@ impl Web3Indexer {
         polyjuice_type_script_hash: H256,
         rollup_type_hash: H256,
         eth_account_lock_hash: H256,
-        compatible_chain_id: u32,
     ) -> Self {
         Web3Indexer {
             pool,
@@ -54,7 +52,6 @@ impl Web3Indexer {
             polyjuice_type_script_hash,
             rollup_type_hash,
             eth_account_lock_hash,
-            compatible_chain_id,
         }
     }
 
@@ -243,8 +240,7 @@ impl Web3Indexer {
                     (Some(address), polyjuice_chain_id)
                 };
                 // calculate chain_id
-                let chain_id: u64 =
-                    ((self.compatible_chain_id as u64) << 32) | (polyjuice_chain_id as u64);
+                let chain_id: u64 = polyjuice_chain_id as u64;
                 let nonce: u32 = l2_transaction.raw().nonce().unpack();
                 let input = polyjuice_args.input.clone().unwrap_or_default();
 
