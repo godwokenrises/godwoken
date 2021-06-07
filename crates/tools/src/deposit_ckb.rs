@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 use std::u128;
 use std::{fs, path::Path};
 
+#[allow(clippy::too_many_arguments)]
 pub fn deposit_ckb(
     privkey_path: &Path,
     deployment_results_path: &Path,
