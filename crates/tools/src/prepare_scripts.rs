@@ -1,4 +1,5 @@
 use crate::deploy_scripts::Programs;
+use crate::run_command;
 use anyhow::Result;
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Script, ScriptHashType};
@@ -6,11 +7,8 @@ use clap::arg_enum;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    env,
-    ffi::OsStr,
     fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 use url::Url;
 
@@ -241,7 +239,7 @@ fn prepare_scripts_in_build_mode(
 fn prepare_scripts_in_copy_mode(prebuild_image: &PathBuf, scripts_dir: &Path) {
     log::info!("Copy scritps from prebuild image...");
     let dummy = "dummy";
-    run_command(
+    run_command::run(
         "docker",
         vec![
             "create",
@@ -254,7 +252,7 @@ fn prepare_scripts_in_copy_mode(prebuild_image: &PathBuf, scripts_dir: &Path) {
     )
     .expect("docker create container");
     let src_path_container = format!("{}:/scripts/.", dummy);
-    run_command(
+    run_command::run(
         "docker",
         vec![
             "cp",
@@ -263,7 +261,7 @@ fn prepare_scripts_in_copy_mode(prebuild_image: &PathBuf, scripts_dir: &Path) {
         ],
     )
     .expect("docker cp files");
-    run_command("docker", vec!["rm", "-f", dummy]).expect("docker rm container");
+    run_command::run("docker", vec!["rm", "-f", dummy]).expect("docker rm container");
 }
 
 fn check_scripts(target_dir: &Path, scripts_info: &HashMap<String, ScriptsInfo>) {
@@ -334,8 +332,8 @@ fn generate_script_deploy_config(
 fn build_godwoken_scripts(repos_dir: &Path, repo_name: &str) {
     let repo_dir = make_path(repos_dir, vec![repo_name]).display().to_string();
     let target_dir = format!("{}/c", repo_dir);
-    run_command("make", vec!["-C", &target_dir]).expect("run make");
-    run_command_in_dir(
+    run_command::run("make", vec!["-C", &target_dir]).expect("run make");
+    run_command::run_in_dir(
         "capsule",
         vec!["build", "--release", "--debug-output"],
         &repo_dir,
@@ -345,13 +343,13 @@ fn build_godwoken_scripts(repos_dir: &Path, repo_name: &str) {
 
 fn build_godwoken_polyjuice(repos_dir: &Path, repo_name: &str) {
     let target_dir = make_path(repos_dir, vec![repo_name]).display().to_string();
-    run_command("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
+    run_command::run("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
 }
 
 fn build_clerkb(repos_dir: &Path, repo_name: &str) {
     let target_dir = make_path(repos_dir, vec![repo_name]).display().to_string();
-    run_command("yarn", vec!["--cwd", &target_dir]).expect("run yarn");
-    run_command("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
+    run_command::run("yarn", vec!["--cwd", &target_dir]).expect("run yarn");
+    run_command::run("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
 }
 
 fn collect_scripts_to_target(
@@ -393,49 +391,16 @@ fn run_git_clone(repo_url: Url, is_recursive: bool, path: &str) -> Result<()> {
     if is_recursive {
         args.push("--recursive");
     }
-    run_command("git", args)
+    run_command::run("git", args)
 }
 
 fn run_git_checkout(repo_dir: &str, commit: &str) -> Result<()> {
-    run_command("git", vec!["-C", repo_dir, "fetch"])?;
-    run_command("git", vec!["-C", repo_dir, "checkout", commit])?;
-    run_command(
+    run_command::run("git", vec!["-C", repo_dir, "fetch"])?;
+    run_command::run("git", vec!["-C", repo_dir, "checkout", commit])?;
+    run_command::run(
         "git",
         vec!["-C", &repo_dir, "submodule", "update", "--recursive"],
     )
-}
-
-fn run_command_in_dir<I, S>(bin: &str, args: I, target_dir: &str) -> Result<()>
-where
-    I: IntoIterator<Item = S> + std::fmt::Debug,
-    S: AsRef<OsStr>,
-{
-    let working_dir = env::current_dir().expect("get working dir");
-    env::set_current_dir(&target_dir).expect("set target dir");
-    let result = run_command(bin, args);
-    env::set_current_dir(&working_dir).expect("set working dir");
-    result
-}
-
-fn run_command<I, S>(bin: &str, args: I) -> Result<()>
-where
-    I: IntoIterator<Item = S> + std::fmt::Debug,
-    S: AsRef<OsStr>,
-{
-    log::info!("[Execute]: {} {:?}", bin, args);
-    let status = Command::new(bin.to_owned())
-        .env("RUST_BACKTRACE", "full")
-        .args(args)
-        .status()
-        .expect("run command");
-    if !status.success() {
-        Err(anyhow::anyhow!(
-            "Exited with status code: {:?}",
-            status.code()
-        ))
-    } else {
-        Ok(())
-    }
 }
 
 fn make_path<P: AsRef<Path>>(parent_dir_path: &Path, paths: Vec<P>) -> PathBuf {

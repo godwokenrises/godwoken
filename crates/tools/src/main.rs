@@ -5,6 +5,7 @@ mod generate_config;
 pub mod godwoken_rpc;
 mod prepare_pk;
 mod prepare_scripts;
+mod run_command;
 
 use clap::{value_t, App, Arg, SubCommand};
 use std::path::Path;
