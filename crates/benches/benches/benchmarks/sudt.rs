@@ -143,7 +143,7 @@ pub fn bench(c: &mut Criterion) {
                             .build(),
                     )
                     .expect("create account");
-                let b_address = tree.get_script_hash(b_id).expect("get script hash");
+                let b_script_hash = tree.get_script_hash(b_id).expect("get script hash");
                 let block_producer_id = tree
                     .create_account_from_script(
                         Script::new_builder()
@@ -162,12 +162,21 @@ pub fn bench(c: &mut Criterion) {
                     H256::from_u128(init_a_balance).into(),
                 )
                 .expect("init balance");
-                (tree, rollup_config, sudt_id, a_id, b_address, block_info)
+                (
+                    tree,
+                    rollup_config,
+                    sudt_id,
+                    a_id,
+                    b_script_hash,
+                    block_info,
+                )
             },
-            |(mut tree, rollup_config, sudt_id, a_id, b_address, block_info)| {
+            |(mut tree, rollup_config, sudt_id, a_id, b_script_hash, block_info)| {
                 // transfer from A to B
                 let value = 4000u128;
                 let fee = 42u128;
+                let mut b_address = [0u8; 20];
+                b_address.copy_from_slice(&b_script_hash.as_slice()[0..20]);
                 let args = SUDTArgs::new_builder()
                     .set(
                         SUDTTransfer::new_builder()

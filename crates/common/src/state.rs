@@ -160,6 +160,10 @@ pub trait State {
 
     /// Mint SUDT token on layer2
     fn mint_sudt(&mut self, sudt_id: u32, id: u32, amount: u128) -> Result<(), Error> {
+        let script_hash = self.get_script_hash(id)?;
+        if script_hash.is_zero() {
+            return Err(Error::AccountNotFound);
+        }
         let raw_key = build_account_key(sudt_id, &H256::from_u32(id).as_slice());
         // calculate balance
         let mut balance = self.get_raw(&raw_key)?.to_u128();

@@ -384,12 +384,7 @@ impl Web3Indexer {
                 match sudt_args.to_enum() {
                     SUDTArgsUnion::SUDTTransfer(sudt_transfer) => {
                         // Since we can transfer to any non-exists account, we can not check the script.code_hash.
-                        let to_address = {
-                            let to: [u8; 32] = sudt_transfer.to().unpack();
-                            let mut data = [0u8; 20];
-                            data.copy_from_slice(&to[0..20]);
-                            data
-                        };
+                        let to_address = sudt_transfer.to().unpack();
                         let amount: u128 = sudt_transfer.amount().unpack();
                         let fee: u128 = sudt_transfer.fee().unpack();
                         let value = amount;
