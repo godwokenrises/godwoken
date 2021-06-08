@@ -44,7 +44,7 @@ const SYS_STORE_DATA: u64 = 4056;
 const SYS_LOAD_DATA: u64 = 4057;
 const SYS_GET_BLOCK_HASH: u64 = 4058;
 const SYS_GET_SCRIPT_HASH_BY_PREFIX: u64 = 4059;
-const SYS_RECOVER_ADDRESS: u64 = 4060;
+const SYS_RECOVER_ACCOUNT: u64 = 4060;
 const SYS_LOG: u64 = 4061;
 const SYS_LOAD_ROLLUP_CONFIG: u64 = 4062;
 /* CKB compatible syscalls */
@@ -370,9 +370,9 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 }
                 Ok(true)
             }
-            SYS_RECOVER_ADDRESS => {
-                // gw_recover_address(msg: Byte32, signature: Bytes, code_hash: Byte32) -> Byte20
-                let short_address_addr = machine.registers()[A0].to_u64();
+            SYS_RECOVER_ACCOUNT => {
+                // gw_recover_account(msg: Byte32, signature: Bytes, code_hash: Byte32) -> Script
+                let script_addr = machine.registers()[A0].to_u64();
                 let msg_addr = machine.registers()[A1].to_u64();
                 let signature_addr = machine.registers()[A2].to_u64();
                 let signature_len = machine.registers()[A3].to_u64();
@@ -394,14 +394,9 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                             .args(Bytes::from(script_args).pack())
                             .build();
 
-                        let mut account_script_hash = [0u8; 32];
-                        let mut hasher = new_blake2b();
-                        hasher.update(account_script.as_slice());
-                        hasher.finalize(&mut account_script_hash);
-                        let short_address = &account_script_hash[0..20];
                         machine
                             .memory_mut()
-                            .store_bytes(short_address_addr, short_address)?;
+                            .store_bytes(script_addr, account_script.as_slice())?;
                         machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                     } else {
                         machine.set_register(A0, Mac::REG::from_u8(ERROR_RECOVER));
