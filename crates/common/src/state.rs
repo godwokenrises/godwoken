@@ -160,6 +160,7 @@ pub trait State {
 
     /// Mint SUDT token on layer2
     fn mint_sudt(&mut self, sudt_id: u32, short_address: &[u8], amount: u128) -> Result<(), Error> {
+        assert_eq!(short_address.len(), 20);
         let raw_key = build_account_key(sudt_id, short_address);
         // calculate balance
         let mut balance = self.get_raw(&raw_key)?.to_u128();
@@ -170,6 +171,7 @@ pub trait State {
 
     /// burn SUDT
     fn burn_sudt(&mut self, sudt_id: u32, short_address: &[u8], amount: u128) -> Result<(), Error> {
+        assert_eq!(short_address.len(), 20);
         let raw_key = build_account_key(sudt_id, short_address);
         // calculate balance
         let mut balance = self.get_raw(&raw_key)?.to_u128();
