@@ -15,8 +15,6 @@ cfg_if::cfg_if! {
             MissingKey,
             #[error("Store error")]
             Store,
-            #[error("Account not found")]
-            AccountNotFound,
         }
     } else {
         #[derive(Debug, Eq, PartialEq, Clone)]
@@ -26,7 +24,6 @@ cfg_if::cfg_if! {
             MerkleProof,
             MissingKey,
             Store,
-            AccountNotFound,
         }
     }
 }
