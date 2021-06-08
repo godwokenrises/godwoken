@@ -94,7 +94,10 @@ impl<S: State + CodeStore> StateExt for S {
         let account_script_hash = request.script().hash();
         // mint CKB
         let capacity: u64 = request.capacity().unpack();
-        if self.get_account_id_by_script_hash(&account_script_hash.into())?.is_none() {
+        if self
+            .get_account_id_by_script_hash(&account_script_hash.into())?
+            .is_none()
+        {
             self.insert_script(account_script_hash.into(), request.script());
             let _new_id = self.create_account(account_script_hash.into())?;
         }

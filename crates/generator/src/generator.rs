@@ -106,7 +106,8 @@ impl Generator {
             .ok_or(AccountError::UnknownAccount)?; // find Simple UDT account
 
         // check CKB balance
-        let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, id)?;
+        let ckb_balance =
+            state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &account_script_hash.as_slice()[0..20])?;
         if capacity as u128 > ckb_balance {
             return Err(WithdrawalError::Overdraft.into());
         }
@@ -121,7 +122,8 @@ impl Generator {
             if amount == 0 {
                 return Err(WithdrawalError::NonPositiveSUDTAmount.into());
             }
-            let balance = state.get_sudt_balance(sudt_id, id)?;
+            let balance =
+                state.get_sudt_balance(sudt_id, &account_script_hash.as_slice()[0..20])?;
             if amount > balance {
                 return Err(WithdrawalError::Overdraft.into());
             }

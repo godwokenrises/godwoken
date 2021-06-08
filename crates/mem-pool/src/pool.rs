@@ -353,7 +353,9 @@ impl MemPool {
                 self.all_txs.remove(&tx_hash);
             }
             // Drop all withdrawals that are have no enough balance
-            let capacity = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, account_id)?;
+            let script_hash = state.get_script_hash(account_id)?;
+            let capacity =
+                state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &script_hash.as_slice()[0..20])?;
             let deprecated_withdrawals =
                 list.remove_lower_nonce_balance_withdrawals(nonce, capacity);
             for withdrawal in deprecated_withdrawals {

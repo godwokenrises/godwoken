@@ -95,7 +95,7 @@ fn test_deposit_and_withdrawal() {
         0,
     )
     .unwrap();
-    let (user_id, ckb_balance) = {
+    let (user_id, user_script_hash, ckb_balance) = {
         let tip_block_hash = chain.store().get_tip_block_hash().unwrap();
         let db = chain.store().begin_transaction();
         let state_db = StateDBTransaction::from_checkpoint(
@@ -116,9 +116,12 @@ fn test_deposit_and_withdrawal() {
             .unwrap()
             .expect("account exists");
         assert_ne!(user_id, 0);
-        let ckb_balance = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, user_id).unwrap();
+        let user_script_hash = tree.get_script_hash(user_id).unwrap();
+        let ckb_balance = tree
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_script_hash.as_slice()[0..20])
+            .unwrap();
         assert_eq!(ckb_balance, capacity as u128);
-        (user_id, ckb_balance)
+        (user_id, user_script_hash, ckb_balance)
     };
     // check tx pool state
     {
@@ -135,7 +138,7 @@ fn test_deposit_and_withdrawal() {
         );
         assert_eq!(
             state
-                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, user_id)
+                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_script_hash.as_slice()[0..20])
                 .unwrap(),
             capacity as u128
         );
@@ -161,7 +164,9 @@ fn test_deposit_and_withdrawal() {
     )
     .unwrap();
     let tree = state_db.account_state_tree().unwrap();
-    let ckb_balance2 = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, user_id).unwrap();
+    let ckb_balance2 = tree
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_script_hash.as_slice()[0..20])
+        .unwrap();
     assert_eq!(ckb_balance, ckb_balance2 + withdraw_capacity as u128);
     let nonce = tree.get_nonce(user_id).unwrap();
     assert_eq!(nonce, 1);
@@ -179,7 +184,7 @@ fn test_deposit_and_withdrawal() {
         );
         assert_eq!(
             state
-                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, user_id)
+                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_script_hash.as_slice()[0..20])
                 .unwrap(),
             ckb_balance2
         );

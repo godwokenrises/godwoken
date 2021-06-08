@@ -236,7 +236,8 @@ async fn get_balance(
     )?;
 
     let tree = state_db.account_state_tree()?;
-    let balance = tree.get_sudt_balance(sudt_id.into(), account_id.into())?;
+    let account_script_hash = tree.get_script_hash(account_id.into())?;
+    let balance = tree.get_sudt_balance(sudt_id.into(), &account_script_hash.as_slice()[0..20])?;
 
     Ok(balance.into())
 }

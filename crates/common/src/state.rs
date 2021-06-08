@@ -140,9 +140,10 @@ pub trait State {
         Ok(Some(id))
     }
 
-    fn get_sudt_balance(&self, sudt_id: u32, id: u32) -> Result<u128, Error> {
+    fn get_sudt_balance(&self, sudt_id: u32, short_address: &[u8]) -> Result<u128, Error> {
+        assert_eq!(short_address.len(), 20);
         // get balance
-        let balance = self.get_value(sudt_id, &H256::from_u32(id))?;
+        let balance = self.get_raw(&build_account_key(sudt_id, short_address))?;
         Ok(balance.to_u128())
     }
 
