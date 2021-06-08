@@ -94,6 +94,10 @@ impl<S: State + CodeStore> StateExt for S {
         let account_script_hash = request.script().hash();
         // mint CKB
         let capacity: u64 = request.capacity().unpack();
+        if self.get_account_id_by_script_hash(&account_script_hash.into())?.is_none() {
+            self.insert_script(account_script_hash.into(), request.script());
+            let _new_id = self.create_account(account_script_hash.into())?;
+        }
         // NOTE: the length `20` is a hard-coded value, may be `16` for some LockAlgorithm.
         let short_address = &account_script_hash[0..20];
         self.mint_sudt(CKB_SUDT_ACCOUNT_ID, short_address, capacity.into())?;
