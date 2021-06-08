@@ -170,14 +170,22 @@ impl MemPool {
                 MAX_IN_POOL_TXS
             ));
         }
+
+        // remove withdrawal request with lower or equal tx nonce
+        let account_id: u32 = tx.raw().from_id().unpack();
+        let entry_list = self.pending.entry(account_id).or_default();
+        let tx_nonce: u32 = tx.raw().nonce().unpack();
+        entry_list.withdrawals.retain(|withdrawal| {
+            let withdrawal_nonce: u32 = withdrawal.raw().nonce().unpack();
+            withdrawal_nonce > tx_nonce
+        });
+
         // Check replace-by-fee
         // TODO
 
         // Add to pool
         // TODO check nonce conflict
         self.all_txs.insert(tx_hash, tx.clone());
-        let account_id: u32 = tx.raw().from_id().unpack();
-        let entry_list = self.pending.entry(account_id).or_default();
         entry_list.txs.push(tx);
         Ok(())
     }
