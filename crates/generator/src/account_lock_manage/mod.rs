@@ -6,7 +6,7 @@ use gw_types::{
     packed::{L2Transaction, Script},
 };
 
-// #[cfg(debug_assertions)]
+#[cfg(debug_assertions)]
 pub mod always_success;
 pub mod secp256k1;
 

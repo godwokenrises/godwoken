@@ -92,16 +92,11 @@ impl<S: State + CodeStore> StateExt for S {
     ) -> Result<(), Error> {
         // find or create user account
         let account_script_hash = request.script().hash();
-        let id = match self.get_account_id_by_script_hash(&account_script_hash.into())? {
-            Some(id) => id,
-            None => {
-                self.insert_script(account_script_hash.into(), request.script());
-                self.create_account(account_script_hash.into())?
-            }
-        };
         // mint CKB
         let capacity: u64 = request.capacity().unpack();
-        self.mint_sudt(CKB_SUDT_ACCOUNT_ID, id, capacity.into())?;
+        // NOTE: the length `20` is a hard-coded value, may be `16` for some LockAlgorithm.
+        let short_address = &account_script_hash[0..20];
+        self.mint_sudt(CKB_SUDT_ACCOUNT_ID, short_address, capacity.into())?;
         let sudt_script_hash = request.sudt_script_hash().unpack();
         let amount = request.amount().unpack();
         if sudt_script_hash != CKB_SUDT_SCRIPT_ARGS.into() {
@@ -120,7 +115,7 @@ impl<S: State + CodeStore> StateExt for S {
                 return Err(AccountError::InvalidSUDTOperation.into());
             }
             // mint SUDT
-            self.mint_sudt(sudt_id, id, amount)?;
+            self.mint_sudt(sudt_id, short_address, amount)?;
         } else if amount != 0 {
             return Err(DepositError::DepositFakedCKB.into());
         }
@@ -143,14 +138,16 @@ impl<S: State + CodeStore> StateExt for S {
             .get_account_id_by_script_hash(&account_script_hash.into())?
             .ok_or(AccountError::UnknownAccount)?; // find Simple UDT account
         let capacity: u64 = raw.capacity().unpack();
+        // NOTE: the length `20` is a hard-coded value, may be `16` for some LockAlgorithm.
+        let short_address = &account_script_hash[0..20];
         // burn CKB
-        self.burn_sudt(CKB_SUDT_ACCOUNT_ID, id, capacity.into())?;
+        self.burn_sudt(CKB_SUDT_ACCOUNT_ID, short_address, capacity.into())?;
         let sudt_id = self
             .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
             .ok_or(AccountError::UnknownSUDT)?;
         if sudt_id != CKB_SUDT_ACCOUNT_ID {
             // burn sudt
-            self.burn_sudt(sudt_id, id, amount)?;
+            self.burn_sudt(sudt_id, short_address, amount)?;
         } else if amount != 0 {
             return Err(WithdrawalError::WithdrawFakedCKB.into());
         }
