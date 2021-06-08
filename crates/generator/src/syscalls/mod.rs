@@ -1,7 +1,7 @@
 use crate::{account_lock_manage::AccountLockManage, RollupContext};
 use ckb_vm::{
     memory::Memory,
-    registers::{A0, A1, A2, A3, A4, A7},
+    registers::{A0, A1, A2, A3, A4, A5, A7},
     Error as VMError, Register, SupportMachine, Syscalls,
 };
 use gw_common::{
@@ -373,10 +373,11 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
             SYS_RECOVER_ACCOUNT => {
                 // gw_recover_account(msg: Byte32, signature: Bytes, code_hash: Byte32) -> Script
                 let script_addr = machine.registers()[A0].to_u64();
-                let msg_addr = machine.registers()[A1].to_u64();
-                let signature_addr = machine.registers()[A2].to_u64();
-                let signature_len = machine.registers()[A3].to_u64();
-                let code_hash_addr = machine.registers()[A4].to_u64();
+                let script_len_addr = machine.registers()[A1].clone();
+                let msg_addr = machine.registers()[A2].to_u64();
+                let signature_addr = machine.registers()[A3].to_u64();
+                let signature_len = machine.registers()[A4].to_u64();
+                let code_hash_addr = machine.registers()[A5].to_u64();
 
                 let msg = load_data_h256(machine, msg_addr)?;
                 let signature = load_bytes(machine, signature_addr, signature_len as usize)?;
@@ -394,6 +395,10 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                             .args(Bytes::from(script_args).pack())
                             .build();
 
+                        machine.memory_mut().store64(
+                            &script_len_addr,
+                            &Mac::REG::from_u64(account_script.as_slice().len() as u64),
+                        )?;
                         machine
                             .memory_mut()
                             .store_bytes(script_addr, account_script.as_slice())?;
