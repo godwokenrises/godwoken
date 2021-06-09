@@ -9,6 +9,8 @@ use std::{
     thread, time,
 };
 
+const MIN_WALLET_CAPACITY: f32 = 100000.0f32;
+
 #[derive(Debug)]
 struct NodeWalletInfo {
     node_name: String,
@@ -20,15 +22,15 @@ struct NodeWalletInfo {
 }
 
 pub fn prepare_pk(
-    _privkey_path: &Path,
-    _ckb_count: u32,
+    payer_privkey: &Path,
+    ckb_count: u32,
     nodes_count: u8,
     output_dir: &Path,
     _poa_config_path: &Path,
     _rollup_config_path: &Path,
 ) -> Result<()> {
-    let privkeys = prepare_privkeys(output_dir, nodes_count);
-    let _nodes_info = check_wallets_info(privkeys);
+    let nodes_privkeys = prepare_privkeys(output_dir, nodes_count);
+    let _nodes_info = check_wallets_info(nodes_privkeys, ckb_count, payer_privkey);
     generate_poa_config();
     generate_rollup_config();
     Ok(())
@@ -53,12 +55,28 @@ fn prepare_privkeys(output_dir: &Path, nodes_count: u8) -> HashMap<String, PathB
         .collect()
 }
 
-fn check_wallets_info(privkeys: HashMap<String, PathBuf>) -> Vec<NodeWalletInfo> {
-    privkeys
+fn check_wallets_info(
+    nodes_privkeys: HashMap<String, PathBuf>,
+    ckb_count: u32,
+    payer_privkey_path: &Path,
+) -> Vec<NodeWalletInfo> {
+    nodes_privkeys
         .into_iter()
         .map(|(node, privkey)| {
-            let wallet_info = get_wallet_info(node, privkey);
-            println!("{:?}", wallet_info);
+            let wallet_info = get_wallet_info(&node, privkey);
+            let mut capacity = query_wallet_capacity(&wallet_info.testnet_address);
+            log::info!("{}'s wallet capacity: {}", node, capacity);
+            if capacity < MIN_WALLET_CAPACITY {
+                log::info!("Transfer ckb...");
+                transfer_ckb(&wallet_info, payer_privkey_path, ckb_count);
+                thread::sleep(time::Duration::from_secs(30));
+                capacity = query_wallet_capacity(&wallet_info.testnet_address);
+                assert!(
+                    capacity >= MIN_WALLET_CAPACITY,
+                    "wallet haven't received ckb, please try again"
+                );
+                log::info!("{}'s wallet capacity: {}", node, capacity);
+            }
             wallet_info
         })
         .collect()
@@ -74,7 +92,7 @@ fn generate_privkey_file(privkey_file_path: &Path) {
     fs::write(&privkey_file_path, &privkey).expect("create pk file");
 }
 
-fn get_wallet_info(node_name: String, privkey_path: PathBuf) -> NodeWalletInfo {
+fn get_wallet_info(node_name: &str, privkey_path: PathBuf) -> NodeWalletInfo {
     let (stdout, stderr) = utils::run_in_output_mode(
         "ckb-cli",
         vec![
@@ -86,7 +104,7 @@ fn get_wallet_info(node_name: String, privkey_path: PathBuf) -> NodeWalletInfo {
     )
     .expect("get key info");
     NodeWalletInfo {
-        node_name,
+        node_name: node_name.into(),
         privkey_path,
         testnet_address: look_after_in_line(&stdout, "testnet:"),
         lock_hash: look_after_in_line(&stdout, "lock_hash:"),
@@ -108,28 +126,23 @@ fn query_wallet_capacity(address: &str) -> f32 {
         .expect("parse capacity")
 }
 
-fn transfer_ckb(nodes_info: Vec<NodeWalletInfo>, privkey_path: &Path, ckb_count: u32) {
-    nodes_info.iter().for_each(|node| {
-        utils::run(
-            "ckb-cli",
-            vec![
-                "wallet",
-                "transfer",
-                "--to-address",
-                &node.testnet_address,
-                "--capacity",
-                &ckb_count.to_string(),
-                "--tx-fee",
-                "1",
-                "--privkey-path",
-                &privkey_path.display().to_string(),
-            ],
-        )
-        .expect("transfer ckb");
-        // thread::sleep(time::Duration::from_secs(30));
-        // let a = query_wallet_capacity(&node.testnet_address);
-        // println!("capa is {:?}", a);
-    });
+fn transfer_ckb(node_wallet: &NodeWalletInfo, payer_privkey_path: &Path, ckb_count: u32) {
+    utils::run(
+        "ckb-cli",
+        vec![
+            "wallet",
+            "transfer",
+            "--to-address",
+            &node_wallet.testnet_address,
+            "--capacity",
+            &ckb_count.to_string(),
+            "--tx-fee",
+            "1",
+            "--privkey-path",
+            &payer_privkey_path.display().to_string(),
+        ],
+    )
+    .expect("transfer ckb");
 }
 
 fn look_after_in_line(text: &str, key: &str) -> String {
