@@ -5,7 +5,7 @@ mod generate_config;
 pub mod godwoken_rpc;
 mod prepare_pk;
 mod prepare_scripts;
-mod run_command;
+mod utils;
 
 use clap::{value_t, App, Arg, SubCommand};
 use std::path::Path;
@@ -235,7 +235,6 @@ fn main() {
             SubCommand::with_name("prepare-pk")
                 .about("Generate godwoken nodes private keys, poa and rollup configs")
                 .arg(arg_privkey_path.clone())
-                .arg(arg_ckb_rpc.clone())
                 .arg(
                     Arg::with_name("ckb-count")
                         .short("c")
@@ -382,7 +381,6 @@ fn main() {
         }
         ("prepare-pk", Some(m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
-            let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
             let ckb_count = m
                 .value_of("ckb-count")
                 .map(|c| c.parse().expect("ckb count"))
@@ -396,7 +394,6 @@ fn main() {
             let rollup_config_path = Path::new(m.value_of("rollup-config-path").unwrap());
             if let Err(err) = prepare_pk::prepare_pk(
                 privkey_path,
-                ckb_rpc_url,
                 ckb_count,
                 nodes_count,
                 output_dir,
