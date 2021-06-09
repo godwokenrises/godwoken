@@ -112,7 +112,7 @@ pub fn deposit_ckb(
     );
     let address: Address = Address::new(network_type, address_payload);
 
-    let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url.to_string());
+    let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
     let init_balance = get_balance_by_script_hash(&mut godwoken_rpc_client, &l2_lock_hash)?;
 
     let output = run_cmd(vec![
