@@ -239,7 +239,7 @@ fn main() {
                     Arg::with_name("ckb-count")
                         .short("c")
                         .takes_value(true)
-                        .default_value("500000")
+                        .default_value("200000")
                         .required(true)
                         .help("CKB count transferred to every node"),
                 )
@@ -268,7 +268,7 @@ fn main() {
                 )
                 .arg(
                     Arg::with_name("rollup-config-path")
-                        .short("s")
+                        .short("r")
                         .takes_value(true)
                         .required(true)
                         .help("Output rollup config file path"),
@@ -392,17 +392,14 @@ fn main() {
             let output_dir = Path::new(m.value_of("output-dir-path").unwrap());
             let poa_config_path = Path::new(m.value_of("poa-config-path").unwrap());
             let rollup_config_path = Path::new(m.value_of("rollup-config-path").unwrap());
-            if let Err(err) = prepare_pk::prepare_pk(
+            prepare_pk::prepare_pk(
                 privkey_path,
                 ckb_count,
                 nodes_count,
                 output_dir,
                 poa_config_path,
                 rollup_config_path,
-            ) {
-                log::error!("Prepare nodes private keys error: {}", err);
-                std::process::exit(-1);
-            };
+            );
         }
         _ => {
             app.print_help().expect("print help");
