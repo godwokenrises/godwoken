@@ -1,7 +1,5 @@
 import blockchain;
 
-array Signature [byte; 65];
-
 struct BlockMerkleState {
     merkle_root: Byte32,
     count: Uint64,
@@ -49,7 +47,7 @@ table RawL2Transaction {
 
 table L2Transaction {
     raw: RawL2Transaction,
-    signature: Signature,
+    signature: Bytes,
 }
 
 vector L2TransactionVec <L2Transaction>;
@@ -122,9 +120,9 @@ struct RawWithdrawalRequest {
 
 vector WithdrawalRequestVec <WithdrawalRequest>;
 
-struct WithdrawalRequest {
+table WithdrawalRequest {
     raw: RawWithdrawalRequest,
-    signature: Signature,
+    signature: Bytes,
 }
 
 // --- contract execution ---

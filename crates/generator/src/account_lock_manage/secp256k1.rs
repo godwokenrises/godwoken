@@ -5,7 +5,7 @@ use gw_common::H256;
 use gw_types::prelude::*;
 use gw_types::{
     bytes::Bytes,
-    packed::{L2Transaction, Script, Signature},
+    packed::{L2Transaction, Script},
 };
 use lazy_static::lazy_static;
 use secp256k1::recovery::{RecoverableSignature, RecoveryId};
@@ -13,6 +13,16 @@ use sha3::{Digest, Keccak256};
 
 lazy_static! {
     pub static ref SECP256K1: secp256k1::Secp256k1<secp256k1::All> = secp256k1::Secp256k1::new();
+}
+
+fn convert_signature_to_byte65(signature: Bytes) -> Result<[u8; 65], LockAlgorithmError> {
+    if signature.len() != 65 {
+        return Err(LockAlgorithmError::InvalidSignature);
+    }
+
+    let mut buf = [0u8; 65];
+    buf.copy_from_slice(&signature);
+    Ok(buf)
 }
 
 #[derive(Debug, Default)]
@@ -37,13 +47,17 @@ impl LockAlgorithm for Secp256k1 {
             tx,
         );
 
-        self.verify_message(sender_script.args().unpack(), tx.signature(), message)
+        self.verify_message(
+            sender_script.args().unpack(),
+            tx.signature().unpack(),
+            message,
+        )
     }
 
     fn verify_message(
         &self,
         lock_args: Bytes,
-        signature: Signature,
+        signature: Bytes,
         message: H256,
     ) -> Result<bool, LockAlgorithmError> {
         if lock_args.len() != 52 {
@@ -52,7 +66,7 @@ impl LockAlgorithm for Secp256k1 {
         let mut expected_pubkey_hash = [0u8; 20];
         expected_pubkey_hash.copy_from_slice(&lock_args[32..52]);
         let signature: RecoverableSignature = {
-            let signature: [u8; 65] = signature.unpack();
+            let signature = convert_signature_to_byte65(signature)?;
             let recid = RecoveryId::from_i32(signature[64] as i32)
                 .map_err(|_| LockAlgorithmError::InvalidSignature)?;
             let data = &signature[..64];
@@ -87,7 +101,7 @@ impl Secp256k1Eth {
     fn verify_alone(
         &self,
         lock_args: Bytes,
-        signature: Signature,
+        signature: Bytes,
         message: H256,
     ) -> Result<bool, LockAlgorithmError> {
         if lock_args.len() != 52 {
@@ -97,7 +111,7 @@ impl Secp256k1Eth {
         let mut expected_pubkey_hash = [0u8; 20];
         expected_pubkey_hash.copy_from_slice(&lock_args[32..52]);
         let signature: RecoverableSignature = {
-            let signature: [u8; 65] = signature.unpack();
+            let signature = convert_signature_to_byte65(signature)?;
             let recid = RecoveryId::from_i32(signature[64] as i32)
                 .map_err(|_| LockAlgorithmError::InvalidSignature)?;
             let data = &signature[..64];
@@ -142,7 +156,11 @@ impl LockAlgorithm for Secp256k1Eth {
             &receiver_script,
             &tx,
         );
-        self.verify_message(sender_script.args().unpack(), tx.signature(), message)
+        self.verify_message(
+            sender_script.args().unpack(),
+            tx.signature().unpack(),
+            message,
+        )
     }
 
     // NOTE: verify_mesage here is using Ethereum's
@@ -150,7 +168,7 @@ impl LockAlgorithm for Secp256k1Eth {
     fn verify_message(
         &self,
         lock_args: Bytes,
-        signature: Signature,
+        signature: Bytes,
         message: H256,
     ) -> Result<bool, LockAlgorithmError> {
         let mut hasher = Keccak256::new();
@@ -187,13 +205,17 @@ impl LockAlgorithm for Secp256k1Tron {
             &tx,
         );
 
-        self.verify_message(sender_script.args().unpack(), tx.signature(), message)
+        self.verify_message(
+            sender_script.args().unpack(),
+            tx.signature().unpack(),
+            message,
+        )
     }
 
     fn verify_message(
         &self,
         lock_args: Bytes,
-        signature: Signature,
+        signature: Bytes,
         message: H256,
     ) -> Result<bool, LockAlgorithmError> {
         if lock_args.len() != 52 {
@@ -209,7 +231,7 @@ impl LockAlgorithm for Secp256k1Tron {
         let mut expected_pubkey_hash = [0u8; 20];
         expected_pubkey_hash.copy_from_slice(&lock_args[32..52]);
         let signature: RecoverableSignature = {
-            let signature: [u8; 65] = signature.unpack();
+            let signature: [u8; 65] = convert_signature_to_byte65(signature)?;
             let recid = {
                 let rec_param: i32 = match signature[64] {
                     28 => 1,
@@ -261,9 +283,8 @@ mod tests {
     #[test]
     fn test_secp256k1_eth_withdrawal_signature() {
         let message = H256::from([0u8; 32]);
-        let test_signature = Signature::from_slice(
-        &hex::decode("c2ae67217b65b785b1add7db1e9deb1df2ae2c7f57b9c29de0dfc40c59ab8d47341a863876660e3d0142b71248338ed71d2d4eb7ca078455565733095ac25a5800").expect("hex decode"))
-        .expect("create signature structure");
+        let test_signature = Bytes::from(
+        hex::decode("c2ae67217b65b785b1add7db1e9deb1df2ae2c7f57b9c29de0dfc40c59ab8d47341a863876660e3d0142b71248338ed71d2d4eb7ca078455565733095ac25a5800").expect("hex decode"));
         let address = Bytes::from(
             hex::decode("ffafb3db9377769f5b59bfff6cd2cf942a34ab17").expect("hex decode"),
         );
@@ -279,9 +300,8 @@ mod tests {
     #[test]
     fn test_secp256k1_tron() {
         let message = H256::from([0u8; 32]);
-        let test_signature = Signature::from_slice(
-        &hex::decode("702ec8cd52a61093519de11433595ee7177bc8beaef2836714efe23e01bbb45f7f4a51c079f16cc742a261fe53fa3d731704a7687054764d424bd92963a82a241b").expect("hex decode"))
-        .expect("create signature structure");
+        let test_signature = Bytes::from(
+        hex::decode("702ec8cd52a61093519de11433595ee7177bc8beaef2836714efe23e01bbb45f7f4a51c079f16cc742a261fe53fa3d731704a7687054764d424bd92963a82a241b").expect("hex decode"));
         let address = Bytes::from(
             hex::decode("d0ebb370429e1cc8a7da1f7aeb2447083e15298b").expect("hex decode"),
         );

@@ -1,5 +1,4 @@
 use crate::blockchain::Script;
-use crate::fixed_bytes::Byte65;
 use anyhow::{anyhow, Error as JsonError};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
@@ -52,7 +51,7 @@ impl From<packed::RawL2Transaction> for RawL2Transaction {
 #[serde(rename_all = "snake_case")]
 pub struct L2Transaction {
     pub raw: RawL2Transaction,
-    pub signature: Byte65,
+    pub signature: JsonBytes,
 }
 
 impl From<L2Transaction> for packed::L2Transaction {
@@ -61,7 +60,7 @@ impl From<L2Transaction> for packed::L2Transaction {
 
         packed::L2Transaction::new_builder()
             .raw(raw.into())
-            .signature(signature.into())
+            .signature(signature.into_bytes().pack())
             .build()
     }
 }
@@ -70,7 +69,7 @@ impl From<packed::L2Transaction> for L2Transaction {
     fn from(l2_transaction: packed::L2Transaction) -> L2Transaction {
         Self {
             raw: l2_transaction.raw().into(),
-            signature: l2_transaction.signature().into(),
+            signature: JsonBytes::from_bytes(l2_transaction.signature().unpack()),
         }
     }
 }
@@ -691,7 +690,7 @@ impl From<packed::DepositRequest> for DepositRequest {
 #[serde(rename_all = "snake_case")]
 pub struct WithdrawalRequest {
     pub raw: RawWithdrawalRequest,
-    pub signature: Byte65,
+    pub signature: JsonBytes,
 }
 
 impl From<WithdrawalRequest> for packed::WithdrawalRequest {
@@ -699,7 +698,7 @@ impl From<WithdrawalRequest> for packed::WithdrawalRequest {
         let WithdrawalRequest { raw, signature } = json;
         packed::WithdrawalRequest::new_builder()
             .raw(raw.into())
-            .signature(signature.into())
+            .signature(signature.into_bytes().pack())
             .build()
     }
 }
@@ -708,7 +707,7 @@ impl From<packed::WithdrawalRequest> for WithdrawalRequest {
     fn from(withdrawal_request: packed::WithdrawalRequest) -> WithdrawalRequest {
         Self {
             raw: withdrawal_request.raw().into(),
-            signature: withdrawal_request.signature().into(),
+            signature: JsonBytes::from_bytes(withdrawal_request.signature().unpack()),
         }
     }
 }

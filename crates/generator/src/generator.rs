@@ -165,7 +165,7 @@ impl Generator {
         let message = raw.calc_message(&self.rollup_context.rollup_script_hash);
         let valid_signature = lock_algo.verify_message(
             account_script.args().unpack(),
-            withdrawal_request.signature(),
+            withdrawal_request.signature().unpack(),
             message,
         )?;
 
