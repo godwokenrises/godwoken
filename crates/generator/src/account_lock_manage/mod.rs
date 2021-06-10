@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use gw_common::H256;
 use gw_types::{
     bytes::Bytes,
-    packed::{L2Transaction, Script, Signature},
+    packed::{L2Transaction, Script},
 };
 
 #[cfg(debug_assertions)]
@@ -16,7 +16,7 @@ pub trait LockAlgorithm {
     fn verify_message(
         &self,
         lock_args: Bytes,
-        signature: Signature,
+        signature: Bytes,
         message: H256,
     ) -> Result<bool, LockAlgorithmError>;
 

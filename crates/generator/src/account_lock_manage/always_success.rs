@@ -1,7 +1,7 @@
 use gw_common::H256;
 use gw_types::{
     bytes::Bytes,
-    packed::{L2Transaction, Script, Signature},
+    packed::{L2Transaction, Script},
 };
 
 use crate::{error::LockAlgorithmError, RollupContext};
@@ -19,7 +19,7 @@ impl LockAlgorithm for AlwaysSuccess {
     fn verify_message(
         &self,
         _lock_args: Bytes,
-        _signature: Signature,
+        _signature: Bytes,
         _message: H256,
     ) -> Result<bool, LockAlgorithmError> {
         Ok(true)

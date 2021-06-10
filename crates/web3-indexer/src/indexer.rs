@@ -224,6 +224,28 @@ impl Web3Indexer {
                 .await?
                 .ok_or_else(|| anyhow!("Can't get script by script_hash: {:?}", to_script_hash))?;
 
+            // assume the signature is compatible if length is 65, otherwise return zero
+            let signature: [u8; 65] = if l2_transaction.signature().len() == 65 {
+                let signature: Bytes = l2_transaction.signature().unpack();
+                let mut buf = [0u8; 65];
+                buf.copy_from_slice(&signature);
+                buf
+            } else {
+                [0u8; 65]
+            };
+
+            let r = {
+                let mut buf = [0u8; 32];
+                buf.copy_from_slice(&signature[0..32]);
+                buf
+            };
+            let s = {
+                let mut buf = [0u8; 32];
+                buf.copy_from_slice(&signature[32..64]);
+                buf
+            };
+            let v: u64 = signature[64].into();
+
             if to_script.code_hash().as_slice() == self.polyjuice_type_script_hash.0 {
                 let l2_tx_args = l2_transaction.raw().args();
                 let polyjuice_args = PolyjuiceArgs::decode(l2_tx_args.raw_data().as_ref())?;
@@ -243,19 +265,6 @@ impl Web3Indexer {
                 let chain_id: u64 = polyjuice_chain_id as u64;
                 let nonce: u32 = l2_transaction.raw().nonce().unpack();
                 let input = polyjuice_args.input.clone().unwrap_or_default();
-
-                let signature: [u8; 65] = l2_transaction.signature().unpack();
-                let r = {
-                    let mut buf = [0u8; 32];
-                    buf.copy_from_slice(&signature[0..32]);
-                    buf
-                };
-                let s = {
-                    let mut buf = [0u8; 32];
-                    buf.copy_from_slice(&signature[32..64]);
-                    buf
-                };
-                let v: u64 = signature[64].into();
 
                 // read logs
                 let db = store.begin_transaction();
@@ -414,18 +423,6 @@ impl Web3Indexer {
                         cumulative_gas_used += gas_limit;
 
                         let nonce: u32 = l2_transaction.raw().nonce().unpack();
-                        let signature: [u8; 65] = l2_transaction.signature().unpack();
-                        let r = {
-                            let mut buf = [0u8; 32];
-                            buf.copy_from_slice(&signature[0..32]);
-                            buf
-                        };
-                        let s = {
-                            let mut buf = [0u8; 32];
-                            buf.copy_from_slice(&signature[32..64]);
-                            buf
-                        };
-                        let v: u64 = signature[64].into();
 
                         let web3_transaction = Web3Transaction::new(
                             gw_tx_hash,
