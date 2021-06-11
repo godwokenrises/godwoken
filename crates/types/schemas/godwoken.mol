@@ -236,7 +236,7 @@ struct ChallengeTarget {
     block_hash: Byte32,
     // index of the challenge target
     target_index: Uint32,
-    // 0: tx, 1: withdrawal
+    // 0: tx execution, 1: tx signature, 2: withdrawal signature
     target_type: byte,
 }
 
@@ -280,28 +280,17 @@ table VerifyTransactionWitness {
     context: VerifyTransactionContext,
 }
 
-table VerifySignatureContext {
-    account_count: Uint32,
-    kv_state: KVPairVec,
-    scripts: ScriptVec,
-}
-
 // cancel challenge by verify tx signature
 table VerifyTransactionSignatureWitness {
-    l2tx: L2Transaction,
     raw_l2block: RawL2Block,
+    l2tx: L2Transaction,
     tx_proof: Bytes,
-    kv_state_proof: Bytes,
-    block_hashes_proof: Bytes,
-    context: VerifySignatureContext,
 }
 
 table VerifyWithdrawalWitness {
     raw_l2block: RawL2Block,
-    kv_state_proof: Bytes,
     withdrawal_request: WithdrawalRequest,
     withdrawal_proof: Bytes,
-    context: VerifySignatureContext,
 }
 
 // --- end of challenge ---
