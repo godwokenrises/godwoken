@@ -280,11 +280,18 @@ table VerifyTransactionWitness {
     context: VerifyTransactionContext,
 }
 
+table VerifyTransactionSignatureContext {
+    account_count: Uint32,
+    kv_state: KVPairVec,
+    scripts: ScriptVec,
+}
+
 // cancel challenge by verify tx signature
 table VerifyTransactionSignatureWitness {
     raw_l2block: RawL2Block,
     l2tx: L2Transaction,
     tx_proof: Bytes,
+    context: VerifyTransactionSignatureContext,
 }
 
 table VerifyWithdrawalWitness {
