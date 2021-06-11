@@ -291,6 +291,7 @@ table VerifyTransactionSignatureWitness {
     raw_l2block: RawL2Block,
     l2tx: L2Transaction,
     tx_proof: Bytes,
+    kv_state_proof: Bytes,
     context: VerifyTransactionSignatureContext,
 }
 
