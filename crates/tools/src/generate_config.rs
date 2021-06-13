@@ -1,5 +1,6 @@
 use crate::deploy_genesis::{get_secp_data, GenesisDeploymentResult};
 use crate::deploy_scripts::ScriptsDeploymentResult;
+use crate::setup_nodes::get_wallet_info;
 use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::Entity;
@@ -38,6 +39,7 @@ pub fn generate_config(
     output_path: &Path,
     database_url: Option<&str>,
     server_url: String,
+    privkey_path: &Path,
 ) -> Result<()> {
     let genesis: GenesisDeploymentResult = {
         let content = fs::read(genesis_path)?;
@@ -72,7 +74,7 @@ pub fn generate_config(
 
     // build configuration
     let account_id = 0;
-    let privkey_path = "<private key path>".into();
+    let _node_wallet_info = get_wallet_info(privkey_path);
     let lock = Default::default();
 
     let rollup_config = genesis.rollup_config.clone();
@@ -120,7 +122,10 @@ pub fn generate_config(
     // TODO: automatic generation
     let l1_sudt_type_dep = gw_types::packed::CellDep::default().into();
 
-    let wallet_config: WalletConfig = WalletConfig { privkey_path, lock };
+    let wallet_config: WalletConfig = WalletConfig {
+        privkey_path: privkey_path.into(),
+        lock,
+    };
 
     let mut backends: Vec<BackendConfig> = Vec::new();
     backends.push(BackendConfig {

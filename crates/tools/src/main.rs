@@ -140,6 +140,13 @@ fn main() {
                         .default_value("localhost:8119")
                         .required(true)
                         .help("The URL of rpc server"),
+                )
+                .arg(
+                    Arg::with_name("private-key-path")
+                        .short("p")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Godwoken node private key path"),
                 ),
         )
         .subcommand(
@@ -332,6 +339,7 @@ fn main() {
             let output_path = Path::new(m.value_of("output-path").unwrap());
             let database_url = m.value_of("database-url");
             let server_url = m.value_of("rpc-server-url").unwrap().to_string();
+            let privkey_path = Path::new(m.value_of("private-key-path").unwrap());
 
             if let Err(err) = generate_config::generate_config(
                 genesis_path,
@@ -342,6 +350,7 @@ fn main() {
                 output_path,
                 database_url,
                 server_url,
+                privkey_path,
             ) {
                 log::error!("Deploy genesis error: {}", err);
                 std::process::exit(-1);
