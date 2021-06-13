@@ -1,5 +1,3 @@
-use std::{fs, path::Path};
-
 use crate::deploy_genesis::{get_secp_data, GenesisDeploymentResult};
 use crate::deploy_scripts::ScriptsDeploymentResult;
 use anyhow::{anyhow, Result};
@@ -10,6 +8,7 @@ use gw_config::{
     RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
+use std::{fs, path::Path};
 
 const BACKEND_BINARIES_DIR: &str = "godwoken-scripts/c/build";
 
@@ -21,6 +20,7 @@ pub fn generate_config(
     indexer_url: String,
     output_path: &Path,
     database_url: Option<&str>,
+    server_url: String,
 ) -> Result<()> {
     let genesis: GenesisDeploymentResult = {
         let content = fs::read(genesis_path)?;
@@ -134,7 +134,7 @@ pub fn generate_config(
         ckb_url,
     };
     let rpc_server = RPCServerConfig {
-        listen: "localhost:8119".to_string(),
+        listen: server_url,
     };
     let block_producer: Option<BlockProducerConfig> = Some(BlockProducerConfig {
         account_id,
