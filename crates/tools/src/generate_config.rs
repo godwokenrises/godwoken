@@ -8,14 +8,31 @@ use gw_config::{
     RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
-use std::{fs, path::Path};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
-const BACKEND_BINARIES_DIR: &str = "godwoken-scripts/c/build";
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+struct ScriptsBuilt {
+    built_scripts: HashMap<String, PathBuf>,
+}
+
+impl ScriptsBuilt {
+    fn get_path(&self, name: &str) -> PathBuf {
+        self.built_scripts
+            .get(name)
+            .expect("get script path")
+            .into()
+    }
+}
 
 pub fn generate_config(
     genesis_path: &Path,
     scripts_path: &Path,
-    polyjuice_binaries_dir: &Path,
+    scripts_config_path: &Path,
     ckb_url: String,
     indexer_url: String,
     output_path: &Path,
@@ -28,6 +45,10 @@ pub fn generate_config(
     };
     let scripts: ScriptsDeploymentResult = {
         let content = fs::read(scripts_path)?;
+        serde_json::from_slice(&content)?
+    };
+    let scripts_built: ScriptsBuilt = {
+        let content = fs::read(scripts_config_path)?;
         serde_json::from_slice(&content)?
     };
 
@@ -103,21 +124,21 @@ pub fn generate_config(
 
     let mut backends: Vec<BackendConfig> = Vec::new();
     backends.push(BackendConfig {
-        validator_path: format!("{}/meta-contract-validator", BACKEND_BINARIES_DIR).into(),
-        generator_path: format!("{}/meta-contract-generator", BACKEND_BINARIES_DIR).into(),
+        validator_path: scripts_built.get_path("meta_contract_validator"),
+        generator_path: scripts_built.get_path("meta_contract_generator"),
         validator_script_type_hash: scripts.meta_contract_validator.script_type_hash.clone(),
     });
     backends.push(BackendConfig {
-        validator_path: format!("{}/sudt-validator", BACKEND_BINARIES_DIR).into(),
-        generator_path: format!("{}/sudt-generator", BACKEND_BINARIES_DIR).into(),
+        validator_path: scripts_built.get_path("l2_sudt_validator"),
+        generator_path: scripts_built.get_path("l2_sudt_generator"),
         validator_script_type_hash: scripts.l2_sudt_validator.script_type_hash.clone(),
     });
-    let polyjuice_binaries_dir = polyjuice_binaries_dir.to_string_lossy().to_string();
     backends.push(BackendConfig {
-        validator_path: format!("{}/polyjuice-validator", polyjuice_binaries_dir).into(),
-        generator_path: format!("{}/polyjuice-generator", polyjuice_binaries_dir).into(),
+        validator_path: scripts_built.get_path("polyjuice_validator"),
+        generator_path: scripts_built.get_path("polyjuice_generator"),
         validator_script_type_hash: scripts.polyjuice_validator.script_type_hash.clone(),
     });
+
     // FIXME change to a directory path after we tested the persist storage
     let store: StoreConfig = StoreConfig { path: "".into() };
     let genesis_committed_info = L2BlockCommittedInfo {
@@ -133,9 +154,7 @@ pub fn generate_config(
         indexer_url,
         ckb_url,
     };
-    let rpc_server = RPCServerConfig {
-        listen: server_url,
-    };
+    let rpc_server = RPCServerConfig { listen: server_url };
     let block_producer: Option<BlockProducerConfig> = Some(BlockProducerConfig {
         account_id,
         // cell deps

@@ -114,11 +114,11 @@ fn main() {
                         .help("The genesis deployment results json file path"),
                 )
                 .arg(
-                    Arg::with_name("polyjuice-binaries-dir-path")
-                        .short("p")
+                    Arg::with_name("scripts-deploy-config-path")
+                        .short("c")
                         .takes_value(true)
                         .required(true)
-                        .help("Polyjuice binaries directory path"),
+                        .help("Scripts depoly config json file path"),
                 )
                 .arg(
                     Arg::with_name("database-url")
@@ -328,8 +328,7 @@ fn main() {
             let indexer_url = m.value_of("indexer-rpc-url").unwrap().to_string();
             let scripts_path = Path::new(m.value_of("scripts-deployment-results-path").unwrap());
             let genesis_path = Path::new(m.value_of("genesis-deployment-results-path").unwrap());
-            let polyjuice_binaries_dir =
-                Path::new(m.value_of("polyjuice-binaries-dir-path").unwrap());
+            let scripts_config_path = Path::new(m.value_of("scripts-deploy-config-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
             let database_url = m.value_of("database-url");
             let server_url = m.value_of("rpc-server-url").unwrap().to_string();
@@ -337,7 +336,7 @@ fn main() {
             if let Err(err) = generate_config::generate_config(
                 genesis_path,
                 scripts_path,
-                polyjuice_binaries_dir,
+                scripts_config_path,
                 ckb_url,
                 indexer_url,
                 output_path,
