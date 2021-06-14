@@ -3,12 +3,13 @@ use crate::deploy_scripts::ScriptsDeploymentResult;
 use crate::setup_nodes::get_wallet_info;
 use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
-use ckb_types::prelude::Entity;
+use ckb_types::prelude::{Builder, Entity};
 use gw_config::{
     BackendConfig, BlockProducerConfig, ChainConfig, Config, GenesisConfig, RPCClientConfig,
     RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
+use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::{
@@ -33,13 +34,13 @@ impl ScriptsBuilt {
 pub fn generate_config(
     genesis_path: &Path,
     scripts_path: &Path,
-    scripts_config_path: &Path,
+    privkey_path: &Path,
     ckb_url: String,
     indexer_url: String,
     output_path: &Path,
     database_url: Option<&str>,
+    scripts_deploy_config_path: &Path,
     server_url: String,
-    privkey_path: &Path,
 ) -> Result<()> {
     let genesis: GenesisDeploymentResult = {
         let content = fs::read(genesis_path)?;
@@ -50,7 +51,7 @@ pub fn generate_config(
         serde_json::from_slice(&content)?
     };
     let scripts_built: ScriptsBuilt = {
-        let content = fs::read(scripts_config_path)?;
+        let content = fs::read(scripts_deploy_config_path)?;
         serde_json::from_slice(&content)?
     };
 
@@ -74,8 +75,35 @@ pub fn generate_config(
 
     // build configuration
     let account_id = 0;
-    let _node_wallet_info = get_wallet_info(privkey_path);
-    let lock = Default::default();
+    let node_wallet_info = get_wallet_info(privkey_path);
+    let code_hash: [u8; 32] = {
+        let mut hash = [0u8; 32];
+        hex::decode_to_slice(
+            node_wallet_info
+                .block_assembler_code_hash
+                .strip_prefix("0x")
+                .expect("get code hash"),
+            &mut hash as &mut [u8],
+        )?;
+        hash
+    };
+    let args: [u8; 20] = {
+        let mut args: [u8; 20] = [0u8; 20];
+        hex::decode_to_slice(
+            node_wallet_info
+                .lock_arg
+                .strip_prefix("0x")
+                .expect("get code hash"),
+            &mut args as &mut [u8],
+        )?;
+        args
+    };
+    let lock = Script::new_builder()
+        .code_hash(code_hash.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args(args.pack())
+        .build()
+        .into();
 
     let rollup_config = genesis.rollup_config.clone();
     let rollup_type_hash = genesis.rollup_type_hash;
@@ -143,7 +171,6 @@ pub fn generate_config(
         generator_path: scripts_built.get_path("polyjuice_generator"),
         validator_script_type_hash: scripts.polyjuice_validator.script_type_hash.clone(),
     });
-
     // FIXME change to a directory path after we tested the persist storage
     let store: StoreConfig = StoreConfig { path: "".into() };
     let genesis_committed_info = L2BlockCommittedInfo {

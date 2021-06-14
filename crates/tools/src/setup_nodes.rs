@@ -13,7 +13,6 @@ const MIN_WALLET_CAPACITY: f64 = 100000.0f64;
 
 #[derive(Debug)]
 pub struct NodeWalletInfo {
-    pub privkey_path: PathBuf,
     pub testnet_address: String,
     pub lock_hash: String,
     pub lock_arg: String,
@@ -134,7 +133,6 @@ pub fn get_wallet_info(privkey_path: &Path) -> NodeWalletInfo {
     )
     .expect("get key info");
     NodeWalletInfo {
-        privkey_path: privkey_path.into(),
         testnet_address: look_after_in_line(&stdout, "testnet:"),
         lock_hash: look_after_in_line(&stdout, "lock_hash:"),
         lock_arg: look_after_in_line(&stdout, "lock_arg:"),
