@@ -228,6 +228,13 @@ fn main() {
                         .takes_value(true)
                         .default_value("http://127.0.0.1:8119")
                         .help("Godwoken jsonrpc rpc sever URL"),
+                )
+                .arg(
+                    Arg::with_name("prefix-with-gw")
+                        .short("w")
+                        .long("prefix-with-gw")
+                        .takes_value(false)
+                        .help("Godwoken RPC with gw prefix or not."),
                 ),
         )
         .subcommand(
@@ -292,6 +299,13 @@ fn main() {
                         .takes_value(true)
                         .default_value("http://127.0.0.1:8119")
                         .help("Godwoken jsonrpc rpc sever URL"),
+                )
+                .arg(
+                    Arg::with_name("prefix-with-gw")
+                        .short("w")
+                        .long("prefix-with-gw")
+                        .takes_value(false)
+                        .help("Godwoken RPC with gw prefix or not."),
                 ),
         );
 
@@ -384,6 +398,7 @@ fn main() {
             let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+            let prefix_with_gw = m.is_present("prefix-with-gw");
 
             if let Err(err) = deposit_ckb::deposit_ckb(
                 privkey_path,
@@ -394,6 +409,7 @@ fn main() {
                 ckb_rpc_url.as_str(),
                 eth_address,
                 godwoken_rpc_url,
+                prefix_with_gw,
             ) {
                 log::error!("Deposit CKB error: {}", err);
                 std::process::exit(-1);
@@ -408,6 +424,7 @@ fn main() {
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
             let owner_ckb_address = m.value_of("owner-ckb-address").unwrap();
             let sudt_script_hash = m.value_of("sudt-script-hash").unwrap();
+            let prefix_with_gw = m.is_present("prefix-with-gw");
 
             if let Err(err) = withdraw::withdraw(
                 godwoken_rpc_url,
@@ -418,6 +435,7 @@ fn main() {
                 owner_ckb_address,
                 config_path,
                 deployment_results_path,
+                prefix_with_gw,
             ) {
                 log::error!("Withdrawal error: {}", err);
                 std::process::exit(-1);

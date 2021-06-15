@@ -31,6 +31,7 @@ pub fn deposit_ckb(
     ckb_rpc_url: &str,
     eth_address: Option<&str>,
     godwoken_rpc_url: &str,
+    prefix_with_gw: bool,
 ) -> Result<(), String> {
     let deployment_result_string =
         std::fs::read_to_string(deployment_results_path).map_err(|err| err.to_string())?;
@@ -112,7 +113,7 @@ pub fn deposit_ckb(
     );
     let address: Address = Address::new(network_type, address_payload);
 
-    let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
+    let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url, prefix_with_gw);
     let init_balance = get_balance_by_script_hash(&mut godwoken_rpc_client, &l2_lock_hash)?;
 
     let output = run_cmd(vec![
