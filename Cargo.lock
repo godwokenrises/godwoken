@@ -2203,6 +2203,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bech32",
+ "ckb-crypto",
  "ckb-fixed-hash",
  "ckb-hash",
  "ckb-jsonrpc-types",

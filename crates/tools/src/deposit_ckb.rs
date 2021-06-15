@@ -145,7 +145,7 @@ pub fn deposit_ckb(
     Ok(())
 }
 
-fn privkey_to_eth_address(privkey: &str) -> Result<CKBBytes, String> {
+pub fn privkey_to_eth_address(privkey: &str) -> Result<CKBBytes, String> {
     let privkey_data = H256::from_str(&privkey.trim()[2..]).map_err(|err| err.to_string())?;
     let privkey = secp256k1::SecretKey::from_slice(privkey_data.as_bytes())
         .map_err(|err| format!("Invalid secp256k1 secret key format, error: {}", err))?;
@@ -176,13 +176,13 @@ fn privkey_to_lock_hash(privkey: &str) -> Result<H256, String> {
 }
 
 // Read config.toml
-fn read_config<P: AsRef<Path>>(path: P) -> Result<Config, String> {
+pub fn read_config<P: AsRef<Path>>(path: P) -> Result<Config, String> {
     let content = fs::read(&path).map_err(|err| err.to_string())?;
     let config = toml::from_slice(&content).map_err(|err| err.to_string())?;
     Ok(config)
 }
 
-pub fn wait_for_balance_change(
+fn wait_for_balance_change(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     from_script_hash: &H256,
     init_balance: u128,
