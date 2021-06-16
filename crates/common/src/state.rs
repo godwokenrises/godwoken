@@ -18,6 +18,7 @@
 
 use crate::error::Error;
 use crate::h256_ext::{H256Ext, H256};
+use crate::vec::Vec;
 use crate::{blake2b::new_blake2b, merkle_utils::calculate_state_checkpoint};
 use core::mem::size_of;
 
@@ -28,6 +29,7 @@ pub const GW_ACCOUNT_SCRIPT_HASH: u8 = 2;
 /* Non-account types */
 pub const GW_SCRIPT_HASH_TO_ID_PREFIX: [u8; 5] = [0, 0, 0, 0, 3];
 pub const GW_DATA_HASH_PREFIX: [u8; 5] = [0, 0, 0, 0, 4];
+pub const SUDT_KEY_FLAG_BALANCE: u32 = 1;
 
 /* Generate a SMT key
  * raw_key: blake2b(id | type | key)
@@ -42,6 +44,14 @@ pub fn build_account_key(id: u32, key: &[u8]) -> H256 {
     hasher.update(key);
     hasher.finalize(&mut raw_key);
     raw_key.into()
+}
+
+pub fn build_sudt_key(key_flag: u32, short_address: &[u8]) -> Vec<u8> {
+    let mut key = Vec::with_capacity(short_address.len() + 8);
+    key.extend(&key_flag.to_le_bytes());
+    key.extend(&(short_address.len() as u32).to_le_bytes());
+    key.extend(short_address);
+    key
 }
 
 pub fn build_account_field_key(id: u32, type_: u8) -> H256 {
@@ -67,6 +77,11 @@ pub fn build_data_hash_key(data_hash: &[u8]) -> H256 {
     hasher.update(data_hash);
     hasher.finalize(&mut key);
     key.into()
+}
+
+/// NOTE: the length `20` is a hard-coded value, may be `16` for some LockAlgorithm.
+pub fn to_short_address(script_hash: &H256) -> &[u8] {
+    &script_hash.as_slice()[0..20]
 }
 
 pub struct PrepareWithdrawalRecord {
@@ -140,9 +155,13 @@ pub trait State {
         Ok(Some(id))
     }
 
-    fn get_sudt_balance(&self, sudt_id: u32, id: u32) -> Result<u128, Error> {
+    fn get_sudt_balance(&self, sudt_id: u32, short_address: &[u8]) -> Result<u128, Error> {
+        if short_address.len() != 20 {
+            return Err(Error::InvalidShortAddress);
+        }
         // get balance
-        let balance = self.get_value(sudt_id, &H256::from_u32(id))?;
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_address);
+        let balance = self.get_raw(&build_account_key(sudt_id, &sudt_key))?;
         Ok(balance.to_u128())
     }
 
@@ -159,8 +178,12 @@ pub trait State {
     }
 
     /// Mint SUDT token on layer2
-    fn mint_sudt(&mut self, sudt_id: u32, id: u32, amount: u128) -> Result<(), Error> {
-        let raw_key = build_account_key(sudt_id, &H256::from_u32(id).as_slice());
+    fn mint_sudt(&mut self, sudt_id: u32, short_address: &[u8], amount: u128) -> Result<(), Error> {
+        if short_address.len() != 20 {
+            return Err(Error::InvalidShortAddress);
+        }
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_address);
+        let raw_key = build_account_key(sudt_id, &sudt_key);
         // calculate balance
         let mut balance = self.get_raw(&raw_key)?.to_u128();
         balance = balance.checked_add(amount).ok_or(Error::AmountOverflow)?;
@@ -169,8 +192,12 @@ pub trait State {
     }
 
     /// burn SUDT
-    fn burn_sudt(&mut self, sudt_id: u32, id: u32, amount: u128) -> Result<(), Error> {
-        let raw_key = build_account_key(sudt_id, &H256::from_u32(id).as_slice());
+    fn burn_sudt(&mut self, sudt_id: u32, short_address: &[u8], amount: u128) -> Result<(), Error> {
+        if short_address.len() != 20 {
+            return Err(Error::InvalidShortAddress);
+        }
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_address);
+        let raw_key = build_account_key(sudt_id, &sudt_key);
         // calculate balance
         let mut balance = self.get_raw(&raw_key)?.to_u128();
         balance = balance.checked_sub(amount).ok_or(Error::AmountOverflow)?;

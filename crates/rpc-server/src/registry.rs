@@ -224,7 +224,7 @@ async fn submit_withdrawal_request(
 }
 
 async fn get_balance(
-    Params((account_id, sudt_id)): Params<(AccountID, AccountID)>,
+    Params((short_address, sudt_id)): Params<(JsonBytes, AccountID)>,
     store: Data<Store>,
 ) -> Result<Uint128> {
     let db = store.begin_transaction();
@@ -236,8 +236,7 @@ async fn get_balance(
     )?;
 
     let tree = state_db.account_state_tree()?;
-    let balance = tree.get_sudt_balance(sudt_id.into(), account_id.into())?;
-
+    let balance = tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?;
     Ok(balance.into())
 }
 

@@ -16,6 +16,10 @@ pub struct AlwaysSuccess;
 ///
 /// manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
 impl LockAlgorithm for AlwaysSuccess {
+    fn recover(&self, _message: H256, _signature: &[u8]) -> Result<Bytes, LockAlgorithmError> {
+        Ok(Default::default())
+    }
+
     fn verify_message(
         &self,
         _lock_args: Bytes,

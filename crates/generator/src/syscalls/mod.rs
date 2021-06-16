@@ -1,7 +1,7 @@
-use crate::RollupContext;
+use crate::{account_lock_manage::AccountLockManage, RollupContext};
 use ckb_vm::{
     memory::Memory,
-    registers::{A0, A1, A2, A3, A4, A7},
+    registers::{A0, A1, A2, A3, A4, A5, A7},
     Error as VMError, Register, SupportMachine, Syscalls,
 };
 use gw_common::{
@@ -44,6 +44,7 @@ const SYS_STORE_DATA: u64 = 4056;
 const SYS_LOAD_DATA: u64 = 4057;
 const SYS_GET_BLOCK_HASH: u64 = 4058;
 const SYS_GET_SCRIPT_HASH_BY_PREFIX: u64 = 4059;
+const SYS_RECOVER_ACCOUNT: u64 = 4060;
 const SYS_LOG: u64 = 4061;
 const SYS_LOAD_ROLLUP_CONFIG: u64 = 4062;
 /* CKB compatible syscalls */
@@ -55,11 +56,13 @@ pub const ERROR_DUPLICATED_SCRIPT_HASH: u8 = 200;
 pub const ERROR_UNKNOWN_SCRIPT_CODE_HASH: u8 = 201;
 pub const ERROR_INVALID_CONTRACT_SCRIPT: u8 = 202;
 pub const ERROR_NOT_FOUND: u8 = 203;
+pub const ERROR_RECOVER: u8 = 204;
 
 pub(crate) struct L2Syscalls<'a, S, C> {
     pub(crate) chain: &'a C,
     pub(crate) state: &'a S,
     pub(crate) rollup_context: &'a RollupContext,
+    pub(crate) account_lock_manage: &'a AccountLockManage,
     pub(crate) block_info: &'a BlockInfo,
     pub(crate) raw_tx: &'a RawL2Transaction,
     pub(crate) code_store: &'a dyn CodeStore,
@@ -323,8 +326,8 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 Ok(true)
             }
             SYS_GET_BLOCK_HASH => {
-                let number = machine.registers()[A0].to_u64();
-                let block_hash_addr = machine.registers()[A1].to_u64();
+                let block_hash_addr = machine.registers()[A0].to_u64();
+                let number = machine.registers()[A1].to_u64();
 
                 let block_hash_opt =
                     self.chain.get_block_hash_by_number(number).map_err(|err| {
@@ -347,26 +350,66 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 Ok(true)
             }
             SYS_GET_SCRIPT_HASH_BY_PREFIX => {
+                let script_hash_addr = machine.registers()[A0].to_u64();
                 // fetch prefix script hash
-                let prefix_addr = machine.registers()[A3].to_u64();
-                let prefix_len = machine.registers()[A4].to_u64();
+                let prefix_addr = machine.registers()[A1].to_u64();
+                let prefix_len = machine.registers()[A2].to_u64();
                 // check prefix len
                 if prefix_len != SCRIPT_HASH_PREFIX_LEN {
+                    log::error!("unexpected script hash prefix length: {}", prefix_len);
                     return Err(VMError::Unexpected);
                 }
                 let script_hash_prefix = load_bytes(machine, prefix_addr, prefix_len as usize)?;
-                let script_hash = match self
-                    .code_store
-                    .get_script_hash_by_prefix(&script_hash_prefix)
-                {
-                    Some(script_hash) => script_hash,
-                    None => {
-                        machine.set_register(A0, Mac::REG::from_u8(ERROR_NOT_FOUND));
-                        return Ok(true);
+                if let Some(script_hash) = self.get_script_hash_by_prefix(&script_hash_prefix) {
+                    machine
+                        .memory_mut()
+                        .store_bytes(script_hash_addr, script_hash.as_slice())?;
+                    machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                } else {
+                    machine.set_register(A0, Mac::REG::from_u8(ERROR_NOT_FOUND));
+                }
+                Ok(true)
+            }
+            SYS_RECOVER_ACCOUNT => {
+                // gw_recover_account(msg: Byte32, signature: Bytes, code_hash: Byte32) -> Script
+                let script_addr = machine.registers()[A0].to_u64();
+                let script_len_addr = machine.registers()[A1].clone();
+                let msg_addr = machine.registers()[A2].to_u64();
+                let signature_addr = machine.registers()[A3].to_u64();
+                let signature_len = machine.registers()[A4].to_u64();
+                let code_hash_addr = machine.registers()[A5].to_u64();
+
+                let msg = load_data_h256(machine, msg_addr)?;
+                let signature = load_bytes(machine, signature_addr, signature_len as usize)?;
+                let code_hash = load_data_h256(machine, code_hash_addr)?;
+
+                if let Some(lock_algo) = self.account_lock_manage.get_lock_algorithm(&code_hash) {
+                    if let Ok(lock_args) = lock_algo.recover(msg, &signature) {
+                        let mut script_args = vec![0u8; 32 + lock_args.len()];
+                        script_args[0..32]
+                            .copy_from_slice(self.rollup_context.rollup_script_hash.as_slice());
+                        script_args[32..32 + lock_args.len()].copy_from_slice(lock_args.as_ref());
+                        let account_script = Script::new_builder()
+                            .code_hash(code_hash.pack())
+                            .hash_type(ScriptHashType::Type.into())
+                            .args(Bytes::from(script_args).pack())
+                            .build();
+
+                        machine.memory_mut().store64(
+                            &script_len_addr,
+                            &Mac::REG::from_u64(account_script.as_slice().len() as u64),
+                        )?;
+                        machine
+                            .memory_mut()
+                            .store_bytes(script_addr, account_script.as_slice())?;
+                        machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                    } else {
+                        machine.set_register(A0, Mac::REG::from_u8(ERROR_RECOVER));
                     }
-                };
-                store_data(machine, script_hash.as_slice())?;
-                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                } else {
+                    machine.set_register(A0, Mac::REG::from_u8(ERROR_NOT_FOUND));
+                }
+
                 Ok(true)
             }
             SYS_LOG => {
@@ -448,6 +491,14 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
                 VMError::Unexpected
             })?;
         Ok(value)
+    }
+    fn get_script_hash_by_prefix(&mut self, prefix: &[u8]) -> Option<H256> {
+        for script_hash in self.result.new_scripts.keys() {
+            if script_hash.as_slice().starts_with(prefix) {
+                return Some(*script_hash);
+            }
+        }
+        self.code_store.get_script_hash_by_prefix(prefix)
     }
     fn get_account_id_by_script_hash(
         &mut self,

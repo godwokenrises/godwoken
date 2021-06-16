@@ -1,5 +1,6 @@
 import blockchain;
 
+
 struct BlockMerkleState {
     merkle_root: Byte32,
     count: Uint64,
@@ -219,12 +220,14 @@ union SUDTArgs {
     SUDTTransfer,
 }
 
-struct SUDTQuery {
-    account_id: Uint32,
+table SUDTQuery {
+    // godwoken short address (script_hash[0..n])
+    short_address: Bytes,
 }
 
-struct SUDTTransfer {
-    to: Uint32,
+table SUDTTransfer {
+    // godwoken short address (script_hash[0..n])
+    to: Bytes,
     amount: Uint128,
     fee: Uint128,
 }

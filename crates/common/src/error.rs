@@ -15,6 +15,8 @@ cfg_if::cfg_if! {
             MissingKey,
             #[error("Store error")]
             Store,
+            #[error("Invalid short address error")]
+            InvalidShortAddress,
         }
     } else {
         #[derive(Debug, Eq, PartialEq, Clone)]
@@ -24,6 +26,7 @@ cfg_if::cfg_if! {
             MerkleProof,
             MissingKey,
             Store,
+            InvalidShortAddress,
         }
     }
 }

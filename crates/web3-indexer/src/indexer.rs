@@ -383,38 +383,16 @@ impl Web3Indexer {
                     SUDTArgs::from_slice(l2_transaction.raw().args().raw_data().as_ref())?;
                 match sudt_args.to_enum() {
                     SUDTArgsUnion::SUDTTransfer(sudt_transfer) => {
-                        let to_id: u32 = sudt_transfer.to().unpack();
+                        // Since we can transfer to any non-exists account, we can not check the script.code_hash.
+                        let to_address_data: Bytes = sudt_transfer.to().unpack();
+                        if to_address_data.len() != 20 {
+                            continue;
+                        }
+                        let mut to_address = [0u8; 20];
+                        to_address.copy_from_slice(to_address_data.as_ref());
+
                         let amount: u128 = sudt_transfer.amount().unpack();
                         let fee: u128 = sudt_transfer.fee().unpack();
-
-                        let to_script_hash = get_script_hash(store.clone(), to_id).await?;
-                        let to_script = get_script(store.clone(), to_script_hash)
-                            .await?
-                            .ok_or_else(|| {
-                                anyhow!("Can't get script by script_hash: {:?}", to_script_hash)
-                            })?;
-                        let to_script_code_hash: H256 = to_script.code_hash().unpack();
-                        // to_id could be eoa account, polyjuice contract account, or any other types of account,
-                        // only eos/polyjuice contract account would be stored.
-                        let to_address = if to_script_code_hash == self.eth_account_lock_hash {
-                            let to_script_args = to_script.args().raw_data();
-                            if to_script_args.len() != 52
-                                && to_script_args[0..32] == self.rollup_type_hash.0
-                            {
-                                return Err(anyhow!(
-                                "Wrong to_address's script args length, expected: 52, actual: {}",
-                                to_script_args.len()
-                            ));
-                            }
-                            let mut to_address = [0u8; 20];
-                            to_address.copy_from_slice(&to_script_args[32..52]);
-                            to_address
-                        } else if to_script_code_hash == self.polyjuice_type_script_hash {
-                            account_id_to_eth_address(to_script_hash, to_id)
-                        } else {
-                            continue;
-                        };
-
                         let value = amount;
 
                         // Represent SUDTTransfer fee in web3 style, set gas_price as 1 temporary.
