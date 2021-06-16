@@ -21,16 +21,16 @@ struct NodeWalletInfo {
     block_assembler_code_hash: String,
 }
 
-pub fn prepare_pk(
+pub fn setup_nodes(
     payer_privkey: &Path,
-    ckb_count: u32,
+    capacity: u32,
     nodes_count: u8,
     output_dir: &Path,
     poa_config_path: &Path,
     rollup_config_path: &Path,
 ) {
     let nodes_privkeys = prepare_privkeys(output_dir, nodes_count);
-    let nodes_info = check_wallets_info(nodes_privkeys, ckb_count, payer_privkey);
+    let nodes_info = check_wallets_info(nodes_privkeys, capacity, payer_privkey);
     generate_poa_config(&nodes_info, poa_config_path);
     generate_rollup_config(rollup_config_path);
 }
@@ -59,25 +59,25 @@ fn prepare_privkeys(output_dir: &Path, nodes_count: u8) -> HashMap<String, PathB
 
 fn check_wallets_info(
     nodes_privkeys: HashMap<String, PathBuf>,
-    ckb_count: u32,
+    capacity: u32,
     payer_privkey_path: &Path,
 ) -> Vec<NodeWalletInfo> {
     nodes_privkeys
         .into_iter()
         .map(|(node, privkey)| {
             let wallet_info = get_wallet_info(&node, privkey);
-            let mut capacity = query_wallet_capacity(&wallet_info.testnet_address);
-            log::info!("{}'s wallet capacity: {}", node, capacity);
-            if capacity < MIN_WALLET_CAPACITY {
+            let mut current_capacity = query_wallet_capacity(&wallet_info.testnet_address);
+            log::info!("{}'s wallet capacity: {}", node, current_capacity);
+            if current_capacity < MIN_WALLET_CAPACITY {
                 log::info!("Start to transfer ckb, and it will take 30 seconds...");
-                transfer_ckb(&wallet_info, payer_privkey_path, ckb_count);
+                transfer_ckb(&wallet_info, payer_privkey_path, capacity);
                 thread::sleep(time::Duration::from_secs(30));
-                capacity = query_wallet_capacity(&wallet_info.testnet_address);
+                current_capacity = query_wallet_capacity(&wallet_info.testnet_address);
                 assert!(
-                    capacity >= MIN_WALLET_CAPACITY,
+                    current_capacity >= MIN_WALLET_CAPACITY,
                     "wallet haven't received ckb, please try again"
                 );
-                log::info!("{}'s wallet capacity: {}", node, capacity);
+                log::info!("{}'s wallet capacity: {}", node, current_capacity);
             }
             wallet_info
         })
@@ -103,11 +103,10 @@ fn generate_poa_config(nodes_info: &[NodeWalletInfo], poa_config_path: &Path) {
 }
 
 fn generate_rollup_config(rollup_config_path: &Path) {
-    let required_staking_capacity = 10000000000u64;
     let rollup_config = json!({
       "l1_sudt_script_type_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "burn_lock_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "required_staking_capacity": required_staking_capacity,
+      "required_staking_capacity": 10000000000u64,
       "challenge_maturity_blocks": 5,
       "finality_blocks": 20,
       "reward_burn_rate": 50,
@@ -158,7 +157,7 @@ fn query_wallet_capacity(address: &str) -> f64 {
         .expect("parse capacity")
 }
 
-fn transfer_ckb(node_wallet: &NodeWalletInfo, payer_privkey_path: &Path, ckb_count: u32) {
+fn transfer_ckb(node_wallet: &NodeWalletInfo, payer_privkey_path: &Path, capacity: u32) {
     utils::run(
         "ckb-cli",
         vec![
@@ -167,7 +166,7 @@ fn transfer_ckb(node_wallet: &NodeWalletInfo, payer_privkey_path: &Path, ckb_cou
             "--to-address",
             &node_wallet.testnet_address,
             "--capacity",
-            &ckb_count.to_string(),
+            &capacity.to_string(),
             "--tx-fee",
             "1",
             "--privkey-path",

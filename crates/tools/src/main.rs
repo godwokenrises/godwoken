@@ -3,8 +3,8 @@ mod deploy_scripts;
 mod deposit_ckb;
 mod generate_config;
 pub mod godwoken_rpc;
-mod prepare_pk;
 mod prepare_scripts;
+mod setup_nodes;
 mod utils;
 
 use clap::{value_t, App, Arg, SubCommand};
@@ -232,16 +232,16 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("prepare-pk")
+            SubCommand::with_name("setup-nodes")
                 .about("Generate godwoken nodes private keys, poa and rollup configs")
                 .arg(arg_privkey_path.clone())
                 .arg(
-                    Arg::with_name("ckb-count")
+                    Arg::with_name("capacity")
                         .short("c")
                         .takes_value(true)
                         .default_value("200000")
                         .required(true)
-                        .help("CKB count transferred to every node"),
+                        .help("Capacity transferred to every node"),
                 )
                 .arg(
                     Arg::with_name("nodes-count")
@@ -379,11 +379,11 @@ fn main() {
                 std::process::exit(-1);
             };
         }
-        ("prepare-pk", Some(m)) => {
+        ("setup-nodes", Some(m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
-            let ckb_count = m
-                .value_of("ckb-count")
-                .map(|c| c.parse().expect("ckb count"))
+            let capacity = m
+                .value_of("capacity")
+                .map(|c| c.parse().expect("get capacity"))
                 .unwrap();
             let nodes_count = m
                 .value_of("nodes-count")
@@ -392,9 +392,9 @@ fn main() {
             let output_dir = Path::new(m.value_of("output-dir-path").unwrap());
             let poa_config_path = Path::new(m.value_of("poa-config-path").unwrap());
             let rollup_config_path = Path::new(m.value_of("rollup-config-path").unwrap());
-            prepare_pk::prepare_pk(
+            setup_nodes::setup_nodes(
                 privkey_path,
-                ckb_count,
+                capacity,
                 nodes_count,
                 output_dir,
                 poa_config_path,
