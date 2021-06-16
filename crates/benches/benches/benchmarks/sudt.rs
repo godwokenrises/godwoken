@@ -1,5 +1,9 @@
 use criterion::*;
-use gw_common::{h256_ext::H256Ext, state::State, H256};
+use gw_common::{
+    h256_ext::H256Ext,
+    state::{build_account_key, State},
+    H256,
+};
 use gw_config::BackendConfig;
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, dummy_state::DummyState,
@@ -138,17 +142,18 @@ pub fn bench(c: &mut Criterion) {
                     .create_account_from_script(
                         Script::new_builder()
                             .code_hash([0u8; 32].pack())
-                            .args([0u8; 20].to_vec().pack())
+                            .args([1u8; 20].to_vec().pack())
                             .hash_type(ScriptHashType::Type.into())
                             .build(),
                     )
                     .expect("create account");
+                let a_script_hash = tree.get_script_hash(a_id).expect("get script hash");
                 let b_script_hash = tree.get_script_hash(b_id).expect("get script hash");
                 let block_producer_id = tree
                     .create_account_from_script(
                         Script::new_builder()
                             .code_hash([0u8; 32].pack())
-                            .args([0u8; 20].to_vec().pack())
+                            .args([3u8; 20].to_vec().pack())
                             .hash_type(ScriptHashType::Type.into())
                             .build(),
                     )
@@ -156,9 +161,8 @@ pub fn bench(c: &mut Criterion) {
                 let block_info = new_block_info(block_producer_id, 1, 0);
 
                 // init balance for a
-                tree.update_value(
-                    sudt_id,
-                    &H256::from_u32(a_id),
+                tree.update_raw(
+                    build_account_key(sudt_id, &a_script_hash.as_slice()[0..20]),
                     H256::from_u128(init_a_balance).into(),
                 )
                 .expect("init balance");
