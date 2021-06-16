@@ -161,11 +161,8 @@ pub fn bench(c: &mut Criterion) {
                 let block_info = new_block_info(block_producer_id, 1, 0);
 
                 // init balance for a
-                tree.update_raw(
-                    build_account_key(sudt_id, &a_script_hash.as_slice()[0..20]),
-                    H256::from_u128(init_a_balance).into(),
-                )
-                .expect("init balance");
+                tree.mint_sudt(sudt_id, &a_script_hash.as_slice()[0..20], init_a_balance)
+                    .expect("init balance");
                 (
                     tree,
                     rollup_config,

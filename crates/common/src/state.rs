@@ -18,6 +18,7 @@
 
 use crate::error::Error;
 use crate::h256_ext::{H256Ext, H256};
+use crate::vec::Vec;
 use crate::{blake2b::new_blake2b, merkle_utils::calculate_state_checkpoint};
 use core::mem::size_of;
 
@@ -28,6 +29,7 @@ pub const GW_ACCOUNT_SCRIPT_HASH: u8 = 2;
 /* Non-account types */
 pub const GW_SCRIPT_HASH_TO_ID_PREFIX: [u8; 5] = [0, 0, 0, 0, 3];
 pub const GW_DATA_HASH_PREFIX: [u8; 5] = [0, 0, 0, 0, 4];
+pub const SUDT_KEY_FLAG_BALANCE: u32 = 1;
 
 /* Generate a SMT key
  * raw_key: blake2b(id | type | key)
@@ -42,6 +44,14 @@ pub fn build_account_key(id: u32, key: &[u8]) -> H256 {
     hasher.update(key);
     hasher.finalize(&mut raw_key);
     raw_key.into()
+}
+
+fn build_sudt_key(key_flag: u32, short_address: &[u8]) -> Vec<u8> {
+    let mut key = Vec::with_capacity(short_address.len() + 8);
+    key.extend(&key_flag.to_le_bytes());
+    key.extend(&(short_address.len() as u32).to_le_bytes());
+    key.extend(short_address);
+    key
 }
 
 pub fn build_account_field_key(id: u32, type_: u8) -> H256 {
@@ -145,7 +155,8 @@ pub trait State {
             return Err(Error::InvalidShortAddress);
         }
         // get balance
-        let balance = self.get_raw(&build_account_key(sudt_id, short_address))?;
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_address);
+        let balance = self.get_raw(&build_account_key(sudt_id, &sudt_key))?;
         Ok(balance.to_u128())
     }
 
@@ -166,7 +177,8 @@ pub trait State {
         if short_address.len() != 20 {
             return Err(Error::InvalidShortAddress);
         }
-        let raw_key = build_account_key(sudt_id, short_address);
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_address);
+        let raw_key = build_account_key(sudt_id, &sudt_key);
         // calculate balance
         let mut balance = self.get_raw(&raw_key)?.to_u128();
         balance = balance.checked_add(amount).ok_or(Error::AmountOverflow)?;
@@ -179,7 +191,8 @@ pub trait State {
         if short_address.len() != 20 {
             return Err(Error::InvalidShortAddress);
         }
-        let raw_key = build_account_key(sudt_id, short_address);
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_address);
+        let raw_key = build_account_key(sudt_id, &sudt_key);
         // calculate balance
         let mut balance = self.get_raw(&raw_key)?.to_u128();
         balance = balance.checked_sub(amount).ok_or(Error::AmountOverflow)?;
