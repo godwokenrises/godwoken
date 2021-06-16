@@ -15,7 +15,7 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     error::Error as StateError,
     h256_ext::H256Ext,
-    state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
+    state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE},
     H256,
 };
 use gw_traits::{ChainStore, CodeStore};
@@ -107,7 +107,7 @@ impl Generator {
 
         // check CKB balance
         let ckb_balance =
-            state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &account_script_hash.as_slice()[0..20])?;
+            state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&account_script_hash))?;
         if capacity as u128 > ckb_balance {
             return Err(WithdrawalError::Overdraft.into());
         }
@@ -123,7 +123,7 @@ impl Generator {
                 return Err(WithdrawalError::NonPositiveSUDTAmount.into());
             }
             let balance =
-                state.get_sudt_balance(sudt_id, &account_script_hash.as_slice()[0..20])?;
+                state.get_sudt_balance(sudt_id, to_short_address(&account_script_hash))?;
             if amount > balance {
                 return Err(WithdrawalError::Overdraft.into());
             }

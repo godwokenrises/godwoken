@@ -1,5 +1,9 @@
 use anyhow::Result;
-use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
+use gw_common::{
+    builtins::CKB_SUDT_ACCOUNT_ID,
+    state::{to_short_address, State},
+    H256,
+};
 use gw_generator::{
     error::{DepositError, WithdrawalError},
     Error,
@@ -118,7 +122,7 @@ fn test_deposit_and_withdrawal() {
         assert_ne!(user_id, 0);
         let user_script_hash = tree.get_script_hash(user_id).unwrap();
         let ckb_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_script_hash.as_slice()[0..20])
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&user_script_hash))
             .unwrap();
         assert_eq!(ckb_balance, capacity as u128);
         (user_id, user_script_hash, ckb_balance)
@@ -138,7 +142,7 @@ fn test_deposit_and_withdrawal() {
         );
         assert_eq!(
             state
-                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_script_hash.as_slice()[0..20])
+                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&user_script_hash))
                 .unwrap(),
             capacity as u128
         );
@@ -165,7 +169,7 @@ fn test_deposit_and_withdrawal() {
     .unwrap();
     let tree = state_db.account_state_tree().unwrap();
     let ckb_balance2 = tree
-        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_script_hash.as_slice()[0..20])
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&user_script_hash))
         .unwrap();
     assert_eq!(ckb_balance, ckb_balance2 + withdraw_capacity as u128);
     let nonce = tree.get_nonce(user_id).unwrap();
@@ -184,7 +188,7 @@ fn test_deposit_and_withdrawal() {
         );
         assert_eq!(
             state
-                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &user_script_hash.as_slice()[0..20])
+                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&user_script_hash))
                 .unwrap(),
             ckb_balance2
         );

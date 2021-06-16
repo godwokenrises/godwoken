@@ -1,7 +1,6 @@
 use criterion::*;
 use gw_common::{
-    h256_ext::H256Ext,
-    state::{build_account_key, State},
+    state::{to_short_address, State},
     H256,
 };
 use gw_config::BackendConfig;
@@ -161,7 +160,7 @@ pub fn bench(c: &mut Criterion) {
                 let block_info = new_block_info(block_producer_id, 1, 0);
 
                 // init balance for a
-                tree.mint_sudt(sudt_id, &a_script_hash.as_slice()[0..20], init_a_balance)
+                tree.mint_sudt(sudt_id, to_short_address(&a_script_hash), init_a_balance)
                     .expect("init balance");
                 (
                     tree,
@@ -176,8 +175,7 @@ pub fn bench(c: &mut Criterion) {
                 // transfer from A to B
                 let value = 4000u128;
                 let fee = 42u128;
-                let mut b_address = [0u8; 20];
-                b_address.copy_from_slice(&b_script_hash.as_slice()[0..20]);
+                let b_address = to_short_address(&b_script_hash).to_vec();
                 let args = SUDTArgs::new_builder()
                     .set(
                         SUDTTransfer::new_builder()

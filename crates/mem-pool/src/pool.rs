@@ -13,7 +13,11 @@
 //! we also maintain a queue list which contains non-executable txs & withdrawals (these objects may become executable in the future).
 
 use anyhow::{anyhow, Result};
-use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
+use gw_common::{
+    builtins::CKB_SUDT_ACCOUNT_ID,
+    state::{to_short_address, State},
+    H256,
+};
 use gw_generator::Generator;
 use gw_store::{
     chain_view::ChainView,
@@ -355,7 +359,7 @@ impl MemPool {
             // Drop all withdrawals that are have no enough balance
             let script_hash = state.get_script_hash(account_id)?;
             let capacity =
-                state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, &script_hash.as_slice()[0..20])?;
+                state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash))?;
             let deprecated_withdrawals =
                 list.remove_lower_nonce_balance_withdrawals(nonce, capacity);
             for withdrawal in deprecated_withdrawals {

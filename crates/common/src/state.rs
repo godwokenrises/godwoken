@@ -46,7 +46,7 @@ pub fn build_account_key(id: u32, key: &[u8]) -> H256 {
     raw_key.into()
 }
 
-fn build_sudt_key(key_flag: u32, short_address: &[u8]) -> Vec<u8> {
+pub fn build_sudt_key(key_flag: u32, short_address: &[u8]) -> Vec<u8> {
     let mut key = Vec::with_capacity(short_address.len() + 8);
     key.extend(&key_flag.to_le_bytes());
     key.extend(&(short_address.len() as u32).to_le_bytes());
@@ -77,6 +77,11 @@ pub fn build_data_hash_key(data_hash: &[u8]) -> H256 {
     hasher.update(data_hash);
     hasher.finalize(&mut key);
     key.into()
+}
+
+/// NOTE: the length `20` is a hard-coded value, may be `16` for some LockAlgorithm.
+pub fn to_short_address(script_hash: &H256) -> &[u8] {
+    &script_hash.as_slice()[0..20]
 }
 
 pub struct PrepareWithdrawalRecord {
