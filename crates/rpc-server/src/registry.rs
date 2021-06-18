@@ -72,6 +72,10 @@ impl Registry {
             .with_method("get_nonce", get_nonce)
             .with_method("get_script", get_script)
             .with_method("get_script_hash", get_script_hash)
+            .with_method(
+                "get_script_hash_by_short_address",
+                get_script_hash_by_short_address,
+            )
             .with_method("get_data", get_data)
             .with_method("get_transaction_receipt", get_transaction_receipt)
             .with_method("execute_l2transaction", execute_l2transaction)
@@ -334,6 +338,22 @@ async fn get_script_hash(
 
     let script_hash = tree.get_script_hash(account_id.into())?;
     Ok(to_jsonh256(script_hash))
+}
+
+async fn get_script_hash_by_short_address(
+    Params((short_address,)): Params<(JsonBytes,)>,
+    store: Data<Store>,
+) -> Result<Option<JsonH256>> {
+    let db = store.begin_transaction();
+    let tip_hash = db.get_tip_block_hash()?;
+    let state_db = StateDBTransaction::from_checkpoint(
+        &db,
+        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        StateDBMode::ReadOnly,
+    )?;
+    let tree = state_db.account_state_tree()?;
+    let script_hash_opt = tree.get_script_hash_by_short_address(&short_address.into_bytes());
+    Ok(script_hash_opt.map(to_jsonh256))
 }
 
 async fn get_data(
