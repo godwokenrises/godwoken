@@ -526,7 +526,7 @@ impl<'a, 'db> CodeStore for StateTree<'a, 'db> {
         }
     }
 
-    fn get_script_hash_by_prefix(&self, script_hash_prefix: &[u8]) -> Option<H256> {
+    fn get_script_hash_by_short_address(&self, script_hash_prefix: &[u8]) -> Option<H256> {
         match self.db.get(COLUMN_SCRIPT_PREFIX, script_hash_prefix) {
             Some(slice) => {
                 let mut hash = [0u8; 32];

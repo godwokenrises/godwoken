@@ -43,7 +43,7 @@ const SYS_LOAD_ACCOUNT_SCRIPT: u64 = 4055;
 const SYS_STORE_DATA: u64 = 4056;
 const SYS_LOAD_DATA: u64 = 4057;
 const SYS_GET_BLOCK_HASH: u64 = 4058;
-const SYS_GET_SCRIPT_HASH_BY_PREFIX: u64 = 4059;
+const SYS_GET_SCRIPT_HASH_BY_SHORT_ADDRESS: u64 = 4059;
 const SYS_RECOVER_ACCOUNT: u64 = 4060;
 const SYS_LOG: u64 = 4061;
 const SYS_LOAD_ROLLUP_CONFIG: u64 = 4062;
@@ -349,7 +349,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 }
                 Ok(true)
             }
-            SYS_GET_SCRIPT_HASH_BY_PREFIX => {
+            SYS_GET_SCRIPT_HASH_BY_SHORT_ADDRESS => {
                 let script_hash_addr = machine.registers()[A0].to_u64();
                 // fetch prefix script hash
                 let prefix_addr = machine.registers()[A1].to_u64();
@@ -360,7 +360,9 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     return Err(VMError::Unexpected);
                 }
                 let script_hash_prefix = load_bytes(machine, prefix_addr, prefix_len as usize)?;
-                if let Some(script_hash) = self.get_script_hash_by_prefix(&script_hash_prefix) {
+                if let Some(script_hash) =
+                    self.get_script_hash_by_short_address(&script_hash_prefix)
+                {
                     machine
                         .memory_mut()
                         .store_bytes(script_hash_addr, script_hash.as_slice())?;
@@ -492,13 +494,13 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
             })?;
         Ok(value)
     }
-    fn get_script_hash_by_prefix(&mut self, prefix: &[u8]) -> Option<H256> {
+    fn get_script_hash_by_short_address(&mut self, prefix: &[u8]) -> Option<H256> {
         for script_hash in self.result.new_scripts.keys() {
             if script_hash.as_slice().starts_with(prefix) {
                 return Some(*script_hash);
             }
         }
-        self.code_store.get_script_hash_by_prefix(prefix)
+        self.code_store.get_script_hash_by_short_address(prefix)
     }
     fn get_account_id_by_script_hash(
         &mut self,
