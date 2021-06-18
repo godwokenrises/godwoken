@@ -128,11 +128,11 @@ fn main() {
                         .help("The output json file path"),
                 )
                 .arg(
-                    Arg::with_name("scripts-deploy-config-path")
+                    Arg::with_name("scripts-deployment-config-path")
                         .short("c")
                         .takes_value(true)
                         .required(true)
-                        .help("Scripts depoly config json file path"),
+                        .help("Scripts deployment config json file path"),
                 )
                 .arg(
                     Arg::with_name("rpc-server-url")
@@ -327,24 +327,25 @@ fn main() {
         ("generate-config", Some(m)) => {
             let ckb_url = m.value_of("ckb-rpc-url").unwrap().to_string();
             let indexer_url = m.value_of("indexer-rpc-url").unwrap().to_string();
-            let scripts_path = Path::new(m.value_of("scripts-deployment-results-path").unwrap());
+            let scripts_results_path =
+                Path::new(m.value_of("scripts-deployment-results-path").unwrap());
             let genesis_path = Path::new(m.value_of("genesis-deployment-results-path").unwrap());
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
             let database_url = m.value_of("database-url");
-            let scripts_deploy_config_path =
-                Path::new(m.value_of("scripts-deploy-config-path").unwrap());
+            let scripts_config_path =
+                Path::new(m.value_of("scripts-deployment-config-path").unwrap());
             let server_url = m.value_of("rpc-server-url").unwrap().to_string();
 
             if let Err(err) = generate_config::generate_config(
                 genesis_path,
-                scripts_path,
+                scripts_results_path,
                 privkey_path,
                 ckb_url,
                 indexer_url,
                 output_path,
                 database_url,
-                scripts_deploy_config_path,
+                scripts_config_path,
                 server_url,
             ) {
                 log::error!("Deploy genesis error: {}", err);

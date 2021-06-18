@@ -31,27 +31,28 @@ impl ScriptsBuilt {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn generate_config(
     genesis_path: &Path,
-    scripts_path: &Path,
+    scripts_results_path: &Path,
     privkey_path: &Path,
     ckb_url: String,
     indexer_url: String,
     output_path: &Path,
     database_url: Option<&str>,
-    scripts_deploy_config_path: &Path,
+    scripts_config_path: &Path,
     server_url: String,
 ) -> Result<()> {
     let genesis: GenesisDeploymentResult = {
         let content = fs::read(genesis_path)?;
         serde_json::from_slice(&content)?
     };
-    let scripts: ScriptsDeploymentResult = {
-        let content = fs::read(scripts_path)?;
+    let scripts_results: ScriptsDeploymentResult = {
+        let content = fs::read(scripts_results_path)?;
         serde_json::from_slice(&content)?
     };
     let scripts_built: ScriptsBuilt = {
-        let content = fs::read(scripts_deploy_config_path)?;
+        let content = fs::read(scripts_config_path)?;
         serde_json::from_slice(&content)?
     };
 
@@ -107,8 +108,10 @@ pub fn generate_config(
 
     let rollup_config = genesis.rollup_config.clone();
     let rollup_type_hash = genesis.rollup_type_hash;
-    let meta_contract_validator_type_hash =
-        scripts.meta_contract_validator.script_type_hash.clone();
+    let meta_contract_validator_type_hash = scripts_results
+        .meta_contract_validator
+        .script_type_hash
+        .clone();
     let rollup_type_script = {
         let script: ckb_types::packed::Script = genesis.rollup_type_script.into();
         gw_types::packed::Script::new_unchecked(script.as_bytes()).into()
@@ -118,33 +121,37 @@ pub fn generate_config(
         gw_types::packed::CellDep::new_unchecked(cell_dep.as_bytes()).into()
     };
     let poa_lock_dep = {
-        let dep: ckb_types::packed::CellDep = scripts.state_validator_lock.cell_dep.clone().into();
+        let dep: ckb_types::packed::CellDep =
+            scripts_results.state_validator_lock.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let poa_state_dep = {
-        let dep: ckb_types::packed::CellDep = scripts.poa_state.cell_dep.clone().into();
+        let dep: ckb_types::packed::CellDep = scripts_results.poa_state.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let rollup_cell_type_dep = {
-        let dep: ckb_types::packed::CellDep = scripts.state_validator.cell_dep.clone().into();
+        let dep: ckb_types::packed::CellDep =
+            scripts_results.state_validator.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let deposit_cell_lock_dep = {
-        let dep: ckb_types::packed::CellDep = scripts.deposit_lock.cell_dep.clone().into();
+        let dep: ckb_types::packed::CellDep = scripts_results.deposit_lock.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let stake_cell_lock_dep = {
-        let dep: ckb_types::packed::CellDep = scripts.stake_lock.cell_dep.clone().into();
+        let dep: ckb_types::packed::CellDep = scripts_results.stake_lock.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let (_data, secp_data_dep) =
         get_secp_data(&mut rpc_client).map_err(|err| anyhow!("{}", err))?;
     let custodian_cell_lock_dep = {
-        let dep: ckb_types::packed::CellDep = scripts.custodian_lock.cell_dep.clone().into();
+        let dep: ckb_types::packed::CellDep =
+            scripts_results.custodian_lock.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let withdrawal_cell_lock_dep = {
-        let dep: ckb_types::packed::CellDep = scripts.withdrawal_lock.cell_dep.clone().into();
+        let dep: ckb_types::packed::CellDep =
+            scripts_results.withdrawal_lock.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     // TODO: automatic generation
@@ -159,17 +166,20 @@ pub fn generate_config(
     backends.push(BackendConfig {
         validator_path: scripts_built.get_path("meta_contract_validator"),
         generator_path: scripts_built.get_path("meta_contract_generator"),
-        validator_script_type_hash: scripts.meta_contract_validator.script_type_hash.clone(),
+        validator_script_type_hash: scripts_results
+            .meta_contract_validator
+            .script_type_hash
+            .clone(),
     });
     backends.push(BackendConfig {
         validator_path: scripts_built.get_path("l2_sudt_validator"),
         generator_path: scripts_built.get_path("l2_sudt_generator"),
-        validator_script_type_hash: scripts.l2_sudt_validator.script_type_hash.clone(),
+        validator_script_type_hash: scripts_results.l2_sudt_validator.script_type_hash.clone(),
     });
     backends.push(BackendConfig {
         validator_path: scripts_built.get_path("polyjuice_validator"),
         generator_path: scripts_built.get_path("polyjuice_generator"),
-        validator_script_type_hash: scripts.polyjuice_validator.script_type_hash.clone(),
+        validator_script_type_hash: scripts_results.polyjuice_validator.script_type_hash.clone(),
     });
     // FIXME change to a directory path after we tested the persist storage
     let store: StoreConfig = StoreConfig { path: "".into() };
@@ -216,7 +226,7 @@ pub fn generate_config(
     let web3_indexer = match database_url {
         Some(database_url) => Some(Web3IndexerConfig {
             database_url: database_url.to_owned(),
-            polyjuice_script_type_hash: scripts.polyjuice_validator.script_type_hash,
+            polyjuice_script_type_hash: scripts_results.polyjuice_validator.script_type_hash,
             eth_account_lock_hash: eth_account_lock_hash.to_owned(),
         }),
         None => None,
