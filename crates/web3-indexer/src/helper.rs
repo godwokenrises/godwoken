@@ -47,20 +47,20 @@ pub fn account_id_to_eth_address(account_script_hash: H256, id: u32) -> [u8; 20]
 pub enum GwLog {
     SudtTransfer {
         sudt_id: u32,
-        from_id: u32,
-        to_id: u32,
+        from_address: [u8; 20],
+        to_address: [u8; 20],
         amount: u128,
     },
     SudtPayFee {
         sudt_id: u32,
-        from_id: u32,
-        block_producer_id: u32,
+        from_address: [u8; 20],
+        block_producer_address: [u8; 20],
         amount: u128,
     },
     PolyjuiceSystem {
         gas_used: u64,
         cumulative_gas_used: u64,
-        created_id: u32,
+        created_address: [u8; 20],
         status_code: u32,
     },
     PolyjuiceUser {
@@ -70,18 +70,18 @@ pub enum GwLog {
     },
 }
 
-fn parse_sudt_log_data(data: &[u8]) -> (u32, u32, u128) {
-    let mut u32_bytes = [0u8; 4];
-    u32_bytes.copy_from_slice(&data[0..4]);
-    let from_id = u32::from_le_bytes(u32_bytes);
+fn parse_sudt_log_data(data: &[u8]) -> ([u8; 20], [u8; 20], u128) {
+    assert_eq!(data[0], 20);
+    let mut from_address = [0u8; 20];
+    from_address.copy_from_slice(&data[1..21]);
 
-    u32_bytes.copy_from_slice(&data[4..8]);
-    let to_id = u32::from_le_bytes(u32_bytes);
+    let mut to_address = [0u8; 20];
+    to_address.copy_from_slice(&data[21..41]);
 
     let mut u128_bytes = [0u8; 16];
-    u128_bytes.copy_from_slice(&data[8..24]);
+    u128_bytes.copy_from_slice(&data[41..57]);
     let amount = u128::from_le_bytes(u128_bytes);
-    (from_id, to_id, amount)
+    (from_address, to_address, amount)
 }
 
 pub fn parse_log(item: &LogItem) -> Result<GwLog> {
@@ -91,32 +91,32 @@ pub fn parse_log(item: &LogItem) -> Result<GwLog> {
     match service_flag {
         GW_LOG_SUDT_TRANSFER => {
             let sudt_id: u32 = item.account_id().unpack();
-            if data.len() != (4 + 4 + 16) {
+            if data.len() != (1 + 20 + 20 + 16) {
                 return Err(anyhow!("Invalid data length: {}", data.len()));
             }
-            let (from_id, to_id, amount) = parse_sudt_log_data(data);
+            let (from_address, to_address, amount) = parse_sudt_log_data(data);
             Ok(GwLog::SudtTransfer {
                 sudt_id,
-                from_id,
-                to_id,
+                from_address,
+                to_address,
                 amount,
             })
         }
         GW_LOG_SUDT_PAY_FEE => {
             let sudt_id: u32 = item.account_id().unpack();
-            if data.len() != (4 + 4 + 16) {
+            if data.len() != (1 + 20 + 20 + 16) {
                 return Err(anyhow!("Invalid data length: {}", data.len()));
             }
-            let (from_id, block_producer_id, amount) = parse_sudt_log_data(data);
+            let (from_address, block_producer_address, amount) = parse_sudt_log_data(data);
             Ok(GwLog::SudtPayFee {
                 sudt_id,
-                from_id,
-                block_producer_id,
+                from_address,
+                block_producer_address,
                 amount,
             })
         }
         GW_LOG_POLYJUICE_SYSTEM => {
-            if data.len() != (8 + 8 + 4 + 4 + 4) {
+            if data.len() != (8 + 8 + 20 + 4) {
                 return Err(anyhow!(
                     "invalid system log raw data length: {}",
                     data.len()
@@ -129,15 +129,18 @@ pub fn parse_log(item: &LogItem) -> Result<GwLog> {
             u64_bytes.copy_from_slice(&data[8..16]);
             let cumulative_gas_used = u64::from_le_bytes(u64_bytes);
 
+            let created_address = {
+                let mut buf = [0u8; 20];
+                buf.copy_from_slice(&data[16..36]);
+                buf
+            };
             let mut u32_bytes = [0u8; 4];
-            u32_bytes.copy_from_slice(&data[16..20]);
-            let created_id = u32::from_le_bytes(u32_bytes);
-            u32_bytes.copy_from_slice(&data[20..24]);
+            u32_bytes.copy_from_slice(&data[36..40]);
             let status_code = u32::from_le_bytes(u32_bytes);
             Ok(GwLog::PolyjuiceSystem {
                 gas_used,
                 cumulative_gas_used,
-                created_id,
+                created_address,
                 status_code,
             })
         }
