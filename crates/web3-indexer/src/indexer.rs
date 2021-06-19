@@ -288,19 +288,18 @@ impl Web3Indexer {
                 let (contract_address, tx_gas_used) = if let GwLog::PolyjuiceSystem {
                     gas_used,
                     cumulative_gas_used: _,
-                    created_id,
+                    created_address,
                     status_code: _,
                 } = polyjuice_system_log
                 {
                     let tx_gas_used = gas_used.into();
                     cumulative_gas_used += tx_gas_used;
-                    let contract_address = if polyjuice_args.is_create && created_id != u32::MAX {
-                        let created_script_hash =
-                            get_script_hash(store.clone(), created_id).await?;
-                        Some(account_id_to_eth_address(created_script_hash, created_id))
-                    } else {
-                        None
-                    };
+                    let contract_address =
+                        if polyjuice_args.is_create && created_address != [0u8; 20] {
+                            Some(created_address)
+                        } else {
+                            None
+                        };
                     (contract_address, tx_gas_used)
                 } else {
                     return Err(anyhow!(
