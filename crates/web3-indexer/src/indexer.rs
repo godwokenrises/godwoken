@@ -102,11 +102,11 @@ impl Web3Indexer {
                 };
                 let  (transaction_id,): (i64,) =
             sqlx::query_as("INSERT INTO transactions
-            (hash, gw_tx_hash, block_number, block_hash, transaction_index, from_address, to_address, value, nonce, gas_limit, gas_price, input, v, r, s, cumulative_gas_used, gas_used, logs_bloom, contract_address, status) 
+            (hash, eth_tx_hash, block_number, block_hash, transaction_index, from_address, to_address, value, nonce, gas_limit, gas_price, input, v, r, s, cumulative_gas_used, gas_used, logs_bloom, contract_address, status) 
             VALUES 
             ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING ID")
-            .bind(hex(web3_tx.compute_eth_tx_hash().as_slice())?)
             .bind(hex(web3_tx.gw_tx_hash.as_slice())?)
+            .bind(hex(web3_tx.compute_eth_tx_hash().as_slice())?)
             .bind(Decimal::from(web3_tx.block_number))
             .bind(hex(web3_tx.block_hash.as_slice())?)
             .bind(web3_tx.transaction_index)
@@ -332,8 +332,6 @@ impl Web3Indexer {
                     true,
                 );
 
-                let eth_tx_hash = web3_transaction.compute_eth_tx_hash();
-
                 let web3_logs = {
                     let mut logs: Vec<Web3Log> = vec![];
                     let mut log_index = 0;
@@ -349,7 +347,7 @@ impl Web3Indexer {
                                 topics,
                             } => {
                                 let web3_log = Web3Log::new(
-                                    eth_tx_hash,
+                                    gw_tx_hash,
                                     tx_index,
                                     block_number,
                                     block_hash,
