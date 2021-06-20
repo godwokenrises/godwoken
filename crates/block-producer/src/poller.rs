@@ -3,17 +3,19 @@ use crate::{
     rpc_client::RPCClient,
 };
 use crate::{types::ChainEvent, utils::to_result};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{Params as ClientParams, Transport};
 use ckb_fixed_hash::H256;
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
-use gw_generator::RollupContext;
+use gw_generator::{ChallengeContext, RollupContext};
 use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, TransactionWithStatus, Uint32};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     packed::{
-        CellOutput, DepositLockArgs, DepositRequest, L2BlockCommittedInfo, Script, Transaction,
+        CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositLockArgs, DepositRequest,
+        L2BlockCommittedInfo, RollupAction, RollupActionUnion, Script, Transaction, WitnessArgs,
+        WitnessArgsReader,
     },
     prelude::*,
 };
@@ -105,9 +107,10 @@ impl ChainUpdater {
     }
 
     pub async fn update(&mut self, txs: &[Tx]) -> anyhow::Result<()> {
-        for tx in txs {
+        for tx in txs.iter() {
             self.update_single(&tx.tx_hash).await?;
         }
+
         Ok(())
     }
 
@@ -148,26 +151,63 @@ impl ChainUpdater {
         )?;
         let header_view =
             header_view.ok_or_else(|| anyhow::anyhow!("Cannot locate block: {:x}", block_hash))?;
-        let requests = self.extract_deposit_requests(&tx).await?;
-        let context = L1ActionContext::SubmitTxs {
-            deposit_requests: requests,
-        };
         let l2block_committed_info = L2BlockCommittedInfo::new_builder()
             .number(header_view.inner.number.value().pack())
             .block_hash(block_hash.0.pack())
             .transaction_hash(tx_hash.pack())
             .build();
+
+        let rollup_action = self.extract_rollup_action(&tx)?;
+        let context = match rollup_action.to_enum() {
+            RollupActionUnion::RollupSubmitBlock(submitted) => {
+                let requests = self.extract_deposit_requests(&tx).await?;
+
+                L1ActionContext::SubmitBlock {
+                    l2block: submitted.block(),
+                    deposit_requests: requests,
+                    reverted_block_hashes: submitted.reverted_block_hashes().unpack(),
+                }
+            }
+            RollupActionUnion::RollupEnterChallenge(challenge) => {
+                let challenge_cell = {
+                    let opt_cell = self.rpc_client.query_verified_challenge_cell().await?;
+                    opt_cell.ok_or_else(|| anyhow!("challenge cell not found"))?
+                };
+                let challenge_lock_args = {
+                    let lock_args: Bytes = challenge_cell.output.lock().args().unpack();
+                    match ChallengeLockArgsReader::verify(&lock_args, false) {
+                        Ok(_) => ChallengeLockArgs::new_unchecked(lock_args),
+                        Err(err) => return Err(anyhow!("invalid challenge lock args {}", err)),
+                    }
+                };
+
+                let target = challenge_lock_args.target();
+                let witness = challenge.witness();
+                L1ActionContext::Challenge {
+                    context: ChallengeContext { target, witness },
+                }
+            }
+            RollupActionUnion::RollupCancelChallenge(_) => L1ActionContext::CancelChallenge,
+            RollupActionUnion::RollupRevert(reverted) => {
+                let reverted_blocks = reverted.reverted_blocks().into_iter();
+                L1ActionContext::Revert {
+                    reverted_blocks: reverted_blocks.collect(),
+                }
+            }
+        };
+
         let update = L1Action {
             transaction: tx.clone(),
             l2block_committed_info,
             context,
         };
-        // todo handle layer1 fork
+        // TODO: handle layer1 fork
         let sync_param = SyncParam {
             reverts: vec![],
             updates: vec![update],
         };
         self.chain.lock().sync(sync_param)?;
+
         // TODO sync missed block
         match &self.web3_indexer {
             Some(indexer) => {
@@ -175,13 +215,45 @@ impl ChainUpdater {
             }
             None => {}
         }
+
         Ok(())
     }
 
-    async fn extract_deposit_requests(
-        &self,
-        tx: &Transaction,
-    ) -> anyhow::Result<Vec<DepositRequest>> {
+    fn extract_rollup_action(&self, tx: &Transaction) -> Result<RollupAction> {
+        let rollup_type_hash: [u8; 32] = {
+            let hash = self.rollup_type_script.calc_script_hash();
+            ckb_types::prelude::Unpack::unpack(&hash)
+        };
+
+        // find rollup state cell from outputs
+        let (i, _) = {
+            let outputs = tx.raw().outputs().into_iter();
+            let find_rollup = outputs.enumerate().find(|(_i, output)| {
+                output.type_().to_opt().map(|type_| type_.hash()) == Some(rollup_type_hash)
+            });
+            find_rollup.ok_or_else(|| anyhow!("no rollup cell found"))?
+        };
+
+        let witness: Bytes = {
+            let rollup_witness = tx.witnesses().get(i).ok_or_else(|| anyhow!("no witness"))?;
+            rollup_witness.unpack()
+        };
+
+        let witness_args = match WitnessArgsReader::verify(&witness, false) {
+            Ok(_) => WitnessArgs::new_unchecked(witness),
+            Err(_) => return Err(anyhow!("invalid witness")),
+        };
+
+        let output_type: Bytes = {
+            let type_ = witness_args.output_type();
+            let should_exist = type_.to_opt().ok_or_else(|| anyhow!("no output type"))?;
+            should_exist.unpack()
+        };
+
+        RollupAction::from_slice(&output_type).map_err(|e| anyhow!("invalid rollup action {}", e))
+    }
+
+    async fn extract_deposit_requests(&self, tx: &Transaction) -> Result<Vec<DepositRequest>> {
         let mut results = vec![];
         for input in tx.raw().inputs().into_iter() {
             // Load cell denoted by the transaction input

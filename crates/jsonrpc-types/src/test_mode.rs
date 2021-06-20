@@ -9,7 +9,7 @@ pub enum ShouldProduceBlock {
     No,
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum ChallengeType {
     TxExecution,

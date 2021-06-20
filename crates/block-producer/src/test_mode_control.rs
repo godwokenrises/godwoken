@@ -1,63 +1,199 @@
 use crate::poa::{PoA, ShouldIssueBlock};
 use crate::rpc_client::RPCClient;
 use crate::types::InputCellInfo;
-use crate::wallet::Wallet;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
-use gw_config::{BlockProducerConfig, NodeMode};
+use gw_generator::ChallengeContext;
+use gw_jsonrpc_types::test_mode::ChallengeType;
 use gw_jsonrpc_types::{
     godwoken::GlobalState,
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
 use gw_rpc_server::registry::TestModeRPC;
-use gw_types::{packed::CellInput, prelude::Unpack};
+use gw_store::Store;
+use gw_types::core::{ChallengeTargetType, Status};
+use gw_types::packed::{
+    ChallengeTarget, ChallengeWitness, L2Block, L2Transaction, WithdrawalRequest,
+};
+use gw_types::prelude::{Pack, PackVec};
+use gw_types::{bytes::Bytes, packed::CellInput, prelude::Unpack};
 use smol::lock::Mutex;
 
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct TestModeControl {
-    mode: NodeMode,
     payload: Arc<Mutex<Option<TestModePayload>>>,
     rpc_client: RPCClient,
     poa: Arc<Mutex<PoA>>,
+    store: Store,
 }
 
 impl TestModeControl {
-    pub fn create(
-        mode: NodeMode,
-        rpc_client: RPCClient,
-        config: &BlockProducerConfig,
-    ) -> Result<Self> {
-        let wallet = Wallet::from_config(&config.wallet_config).with_context(|| "init wallet")?;
-        let poa = PoA::new(
-            rpc_client.clone(),
-            wallet.lock_script().to_owned(),
-            config.poa_lock_dep.clone().into(),
-            config.poa_state_dep.clone().into(),
-        );
-
-        Ok(TestModeControl {
-            mode,
+    pub fn new(rpc_client: RPCClient, poa: Arc<Mutex<PoA>>, store: Store) -> Self {
+        TestModeControl {
             payload: Arc::new(Mutex::new(None)),
             rpc_client,
-            poa: Arc::new(Mutex::new(poa)),
-        })
+            poa,
+            store,
+        }
     }
 
-    pub fn mode(&self) -> NodeMode {
-        self.mode
-    }
-
-    pub async fn get_payload(&self) -> Option<TestModePayload> {
+    pub async fn payload(&self) -> Option<TestModePayload> {
         self.payload.lock().await.to_owned()
     }
 
-    pub async fn take_payload(&self) -> Option<TestModePayload> {
-        self.payload.lock().await.take()
+    pub async fn none(&self) -> Result<()> {
+        let mut payload = self.payload.lock().await;
+        if Some(TestModePayload::None) != *payload {
+            return Err(anyhow!("not none payload"));
+        }
+
+        payload.take(); // Consume payload
+        Ok(())
+    }
+
+    pub async fn bad_block(&self, block: L2Block) -> Result<L2Block> {
+        let (target_index, target_type) = {
+            let mut payload = self.payload.lock().await;
+
+            let (target_index, target_type) = match *payload {
+                Some(TestModePayload::BadBlock {
+                    target_index,
+                    target_type,
+                }) => (target_index.value(), target_type),
+                _ => return Err(anyhow!("not bad block payload")),
+            };
+
+            payload.take(); // Consume payload
+            (target_index, target_type)
+        };
+
+        match target_type {
+            ChallengeType::TxExecution => {
+                let tx_count: u32 = block.raw().submit_transactions().tx_count().unpack();
+                if target_index >= tx_count {
+                    return Err(anyhow!("target index out of bound, total {}", tx_count));
+                }
+
+                let tx = block.transactions().get_unchecked(target_index as usize);
+                let bad_tx = {
+                    let raw_tx = tx
+                        .raw()
+                        .as_builder()
+                        .nonce(99999999u32.pack())
+                        .to_id(99999999u32.pack())
+                        .args(Bytes::copy_from_slice("break tx execution".as_bytes()).pack())
+                        .build();
+
+                    tx.as_builder().raw(raw_tx).build()
+                };
+
+                let mut txs: Vec<L2Transaction> = block.transactions().into_iter().collect();
+                *txs.get_mut(target_index as usize).expect("exists") = bad_tx;
+                Ok(block.as_builder().transactions(txs.pack()).build())
+            }
+            ChallengeType::TxSignature => {
+                let tx_count: u32 = block.raw().submit_transactions().tx_count().unpack();
+                if target_index >= tx_count {
+                    return Err(anyhow!("target index out of bound, total {}", tx_count));
+                }
+
+                let tx = block.transactions().get_unchecked(target_index as usize);
+                let bad_tx = tx.as_builder().signature(Bytes::default().pack()).build();
+
+                let mut txs: Vec<L2Transaction> = block.transactions().into_iter().collect();
+                *txs.get_mut(target_index as usize).expect("exists") = bad_tx;
+                Ok(block.as_builder().transactions(txs.pack()).build())
+            }
+            ChallengeType::WithdrawalSignature => {
+                let count: u32 = block.raw().submit_withdrawals().withdrawal_count().unpack();
+                if target_index >= count {
+                    return Err(anyhow!("target index out of bound, total {}", count));
+                }
+
+                let withdrawal = block.withdrawals().get_unchecked(target_index as usize);
+                let bad_withdrawal = withdrawal
+                    .as_builder()
+                    .signature(Bytes::default().pack())
+                    .build();
+
+                let mut withdrawals: Vec<WithdrawalRequest> =
+                    block.withdrawals().into_iter().collect();
+                *withdrawals.get_mut(target_index as usize).expect("exists") = bad_withdrawal;
+                Ok(block.as_builder().withdrawals(withdrawals.pack()).build())
+            }
+        }
+    }
+
+    pub async fn challenge(&self) -> Result<ChallengeContext> {
+        let (block_number, target_index, target_type) = {
+            let mut payload = self.payload.lock().await;
+
+            let (block_number, target_index, target_type) = match *payload {
+                Some(TestModePayload::Challenge {
+                    block_number,
+                    target_index,
+                    target_type,
+                }) => (block_number.value(), target_index.value(), target_type),
+                _ => return Err(anyhow!("not challenge payload")),
+            };
+
+            payload.take(); // Consume payload
+            (block_number, target_index, target_type)
+        };
+
+        let db = self.store.begin_transaction();
+        let block_hash = db.get_block_hash_by_number(block_number)?;
+        let block = db.get_block(&block_hash.ok_or_else(|| anyhow!("block {} not found"))?)?;
+        let raw_l2block = block.ok_or_else(|| anyhow!("block {} not found"))?.raw();
+
+        let block_proof = db
+            .block_smt()?
+            .merkle_proof(vec![raw_l2block.smt_key().into()])?
+            .compile(vec![(
+                raw_l2block.smt_key().into(),
+                raw_l2block.hash().into(),
+            )])?;
+
+        let target_type = match target_type {
+            ChallengeType::TxExecution => ChallengeTargetType::TxExecution,
+            ChallengeType::TxSignature => ChallengeTargetType::TxSignature,
+            ChallengeType::WithdrawalSignature => ChallengeTargetType::Withdrawal,
+        };
+
+        let challenge_target = ChallengeTarget::new_builder()
+            .block_hash(raw_l2block.hash().pack())
+            .target_index(target_index.pack())
+            .target_type(target_type.into())
+            .build();
+
+        let challenge_witness = ChallengeWitness::new_builder()
+            .raw_l2block(raw_l2block)
+            .block_proof(block_proof.0.pack())
+            .build();
+
+        Ok(ChallengeContext {
+            target: challenge_target,
+            witness: challenge_witness,
+        })
+    }
+
+    pub async fn wait_for_challenge_maturity(&self, rollup_status: Status) -> Result<()> {
+        let mut payload = self.payload.lock().await;
+        if Some(TestModePayload::WaitForChallengeMaturity) != *payload {
+            return Err(anyhow!("not wait for challenge maturity payload"));
+        }
+
+        // Only consume payload after rollup change back to running
+        if Status::Running == rollup_status {
+            payload.take();
+        }
+
+        Ok(())
     }
 }
 

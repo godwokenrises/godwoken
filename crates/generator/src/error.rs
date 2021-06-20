@@ -18,6 +18,8 @@ pub enum Error {
     Deposit(DepositError),
     #[error("Withdrawal error {0}")]
     Withdrawal(WithdrawalError),
+    #[error("Withdrawal error with context {0}")]
+    WithdrawalWithContext(WithdrawalErrorWithContext),
 }
 
 impl From<StateError> for Error {
@@ -73,6 +75,26 @@ pub enum WithdrawalError {
 impl From<WithdrawalError> for Error {
     fn from(err: WithdrawalError) -> Self {
         Error::Withdrawal(err)
+    }
+}
+
+/// Withdrawal error with challenge context
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+#[error("{error}")]
+pub struct WithdrawalErrorWithContext {
+    pub context: ChallengeTarget,
+    pub error: WithdrawalError,
+}
+
+impl WithdrawalErrorWithContext {
+    pub fn new(context: ChallengeTarget, error: WithdrawalError) -> Self {
+        Self { context, error }
+    }
+}
+
+impl From<WithdrawalErrorWithContext> for Error {
+    fn from(err: WithdrawalErrorWithContext) -> Self {
+        Error::WithdrawalWithContext(err)
     }
 }
 

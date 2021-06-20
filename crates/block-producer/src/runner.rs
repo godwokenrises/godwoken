@@ -1,6 +1,7 @@
 use crate::{
-    block_producer::BlockProducer, poller::ChainUpdater, rpc_client::RPCClient,
-    test_mode_control::TestModeControl, types::ChainEvent, utils::CKBGenesisInfo,
+    block_producer::BlockProducer, challenger::Challenger, poa::PoA, poller::ChainUpdater,
+    rpc_client::RPCClient, test_mode_control::TestModeControl, types::ChainEvent,
+    utils::CKBGenesisInfo, wallet::Wallet,
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
@@ -15,7 +16,6 @@ use gw_generator::{
     genesis::init_genesis,
     Generator, RollupContext,
 };
-use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_mem_pool::pool::MemPool;
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
@@ -45,16 +45,18 @@ async fn poll_loop(
     rpc_client: RPCClient,
     chain_updater: ChainUpdater,
     block_producer: Option<BlockProducer>,
-    test_mode_control: Option<TestModeControl>,
+    challenger: Option<Challenger>,
     poll_interval: Duration,
 ) -> Result<()> {
     struct Inner {
         chain_updater: ChainUpdater,
         block_producer: Option<BlockProducer>,
+        challenger: Option<Challenger>,
     }
 
     let inner = Arc::new(smol::lock::Mutex::new(Inner {
         chain_updater,
+        challenger,
         block_producer,
     }));
     // get tip
@@ -106,22 +108,24 @@ async fn poll_loop(
                 );
             }
 
+            if let Some(ref mut challenger) = inner.challenger {
+                if let Err(err) = challenger.handle_event(event.clone()).await {
+                    log::error!(
+                        "Error occured when polling challenger, event: {:?}, error: {}",
+                        event,
+                        err
+                    );
+                }
+            }
+
             // TODO: implement test mode challenge control
             if let Some(ref mut block_producer) = inner.block_producer {
-                let mut is_enabled = true;
-                if let Some(ref t) = test_mode_control {
-                    if Some(TestModePayload::None) != t.take_payload().await {
-                        is_enabled = false;
-                    }
-                }
-                if is_enabled {
-                    if let Err(err) = block_producer.handle_event(event.clone()).await {
-                        log::error!(
-                            "Error occured when polling block_producer, event: {:?}, error: {}",
-                            event,
-                            err
-                        );
-                    }
+                if let Err(err) = block_producer.handle_event(event.clone()).await {
+                    log::error!(
+                        "Error occured when polling block_producer, event: {:?}, error: {}",
+                        event,
+                        err
+                    );
                 }
             }
 
@@ -268,11 +272,12 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
         None => None,
     };
+
     // create chain updater
     let chain_updater = ChainUpdater::new(
         Arc::clone(&chain),
         rpc_client.clone(),
-        rollup_context,
+        rollup_context.clone(),
         rollup_type_script.clone(),
         web3_indexer,
     );
@@ -283,44 +288,69 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         CKBGenesisInfo::from_block(&ckb_genesis)?
     };
 
-    let (block_producer, test_mode_control) = match config.node_mode {
-        NodeMode::ReadOnly => (None, None),
+    let (block_producer, challenger, test_mode_control) = match config.node_mode {
+        NodeMode::ReadOnly => (None, None, None),
         _ => {
             let block_producer_config = config
                 .block_producer
                 .clone()
                 .ok_or_else(|| anyhow!("not set block producer"))?;
+
+            let wallet = Wallet::from_config(&block_producer_config.wallet_config)
+                .with_context(|| "init wallet")?;
+
+            let poa = {
+                let poa = PoA::new(
+                    rpc_client.clone(),
+                    wallet.lock_script().to_owned(),
+                    block_producer_config.poa_lock_dep.clone().into(),
+                    block_producer_config.poa_state_dep.clone().into(),
+                );
+                Arc::new(smol::lock::Mutex::new(poa))
+            };
+
+            let tests_control = if let NodeMode::Test = config.node_mode {
+                Some(TestModeControl::new(
+                    rpc_client.clone(),
+                    Arc::clone(&poa),
+                    store.clone(),
+                ))
+            } else {
+                None
+            };
+
+            // Block Producer
             let block_producer = BlockProducer::create(
                 rollup_config_hash,
                 store.clone(),
                 generator.clone(),
-                chain,
+                Arc::clone(&chain),
                 mem_pool.clone(),
                 rpc_client.clone(),
-                ckb_genesis_info,
+                ckb_genesis_info.clone(),
                 block_producer_config.clone(),
+                tests_control.clone(),
             )
             .with_context(|| "init block producer")?;
-            if let NodeMode::Test = config.node_mode {
-                let test_mode_control = TestModeControl::create(
-                    config.node_mode,
-                    rpc_client.clone(),
-                    &block_producer_config,
-                )?;
-                (Some(block_producer), Some(test_mode_control))
-            } else {
-                (Some(block_producer), None)
-            }
+
+            // Challenger
+            let challenger = Challenger::new(
+                rollup_context,
+                rpc_client.clone(),
+                wallet,
+                block_producer_config,
+                ckb_genesis_info,
+                Arc::clone(&chain),
+                Arc::clone(&poa),
+                tests_control.clone(),
+            );
+
+            (Some(block_producer), Some(challenger), tests_control)
         }
     };
 
     // RPC registry
-    let rpc_registry = Registry::new(
-        store,
-        mem_pool,
-        generator,
-        test_mode_control.clone().map(Box::new),
-    );
+    let rpc_registry = Registry::new(store, mem_pool, generator, test_mode_control.map(Box::new));
 
     let (s, ctrl_c) = async_channel::bounded(100);
     let handle = move || {
@@ -357,7 +387,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     smol::block_on(async {
         select! {
             _ = ctrl_c.recv().fuse() => log::info!("Exiting..."),
-            e = poll_loop(rpc_client, chain_updater, block_producer, test_mode_control, Duration::from_secs(3)).fuse() => {
+            e = poll_loop(rpc_client, chain_updater, block_producer, challenger, Duration::from_secs(3)).fuse() => {
                 log::error!("Error in main poll loop: {:?}", e);
             }
             e = start_jsonrpc_server(rpc_address, rpc_registry).fuse() => {

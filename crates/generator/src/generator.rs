@@ -1,7 +1,7 @@
 use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
-    error::{TransactionValidateError, WithdrawalError},
+    error::{TransactionValidateError, WithdrawalError, WithdrawalErrorWithContext},
     RollupContext,
 };
 use crate::{
@@ -270,11 +270,7 @@ impl Generator {
     }
 
     /// Apply l2 state transition
-    ///
-    /// Notice:
-    /// This function do not verify the block and transactions signature.
-    /// The caller is supposed to do the verification.
-    pub fn apply_state_transition<S: State + CodeStore, C: ChainStore>(
+    pub fn verify_and_apply_state_transition<S: State + CodeStore, C: ChainStore>(
         &self,
         chain: &C,
         state: &mut S,
@@ -282,21 +278,57 @@ impl Generator {
     ) -> Result<StateTransitionResult, Error> {
         let raw_block = args.l2block.raw();
         let block_info = get_block_info(&raw_block);
-        let withdrawal_requests: Vec<_> = args.l2block.withdrawals().into_iter().collect();
+
         // apply withdrawal to state
+        let withdrawal_requests: Vec<_> = args.l2block.withdrawals().into_iter().collect();
+        let block_hash = raw_block.hash();
         let block_producer_id: u32 = block_info.block_producer_id().unpack();
-        let withdrawal_receipts = state.apply_withdrawal_requests(
-            &self.rollup_context,
-            block_producer_id,
-            &withdrawal_requests,
-        )?;
+
+        let mut withdrawal_receipts = Vec::with_capacity(withdrawal_requests.len());
+        for (wth_idx, request) in withdrawal_requests.into_iter().enumerate() {
+            if let Err(err) = self.check_withdrawal_request_signature(state, &request) {
+                return match err {
+                    Error::Withdrawal(err) => {
+                        let target = build_challenge_target(
+                            block_hash.into(),
+                            ChallengeTargetType::Withdrawal,
+                            wth_idx as u32,
+                        );
+                        Err(WithdrawalErrorWithContext::new(target, err).into())
+                    }
+                    _ => Err(err),
+                };
+            }
+
+            let withdrawal_receipt = state.apply_withdrawal_request(
+                &self.rollup_context,
+                block_producer_id,
+                &request,
+            )?;
+            withdrawal_receipts.push(withdrawal_receipt);
+        }
         // apply deposition to state
         state.apply_deposit_requests(&self.rollup_context, &args.deposit_requests)?;
 
         // handle transactions
-        let block_hash = raw_block.hash();
         let mut tx_receipts = Vec::with_capacity(args.l2block.transactions().len());
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
+            if let Err(err) = self.check_transaction_signature(state, &tx) {
+                return match err {
+                    TransactionValidateError::Transaction(tx_err) => {
+                        let target = build_challenge_target(
+                            block_hash.into(),
+                            ChallengeTargetType::TxSignature,
+                            tx_index as u32,
+                        );
+                        Err(TransactionErrorWithContext::new(target, tx_err).into())
+                    }
+                    TransactionValidateError::Account(err) => Err(Error::Account(err)),
+                    TransactionValidateError::State(err) => Err(Error::State(err)),
+                    TransactionValidateError::Unlock(err) => Err(Error::Unlock(err)),
+                };
+            }
+
             let raw_tx = tx.raw();
             // check nonce
             let expected_nonce = state.get_nonce(raw_tx.from_id().unpack())?;
