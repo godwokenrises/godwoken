@@ -237,7 +237,7 @@ table SUDTTransfer {
     // godwoken short address (script_hash[0..n])
     to: Bytes,
     amount: Uint128,
-    fee_amount: Uint128,
+    fee: Uint128,
 }
 // --- end of layer2 SUDT ---
 

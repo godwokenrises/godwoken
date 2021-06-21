@@ -9731,7 +9731,7 @@ impl ::core::fmt::Display for SUDTTransfer {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "to", self.to())?;
         write!(f, ", {}: {}", "amount", self.amount())?;
-        write!(f, ", {}: {}", "fee_amount", self.fee_amount())?;
+        write!(f, ", {}: {}", "fee", self.fee())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -9778,7 +9778,7 @@ impl SUDTTransfer {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Uint128::new_unchecked(self.0.slice(start..end))
     }
-    pub fn fee_amount(&self) -> Uint128 {
+    pub fn fee(&self) -> Uint128 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
@@ -9817,7 +9817,7 @@ impl molecule::prelude::Entity for SUDTTransfer {
         Self::new_builder()
             .to(self.to())
             .amount(self.amount())
-            .fee_amount(self.fee_amount())
+            .fee(self.fee())
     }
 }
 #[derive(Clone, Copy)]
@@ -9841,7 +9841,7 @@ impl<'r> ::core::fmt::Display for SUDTTransferReader<'r> {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "to", self.to())?;
         write!(f, ", {}: {}", "amount", self.amount())?;
-        write!(f, ", {}: {}", "fee_amount", self.fee_amount())?;
+        write!(f, ", {}: {}", "fee", self.fee())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -9879,7 +9879,7 @@ impl<'r> SUDTTransferReader<'r> {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Uint128Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn fee_amount(&self) -> Uint128Reader<'r> {
+    pub fn fee(&self) -> Uint128Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
@@ -9951,7 +9951,7 @@ impl<'r> molecule::prelude::Reader<'r> for SUDTTransferReader<'r> {
 pub struct SUDTTransferBuilder {
     pub(crate) to: Bytes,
     pub(crate) amount: Uint128,
-    pub(crate) fee_amount: Uint128,
+    pub(crate) fee: Uint128,
 }
 impl SUDTTransferBuilder {
     pub const FIELD_COUNT: usize = 3;
@@ -9963,8 +9963,8 @@ impl SUDTTransferBuilder {
         self.amount = v;
         self
     }
-    pub fn fee_amount(mut self, v: Uint128) -> Self {
-        self.fee_amount = v;
+    pub fn fee(mut self, v: Uint128) -> Self {
+        self.fee = v;
         self
     }
 }
@@ -9975,7 +9975,7 @@ impl molecule::prelude::Builder for SUDTTransferBuilder {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.to.as_slice().len()
             + self.amount.as_slice().len()
-            + self.fee_amount.as_slice().len()
+            + self.fee.as_slice().len()
     }
     fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -9985,14 +9985,14 @@ impl molecule::prelude::Builder for SUDTTransferBuilder {
         offsets.push(total_size);
         total_size += self.amount.as_slice().len();
         offsets.push(total_size);
-        total_size += self.fee_amount.as_slice().len();
+        total_size += self.fee.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
         writer.write_all(self.to.as_slice())?;
         writer.write_all(self.amount.as_slice())?;
-        writer.write_all(self.fee_amount.as_slice())?;
+        writer.write_all(self.fee.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
