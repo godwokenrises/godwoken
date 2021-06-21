@@ -12,6 +12,8 @@ use std::{
 };
 use url::Url;
 
+pub const REPOS_DIR_PATH: &str = "tmp/scripts-build-dir/";
+pub const SCRIPTS_DIR_PATH: &str = "scripts/";
 const GODWOKEN_SCRIPTS: &str = "godwoken-scripts";
 const GODWOKEN_POLYJUICE: &str = "godwoken-polyjuice";
 const CLERKB: &str = "clerkb";

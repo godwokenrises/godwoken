@@ -4,6 +4,7 @@ mod deposit_ckb;
 mod generate_config;
 pub mod godwoken_rpc;
 mod prepare_scripts;
+mod setup;
 mod setup_nodes;
 mod utils;
 
