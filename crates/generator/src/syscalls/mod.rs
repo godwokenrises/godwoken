@@ -470,6 +470,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     sudt_id,
                     amount
                 );
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
             DEBUG_PRINT_SYSCALL_NUMBER => {
