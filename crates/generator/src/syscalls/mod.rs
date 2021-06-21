@@ -29,24 +29,28 @@ const MAX_SET_RETURN_DATA_SIZE: u64 = 1024 * 24;
 // 20 Bytes
 const SCRIPT_HASH_PREFIX_LEN: u64 = 20;
 
-/* Syscall numbers */
-const SYS_STORE: u64 = 3051;
-const SYS_LOAD: u64 = 3052;
-const SYS_SET_RETURN_DATA: u64 = 3061;
-const SYS_CREATE: u64 = 3071;
-/* internal syscall numbers */
-const SYS_LOAD_TRANSACTION: u64 = 4051;
-const SYS_LOAD_BLOCKINFO: u64 = 4052;
-const SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID: u64 = 4053;
-const SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH: u64 = 4054;
-const SYS_LOAD_ACCOUNT_SCRIPT: u64 = 4055;
-const SYS_STORE_DATA: u64 = 4056;
-const SYS_LOAD_DATA: u64 = 4057;
-const SYS_GET_BLOCK_HASH: u64 = 4058;
-const SYS_GET_SCRIPT_HASH_BY_SHORT_ADDRESS: u64 = 4059;
-const SYS_RECOVER_ACCOUNT: u64 = 4060;
-const SYS_LOG: u64 = 4061;
-const SYS_LOAD_ROLLUP_CONFIG: u64 = 4062;
+/* Syscall account store / load / create */
+const SYS_CREATE: u64 = 3100;
+const SYS_STORE: u64 = 3101;
+const SYS_LOAD: u64 = 3102;
+const SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID: u64 = 3103;
+const SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH: u64 = 3104;
+const SYS_LOAD_ACCOUNT_SCRIPT: u64 = 3105;
+const SYS_GET_SCRIPT_HASH_BY_SHORT_ADDRESS: u64 = 3106;
+/* Syscall call / return */
+const SYS_SET_RETURN_DATA: u64 = 3201;
+/* Syscall data store / load */
+const SYS_STORE_DATA: u64 = 3301;
+const SYS_LOAD_DATA: u64 = 3302;
+/* Syscall load metadata structures */
+const SYS_LOAD_ROLLUP_CONFIG: u64 = 3401;
+const SYS_LOAD_TRANSACTION: u64 = 3402;
+const SYS_LOAD_BLOCKINFO: u64 = 3403;
+const SYS_GET_BLOCK_HASH: u64 = 3404;
+/* Syscall builtins */
+const SYS_PAY_FEE: u64 = 3501;
+const SYS_LOG: u64 = 3502;
+const SYS_RECOVER_ACCOUNT: u64 = 3503;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
@@ -67,6 +71,17 @@ pub(crate) struct L2Syscalls<'a, S, C> {
     pub(crate) raw_tx: &'a RawL2Transaction,
     pub(crate) code_store: &'a dyn CodeStore,
     pub(crate) result: &'a mut RunResult,
+}
+
+fn load_data_u128<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<u128, VMError> {
+    let mut data = [0u8; 16];
+    for (i, c) in data.iter_mut().enumerate() {
+        *c = machine
+            .memory_mut()
+            .load8(&Mac::REG::from_u64(addr).overflowing_add(&Mac::REG::from_u64(i as u64)))?
+            .to_u8();
+    }
+    Ok(u128::from_le_bytes(data))
 }
 
 fn load_data_h256<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<H256, VMError> {
@@ -435,6 +450,26 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 let data = self.rollup_context.rollup_config.as_slice();
                 store_data(machine, data)?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
+            SYS_PAY_FEE => {
+                // record the fee to block producer
+                // NOTICE this syscall do not actually execute the transfer of assets,
+                // the trusted script should do the transfer of fee first,
+                // then called this syscal to record the fee only after the success of the transfer.
+
+                let account_id = machine.registers()[A0].to_u32();
+                let sudt_id = machine.registers()[A1].to_u8();
+                let amount_addr = machine.registers()[A2].to_u64();
+                let amount = load_data_u128(machine, amount_addr)?;
+
+                // TODO record fee payment in the generator context
+                log::debug!(
+                    "[contract syscall: SYS_PAY_FEE] payer: {}, sudt_id: {}, amount: {}",
+                    account_id,
+                    sudt_id,
+                    amount
+                );
                 Ok(true)
             }
             DEBUG_PRINT_SYSCALL_NUMBER => {
