@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use anyhow::{Error, Result};
+use gw_config::TestMode;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{body::HttpBody, Body, Method, Request, Response, Server};
 use smol::{io, prelude::*, Async};
@@ -13,9 +14,19 @@ use smol::{io, prelude::*, Async};
 use jsonrpc_v2::{RequestKind, ResponseObjects, Router, Server as JsonrpcServer};
 
 use crate::registry::Registry;
+use crate::test_mode_registry::{
+    TestModeRegistry, TEST_MODE_URI_PATH_GLOBAL_STATE, TEST_MODE_URI_PATH_PRODUCE_BLOCK,
+};
 
-pub async fn start_jsonrpc_server(listen_addr: SocketAddr, registry: Registry) -> Result<()> {
+pub async fn start_jsonrpc_server(
+    listen_addr: SocketAddr,
+    registry: Registry,
+    tests_registry: TestModeRegistry,
+    test_mode: TestMode,
+) -> Result<()> {
     let rpc_server = registry.build_rpc_server()?;
+    let tests_produce_block_rpc_server = tests_registry.build_produce_block_rpc_server()?;
+    let tests_global_state_rpc_server = tests_registry.build_global_state_rpc_server()?;
     let listener = Async::<TcpListener>::bind(listen_addr)?;
 
     // Format the full address.
@@ -27,7 +38,23 @@ pub async fn start_jsonrpc_server(listen_addr: SocketAddr, registry: Registry) -
         .executor(SmolExecutor)
         .serve(make_service_fn(move |_| {
             let rpc_server = Arc::clone(&rpc_server);
-            async { Ok::<_, Error>(service_fn(move |req| serve(Arc::clone(&rpc_server), req))) }
+            let tests_produce_block_rpc_server = Arc::clone(&tests_produce_block_rpc_server);
+            let tests_global_state_rpc_server = Arc::clone(&tests_global_state_rpc_server);
+
+            async move {
+                Ok::<_, Error>(service_fn(move |req| {
+                    let server = match req.uri().path() {
+                        TEST_MODE_URI_PATH_PRODUCE_BLOCK if TestMode::Enable == test_mode => {
+                            &tests_produce_block_rpc_server
+                        }
+                        TEST_MODE_URI_PATH_GLOBAL_STATE if TestMode::Enable == test_mode => {
+                            &tests_global_state_rpc_server
+                        }
+                        _ => &rpc_server,
+                    };
+                    serve(Arc::clone(&server), req)
+                }))
+            }
         }))
         .await?;
 

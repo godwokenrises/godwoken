@@ -7,7 +7,7 @@ use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::Entity;
 use gw_config::{
     BackendConfig, BlockProducerConfig, ChainConfig, Config, GenesisConfig, RPCClientConfig,
-    RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
+    RPCServerConfig, StoreConfig, TestModeConfig, WalletConfig, Web3IndexerConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 
@@ -170,6 +170,7 @@ pub fn generate_config(
         }),
         None => None,
     };
+    let test_mode = TestModeConfig { enable: false };
 
     let config: Config = Config {
         backends,
@@ -180,6 +181,7 @@ pub fn generate_config(
         rpc_server,
         block_producer,
         web3_indexer,
+        test_mode,
     };
 
     let output_content = toml::to_string_pretty(&config).expect("serde toml to string pretty");

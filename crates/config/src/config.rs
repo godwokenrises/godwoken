@@ -16,6 +16,7 @@ pub struct Config {
     pub rpc_server: RPCServerConfig,
     pub block_producer: Option<BlockProducerConfig>,
     pub web3_indexer: Option<Web3IndexerConfig>,
+    pub test_mode: TestModeConfig,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -86,4 +87,32 @@ pub struct Web3IndexerConfig {
     pub database_url: String,
     pub polyjuice_script_type_hash: H256,
     pub eth_account_lock_hash: H256,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TestMode {
+    Enable,
+    Disable,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TestModeConfig {
+    pub enable: bool,
+}
+
+impl TestModeConfig {
+    pub fn mode(&self) -> TestMode {
+        if self.enable {
+            TestMode::Enable
+        } else {
+            TestMode::Disable
+        }
+    }
+}
+
+impl Default for TestModeConfig {
+    fn default() -> Self {
+        Self { enable: false }
+    }
 }

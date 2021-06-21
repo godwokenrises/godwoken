@@ -1,13 +1,13 @@
 use crate::{
-    block_producer::BlockProducer, poller::ChainUpdater, rpc_client::RPCClient, types::ChainEvent,
-    utils::CKBGenesisInfo,
+    block_producer::BlockProducer, poller::ChainUpdater, rpc_client::RPCClient,
+    test_mode_control::TestModeControl, types::ChainEvent, utils::CKBGenesisInfo,
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use futures::{executor::block_on, select, FutureExt};
 use gw_chain::chain::Chain;
 use gw_common::H256;
-use gw_config::Config;
+use gw_config::{Config, TestMode};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
@@ -15,8 +15,11 @@ use gw_generator::{
     genesis::init_genesis,
     Generator, RollupContext,
 };
+use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_mem_pool::pool::MemPool;
-use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
+use gw_rpc_server::{
+    registry::Registry, server::start_jsonrpc_server, test_mode_registry::TestModeRegistry,
+};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
@@ -40,6 +43,7 @@ async fn poll_loop(
     rpc_client: RPCClient,
     chain_updater: ChainUpdater,
     block_producer: BlockProducer,
+    test_mode_control: TestModeControl,
     poll_interval: Duration,
 ) -> Result<()> {
     struct Inner {
@@ -99,13 +103,20 @@ async fn poll_loop(
                     err
                 );
             }
-            if let Err(err) = inner.block_producer.handle_event(event.clone()).await {
-                log::error!(
-                    "Error occured when polling block_producer, event: {:?}, error: {}",
-                    event,
-                    err
-                );
+
+            if TestMode::Disable == test_mode_control.mode()
+                || TestMode::Enable == test_mode_control.mode()
+                    && Some(TestModePayload::None) == test_mode_control.take_payload().await
+            {
+                if let Err(err) = inner.block_producer.handle_event(event.clone()).await {
+                    log::error!(
+                        "Error occured when polling block_producer, event: {:?}, error: {}",
+                        event,
+                        err
+                    );
+                }
             }
+
             // }
             // })
             // .detach();
@@ -217,6 +228,12 @@ pub fn run(config: Config) -> Result<()> {
     // RPC registry
     let rpc_registry = Registry::new(store.clone(), mem_pool.clone(), generator.clone());
 
+    // Test mode rpc registry
+    let test_mode = config.test_mode.mode();
+    let test_mode_control =
+        TestModeControl::create(test_mode, rpc_client.clone(), &block_producer_config)?;
+    let tests_rpc_registry = TestModeRegistry::new(test_mode_control.clone());
+
     // create web3 indexer
     let web3_indexer = match config.web3_indexer {
         Some(web3_indexer_config) => {
@@ -301,13 +318,17 @@ pub fn run(config: Config) -> Result<()> {
         log::info!("Rollup config hash: {}", rollup_config_hash);
     }
 
+    if TestMode::Enable == test_mode {
+        log::info!("Test mode enabled!!!");
+    }
+
     smol::block_on(async {
         select! {
             _ = ctrl_c.recv().fuse() => log::info!("Exiting..."),
-            e = poll_loop(rpc_client, chain_updater, block_producer, Duration::from_secs(3)).fuse() => {
+            e = poll_loop(rpc_client, chain_updater, block_producer, test_mode_control ,Duration::from_secs(3)).fuse() => {
                 log::error!("Error in main poll loop: {:?}", e);
             }
-            e = start_jsonrpc_server(rpc_address, rpc_registry).fuse() => {
+            e = start_jsonrpc_server(rpc_address, rpc_registry, tests_rpc_registry, test_mode).fuse() => {
                 log::error!("Error running JSONRPC server: {:?}", e);
                 exit(1);
             },

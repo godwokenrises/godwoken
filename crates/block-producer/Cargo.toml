@@ -45,3 +45,4 @@ smol = "1.2.5"
 lazy_static = "1.4"
 sqlx = { version = "0.5", features = [ "runtime-async-std-native-tls", "postgres", "sqlite", "chrono", "decimal" ] }
 hex = "0.4"
+async-trait = "0.1"
