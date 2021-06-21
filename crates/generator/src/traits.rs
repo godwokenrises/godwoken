@@ -113,8 +113,8 @@ impl<S: State + CodeStore> StateExt for S {
             sudt_id,
             &amount
         );
-        self.burn_sudt(sudt_id, payer_short_address, amount.into())?;
-        self.mint_sudt(sudt_id, block_producer_short_address, amount.into())?;
+        self.burn_sudt(sudt_id, payer_short_address, amount)?;
+        self.mint_sudt(sudt_id, block_producer_short_address, amount)?;
         Ok(())
     }
 
