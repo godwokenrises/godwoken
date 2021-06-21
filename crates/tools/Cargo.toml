@@ -35,3 +35,5 @@ gw-generator = { path = "../generator" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 url = "2.2"
 faster-hex = "0.5.0"
+rand = "0.8"
+hex = "0.4"
