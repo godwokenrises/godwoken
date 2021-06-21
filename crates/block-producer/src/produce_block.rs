@@ -128,7 +128,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         }
 
         // update the state
-        match state.apply_withdrawal_request(rollup_context, &request) {
+        match state.apply_withdrawal_request(rollup_context, block_producer_id, &request) {
             Ok(_) => {
                 used_withdrawal_requests.push(request);
                 state_checkpoint_list.push(state.calculate_state_checkpoint()?);

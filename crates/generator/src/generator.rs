@@ -258,15 +258,19 @@ impl Generator {
         args: StateTransitionArgs,
     ) -> Result<StateTransitionResult, Error> {
         let raw_block = args.l2block.raw();
+        let block_info = get_block_info(&raw_block);
         let withdrawal_requests: Vec<_> = args.l2block.withdrawals().into_iter().collect();
         // apply withdrawal to state
-        let withdrawal_receipts =
-            state.apply_withdrawal_requests(&self.rollup_context, &withdrawal_requests)?;
+        let block_producer_id: u32 = block_info.block_producer_id().unpack();
+        let withdrawal_receipts = state.apply_withdrawal_requests(
+            &self.rollup_context,
+            block_producer_id,
+            &withdrawal_requests,
+        )?;
         // apply deposition to state
         state.apply_deposit_requests(&self.rollup_context, &args.deposit_requests)?;
 
         // handle transactions
-        let block_info = get_block_info(&raw_block);
         let block_hash = raw_block.hash();
         let mut tx_receipts = Vec::with_capacity(args.l2block.transactions().len());
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
