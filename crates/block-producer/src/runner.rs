@@ -104,6 +104,7 @@ async fn poll_loop(
                 );
             }
 
+            // TODO: implement test mode challenge control
             if TestMode::Disable == test_mode_control.mode()
                 || TestMode::Enable == test_mode_control.mode()
                     && Some(TestModePayload::None) == test_mode_control.take_payload().await
