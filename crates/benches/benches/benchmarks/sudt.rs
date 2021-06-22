@@ -1,5 +1,8 @@
 use criterion::*;
-use gw_common::{h256_ext::H256Ext, state::State, H256};
+use gw_common::{
+    state::{to_short_address, State},
+    H256,
+};
 use gw_config::BackendConfig;
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, dummy_state::DummyState,
@@ -138,16 +141,18 @@ pub fn bench(c: &mut Criterion) {
                     .create_account_from_script(
                         Script::new_builder()
                             .code_hash([0u8; 32].pack())
-                            .args([0u8; 20].to_vec().pack())
+                            .args([1u8; 20].to_vec().pack())
                             .hash_type(ScriptHashType::Type.into())
                             .build(),
                     )
                     .expect("create account");
+                let a_script_hash = tree.get_script_hash(a_id).expect("get script hash");
+                let b_script_hash = tree.get_script_hash(b_id).expect("get script hash");
                 let block_producer_id = tree
                     .create_account_from_script(
                         Script::new_builder()
                             .code_hash([0u8; 32].pack())
-                            .args([0u8; 20].to_vec().pack())
+                            .args([3u8; 20].to_vec().pack())
                             .hash_type(ScriptHashType::Type.into())
                             .build(),
                     )
@@ -155,22 +160,26 @@ pub fn bench(c: &mut Criterion) {
                 let block_info = new_block_info(block_producer_id, 1, 0);
 
                 // init balance for a
-                tree.update_value(
+                tree.mint_sudt(sudt_id, to_short_address(&a_script_hash), init_a_balance)
+                    .expect("init balance");
+                (
+                    tree,
+                    rollup_config,
                     sudt_id,
-                    &H256::from_u32(a_id),
-                    H256::from_u128(init_a_balance).into(),
+                    a_id,
+                    b_script_hash,
+                    block_info,
                 )
-                .expect("init balance");
-                (tree, rollup_config, sudt_id, a_id, b_id, block_info)
             },
-            |(mut tree, rollup_config, sudt_id, a_id, b_id, block_info)| {
+            |(mut tree, rollup_config, sudt_id, a_id, b_script_hash, block_info)| {
                 // transfer from A to B
                 let value = 4000u128;
                 let fee = 42u128;
+                let b_address = to_short_address(&b_script_hash).to_vec();
                 let args = SUDTArgs::new_builder()
                     .set(
                         SUDTTransfer::new_builder()
-                            .to(b_id.pack())
+                            .to(b_address.pack())
                             .amount(value.pack())
                             .fee(fee.pack())
                             .build(),

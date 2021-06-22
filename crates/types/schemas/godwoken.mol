@@ -1,6 +1,5 @@
 import blockchain;
 
-array Signature [byte; 65];
 
 struct BlockMerkleState {
     merkle_root: Byte32,
@@ -35,7 +34,6 @@ table RollupConfig {
     required_staking_capacity: Uint64,
     challenge_maturity_blocks: Uint64,
     finality_blocks: Uint64,
-    compatible_chain_id: Uint32,
     reward_burn_rate: byte, // * reward_burn_rate / 100
     allowed_eoa_type_hashes: Byte32Vec, // list of script code_hash allowed an EOA(external owned account) to use
     allowed_contract_type_hashes: Byte32Vec, // list of script code_hash allowed a contract account to use
@@ -50,7 +48,7 @@ table RawL2Transaction {
 
 table L2Transaction {
     raw: RawL2Transaction,
-    signature: Signature,
+    signature: Bytes,
 }
 
 vector L2TransactionVec <L2Transaction>;
@@ -123,9 +121,9 @@ struct RawWithdrawalRequest {
 
 vector WithdrawalRequestVec <WithdrawalRequest>;
 
-struct WithdrawalRequest {
+table WithdrawalRequest {
     raw: RawWithdrawalRequest,
-    signature: Signature,
+    signature: Bytes,
 }
 
 // --- contract execution ---
@@ -222,12 +220,14 @@ union SUDTArgs {
     SUDTTransfer,
 }
 
-struct SUDTQuery {
-    account_id: Uint32,
+table SUDTQuery {
+    // godwoken short address (script_hash[0..n])
+    short_address: Bytes,
 }
 
-struct SUDTTransfer {
-    to: Uint32,
+table SUDTTransfer {
+    // godwoken short address (script_hash[0..n])
+    to: Bytes,
     amount: Uint128,
     fee: Uint128,
 }
@@ -239,7 +239,7 @@ struct ChallengeTarget {
     block_hash: Byte32,
     // index of the challenge target
     target_index: Uint32,
-    // 0: tx, 1: withdrawal
+    // 0: tx execution, 1: tx signature, 2: withdrawal signature
     target_type: byte,
 }
 
@@ -283,7 +283,7 @@ table VerifyTransactionWitness {
     context: VerifyTransactionContext,
 }
 
-table VerifySignatureContext {
+table VerifyTransactionSignatureContext {
     account_count: Uint32,
     kv_state: KVPairVec,
     scripts: ScriptVec,
@@ -291,20 +291,17 @@ table VerifySignatureContext {
 
 // cancel challenge by verify tx signature
 table VerifyTransactionSignatureWitness {
-    l2tx: L2Transaction,
     raw_l2block: RawL2Block,
+    l2tx: L2Transaction,
     tx_proof: Bytes,
     kv_state_proof: Bytes,
-    block_hashes_proof: Bytes,
-    context: VerifySignatureContext,
+    context: VerifyTransactionSignatureContext,
 }
 
 table VerifyWithdrawalWitness {
     raw_l2block: RawL2Block,
-    kv_state_proof: Bytes,
     withdrawal_request: WithdrawalRequest,
     withdrawal_proof: Bytes,
-    context: VerifySignatureContext,
 }
 
 // --- end of challenge ---

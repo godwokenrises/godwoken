@@ -3,7 +3,11 @@ use crate::{
     error::{AccountError, DepositError, Error, WithdrawalError},
     RollupContext,
 };
-use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, CKB_SUDT_SCRIPT_ARGS};
+use gw_common::{
+    builtins::CKB_SUDT_ACCOUNT_ID,
+    state::{to_short_address, State},
+    CKB_SUDT_SCRIPT_ARGS, H256,
+};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
@@ -91,17 +95,22 @@ impl<S: State + CodeStore> StateExt for S {
         request: &DepositRequest,
     ) -> Result<(), Error> {
         // find or create user account
-        let account_script_hash = request.script().hash();
-        let id = match self.get_account_id_by_script_hash(&account_script_hash.into())? {
-            Some(id) => id,
-            None => {
-                self.insert_script(account_script_hash.into(), request.script());
-                self.create_account(account_script_hash.into())?
-            }
-        };
+        let account_script_hash: H256 = request.script().hash().into();
         // mint CKB
         let capacity: u64 = request.capacity().unpack();
-        self.mint_sudt(CKB_SUDT_ACCOUNT_ID, id, capacity.into())?;
+        if self
+            .get_account_id_by_script_hash(&account_script_hash)?
+            .is_none()
+        {
+            self.insert_script(account_script_hash, request.script());
+            let _new_id = self.create_account(account_script_hash)?;
+        }
+        // NOTE: the length `20` is a hard-coded value, may be `16` for some LockAlgorithm.
+        self.mint_sudt(
+            CKB_SUDT_ACCOUNT_ID,
+            to_short_address(&account_script_hash),
+            capacity.into(),
+        )?;
         let sudt_script_hash = request.sudt_script_hash().unpack();
         let amount = request.amount().unpack();
         if sudt_script_hash != CKB_SUDT_SCRIPT_ARGS.into() {
@@ -120,7 +129,7 @@ impl<S: State + CodeStore> StateExt for S {
                 return Err(AccountError::InvalidSUDTOperation.into());
             }
             // mint SUDT
-            self.mint_sudt(sudt_id, id, amount)?;
+            self.mint_sudt(sudt_id, to_short_address(&account_script_hash), amount)?;
         } else if amount != 0 {
             return Err(DepositError::DepositFakedCKB.into());
         }
@@ -134,23 +143,27 @@ impl<S: State + CodeStore> StateExt for S {
         request: &WithdrawalRequest,
     ) -> Result<WithdrawalReceipt, Error> {
         let raw = request.raw();
-        let account_script_hash: [u8; 32] = raw.account_script_hash().unpack();
+        let account_script_hash: H256 = raw.account_script_hash().unpack();
         let l2_sudt_script_hash: [u8; 32] =
             build_l2_sudt_script(&ctx, &raw.sudt_script_hash().unpack()).hash();
         let amount: u128 = raw.amount().unpack();
         // find user account
         let id = self
-            .get_account_id_by_script_hash(&account_script_hash.into())?
+            .get_account_id_by_script_hash(&account_script_hash)?
             .ok_or(AccountError::UnknownAccount)?; // find Simple UDT account
         let capacity: u64 = raw.capacity().unpack();
         // burn CKB
-        self.burn_sudt(CKB_SUDT_ACCOUNT_ID, id, capacity.into())?;
+        self.burn_sudt(
+            CKB_SUDT_ACCOUNT_ID,
+            to_short_address(&account_script_hash),
+            capacity.into(),
+        )?;
         let sudt_id = self
             .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
             .ok_or(AccountError::UnknownSUDT)?;
         if sudt_id != CKB_SUDT_ACCOUNT_ID {
             // burn sudt
-            self.burn_sudt(sudt_id, id, amount)?;
+            self.burn_sudt(sudt_id, to_short_address(&account_script_hash), amount)?;
         } else if amount != 0 {
             return Err(WithdrawalError::WithdrawFakedCKB.into());
         }

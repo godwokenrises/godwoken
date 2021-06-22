@@ -36,7 +36,6 @@ pub struct Web3Indexer {
     polyjuice_type_script_hash: H256,
     rollup_type_hash: H256,
     eth_account_lock_hash: H256,
-    compatible_chain_id: u32,
 }
 
 impl Web3Indexer {
@@ -46,7 +45,6 @@ impl Web3Indexer {
         polyjuice_type_script_hash: H256,
         rollup_type_hash: H256,
         eth_account_lock_hash: H256,
-        compatible_chain_id: u32,
     ) -> Self {
         Web3Indexer {
             pool,
@@ -54,7 +52,6 @@ impl Web3Indexer {
             polyjuice_type_script_hash,
             rollup_type_hash,
             eth_account_lock_hash,
-            compatible_chain_id,
         }
     }
 
@@ -105,11 +102,11 @@ impl Web3Indexer {
                 };
                 let  (transaction_id,): (i64,) =
             sqlx::query_as("INSERT INTO transactions
-            (hash, gw_tx_hash, block_number, block_hash, transaction_index, from_address, to_address, value, nonce, gas_limit, gas_price, input, v, r, s, cumulative_gas_used, gas_used, logs_bloom, contract_address, status) 
+            (hash, eth_tx_hash, block_number, block_hash, transaction_index, from_address, to_address, value, nonce, gas_limit, gas_price, input, v, r, s, cumulative_gas_used, gas_used, logs_bloom, contract_address, status) 
             VALUES 
             ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING ID")
-            .bind(hex(web3_tx.compute_eth_tx_hash().as_slice())?)
             .bind(hex(web3_tx.gw_tx_hash.as_slice())?)
+            .bind(hex(web3_tx.compute_eth_tx_hash().as_slice())?)
             .bind(Decimal::from(web3_tx.block_number))
             .bind(hex(web3_tx.block_hash.as_slice())?)
             .bind(web3_tx.transaction_index)
@@ -227,6 +224,28 @@ impl Web3Indexer {
                 .await?
                 .ok_or_else(|| anyhow!("Can't get script by script_hash: {:?}", to_script_hash))?;
 
+            // assume the signature is compatible if length is 65, otherwise return zero
+            let signature: [u8; 65] = if l2_transaction.signature().len() == 65 {
+                let signature: Bytes = l2_transaction.signature().unpack();
+                let mut buf = [0u8; 65];
+                buf.copy_from_slice(&signature);
+                buf
+            } else {
+                [0u8; 65]
+            };
+
+            let r = {
+                let mut buf = [0u8; 32];
+                buf.copy_from_slice(&signature[0..32]);
+                buf
+            };
+            let s = {
+                let mut buf = [0u8; 32];
+                buf.copy_from_slice(&signature[32..64]);
+                buf
+            };
+            let v: u64 = signature[64].into();
+
             if to_script.code_hash().as_slice() == self.polyjuice_type_script_hash.0 {
                 let l2_tx_args = l2_transaction.raw().args();
                 let polyjuice_args = PolyjuiceArgs::decode(l2_tx_args.raw_data().as_ref())?;
@@ -243,23 +262,9 @@ impl Web3Indexer {
                     (Some(address), polyjuice_chain_id)
                 };
                 // calculate chain_id
-                let chain_id: u64 =
-                    ((self.compatible_chain_id as u64) << 32) | (polyjuice_chain_id as u64);
+                let chain_id: u64 = polyjuice_chain_id as u64;
                 let nonce: u32 = l2_transaction.raw().nonce().unpack();
                 let input = polyjuice_args.input.clone().unwrap_or_default();
-
-                let signature: [u8; 65] = l2_transaction.signature().unpack();
-                let r = {
-                    let mut buf = [0u8; 32];
-                    buf.copy_from_slice(&signature[0..32]);
-                    buf
-                };
-                let s = {
-                    let mut buf = [0u8; 32];
-                    buf.copy_from_slice(&signature[32..64]);
-                    buf
-                };
-                let v: u64 = signature[64].into();
 
                 // read logs
                 let db = store.begin_transaction();
@@ -283,19 +288,18 @@ impl Web3Indexer {
                 let (contract_address, tx_gas_used) = if let GwLog::PolyjuiceSystem {
                     gas_used,
                     cumulative_gas_used: _,
-                    created_id,
+                    created_address,
                     status_code: _,
                 } = polyjuice_system_log
                 {
                     let tx_gas_used = gas_used.into();
                     cumulative_gas_used += tx_gas_used;
-                    let contract_address = if polyjuice_args.is_create && created_id != u32::MAX {
-                        let created_script_hash =
-                            get_script_hash(store.clone(), created_id).await?;
-                        Some(account_id_to_eth_address(created_script_hash, created_id))
-                    } else {
-                        None
-                    };
+                    let contract_address =
+                        if polyjuice_args.is_create && created_address != [0u8; 20] {
+                            Some(created_address)
+                        } else {
+                            None
+                        };
                     (contract_address, tx_gas_used)
                 } else {
                     return Err(anyhow!(
@@ -327,8 +331,6 @@ impl Web3Indexer {
                     true,
                 );
 
-                let eth_tx_hash = web3_transaction.compute_eth_tx_hash();
-
                 let web3_logs = {
                     let mut logs: Vec<Web3Log> = vec![];
                     let mut log_index = 0;
@@ -344,7 +346,7 @@ impl Web3Indexer {
                                 topics,
                             } => {
                                 let web3_log = Web3Log::new(
-                                    eth_tx_hash,
+                                    gw_tx_hash,
                                     tx_index,
                                     block_number,
                                     block_hash,
@@ -378,38 +380,16 @@ impl Web3Indexer {
                     SUDTArgs::from_slice(l2_transaction.raw().args().raw_data().as_ref())?;
                 match sudt_args.to_enum() {
                     SUDTArgsUnion::SUDTTransfer(sudt_transfer) => {
-                        let to_id: u32 = sudt_transfer.to().unpack();
+                        // Since we can transfer to any non-exists account, we can not check the script.code_hash.
+                        let to_address_data: Bytes = sudt_transfer.to().unpack();
+                        if to_address_data.len() != 20 {
+                            continue;
+                        }
+                        let mut to_address = [0u8; 20];
+                        to_address.copy_from_slice(to_address_data.as_ref());
+
                         let amount: u128 = sudt_transfer.amount().unpack();
                         let fee: u128 = sudt_transfer.fee().unpack();
-
-                        let to_script_hash = get_script_hash(store.clone(), to_id).await?;
-                        let to_script = get_script(store.clone(), to_script_hash)
-                            .await?
-                            .ok_or_else(|| {
-                                anyhow!("Can't get script by script_hash: {:?}", to_script_hash)
-                            })?;
-                        let to_script_code_hash: H256 = to_script.code_hash().unpack();
-                        // to_id could be eoa account, polyjuice contract account, or any other types of account,
-                        // only eos/polyjuice contract account would be stored.
-                        let to_address = if to_script_code_hash == self.eth_account_lock_hash {
-                            let to_script_args = to_script.args().raw_data();
-                            if to_script_args.len() != 52
-                                && to_script_args[0..32] == self.rollup_type_hash.0
-                            {
-                                return Err(anyhow!(
-                                "Wrong to_address's script args length, expected: 52, actual: {}",
-                                to_script_args.len()
-                            ));
-                            }
-                            let mut to_address = [0u8; 20];
-                            to_address.copy_from_slice(&to_script_args[32..52]);
-                            to_address
-                        } else if to_script_code_hash == self.polyjuice_type_script_hash {
-                            account_id_to_eth_address(to_script_hash, to_id)
-                        } else {
-                            continue;
-                        };
-
                         let value = amount;
 
                         // Represent SUDTTransfer fee in web3 style, set gas_price as 1 temporary.
@@ -418,18 +398,6 @@ impl Web3Indexer {
                         cumulative_gas_used += gas_limit;
 
                         let nonce: u32 = l2_transaction.raw().nonce().unpack();
-                        let signature: [u8; 65] = l2_transaction.signature().unpack();
-                        let r = {
-                            let mut buf = [0u8; 32];
-                            buf.copy_from_slice(&signature[0..32]);
-                            buf
-                        };
-                        let s = {
-                            let mut buf = [0u8; 32];
-                            buf.copy_from_slice(&signature[32..64]);
-                            buf
-                        };
-                        let v: u64 = signature[64].into();
 
                         let web3_transaction = Web3Transaction::new(
                             gw_tx_hash,

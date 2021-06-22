@@ -2,7 +2,11 @@ use crate::testing_tool::chain::{
     build_sync_tx, construct_block, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
 };
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, RevertedL1Action, SyncEvent, SyncParam};
-use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
+use gw_common::{
+    builtins::CKB_SUDT_ACCOUNT_ID,
+    state::{to_short_address, State},
+    H256,
+};
 use gw_store::state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState};
 use gw_types::{
     core::ScriptHashType,
@@ -115,19 +119,25 @@ fn test_produce_blocks() {
         )
         .unwrap();
         let tree = state_db.account_state_tree().unwrap();
+        let script_hash_a: H256 = user_script_a.hash().into();
+        let script_hash_b: H256 = user_script_b.hash().into();
         let id_a = tree
-            .get_account_id_by_script_hash(&user_script_a.hash().into())
+            .get_account_id_by_script_hash(&script_hash_a)
             .unwrap()
             .unwrap();
         let id_b = tree
-            .get_account_id_by_script_hash(&user_script_b.hash().into())
+            .get_account_id_by_script_hash(&script_hash_b)
             .unwrap()
             .unwrap();
         // 0 is meta contract, 1 is ckb sudt, so the user id start from 2
         assert_eq!(id_a, 2);
         assert_eq!(id_b, 3);
-        let balance_a = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, id_a).unwrap();
-        let balance_b = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, id_b).unwrap();
+        let balance_a = tree
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash_a))
+            .unwrap();
+        let balance_b = tree
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash_b))
+            .unwrap();
         assert_eq!(balance_a, 300);
         assert_eq!(balance_b, 500);
     }
@@ -433,13 +443,14 @@ fn test_layer1_revert() {
         );
 
         assert_eq!(tree.get_account_count().unwrap(), 3);
+        let alice_script_hash: H256 = alice_script.hash().into();
         let alice_id = tree
-            .get_account_id_by_script_hash(&alice_script.hash().into())
+            .get_account_id_by_script_hash(&alice_script_hash)
             .unwrap()
             .unwrap();
         assert_eq!(alice_id, 2);
         let alice_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, alice_id)
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&alice_script_hash))
             .unwrap();
         assert_eq!(alice_balance, 100);
 
@@ -481,23 +492,27 @@ fn test_layer1_revert() {
         );
 
         assert_eq!(tree.get_account_count().unwrap(), 4);
+        let alice_script_hash: H256 = alice_script.hash().into();
         let alice_id = tree
-            .get_account_id_by_script_hash(&alice_script.hash().into())
+            .get_account_id_by_script_hash(&alice_script_hash)
             .unwrap()
             .unwrap();
         assert_eq!(alice_id, 2);
         let alice_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, alice_id)
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&alice_script_hash))
             .unwrap();
         assert_eq!(alice_balance, 100);
 
+        let bob_script_hash: H256 = bob_script.hash().into();
         let bob_id = tree
-            .get_account_id_by_script_hash(&bob_script.hash().into())
+            .get_account_id_by_script_hash(&bob_script_hash)
             .unwrap()
             .unwrap();
         assert_eq!(bob_id, 3);
 
-        let bob_balance = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, bob_id).unwrap();
+        let bob_balance = tree
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&bob_script_hash))
+            .unwrap();
         assert_eq!(bob_balance, 500);
     }
 }
@@ -577,19 +592,25 @@ fn test_sync_blocks() {
         )
         .unwrap();
         let tree = state_db.account_state_tree().unwrap();
+        let script_hash_a: H256 = user_script_a.hash().into();
         let id_a = tree
-            .get_account_id_by_script_hash(&user_script_a.hash().into())
+            .get_account_id_by_script_hash(&script_hash_a)
             .unwrap()
             .unwrap();
+        let script_hash_b: H256 = user_script_b.hash().into();
         let id_b = tree
-            .get_account_id_by_script_hash(&user_script_b.hash().into())
+            .get_account_id_by_script_hash(&script_hash_b)
             .unwrap()
             .unwrap();
         // 0 is meta contract, 1 is ckb sudt, so the user id start from 2
         assert_eq!(id_a, 2);
         assert_eq!(id_b, 4);
-        let balance_a = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, id_a).unwrap();
-        let balance_b = tree.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, id_b).unwrap();
+        let balance_a = tree
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash_a))
+            .unwrap();
+        let balance_b = tree
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash_b))
+            .unwrap();
         assert_eq!(balance_a, 300);
         assert_eq!(balance_b, 500);
     }

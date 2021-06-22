@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use gw_common::H256;
 use gw_types::{
     bytes::Bytes,
-    packed::{L2Transaction, Script, Signature},
+    packed::{L2Transaction, Script},
 };
 
 #[cfg(debug_assertions)]
@@ -13,10 +13,12 @@ pub mod secp256k1;
 use crate::{error::LockAlgorithmError, RollupContext};
 
 pub trait LockAlgorithm {
-    fn verify_withdrawal_signature(
+    fn recover(&self, message: H256, signature: &[u8]) -> Result<Bytes, LockAlgorithmError>;
+
+    fn verify_message(
         &self,
         lock_args: Bytes,
-        signature: Signature,
+        signature: Bytes,
         message: H256,
     ) -> Result<bool, LockAlgorithmError>;
 
@@ -25,7 +27,7 @@ pub trait LockAlgorithm {
         ctx: &RollupContext,
         sender_script: Script,
         receiver_script: Script,
-        tx: L2Transaction,
+        tx: &L2Transaction,
     ) -> Result<bool, LockAlgorithmError>;
 }
 

@@ -15,7 +15,7 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     error::Error as StateError,
     h256_ext::H256Ext,
-    state::{build_account_field_key, State, GW_ACCOUNT_NONCE},
+    state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE},
     H256,
 };
 use gw_traits::{ChainStore, CodeStore};
@@ -106,7 +106,8 @@ impl Generator {
             .ok_or(AccountError::UnknownAccount)?; // find Simple UDT account
 
         // check CKB balance
-        let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, id)?;
+        let ckb_balance =
+            state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&account_script_hash))?;
         if capacity as u128 > ckb_balance {
             return Err(WithdrawalError::Overdraft.into());
         }
@@ -121,7 +122,8 @@ impl Generator {
             if amount == 0 {
                 return Err(WithdrawalError::NonPositiveSUDTAmount.into());
             }
-            let balance = state.get_sudt_balance(sudt_id, id)?;
+            let balance =
+                state.get_sudt_balance(sudt_id, to_short_address(&account_script_hash))?;
             if amount > balance {
                 return Err(WithdrawalError::Overdraft.into());
             }
@@ -163,9 +165,9 @@ impl Generator {
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
 
         let message = raw.calc_message(&self.rollup_context.rollup_script_hash);
-        let valid_signature = lock_algo.verify_withdrawal_signature(
+        let valid_signature = lock_algo.verify_message(
             account_script.args().unpack(),
-            withdrawal_request.signature(),
+            withdrawal_request.signature().unpack(),
             message,
         )?;
 
@@ -237,7 +239,7 @@ impl Generator {
             .get_lock_algorithm(&lock_code_hash.into())
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
         let valid_signature =
-            lock_algo.verify_tx(&self.rollup_context, script, receiver_script, tx.clone())?;
+            lock_algo.verify_tx(&self.rollup_context, script, receiver_script, &tx)?;
         if !valid_signature {
             return Err(LockAlgorithmError::InvalidSignature.into());
         }
@@ -375,6 +377,7 @@ impl Generator {
                     block_info,
                     raw_tx,
                     rollup_context: &self.rollup_context,
+                    account_lock_manage: &self.account_lock_manage,
                     result: &mut run_result,
                     code_store: state,
                 }));

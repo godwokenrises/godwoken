@@ -1,20 +1,5 @@
 use crate::{core::H256, packed, prelude::*, vec::Vec};
 
-impl Pack<packed::Signature> for [u8; 65] {
-    fn pack(&self) -> packed::Signature {
-        packed::Signature::from_slice(&self[..]).expect("impossible: fail to pack [u8; 65]")
-    }
-}
-
-impl<'r> Unpack<[u8; 65]> for packed::SignatureReader<'r> {
-    fn unpack(&self) -> [u8; 65] {
-        let ptr = self.as_slice().as_ptr() as *const [u8; 65];
-        unsafe { *ptr }
-    }
-}
-
-impl_conversion_for_entity_unpack!([u8; 65], Signature);
-
 impl Pack<packed::KVPair> for (H256, H256) {
     fn pack(&self) -> packed::KVPair {
         packed::KVPair::new_builder()
