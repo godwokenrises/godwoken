@@ -9,7 +9,7 @@ use std::{
     thread, time,
 };
 
-pub const TRANSFER_CAPACITY: u32 = 200000;
+pub const TRANSFER_CAPACITY: &str = "200000";
 const MIN_WALLET_CAPACITY: f64 = 100000.0f64;
 
 #[derive(Debug)]

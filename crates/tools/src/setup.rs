@@ -6,11 +6,12 @@ use crate::setup_nodes::{self, setup_nodes};
 use crate::utils;
 use std::path::Path;
 
+#[allow(clippy::too_many_arguments)]
 pub fn setup(
     ckb_rpc_url: &str,
     indexer_url: &str,
     mode: ScriptsBuildMode,
-    input_file_path: &Path,
+    scripts_path: &Path,
     privkey_path: &Path,
     nodes_count: u8,
     server_url: &str,
@@ -19,7 +20,7 @@ pub fn setup(
     let prepare_scripts_result = Path::new("deploy/scripts-deploy.json");
     prepare_scripts(
         mode,
-        input_file_path,
+        scripts_path,
         Path::new(prepare_scripts::REPOS_DIR_PATH),
         Path::new(prepare_scripts::SCRIPTS_DIR_PATH),
         prepare_scripts_result,
@@ -37,7 +38,9 @@ pub fn setup(
 
     let poa_config_path = Path::new("deploy/poa-config.json");
     let rollup_config_path = Path::new("deploy/rollup-config.json");
-    let capacity = setup_nodes::TRANSFER_CAPACITY;
+    let capacity = setup_nodes::TRANSFER_CAPACITY
+        .parse()
+        .expect("get capacity");
     setup_nodes(
         privkey_path,
         capacity,
@@ -77,4 +80,6 @@ pub fn setup(
         )
         .expect("generate_config");
     });
+
+    log::info!("Finish");
 }
