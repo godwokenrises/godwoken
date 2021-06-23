@@ -74,7 +74,8 @@ impl GodwokenRpcClient {
         match call_method_result {
             Ok(_) => call_method_result,
             Err(_) => {
-                log::info!("Failed to request /{m}, Retry /gw_{m} ...", m = method);
+                log::info!("Failed to request /{}", method);
+                log::info!("Retry /gw_{} ...", method);
                 let method_name = format!("gw_{}", method);
                 let call_gw_method_result =
                     self.call_rpc::<SuccessResponse>(method_name.as_str(), params)?;
