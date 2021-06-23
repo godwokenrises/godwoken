@@ -1,11 +1,14 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{state::State, H256};
+use gw_config::TestMode;
 use gw_generator::{sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
-    godwoken::{L2BlockView, RunResult, TxReceipt},
+    godwoken::{GlobalState, L2BlockView, RunResult, TxReceipt},
+    test_mode::{ShouldProduceBlock, TestModePayload},
 };
 use gw_store::{
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
@@ -25,6 +28,14 @@ type RPCServer = Arc<Server<MapRouter>>;
 type MemPool = Mutex<gw_mem_pool::pool::MemPool>;
 type AccountID = Uint32;
 type JsonH256 = ckb_fixed_hash::H256;
+type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
+
+#[async_trait]
+pub trait TestModeRPC {
+    async fn get_global_state(&self) -> Result<GlobalState>;
+    async fn produce_block(&self, payload: TestModePayload) -> Result<()>;
+    async fn should_produce_block(&self) -> Result<ShouldProduceBlock>;
+}
 
 fn to_h256(v: JsonH256) -> H256 {
     let h: [u8; 32] = v.into();
@@ -40,14 +51,27 @@ pub struct Registry {
     generator: Arc<Generator>,
     mem_pool: Arc<MemPool>,
     store: Store,
+    test_mode: TestMode,
+    tests_rpc_impl: Arc<BoxedTestsRPCImpl>,
 }
 
 impl Registry {
-    pub fn new(store: Store, mem_pool: Arc<MemPool>, generator: Arc<Generator>) -> Self {
+    pub fn new<T>(
+        store: Store,
+        mem_pool: Arc<MemPool>,
+        generator: Arc<Generator>,
+        test_mode: TestMode,
+        tests_rpc_impl: T,
+    ) -> Self
+    where
+        T: TestModeRPC + Send + Sync + 'static,
+    {
         Self {
             mem_pool,
             store,
             generator,
+            test_mode,
+            tests_rpc_impl: Arc::new(Box::new(tests_rpc_impl)),
         }
     }
 
@@ -83,6 +107,15 @@ impl Registry {
             .with_method("submit_l2transaction", submit_l2transaction)
             .with_method("submit_withdrawal_request", submit_withdrawal_request)
             .with_method("compute_l2_sudt_script_hash", compute_l2_sudt_script_hash);
+
+        // Tests
+        if TestMode::Enable == self.test_mode {
+            server = server
+                .with_data(Data(Arc::clone(&self.tests_rpc_impl)))
+                .with_method("tests_produce_block", tests_produce_block)
+                .with_method("tests_should_produce_block", tests_should_produce_block)
+                .with_method("tests_get_global_state", tests_get_global_state);
+        }
 
         Ok(server.finish())
     }
@@ -383,4 +416,21 @@ async fn compute_l2_sudt_script_hash(
     let l2_sudt_script =
         build_l2_sudt_script(generator.rollup_context(), &to_h256(l1_sudt_script_hash));
     Ok(to_jsonh256(l2_sudt_script.hash().into()))
+}
+
+async fn tests_produce_block(
+    Params((payload,)): Params<(TestModePayload,)>,
+    tests_rpc_impl: Data<BoxedTestsRPCImpl>,
+) -> Result<()> {
+    tests_rpc_impl.produce_block(payload).await
+}
+
+async fn tests_get_global_state(tests_rpc_impl: Data<BoxedTestsRPCImpl>) -> Result<GlobalState> {
+    tests_rpc_impl.get_global_state().await
+}
+
+async fn tests_should_produce_block(
+    tests_rpc_impl: Data<BoxedTestsRPCImpl>,
+) -> Result<ShouldProduceBlock> {
+    tests_rpc_impl.should_produce_block().await
 }

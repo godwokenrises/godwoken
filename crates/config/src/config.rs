@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
+    pub test_mode: TestMode,
     pub backends: Vec<BackendConfig>,
     pub store: StoreConfig,
     pub genesis: GenesisConfig,
@@ -86,4 +87,17 @@ pub struct Web3IndexerConfig {
     pub database_url: String,
     pub polyjuice_script_type_hash: H256,
     pub eth_account_lock_hash: H256,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TestMode {
+    Enable,
+    Disable,
+}
+
+impl Default for TestMode {
+    fn default() -> Self {
+        TestMode::Disable
+    }
 }
