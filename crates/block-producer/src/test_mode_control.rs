@@ -12,7 +12,7 @@ use gw_jsonrpc_types::{
     godwoken::GlobalState,
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
-use gw_rpc_server::test_mode_registry::TestModeRPC;
+use gw_rpc_server::registry::TestModeRPC;
 use gw_types::{packed::CellInput, prelude::Unpack};
 use smol::lock::Mutex;
 
@@ -75,13 +75,13 @@ impl TestModeRPC for TestModeControl {
         Ok(global_state.into())
     }
 
-    async fn next_global_state(&self, payload: TestModePayload) -> Result<()> {
+    async fn produce_block(&self, payload: TestModePayload) -> Result<()> {
         *self.payload.lock().await = Some(payload);
 
         Ok(())
     }
 
-    async fn should_produce_next_block(&self) -> Result<ShouldProduceBlock> {
+    async fn should_produce_block(&self) -> Result<ShouldProduceBlock> {
         let rollup_cell = {
             let opt = self.rpc_client.query_rollup_cell().await?;
             opt.ok_or_else(|| anyhow!("rollup cell not found"))?

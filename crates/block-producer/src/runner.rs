@@ -17,9 +17,7 @@ use gw_generator::{
 };
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_mem_pool::pool::MemPool;
-use gw_rpc_server::{
-    registry::Registry, server::start_jsonrpc_server, test_mode_registry::TestModeRegistry,
-};
+use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
@@ -227,13 +225,16 @@ pub fn run(config: Config) -> Result<()> {
     ));
 
     // RPC registry
-    let rpc_registry = Registry::new(store.clone(), mem_pool.clone(), generator.clone());
-
-    // Test mode rpc registry
     let test_mode = config.test_mode.mode();
     let test_mode_control =
         TestModeControl::create(test_mode, rpc_client.clone(), &block_producer_config)?;
-    let tests_rpc_registry = TestModeRegistry::new(test_mode_control.clone());
+    let rpc_registry = Registry::new(
+        store.clone(),
+        mem_pool.clone(),
+        generator.clone(),
+        test_mode,
+        test_mode_control.clone(),
+    );
 
     // create web3 indexer
     let web3_indexer = match config.web3_indexer {
@@ -329,7 +330,7 @@ pub fn run(config: Config) -> Result<()> {
             e = poll_loop(rpc_client, chain_updater, block_producer, test_mode_control ,Duration::from_secs(3)).fuse() => {
                 log::error!("Error in main poll loop: {:?}", e);
             }
-            e = start_jsonrpc_server(rpc_address, rpc_registry, tests_rpc_registry, test_mode).fuse() => {
+            e = start_jsonrpc_server(rpc_address, rpc_registry).fuse() => {
                 log::error!("Error running JSONRPC server: {:?}", e);
                 exit(1);
             },
