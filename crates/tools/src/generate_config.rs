@@ -88,17 +88,12 @@ pub fn generate_config(
         )?;
         hash
     };
-    let args: [u8; 20] = {
-        let mut args: [u8; 20] = [0u8; 20];
-        hex::decode_to_slice(
-            node_wallet_info
-                .lock_arg
-                .strip_prefix("0x")
-                .expect("get code hash"),
-            &mut args as &mut [u8],
-        )?;
-        args
-    };
+    let args = hex::decode(
+        node_wallet_info
+            .lock_arg
+            .strip_prefix("0x")
+            .expect("get args"),
+    )?;
     let lock = Script::new_builder()
         .code_hash(code_hash.pack())
         .hash_type(ScriptHashType::Type.into())
