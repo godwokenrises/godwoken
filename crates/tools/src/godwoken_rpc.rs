@@ -8,17 +8,15 @@ pub struct GodwokenRpcClient {
     url: reqwest::Url,
     client: reqwest::blocking::Client,
     id: u64,
-    prefix_with_gw: bool,
 }
 
 impl GodwokenRpcClient {
-    pub fn new(url: &str, prefix_with_gw: bool) -> GodwokenRpcClient {
+    pub fn new(url: &str) -> GodwokenRpcClient {
         let url = reqwest::Url::parse(url).expect("godwoken uri, e.g. \"http://127.0.0.1:8119\"");
         GodwokenRpcClient {
             url,
             id: 0,
             client: reqwest::blocking::Client::new(),
-            prefix_with_gw,
         }
     }
 }
@@ -71,19 +69,30 @@ impl GodwokenRpcClient {
         method: &str,
         params: serde_json::Value,
     ) -> Result<SuccessResponse, String> {
-        let method_name = match self.prefix_with_gw {
-            false => method.to_owned(),
-            true => format!("gw_{}", method),
-        };
+        let call_method_result = self.call_rpc::<SuccessResponse>(method, params.clone());
 
+        match call_method_result {
+            Ok(_) => call_method_result,
+            Err(_) => {
+                log::info!("Failed to request /{m}, Retry /gw_{m} ...", m = method);
+                let method_name = format!("gw_{}", method);
+                let call_gw_method_result =
+                    self.call_rpc::<SuccessResponse>(method_name.as_str(), params)?;
+                Ok(call_gw_method_result)
+            }
+        }
+    }
+
+    fn call_rpc<SuccessResponse: serde::de::DeserializeOwned>(
+        &mut self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<SuccessResponse, String> {
         self.id += 1;
         let mut req_json = serde_json::Map::new();
         req_json.insert("id".to_owned(), serde_json::to_value(&self.id).unwrap());
         req_json.insert("jsonrpc".to_owned(), serde_json::to_value(&"2.0").unwrap());
-        req_json.insert(
-            "method".to_owned(),
-            serde_json::to_value(method_name).unwrap(),
-        );
+        req_json.insert("method".to_owned(), serde_json::to_value(method).unwrap());
         req_json.insert("params".to_owned(), params);
 
         let resp = self

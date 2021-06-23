@@ -30,7 +30,6 @@ pub fn withdraw(
     owner_ckb_address: &str,
     config_path: &Path,
     deployment_results_path: &Path,
-    prefix_with_gw: bool,
 ) -> Result<(), String> {
     let sudt_script_hash =
         H256::from_str(&sudt_script_hash.trim()[2..]).map_err(|err| err.to_string())?;
@@ -42,7 +41,7 @@ pub fn withdraw(
     let deployment_result: ScriptsDeploymentResult =
         serde_json::from_str(&deployment_result_string).map_err(|err| err.to_string())?;
 
-    let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url, prefix_with_gw);
+    let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
     let sell_capacity = 100u64 * 10u64.pow(8);
 
