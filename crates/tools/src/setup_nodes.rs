@@ -12,13 +12,11 @@ use std::{
 const MIN_WALLET_CAPACITY: f64 = 100000.0f64;
 
 #[derive(Debug)]
-struct NodeWalletInfo {
-    node_name: String,
-    privkey_path: PathBuf,
-    testnet_address: String,
-    lock_hash: String,
-    lock_arg: String,
-    block_assembler_code_hash: String,
+pub struct NodeWalletInfo {
+    pub testnet_address: String,
+    pub lock_hash: String,
+    pub lock_arg: String,
+    pub block_assembler_code_hash: String,
 }
 
 pub fn setup_nodes(
@@ -61,11 +59,11 @@ fn check_wallets_info(
     nodes_privkeys: HashMap<String, PathBuf>,
     capacity: u32,
     payer_privkey_path: &Path,
-) -> Vec<NodeWalletInfo> {
+) -> HashMap<String, NodeWalletInfo> {
     nodes_privkeys
         .into_iter()
         .map(|(node, privkey)| {
-            let wallet_info = get_wallet_info(&node, privkey);
+            let wallet_info = get_wallet_info(&privkey);
             let mut current_capacity = query_wallet_capacity(&wallet_info.testnet_address);
             log::info!("{}'s wallet capacity: {}", node, current_capacity);
             if current_capacity < MIN_WALLET_CAPACITY {
@@ -79,15 +77,15 @@ fn check_wallets_info(
                 );
                 log::info!("{}'s wallet capacity: {}", node, current_capacity);
             }
-            wallet_info
+            (node, wallet_info)
         })
         .collect()
 }
 
-fn generate_poa_config(nodes_info: &[NodeWalletInfo], poa_config_path: &Path) {
+fn generate_poa_config(nodes_info: &HashMap<String, NodeWalletInfo>, poa_config_path: &Path) {
     let identities: Vec<&str> = nodes_info
         .iter()
-        .map(|node| node.lock_hash.as_str())
+        .map(|(_, node)| node.lock_hash.as_str())
         .collect();
     let poa_config = json!({
         "poa_setup" : {
@@ -123,7 +121,7 @@ fn generate_privkey_file(privkey_file_path: &Path) {
     fs::write(&privkey_file_path, &privkey).expect("create pk file");
 }
 
-fn get_wallet_info(node_name: &str, privkey_path: PathBuf) -> NodeWalletInfo {
+pub fn get_wallet_info(privkey_path: &Path) -> NodeWalletInfo {
     let (stdout, stderr) = utils::run_in_output_mode(
         "ckb-cli",
         vec![
@@ -135,8 +133,6 @@ fn get_wallet_info(node_name: &str, privkey_path: PathBuf) -> NodeWalletInfo {
     )
     .expect("get key info");
     NodeWalletInfo {
-        node_name: node_name.into(),
-        privkey_path,
         testnet_address: look_after_in_line(&stdout, "testnet:"),
         lock_hash: look_after_in_line(&stdout, "lock_hash:"),
         lock_arg: look_after_in_line(&stdout, "lock_arg:"),

@@ -113,13 +113,7 @@ fn main() {
                         .required(true)
                         .help("The genesis deployment results json file path"),
                 )
-                .arg(
-                    Arg::with_name("polyjuice-binaries-dir-path")
-                        .short("p")
-                        .takes_value(true)
-                        .required(true)
-                        .help("Polyjuice binaries directory path"),
-                )
+                .arg(arg_privkey_path.clone())
                 .arg(
                     Arg::with_name("database-url")
                         .short("d")
@@ -132,6 +126,21 @@ fn main() {
                         .takes_value(true)
                         .required(true)
                         .help("The output json file path"),
+                )
+                .arg(
+                    Arg::with_name("scripts-deployment-config-path")
+                        .short("c")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Scripts deployment config json file path"),
+                )
+                .arg(
+                    Arg::with_name("rpc-server-url")
+                        .short("u")
+                        .takes_value(true)
+                        .default_value("localhost:8119")
+                        .required(true)
+                        .help("The URL of rpc server"),
                 ),
         )
         .subcommand(
@@ -318,21 +327,26 @@ fn main() {
         ("generate-config", Some(m)) => {
             let ckb_url = m.value_of("ckb-rpc-url").unwrap().to_string();
             let indexer_url = m.value_of("indexer-rpc-url").unwrap().to_string();
-            let scripts_path = Path::new(m.value_of("scripts-deployment-results-path").unwrap());
+            let scripts_results_path =
+                Path::new(m.value_of("scripts-deployment-results-path").unwrap());
             let genesis_path = Path::new(m.value_of("genesis-deployment-results-path").unwrap());
-            let polyjuice_binaries_dir =
-                Path::new(m.value_of("polyjuice-binaries-dir-path").unwrap());
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
             let database_url = m.value_of("database-url");
+            let scripts_config_path =
+                Path::new(m.value_of("scripts-deployment-config-path").unwrap());
+            let server_url = m.value_of("rpc-server-url").unwrap().to_string();
 
             if let Err(err) = generate_config::generate_config(
                 genesis_path,
-                scripts_path,
-                polyjuice_binaries_dir,
+                scripts_results_path,
+                privkey_path,
                 ckb_url,
                 indexer_url,
                 output_path,
                 database_url,
+                scripts_config_path,
+                server_url,
             ) {
                 log::error!("Deploy genesis error: {}", err);
                 std::process::exit(-1);
