@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
+    pub test_mode: TestMode,
     pub backends: Vec<BackendConfig>,
     pub store: StoreConfig,
     pub genesis: GenesisConfig,
@@ -16,7 +17,6 @@ pub struct Config {
     pub rpc_server: RPCServerConfig,
     pub block_producer: Option<BlockProducerConfig>,
     pub web3_indexer: Option<Web3IndexerConfig>,
-    pub test_mode: TestModeConfig,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -96,23 +96,8 @@ pub enum TestMode {
     Disable,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct TestModeConfig {
-    pub enable: bool,
-}
-
-impl TestModeConfig {
-    pub fn mode(&self) -> TestMode {
-        if self.enable {
-            TestMode::Enable
-        } else {
-            TestMode::Disable
-        }
-    }
-}
-
-impl Default for TestModeConfig {
+impl Default for TestMode {
     fn default() -> Self {
-        Self { enable: false }
+        TestMode::Disable
     }
 }

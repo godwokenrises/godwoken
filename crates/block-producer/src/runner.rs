@@ -225,14 +225,13 @@ pub fn run(config: Config) -> Result<()> {
     ));
 
     // RPC registry
-    let test_mode = config.test_mode.mode();
     let test_mode_control =
-        TestModeControl::create(test_mode, rpc_client.clone(), &block_producer_config)?;
+        TestModeControl::create(config.test_mode, rpc_client.clone(), &block_producer_config)?;
     let rpc_registry = Registry::new(
         store.clone(),
         mem_pool.clone(),
         generator.clone(),
-        test_mode,
+        config.test_mode,
         test_mode_control.clone(),
     );
 
@@ -320,7 +319,7 @@ pub fn run(config: Config) -> Result<()> {
         log::info!("Rollup config hash: {}", rollup_config_hash);
     }
 
-    if TestMode::Enable == test_mode {
+    if TestMode::Enable == config.test_mode {
         log::info!("Test mode enabled!!!");
     }
 
