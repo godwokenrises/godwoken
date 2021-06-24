@@ -17,27 +17,28 @@ pub fn setup(
     server_url: &str,
     output_dir: &Path,
 ) {
-    let prepare_scripts_result = Path::new("deploy/scripts-deploy.json");
+    let prepare_scripts_result = utils::make_path(output_dir, vec!["scripts-deploy.json"]);
     prepare_scripts(
         mode,
         scripts_path,
         Path::new(prepare_scripts::REPOS_DIR_PATH),
         Path::new(prepare_scripts::SCRIPTS_DIR_PATH),
-        prepare_scripts_result,
+        &prepare_scripts_result,
     )
     .expect("prepare scripts");
 
-    let scripts_deployment_result = Path::new("deploy/scripts-deploy-result.json");
+    let scripts_deployment_result =
+        utils::make_path(output_dir, vec!["scripts-deploy-result.json"]);
     deploy_scripts(
         privkey_path,
         ckb_rpc_url,
-        prepare_scripts_result,
-        scripts_deployment_result,
+        &prepare_scripts_result,
+        &scripts_deployment_result,
     )
     .expect("deploy scripts");
 
-    let poa_config_path = Path::new("deploy/poa-config.json");
-    let rollup_config_path = Path::new("deploy/rollup-config.json");
+    let poa_config_path = utils::make_path(output_dir, vec!["poa-config.json"]);
+    let rollup_config_path = utils::make_path(output_dir, vec!["rollup-config.json"]);
     let capacity = setup_nodes::TRANSFER_CAPACITY
         .parse()
         .expect("get capacity");
@@ -46,19 +47,19 @@ pub fn setup(
         capacity,
         nodes_count,
         output_dir,
-        poa_config_path,
-        rollup_config_path,
+        &poa_config_path,
+        &rollup_config_path,
     );
 
-    let genesis_deploy_result = Path::new("deploy/genesis-deploy-result.json");
+    let genesis_deploy_result = utils::make_path(output_dir, vec!["genesis-deploy-result.json"]);
     deploy_genesis(
         privkey_path,
         ckb_rpc_url,
-        scripts_deployment_result,
-        rollup_config_path,
-        poa_config_path,
+        &scripts_deployment_result,
+        &rollup_config_path,
+        &poa_config_path,
         None,
-        genesis_deploy_result,
+        &genesis_deploy_result,
     )
     .expect("deploy genesis");
 
@@ -68,14 +69,14 @@ pub fn setup(
         let output_file_path =
             utils::make_path(output_dir, vec![node_name, "config.toml".to_owned()]);
         generate_config(
-            genesis_deploy_result,
-            scripts_deployment_result,
+            &genesis_deploy_result,
+            &scripts_deployment_result,
             privkey_path.as_ref(),
             ckb_rpc_url.to_owned(),
             indexer_url.to_owned(),
             output_file_path.as_ref(),
             None,
-            prepare_scripts_result,
+            &prepare_scripts_result,
             server_url.to_string(),
         )
         .expect("generate_config");
