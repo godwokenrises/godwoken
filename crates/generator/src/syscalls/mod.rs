@@ -27,26 +27,30 @@ use std::{cmp, convert::TryInto};
 // 24KB is max ethereum contract code size
 const MAX_SET_RETURN_DATA_SIZE: u64 = 1024 * 24;
 // 20 Bytes
-const SCRIPT_HASH_PREFIX_LEN: u64 = 20;
+const SCRIPT_HASH_SHORT_LEN: u64 = 20;
 
-/* Syscall numbers */
-const SYS_STORE: u64 = 3051;
-const SYS_LOAD: u64 = 3052;
-const SYS_SET_RETURN_DATA: u64 = 3061;
-const SYS_CREATE: u64 = 3071;
-/* internal syscall numbers */
-const SYS_LOAD_TRANSACTION: u64 = 4051;
-const SYS_LOAD_BLOCKINFO: u64 = 4052;
-const SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID: u64 = 4053;
-const SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH: u64 = 4054;
-const SYS_LOAD_ACCOUNT_SCRIPT: u64 = 4055;
-const SYS_STORE_DATA: u64 = 4056;
-const SYS_LOAD_DATA: u64 = 4057;
-const SYS_GET_BLOCK_HASH: u64 = 4058;
-const SYS_GET_SCRIPT_HASH_BY_SHORT_ADDRESS: u64 = 4059;
-const SYS_RECOVER_ACCOUNT: u64 = 4060;
-const SYS_LOG: u64 = 4061;
-const SYS_LOAD_ROLLUP_CONFIG: u64 = 4062;
+/* Syscall account store / load / create */
+const SYS_CREATE: u64 = 3100;
+const SYS_STORE: u64 = 3101;
+const SYS_LOAD: u64 = 3102;
+const SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID: u64 = 3103;
+const SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH: u64 = 3104;
+const SYS_LOAD_ACCOUNT_SCRIPT: u64 = 3105;
+const SYS_GET_SCRIPT_HASH_BY_SHORT_ADDRESS: u64 = 3106;
+/* Syscall call / return */
+const SYS_SET_RETURN_DATA: u64 = 3201;
+/* Syscall data store / load */
+const SYS_STORE_DATA: u64 = 3301;
+const SYS_LOAD_DATA: u64 = 3302;
+/* Syscall load metadata structures */
+const SYS_LOAD_ROLLUP_CONFIG: u64 = 3401;
+const SYS_LOAD_TRANSACTION: u64 = 3402;
+const SYS_LOAD_BLOCKINFO: u64 = 3403;
+const SYS_GET_BLOCK_HASH: u64 = 3404;
+/* Syscall builtins */
+const SYS_PAY_FEE: u64 = 3501;
+const SYS_LOG: u64 = 3502;
+const SYS_RECOVER_ACCOUNT: u64 = 3503;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
@@ -67,6 +71,17 @@ pub(crate) struct L2Syscalls<'a, S, C> {
     pub(crate) raw_tx: &'a RawL2Transaction,
     pub(crate) code_store: &'a dyn CodeStore,
     pub(crate) result: &'a mut RunResult,
+}
+
+fn load_data_u128<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<u128, VMError> {
+    let mut data = [0u8; 16];
+    for (i, c) in data.iter_mut().enumerate() {
+        *c = machine
+            .memory_mut()
+            .load8(&Mac::REG::from_u64(addr).overflowing_add(&Mac::REG::from_u64(i as u64)))?
+            .to_u8();
+    }
+    Ok(u128::from_le_bytes(data))
 }
 
 fn load_data_h256<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<H256, VMError> {
@@ -198,7 +213,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                         return Ok(true);
                     }
 
-                    // check contract script prefix
+                    // check contract script short length
                     let args: Bytes = script.args().unpack();
                     if args.len() < 32
                         || !args.starts_with(self.rollup_context.rollup_script_hash.as_slice())
@@ -351,18 +366,17 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
             }
             SYS_GET_SCRIPT_HASH_BY_SHORT_ADDRESS => {
                 let script_hash_addr = machine.registers()[A0].to_u64();
-                // fetch prefix script hash
-                let prefix_addr = machine.registers()[A1].to_u64();
-                let prefix_len = machine.registers()[A2].to_u64();
-                // check prefix len
-                if prefix_len != SCRIPT_HASH_PREFIX_LEN {
-                    log::error!("unexpected script hash prefix length: {}", prefix_len);
+                // fetch short script hash
+                let short_address_addr = machine.registers()[A1].to_u64();
+                let short_address_len = machine.registers()[A2].to_u64();
+                // check short address len
+                if short_address_len != SCRIPT_HASH_SHORT_LEN {
+                    log::error!("unexpected script hash short length: {}", short_address_len);
                     return Err(VMError::Unexpected);
                 }
-                let script_hash_prefix = load_bytes(machine, prefix_addr, prefix_len as usize)?;
-                if let Some(script_hash) =
-                    self.get_script_hash_by_short_address(&script_hash_prefix)
-                {
+                let short_address =
+                    load_bytes(machine, short_address_addr, short_address_len as usize)?;
+                if let Some(script_hash) = self.get_script_hash_by_short_address(&short_address) {
                     machine
                         .memory_mut()
                         .store_bytes(script_hash_addr, script_hash.as_slice())?;
@@ -437,6 +451,39 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
+            SYS_PAY_FEE => {
+                // record the fee to block producer
+                // NOTICE this syscall do not actually execute the transfer of assets,
+                // the trusted script should do the transfer of fee first,
+                // then called this syscal to record the fee only after the success of the transfer.
+
+                // fetch short script hash
+                let short_address = {
+                    let short_address_addr = machine.registers()[A0].to_u64();
+                    let short_address_len = machine.registers()[A1].to_u64();
+                    // check short address len
+                    if short_address_len != SCRIPT_HASH_SHORT_LEN {
+                        log::error!("unexpected script hash short length: {}", short_address_len);
+                        return Err(VMError::Unexpected);
+                    }
+                    load_bytes(machine, short_address_addr, short_address_len as usize)?
+                };
+                let sudt_id = machine.registers()[A2].to_u8();
+                let amount = {
+                    let amount_addr = machine.registers()[A3].to_u64();
+                    load_data_u128(machine, amount_addr)?
+                };
+
+                // TODO record fee payment in the generator context
+                log::debug!(
+                    "[contract syscall: SYS_PAY_FEE] payer: {}, sudt_id: {}, amount: {}",
+                    hex::encode(&short_address),
+                    sudt_id,
+                    amount
+                );
+                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
+                Ok(true)
+            }
             DEBUG_PRINT_SYSCALL_NUMBER => {
                 self.output_debug(machine)?;
                 Ok(true)
@@ -494,13 +541,14 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
             })?;
         Ok(value)
     }
-    fn get_script_hash_by_short_address(&mut self, prefix: &[u8]) -> Option<H256> {
+    fn get_script_hash_by_short_address(&mut self, short_address: &[u8]) -> Option<H256> {
         for script_hash in self.result.new_scripts.keys() {
-            if script_hash.as_slice().starts_with(prefix) {
+            if script_hash.as_slice().starts_with(short_address) {
                 return Some(*script_hash);
             }
         }
-        self.code_store.get_script_hash_by_short_address(prefix)
+        self.code_store
+            .get_script_hash_by_short_address(short_address)
     }
     fn get_account_id_by_script_hash(
         &mut self,

@@ -90,6 +90,10 @@ impl Generator {
         let sudt_script_hash: H256 = raw.sudt_script_hash().unpack();
         let amount: u128 = raw.amount().unpack();
         let capacity: u64 = raw.capacity().unpack();
+        let fee = raw.fee();
+        let fee_sudt_id: u32 = fee.sudt_id().unpack();
+        let fee_amount: u128 = fee.amount().unpack();
+        let account_short_address = to_short_address(&account_script_hash);
 
         // check capacity
         if capacity < MIN_WITHDRAWAL_CAPACITY {
@@ -106,9 +110,16 @@ impl Generator {
             .ok_or(AccountError::UnknownAccount)?; // find Simple UDT account
 
         // check CKB balance
-        let ckb_balance =
-            state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&account_script_hash))?;
-        if capacity as u128 > ckb_balance {
+        let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, account_short_address)?;
+        let required_ckb_capacity = {
+            let mut required_capacity = capacity as u128;
+            // Count withdrawal fee
+            if fee_sudt_id == CKB_SUDT_ACCOUNT_ID {
+                required_capacity = required_capacity.saturating_add(fee_amount);
+            }
+            required_capacity
+        };
+        if required_ckb_capacity > ckb_balance {
             return Err(WithdrawalError::Overdraft.into());
         }
         let l2_sudt_script_hash =
@@ -116,20 +127,32 @@ impl Generator {
         let sudt_id = state
             .get_account_id_by_script_hash(&l2_sudt_script_hash.into())?
             .ok_or(AccountError::UnknownSUDT)?;
+        // The sUDT id must not be equals to the CKB sUDT id if amount isn't 0
         if sudt_id != CKB_SUDT_ACCOUNT_ID {
             // check SUDT balance
             // user can't withdrawal 0 SUDT when non-CKB sudt_id exists
             if amount == 0 {
                 return Err(WithdrawalError::NonPositiveSUDTAmount.into());
             }
-            let balance =
-                state.get_sudt_balance(sudt_id, to_short_address(&account_script_hash))?;
-            if amount > balance {
+            let mut required_amount = amount;
+            if sudt_id == fee_sudt_id {
+                required_amount = required_amount.saturating_add(fee_amount);
+            }
+            let balance = state.get_sudt_balance(sudt_id, account_short_address)?;
+            if required_amount > balance {
                 return Err(WithdrawalError::Overdraft.into());
             }
         } else if amount != 0 {
             // user can't withdrawal CKB token via SUDT fields
             return Err(WithdrawalError::WithdrawFakedCKB.into());
+        }
+
+        // check fees if it isn't been cheked yet
+        if fee_sudt_id != CKB_SUDT_ACCOUNT_ID && fee_sudt_id != sudt_id && fee_amount > 0 {
+            let balance = state.get_sudt_balance(fee_sudt_id, account_short_address)?;
+            if fee_amount > balance {
+                return Err(WithdrawalError::Overdraft.into());
+            }
         }
 
         // check nonce
@@ -258,15 +281,19 @@ impl Generator {
         args: StateTransitionArgs,
     ) -> Result<StateTransitionResult, Error> {
         let raw_block = args.l2block.raw();
+        let block_info = get_block_info(&raw_block);
         let withdrawal_requests: Vec<_> = args.l2block.withdrawals().into_iter().collect();
         // apply withdrawal to state
-        let withdrawal_receipts =
-            state.apply_withdrawal_requests(&self.rollup_context, &withdrawal_requests)?;
+        let block_producer_id: u32 = block_info.block_producer_id().unpack();
+        let withdrawal_receipts = state.apply_withdrawal_requests(
+            &self.rollup_context,
+            block_producer_id,
+            &withdrawal_requests,
+        )?;
         // apply deposition to state
         state.apply_deposit_requests(&self.rollup_context, &args.deposit_requests)?;
 
         // handle transactions
-        let block_info = get_block_info(&raw_block);
         let block_hash = raw_block.hash();
         let mut tx_receipts = Vec::with_capacity(args.l2block.transactions().len());
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {

@@ -29,6 +29,7 @@ pub trait StateExt {
     fn apply_withdrawal_request(
         &mut self,
         ctx: &RollupContext,
+        block_producer_id: u32,
         withdrawal_request: &WithdrawalRequest,
     ) -> Result<WithdrawalReceipt, Error>;
 
@@ -43,15 +44,24 @@ pub trait StateExt {
         Ok(())
     }
 
+    fn pay_fee(
+        &mut self,
+        payer_short_address: &[u8],
+        block_producer_short_address: &[u8],
+        sudt_id: u32,
+        amount: u128,
+    ) -> Result<(), Error>;
+
     fn apply_withdrawal_requests(
         &mut self,
         ctx: &RollupContext,
+        block_producer_id: u32,
         withdrawal_requests: &[WithdrawalRequest],
     ) -> Result<Vec<WithdrawalReceipt>, Error> {
         let mut receipts = Vec::with_capacity(withdrawal_requests.len());
 
         for request in withdrawal_requests {
-            let receipt = self.apply_withdrawal_request(ctx, request)?;
+            let receipt = self.apply_withdrawal_request(ctx, block_producer_id, request)?;
             receipts.push(receipt);
         }
 
@@ -86,6 +96,25 @@ impl<S: State + CodeStore> StateExt for S {
             self.store_data_hash(*data_hash)?;
             self.insert_data(*data_hash, Bytes::from(data.clone()));
         }
+        Ok(())
+    }
+
+    fn pay_fee(
+        &mut self,
+        payer_short_address: &[u8],
+        block_producer_short_address: &[u8],
+        sudt_id: u32,
+        amount: u128,
+    ) -> Result<(), Error> {
+        log::debug!(
+            "account: 0x{} pay fee to block_producer: 0x{}, sudt_id: {}, amount: {}",
+            hex::encode(&payer_short_address),
+            hex::encode(&block_producer_short_address),
+            sudt_id,
+            &amount
+        );
+        self.burn_sudt(sudt_id, payer_short_address, amount)?;
+        self.mint_sudt(sudt_id, block_producer_short_address, amount)?;
         Ok(())
     }
 
@@ -140,6 +169,7 @@ impl<S: State + CodeStore> StateExt for S {
     fn apply_withdrawal_request(
         &mut self,
         ctx: &RollupContext,
+        block_producer_id: u32,
         request: &WithdrawalRequest,
     ) -> Result<WithdrawalReceipt, Error> {
         let raw = request.raw();
@@ -147,15 +177,29 @@ impl<S: State + CodeStore> StateExt for S {
         let l2_sudt_script_hash: [u8; 32] =
             build_l2_sudt_script(&ctx, &raw.sudt_script_hash().unpack()).hash();
         let amount: u128 = raw.amount().unpack();
+        let withdrawal_short_address = to_short_address(&account_script_hash);
         // find user account
         let id = self
             .get_account_id_by_script_hash(&account_script_hash)?
             .ok_or(AccountError::UnknownAccount)?; // find Simple UDT account
         let capacity: u64 = raw.capacity().unpack();
+        // pay fee to block producer
+        {
+            let sudt_id: u32 = raw.fee().sudt_id().unpack();
+            let amount: u128 = raw.fee().amount().unpack();
+            let block_producer_script_hash = self.get_script_hash(block_producer_id)?;
+            let block_producer_short_address = to_short_address(&&block_producer_script_hash);
+            self.pay_fee(
+                withdrawal_short_address,
+                block_producer_short_address,
+                sudt_id,
+                amount,
+            )?;
+        }
         // burn CKB
         self.burn_sudt(
             CKB_SUDT_ACCOUNT_ID,
-            to_short_address(&account_script_hash),
+            withdrawal_short_address,
             capacity.into(),
         )?;
         let sudt_id = self
@@ -163,7 +207,7 @@ impl<S: State + CodeStore> StateExt for S {
             .ok_or(AccountError::UnknownSUDT)?;
         if sudt_id != CKB_SUDT_ACCOUNT_ID {
             // burn sudt
-            self.burn_sudt(sudt_id, to_short_address(&account_script_hash), amount)?;
+            self.burn_sudt(sudt_id, withdrawal_short_address, amount)?;
         } else if amount != 0 {
             return Err(WithdrawalError::WithdrawFakedCKB.into());
         }

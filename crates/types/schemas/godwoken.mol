@@ -117,6 +117,8 @@ struct RawWithdrawalRequest {
     owner_lock_hash: Byte32,
     // layer1 lock to receive the payment, must exists on the chain
     payment_lock_hash: Byte32,
+    // withdrawal fee, paid to block producer
+    fee: Fee,
 }
 
 vector WithdrawalRequestVec <WithdrawalRequest>;
@@ -209,8 +211,14 @@ union MetaContractArgs {
     CreateAccount,
 }
 
+struct Fee {
+    sudt_id: Uint32,
+    amount: Uint128,
+}
+
 table CreateAccount {
     script: Script,
+    fee: Fee,
 }
 // --- end of Meta contract
 
