@@ -87,6 +87,11 @@ fn main() {
                         .takes_value(true)
                         .required(true)
                         .help("The output json file path"),
+                )
+                .arg(
+                    Arg::with_name("skip-config-check")
+                        .long("skip-config-check")
+                        .help("Force to accept unsafe config file"),
                 ),
         )
         .subcommand(
@@ -438,6 +443,7 @@ fn main() {
                 &poa_config_path,
                 timestamp,
                 &output_path,
+                m.is_present("skip-config-check"),
             ) {
                 log::error!("Deploy genesis error: {}", err);
                 std::process::exit(-1);

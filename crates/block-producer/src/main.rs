@@ -8,6 +8,7 @@ const COMMAND_RUN: &str = "run";
 const COMMAND_EXAMPLE_CONFIG: &str = "generate-example-config";
 const ARG_OUTPUT_PATH: &str = "output-path";
 const ARG_CONFIG: &str = "config";
+const ARG_SKIP_CONFIG_CHECK: &str = "skip-config-check";
 
 fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
     let content = fs::read(&path)
@@ -40,6 +41,11 @@ fn run_cli() -> Result<()> {
                         .default_value("./config.toml")
                         .help("The config file path"),
                 )
+                .arg(
+                    Arg::with_name(ARG_SKIP_CONFIG_CHECK)
+                        .long(ARG_SKIP_CONFIG_CHECK)
+                        .help("Force to accept unsafe config file"),
+                )
                 .display_order(0),
         )
         .subcommand(
@@ -62,6 +68,9 @@ fn run_cli() -> Result<()> {
         (COMMAND_RUN, Some(m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
+            if !m.is_present(ARG_SKIP_CONFIG_CHECK) {
+                unimplemented!()
+            }
             runner::run(config)?;
         }
         (COMMAND_EXAMPLE_CONFIG, Some(m)) => {

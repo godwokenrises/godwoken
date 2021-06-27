@@ -238,6 +238,7 @@ impl<'a> DeployContext<'a> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn deploy_genesis(
     privkey_path: &Path,
     ckb_rpc_url: &str,
@@ -246,6 +247,7 @@ pub fn deploy_genesis(
     poa_config_path: &Path,
     timestamp: Option<u64>,
     output_path: &Path,
+    skip_config_check: bool,
 ) -> Result<(), String> {
     let deployment_result_string =
         std::fs::read_to_string(deployment_result_path).map_err(|err| err.to_string())?;
@@ -260,6 +262,10 @@ pub fn deploy_genesis(
     let poa_config: PoAConfig =
         serde_json::from_str(&poa_config_string).map_err(|err| err.to_string())?;
     let poa_setup = poa_config.poa_setup;
+
+    if !skip_config_check {
+        unimplemented!()
+    }
 
     let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
     let network_type = get_network_type(&mut rpc_client)?;
