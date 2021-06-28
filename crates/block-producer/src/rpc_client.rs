@@ -954,4 +954,10 @@ impl RPCClient {
         )?;
         Ok(to_h256(tx_hash))
     }
+
+    pub async fn get_ckb_version(&self) -> Result<String> {
+        let node: ckb_jsonrpc_types::LocalNode =
+            to_result(self.ckb_client.request("local_node_info", None).await?)?;
+        Ok(node.version)
+    }
 }

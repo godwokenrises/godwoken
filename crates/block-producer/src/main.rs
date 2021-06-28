@@ -68,10 +68,7 @@ fn run_cli() -> Result<()> {
         (COMMAND_RUN, Some(m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
-            if !m.is_present(ARG_SKIP_CONFIG_CHECK) {
-                unimplemented!()
-            }
-            runner::run(config)?;
+            runner::run(config, m.is_present(ARG_SKIP_CONFIG_CHECK))?;
         }
         (COMMAND_EXAMPLE_CONFIG, Some(m)) => {
             let path = m.value_of(ARG_OUTPUT_PATH).unwrap();
@@ -81,7 +78,7 @@ fn run_cli() -> Result<()> {
             // default command: start a Godwoken node
             let config_path = "./config.toml";
             let config = read_config(&config_path)?;
-            runner::run(config)?;
+            runner::run(config, false)?;
         }
     };
     Ok(())
