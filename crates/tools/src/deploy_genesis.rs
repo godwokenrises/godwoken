@@ -264,7 +264,12 @@ pub fn deploy_genesis(
     let poa_setup = poa_config.poa_setup;
 
     if !skip_config_check {
-        unimplemented!()
+        if H256([0u8; 32]) != user_rollup_config.burn_lock_hash {
+            return Err("burn lock hash is not all zeros as expected".to_string());
+        }
+        if poa_setup.round_intervals <= 0 {
+            return Err("round intervals value must be greater than 0".to_string());
+        }
     }
 
     let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
