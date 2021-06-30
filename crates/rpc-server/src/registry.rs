@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{state::State, H256};
-use gw_config::TestMode;
+use gw_config::NodeMode;
 use gw_generator::{sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
@@ -51,7 +51,7 @@ pub struct Registry {
     generator: Arc<Generator>,
     mem_pool: Arc<MemPool>,
     store: Store,
-    test_mode: TestMode,
+    node_mode: NodeMode,
     tests_rpc_impl: Arc<BoxedTestsRPCImpl>,
 }
 
@@ -60,7 +60,7 @@ impl Registry {
         store: Store,
         mem_pool: Arc<MemPool>,
         generator: Arc<Generator>,
-        test_mode: TestMode,
+        node_mode: NodeMode,
         tests_rpc_impl: T,
     ) -> Self
     where
@@ -70,7 +70,7 @@ impl Registry {
             mem_pool,
             store,
             generator,
-            test_mode,
+            node_mode,
             tests_rpc_impl: Arc::new(Box::new(tests_rpc_impl)),
         }
     }
@@ -109,7 +109,7 @@ impl Registry {
             .with_method("compute_l2_sudt_script_hash", compute_l2_sudt_script_hash);
 
         // Tests
-        if TestMode::Enable == self.test_mode {
+        if NodeMode::Enable == self.node_mode {
             server = server
                 .with_data(Data(Arc::clone(&self.tests_rpc_impl)))
                 .with_method("tests_produce_block", tests_produce_block)

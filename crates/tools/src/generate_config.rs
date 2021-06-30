@@ -5,8 +5,8 @@ use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_config::{
-    BackendConfig, BlockProducerConfig, ChainConfig, Config, GenesisConfig, RPCClientConfig,
-    RPCServerConfig, StoreConfig, TestMode, WalletConfig, Web3IndexerConfig,
+    BackendConfig, BlockProducerConfig, ChainConfig, Config, GenesisConfig, NodeMode,
+    RPCClientConfig, RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
@@ -236,7 +236,7 @@ pub fn generate_config(
         rpc_server,
         block_producer,
         web3_indexer,
-        test_mode: TestMode::Disable,
+        node_mode: NodeMode::Disable,
     };
 
     let output_content = toml::to_string_pretty(&config).expect("serde toml to string pretty");

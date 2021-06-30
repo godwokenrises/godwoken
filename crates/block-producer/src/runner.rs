@@ -7,7 +7,7 @@ use async_jsonrpc_client::HttpClient;
 use futures::{select, FutureExt};
 use gw_chain::chain::Chain;
 use gw_common::H256;
-use gw_config::{BlockProducerConfig, Config, TestMode};
+use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
@@ -107,8 +107,8 @@ async fn poll_loop(
             }
 
             // TODO: implement test mode challenge control
-            if TestMode::Disable == test_mode_control.mode()
-                || TestMode::Enable == test_mode_control.mode()
+            if NodeMode::Disable == test_mode_control.mode()
+                || NodeMode::Enable == test_mode_control.mode()
                     && Some(TestModePayload::None) == test_mode_control.take_payload().await
             {
                 if let Err(err) = inner.block_producer.handle_event(event.clone()).await {
@@ -236,12 +236,12 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     // RPC registry
     let test_mode_control =
-        TestModeControl::create(config.test_mode, rpc_client.clone(), &block_producer_config)?;
+        TestModeControl::create(config.node_mode, rpc_client.clone(), &block_producer_config)?;
     let rpc_registry = Registry::new(
         store.clone(),
         mem_pool.clone(),
         generator.clone(),
-        config.test_mode,
+        config.node_mode,
         test_mode_control.clone(),
     );
 
@@ -329,7 +329,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         log::info!("Rollup config hash: {}", rollup_config_hash);
     }
 
-    if TestMode::Enable == config.test_mode {
+    if NodeMode::Enable == config.node_mode {
         log::info!("Test mode enabled!!!");
     }
 

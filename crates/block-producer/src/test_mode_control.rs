@@ -7,7 +7,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
-use gw_config::{BlockProducerConfig, TestMode};
+use gw_config::{BlockProducerConfig, NodeMode};
 use gw_jsonrpc_types::{
     godwoken::GlobalState,
     test_mode::{ShouldProduceBlock, TestModePayload},
@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct TestModeControl {
-    mode: TestMode,
+    mode: NodeMode,
     payload: Arc<Mutex<Option<TestModePayload>>>,
     rpc_client: RPCClient,
     poa: Arc<Mutex<PoA>>,
@@ -28,7 +28,7 @@ pub struct TestModeControl {
 
 impl TestModeControl {
     pub fn create(
-        mode: TestMode,
+        mode: NodeMode,
         rpc_client: RPCClient,
         config: &BlockProducerConfig,
     ) -> Result<Self> {
@@ -48,7 +48,7 @@ impl TestModeControl {
         })
     }
 
-    pub fn mode(&self) -> TestMode {
+    pub fn mode(&self) -> NodeMode {
         self.mode
     }
 
