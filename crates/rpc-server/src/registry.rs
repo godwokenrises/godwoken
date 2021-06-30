@@ -109,7 +109,7 @@ impl Registry {
             .with_method("compute_l2_sudt_script_hash", compute_l2_sudt_script_hash);
 
         // Tests
-        if NodeMode::Enable == self.node_mode {
+        if NodeMode::Test == self.node_mode {
             server = server
                 .with_data(Data(Arc::clone(&self.tests_rpc_impl)))
                 .with_method("tests_produce_block", tests_produce_block)

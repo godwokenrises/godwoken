@@ -236,7 +236,7 @@ pub fn generate_config(
         rpc_server,
         block_producer,
         web3_indexer,
-        node_mode: NodeMode::Disable,
+        node_mode: NodeMode::FullNode,
     };
 
     let output_content = toml::to_string_pretty(&config).expect("serde toml to string pretty");

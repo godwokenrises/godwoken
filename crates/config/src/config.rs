@@ -92,12 +92,12 @@ pub struct Web3IndexerConfig {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeMode {
-    Enable,
-    Disable,
+    FullNode,
+    Test,
 }
 
 impl Default for NodeMode {
     fn default() -> Self {
-        NodeMode::Disable
+        NodeMode::FullNode
     }
 }

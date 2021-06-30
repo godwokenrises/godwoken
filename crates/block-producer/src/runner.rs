@@ -107,8 +107,8 @@ async fn poll_loop(
             }
 
             // TODO: implement test mode challenge control
-            if NodeMode::Disable == test_mode_control.mode()
-                || NodeMode::Enable == test_mode_control.mode()
+            if NodeMode::FullNode == test_mode_control.mode()
+                || NodeMode::Test == test_mode_control.mode()
                     && Some(TestModePayload::None) == test_mode_control.take_payload().await
             {
                 if let Err(err) = inner.block_producer.handle_event(event.clone()).await {
@@ -329,7 +329,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         log::info!("Rollup config hash: {}", rollup_config_hash);
     }
 
-    if NodeMode::Enable == config.node_mode {
+    if NodeMode::Test == config.node_mode {
         log::info!("Test mode enabled!!!");
     }
 
