@@ -94,6 +94,7 @@ pub struct Web3IndexerConfig {
 pub enum NodeMode {
     FullNode,
     Test,
+    ReadOnly,
 }
 
 impl Default for NodeMode {
