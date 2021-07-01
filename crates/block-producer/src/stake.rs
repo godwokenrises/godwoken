@@ -2,7 +2,7 @@ use crate::{
     rpc_client::RPCClient,
     types::{CellInfo, InputCellInfo},
 };
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use ckb_types::{
     bytes::Bytes,
     prelude::{Builder, Entity},
@@ -11,7 +11,7 @@ use gw_config::BlockProducerConfig;
 use gw_generator::RollupContext;
 use gw_types::{
     core::{DepType, ScriptHashType},
-    packed::{CellDep, CellInput, CellOutput, GlobalState, L2Block, Script, StakeLockArgs},
+    packed::{CellDep, CellInput, CellOutput, L2Block, Script, StakeLockArgs},
     prelude::{Pack, Unpack},
 };
 
@@ -50,11 +50,8 @@ pub async fn generate(
         .args(lock_args.pack())
         .build();
 
-    let global_state = GlobalState::from_slice(&rollup_cell.data)
-        .map_err(|_| anyhow!("parse rollup cell global state"))?;
-    let last_finalized_block_number = global_state.last_finalized_block_number().unpack();
     if let Some(unlocked_stake) = rpc_client
-        .query_unlocked_stake(rollup_context, owner_lock_hash, last_finalized_block_number)
+        .query_stake(rollup_context, owner_lock_hash, None)
         .await?
     {
         let stake_lock_dep = block_producer_config.stake_cell_lock_dep.clone();

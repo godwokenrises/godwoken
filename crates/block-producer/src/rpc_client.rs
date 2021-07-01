@@ -537,11 +537,14 @@ impl RPCClient {
         Ok(deposit_infos)
     }
 
-    pub async fn query_unlocked_stake(
+    /// query stake
+    /// return cell which stake_block_number is less than last_finalized_block_number if the args isn't none
+    /// otherwise return stake cell randomly
+    pub async fn query_stake(
         &self,
         rollup_context: &RollupContext,
         owner_lock_hash: [u8; 32],
-        last_finalized_block_number: u64,
+        last_finalized_block_number: Option<u64>,
     ) -> Result<Option<CellInfo>> {
         let lock = Script::new_builder()
             .code_hash(rollup_context.rollup_config.stake_script_type_hash())
@@ -565,10 +568,10 @@ impl RPCClient {
         let order = Order::Desc;
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
 
-        let mut unlocked_cell = None;
+        let mut stake_cell = None;
         let mut cursor = None;
 
-        while unlocked_cell.is_none() {
+        while stake_cell.is_none() {
             let cells: Pagination<Cell> = to_result(
                 self.indexer_client
                     .request(
@@ -589,19 +592,22 @@ impl RPCClient {
             }
             cursor = Some(cells.last_cursor);
 
-            unlocked_cell = cells.objects.into_iter().find(|cell| {
-                let args = cell.output.lock.args.clone().into_bytes();
-                let stake_lock_args = match StakeLockArgsReader::verify(&args[32..], false) {
-                    Ok(()) => StakeLockArgs::new_unchecked(args.slice(32..)),
-                    Err(_) => return false,
-                };
+            stake_cell = match last_finalized_block_number {
+                Some(last_finalized_block_number) => cells.objects.into_iter().find(|cell| {
+                    let args = cell.output.lock.args.clone().into_bytes();
+                    let stake_lock_args = match StakeLockArgsReader::verify(&args[32..], false) {
+                        Ok(()) => StakeLockArgs::new_unchecked(args.slice(32..)),
+                        Err(_) => return false,
+                    };
 
-                stake_lock_args.stake_block_number().unpack() <= last_finalized_block_number
-                    && stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash
-            });
+                    stake_lock_args.stake_block_number().unpack() <= last_finalized_block_number
+                        && stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash
+                }),
+                None => cells.objects.into_iter().next(),
+            };
         }
 
-        let unlocked_cell_info = |cell: Cell| {
+        let fetch_cell_info = |cell: Cell| {
             let out_point = {
                 let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
                 OutPoint::new_unchecked(out_point.as_bytes())
@@ -619,7 +625,7 @@ impl RPCClient {
             }
         };
 
-        Ok(unlocked_cell.map(unlocked_cell_info))
+        Ok(stake_cell.map(fetch_cell_info))
     }
 
     pub async fn query_finalized_custodian_cells(
