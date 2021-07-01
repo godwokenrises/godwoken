@@ -4,6 +4,7 @@ mod deposit_ckb;
 mod generate_config;
 pub mod godwoken_rpc;
 mod prepare_scripts;
+mod setup;
 mod setup_nodes;
 mod utils;
 
@@ -165,7 +166,7 @@ fn main() {
                     Arg::with_name("repos-dir-path")
                         .short("r")
                         .takes_value(true)
-                        .default_value("tmp/scripts-build-dir/")
+                        .default_value(prepare_scripts::REPOS_DIR_PATH)
                         .required(true)
                         .help("The repos dir path"),
                 )
@@ -173,7 +174,7 @@ fn main() {
                     Arg::with_name("scripts-dir-path")
                         .short("s")
                         .takes_value(true)
-                        .default_value("scripts/")
+                        .default_value(prepare_scripts::SCRIPTS_DIR_PATH)
                         .required(true)
                         .help("Scripts directory path"),
                 )
@@ -248,7 +249,7 @@ fn main() {
                     Arg::with_name("capacity")
                         .short("c")
                         .takes_value(true)
-                        .default_value("200000")
+                        .default_value(setup_nodes::TRANSFER_CAPACITY)
                         .required(true)
                         .help("Capacity transferred to every node"),
                 )
@@ -281,6 +282,59 @@ fn main() {
                         .takes_value(true)
                         .required(true)
                         .help("Output rollup config file path"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("setup")
+                .about("Prepare scripts, deploy scripts, setup nodes, deploy genesis and generate configs")
+                .arg(arg_ckb_rpc.clone())
+                .arg(
+                    Arg::with_name("indexer-rpc-url")
+                        .short("i")
+                        .takes_value(true)
+                        .default_value("http://127.0.0.1:8116")
+                        .required(true)
+                        .help("The URL of ckb indexer"),
+                )
+                .arg(
+                    Arg::with_name("mode")
+                        .short("m")
+                        .takes_value(true)
+                        .default_value("build")
+                        .required(true)
+                        .help("Scripts generation mode: build or copy"),
+                )
+                .arg(
+                    Arg::with_name("scripts-build-file-path")
+                        .short("s")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The scripts build json file path"),
+                )
+                .arg(arg_privkey_path.clone())
+                .arg(
+                    Arg::with_name("nodes-count")
+                        .short("n")
+                        .takes_value(true)
+                        .default_value("2")
+                        .required(true)
+                        .help("The godwoken nodes count"),
+                )
+                .arg(
+                    Arg::with_name("rpc-server-url")
+                        .short("u")
+                        .takes_value(true)
+                        .default_value("localhost:8119")
+                        .required(true)
+                        .help("The URL of rpc server"),
+                )
+                .arg(
+                    Arg::with_name("output-dir-path")
+                        .short("o")
+                        .takes_value(true)
+                        .default_value("deploy/")
+                        .required(true)
+                        .help("The godwoken nodes configs output dir path"),
                 ),
         );
 
@@ -413,6 +467,29 @@ fn main() {
                 output_dir,
                 poa_config_path,
                 rollup_config_path,
+            );
+        }
+        ("setup", Some(m)) => {
+            let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
+            let indexer_url = m.value_of("indexer-rpc-url").unwrap();
+            let mode = value_t!(m, "mode", prepare_scripts::ScriptsBuildMode).unwrap();
+            let scripts_path = Path::new(m.value_of("scripts-build-file-path").unwrap());
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let nodes_count = m
+                .value_of("nodes-count")
+                .map(|c| c.parse().expect("nodes count"))
+                .unwrap();
+            let server_url = m.value_of("rpc-server-url").unwrap();
+            let output_dir = Path::new(m.value_of("output-dir-path").unwrap());
+            setup::setup(
+                ckb_rpc_url,
+                indexer_url,
+                mode,
+                scripts_path,
+                privkey_path,
+                nodes_count,
+                server_url,
+                output_dir,
             );
         }
         _ => {
