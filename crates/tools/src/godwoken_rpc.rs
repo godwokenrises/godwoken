@@ -1,5 +1,5 @@
 use ckb_types::H256;
-use gw_jsonrpc_types::ckb_jsonrpc_types::{Uint128, Uint32};
+use gw_jsonrpc_types::ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32};
 use std::{u128, u32};
 
 type AccountID = Uint32;
@@ -43,7 +43,48 @@ impl GodwokenRpcClient {
             .map(|opt| opt.map(Into::into))
     }
 
+    pub fn get_nonce(&mut self, account_id: u32) -> Result<u32, String> {
+        let params =
+            serde_json::to_value((AccountID::from(account_id),)).map_err(|err| err.to_string())?;
+        self.rpc::<Uint32>("get_nonce", params).map(Into::into)
+    }
+
+    pub fn submit_withdrawal_request(
+        &mut self,
+        withdrawal_request: JsonBytes,
+    ) -> Result<(), String> {
+        let params = serde_json::to_value((withdrawal_request,)).map_err(|err| err.to_string())?;
+        self.rpc::<()>("submit_withdrawal_request", params)
+            .map(Into::into)
+    }
+
+    pub fn get_script_hash(&mut self, account_id: u32) -> Result<H256, String> {
+        let params =
+            serde_json::to_value((AccountID::from(account_id),)).map_err(|err| err.to_string())?;
+        self.rpc::<H256>("get_script_hash", params).map(Into::into)
+    }
+
     fn rpc<SuccessResponse: serde::de::DeserializeOwned>(
+        &mut self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<SuccessResponse, String> {
+        let call_method_result = self.call_rpc::<SuccessResponse>(method, params.clone());
+
+        match call_method_result {
+            Ok(_) => call_method_result,
+            Err(_) => {
+                log::info!("Failed to request /{}", method);
+                log::info!("Retry /gw_{} ...", method);
+                let method_name = format!("gw_{}", method);
+                let call_gw_method_result =
+                    self.call_rpc::<SuccessResponse>(method_name.as_str(), params)?;
+                Ok(call_gw_method_result)
+            }
+        }
+    }
+
+    fn call_rpc<SuccessResponse: serde::de::DeserializeOwned>(
         &mut self,
         method: &str,
         params: serde_json::Value,

@@ -7,6 +7,7 @@ mod prepare_scripts;
 mod setup;
 mod setup_nodes;
 mod utils;
+mod withdraw;
 
 use clap::{value_t, App, Arg, SubCommand};
 use std::path::Path;
@@ -242,6 +243,70 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("withdraw")
+                .about("withdraw CKB / sUDT from godwoken")
+                .arg(arg_privkey_path.clone())
+                .arg(
+                    Arg::with_name("deployment-results-path")
+                        .short("d")
+                        .long("deployment-results-path")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The deployment results json file path"),
+                )
+                .arg(
+                    Arg::with_name("config-path")
+                        .short("o")
+                        .long("config-path")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The config.toml file path"),
+                )
+                .arg(
+                    Arg::with_name("capacity")
+                        .short("c")
+                        .long("capacity")
+                        .takes_value(true)
+                        .required(true)
+                        .help("CKB capacity to withdrawal"),
+                )
+                .arg(
+                    Arg::with_name("amount")
+                        .short("m")
+                        .long("amount")
+                        .takes_value(true)
+                        .default_value("0")
+                        .help("sUDT amount to withdrawal"),
+                )
+                .arg(
+                    Arg::with_name("owner-ckb-address")
+                        .short("a")
+                        .long("owner-ckb-address")
+                        .takes_value(true)
+                        .required(true)
+                        .help("owner ckb address (to)"),
+                )
+                .arg(
+                    Arg::with_name("sudt-script-hash")
+                        .short("s")
+                        .long("sudt-script-hash")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value(
+                            "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        )
+                        .help("l1 sudt script hash, default for withdrawal CKB"),
+                )
+                .arg(
+                    Arg::with_name("godwoken-rpc-url")
+                        .short("g")
+                        .long("godwoken-rpc-url")
+                        .takes_value(true)
+                        .default_value("http://127.0.0.1:8119")
+                        .help("Godwoken jsonrpc rpc sever URL"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("setup-nodes")
                 .about("Generate godwoken nodes private keys, poa and rollup configs")
                 .arg(arg_privkey_path.clone())
@@ -444,6 +509,30 @@ fn main() {
                 godwoken_rpc_url,
             ) {
                 log::error!("Deposit CKB error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("withdraw", Some(m)) => {
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let capacity = m.value_of("capacity").unwrap();
+            let amount = m.value_of("amount").unwrap();
+            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let config_path = Path::new(m.value_of("config-path").unwrap());
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+            let owner_ckb_address = m.value_of("owner-ckb-address").unwrap();
+            let sudt_script_hash = m.value_of("sudt-script-hash").unwrap();
+
+            if let Err(err) = withdraw::withdraw(
+                godwoken_rpc_url,
+                privkey_path,
+                capacity,
+                amount,
+                sudt_script_hash,
+                owner_ckb_address,
+                config_path,
+                deployment_results_path,
+            ) {
+                log::error!("Withdrawal error: {}", err);
                 std::process::exit(-1);
             };
         }

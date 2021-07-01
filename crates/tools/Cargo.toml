@@ -26,6 +26,7 @@ ckb-resource = "0.38.0"
 ckb-hash = "0.38.0"
 ckb-fixed-hash = "0.38.0"
 ckb-sdk = { git = "https://github.com/jjyr/ckb-cli.git", branch = "ckb-v0.38.0" }
+ckb-crypto = "0.38.0"
 gw-db = { path = "../db" }
 gw-types = { path = "../types" }
 gw-config = { path = "../config" }
