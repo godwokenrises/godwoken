@@ -32,9 +32,8 @@ use gw_types::{
     prelude::Pack as GwPack, prelude::PackVec as GwPackVec,
 };
 
-use super::deploy_scripts::{
-    get_network_type, run_cmd, wait_for_tx, ScriptsDeploymentResult, TYPE_ID_CODE_HASH,
-};
+use super::deploy_scripts::ScriptsDeploymentResult;
+use crate::utils::{get_network_type, run_cmd, wait_for_tx, TYPE_ID_CODE_HASH};
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -233,6 +232,7 @@ impl<'a> DeployContext<'a> {
             "--skip-check",
         ])?;
         let tx_hash = H256::from_str(&send_output.trim()[2..]).map_err(|err| err.to_string())?;
+        log::info!("tx_hash: {:#x}", tx_hash);
         wait_for_tx(rpc_client, &tx_hash, 120)?;
         Ok(tx_hash)
     }
