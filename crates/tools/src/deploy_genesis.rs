@@ -267,7 +267,7 @@ pub fn deploy_genesis(
         if H256([0u8; 32]) != user_rollup_config.burn_lock_hash {
             return Err("burn lock hash is not all zeros as expected".to_string());
         }
-        if poa_setup.round_intervals <= 0 {
+        if poa_setup.round_intervals == 0 {
             return Err("round intervals value must be greater than 0".to_string());
         }
     }
