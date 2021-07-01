@@ -1,6 +1,6 @@
-use crate::deploy_scripts::wait_for_tx;
-use crate::deploy_scripts::{get_network_type, run_cmd, ScriptsDeploymentResult};
+use crate::deploy_scripts::ScriptsDeploymentResult;
 use crate::godwoken_rpc::GodwokenRpcClient;
+use crate::utils::{get_network_type, run_cmd, wait_for_tx};
 use ckb_fixed_hash::H256;
 use ckb_sdk::{Address, AddressPayload, HttpRpcClient, SECP256K1};
 use ckb_types::{

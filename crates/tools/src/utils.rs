@@ -1,6 +1,15 @@
 use anyhow::Result;
+use ckb_fixed_hash::{h256, H256};
+use ckb_jsonrpc_types::Status;
+use ckb_sdk::rpc::TransactionView;
+use ckb_sdk::HttpRpcClient;
+use ckb_sdk::NetworkType;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 use std::{env, ffi::OsStr, process::Command};
+
+// "TYPE_ID" in hex
+pub const TYPE_ID_CODE_HASH: H256 = h256!("0x545950455f4944");
 
 pub fn run_in_dir<I, S>(bin: &str, args: I, target_dir: &str) -> Result<()>
 where
@@ -19,7 +28,7 @@ where
     I: IntoIterator<Item = S> + std::fmt::Debug,
     S: AsRef<OsStr>,
 {
-    log::info!("[Execute]: {} {:?}", bin, args);
+    log::debug!("[Execute]: {} {:?}", bin, args);
     let status = Command::new(bin.to_owned())
         .env("RUST_BACKTRACE", "full")
         .args(args)
@@ -35,12 +44,71 @@ where
     }
 }
 
+pub fn run_cmd<I, S>(args: I) -> Result<String, String>
+where
+    I: IntoIterator<Item = S> + std::fmt::Debug,
+    S: AsRef<OsStr>,
+{
+    let bin = "ckb-cli";
+    log::debug!("[Execute]: {} {:?}", bin, args);
+    let init_output = Command::new(bin.to_owned())
+        .env("RUST_BACKTRACE", "full")
+        .args(args)
+        .output()
+        .expect("Run command failed");
+
+    if !init_output.status.success() {
+        Err(format!(
+            "{}",
+            String::from_utf8_lossy(init_output.stderr.as_slice())
+        ))
+    } else {
+        let stdout = String::from_utf8_lossy(init_output.stdout.as_slice()).to_string();
+        log::debug!("stdout: {}", stdout);
+        Ok(stdout)
+    }
+}
+
+pub fn wait_for_tx(
+    rpc_client: &mut HttpRpcClient,
+    tx_hash: &H256,
+    timeout_secs: u64,
+) -> Result<TransactionView, String> {
+    let retry_timeout = Duration::from_secs(timeout_secs);
+    let start_time = Instant::now();
+    while start_time.elapsed() < retry_timeout {
+        std::thread::sleep(Duration::from_secs(2));
+        match rpc_client.get_transaction(tx_hash.clone())? {
+            Some(tx_with_status) if tx_with_status.tx_status.status == Status::Pending => {
+                log::info!("tx pending");
+            }
+            Some(tx_with_status) if tx_with_status.tx_status.status == Status::Proposed => {
+                log::info!("tx proposed");
+            }
+            Some(tx_with_status) if tx_with_status.tx_status.status == Status::Committed => {
+                log::info!("tx commited");
+                return Ok(tx_with_status.transaction);
+            }
+            _ => {
+                log::error!("error")
+            }
+        }
+    }
+    Err(format!("Timeout: {:?}", retry_timeout))
+}
+
+pub fn get_network_type(rpc_client: &mut HttpRpcClient) -> Result<NetworkType, String> {
+    let chain_info = rpc_client.get_blockchain_info()?;
+    NetworkType::from_raw_str(chain_info.chain.as_str())
+        .ok_or_else(|| format!("Unexpected network type: {}", chain_info.chain))
+}
+
 pub fn run_in_output_mode<I, S>(bin: &str, args: I) -> Result<(String, String), String>
 where
     I: IntoIterator<Item = S> + std::fmt::Debug,
     S: AsRef<OsStr>,
 {
-    log::info!("[Execute]: {} {:?}", bin, args);
+    log::debug!("[Execute]: {} {:?}", bin, args);
     let init_output = Command::new(bin.to_owned())
         .env("RUST_BACKTRACE", "full")
         .args(args)
