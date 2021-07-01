@@ -300,6 +300,7 @@ pub fn deploy_genesis(
             .into_iter()
             .map(|hash| GwPack::pack(&hash)),
     );
+    allowed_eoa_type_hashes.dedup();
     let rollup_config = RollupConfig::new_builder()
         .l1_sudt_script_type_hash(GwPack::pack(&user_rollup_config.l1_sudt_script_type_hash))
         .custodian_script_type_hash(GwPack::pack(
