@@ -5,7 +5,6 @@ mod generate_config;
 pub mod godwoken_rpc;
 mod prepare_scripts;
 mod setup;
-mod setup_nodes;
 mod utils;
 mod withdraw;
 
@@ -307,49 +306,6 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("setup-nodes")
-                .about("Generate godwoken nodes private keys, poa and rollup configs")
-                .arg(arg_privkey_path.clone())
-                .arg(
-                    Arg::with_name("capacity")
-                        .short("c")
-                        .takes_value(true)
-                        .default_value(setup_nodes::TRANSFER_CAPACITY)
-                        .required(true)
-                        .help("Capacity transferred to every node"),
-                )
-                .arg(
-                    Arg::with_name("nodes-count")
-                        .short("n")
-                        .takes_value(true)
-                        .default_value("2")
-                        .required(true)
-                        .help("The godwoken nodes count"),
-                )
-                .arg(
-                    Arg::with_name("output-dir-path")
-                        .short("o")
-                        .takes_value(true)
-                        .default_value("deploy/")
-                        .required(true)
-                        .help("The godwoken nodes private keys output dir path"),
-                )
-                .arg(
-                    Arg::with_name("poa-config-path")
-                        .short("p")
-                        .takes_value(true)
-                        .required(true)
-                        .help("Output poa config file path"),
-                )
-                .arg(
-                    Arg::with_name("rollup-config-path")
-                        .short("r")
-                        .takes_value(true)
-                        .required(true)
-                        .help("Output rollup config file path"),
-                ),
-        )
-        .subcommand(
             SubCommand::with_name("setup")
                 .about("Prepare scripts, deploy scripts, setup nodes, deploy genesis and generate configs")
                 .arg(arg_ckb_rpc.clone())
@@ -535,28 +491,6 @@ fn main() {
                 log::error!("Withdrawal error: {}", err);
                 std::process::exit(-1);
             };
-        }
-        ("setup-nodes", Some(m)) => {
-            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
-            let capacity = m
-                .value_of("capacity")
-                .map(|c| c.parse().expect("get capacity"))
-                .unwrap();
-            let nodes_count = m
-                .value_of("nodes-count")
-                .map(|c| c.parse().expect("nodes count"))
-                .unwrap();
-            let output_dir = Path::new(m.value_of("output-dir-path").unwrap());
-            let poa_config_path = Path::new(m.value_of("poa-config-path").unwrap());
-            let rollup_config_path = Path::new(m.value_of("rollup-config-path").unwrap());
-            setup_nodes::setup_nodes(
-                privkey_path,
-                capacity,
-                nodes_count,
-                output_dir,
-                poa_config_path,
-                rollup_config_path,
-            );
         }
         ("setup", Some(m)) => {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
