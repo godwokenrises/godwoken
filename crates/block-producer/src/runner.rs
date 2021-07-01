@@ -377,25 +377,32 @@ fn check_rollup_config_cell(
         ),
     )?
     .ok_or_else(|| anyhow!("can't find rollup config cell"))?;
-    let cell_data = format!("{:?}", rollup_config_cell.data.to_vec());
-    let accounts = rollup_config.allowed_eoa_type_hashes();
-    for i in accounts {
-        let account = format!("{:?}", i.as_slice());
-        let account = account.trim_matches(|c| c == '[' || c == ']');
-        if !cell_data.contains(&account) {
-            return Err(anyhow!("The eoa type is not registered: {}", i.to_string()));
-        }
+    let cell_data = RollupConfig::from_slice(&rollup_config_cell.data.to_vec())?;
+    let eoa_set = rollup_config
+        .allowed_eoa_type_hashes()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let contract_set = rollup_config
+        .allowed_contract_type_hashes()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let ret = cell_data
+        .allowed_eoa_type_hashes()
+        .into_iter()
+        .all(|item| eoa_set.contains(&item));
+    if !ret {
+        return Err(anyhow!(
+            "Not all of the eoa type hashes in the rollup config cell are registered"
+        ));
     }
-    let contracts = rollup_config.allowed_contract_type_hashes();
-    for i in contracts {
-        let contract = format!("{:?}", i.as_slice());
-        let contract = contract.trim_matches(|c| c == '[' || c == ']');
-        if !cell_data.contains(&contract) {
-            return Err(anyhow!(
-                "The contract type is not registered: {}",
-                i.to_string()
-            ));
-        }
+    let ret = cell_data
+        .allowed_contract_type_hashes()
+        .into_iter()
+        .all(|item| contract_set.contains(&item));
+    if !ret {
+        return Err(anyhow!(
+            "Not all of the contract type hashes in the rollup config cell are registered"
+        ));
     }
     Ok(())
 }
