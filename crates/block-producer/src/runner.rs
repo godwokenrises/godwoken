@@ -241,8 +241,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         store.clone(),
         mem_pool.clone(),
         generator.clone(),
-        config.node_mode,
-        test_mode_control.clone(),
+        Some(Box::new(test_mode_control.clone())),
     );
 
     // create web3 indexer
