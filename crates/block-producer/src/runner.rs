@@ -277,33 +277,34 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         CKBGenesisInfo::from_block(&ckb_genesis)?
     };
 
-    let (block_producer, test_mode_control) = if let NodeMode::ReadOnly = config.node_mode {
-        (None, None)
-    } else {
-        let block_producer_config = config
-            .block_producer
-            .clone()
-            .ok_or_else(|| anyhow!("not set block producer"))?;
-        let block_producer = BlockProducer::create(
-            rollup_config_hash,
-            store.clone(),
-            generator.clone(),
-            chain,
-            mem_pool.clone(),
-            rpc_client.clone(),
-            ckb_genesis_info,
-            block_producer_config.clone(),
-        )
-        .with_context(|| "init block producer")?;
-        if let NodeMode::FullNode = config.node_mode {
-            (Some(block_producer), None)
-        } else {
-            let test_mode_control = TestModeControl::create(
-                config.node_mode,
+    let (block_producer, test_mode_control) = match config.node_mode {
+        NodeMode::ReadOnly => (None, None),
+        _ => {
+            let block_producer_config = config
+                .block_producer
+                .clone()
+                .ok_or_else(|| anyhow!("not set block producer"))?;
+            let block_producer = BlockProducer::create(
+                rollup_config_hash,
+                store.clone(),
+                generator.clone(),
+                chain,
+                mem_pool.clone(),
                 rpc_client.clone(),
-                &block_producer_config,
-            )?;
-            (Some(block_producer), Some(test_mode_control))
+                ckb_genesis_info,
+                block_producer_config.clone(),
+            )
+            .with_context(|| "init block producer")?;
+            if let NodeMode::Test = config.node_mode {
+                let test_mode_control = TestModeControl::create(
+                    config.node_mode,
+                    rpc_client.clone(),
+                    &block_producer_config,
+                )?;
+                (Some(block_producer), Some(test_mode_control))
+            } else {
+                (Some(block_producer), None)
+            }
         }
     };
 
@@ -312,7 +313,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         store,
         mem_pool,
         generator,
-        test_mode_control.clone().map(|c| Box::new(c)),
+        test_mode_control.clone().map(Box::new),
     );
 
     let (s, ctrl_c) = async_channel::bounded(100);
