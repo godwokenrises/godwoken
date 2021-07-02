@@ -398,8 +398,8 @@ fn check_rollup_config_cell(
         .collect::<Vec<_>>();
     if !unregistered_eoas.is_empty() || !unregistered_contracts.is_empty() {
         return Err(anyhow!(
-            "The eoa type hashes are not registered: {:#?}, \
-            the contract type hashes are not registered: {:#?}",
+            "Unregistered eoa type hashes: {:#?}, \
+            unregistered contract type hashes: {:#?}",
             unregistered_eoas,
             unregistered_contracts
         ));
