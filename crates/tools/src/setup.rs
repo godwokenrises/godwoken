@@ -60,6 +60,7 @@ pub fn setup(
         &poa_config_path,
         None,
         &genesis_deploy_result,
+        false,
     )
     .expect("deploy genesis");
 

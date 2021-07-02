@@ -4,10 +4,10 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
-use futures::{executor::block_on, select, FutureExt};
+use futures::{select, FutureExt};
 use gw_chain::chain::Chain;
 use gw_common::H256;
-use gw_config::{Config, TestMode};
+use gw_config::{BlockProducerConfig, Config, TestMode};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
@@ -19,6 +19,7 @@ use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_mem_pool::pool::MemPool;
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
+use gw_types::prelude::{Pack, Unpack};
 use gw_types::{
     bytes::Bytes,
     packed::{NumberHash, RollupConfig, Script},
@@ -26,6 +27,7 @@ use gw_types::{
 };
 use gw_web3_indexer::Web3Indexer;
 use parking_lot::Mutex;
+use semver::Version;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     ConnectOptions,
@@ -36,6 +38,8 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+
+const MIN_CKB_VERSION: &str = "0.40.0";
 
 async fn poll_loop(
     rpc_client: RPCClient,
@@ -133,7 +137,7 @@ async fn poll_loop(
     }
 }
 
-pub fn run(config: Config) -> Result<()> {
+pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
     let block_producer_config = config
         .block_producer
@@ -161,6 +165,12 @@ pub fn run(config: Config) -> Result<()> {
         }
     };
 
+    if !skip_config_check {
+        check_ckb_version(&rpc_client)?;
+        // check ckb indexer version
+        check_rollup_config_cell(&block_producer_config, &rollup_config, &rpc_client)?;
+    }
+
     // Open store
     let store = if config.store.path.as_os_str().is_empty() {
         log::warn!("config.store.path is blank, using temporary store");
@@ -175,7 +185,7 @@ pub fn run(config: Config) -> Result<()> {
     };
     let secp_data: Bytes = {
         let out_point = config.genesis.secp_data_dep.out_point.clone();
-        block_on(rpc_client.get_transaction(out_point.tx_hash.0.into()))?
+        smol::block_on(rpc_client.get_transaction(out_point.tx_hash.0.into()))?
             .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?
             .raw()
             .outputs_data()
@@ -336,5 +346,63 @@ pub fn run(config: Config) -> Result<()> {
         };
     });
 
+    Ok(())
+}
+
+fn check_ckb_version(rpc_client: &RPCClient) -> Result<()> {
+    let ckb_version = smol::block_on(rpc_client.get_ckb_version())?;
+    let ckb_version = ckb_version.split('(').collect::<Vec<&str>>()[0].trim_end();
+    if Version::parse(&ckb_version)? < Version::parse(MIN_CKB_VERSION)? {
+        return Err(anyhow!(
+            "The version of CKB node {} is lower than the minimum version {}",
+            ckb_version,
+            MIN_CKB_VERSION
+        ));
+    }
+    Ok(())
+}
+
+fn check_rollup_config_cell(
+    block_producer_config: &BlockProducerConfig,
+    rollup_config: &RollupConfig,
+    rpc_client: &RPCClient,
+) -> Result<()> {
+    let rollup_config_cell = smol::block_on(
+        rpc_client.get_cell(
+            block_producer_config
+                .rollup_config_cell_dep
+                .out_point
+                .clone()
+                .into(),
+        ),
+    )?
+    .ok_or_else(|| anyhow!("can't find rollup config cell"))?;
+    let cell_data = RollupConfig::from_slice(&rollup_config_cell.data.to_vec())?;
+    let eoa_set = rollup_config
+        .allowed_eoa_type_hashes()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let contract_set = rollup_config
+        .allowed_contract_type_hashes()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let unregistered_eoas = cell_data
+        .allowed_eoa_type_hashes()
+        .into_iter()
+        .filter(|item| !eoa_set.contains(&item))
+        .collect::<Vec<_>>();
+    let unregistered_contracts = cell_data
+        .allowed_contract_type_hashes()
+        .into_iter()
+        .filter(|item| !contract_set.contains(&item))
+        .collect::<Vec<_>>();
+    if !unregistered_eoas.is_empty() || !unregistered_contracts.is_empty() {
+        return Err(anyhow!(
+            "Unregistered eoa type hashes: {:#?}, \
+            unregistered contract type hashes: {:#?}",
+            unregistered_eoas,
+            unregistered_contracts
+        ));
+    }
     Ok(())
 }
