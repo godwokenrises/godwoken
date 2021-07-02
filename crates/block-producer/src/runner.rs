@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
-use futures::{executor::block_on, select, FutureExt};
+use futures::{select, FutureExt};
 use gw_chain::chain::Chain;
 use gw_common::H256;
 use gw_config::{BlockProducerConfig, Config, TestMode};
@@ -185,7 +185,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     };
     let secp_data: Bytes = {
         let out_point = config.genesis.secp_data_dep.out_point.clone();
-        block_on(rpc_client.get_transaction(out_point.tx_hash.0.into()))?
+        smol::block_on(rpc_client.get_transaction(out_point.tx_hash.0.into()))?
             .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?
             .raw()
             .outputs_data()
@@ -350,7 +350,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 }
 
 fn check_ckb_version(rpc_client: &RPCClient) -> Result<()> {
-    let ckb_version = block_on(rpc_client.get_ckb_version())?;
+    let ckb_version = smol::block_on(rpc_client.get_ckb_version())?;
     let ckb_version = ckb_version.split('(').collect::<Vec<&str>>()[0].trim_end();
     if Version::parse(&ckb_version)? < Version::parse(MIN_CKB_VERSION)? {
         return Err(anyhow!(
@@ -367,7 +367,7 @@ fn check_rollup_config_cell(
     rollup_config: &RollupConfig,
     rpc_client: &RPCClient,
 ) -> Result<()> {
-    let rollup_config_cell = block_on(
+    let rollup_config_cell = smol::block_on(
         rpc_client.get_cell(
             block_producer_config
                 .rollup_config_cell_dep
@@ -386,22 +386,22 @@ fn check_rollup_config_cell(
         .allowed_contract_type_hashes()
         .into_iter()
         .collect::<Vec<_>>();
-    let ret = cell_data
+    let unregistered_eoas = cell_data
         .allowed_eoa_type_hashes()
         .into_iter()
-        .all(|item| eoa_set.contains(&item));
-    if !ret {
-        return Err(anyhow!(
-            "Not all of the eoa type hashes in the rollup config cell are registered"
-        ));
-    }
-    let ret = cell_data
+        .filter(|item| !eoa_set.contains(&item))
+        .collect::<Vec<_>>();
+    let unregistered_contracts = cell_data
         .allowed_contract_type_hashes()
         .into_iter()
-        .all(|item| contract_set.contains(&item));
-    if !ret {
+        .filter(|item| !contract_set.contains(&item))
+        .collect::<Vec<_>>();
+    if !unregistered_eoas.is_empty() || !unregistered_contracts.is_empty() {
         return Err(anyhow!(
-            "Not all of the contract type hashes in the rollup config cell are registered"
+            "The eoa type hashes are not registered: {:#?}, \
+            the contract type hashes are not registered: {:#?}",
+            unregistered_eoas,
+            unregistered_contracts
         ));
     }
     Ok(())
