@@ -167,8 +167,14 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     if !skip_config_check {
         check_ckb_version(&rpc_client)?;
-        // check ckb indexer version
-        check_rollup_config_cell(&block_producer_config, &rollup_config, &rpc_client)?;
+        // TODO: check ckb indexer version
+        if NodeMode::ReadOnly != config.node_mode {
+            let block_producer_config = config
+                .block_producer
+                .clone()
+                .ok_or_else(|| anyhow!("not set block producer"))?;
+            check_rollup_config_cell(&block_producer_config, &rollup_config, &rpc_client)?;
+        }
     }
 
     // Open store
