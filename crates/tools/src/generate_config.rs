@@ -1,6 +1,6 @@
 use crate::deploy_genesis::{get_secp_data, GenesisDeploymentResult};
 use crate::deploy_scripts::ScriptsDeploymentResult;
-use crate::setup_nodes::get_wallet_info;
+use crate::setup::get_wallet_info;
 use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Builder, Entity};
