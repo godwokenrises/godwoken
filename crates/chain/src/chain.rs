@@ -246,12 +246,6 @@ impl Chain {
                     self.pending_revert_blocks
                         .retain(|block| !reverted_block_hashes.contains(&block.hash()));
 
-                    // Ensure block smt is updated to be able to build correct block proof. It doesn't
-                    // matter current l2block is bad or not.
-                    db.block_smt()?
-                        .update(l2block.smt_key().into(), l2block.hash().into())?;
-                    db.commit()?;
-
                     // If there's new l2block after bad block, also mark it bad block since it
                     // bases on incorrect state.
                     let l2block_number: u64 = l2block.raw().number().unpack();
@@ -269,11 +263,14 @@ impl Chain {
                         assert_eq!(should_be_next_bad_block, true);
 
                         log::debug!("push last bad block, hash {:?}", l2block.hash());
-                        self.bad_blocks.push(l2block);
+                        self.bad_blocks.push(l2block.clone());
 
                         // Update bad block proof, since block height changed
                         let root: [u8; 32] = global_state.block().merkle_root().unpack();
+                        db.block_smt()?
+                            .update(l2block.smt_key().into(), l2block.hash().into())?;
                         update_bad_block_proof(db, root.into(), bad_block_context)?;
+
                         return Ok(SyncEvent::BadBlock {
                             context: bad_block_context.to_owned(),
                         });
@@ -287,6 +284,13 @@ impl Chain {
                         deposit_requests,
                     )? {
                         log::info!("a bad block found, hash {:?}", l2block.hash());
+
+                        db.rollback()?;
+
+                        // Ensure block smt is updated to be able to build correct block proof. It doesn't
+                        // matter current l2block is bad or not.
+                        db.block_smt()?
+                            .update(l2block.smt_key().into(), l2block.hash().into())?;
 
                         // stop syncing and return event
                         self.bad_block_context = Some(challenge_context.clone());
@@ -419,7 +423,6 @@ impl Chain {
                             reverted_block.hash().into(),
                         )?;
                     }
-                    db.commit()?;
                     let global_state_reverted_block_root: [u8; 32] =
                         global_state.reverted_block_root().unpack();
                     assert_eq!(
@@ -555,53 +558,43 @@ impl Chain {
         // update layer1 actions
         for action in param.updates {
             self.update_l1action(&db, action)?;
+            db.commit()?;
 
-            match self.last_sync_event {
-                // only Success if there's not bad block
-                SyncEvent::Success => {
-                    db.commit()?;
-                    // update mem pool state
-                    self.mem_pool
-                        .lock()
-                        .notify_new_tip(self.local_state.tip.hash().into())?;
-                    // check consistency of account SMT
-                    {
-                        // check account SMT, should be able to calculate account state root
-                        let expected_account_root: H256 = self
-                            .local_state
-                            .tip
-                            .raw()
-                            .post_account()
-                            .merkle_root()
-                            .unpack();
-                        let state_db = StateDBTransaction::from_checkpoint(
+            if let SyncEvent::Success = self.last_sync_event {
+                // update mem pool state
+                self.mem_pool
+                    .lock()
+                    .notify_new_tip(self.local_state.tip.hash().into())?;
+                // check consistency of account SMT
+                {
+                    // check account SMT, should be able to calculate account state root
+                    let expected_account_root: H256 = self
+                        .local_state
+                        .tip
+                        .raw()
+                        .post_account()
+                        .merkle_root()
+                        .unpack();
+                    let state_db = StateDBTransaction::from_checkpoint(
+                        &db,
+                        CheckPoint::from_block_hash(
                             &db,
-                            CheckPoint::from_block_hash(
-                                &db,
-                                self.local_state.tip().hash().into(),
-                                SubState::Block,
-                            )?,
-                            StateDBMode::ReadOnly,
-                        )?;
-                        assert_eq!(
-                            state_db.account_smt().unwrap().root(),
-                            &expected_account_root,
-                            "account root consistent in DB"
-                        );
-                        let tree = state_db.account_state_tree()?;
-                        let current_account_root = tree.calculate_root().unwrap();
-                        assert_eq!(
-                            current_account_root, expected_account_root,
-                            "check account tree"
-                        );
-                    }
-                }
-                _ => {
-                    // Since bad block process isn't completed, db state is broken. To simplify
-                    // Revert procedure, just rollback if event isn't Success. We won't process
-                    // further l2block(expect block smt update) until bad block is reverted. We
-                    // stay at last valid block.
-                    db.rollback()?;
+                            self.local_state.tip().hash().into(),
+                            SubState::Block,
+                        )?,
+                        StateDBMode::ReadOnly,
+                    )?;
+                    assert_eq!(
+                        state_db.account_smt().unwrap().root(),
+                        &expected_account_root,
+                        "account root consistent in DB"
+                    );
+                    let tree = state_db.account_state_tree()?;
+                    let current_account_root = tree.calculate_root().unwrap();
+                    assert_eq!(
+                        current_account_root, expected_account_root,
+                        "check account tree"
+                    );
                 }
             }
         }
