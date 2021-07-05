@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
-    pub test_mode: TestMode,
+    pub node_mode: NodeMode,
     pub backends: Vec<BackendConfig>,
     pub store: StoreConfig,
     pub genesis: GenesisConfig,
@@ -91,13 +91,14 @@ pub struct Web3IndexerConfig {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum TestMode {
-    Enable,
-    Disable,
+pub enum NodeMode {
+    FullNode,
+    Test,
+    ReadOnly,
 }
 
-impl Default for TestMode {
+impl Default for NodeMode {
     fn default() -> Self {
-        TestMode::Disable
+        NodeMode::ReadOnly
     }
 }

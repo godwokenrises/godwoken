@@ -7,7 +7,7 @@ use async_jsonrpc_client::HttpClient;
 use futures::{select, FutureExt};
 use gw_chain::chain::Chain;
 use gw_common::H256;
-use gw_config::{BlockProducerConfig, Config, TestMode};
+use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{secp256k1::Secp256k1Eth, AccountLockManage},
@@ -44,13 +44,13 @@ const MIN_CKB_VERSION: &str = "0.40.0";
 async fn poll_loop(
     rpc_client: RPCClient,
     chain_updater: ChainUpdater,
-    block_producer: BlockProducer,
-    test_mode_control: TestModeControl,
+    block_producer: Option<BlockProducer>,
+    test_mode_control: Option<TestModeControl>,
     poll_interval: Duration,
 ) -> Result<()> {
     struct Inner {
         chain_updater: ChainUpdater,
-        block_producer: BlockProducer,
+        block_producer: Option<BlockProducer>,
     }
 
     let inner = Arc::new(smol::lock::Mutex::new(Inner {
@@ -107,16 +107,21 @@ async fn poll_loop(
             }
 
             // TODO: implement test mode challenge control
-            if TestMode::Disable == test_mode_control.mode()
-                || TestMode::Enable == test_mode_control.mode()
-                    && Some(TestModePayload::None) == test_mode_control.take_payload().await
-            {
-                if let Err(err) = inner.block_producer.handle_event(event.clone()).await {
-                    log::error!(
-                        "Error occured when polling block_producer, event: {:?}, error: {}",
-                        event,
-                        err
-                    );
+            if let Some(ref mut block_producer) = inner.block_producer {
+                let mut is_enabled = true;
+                if let Some(ref t) = test_mode_control {
+                    if Some(TestModePayload::None) != t.take_payload().await {
+                        is_enabled = false;
+                    }
+                }
+                if is_enabled {
+                    if let Err(err) = block_producer.handle_event(event.clone()).await {
+                        log::error!(
+                            "Error occured when polling block_producer, event: {:?}, error: {}",
+                            event,
+                            err
+                        );
+                    }
                 }
             }
 
@@ -139,11 +144,6 @@ async fn poll_loop(
 
 pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
-    let block_producer_config = config
-        .block_producer
-        .clone()
-        .ok_or_else(|| anyhow!("not set block producer"))?;
-
     let rollup_context = RollupContext {
         rollup_config: rollup_config.clone(),
         rollup_script_hash: {
@@ -167,8 +167,14 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     if !skip_config_check {
         check_ckb_version(&rpc_client)?;
-        // check ckb indexer version
-        check_rollup_config_cell(&block_producer_config, &rollup_config, &rpc_client)?;
+        // TODO: check ckb indexer version
+        if NodeMode::ReadOnly != config.node_mode {
+            let block_producer_config = config
+                .block_producer
+                .clone()
+                .ok_or_else(|| anyhow!("not set block producer"))?;
+            check_rollup_config_cell(&block_producer_config, &rollup_config, &rpc_client)?;
+        }
     }
 
     // Open store
@@ -201,7 +207,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     )
     .with_context(|| "init genesis")?;
 
-    let rollup_config_hash = rollup_config.hash().into();
+    let rollup_config_hash: H256 = rollup_config.hash().into();
     let generator = {
         let backend_manage = BackendManage::from_config(config.backends.clone())
             .with_context(|| "config backends")?;
@@ -233,17 +239,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         )
         .with_context(|| "create chain")?,
     ));
-
-    // RPC registry
-    let test_mode_control =
-        TestModeControl::create(config.test_mode, rpc_client.clone(), &block_producer_config)?;
-    let rpc_registry = Registry::new(
-        store.clone(),
-        mem_pool.clone(),
-        generator.clone(),
-        config.test_mode,
-        test_mode_control.clone(),
-    );
 
     // create web3 indexer
     let web3_indexer = match config.web3_indexer {
@@ -288,18 +283,44 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         CKBGenesisInfo::from_block(&ckb_genesis)?
     };
 
-    // create block producer
-    let block_producer = BlockProducer::create(
-        rollup_config_hash,
+    let (block_producer, test_mode_control) = match config.node_mode {
+        NodeMode::ReadOnly => (None, None),
+        _ => {
+            let block_producer_config = config
+                .block_producer
+                .clone()
+                .ok_or_else(|| anyhow!("not set block producer"))?;
+            let block_producer = BlockProducer::create(
+                rollup_config_hash,
+                store.clone(),
+                generator.clone(),
+                chain,
+                mem_pool.clone(),
+                rpc_client.clone(),
+                ckb_genesis_info,
+                block_producer_config.clone(),
+            )
+            .with_context(|| "init block producer")?;
+            if let NodeMode::Test = config.node_mode {
+                let test_mode_control = TestModeControl::create(
+                    config.node_mode,
+                    rpc_client.clone(),
+                    &block_producer_config,
+                )?;
+                (Some(block_producer), Some(test_mode_control))
+            } else {
+                (Some(block_producer), None)
+            }
+        }
+    };
+
+    // RPC registry
+    let rpc_registry = Registry::new(
         store,
-        generator,
-        chain,
         mem_pool,
-        rpc_client.clone(),
-        ckb_genesis_info,
-        block_producer_config,
-    )
-    .with_context(|| "init block producer")?;
+        generator,
+        test_mode_control.clone().map(Box::new),
+    );
 
     let (s, ctrl_c) = async_channel::bounded(100);
     let handle = move || {
@@ -329,14 +350,14 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         log::info!("Rollup config hash: {}", rollup_config_hash);
     }
 
-    if TestMode::Enable == config.test_mode {
+    if NodeMode::Test == config.node_mode {
         log::info!("Test mode enabled!!!");
     }
 
     smol::block_on(async {
         select! {
             _ = ctrl_c.recv().fuse() => log::info!("Exiting..."),
-            e = poll_loop(rpc_client, chain_updater, block_producer, test_mode_control ,Duration::from_secs(3)).fuse() => {
+            e = poll_loop(rpc_client, chain_updater, block_producer, test_mode_control, Duration::from_secs(3)).fuse() => {
                 log::error!("Error in main poll loop: {:?}", e);
             }
             e = start_jsonrpc_server(rpc_address, rpc_registry).fuse() => {

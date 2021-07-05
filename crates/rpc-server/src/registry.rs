@@ -2,7 +2,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{state::State, H256};
-use gw_config::TestMode;
 use gw_generator::{sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
@@ -51,8 +50,7 @@ pub struct Registry {
     generator: Arc<Generator>,
     mem_pool: Arc<MemPool>,
     store: Store,
-    test_mode: TestMode,
-    tests_rpc_impl: Arc<BoxedTestsRPCImpl>,
+    tests_rpc_impl: Option<Arc<BoxedTestsRPCImpl>>,
 }
 
 impl Registry {
@@ -60,8 +58,7 @@ impl Registry {
         store: Store,
         mem_pool: Arc<MemPool>,
         generator: Arc<Generator>,
-        test_mode: TestMode,
-        tests_rpc_impl: T,
+        tests_rpc_impl: Option<Box<T>>,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -70,8 +67,8 @@ impl Registry {
             mem_pool,
             store,
             generator,
-            test_mode,
-            tests_rpc_impl: Arc::new(Box::new(tests_rpc_impl)),
+            tests_rpc_impl: tests_rpc_impl
+                .map(|r| Arc::new(r as Box<dyn TestModeRPC + Sync + Send + 'static>)),
         }
     }
 
@@ -109,9 +106,9 @@ impl Registry {
             .with_method("compute_l2_sudt_script_hash", compute_l2_sudt_script_hash);
 
         // Tests
-        if TestMode::Enable == self.test_mode {
+        if let Some(tests_rpc_impl) = self.tests_rpc_impl {
             server = server
-                .with_data(Data(Arc::clone(&self.tests_rpc_impl)))
+                .with_data(Data(Arc::clone(&tests_rpc_impl)))
                 .with_method("tests_produce_block", tests_produce_block)
                 .with_method("tests_should_produce_block", tests_should_produce_block)
                 .with_method("tests_get_global_state", tests_get_global_state);
