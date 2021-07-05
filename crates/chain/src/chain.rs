@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Result};
 use gw_common::{sparse_merkle_tree, state::State, H256};
 use gw_generator::{
-    generator::StateTransitionArgs, ChallengeContext, Error as GeneratorError, Generator,
+    generator::{StateTransitionArgs, StateTransitionResult},
+    ChallengeContext, Generator,
 };
 use gw_mem_pool::pool::MemPool;
 use gw_store::{
@@ -283,7 +284,7 @@ impl Chain {
                         global_state.clone(),
                         deposit_requests,
                     )? {
-                        log::info!("a bad block found, hash {:?}", l2block.hash());
+                        log::info!("found a bad block 0x{} ", hex::encode(l2block.hash()));
 
                         db.rollback()?;
 
@@ -644,33 +645,32 @@ impl Chain {
         );
 
         // process transactions
+        // TODO: run offchain validator before send challenge, to make sure the block is bad
         let generator = &self.generator;
-        let result = match generator.verify_and_apply_state_transition(&chain_view, &mut tree, args)
-        {
-            Ok(result) => result,
-            // TODO: run offchain validator before send challenge, to make sure the block is bad
-            Err(GeneratorError::WithdrawalWithContext(err)) => {
-                return Ok(Some(ChallengeContext {
-                    target: err.context,
-                    witness: build_challenge_witness(db, l2block.raw())?,
-                }));
-            }
-            Err(GeneratorError::Transaction(err)) => {
-                return Ok(Some(ChallengeContext {
-                    target: err.context,
-                    witness: build_challenge_witness(db, l2block.raw())?,
-                }));
-            }
-            Err(err) => return Err(err.into()),
-        };
+        let (tx_receipts, withdrawal_receipts) =
+            match generator.verify_and_apply_state_transition(&chain_view, &mut tree, args) {
+                StateTransitionResult::Success {
+                    tx_receipts,
+                    withdrawal_receipts,
+                } => (tx_receipts, withdrawal_receipts),
+                StateTransitionResult::Challenge { target, error } => {
+                    log::debug!("verify and apply state transition error {}", error);
+
+                    return Ok(Some(ChallengeContext {
+                        target,
+                        witness: build_challenge_witness(db, l2block.raw())?,
+                    }));
+                }
+                StateTransitionResult::Generator(err) => return Err(err.into()),
+            };
 
         // update chain
         db.insert_block(
             l2block.clone(),
             l2block_committed_info,
             global_state,
-            result.tx_receipts,
-            result.withdrawal_receipts,
+            tx_receipts,
+            withdrawal_receipts,
             deposit_requests,
         )?;
         let rollup_config = &self.generator.rollup_context().rollup_config;

@@ -1,12 +1,12 @@
 use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
-    error::{TransactionValidateError, WithdrawalError, WithdrawalErrorWithContext},
+    error::{TransactionValidateError, WithdrawalError},
     RollupContext,
 };
 use crate::{
     backend_manage::Backend,
-    error::{Error, TransactionError, TransactionErrorWithContext},
+    error::{Error, TransactionError},
     sudt::build_l2_sudt_script,
 };
 use crate::{error::AccountError, syscalls::L2Syscalls};
@@ -46,9 +46,16 @@ pub struct StateTransitionArgs {
     pub deposit_requests: Vec<DepositRequest>,
 }
 
-pub struct StateTransitionResult {
-    pub withdrawal_receipts: Vec<WithdrawalReceipt>,
-    pub tx_receipts: Vec<TxReceipt>,
+pub enum StateTransitionResult {
+    Success {
+        withdrawal_receipts: Vec<WithdrawalReceipt>,
+        tx_receipts: Vec<TxReceipt>,
+    },
+    Challenge {
+        target: ChallengeTarget,
+        error: Error,
+    },
+    Generator(Error),
 }
 
 pub struct Generator {
@@ -275,7 +282,7 @@ impl Generator {
         chain: &C,
         state: &mut S,
         args: StateTransitionArgs,
-    ) -> Result<StateTransitionResult, Error> {
+    ) -> StateTransitionResult {
         let raw_block = args.l2block.raw();
         let block_info = get_block_info(&raw_block);
 
@@ -286,115 +293,124 @@ impl Generator {
 
         let mut withdrawal_receipts = Vec::with_capacity(withdrawal_requests.len());
         for (wth_idx, request) in withdrawal_requests.into_iter().enumerate() {
-            if let Err(err) = self.check_withdrawal_request_signature(state, &request) {
-                return match err {
-                    Error::Withdrawal(err) => {
-                        let target = build_challenge_target(
-                            block_hash.into(),
-                            ChallengeTargetType::Withdrawal,
-                            wth_idx as u32,
-                        );
-                        Err(WithdrawalErrorWithContext::new(target, err).into())
-                    }
-                    _ => Err(err),
-                };
+            if let Err(error) = self.check_withdrawal_request_signature(state, &request) {
+                let target = build_challenge_target(
+                    block_hash.into(),
+                    ChallengeTargetType::Withdrawal,
+                    wth_idx as u32,
+                );
+
+                return StateTransitionResult::Challenge { target, error };
             }
 
-            let withdrawal_receipt = state.apply_withdrawal_request(
-                &self.rollup_context,
-                block_producer_id,
-                &request,
-            )?;
-            withdrawal_receipts.push(withdrawal_receipt);
+            match state.apply_withdrawal_request(&self.rollup_context, block_producer_id, &request)
+            {
+                Ok(withdrawal_receipt) => withdrawal_receipts.push(withdrawal_receipt),
+                Err(err) => return StateTransitionResult::Generator(err.into()),
+            }
         }
+
         // apply deposition to state
-        state.apply_deposit_requests(&self.rollup_context, &args.deposit_requests)?;
+        if let Err(err) = state.apply_deposit_requests(&self.rollup_context, &args.deposit_requests)
+        {
+            return StateTransitionResult::Generator(err.into());
+        }
 
         // handle transactions
         let mut tx_receipts = Vec::with_capacity(args.l2block.transactions().len());
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
             if let Err(err) = self.check_transaction_signature(state, &tx) {
-                return match err {
-                    TransactionValidateError::Transaction(tx_err) => {
-                        let target = build_challenge_target(
-                            block_hash.into(),
-                            ChallengeTargetType::TxSignature,
-                            tx_index as u32,
-                        );
-                        Err(TransactionErrorWithContext::new(target, tx_err).into())
-                    }
-                    TransactionValidateError::Account(err) => Err(Error::Account(err)),
-                    TransactionValidateError::State(err) => Err(Error::State(err)),
-                    TransactionValidateError::Unlock(err) => Err(Error::Unlock(err)),
+                let target = build_challenge_target(
+                    block_hash.into(),
+                    ChallengeTargetType::TxSignature,
+                    tx_index as u32,
+                );
+
+                return StateTransitionResult::Challenge {
+                    target,
+                    error: err.into(),
                 };
             }
 
-            let raw_tx = tx.raw();
             // check nonce
-            let expected_nonce = state.get_nonce(raw_tx.from_id().unpack())?;
+            let raw_tx = tx.raw();
+            let expected_nonce = match state.get_nonce(raw_tx.from_id().unpack()) {
+                Err(err) => return StateTransitionResult::Generator(Error::from(err)),
+                Ok(nonce) => nonce,
+            };
             let actual_nonce: u32 = raw_tx.nonce().unpack();
             if actual_nonce != expected_nonce {
-                return Err(TransactionErrorWithContext::new(
-                    build_challenge_target(
+                return StateTransitionResult::Challenge {
+                    target: build_challenge_target(
                         block_hash.into(),
-                        ChallengeTargetType::TxSignature,
+                        ChallengeTargetType::TxExecution,
                         tx_index as u32,
                     ),
-                    TransactionError::Nonce {
+                    error: Error::Transaction(TransactionError::Nonce {
                         expected: expected_nonce,
                         actual: actual_nonce,
-                    },
-                )
-                .into());
+                    }),
+                };
             }
+
             // build call context
             // NOTICE users only allowed to send HandleMessage CallType txs
             let run_result = match self.execute_transaction(chain, state, &block_info, &raw_tx) {
                 Ok(run_result) => run_result,
                 Err(err) => {
-                    return Err(TransactionErrorWithContext::new(
-                        build_challenge_target(
-                            block_hash.into(),
-                            ChallengeTargetType::TxExecution,
-                            tx_index as u32,
-                        ),
-                        err,
-                    )
-                    .into());
+                    let target = build_challenge_target(
+                        block_hash.into(),
+                        ChallengeTargetType::TxSignature,
+                        tx_index as u32,
+                    );
+
+                    return StateTransitionResult::Challenge {
+                        target,
+                        error: Error::Transaction(err),
+                    };
                 }
             };
-            state.apply_run_result(&run_result)?;
 
-            let post_state = {
-                let account_root = state.calculate_root()?;
-                let account_count = state.get_account_count()?;
-                AccountMerkleState::new_builder()
-                    .merkle_root(account_root.pack())
-                    .count(account_count.pack())
-                    .build()
+            let apply_result = || -> Result<(), Error> {
+                state.apply_run_result(&run_result)?;
+
+                let post_state = {
+                    let account_root = state.calculate_root()?;
+                    let account_count = state.get_account_count()?;
+                    AccountMerkleState::new_builder()
+                        .merkle_root(account_root.pack())
+                        .count(account_count.pack())
+                        .build()
+                };
+
+                let tx_receipt = TxReceipt::new_builder()
+                    .tx_witness_hash(tx.witness_hash().pack())
+                    .post_state(post_state)
+                    .read_data_hashes(
+                        run_result
+                            .read_data
+                            .into_iter()
+                            .map(|(hash, _)| hash.pack())
+                            .collect::<Vec<_>>()
+                            .pack(),
+                    )
+                    .logs(run_result.logs.pack())
+                    .build();
+
+                tx_receipts.push(tx_receipt);
+
+                Ok(())
             };
-            let tx_receipt = TxReceipt::new_builder()
-                .tx_witness_hash(tx.witness_hash().pack())
-                .post_state(post_state)
-                .read_data_hashes(
-                    run_result
-                        .read_data
-                        .into_iter()
-                        .map(|(hash, _)| hash.pack())
-                        .collect::<Vec<_>>()
-                        .pack(),
-                )
-                .logs(run_result.logs.pack())
-                .build();
-            tx_receipts.push(tx_receipt);
+
+            if let Err(err) = apply_result() {
+                return StateTransitionResult::Generator(err);
+            }
         }
 
-        let result = StateTransitionResult {
+        StateTransitionResult::Success {
             withdrawal_receipts,
             tx_receipts,
-        };
-
-        Ok(result)
+        }
     }
 
     fn load_backend<S: State + CodeStore>(&self, state: &S, script_hash: &H256) -> Option<Backend> {

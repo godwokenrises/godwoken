@@ -2022,6 +2022,7 @@ dependencies = [
  "gw-store",
  "gw-traits",
  "gw-types",
+ "hex",
  "lazy_static",
  "log",
  "parking_lot 0.11.1",
