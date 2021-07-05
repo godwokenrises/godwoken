@@ -99,6 +99,6 @@ pub enum NodeMode {
 
 impl Default for NodeMode {
     fn default() -> Self {
-        NodeMode::FullNode
+        NodeMode::ReadOnly
     }
 }

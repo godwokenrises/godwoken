@@ -106,9 +106,9 @@ impl Registry {
             .with_method("compute_l2_sudt_script_hash", compute_l2_sudt_script_hash);
 
         // Tests
-        if let Some(r) = self.tests_rpc_impl {
+        if let Some(tests_rpc_impl) = self.tests_rpc_impl {
             server = server
-                .with_data(Data(Arc::clone(&r)))
+                .with_data(Data(Arc::clone(&tests_rpc_impl)))
                 .with_method("tests_produce_block", tests_produce_block)
                 .with_method("tests_should_produce_block", tests_should_produce_block)
                 .with_method("tests_get_global_state", tests_get_global_state);
