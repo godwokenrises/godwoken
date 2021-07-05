@@ -84,7 +84,7 @@ pub fn build_revert_context(
     // Build reverted block proof
     let (post_reverted_block_root, reverted_block_proof) = {
         let smt = db.reverted_block_smt()?;
-        let to_leave = |b: &RawL2Block| (b.smt_key().into(), b.hash().into());
+        let to_leave = |b: &RawL2Block| (b.smt_key().into(), H256::zero());
 
         let smt_keys = reverted_raw_blocks.iter().map(|rb| rb.smt_key().into());
         let leaves = reverted_raw_blocks.iter().map(to_leave);

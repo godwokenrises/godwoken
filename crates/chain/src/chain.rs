@@ -263,14 +263,14 @@ impl Chain {
                         // pending_revert_blocks.
                         assert_eq!(should_be_next_bad_block, true);
 
-                        log::debug!("push last bad block, hash {:?}", l2block.hash());
+                        log::info!("push new bad block {}", hex::encode(l2block.hash()));
                         self.bad_blocks.push(l2block.clone());
 
                         // Update bad block proof, since block height changed
+                        update_block_smt(db, &l2block)?;
                         let root: [u8; 32] = global_state.block().merkle_root().unpack();
-                        db.block_smt()?
-                            .update(l2block.smt_key().into(), l2block.hash().into())?;
                         update_bad_block_proof(db, root.into(), bad_block_context)?;
+                        log::info!("bad bock proof updated");
 
                         return Ok(SyncEvent::BadBlock {
                             context: bad_block_context.to_owned(),
@@ -285,15 +285,11 @@ impl Chain {
                         deposit_requests,
                     )? {
                         log::info!("found a bad block 0x{} ", hex::encode(l2block.hash()));
-
                         db.rollback()?;
 
                         // Ensure block smt is updated to be able to build correct block proof. It doesn't
                         // matter current l2block is bad or not.
-                        db.block_smt()?
-                            .update(l2block.smt_key().into(), l2block.hash().into())?;
-
-                        // stop syncing and return event
+                        update_block_smt(db, &l2block)?;
                         self.bad_block_context = Some(challenge_context.clone());
 
                         assert_eq!(self.bad_blocks.is_empty(), true);
@@ -426,10 +422,12 @@ impl Chain {
                     }
                     let global_state_reverted_block_root: [u8; 32] =
                         global_state.reverted_block_root().unpack();
+                    let reverted_block_smt_root = reverted_block_smt.root();
                     assert_eq!(
-                        reverted_block_smt.root(),
+                        reverted_block_smt_root,
                         &global_state_reverted_block_root.into()
                     );
+                    db.set_reverted_block_smt_root(*reverted_block_smt_root)?;
 
                     // Update pending clearing blocks
                     self.pending_revert_blocks.extend(pending_revert_blocks);
@@ -751,6 +749,15 @@ fn update_bad_block_proof(
         target: bad_block_context.target.to_owned(),
         witness: updated_witness,
     };
+
+    Ok(())
+}
+
+fn update_block_smt(db: &StoreTransaction, block: &L2Block) -> Result<()> {
+    let mut smt = db.block_smt()?;
+    smt.update(block.smt_key().into(), block.hash().into())?;
+    let root = smt.root();
+    db.set_block_smt_root(*root)?;
 
     Ok(())
 }
