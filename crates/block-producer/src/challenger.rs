@@ -19,7 +19,7 @@ use gw_types::core::{ChallengeTargetType, Status};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, GlobalState, Script, Transaction, WitnessArgs,
 };
-use gw_types::prelude::Unpack;
+use gw_types::prelude::{Pack, Unpack};
 use smol::lock::Mutex;
 
 use std::convert::TryFrom;
@@ -295,17 +295,16 @@ impl Challenger {
             block_number.ok_or_else(|| anyhow!("challenge tx block number not found"))?
         };
 
-        // TODO: Use since?
-        // const FLAG_SINCE_RELATIVE: u64 =
-        //     0b1000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000;
-        // const FLAG_SINCE_BLOCK_NUMBER: u64 =
-        //     0b000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000;
-        // let since = {
-        //     let block_number = ckb_types::core::BlockNumber::from_le_bytes(
-        //         challenge_maturity_blocks.to_le_bytes(),
-        //     );
-        //     FLAG_SINCE_RELATIVE | FLAG_SINCE_BLOCK_NUMBER | block_number
-        // };
+        const FLAG_SINCE_RELATIVE: u64 =
+            0b1000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000;
+        const FLAG_SINCE_BLOCK_NUMBER: u64 =
+            0b000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000;
+        let since = {
+            let block_number = ckb_types::core::BlockNumber::from_le_bytes(
+                challenge_maturity_blocks.to_le_bytes(),
+            );
+            FLAG_SINCE_RELATIVE | FLAG_SINCE_BLOCK_NUMBER | block_number
+        };
 
         if tip_block_number.saturating_sub(challenge_tx_block_number) < challenge_maturity_blocks {
             return Ok(());
@@ -360,7 +359,7 @@ impl Challenger {
         }
 
         // Challenge
-        let challenge_input = to_input_cell_info(challenge_cell);
+        let challenge_input = to_input_cell_info_with_since(challenge_cell, since);
         let challenge_dep = self.config.challenge_cell_lock_dep.clone().into();
         tx_skeleton.cell_deps_mut().push(challenge_dep);
         tx_skeleton.inputs_mut().push(challenge_input);
@@ -578,6 +577,16 @@ fn to_input_cell_info(cell_info: CellInfo) -> InputCellInfo {
     InputCellInfo {
         input: CellInput::new_builder()
             .previous_output(cell_info.out_point.clone())
+            .build(),
+        cell: cell_info,
+    }
+}
+
+fn to_input_cell_info_with_since(cell_info: CellInfo, since: u64) -> InputCellInfo {
+    InputCellInfo {
+        input: CellInput::new_builder()
+            .previous_output(cell_info.out_point.clone())
+            .since(since.pack())
             .build(),
         cell: cell_info,
     }

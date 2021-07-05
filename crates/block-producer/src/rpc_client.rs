@@ -1078,13 +1078,13 @@ impl RPCClient {
                 .await?,
         )?;
 
-        let block_hash: ckb_types::H256 = {
+        let block_hash: ckb_fixed_hash::H256 = {
             let tx_with_status = tx_with_status.ok_or_else(|| anyhow!("tx not found"))?;
             let status = tx_with_status.tx_status;
             status.block_hash.ok_or_else(|| anyhow!("no tx block hash"))
         }?;
 
-        let block: Option<ckb_jsonrpc_types::Block> = to_result(
+        let block: Option<ckb_jsonrpc_types::BlockView> = to_result(
             self.ckb_client
                 .request(
                     "get_block",
@@ -1093,7 +1093,7 @@ impl RPCClient {
                 .await?,
         )?;
 
-        Ok(block.map(|b| b.header.number.value()))
+        Ok(block.map(|b| b.header.inner.number.value()))
     }
 
     pub async fn get_transaction(&self, tx_hash: H256) -> Result<Option<Transaction>> {

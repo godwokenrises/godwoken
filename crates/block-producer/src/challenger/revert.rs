@@ -66,8 +66,8 @@ impl<'a> Revert<'a> {
         // Rewards
         let challenge_lock_args = {
             let lock_args: Bytes = self.challenge_cell.output.lock().args().unpack();
-            match ChallengeLockArgsReader::verify(&lock_args, false) {
-                Ok(_) => ChallengeLockArgs::new_unchecked(lock_args),
+            match ChallengeLockArgsReader::verify(&lock_args.slice(32..), false) {
+                Ok(_) => ChallengeLockArgs::new_unchecked(lock_args.slice(32..)),
                 Err(err) => return Err(anyhow!("invalid challenge lock args {}", err)),
             }
         };
