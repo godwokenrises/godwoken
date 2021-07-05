@@ -5,18 +5,22 @@ use crate::types::InputCellInfo;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
+use gw_common::h256_ext::H256Ext;
+use gw_common::merkle_utils::calculate_merkle_root;
+use gw_common::smt::Blake2bHasher;
 use gw_common::H256;
 use gw_generator::ChallengeContext;
 use gw_jsonrpc_types::test_mode::ChallengeType;
 use gw_jsonrpc_types::{
-    godwoken::GlobalState,
+    godwoken::GlobalState as JsonGlobalState,
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
 use gw_rpc_server::registry::TestModeRPC;
 use gw_store::Store;
 use gw_types::core::{ChallengeTargetType, Status};
 use gw_types::packed::{
-    ChallengeTarget, ChallengeWitness, L2Block, L2Transaction, WithdrawalRequest,
+    BlockMerkleState, ChallengeTarget, ChallengeWitness, GlobalState, L2Block, L2Transaction,
+    SubmitWithdrawals, WithdrawalRequest,
 };
 use gw_types::prelude::{Pack, PackVec};
 use gw_types::{bytes::Bytes, packed::CellInput, prelude::Unpack};
@@ -56,7 +60,11 @@ impl TestModeControl {
         Ok(())
     }
 
-    pub async fn bad_block(&self, block: L2Block) -> Result<L2Block> {
+    pub async fn bad_block(
+        &self,
+        block: L2Block,
+        global_state: GlobalState,
+    ) -> Result<(L2Block, GlobalState)> {
         let (target_index, target_type) = {
             let mut payload = self.payload.lock().await;
 
@@ -72,7 +80,7 @@ impl TestModeControl {
             (target_index, target_type)
         };
 
-        match target_type {
+        let bad_block = match target_type {
             ChallengeType::TxExecution => {
                 let tx_count: u32 = block.raw().submit_transactions().tx_count().unpack();
                 if target_index >= tx_count {
@@ -94,7 +102,28 @@ impl TestModeControl {
 
                 let mut txs: Vec<L2Transaction> = block.transactions().into_iter().collect();
                 *txs.get_mut(target_index as usize).expect("exists") = bad_tx;
-                Ok(block.as_builder().transactions(txs.pack()).build())
+
+                let tx_witness_root = {
+                    let witnesses = txs.iter().map(|t| t.witness_hash().into());
+                    calculate_merkle_root(witnesses.collect())?
+                };
+
+                let submit_txs = {
+                    let builder = block.raw().submit_transactions().as_builder();
+                    builder.tx_witness_root(tx_witness_root.pack()).build()
+                };
+
+                let raw_block = block
+                    .raw()
+                    .as_builder()
+                    .submit_transactions(submit_txs)
+                    .build();
+
+                block
+                    .as_builder()
+                    .raw(raw_block)
+                    .transactions(txs.pack())
+                    .build()
             }
             ChallengeType::TxSignature => {
                 let tx_count: u32 = block.raw().submit_transactions().tx_count().unpack();
@@ -107,7 +136,28 @@ impl TestModeControl {
 
                 let mut txs: Vec<L2Transaction> = block.transactions().into_iter().collect();
                 *txs.get_mut(target_index as usize).expect("exists") = bad_tx;
-                Ok(block.as_builder().transactions(txs.pack()).build())
+
+                let tx_witness_root = {
+                    let witnesses = txs.iter().map(|t| t.witness_hash().into());
+                    calculate_merkle_root(witnesses.collect())?
+                };
+
+                let submit_txs = {
+                    let builder = block.raw().submit_transactions().as_builder();
+                    builder.tx_witness_root(tx_witness_root.pack()).build()
+                };
+
+                let raw_block = block
+                    .raw()
+                    .as_builder()
+                    .submit_transactions(submit_txs)
+                    .build();
+
+                block
+                    .as_builder()
+                    .raw(raw_block)
+                    .transactions(txs.pack())
+                    .build()
             }
             ChallengeType::WithdrawalSignature => {
                 let count: u32 = block.raw().submit_withdrawals().withdrawal_count().unpack();
@@ -124,9 +174,63 @@ impl TestModeControl {
                 let mut withdrawals: Vec<WithdrawalRequest> =
                     block.withdrawals().into_iter().collect();
                 *withdrawals.get_mut(target_index as usize).expect("exists") = bad_withdrawal;
-                Ok(block.as_builder().withdrawals(withdrawals.pack()).build())
+
+                let withdrawal_witness_root = {
+                    let witnesses = withdrawals.iter().map(|r| r.witness_hash().into());
+                    calculate_merkle_root(witnesses.collect())?
+                };
+
+                let submit_withdrawals = SubmitWithdrawals::new_builder()
+                    .withdrawal_witness_root(withdrawal_witness_root.pack())
+                    .withdrawal_count((withdrawals.len() as u32).pack())
+                    .build();
+
+                let raw_block = block
+                    .raw()
+                    .as_builder()
+                    .submit_withdrawals(submit_withdrawals)
+                    .build();
+
+                block
+                    .as_builder()
+                    .raw(raw_block)
+                    .withdrawals(withdrawals.pack())
+                    .build()
             }
-        }
+        };
+
+        let block_number = bad_block.raw().number().unpack();
+        let bad_global_state = {
+            let db = self.store.begin_transaction();
+
+            let bad_block_proof = db
+                .block_smt()?
+                .merkle_proof(vec![H256::from_u64(block_number)])?
+                .compile(vec![(H256::from_u64(block_number), H256::zero())])?;
+
+            // Generate new block smt for global state
+            let bad_block_smt = {
+                let bad_block_root: [u8; 32] = bad_block_proof
+                    .compute_root::<Blake2bHasher>(vec![(
+                        bad_block.smt_key().into(),
+                        bad_block.hash().into(),
+                    )])?
+                    .into();
+
+                BlockMerkleState::new_builder()
+                    .merkle_root(bad_block_root.pack())
+                    .count((block_number + 1).pack())
+                    .build()
+            };
+
+            global_state
+                .as_builder()
+                .block(bad_block_smt)
+                .tip_block_hash(bad_block.hash().pack())
+                .build()
+        };
+
+        Ok((bad_block, bad_global_state))
     }
 
     pub async fn challenge(&self) -> Result<ChallengeContext> {
@@ -199,13 +303,13 @@ impl TestModeControl {
 
 #[async_trait]
 impl TestModeRPC for TestModeControl {
-    async fn get_global_state(&self) -> Result<GlobalState> {
+    async fn get_global_state(&self) -> Result<JsonGlobalState> {
         let rollup_cell = {
             let opt = self.rpc_client.query_rollup_cell().await?;
             opt.ok_or_else(|| anyhow!("rollup cell not found"))?
         };
 
-        let global_state = gw_types::packed::GlobalState::from_slice(&rollup_cell.data)
+        let global_state = GlobalState::from_slice(&rollup_cell.data)
             .map_err(|_| anyhow!("parse rollup up global state"))?;
 
         Ok(global_state.into())

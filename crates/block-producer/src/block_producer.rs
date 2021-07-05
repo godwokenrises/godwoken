@@ -362,7 +362,7 @@ impl BlockProducer {
         let block_result = produce_block(param)?;
         let ProduceBlockResult {
             mut block,
-            global_state,
+            mut global_state,
             unused_transactions,
             unused_withdrawal_requests,
         } = block_result;
@@ -378,7 +378,11 @@ impl BlockProducer {
 
         if let Some(ref tests_control) = self.tests_control {
             if let Some(TestModePayload::BadBlock { .. }) = tests_control.payload().await {
-                block = tests_control.bad_block(block).await?;
+                let (bad_block, bad_global_state) =
+                    tests_control.bad_block(block, global_state).await?;
+
+                block = bad_block;
+                global_state = bad_global_state;
             }
         }
 
