@@ -83,11 +83,13 @@ impl Challenger {
         let median_time = self.rpc_client.get_block_median_time(tip_hash).await?;
         let rollup = RollupState::query(&self.rpc_client).await?;
 
-        let mut poa = self.poa.lock().await;
-        let rollup_input = rollup.rollup_input();
-        let check_lock = poa.should_issue_next_block(median_time, &rollup_input);
-        if ShouldIssueBlock::Yes != check_lock.await? {
-            return Ok(());
+        {
+            let mut poa = self.poa.lock().await;
+            let rollup_input = rollup.rollup_input();
+            let check_lock = poa.should_issue_next_block(median_time, &rollup_input);
+            if ShouldIssueBlock::Yes != check_lock.await? {
+                return Ok(());
+            }
         }
 
         if let Some(ref tests_control) = self.tests_control {
@@ -102,7 +104,8 @@ impl Challenger {
             }
         }
 
-        match self.chain.lock().last_sync_event().to_owned() {
+        let last_sync_event = { self.chain.lock().last_sync_event().to_owned() };
+        match last_sync_event {
             SyncEvent::Success => Ok(()),
             SyncEvent::BadBlock { context } => {
                 if let Some(ref tests_control) = self.tests_control {
@@ -190,8 +193,10 @@ impl Challenger {
         tx_skeleton.witnesses_mut().push(rollup_witness);
 
         // Poa
-        let poa = self.poa.lock().await;
-        poa.fill_poa(&mut tx_skeleton, 0, media_time).await?;
+        {
+            let poa = self.poa.lock().await;
+            poa.fill_poa(&mut tx_skeleton, 0, media_time).await?;
+        }
 
         // Challenge
         let challenge_cell = challenge_output.challenge_cell;
@@ -349,8 +354,10 @@ impl Challenger {
         tx_skeleton.witnesses_mut().push(rollup_witness);
 
         // Poa
-        let poa = self.poa.lock().await;
-        poa.fill_poa(&mut tx_skeleton, 0, media_time).await?;
+        {
+            let poa = self.poa.lock().await;
+            poa.fill_poa(&mut tx_skeleton, 0, media_time).await?;
+        }
 
         // Challenge
         let challenge_input = to_input_cell_info(challenge_cell);
@@ -429,8 +436,10 @@ impl Challenger {
         }
 
         // Poa
-        let poa = self.poa.lock().await;
-        poa.fill_poa(&mut tx_skeleton, 0, media_time).await?;
+        {
+            let poa = self.poa.lock().await;
+            poa.fill_poa(&mut tx_skeleton, 0, media_time).await?;
+        }
 
         // Signature verification needs an owner cell
         let owner_lock = self.wallet.lock_script().to_owned();
