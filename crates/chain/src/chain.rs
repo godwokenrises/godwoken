@@ -13,10 +13,10 @@ use gw_store::{
 };
 use gw_types::{
     bytes::Bytes,
-    core::Status,
+    core::{ChallengeTargetType, Status},
     packed::{
-        ChallengeWitness, DepositRequest, GlobalState, L2Block, L2BlockCommittedInfo, RawL2Block,
-        RollupConfig, Script, Transaction,
+        BlockMerkleState, ChallengeWitness, DepositRequest, GlobalState, L2Block,
+        L2BlockCommittedInfo, RawL2Block, RollupConfig, Script, Transaction,
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
@@ -263,14 +263,14 @@ impl Chain {
                         // pending_revert_blocks.
                         assert_eq!(should_be_next_bad_block, true);
 
-                        log::info!("push new bad block {}", hex::encode(l2block.hash()));
                         self.bad_blocks.push(l2block.clone());
+                        log::info!("push new bad block {}", hex::encode(l2block.hash()));
 
                         // Update bad block proof, since block height changed
                         update_block_smt(db, &l2block)?;
-                        let root: [u8; 32] = global_state.block().merkle_root().unpack();
-                        update_bad_block_proof(db, root.into(), bad_block_context)?;
-                        log::info!("bad bock proof updated");
+                        let root: H256 = global_state.block().merkle_root().unpack();
+                        update_bad_block_proof(db, root, bad_block_context)?;
+                        log::info!("local bad bock proof updated");
 
                         return Ok(SyncEvent::BadBlock {
                             context: bad_block_context.to_owned(),
@@ -284,8 +284,10 @@ impl Chain {
                         global_state.clone(),
                         deposit_requests,
                     )? {
-                        log::info!("found a bad block 0x{} ", hex::encode(l2block.hash()));
+                        log::info!("found a bad block 0x{}", hex::encode(l2block.hash()));
+
                         db.rollback()?;
+                        log::info!("rollback db because of bad block found");
 
                         // Ensure block smt is updated to be able to build correct block proof. It doesn't
                         // matter current l2block is bad or not.
@@ -320,6 +322,14 @@ impl Chain {
                     if local_bad_block.is_none()
                         || local_block_number > Some(challenge_block_number)
                     {
+                        {
+                            let h = hex::encode::<[u8; 32]>(context.target.block_hash().unpack());
+                            let i: u32 = context.target.target_index().unpack();
+                            let t = ChallengeTargetType::try_from(context.target.target_type())
+                                .map_err(|_| anyhow!("invalid challenge type"))?;
+                            log::info!("cancelable challenge block 0x{} target {} {:?}", h, i, t);
+                        }
+
                         use crate::challenge::build_verify_context;
                         let generator = Arc::clone(&self.generator);
 
@@ -343,12 +353,13 @@ impl Chain {
                     let (_, reverted_blocks) = self.bad_blocks.split_at(challenge_block_pos);
 
                     // Either valid challenge or we don't have correct state to verify
-                    // it (aka challenge block after our caught bad block)
+                    // it (aka challenge block after our local bad block)
                     // If block is same, we don't care about target index and type, just want this
                     // block to be reverted.
                     let maybe_context = crate::challenge::build_revert_context(db, reverted_blocks);
                     // Rollback db, only update reverted_block_smt in L1ActionContext::Revert
                     db.rollback()?;
+                    log::info!("rollback db after prepare context for revert");
 
                     Ok(SyncEvent::WaitChallenge {
                         context: maybe_context?,
@@ -368,30 +379,30 @@ impl Chain {
                     }
                 }
                 (Status::Halting, L1ActionContext::Revert { reverted_blocks }) => {
-                    let first_reverted_block =
-                        reverted_blocks.first().expect("first block not found");
+                    let first_reverted_block = reverted_blocks.first().expect("first block");
                     let first_reverted_block_number = first_reverted_block.number().unpack();
-                    log::info!("first reverted block {}", first_reverted_block_number);
+                    log::debug!("first reverted block {}", first_reverted_block_number);
 
                     let status: u8 = global_state.status().into();
                     assert_eq!(Status::try_from(status), Ok(Status::Running));
 
                     // Valid block should not be reverted
                     let bad_block_context = self.bad_block_context.as_ref();
-                    let caught_bad_block = bad_block_context.map(|c| c.witness.raw_l2block());
-                    let caught_bad_block_number =
-                        caught_bad_block.as_ref().map(|b| b.number().unpack());
-                    let caught_bad_block_hash = caught_bad_block.as_ref().map(|b| b.hash());
-                    if caught_bad_block.is_none()
-                        || caught_bad_block_number > Some(first_reverted_block_number)
-                    {
-                        if let Some(caught_bad_block_hash) = caught_bad_block_hash {
-                            // First reverted block number is smaller than caught bad block
-                            let find_caught_block = reverted_blocks
-                                .iter()
-                                .find(|b| b.hash() == caught_bad_block_hash);
+                    let local_bad_block = bad_block_context.map(|c| c.witness.raw_l2block());
+                    let local_bad_block_number =
+                        local_bad_block.as_ref().map(|b| b.number().unpack());
+                    let local_bad_block_hash = local_bad_block.as_ref().map(|b| b.hash());
 
-                            if find_caught_block.is_none() {
+                    if local_bad_block.is_none()
+                        || local_bad_block_number > Some(first_reverted_block_number)
+                    {
+                        if let Some(local_bad_block_hash) = local_bad_block_hash {
+                            // First reverted block number is smaller than local bad block
+                            let has_local_block = reverted_blocks
+                                .iter()
+                                .any(|b| b.hash() == local_bad_block_hash);
+
+                            if !has_local_block {
                                 panic!("chain forked");
                             }
                         }
@@ -406,6 +417,7 @@ impl Chain {
                         .expect("first reverted block should be known");
 
                     // Both bad blocks and reverted_blocks should be ascended and matched
+                    // Since our local bad_blocks is ascended, simply compare hashes is ok
                     let pending_revert_blocks = self.bad_blocks.split_off(first_reverted_block_pos);
                     let pending_slice = pending_revert_blocks.iter().map(|b| b.raw().hash());
                     let reverted_slice = reverted_blocks.iter().map(|b| b.hash());
@@ -415,26 +427,82 @@ impl Chain {
                     );
 
                     // Update reverted block smt
-                    let mut reverted_block_smt = db.reverted_block_smt()?;
-                    for reverted_block in pending_revert_blocks.iter() {
-                        reverted_block_smt.update(reverted_block.hash().into(), H256::one())?;
+                    {
+                        let mut reverted_block_smt = db.reverted_block_smt()?;
+                        for reverted_block in pending_revert_blocks.iter() {
+                            reverted_block_smt.update(reverted_block.hash().into(), H256::one())?;
+                        }
+                        let local_reverted_block_root = reverted_block_smt.root();
+
+                        let global_reverted_block_root: H256 =
+                            global_state.reverted_block_root().unpack();
+                        assert_eq!(local_reverted_block_root, &global_reverted_block_root);
+
+                        db.set_reverted_block_smt_root(*local_reverted_block_root)?;
+                        log::debug!("update reverted block smt");
                     }
-                    let global_state_reverted_block_root: [u8; 32] =
-                        global_state.reverted_block_root().unpack();
-                    let reverted_block_smt_root = reverted_block_smt.root();
-                    assert_eq!(
-                        reverted_block_smt_root,
-                        &global_state_reverted_block_root.into()
-                    );
-                    db.set_reverted_block_smt_root(*reverted_block_smt_root)?;
+
+                    // Revert block smt (delete reverted block hashes)
+                    {
+                        let mut block_smt = db.block_smt()?;
+                        for reverted_block in pending_revert_blocks.iter() {
+                            block_smt.update(H256::from(reverted_block.smt_key()), H256::zero())?;
+                        }
+                        let block_smt_root = block_smt.root().to_owned();
+                        let local_block_smt = BlockMerkleState::new_builder()
+                            .merkle_root(Into::<[u8; 32]>::into(block_smt_root).pack())
+                            .count(first_reverted_block.number())
+                            .build();
+
+                        let global_block_smt = global_state.block();
+                        assert_eq!(local_block_smt.as_slice(), global_block_smt.as_slice());
+
+                        db.set_block_smt_root(block_smt_root)?;
+                        log::debug!("revert block smt");
+                    }
 
                     // Update pending clearing blocks
                     self.pending_revert_blocks.extend(pending_revert_blocks);
 
+                    // Revert account smt
+                    {
+                        let prev_account_smt = first_reverted_block.prev_account();
+                        let global_account_smt = global_state.account();
+                        assert_eq!(prev_account_smt.as_slice(), global_account_smt.as_slice());
+
+                        let prev_account_root: H256 = prev_account_smt.merkle_root().unpack();
+                        db.set_account_smt_root(prev_account_root)?;
+                        db.set_account_count(prev_account_smt.count().unpack())?;
+                        log::debug!("revert account smt");
+                    }
+
+                    // Revert tip block
+                    {
+                        let parent_block_hash: H256 =
+                            first_reverted_block.parent_block_hash().unpack();
+                        let global_tip_block_hash: H256 = global_state.tip_block_hash().unpack();
+                        assert_eq!(parent_block_hash, global_tip_block_hash);
+
+                        db.set_tip_block_hash(parent_block_hash)?;
+                        log::debug!("revert tip block hash");
+
+                        let parent_block = db
+                            .get_block(&parent_block_hash)?
+                            .expect("reverted parent block");
+
+                        self.local_state.tip = parent_block;
+                        log::debug!("revert chain local state tip block");
+                    }
+
+                    let local_tip_block_number = self.local_state.tip.raw().number();
+                    log::info!("revert to block {}", local_tip_block_number.unpack());
+
                     // Check whether our bad block is reverted
-                    if caught_bad_block_hash == Some(first_reverted_block_hash) {
+                    if local_bad_block_hash == Some(first_reverted_block_hash) {
                         self.bad_block_context = None;
                         assert_eq!(self.bad_blocks.is_empty(), true);
+
+                        log::info!("clear local bad block");
                     }
 
                     match self.bad_block_context {
@@ -463,7 +531,7 @@ impl Chain {
         self.last_sync_event = update()?;
         self.local_state.last_global_state = global_state;
         self.local_state.last_synced = l2block_committed_info;
-        log::info!("last sync event {:?}", self.last_sync_event);
+        log::debug!("last sync event {:?}", self.last_sync_event);
 
         Ok(())
     }
@@ -558,44 +626,39 @@ impl Chain {
         for action in param.updates {
             self.update_l1action(&db, action)?;
             db.commit()?;
+            log::debug!("commit db after sync");
 
+            let tip_block_hash: H256 = self.local_state.tip.hash().into();
             if let SyncEvent::Success = self.last_sync_event {
                 // update mem pool state
-                self.mem_pool
-                    .lock()
-                    .notify_new_tip(self.local_state.tip.hash().into())?;
-                // check consistency of account SMT
-                {
-                    // check account SMT, should be able to calculate account state root
-                    let expected_account_root: H256 = self
-                        .local_state
-                        .tip
-                        .raw()
-                        .post_account()
-                        .merkle_root()
-                        .unpack();
-                    let state_db = StateDBTransaction::from_checkpoint(
-                        &db,
-                        CheckPoint::from_block_hash(
-                            &db,
-                            self.local_state.tip().hash().into(),
-                            SubState::Block,
-                        )?,
-                        StateDBMode::ReadOnly,
-                    )?;
-                    assert_eq!(
-                        state_db.account_smt().unwrap().root(),
-                        &expected_account_root,
-                        "account root consistent in DB"
-                    );
-                    let tree = state_db.account_state_tree()?;
-                    let current_account_root = tree.calculate_root().unwrap();
-                    assert_eq!(
-                        current_account_root, expected_account_root,
-                        "check account tree"
-                    );
-                }
+                self.mem_pool.lock().notify_new_tip(tip_block_hash)?;
             }
+
+            // check consistency of account SMT
+            let expected_account_root: H256 = {
+                let raw_block = self.local_state.tip.raw();
+                raw_block.post_account().merkle_root().unpack()
+            };
+
+            let state_db = StateDBTransaction::from_checkpoint(
+                &db,
+                CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block)?,
+                StateDBMode::ReadOnly,
+            )?;
+
+            assert_eq!(
+                state_db.account_smt().unwrap().root(),
+                &expected_account_root,
+                "account root consistent in DB"
+            );
+
+            let tree = state_db.account_state_tree()?;
+            let current_account_root = tree.calculate_root().unwrap();
+
+            assert_eq!(
+                current_account_root, expected_account_root,
+                "check account tree"
+            );
         }
 
         Ok(())

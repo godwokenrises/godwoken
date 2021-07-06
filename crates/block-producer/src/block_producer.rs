@@ -15,7 +15,7 @@ use anyhow::{anyhow, Context, Result};
 use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
 use gw_chain::chain::Chain;
-use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_common::{h256_ext::H256Ext, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_config::BlockProducerConfig;
 use gw_generator::{Generator, RollupContext};
 use gw_jsonrpc_types::test_mode::TestModePayload;
@@ -345,6 +345,11 @@ impl BlockProducer {
         log::debug!("available custodians {:?}", available_custodians);
 
         // produce block
+        let reverted_block_root: H256 = {
+            let db = self.store.begin_transaction();
+            let smt = db.reverted_block_smt()?;
+            smt.root().to_owned()
+        };
         let param = ProduceBlockParam {
             db: self.store.begin_transaction(),
             generator: &self.generator,
@@ -355,6 +360,7 @@ impl BlockProducer {
             deposit_requests: deposit_cells.iter().map(|d| &d.request).cloned().collect(),
             withdrawal_requests,
             parent_block: &parent_block,
+            reverted_block_root,
             rollup_config_hash: &self.rollup_config_hash,
             max_withdrawal_capacity,
             available_custodians,
@@ -459,22 +465,20 @@ impl BlockProducer {
                     let db = self.store.begin_transaction();
                     let block_smt = db.reverted_block_smt()?;
 
-                    let local_root: [u8; 32] = block_smt.root().to_owned().into();
-                    let last_reverted_root: [u8; 32] = global_state.reverted_block_root().unpack();
-                    if local_root != last_reverted_root {
-                        // out of sync, wait until synced
-                        RollupSubmitBlock::new_builder()
-                    } else {
-                        let proof = block_smt
-                            .merkle_proof(vec![revert_block.smt_key().into()])?
-                            .compile(vec![(
-                                revert_block.smt_key().into(),
-                                revert_block.hash().into(),
-                            )])?;
-                        RollupSubmitBlock::new_builder()
-                            .reverted_block_hashes(vec![revert_block.hash()].pack())
-                            .reverted_block_proof(proof.0.pack())
-                    }
+                    let local_root: &H256 = block_smt.root();
+                    let global_revert_block_root: H256 =
+                        global_state.reverted_block_root().unpack();
+                    assert_eq!(local_root, &global_revert_block_root);
+
+                    let revert_block_hash = revert_block.hash();
+                    let proof = block_smt
+                        .merkle_proof(vec![H256::from(revert_block_hash)])?
+                        .compile(vec![(H256::from(revert_block_hash), H256::one())])?;
+                    log::info!("submit revert block {}", hex::encode(revert_block_hash));
+
+                    RollupSubmitBlock::new_builder()
+                        .reverted_block_hashes(vec![revert_block.hash()].pack())
+                        .reverted_block_proof(proof.0.pack())
                 }
                 None => RollupSubmitBlock::new_builder(),
             };

@@ -153,6 +153,11 @@ impl StoreTransaction {
         )
     }
 
+    pub fn set_tip_block_hash(&self, block_hash: H256) -> Result<(), Error> {
+        let block_hash: [u8; 32] = block_hash.into();
+        self.insert_raw(COLUMN_META, &META_TIP_BLOCK_HASH_KEY, &block_hash)
+    }
+
     pub fn get_tip_block(&self) -> Result<packed::L2Block, Error> {
         let tip_block_hash = self.get_tip_block_hash()?;
         Ok(self.get_block(&tip_block_hash)?.expect("get tip block"))
