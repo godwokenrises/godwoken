@@ -136,20 +136,6 @@ impl Challenger {
                 }
                 self.cancel_challenge(rollup, context, median_time).await
             }
-            SyncEvent::WaitResolvedChallenge => {
-                if TestMode::Enable == self.tests_control.mode() {
-                    match self.tests_control.payload().await {
-                        Some(TestModePayload::WaitForChallengeMaturity) => {
-                            self.tests_control
-                                .wait_for_challenge_maturity(rollup.status()?)
-                                .await?
-                        }
-                        Some(TestModePayload::None) => self.tests_control.none().await?,
-                        _ => unreachable!(),
-                    }
-                }
-                Ok(())
-            }
             SyncEvent::WaitChallenge { context } => {
                 if let Some(ref tests_control) = self.tests_control {
                     match tests_control.payload().await {

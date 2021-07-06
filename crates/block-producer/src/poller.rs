@@ -7,7 +7,7 @@ use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{Params as ClientParams, Transport};
 use ckb_fixed_hash::H256;
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
-use gw_generator::{ChallengeContext, RollupContext};
+use gw_generator::RollupContext;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, TransactionWithStatus, Uint32};
 use gw_types::{
     bytes::Bytes,
@@ -169,26 +169,11 @@ impl ChainUpdater {
                 }
             }
             RollupActionUnion::RollupEnterChallenge(challenge) => {
-                match self.rpc_client.query_verified_challenge_cell().await? {
-                    Some(challenge_cell) => {
-                        let challenge_lock_args = {
-                            let lock_args: Bytes = challenge_cell.output.lock().args().unpack();
-                            match ChallengeLockArgsReader::verify(&lock_args.slice(32..), false) {
-                                Ok(_) => ChallengeLockArgs::new_unchecked(lock_args.slice(32..)),
-                                Err(err) => {
-                                    return Err(anyhow!("invalid challenge lock args {}", err))
-                                }
-                            }
-                        };
+                let challenge_lock_args = self.extract_challenge_lock_args(&tx).await?;
 
-                        let context = ChallengeContext {
-                            target: challenge_lock_args.target(),
-                            witness: challenge.witness(),
-                        };
-
-                        L1ActionContext::Challenge { context }
-                    }
-                    None => L1ActionContext::ResolvedChallenge,
+                L1ActionContext::Challenge {
+                    target: challenge_lock_args.target(),
+                    witness: challenge.witness(),
                 }
             }
             RollupActionUnion::RollupCancelChallenge(_) => L1ActionContext::CancelChallenge,
@@ -255,6 +240,29 @@ impl ChainUpdater {
         };
 
         RollupAction::from_slice(&output_type).map_err(|e| anyhow!("invalid rollup action {}", e))
+    }
+
+    async fn extract_challenge_lock_args(&self, tx: &Transaction) -> Result<ChallengeLockArgs> {
+        let challenge_script_type_hash = self
+            .rollup_context
+            .rollup_config
+            .challenge_script_type_hash();
+
+        for cell_output in tx.raw().outputs().into_iter() {
+            if cell_output.lock().code_hash() != challenge_script_type_hash
+                || cell_output.lock().hash_type() != ScriptHashType::Type.into()
+            {
+                continue;
+            }
+
+            let lock_args: Bytes = cell_output.lock().args().unpack();
+            return match ChallengeLockArgsReader::verify(&lock_args.slice(32..), false) {
+                Ok(_) => Ok(ChallengeLockArgs::new_unchecked(lock_args.slice(32..))),
+                Err(err) => Err(anyhow!("invalid challenge lock args {}", err)),
+            };
+        }
+
+        unreachable!("challenge output not found");
     }
 
     async fn extract_deposit_requests(&self, tx: &Transaction) -> Result<Vec<DepositRequest>> {

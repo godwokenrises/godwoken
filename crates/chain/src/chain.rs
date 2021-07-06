@@ -15,7 +15,7 @@ use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, Status},
     packed::{
-        BlockMerkleState, ChallengeWitness, DepositRequest, GlobalState, L2Block,
+        BlockMerkleState, ChallengeTarget, ChallengeWitness, DepositRequest, GlobalState, L2Block,
         L2BlockCommittedInfo, RawL2Block, RollupConfig, Script, Transaction,
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
@@ -41,9 +41,9 @@ pub enum L1ActionContext {
         reverted_block_hashes: Vec<[u8; 32]>,
     },
     Challenge {
-        context: ChallengeContext,
+        target: ChallengeTarget,
+        witness: ChallengeWitness,
     },
-    ResolvedChallenge,
     CancelChallenge,
     Revert {
         reverted_blocks: Vec<RawL2Block>,
@@ -87,7 +87,6 @@ pub enum SyncEvent {
     WaitChallenge {
         context: crate::challenge::RevertContext,
     },
-    WaitResolvedChallenge,
 }
 
 /// concrete type aliases
@@ -307,15 +306,7 @@ impl Chain {
                         Ok(SyncEvent::Success)
                     }
                 }
-                (Status::Running, L1ActionContext::ResolvedChallenge) => {
-                    log::info!("synced resolved challenge");
-
-                    let status: u8 = global_state.status().into();
-                    assert_eq!(Status::try_from(status), Ok(Status::Halting));
-
-                    Ok(SyncEvent::WaitResolvedChallenge)
-                }
-                (Status::Running, L1ActionContext::Challenge { context }) => {
+                (Status::Running, L1ActionContext::Challenge { target, witness }) => {
                     let status: u8 = global_state.status().into();
                     assert_eq!(Status::try_from(status), Ok(Status::Halting));
 
@@ -324,55 +315,46 @@ impl Chain {
                         bad_block_context.map(|ctx| ctx.witness.raw_l2block())
                     };
 
-                    let challenge_block_number = context.witness.raw_l2block().number().unpack();
+                    let challenge_block_number = witness.raw_l2block().number().unpack();
                     let local_bad_block_number =
                         local_bad_block.as_ref().map(|b| b.number().unpack());
 
                     {
                         let n = challenge_block_number;
-                        let h = hex::encode::<[u8; 32]>(context.target.block_hash().unpack());
-                        let i: u32 = context.target.target_index().unpack();
-                        let t = ChallengeTargetType::try_from(context.target.target_type())
+                        let h = hex::encode::<[u8; 32]>(target.block_hash().unpack());
+                        let i: u32 = target.target_index().unpack();
+                        let t = ChallengeTargetType::try_from(target.target_type())
                             .map_err(|_| anyhow!("invalid challenge type"))?;
                         log::info!("sync challenge block {} 0x{} target {} {:?}", n, h, i, t);
-                    }
-
-                    // Future ongoing challenge
-                    if local_bad_block_number.is_some()
-                        && Some(challenge_block_number) > local_bad_block_number
-                    {
-                        log::info!("found a future ongoing challenge context");
-                        return Ok(SyncEvent::WaitResolvedChallenge);
                     }
 
                     // Challenge we can cancel:
                     // 1. no bad block found (aka self.bad_block_context is none)
                     // 2. challenge block number is smaller than local bad block
-                    let local_tip_block = self.local_state.tip.raw().number().unpack();
-                    if (local_bad_block.is_none() && local_tip_block >= challenge_block_number)
+                    let local_tip_block_number = self.local_state.tip.raw().number().unpack();
+                    if (local_bad_block.is_none()
+                        && local_tip_block_number >= challenge_block_number)
                         || local_bad_block_number > Some(challenge_block_number)
                     {
                         log::info!("challenge cancelable, build verify context");
 
                         let generator = Arc::clone(&self.generator);
                         let context =
-                            crate::challenge::build_verify_context(generator, db, &context.target)?;
+                            crate::challenge::build_verify_context(generator, db, &target)?;
 
                         return Ok(SyncEvent::BadChallenge { context });
                     }
 
-                    // Maybe previous bad block number is being challenged again
-                    let challenge_block_hash: [u8; 32] = context.target.block_hash().unpack();
+                    if local_bad_block.is_none() && local_tip_block_number < challenge_block_number
+                    {
+                        unreachable!("impossible challenge")
+                    }
+
+                    // Check block hash match
+                    let challenge_block_hash: [u8; 32] = target.block_hash().unpack();
                     if local_bad_block_number == Some(challenge_block_number) {
-                        let local_bad_block_hash =
-                            local_bad_block.map(|lb| lb.hash()).expect("exists");
-
-                        if local_bad_block_hash != challenge_block_hash {
-                            log::info!("previous reverted block number is challenged again");
-                        }
-
-                        // Treat this as future ongoing challenge
-                        return Ok(SyncEvent::WaitResolvedChallenge);
+                        let local_bad_block_hash = local_bad_block.map(|b| b.hash());
+                        assert_eq!(local_bad_block_hash, Some(challenge_block_hash));
                     }
 
                     // Challenge block should be known
@@ -399,6 +381,8 @@ impl Chain {
                 (Status::Halting, L1ActionContext::CancelChallenge) => {
                     let status: u8 = global_state.status().into();
                     assert_eq!(Status::try_from(status), Ok(Status::Running));
+
+                    log::info!("challenge cancelled");
 
                     match self.bad_block_context {
                         // Previous challenge miss right target, we should challenge it
