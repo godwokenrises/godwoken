@@ -105,6 +105,8 @@ impl Challenger {
         }
 
         let last_sync_event = { self.chain.lock().last_sync_event().to_owned() };
+        log::debug!("load chain last sync event {:?}", last_sync_event);
+
         match last_sync_event {
             SyncEvent::Success => Ok(()),
             SyncEvent::BadBlock { context } => {

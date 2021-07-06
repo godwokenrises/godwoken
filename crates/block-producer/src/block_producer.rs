@@ -209,6 +209,12 @@ impl BlockProducer {
             }
         }
 
+        let last_sync_event = { self.chain.lock().last_sync_event().to_owned() };
+        match last_sync_event {
+            SyncEvent::Success => (),
+            _ => return Ok(()),
+        }
+
         // assume the chain is updated
         let tip_block = match event {
             ChainEvent::Reverted {
