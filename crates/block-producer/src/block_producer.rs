@@ -14,7 +14,7 @@ use crate::{
 use anyhow::{anyhow, Context, Result};
 use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
-use gw_chain::chain::Chain;
+use gw_chain::chain::{Chain, SyncEvent};
 use gw_common::{h256_ext::H256Ext, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_config::BlockProducerConfig;
 use gw_generator::{Generator, RollupContext};
@@ -204,8 +204,8 @@ impl BlockProducer {
                 Some(TestModePayload::Challenge { .. }) // Payload not match
                 | Some(TestModePayload::WaitForChallengeMaturity) // Payload not match
                 | None => return Ok(()), // Wait payload
-                Some(TestModePayload::None) => tests_control.none().await?, // Produce block
-                Some(TestModePayload::BadBlock { .. }) => (), // Produce block but create bad block
+                Some(TestModePayload::None) // Produce block
+                | Some(TestModePayload::BadBlock { .. }) => (), // Produce block but create bad block
             }
         }
 
@@ -262,6 +262,14 @@ impl BlockProducer {
         median_time: Duration,
         rollup_cell: CellInfo,
     ) -> Result<()> {
+        if TestMode::Enable == self.tests_control.mode() {
+            match self.tests_control.payload().await {
+                Some(TestModePayload::None) => self.tests_control.none().await?,
+                Some(TestModePayload::BadBlock { .. }) => (),
+                _ => unreachable!(),
+            }
+        }
+
         let block_producer_id = self.config.account_id;
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
