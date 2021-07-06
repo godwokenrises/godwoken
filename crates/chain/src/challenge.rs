@@ -72,6 +72,7 @@ pub struct RevertContext {
     pub revert_witness: RevertWitness,
 }
 
+/// NOTE: Caller should rollback db, only update reverted_block_smt in L1ActionContext::Revert
 pub fn build_revert_context(
     db: &StoreTransaction,
     reverted_blocks: &[L2Block],
@@ -83,15 +84,20 @@ pub fn build_revert_context(
 
     // Build reverted block proof
     let (post_reverted_block_root, reverted_block_proof) = {
-        let smt = db.reverted_block_smt()?;
-        let to_leave = |b: &RawL2Block| (b.smt_key().into(), H256::zero());
+        let mut smt = db.reverted_block_smt()?;
+        let to_key = |b: &RawL2Block| H256::from(b.hash());
+        let to_leave = |b: &RawL2Block| (to_key(b), H256::one());
 
-        let smt_keys = reverted_raw_blocks.iter().map(|rb| rb.smt_key().into());
-        let leaves = reverted_raw_blocks.iter().map(to_leave);
-        let proof = smt
-            .merkle_proof(smt_keys.collect())?
-            .compile(leaves.collect())?;
-        (smt.root().to_owned(), proof)
+        let keys: Vec<H256> = reverted_raw_blocks.iter().map(to_key).collect();
+        for key in keys.iter() {
+            smt.update(key.to_owned(), H256::one())?;
+        }
+
+        let root = smt.root().to_owned();
+        let leaves = reverted_raw_blocks.iter().map(to_leave).collect();
+        let proof = smt.merkle_proof(keys)?.compile(leaves)?;
+
+        (root, proof)
     };
 
     let reverted_blocks = RawL2BlockVec::new_builder()

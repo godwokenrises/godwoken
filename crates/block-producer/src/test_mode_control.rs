@@ -316,8 +316,9 @@ impl TestModeRPC for TestModeControl {
     }
 
     async fn produce_block(&self, payload: TestModePayload) -> Result<()> {
-        *self.payload.lock().await = Some(payload);
         log::info!("receive tests produce block payload: {:?}", payload);
+
+        *self.payload.lock().await = Some(payload);
 
         Ok(())
     }

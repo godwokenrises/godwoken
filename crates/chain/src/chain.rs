@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use gw_common::{sparse_merkle_tree, state::State, H256};
+use gw_common::{h256_ext::H256Ext, sparse_merkle_tree, state::State, H256};
 use gw_generator::{
     generator::{StateTransitionArgs, StateTransitionResult},
     ChallengeContext, Generator,
@@ -346,10 +346,12 @@ impl Chain {
                     // it (aka challenge block after our caught bad block)
                     // If block is same, we don't care about target index and type, just want this
                     // block to be reverted.
-                    // let context = crate::challenge::build_revert_context(db, )
-                    use crate::challenge::build_revert_context;
+                    let maybe_context = crate::challenge::build_revert_context(db, reverted_blocks);
+                    // Rollback db, only update reverted_block_smt in L1ActionContext::Revert
+                    db.rollback()?;
+
                     Ok(SyncEvent::WaitChallenge {
-                        context: build_revert_context(db, reverted_blocks)?,
+                        context: maybe_context?,
                     })
                 }
                 (Status::Halting, L1ActionContext::CancelChallenge) => {
@@ -415,10 +417,7 @@ impl Chain {
                     // Update reverted block smt
                     let mut reverted_block_smt = db.reverted_block_smt()?;
                     for reverted_block in pending_revert_blocks.iter() {
-                        reverted_block_smt.update(
-                            reverted_block.smt_key().into(),
-                            reverted_block.hash().into(),
-                        )?;
+                        reverted_block_smt.update(reverted_block.hash().into(), H256::one())?;
                     }
                     let global_state_reverted_block_root: [u8; 32] =
                         global_state.reverted_block_root().unpack();
@@ -464,6 +463,7 @@ impl Chain {
         self.last_sync_event = update()?;
         self.local_state.last_global_state = global_state;
         self.local_state.last_synced = l2block_committed_info;
+        log::info!("last sync event {:?}", self.last_sync_event);
 
         Ok(())
     }
