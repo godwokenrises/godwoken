@@ -43,6 +43,7 @@ pub enum L1ActionContext {
     Challenge {
         context: ChallengeContext,
     },
+    ResolvedChallenge,
     CancelChallenge,
     Revert {
         reverted_blocks: Vec<RawL2Block>,
@@ -86,6 +87,7 @@ pub enum SyncEvent {
     WaitChallenge {
         context: crate::challenge::RevertContext,
     },
+    WaitResolvedChallenge,
 }
 
 /// concrete type aliases
@@ -305,6 +307,14 @@ impl Chain {
                         Ok(SyncEvent::Success)
                     }
                 }
+                (Status::Running, L1ActionContext::ResolvedChallenge) => {
+                    log::info!("synced resolved challenge");
+
+                    let status: u8 = global_state.status().into();
+                    assert_eq!(Status::try_from(status), Ok(Status::Halting));
+
+                    Ok(SyncEvent::WaitResolvedChallenge)
+                }
                 (Status::Running, L1ActionContext::Challenge { context }) => {
                     let status: u8 = global_state.status().into();
                     assert_eq!(Status::try_from(status), Ok(Status::Halting));
@@ -314,13 +324,23 @@ impl Chain {
                         bad_block_context.map(|ctx| ctx.witness.raw_l2block())
                     };
 
+                    let challenge_block_number = context.witness.raw_l2block().number().unpack();
+                    let local_bad_block_number =
+                        local_bad_block.as_ref().map(|b| b.number().unpack());
+
+                    // Future ongoing challenge
+                    if local_bad_block_number.is_some()
+                        && Some(challenge_block_number) > local_bad_block_number
+                    {
+                        log::debug!("found a future ongoing challenge context");
+                        return Ok(SyncEvent::WaitResolvedChallenge);
+                    }
+
                     // Challenge we can cancel:
                     // 1. no bad block found (aka self.bad_block_context is none)
                     // 2. challenge block number is smaller than local bad block
-                    let challenge_block_number = context.witness.raw_l2block().number().unpack();
-                    let local_block_number = local_bad_block.as_ref().map(|b| b.number().unpack());
                     if local_bad_block.is_none()
-                        || local_block_number > Some(challenge_block_number)
+                        || local_bad_block_number > Some(challenge_block_number)
                     {
                         {
                             let h = hex::encode::<[u8; 32]>(context.target.block_hash().unpack());
@@ -330,17 +350,16 @@ impl Chain {
                             log::info!("cancelable challenge block 0x{} target {} {:?}", h, i, t);
                         }
 
-                        use crate::challenge::build_verify_context;
                         let generator = Arc::clone(&self.generator);
+                        let context =
+                            crate::challenge::build_verify_context(generator, db, &context.target)?;
 
-                        return Ok(SyncEvent::BadChallenge {
-                            context: build_verify_context(generator, db, &context.target)?,
-                        });
+                        return Ok(SyncEvent::BadChallenge { context });
                     }
 
                     // Check forked
                     let challenge_block_hash: [u8; 32] = context.target.block_hash().unpack();
-                    if local_block_number == Some(challenge_block_number) {
+                    if local_bad_block_number == Some(challenge_block_number) {
                         let local_block_hash = local_bad_block.map(|lb| lb.hash()).expect("exists");
                         assert_eq!(local_block_hash, challenge_block_hash, "challenge forked");
                     }
@@ -369,7 +388,6 @@ impl Chain {
                     let status: u8 = global_state.status().into();
                     assert_eq!(Status::try_from(status), Ok(Status::Running));
 
-                    // TODO: If block hash matched, forked
                     match self.bad_block_context {
                         // Previous challenge miss right target, we should challenge it
                         Some(ref bad_block) => Ok(SyncEvent::BadBlock {

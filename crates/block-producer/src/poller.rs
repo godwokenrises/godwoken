@@ -169,22 +169,26 @@ impl ChainUpdater {
                 }
             }
             RollupActionUnion::RollupEnterChallenge(challenge) => {
-                let challenge_cell = {
-                    let opt_cell = self.rpc_client.query_verified_challenge_cell().await?;
-                    opt_cell.ok_or_else(|| anyhow!("challenge cell not found"))?
-                };
-                let challenge_lock_args = {
-                    let lock_args: Bytes = challenge_cell.output.lock().args().unpack();
-                    match ChallengeLockArgsReader::verify(&lock_args.slice(32..), false) {
-                        Ok(_) => ChallengeLockArgs::new_unchecked(lock_args.slice(32..)),
-                        Err(err) => return Err(anyhow!("invalid challenge lock args {}", err)),
-                    }
-                };
+                match self.rpc_client.query_verified_challenge_cell().await? {
+                    Some(challenge_cell) => {
+                        let challenge_lock_args = {
+                            let lock_args: Bytes = challenge_cell.output.lock().args().unpack();
+                            match ChallengeLockArgsReader::verify(&lock_args.slice(32..), false) {
+                                Ok(_) => ChallengeLockArgs::new_unchecked(lock_args.slice(32..)),
+                                Err(err) => {
+                                    return Err(anyhow!("invalid challenge lock args {}", err))
+                                }
+                            }
+                        };
 
-                let target = challenge_lock_args.target();
-                let witness = challenge.witness();
-                L1ActionContext::Challenge {
-                    context: ChallengeContext { target, witness },
+                        let context = ChallengeContext {
+                            target: challenge_lock_args.target(),
+                            witness: challenge.witness(),
+                        };
+
+                        L1ActionContext::Challenge { context }
+                    }
+                    None => L1ActionContext::ResolvedChallenge,
                 }
             }
             RollupActionUnion::RollupCancelChallenge(_) => L1ActionContext::CancelChallenge,
