@@ -116,10 +116,7 @@ impl Challenger {
                     }
                 }
                 {
-                    let hash = {
-                        let h: [u8; 32] = context.target.block_hash().unpack();
-                        hex::encode(h)
-                    };
+                    let hash = hex::encode::<[u8; 32]>(context.target.block_hash().unpack());
                     let idx: u32 = context.target.target_index().unpack();
                     let type_ = ChallengeTargetType::try_from(context.target.target_type())
                         .map_err(|_| anyhow!("invalid challenge type"))?;
@@ -167,7 +164,10 @@ impl Challenger {
         }
 
         let block_numer = context.witness.raw_l2block().number().unpack();
-        let rewards_lock = self.wallet.lock_script().to_owned();
+        let rewards_lock = {
+            let challenger_config = &self.config.challenger_config;
+            challenger_config.rewards_receiver_lock.clone().into()
+        };
         let prev_state = rollup_state.get_state().to_owned();
         let enter_challenge =
             EnterChallenge::new(prev_state, &self.rollup_context, context, rewards_lock);
@@ -321,7 +321,7 @@ impl Challenger {
             query.await?
         };
         let prev_state = rollup_state.get_state().to_owned();
-        let burn_lock = self.config.burn_config.burn_lock.clone().into();
+        let burn_lock = self.config.challenger_config.burn_lock.clone().into();
 
         let revert = Revert::new(
             &self.rollup_context,

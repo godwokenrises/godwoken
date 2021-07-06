@@ -54,10 +54,14 @@ pub struct WalletConfig {
     pub lock: Script,
 }
 
+// NOTE: Rewards receiver lock must be different than lock in WalletConfig,
+// since stake_capacity(minus burnt) + challenge_capacity - tx_fee will never
+// every bigger or equal than stake_capacity(minus burnt) + challenge_capacity.
+// TODO: Support sudt stake ?
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct BurnConfig {
+pub struct ChallengerConfig {
+    pub rewards_receiver_lock: Script,
     pub burn_lock: Script,
-    pub burn_lock_dep: CellDep,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -76,7 +80,7 @@ pub struct BlockProducerConfig {
     pub l1_sudt_type_dep: CellDep,
     pub allowed_eoa_deps: HashMap<H256, CellDep>,
     pub allowed_contract_deps: HashMap<H256, CellDep>,
-    pub burn_config: BurnConfig,
+    pub challenger_config: ChallengerConfig,
     pub wallet_config: WalletConfig,
 }
 

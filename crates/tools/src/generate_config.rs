@@ -5,8 +5,8 @@ use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_config::{
-    BackendConfig, BlockProducerConfig, BurnConfig, ChainConfig, Config, GenesisConfig, NodeMode,
-    RPCClientConfig, RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
+    BackendConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config, GenesisConfig,
+    NodeMode, RPCClientConfig, RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
@@ -206,9 +206,9 @@ pub fn generate_config(
         polyjuice_validator_dep,
     );
 
-    let burn_config = BurnConfig {
+    let challenger_config = ChallengerConfig {
+        rewards_receiver_lock: gw_types::packed::Script::default().into(),
         burn_lock: gw_types::packed::Script::default().into(),
-        burn_lock_dep: gw_types::packed::CellDep::default().into(),
     };
 
     let wallet_config: WalletConfig = WalletConfig {
@@ -266,7 +266,7 @@ pub fn generate_config(
         l1_sudt_type_dep,
         allowed_eoa_deps,
         allowed_contract_deps,
-        burn_config,
+        challenger_config,
         wallet_config,
     });
     let genesis: GenesisConfig = GenesisConfig {
