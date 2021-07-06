@@ -328,27 +328,31 @@ impl Chain {
                     let local_bad_block_number =
                         local_bad_block.as_ref().map(|b| b.number().unpack());
 
+                    {
+                        let n = challenge_block_number;
+                        let h = hex::encode::<[u8; 32]>(context.target.block_hash().unpack());
+                        let i: u32 = context.target.target_index().unpack();
+                        let t = ChallengeTargetType::try_from(context.target.target_type())
+                            .map_err(|_| anyhow!("invalid challenge type"))?;
+                        log::info!("sync challenge block {} 0x{} target {} {:?}", n, h, i, t);
+                    }
+
                     // Future ongoing challenge
                     if local_bad_block_number.is_some()
                         && Some(challenge_block_number) > local_bad_block_number
                     {
-                        log::debug!("found a future ongoing challenge context");
+                        log::info!("found a future ongoing challenge context");
                         return Ok(SyncEvent::WaitResolvedChallenge);
                     }
 
                     // Challenge we can cancel:
                     // 1. no bad block found (aka self.bad_block_context is none)
                     // 2. challenge block number is smaller than local bad block
-                    if local_bad_block.is_none()
+                    let local_tip_block = self.local_state.tip.raw().number().unpack();
+                    if (local_bad_block.is_none() && local_tip_block >= challenge_block_number)
                         || local_bad_block_number > Some(challenge_block_number)
                     {
-                        {
-                            let h = hex::encode::<[u8; 32]>(context.target.block_hash().unpack());
-                            let i: u32 = context.target.target_index().unpack();
-                            let t = ChallengeTargetType::try_from(context.target.target_type())
-                                .map_err(|_| anyhow!("invalid challenge type"))?;
-                            log::info!("cancelable challenge block 0x{} target {} {:?}", h, i, t);
-                        }
+                        log::info!("challenge cancelable, build verify context");
 
                         let generator = Arc::clone(&self.generator);
                         let context =
@@ -357,11 +361,18 @@ impl Chain {
                         return Ok(SyncEvent::BadChallenge { context });
                     }
 
-                    // Check forked
+                    // Maybe previous bad block number is being challenged again
                     let challenge_block_hash: [u8; 32] = context.target.block_hash().unpack();
                     if local_bad_block_number == Some(challenge_block_number) {
-                        let local_block_hash = local_bad_block.map(|lb| lb.hash()).expect("exists");
-                        assert_eq!(local_block_hash, challenge_block_hash, "challenge forked");
+                        let local_bad_block_hash =
+                            local_bad_block.map(|lb| lb.hash()).expect("exists");
+
+                        if local_bad_block_hash != challenge_block_hash {
+                            log::info!("previous reverted block number is challenged again");
+                        }
+
+                        // Treat this as future ongoing challenge
+                        return Ok(SyncEvent::WaitResolvedChallenge);
                     }
 
                     // Challenge block should be known
@@ -376,7 +387,8 @@ impl Chain {
                     // If block is same, we don't care about target index and type, just want this
                     // block to be reverted.
                     let maybe_context = crate::challenge::build_revert_context(db, reverted_blocks);
-                    // Rollback db, only update reverted_block_smt in L1ActionContext::Revert
+                    // NOTE: Ensure db is rollback. build_revert_context will modify reverted_block_smt
+                    // to compute merkle proof and root, so must rollback changes.
                     db.rollback()?;
                     log::info!("rollback db after prepare context for revert");
 
