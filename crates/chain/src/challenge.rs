@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use gw_common::h256_ext::H256Ext;
-use gw_common::smt::SMT;
+use gw_common::smt::{Blake2bHasher, SMT};
 use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::sparse_merkle_tree::CompiledMerkleProof;
 use gw_common::state::State;
@@ -8,7 +8,7 @@ use gw_common::{blake2b::new_blake2b, H256};
 use gw_generator::traits::StateExt;
 use gw_generator::Generator;
 use gw_store::chain_view::ChainView;
-use gw_store::state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState};
+use gw_store::state_db::{CheckPoint, StateDBMode, StateDBTransaction, StateTree, SubState};
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::ChallengeTargetType;
@@ -81,6 +81,7 @@ pub fn build_revert_context(
     let reverted_blocks = reverted_blocks.iter();
     let reverted_raw_blocks: Vec<RawL2Block> = reverted_blocks.map(|rb| rb.raw()).collect();
     let (_, block_proof) = build_block_proof(db, &reverted_raw_blocks)?;
+    log::debug!("build main chain block proof");
 
     // Build reverted block proof
     let (post_reverted_block_root, reverted_block_proof) = {
@@ -99,6 +100,7 @@ pub fn build_revert_context(
 
         (root, proof)
     };
+    log::debug!("build reverted block proof");
 
     let reverted_blocks = RawL2BlockVec::new_builder()
         .extend(reverted_raw_blocks)
@@ -147,6 +149,7 @@ fn build_verify_withdrawal_witness(
     let withdrawal_proof = tree
         .merkle_proof(vec![H256::from_u32(withdrawal_index)])?
         .compile(leaves)?;
+    log::debug!("build withdrawal proof");
 
     // Get sender account script
     let sender_script_hash: [u8; 32] = withdrawal.raw().account_script_hash().unpack();
@@ -183,7 +186,10 @@ fn build_verify_transaction_signature_witness(
         .ok_or_else(|| anyhow!("block not found"))?;
 
     let (tx, tx_proof) = build_tx_proof(&block, tx_index)?;
+    log::debug!("build tx proof");
+
     let kv_witness = build_tx_kv_witness(db, &block, &tx.raw(), TxKvState::Signature)?;
+    log::debug!("build kv witness");
 
     let context = VerifyTransactionSignatureContext::new_builder()
         .account_count(kv_witness.account_count)
@@ -218,20 +224,22 @@ fn build_verify_transaction_witness(
     let raw_block = block.raw();
 
     let (tx, tx_proof) = build_tx_proof(&block, tx_index)?;
+    log::debug!("build tx proof");
+
     let kv_witness =
         build_tx_kv_witness(db, &block, &tx.raw(), TxKvState::Execution { generator })?;
-    let (block_hashes, block_proof) = build_block_proof(db, &[raw_block.clone()])?;
+    log::debug!("build kv witness");
 
     let return_data_hash = kv_witness
         .return_data_hash
         .expect("execution return data hash not found");
 
+    // TODO: block hashes and proof?
     let context = VerifyTransactionContext::new_builder()
         .account_count(kv_witness.account_count)
         .kv_state(kv_witness.kv_state)
         .scripts(kv_witness.scripts)
         .return_data_hash(return_data_hash)
-        .block_hashes(block_hashes)
         .build();
 
     let verify_witness = VerifyTransactionWitness::new_builder()
@@ -239,7 +247,6 @@ fn build_verify_transaction_witness(
         .raw_l2block(raw_block)
         .tx_proof(tx_proof.0.pack())
         .kv_state_proof(kv_witness.kv_state_proof.0.pack())
-        .block_hashes_proof(block_proof.0.pack())
         .context(context)
         .build();
 
@@ -307,22 +314,30 @@ fn build_tx_kv_witness(
     };
 
     let state_db = StateDBTransaction::from_checkpoint(db, check_point, StateDBMode::ReadOnly)?;
+    // Check account smt root
+    {
+        let local_smt = state_db.account_smt()?;
+        let local_smt_root = local_smt.root();
+        let prev_smt_root: H256 = raw_block.prev_account().merkle_root().unpack();
+
+        assert_eq!(local_smt_root, &prev_smt_root);
+    }
+
     let mut tree = state_db.account_state_tree()?;
     tree.tracker_mut().enable();
 
-    let get_script = |account_id: u32| -> Result<Option<Script>> {
-        let script_hash = tree.get_script_hash(account_id)?;
-        Ok(tree.get_script(&script_hash))
+    let get_script = |state: &StateTree<'_, '_>, account_id: u32| -> Result<Option<Script>> {
+        let script_hash = state.get_script_hash(account_id)?;
+        Ok(state.get_script(&script_hash))
     };
 
+    let sender_id = raw_tx.from_id().unpack();
+    let receiver_id = raw_tx.to_id().unpack();
+
     let sender_script =
-        get_script(raw_tx.from_id().unpack())?.ok_or_else(|| anyhow!("sender script not found"))?;
+        get_script(&tree, sender_id)?.ok_or_else(|| anyhow!("sender script not found"))?;
     let receiver_script =
-        get_script(raw_tx.to_id().unpack())?.ok_or_else(|| anyhow!("receiver script not found"))?;
-    let scripts = ScriptVec::new_builder()
-        .push(sender_script.clone())
-        .push(receiver_script.clone())
-        .build();
+        get_script(&tree, receiver_id)?.ok_or_else(|| anyhow!("receiver script not found"))?;
 
     let return_data_hash = match tx_kv_state {
         TxKvState::Execution { generator } => {
@@ -350,6 +365,7 @@ fn build_tx_kv_witness(
         }
         TxKvState::Signature => None,
     };
+    log::debug!("return data hash {:?}", return_data_hash);
 
     let account_count = tree.get_account_count()?;
     let touched_keys: Vec<H256> = {
@@ -358,6 +374,12 @@ fn build_tx_kv_witness(
         let clone_keys = keys.borrow().clone().into_iter();
         clone_keys.collect()
     };
+
+    // Discard all changes
+    drop(tree);
+    db.rollback()?;
+
+    tree = state_db.account_state_tree()?;
     let kv_state = {
         let keys = touched_keys.iter();
         let to_kv = keys.map(|k| {
@@ -366,10 +388,24 @@ fn build_tx_kv_witness(
         });
         to_kv.collect::<Result<Vec<(H256, H256)>>>()
     }?;
+
     let kv_state_proof = {
         let smt = state_db.account_smt()?;
         smt.merkle_proof(touched_keys)?.compile(kv_state.clone())?
     };
+    log::debug!("build kv state proof");
+
+    // Check proof
+    {
+        let prev_smt_root: H256 = raw_block.as_reader().prev_account().merkle_root().unpack();
+        let proof_root = kv_state_proof.compute_root::<Blake2bHasher>(kv_state.clone())?;
+        assert_eq!(proof_root, prev_smt_root);
+    }
+
+    let scripts = ScriptVec::new_builder()
+        .push(sender_script.clone())
+        .push(receiver_script.clone())
+        .build();
 
     let witness = TxKvWitness {
         account_count: account_count.pack(),

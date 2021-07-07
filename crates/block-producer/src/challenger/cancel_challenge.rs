@@ -249,9 +249,12 @@ impl CancelChallenge<VerifyWithdrawalWitness> {
 }
 
 fn build_post_global_state(prev_global_state: GlobalState) -> GlobalState {
-    let halting_status: u8 = Status::Running.into();
-    let builder = prev_global_state.clone().as_builder();
-    builder.status(halting_status.into()).build()
+    let running_status: u8 = Status::Running.into();
+
+    prev_global_state
+        .as_builder()
+        .status(running_status.into())
+        .build()
 }
 
 fn build_rollup_witness() -> WitnessArgs {

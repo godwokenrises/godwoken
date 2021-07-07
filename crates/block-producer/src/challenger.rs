@@ -257,7 +257,7 @@ impl Challenger {
         match self.rpc_client.send_transaction(tx.await?).await {
             Ok(tx_hash) => log::info!("Cancel challenge in tx {}", to_hex(&tx_hash)),
             Err(err) => {
-                log::error!("\nCancel challenge failed: {}\n", err);
+                log::error!("Cancel challenge failed: {}", err);
 
                 let tx =
                     self.build_reclaim_verifier_tx(verifier_dep, verifier_input, verifier_witness);
@@ -429,17 +429,18 @@ impl Challenger {
         tx_skeleton.outputs_mut().push(rollup_output);
         tx_skeleton.witnesses_mut().push(rollup_witness);
 
+        // Challenge
+        let challenge_dep = self.config.challenge_cell_lock_dep.clone().into();
+        let challenge_witness = cancel_output.challenge_witness;
+        tx_skeleton.cell_deps_mut().push(challenge_dep);
+        tx_skeleton.inputs_mut().push(challenge_input);
+        tx_skeleton.witnesses_mut().push(challenge_witness);
+
         // Verifier
         tx_skeleton.cell_deps_mut().push(verifier_dep);
         tx_skeleton.inputs_mut().push(verifier_input.clone());
         if let Some(verifier_witness) = cancel_output.verifier_witness {
             tx_skeleton.witnesses_mut().push(verifier_witness);
-        }
-
-        // Poa
-        {
-            let poa = self.poa.lock().await;
-            poa.fill_poa(&mut tx_skeleton, 0, media_time).await?;
         }
 
         // Signature verification needs an owner cell
@@ -450,31 +451,18 @@ impl Challenger {
                 let cell = query.ok_or_else(|| anyhow!("can't find a owner cell for verifier"))?;
                 to_input_cell_info(cell)
             };
+            log::debug!("push an owner cell to unlock verifier cell");
 
             let owner_lock_dep = self.ckb_genesis_info.sighash_dep();
             tx_skeleton.cell_deps_mut().push(owner_lock_dep);
             tx_skeleton.inputs_mut().push(owner_input);
         }
 
-        // Challenge
-        let challenge_dep = self.config.challenge_cell_lock_dep.clone().into();
-        let challenge_witness = cancel_output.challenge_witness;
-        tx_skeleton.cell_deps_mut().push(challenge_dep);
-        tx_skeleton.inputs_mut().push(challenge_input);
+        // Poa
         {
-            // Append dummy witness args to align our challenge witness args
-            let input_len = tx_skeleton.inputs().len();
-            let witness_len = tx_skeleton.witnesses_mut().len();
-
-            if input_len != witness_len {
-                let dummy_witness_argses = (0..input_len - witness_len)
-                    .into_iter()
-                    .map(|_| WitnessArgs::default())
-                    .collect::<Vec<_>>();
-                tx_skeleton.witnesses_mut().extend(dummy_witness_argses);
-            }
+            let poa = self.poa.lock().await;
+            poa.fill_poa(&mut tx_skeleton, 0, media_time).await?;
         }
-        tx_skeleton.witnesses_mut().push(challenge_witness);
 
         fill_tx_fee(&mut tx_skeleton, &self.rpc_client, owner_lock).await?;
         self.wallet.sign_tx_skeleton(tx_skeleton)
