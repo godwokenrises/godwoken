@@ -339,6 +339,9 @@ fn build_tx_kv_witness(
     let receiver_script =
         get_script(&tree, receiver_id)?.ok_or_else(|| anyhow!("receiver script not found"))?;
 
+    // To verify transaction signature
+    tree.get_nonce(sender_id)?;
+
     let return_data_hash = match tx_kv_state {
         TxKvState::Execution { generator } => {
             let parent_block_hash = db

@@ -3,7 +3,6 @@ use crate::types::{CellInfo, InputCellInfo};
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::challenge::{VerifyContext, VerifyWitness};
-use gw_common::blake2b::new_blake2b;
 use gw_common::H256;
 use gw_config::BlockProducerConfig;
 use gw_generator::RollupContext;
@@ -207,17 +206,13 @@ impl CancelChallenge<VerifyTransactionSignatureWitness> {
 
     fn calc_tx_message(&self, receiver_script_hash: &H256) -> [u8; 32] {
         let raw_tx = self.verify_witness.l2tx().raw();
-
-        let mut hasher = new_blake2b();
-        hasher.update(self.rollup_type_hash.as_slice());
-        hasher.update(&self.verifier_lock.hash());
-        hasher.update(receiver_script_hash.as_slice());
-        hasher.update(raw_tx.as_slice());
-
-        let mut message = [0u8; 32];
-        hasher.finalize(&mut message);
-
-        message
+        raw_tx
+            .calc_message(
+                &self.rollup_type_hash,
+                &H256::from(self.verifier_lock.hash()),
+                receiver_script_hash,
+            )
+            .into()
     }
 }
 
@@ -236,15 +231,7 @@ impl CancelChallenge<VerifyWithdrawalWitness> {
 
     fn calc_withdrawal_message(&self) -> [u8; 32] {
         let raw_withdrawal = self.verify_witness.withdrawal_request().raw();
-
-        let mut hasher = new_blake2b();
-        hasher.update(self.rollup_type_hash.as_slice());
-        hasher.update(raw_withdrawal.as_slice());
-
-        let mut message = [0u8; 32];
-        hasher.finalize(&mut message);
-
-        message
+        raw_withdrawal.calc_message(&self.rollup_type_hash).into()
     }
 }
 
