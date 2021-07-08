@@ -29,6 +29,7 @@ type MemPool = Mutex<gw_mem_pool::pool::MemPool>;
 type AccountID = Uint32;
 type JsonH256 = ckb_fixed_hash::H256;
 type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
+type GwUint64 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint64;
 
 #[async_trait]
 pub trait TestModeRPC {
@@ -209,15 +210,41 @@ async fn execute_l2transaction(
     Ok(run_result)
 }
 
+// raw_l2tx, block_number
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum ExecuteRawL2TransactionParams {
+    Tip(JsonBytes),
+    Number(JsonBytes, Option<GwUint64>),
+}
+
 async fn execute_raw_l2transaction(
-    Params((raw_l2tx,)): Params<(JsonBytes,)>,
+    Params(params): Params<ExecuteRawL2TransactionParams>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<RunResult> {
+) -> Result<Option<RunResult>> {
+    let (raw_l2tx, block_number) = match params {
+        ExecuteRawL2TransactionParams::Tip(raw_l2tx) => (raw_l2tx, None),
+        ExecuteRawL2TransactionParams::Number(raw_l2tx, block_number) => (raw_l2tx, block_number),
+    };
+
     let raw_l2tx_bytes = raw_l2tx.into_bytes();
     let raw_l2tx = packed::RawL2Transaction::from_slice(&raw_l2tx_bytes)?;
 
-    let raw_block = store.get_tip_block()?.raw();
+    let db = store.begin_transaction();
+    let block_number = match block_number {
+        Some(num) => num.value(),
+        None => db.get_tip_block()?.raw().number().unpack(),
+    };
+    let block_hash = match db.get_block_hash_by_number(block_number)? {
+        Some(block_hash) => block_hash,
+        None => return Ok(None),
+    };
+
+    let raw_block = match store.get_block(&block_hash)? {
+        Some(block) => block.raw(),
+        None => return Ok(None),
+    };
     let block_producer_id = raw_block.block_producer_id();
     let timestamp = raw_block.timestamp();
     let number = {
@@ -233,9 +260,9 @@ async fn execute_raw_l2transaction(
 
     let run_result: RunResult = mem_pool
         .lock()
-        .execute_raw_transaction(raw_l2tx, &block_info)?
+        .execute_raw_transaction(raw_l2tx, &block_info, block_number)?
         .into();
-    Ok(run_result)
+    Ok(Some(run_result))
 }
 
 async fn submit_l2transaction(
@@ -260,15 +287,37 @@ async fn submit_withdrawal_request(
     Ok(())
 }
 
+// short_address, sudt_id, block_number
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum GetBalanceParams {
+    Tip(JsonBytes, AccountID),
+    Number(
+        JsonBytes,
+        AccountID,
+        Option<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64>,
+    ),
+}
+
 async fn get_balance(
-    Params((short_address, sudt_id)): Params<(JsonBytes, AccountID)>,
+    Params(params): Params<GetBalanceParams>,
     store: Data<Store>,
 ) -> Result<Uint128> {
+    let (short_address, sudt_id, block_number) = match params {
+        GetBalanceParams::Tip(short_address, sudt_id) => (short_address, sudt_id, None),
+        GetBalanceParams::Number(short_address, sudt_id, block_number) => {
+            (short_address, sudt_id, block_number)
+        }
+    };
+
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
+    let block_number = match block_number {
+        Some(num) => num.value(),
+        None => db.get_tip_block()?.raw().number().unpack(),
+    };
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        CheckPoint::new(block_number, SubState::Block),
         StateDBMode::ReadOnly,
     )?;
 
@@ -277,15 +326,33 @@ async fn get_balance(
     Ok(balance.into())
 }
 
+// account_id, key, block_number
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum GetStorageAtParams {
+    Tip(AccountID, JsonH256),
+    Number(AccountID, JsonH256, Option<GwUint64>),
+}
+
 async fn get_storage_at(
-    Params((account_id, key)): Params<(AccountID, JsonH256)>,
+    Params(params): Params<GetStorageAtParams>,
     store: Data<Store>,
 ) -> Result<JsonH256> {
+    let (account_id, key, block_number) = match params {
+        GetStorageAtParams::Tip(account_id, key) => (account_id, key, None),
+        GetStorageAtParams::Number(account_id, key, block_number) => {
+            (account_id, key, block_number)
+        }
+    };
+
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
+    let block_number = match block_number {
+        Some(num) => num.value(),
+        None => db.get_tip_block()?.raw().number().unpack(),
+    };
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        CheckPoint::new(block_number, SubState::Block),
         StateDBMode::ReadOnly,
     )?;
 
@@ -319,15 +386,28 @@ async fn get_account_id_by_script_hash(
     Ok(account_id_opt)
 }
 
-async fn get_nonce(
-    Params((account_id,)): Params<(AccountID,)>,
-    store: Data<Store>,
-) -> Result<Uint32> {
+// account_id, block_number
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum GetNonceParams {
+    Tip(AccountID),
+    Number(AccountID, Option<GwUint64>),
+}
+
+async fn get_nonce(Params(params): Params<GetNonceParams>, store: Data<Store>) -> Result<Uint32> {
+    let (account_id, block_number) = match params {
+        GetNonceParams::Tip(account_id) => (account_id, None),
+        GetNonceParams::Number(account_id, block_number) => (account_id, block_number),
+    };
+
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
+    let block_number = match block_number {
+        Some(num) => num.value(),
+        None => db.get_tip_block()?.raw().number().unpack(),
+    };
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        CheckPoint::new(block_number, SubState::Block),
         StateDBMode::ReadOnly,
     )?;
     let tree = state_db.account_state_tree()?;
@@ -389,15 +469,31 @@ async fn get_script_hash_by_short_address(
     Ok(script_hash_opt.map(to_jsonh256))
 }
 
+// data_hash, block_number
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum GetDataParams {
+    Tip(JsonH256),
+    Number(JsonH256, Option<GwUint64>),
+}
+
 async fn get_data(
-    Params((data_hash,)): Params<(JsonH256,)>,
+    Params(params): Params<GetDataParams>,
     store: Data<Store>,
 ) -> Result<Option<JsonBytes>> {
+    let (data_hash, block_number) = match params {
+        GetDataParams::Tip(data_hash) => (data_hash, None),
+        GetDataParams::Number(data_hash, block_number) => (data_hash, block_number),
+    };
+
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
+    let block_number = match block_number {
+        Some(num) => num.value(),
+        None => db.get_tip_block()?.raw().number().unpack(),
+    };
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        CheckPoint::new(block_number, SubState::Block),
         StateDBMode::ReadOnly,
     )?;
     let tree = state_db.account_state_tree()?;
