@@ -1,7 +1,7 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
-use crate::types::CellInfo;
+use crate::types::{CellInfo, TxStatus};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{HttpClient, Output, Params as ClientParams, Transport};
 use ckb_types::prelude::Entity;
@@ -1109,6 +1109,25 @@ impl RPCClient {
             let tx: ckb_types::packed::Transaction = tx_with_status.transaction.inner.into();
             Transaction::new_unchecked(tx.as_bytes())
         }))
+    }
+
+    pub async fn get_transaction_status(&self, tx_hash: H256) -> Result<Option<TxStatus>> {
+        let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = to_result(
+            self.ckb_client
+                .request(
+                    "get_transaction",
+                    Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
+                )
+                .await?,
+        )?;
+
+        Ok(
+            tx_with_status.map(|tx_with_status| match tx_with_status.tx_status.status {
+                ckb_jsonrpc_types::Status::Pending => TxStatus::Pending,
+                ckb_jsonrpc_types::Status::Committed => TxStatus::Committed,
+                ckb_jsonrpc_types::Status::Proposed => TxStatus::Proposed,
+            }),
+        )
     }
 
     pub async fn send_transaction(&self, tx: Transaction) -> Result<H256> {

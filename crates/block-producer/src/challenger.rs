@@ -2,7 +2,7 @@ use crate::poa::{PoA, ShouldIssueBlock};
 use crate::rpc_client::RPCClient;
 use crate::test_mode_control::TestModeControl;
 use crate::transaction_skeleton::TransactionSkeleton;
-use crate::types::{CellInfo, ChainEvent, InputCellInfo};
+use crate::types::{CellInfo, ChainEvent, InputCellInfo, TxStatus};
 use crate::utils::{fill_tx_fee, CKBGenesisInfo};
 use crate::wallet::Wallet;
 
@@ -24,7 +24,7 @@ use smol::lock::Mutex;
 
 use std::convert::TryFrom;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod cancel_challenge;
 mod enter_challenge;
@@ -239,6 +239,8 @@ impl Challenger {
         let tx = self.build_verifier_tx(cancel_output.verifier_cell.clone());
         let verifier_tx_hash = self.rpc_client.send_transaction(tx.await?).await?;
         log::info!("Create verifier in tx {}", to_hex(&verifier_tx_hash));
+
+        self.wait_tx_proposed(verifier_tx_hash).await?;
 
         // Build cancellation transaction
         let challenge_input = to_input_cell_info(challenge_cell);
@@ -496,6 +498,29 @@ impl Challenger {
 
         fill_tx_fee(&mut tx_skeleton, &self.rpc_client, owner_lock).await?;
         self.wallet.sign_tx_skeleton(tx_skeleton)
+    }
+
+    async fn wait_tx_proposed(&self, tx_hash: H256) -> Result<()> {
+        let timeout = Duration::new(30, 0);
+        let now = Instant::now();
+
+        loop {
+            match self
+                .rpc_client
+                .get_transaction_status(tx_hash.clone())
+                .await?
+            {
+                Some(TxStatus::Proposed) | Some(TxStatus::Committed) => return Ok(()),
+                Some(TxStatus::Pending) => (),
+                None => return Err(anyhow!("tx hash {} not found", to_hex(&tx_hash))),
+            }
+
+            if now.elapsed() >= timeout {
+                return Err(anyhow!("wait tx hash {} timeout", to_hex(&tx_hash)));
+            }
+
+            async_std::task::sleep(Duration::new(3, 0)).await;
+        }
     }
 }
 
