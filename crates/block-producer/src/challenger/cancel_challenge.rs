@@ -101,7 +101,7 @@ pub fn build_output(
                 .ok_or_else(|| anyhow!("receiver script not found"))?;
 
             let verifier_witness = {
-                let signature = witness.l2tx().signature().clone();
+                let signature = witness.l2tx().signature();
                 WitnessArgs::new_builder()
                     .lock(Some(signature).pack())
                     .build()
@@ -145,7 +145,7 @@ impl<W: Entity> CancelChallenge<W> {
         verifier_lock: Script,
         verify_witness: W,
     ) -> Self {
-        let rollup_type_hash = rollup_context.rollup_script_hash.clone();
+        let rollup_type_hash = rollup_context.rollup_script_hash;
 
         Self {
             rollup_type_hash,
@@ -168,7 +168,7 @@ impl<W: Entity> CancelChallenge<W> {
             .capacity(verifier_capacity.pack())
             .lock(self.verifier_lock)
             .build();
-        let verifier_cell = (verifier, verifier_data.into());
+        let verifier_cell = (verifier, verifier_data);
 
         let post_global_state = build_post_global_state(self.prev_global_state);
         let challenge_witness = WitnessArgs::new_builder()

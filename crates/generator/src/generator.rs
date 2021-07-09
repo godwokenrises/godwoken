@@ -306,14 +306,14 @@ impl Generator {
             match state.apply_withdrawal_request(&self.rollup_context, block_producer_id, &request)
             {
                 Ok(withdrawal_receipt) => withdrawal_receipts.push(withdrawal_receipt),
-                Err(err) => return StateTransitionResult::Generator(err.into()),
+                Err(err) => return StateTransitionResult::Generator(err),
             }
         }
 
         // apply deposition to state
         if let Err(err) = state.apply_deposit_requests(&self.rollup_context, &args.deposit_requests)
         {
-            return StateTransitionResult::Generator(err.into());
+            return StateTransitionResult::Generator(err);
         }
 
         // handle transactions

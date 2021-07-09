@@ -30,7 +30,7 @@ impl EnterChallenge {
         challenge_context: ChallengeContext,
         rewards_lock: Script,
     ) -> Self {
-        let rollup_type_hash = rollup_context.rollup_script_hash.clone();
+        let rollup_type_hash = rollup_context.rollup_script_hash;
         let challenge_script_type_hash = rollup_context.rollup_config.challenge_script_type_hash();
 
         EnterChallenge {
@@ -80,7 +80,7 @@ impl EnterChallenge {
 
         // Build witness
         let enter_challenge = RollupEnterChallenge::new_builder()
-            .witness(self.witness.clone())
+            .witness(self.witness)
             .build();
 
         let rollup_action = RollupAction::new_builder()

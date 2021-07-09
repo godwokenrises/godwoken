@@ -46,6 +46,7 @@ pub struct Challenger {
 }
 
 impl Challenger {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         rollup_context: RollupContext,
         rpc_client: RPCClient,
@@ -539,11 +540,7 @@ impl Challenger {
         let now = Instant::now();
 
         loop {
-            match self
-                .rpc_client
-                .get_transaction_status(tx_hash.clone())
-                .await?
-            {
+            match self.rpc_client.get_transaction_status(tx_hash).await? {
                 Some(TxStatus::Proposed) | Some(TxStatus::Committed) => return Ok(()),
                 Some(TxStatus::Pending) => (),
                 None => return Err(anyhow!("tx hash {} not found", to_hex(&tx_hash))),

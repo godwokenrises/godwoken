@@ -423,7 +423,7 @@ fn build_tx_kv_witness(
     Ok(witness)
 }
 
-fn build_block_proof<'a>(
+fn build_block_proof(
     db: &StoreTransaction,
     raw_blocks: &[RawL2Block],
 ) -> Result<(BlockHashEntryVec, CompiledMerkleProof)> {

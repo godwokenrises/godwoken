@@ -101,10 +101,7 @@ pub enum SyncEvent {
 
 impl SyncEvent {
     pub fn is_success(&self) -> bool {
-        match self {
-            SyncEvent::Success => true,
-            _ => false,
-        }
+        matches!(self, SyncEvent::Success)
     }
 }
 
