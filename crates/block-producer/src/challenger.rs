@@ -92,6 +92,30 @@ impl Challenger {
             }
         }
 
+        // Reclaim verifier cell if rollup is running
+        {
+            if Status::Running == rollup.status()? {
+                let allowed_scripts = {
+                    let eoa = self.config.allowed_eoa_deps.iter();
+                    eoa.chain(self.config.allowed_contract_deps.iter())
+                };
+                let rpc_client = &self.rpc_client;
+                let owner_lock_hash = self.wallet.lock_script().hash();
+
+                for (script_type_hash, dep) in allowed_scripts {
+                    if let Some(cell_info) = rpc_client
+                        .query_verifier_cell(script_type_hash.0, owner_lock_hash)
+                        .await?
+                    {
+                        let cell_dep: CellDep = dep.to_owned().into();
+                        if let Err(err) = self.reclaim_verifier(cell_dep, cell_info).await {
+                            log::error!("reclaim verifier failed {}", err);
+                        }
+                    }
+                }
+            }
+        }
+
         if let Some(ref tests_control) = self.tests_control {
             if let Some(TestModePayload::Challenge { .. }) = tests_control.payload().await {
                 match rollup.status()? {
@@ -386,6 +410,18 @@ impl Challenger {
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
         let tx_hash = self.rpc_client.send_transaction(tx).await?;
         log::info!("Revert block in tx {}", to_hex(&tx_hash));
+
+        Ok(())
+    }
+
+    // FIXME: Support reclaim signature verifier cell. Remove addition signature
+    // requirement to unlock.
+    async fn reclaim_verifier(&self, cell_dep: CellDep, cell_info: CellInfo) -> Result<()> {
+        let input = to_input_cell_info(cell_info);
+
+        let tx = self.build_reclaim_verifier_tx(cell_dep, input, None);
+        let tx_hash = self.rpc_client.send_transaction(tx.await?).await?;
+        log::info!("Reclaim verifier in tx {}", to_hex(&tx_hash));
 
         Ok(())
     }

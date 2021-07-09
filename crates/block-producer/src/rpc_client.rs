@@ -1019,6 +1019,74 @@ impl RPCClient {
         Ok(collected)
     }
 
+    pub async fn query_verifier_cell(
+        &self,
+        allowed_script_type_hash: [u8; 32],
+        owner_lock_hash: [u8; 32],
+    ) -> Result<Option<CellInfo>> {
+        let lock = Script::new_builder()
+            .code_hash(allowed_script_type_hash.pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(self.rollup_context.rollup_script_hash.as_slice().pack())
+            .build();
+
+        let search_key = SearchKey {
+            script: {
+                let lock = ckb_types::packed::Script::new_unchecked(lock.as_bytes());
+                lock.into()
+            },
+            script_type: ScriptType::Lock,
+            filter: Some(SearchKeyFilter {
+                script: None,
+                output_data_len_range: None,
+                output_capacity_range: None,
+                block_range: None,
+            }),
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut verifier_cell = None;
+        let mut cursor = None;
+
+        while verifier_cell.is_none() {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer_client
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            if cells.last_cursor.is_empty() {
+                log::debug!(
+                    "no verifier cell for script type hash {:?}",
+                    allowed_script_type_hash
+                );
+                return Ok(None);
+            }
+            cursor = Some(cells.last_cursor);
+
+            verifier_cell = cells.objects.into_iter().find_map(|cell| {
+                if cell.output_data.len() >= 32
+                    && cell.output_data.as_bytes()[0..32] == owner_lock_hash
+                {
+                    Some(to_cell_info(cell))
+                } else {
+                    None
+                }
+            });
+        }
+
+        Ok(verifier_cell)
+    }
+
     pub async fn get_transaction_block_number(&self, tx_hash: H256) -> Result<Option<u64>> {
         let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = to_result(
             self.ckb_client
