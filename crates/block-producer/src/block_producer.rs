@@ -264,7 +264,7 @@ impl BlockProducer {
     ) -> Result<()> {
         if TestMode::Enable == self.tests_control.mode() {
             match self.tests_control.payload().await {
-                Some(TestModePayload::None) => self.tests_control.none().await?,
+                Some(TestModePayload::None) => self.tests_control.clear_none().await?,
                 Some(TestModePayload::BadBlock { .. }) => (),
                 _ => unreachable!(),
             }
@@ -398,8 +398,9 @@ impl BlockProducer {
 
         if let Some(ref tests_control) = self.tests_control {
             if let Some(TestModePayload::BadBlock { .. }) = tests_control.payload().await {
-                let (bad_block, bad_global_state) =
-                    tests_control.bad_block(block, global_state).await?;
+                let (bad_block, bad_global_state) = tests_control
+                    .generate_a_bad_block(block, global_state)
+                    .await?;
 
                 block = bad_block;
                 global_state = bad_global_state;

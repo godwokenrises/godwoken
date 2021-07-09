@@ -50,7 +50,7 @@ impl TestModeControl {
         self.payload.lock().await.to_owned()
     }
 
-    pub async fn none(&self) -> Result<()> {
+    pub async fn clear_none(&self) -> Result<()> {
         let mut payload = self.payload.lock().await;
         if Some(TestModePayload::None) != *payload {
             return Err(anyhow!("not none payload"));
@@ -60,7 +60,7 @@ impl TestModeControl {
         Ok(())
     }
 
-    pub async fn bad_block(
+    pub async fn generate_a_bad_block(
         &self,
         block: L2Block,
         global_state: GlobalState,

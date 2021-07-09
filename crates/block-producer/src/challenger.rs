@@ -137,7 +137,7 @@ impl Challenger {
                 if let Some(ref tests_control) = self.tests_control {
                     match tests_control.payload().await {
                         Some(TestModePayload::WaitForChallengeMaturity) => return Ok(()), // do nothing
-                        Some(TestModePayload::None) => tests_control.none().await?,
+                        Some(TestModePayload::None) => tests_control.clear_none().await?,
                         _ => unreachable!(),
                     }
                 }
@@ -154,7 +154,7 @@ impl Challenger {
                 if let Some(ref tests_control) = self.tests_control {
                     match tests_control.payload().await {
                         Some(TestModePayload::WaitForChallengeMaturity) => return Ok(()), // do nothing
-                        Some(TestModePayload::None) => tests_control.none().await?,
+                        Some(TestModePayload::None) => tests_control.clear_none().await?,
                         _ => unreachable!(),
                     }
                 }
@@ -169,7 +169,7 @@ impl Challenger {
                                 .wait_for_challenge_maturity(rollup.status()?)
                                 .await?
                         }
-                        Some(TestModePayload::None) => tests_control.none().await?,
+                        Some(TestModePayload::None) => tests_control.clear_none().await?,
                         _ => unreachable!(),
                     }
                 }
