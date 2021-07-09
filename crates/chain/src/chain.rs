@@ -663,44 +663,50 @@ impl Chain {
                 self.revert_l1action(&db, reverted_action)?;
             }
         }
+
         // update layer1 actions
         for action in param.updates {
             self.update_l1action(&db, action)?;
-            db.commit()?;
-            log::debug!("commit db after sync");
-
-            let tip_block_hash: H256 = self.local_state.tip.hash().into();
-            if let SyncEvent::Success = self.last_sync_event {
-                // update mem pool state
-                self.mem_pool.lock().notify_new_tip(tip_block_hash)?;
+            match self.last_sync_event() {
+                SyncEvent::Success => (),
+                _ => db.commit()?,
             }
-
-            // check consistency of account SMT
-            let expected_account_root: H256 = {
-                let raw_block = self.local_state.tip.raw();
-                raw_block.post_account().merkle_root().unpack()
-            };
-
-            let state_db = StateDBTransaction::from_checkpoint(
-                &db,
-                CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block)?,
-                StateDBMode::ReadOnly,
-            )?;
-
-            assert_eq!(
-                state_db.account_smt().unwrap().root(),
-                &expected_account_root,
-                "account root consistent in DB"
-            );
-
-            let tree = state_db.account_state_tree()?;
-            let current_account_root = tree.calculate_root().unwrap();
-
-            assert_eq!(
-                current_account_root, expected_account_root,
-                "check account tree"
-            );
         }
+
+        db.commit()?;
+        log::debug!("commit db after sync");
+
+        let tip_block_hash: H256 = self.local_state.tip.hash().into();
+        if let SyncEvent::Success = self.last_sync_event {
+            // update mem pool state
+            self.mem_pool.lock().notify_new_tip(tip_block_hash)?;
+        }
+
+        // check consistency of account SMT
+        let expected_account_root: H256 = {
+            let raw_block = self.local_state.tip.raw();
+            raw_block.post_account().merkle_root().unpack()
+        };
+
+        let state_db = StateDBTransaction::from_checkpoint(
+            &db,
+            CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block)?,
+            StateDBMode::ReadOnly,
+        )?;
+
+        assert_eq!(
+            state_db.account_smt().unwrap().root(),
+            &expected_account_root,
+            "account root consistent in DB"
+        );
+
+        let tree = state_db.account_state_tree()?;
+        let current_account_root = tree.calculate_root().unwrap();
+
+        assert_eq!(
+            current_account_root, expected_account_root,
+            "check account tree"
+        );
 
         Ok(())
     }
