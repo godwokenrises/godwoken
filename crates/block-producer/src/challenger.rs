@@ -8,7 +8,7 @@ use crate::wallet::Wallet;
 
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
-use gw_chain::chain::{Chain, SyncEvent};
+use gw_chain::chain::{Chain, ChallengeCell, SyncEvent};
 use gw_chain::challenge::{RevertContext, VerifyContext};
 use gw_common::H256;
 use gw_config::BlockProducerConfig;
@@ -126,7 +126,7 @@ impl Challenger {
                 }
                 self.challenge_block(rollup, context, median_time).await
             }
-            SyncEvent::BadChallenge { context } => {
+            SyncEvent::BadChallenge { cell, context } => {
                 if let Some(ref tests_control) = self.tests_control {
                     match tests_control.payload().await {
                         Some(TestModePayload::WaitForChallengeMaturity) => return Ok(()), // do nothing
@@ -134,9 +134,10 @@ impl Challenger {
                         _ => unreachable!(),
                     }
                 }
-                self.cancel_challenge(rollup, context, median_time).await
+                self.cancel_challenge(rollup, cell, context, median_time)
+                    .await
             }
-            SyncEvent::WaitChallenge { context } => {
+            SyncEvent::WaitChallenge { cell, context } => {
                 if let Some(ref tests_control) = self.tests_control {
                     match tests_control.payload().await {
                         Some(TestModePayload::WaitForChallengeMaturity) => {
@@ -149,7 +150,8 @@ impl Challenger {
                     }
                 }
                 let tip_number = to_tip_number(&event);
-                self.revert(rollup, context, tip_number, median_time).await
+                self.revert(rollup, cell, context, tip_number, median_time)
+                    .await
             }
         }
     }
@@ -218,6 +220,7 @@ impl Challenger {
     async fn cancel_challenge(
         &self,
         rollup_state: RollupState,
+        challenge_cell: ChallengeCell,
         context: VerifyContext,
         media_time: Duration,
     ) -> Result<()> {
@@ -226,10 +229,7 @@ impl Challenger {
             return Ok(());
         }
 
-        let challenge_cell = {
-            let query = self.rpc_client.query_verified_challenge_cell().await?;
-            query.ok_or_else(|| anyhow!("challenge cell not found"))?
-        };
+        let challenge_cell = to_cell_info(challenge_cell);
         let prev_state = rollup_state.get_state().to_owned();
         let owner_lock = self.wallet.lock_script().to_owned();
         let cancel_output =
@@ -274,6 +274,7 @@ impl Challenger {
     async fn revert(
         &self,
         rollup_state: RollupState,
+        challenge_cell: ChallengeCell,
         context: RevertContext,
         tip_block_number: u64,
         media_time: Duration,
@@ -288,10 +289,7 @@ impl Challenger {
             let config = &self.rollup_context.rollup_config;
             config.challenge_maturity_blocks().unpack()
         };
-        let challenge_cell = {
-            let query = self.rpc_client.query_verified_challenge_cell().await?;
-            query.ok_or_else(|| anyhow!("challenge cell not found"))?
-        };
+        let challenge_cell = to_cell_info(challenge_cell);
         let challenge_tx_block_number = {
             let tx_hash: [u8; 32] = challenge_cell.out_point.tx_hash().unpack();
             let query = self.rpc_client.get_transaction_block_number(tx_hash.into());
@@ -609,4 +607,12 @@ fn to_input_cell_info_with_since(cell_info: CellInfo, since: u64) -> InputCellIn
 
 fn to_hex(hash: &H256) -> String {
     hex::encode(hash.as_slice())
+}
+
+fn to_cell_info(cell: ChallengeCell) -> CellInfo {
+    CellInfo {
+        out_point: cell.input.previous_output(),
+        output: cell.output,
+        data: cell.output_data,
+    }
 }

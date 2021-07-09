@@ -6,16 +6,16 @@ use crate::{types::ChainEvent, utils::to_result};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{Params as ClientParams, Transport};
 use ckb_fixed_hash::H256;
-use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
+use gw_chain::chain::{Chain, ChallengeCell, L1Action, L1ActionContext, SyncParam};
 use gw_generator::RollupContext;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, TransactionWithStatus, Uint32};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     packed::{
-        CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositLockArgs, DepositRequest,
-        L2BlockCommittedInfo, RollupAction, RollupActionUnion, Script, Transaction, WitnessArgs,
-        WitnessArgsReader,
+        CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositLockArgs,
+        DepositRequest, L2BlockCommittedInfo, OutPoint, RollupAction, RollupActionUnion, Script,
+        Transaction, WitnessArgs, WitnessArgsReader,
     },
     prelude::*,
 };
@@ -168,12 +168,14 @@ impl ChainUpdater {
                     reverted_block_hashes: submitted.reverted_block_hashes().unpack(),
                 }
             }
-            RollupActionUnion::RollupEnterChallenge(challenge) => {
-                let challenge_lock_args = self.extract_challenge_lock_args(&tx).await?;
+            RollupActionUnion::RollupEnterChallenge(entered) => {
+                let (challenge_cell, challenge_lock_args) =
+                    self.extract_challenge_context(&tx).await?;
 
                 L1ActionContext::Challenge {
+                    cell: challenge_cell,
                     target: challenge_lock_args.target(),
-                    witness: challenge.witness(),
+                    witness: entered.witness(),
                 }
             }
             RollupActionUnion::RollupCancelChallenge(_) => L1ActionContext::CancelChallenge,
@@ -242,24 +244,48 @@ impl ChainUpdater {
         RollupAction::from_slice(&output_type).map_err(|e| anyhow!("invalid rollup action {}", e))
     }
 
-    async fn extract_challenge_lock_args(&self, tx: &Transaction) -> Result<ChallengeLockArgs> {
+    async fn extract_challenge_context(
+        &self,
+        tx: &Transaction,
+    ) -> Result<(ChallengeCell, ChallengeLockArgs)> {
         let challenge_script_type_hash = self
             .rollup_context
             .rollup_config
             .challenge_script_type_hash();
 
-        for cell_output in tx.raw().outputs().into_iter() {
-            if cell_output.lock().code_hash() != challenge_script_type_hash
-                || cell_output.lock().hash_type() != ScriptHashType::Type.into()
+        let outputs = tx.as_reader().raw().outputs();
+        let outputs_data = tx.as_reader().raw().outputs_data();
+        for (index, (output, output_data)) in outputs.iter().zip(outputs_data.iter()).enumerate() {
+            if output.lock().code_hash().as_slice() != challenge_script_type_hash.as_slice()
+                || output.lock().hash_type().to_entity() != ScriptHashType::Type.into()
             {
                 continue;
             }
 
-            let lock_args: Bytes = cell_output.lock().args().unpack();
-            return match ChallengeLockArgsReader::verify(&lock_args.slice(32..), false) {
-                Ok(_) => Ok(ChallengeLockArgs::new_unchecked(lock_args.slice(32..))),
-                Err(err) => Err(anyhow!("invalid challenge lock args {}", err)),
+            let lock_args = {
+                let args: Bytes = output.lock().args().unpack();
+                match ChallengeLockArgsReader::verify(&args.slice(32..), false) {
+                    Ok(_) => ChallengeLockArgs::new_unchecked(args.slice(32..)),
+                    Err(err) => return Err(anyhow!("invalid challenge lock args {}", err)),
+                }
             };
+
+            let input = {
+                let out_point = OutPoint::new_builder()
+                    .tx_hash(tx.hash().pack())
+                    .index((index as u32).pack())
+                    .build();
+
+                CellInput::new_builder().previous_output(out_point).build()
+            };
+
+            let cell = ChallengeCell {
+                input,
+                output: output.to_entity(),
+                output_data: output_data.unpack(),
+            };
+
+            return Ok((cell, lock_args));
         }
 
         unreachable!("challenge output not found");

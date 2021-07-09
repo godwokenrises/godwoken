@@ -15,13 +15,20 @@ use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, Status},
     packed::{
-        BlockMerkleState, ChallengeTarget, ChallengeWitness, DepositRequest, GlobalState, L2Block,
-        L2BlockCommittedInfo, RawL2Block, RollupConfig, Script, Transaction,
+        BlockMerkleState, CellInput, CellOutput, ChallengeTarget, ChallengeWitness, DepositRequest,
+        GlobalState, L2Block, L2BlockCommittedInfo, RawL2Block, RollupConfig, Script, Transaction,
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
 use parking_lot::Mutex;
 use std::{convert::TryFrom, sync::Arc};
+
+#[derive(Debug, Clone)]
+pub struct ChallengeCell {
+    pub input: CellInput,
+    pub output: CellOutput,
+    pub output_data: Bytes,
+}
 
 /// sync params
 #[derive(Clone)]
@@ -41,6 +48,7 @@ pub enum L1ActionContext {
         reverted_block_hashes: Vec<[u8; 32]>,
     },
     Challenge {
+        cell: ChallengeCell,
         target: ChallengeTarget,
         witness: ChallengeWitness,
     },
@@ -81,10 +89,12 @@ pub enum SyncEvent {
     },
     // found a invalid challenge
     BadChallenge {
+        cell: ChallengeCell,
         context: crate::challenge::VerifyContext,
     },
     // the rollup is in a challenge
     WaitChallenge {
+        cell: ChallengeCell,
         context: crate::challenge::RevertContext,
     },
 }
@@ -306,7 +316,14 @@ impl Chain {
                         Ok(SyncEvent::Success)
                     }
                 }
-                (Status::Running, L1ActionContext::Challenge { target, witness }) => {
+                (
+                    Status::Running,
+                    L1ActionContext::Challenge {
+                        cell,
+                        target,
+                        witness,
+                    },
+                ) => {
                     let status: u8 = global_state.status().into();
                     assert_eq!(Status::try_from(status), Ok(Status::Halting));
 
@@ -342,7 +359,7 @@ impl Chain {
                         let context =
                             crate::challenge::build_verify_context(generator, db, &target)?;
 
-                        return Ok(SyncEvent::BadChallenge { context });
+                        return Ok(SyncEvent::BadChallenge { cell, context });
                     }
 
                     if local_bad_block.is_none() && local_tip_block_number < challenge_block_number
@@ -375,6 +392,7 @@ impl Chain {
                     log::info!("rollback db after prepare context for revert");
 
                     Ok(SyncEvent::WaitChallenge {
+                        cell,
                         context: maybe_context?,
                     })
                 }

@@ -1019,55 +1019,6 @@ impl RPCClient {
         Ok(collected)
     }
 
-    pub async fn query_verified_challenge_cell(&self) -> Result<Option<CellInfo>> {
-        let rollup_context = &self.rollup_context;
-
-        let challenge_lock = Script::new_builder()
-            .code_hash(rollup_context.rollup_config.challenge_script_type_hash())
-            .hash_type(ScriptHashType::Type.into())
-            .args(rollup_context.rollup_script_hash.as_slice().pack())
-            .build();
-
-        let search_key = SearchKey {
-            script: ckb_types::packed::Script::new_unchecked(challenge_lock.as_bytes()).into(),
-            script_type: ScriptType::Lock,
-            filter: None,
-        };
-        let order = Order::Desc;
-        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
-
-        let mut cells: Pagination<Cell> = to_result(
-            self.indexer_client
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                    ])),
-                )
-                .await?,
-        )?;
-        if let Some(cell) = cells.objects.pop() {
-            let out_point = {
-                let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-                OutPoint::new_unchecked(out_point.as_bytes())
-            };
-            let output = {
-                let output: ckb_types::packed::CellOutput = cell.output.into();
-                CellOutput::new_unchecked(output.as_bytes())
-            };
-            let data = cell.output_data.into_bytes();
-            let cell_info = CellInfo {
-                out_point,
-                output,
-                data,
-            };
-            return Ok(Some(cell_info));
-        }
-        Ok(None)
-    }
-
     pub async fn get_transaction_block_number(&self, tx_hash: H256) -> Result<Option<u64>> {
         let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = to_result(
             self.ckb_client
