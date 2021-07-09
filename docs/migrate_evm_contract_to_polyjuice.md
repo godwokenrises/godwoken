@@ -15,7 +15,8 @@ For high-level designs of polyjuice please check [known caveats of polyjuice](ht
 some of this issues might be fixed soon, docs here will keep updating. please get back to check again.
 
 1. `from` parameter in `eth_call` is optional, but due to an known issue, you should always set an valid `from` paramter when calling `eth_call`.
-2. `eth_getBlockByNumber` is currently only support `latest` tag, other tags will not be recognised.
+2. calling a view function from smart-contract do not needs to pay fee in ethereum, however in godwoken we should set enough gasLimit and `gasPrice = 0`.
+3. `eth_getBlockByNumber` is currently only support `latest` tag, other tags will not be recognised.
 
 
 ## Examples
