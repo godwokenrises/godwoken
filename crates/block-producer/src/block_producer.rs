@@ -661,6 +661,12 @@ impl BlockProducer {
                 .extend(reverted_withdrawals.outputs);
         }
 
+        // check cell dep duplicate (deposits, withdrawals, reverted_withdrawals sudt type dep)
+        {
+            let deps: HashSet<_> = tx_skeleton.cell_deps_mut().iter().collect();
+            *tx_skeleton.cell_deps_mut() = deps.into_iter().cloned().collect();
+        }
+
         // tx fee cell
         fill_tx_fee(
             &mut tx_skeleton,
