@@ -1,7 +1,7 @@
 use crate::testing_tool::chain::{
     build_sync_tx, construct_block, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
 };
-use gw_chain::chain::{Chain, L1Action, L1ActionContext, RevertedL1Action, SyncEvent, SyncParam};
+use gw_chain::chain::{Chain, L1Action, L1ActionContext, RevertedL1Action, SyncParam};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     state::{to_short_address, State},
@@ -24,14 +24,17 @@ fn produce_a_block(
         let mem_pool = chain.mem_pool().lock();
         construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
     };
+    let l2block = block_result.block.clone();
     let transaction = build_sync_tx(rollup_cell, block_result);
     let l2block_committed_info = L2BlockCommittedInfo::new_builder()
         .number(expected_tip.pack())
         .build();
 
     let update = L1Action {
-        context: L1ActionContext::SubmitTxs {
+        context: L1ActionContext::SubmitBlock {
+            l2block,
             deposit_requests: vec![deposit.clone()],
+            reverted_block_hashes: vec![],
         },
         transaction,
         l2block_committed_info,
@@ -40,8 +43,8 @@ fn produce_a_block(
         updates: vec![update],
         reverts: Default::default(),
     };
-    let event = chain.sync(param.clone()).unwrap();
-    assert_eq!(event, SyncEvent::Success);
+    chain.sync(param.clone()).unwrap();
+    assert_eq!(chain.last_sync_event().is_success(), true);
 
     assert_eq!(
         {
@@ -175,8 +178,10 @@ fn test_layer1_fork() {
         let block_result = construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap();
 
         L1Action {
-            context: L1ActionContext::SubmitTxs {
+            context: L1ActionContext::SubmitBlock {
+                l2block: block_result.block.clone(),
                 deposit_requests: vec![deposit],
+                reverted_block_hashes: vec![],
             },
             transaction: build_sync_tx(rollup_cell.clone(), block_result),
             l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -203,8 +208,10 @@ fn test_layer1_fork() {
         construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action1 = L1Action {
-        context: L1ActionContext::SubmitTxs {
+        context: L1ActionContext::SubmitBlock {
+            l2block: block_result.block.clone(),
             deposit_requests: vec![deposit.clone()],
+            reverted_block_hashes: vec![],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -215,8 +222,8 @@ fn test_layer1_fork() {
         updates: vec![action1.clone()],
         reverts: Default::default(),
     };
-    let event = chain.sync(param).unwrap();
-    assert_eq!(event, SyncEvent::Success);
+    chain.sync(param).unwrap();
+    assert_eq!(chain.last_sync_event().is_success(), true);
     // update block 2
     let bob_script = Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
@@ -236,8 +243,10 @@ fn test_layer1_fork() {
         construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action2 = L1Action {
-        context: L1ActionContext::SubmitTxs {
+        context: L1ActionContext::SubmitBlock {
+            l2block: block_result.block.clone(),
             deposit_requests: vec![deposit],
+            reverted_block_hashes: vec![],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -248,8 +257,8 @@ fn test_layer1_fork() {
         updates: vec![action2.clone()],
         reverts: Default::default(),
     };
-    let event = chain.sync(param).unwrap();
-    assert_eq!(event, SyncEvent::Success);
+    chain.sync(param).unwrap();
+    assert_eq!(chain.last_sync_event().is_success(), true);
     let tip_block = chain.store().get_tip_block().unwrap();
     let tip_block_number: u64 = tip_block.raw().number().unpack();
     assert_eq!(tip_block_number, 2);
@@ -280,9 +289,9 @@ fn test_layer1_fork() {
         updates: forks,
         reverts,
     };
-    let event = chain.sync(param).unwrap();
+    chain.sync(param).unwrap();
+    assert_eq!(chain.last_sync_event().is_success(), true);
 
-    assert_eq!(event, SyncEvent::Success);
     let tip_block = chain.store().get_tip_block().unwrap();
     let tip_block_number: u64 = tip_block.raw().number().unpack();
     assert_eq!(tip_block_number, 1);
@@ -342,8 +351,10 @@ fn test_layer1_revert() {
         construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action1 = L1Action {
-        context: L1ActionContext::SubmitTxs {
+        context: L1ActionContext::SubmitBlock {
+            l2block: block_result.block.clone(),
             deposit_requests: vec![deposit.clone()],
+            reverted_block_hashes: vec![],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -354,8 +365,8 @@ fn test_layer1_revert() {
         updates: vec![action1.clone()],
         reverts: Default::default(),
     };
-    let event = chain.sync(param).unwrap();
-    assert_eq!(event, SyncEvent::Success);
+    chain.sync(param).unwrap();
+    assert_eq!(chain.last_sync_event().is_success(), true);
     // update block 2
     let bob_script = Script::new_builder()
         .code_hash(default_eoa_code_hash)
@@ -375,8 +386,10 @@ fn test_layer1_revert() {
         construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action2 = L1Action {
-        context: L1ActionContext::SubmitTxs {
+        context: L1ActionContext::SubmitBlock {
+            l2block: block_result.block.clone(),
             deposit_requests: vec![deposit],
+            reverted_block_hashes: vec![],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -387,8 +400,8 @@ fn test_layer1_revert() {
         updates: vec![action2.clone()],
         reverts: Default::default(),
     };
-    let event = chain.sync(param).unwrap();
-    assert_eq!(event, SyncEvent::Success);
+    chain.sync(param).unwrap();
+    assert_eq!(chain.last_sync_event().is_success(), true);
     let tip_block = chain.store().get_tip_block().unwrap();
     let tip_block_number: u64 = tip_block.raw().number().unpack();
     assert_eq!(tip_block_number, 2);
@@ -418,8 +431,8 @@ fn test_layer1_revert() {
         updates: Default::default(),
         reverts,
     };
-    let event = chain.sync(param).unwrap();
-    assert_eq!(event, SyncEvent::Success);
+    chain.sync(param).unwrap();
+    assert_eq!(chain.last_sync_event().is_success(), true);
 
     let tip_block = chain.store().get_tip_block().unwrap();
     let tip_block_number: u64 = tip_block.raw().number().unpack();
@@ -466,8 +479,8 @@ fn test_layer1_revert() {
         updates,
         reverts: Default::default(),
     };
-    let event = chain.sync(param).unwrap();
-    assert_eq!(event, SyncEvent::Success);
+    chain.sync(param).unwrap();
+    assert_eq!(chain.last_sync_event().is_success(), true);
 
     // check block2 agnain
 
@@ -572,9 +585,14 @@ fn test_sync_blocks() {
 
     drop(chain1);
 
-    assert_eq!(chain2.sync(sync_1).expect("success"), SyncEvent::Success);
-    assert_eq!(chain2.sync(sync_2).expect("success"), SyncEvent::Success);
-    assert_eq!(chain2.sync(sync_3).expect("success"), SyncEvent::Success);
+    chain2.sync(sync_1).expect("success");
+    assert_eq!(chain2.last_sync_event().is_success(), true);
+
+    chain2.sync(sync_2).expect("success");
+    assert_eq!(chain2.last_sync_event().is_success(), true);
+
+    chain2.sync(sync_3).expect("success");
+    assert_eq!(chain2.last_sync_event().is_success(), true);
 
     // check state
     {

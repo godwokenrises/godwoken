@@ -99,6 +99,15 @@ pub enum SyncEvent {
     },
 }
 
+impl SyncEvent {
+    pub fn is_success(&self) -> bool {
+        match self {
+            SyncEvent::Success => true,
+            _ => false,
+        }
+    }
+}
+
 /// concrete type aliases
 pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
 
