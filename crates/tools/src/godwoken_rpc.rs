@@ -28,8 +28,8 @@ impl GodwokenRpcClient {
             .map(|opt| opt.map(Into::into))
     }
 
-    pub fn get_balance(&mut self, account_id: u32, sudt_id: u32) -> Result<u128, String> {
-        let params = serde_json::to_value((AccountID::from(account_id), AccountID::from(sudt_id)))
+    pub fn get_balance(&mut self, short_address: JsonBytes, sudt_id: u32) -> Result<u128, String> {
+        let params = serde_json::to_value((short_address, AccountID::from(sudt_id)))
             .map_err(|err| err.to_string())?;
         self.rpc::<Uint128>("get_balance", params).map(Into::into)
     }
@@ -62,6 +62,16 @@ impl GodwokenRpcClient {
         let params =
             serde_json::to_value((AccountID::from(account_id),)).map_err(|err| err.to_string())?;
         self.rpc::<H256>("get_script_hash", params).map(Into::into)
+    }
+
+    pub fn get_script_hash_by_short_address(
+        &mut self,
+        short_address: JsonBytes,
+    ) -> Result<H256, String> {
+        let params = serde_json::to_value((short_address,)).map_err(|err| err.to_string())?;
+
+        self.rpc::<H256>("get_script_hash_by_short_address", params)
+            .map(Into::into)
     }
 
     fn rpc<SuccessResponse: serde::de::DeserializeOwned>(

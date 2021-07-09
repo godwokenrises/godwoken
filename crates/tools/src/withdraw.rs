@@ -71,13 +71,11 @@ pub fn withdraw(
         .ok_or_else(|| "Privkey file is empty".to_string())?;
     let privkey = H256::from_str(&privkey_string.trim()[2..]).map_err(|err| err.to_string())?;
 
+    let from_address =
+        privkey_to_short_address(&privkey_string, &rollup_type_hash, &deployment_result)?;
+
     // get from_id
-    let from_id = privkey_to_account_id(
-        &mut godwoken_rpc_client,
-        &privkey_string,
-        &rollup_type_hash,
-        &deployment_result,
-    )?;
+    let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
     let from_id = from_id.expect("from id not found!");
     let nonce = godwoken_rpc_client.get_nonce(from_id)?;
 
@@ -106,12 +104,13 @@ pub fn withdraw(
 
     log::info!("withdrawal_request: {}", withdrawal_request);
 
-    let init_balance = godwoken_rpc_client.get_balance(from_id, 1)?;
+    let init_balance =
+        godwoken_rpc_client.get_balance(JsonBytes::from_bytes(from_address.clone()), 1)?;
 
     let bytes = JsonBytes::from_bytes(withdrawal_request.as_bytes());
     godwoken_rpc_client.submit_withdrawal_request(bytes)?;
 
-    wait_for_balance_change(&mut godwoken_rpc_client, from_id, init_balance, 180u64)?;
+    wait_for_balance_change(&mut godwoken_rpc_client, from_address, init_balance, 180u64)?;
 
     Ok(())
 }
@@ -196,12 +195,11 @@ fn get_signature(msg: &H256, privkey: H256) -> Result<[u8; 65], String> {
     Ok(signature)
 }
 
-fn privkey_to_account_id(
-    godwoken_rpc_client: &mut GodwokenRpcClient,
+fn privkey_to_short_address(
     privkey: &str,
     rollup_type_hash: &H256,
     deployment_result: &ScriptsDeploymentResult,
-) -> Result<Option<u32>, String> {
+) -> Result<GwBytes, String> {
     let eth_address = privkey_to_eth_address(privkey)?;
 
     let code_hash = Byte32::from_slice(
@@ -230,6 +228,19 @@ fn privkey_to_account_id(
         hash.into()
     };
 
+    let short_address = &script_hash.as_bytes()[..20];
+
+    let addr = GwBytes::from(short_address.to_vec());
+
+    Ok(addr)
+}
+
+fn short_address_to_account_id(
+    godwoken_rpc_client: &mut GodwokenRpcClient,
+    short_address: &GwBytes,
+) -> Result<Option<u32>, String> {
+    let bytes = JsonBytes::from_bytes(short_address.clone());
+    let script_hash = godwoken_rpc_client.get_script_hash_by_short_address(bytes)?;
     let account_id = godwoken_rpc_client.get_account_id_by_script_hash(script_hash)?;
 
     Ok(account_id)
@@ -237,7 +248,7 @@ fn privkey_to_account_id(
 
 fn wait_for_balance_change(
     godwoken_rpc_client: &mut GodwokenRpcClient,
-    from_id: u32,
+    from_address: GwBytes,
     init_balance: u128,
     timeout_secs: u64,
 ) -> Result<(), String> {
@@ -246,7 +257,8 @@ fn wait_for_balance_change(
     while start_time.elapsed() < retry_timeout {
         std::thread::sleep(Duration::from_secs(2));
 
-        let balance = godwoken_rpc_client.get_balance(from_id, 1)?;
+        let balance =
+            godwoken_rpc_client.get_balance(JsonBytes::from_bytes(from_address.clone()), 1)?;
         log::info!(
             "current balance: {}, waiting for {} secs.",
             balance,

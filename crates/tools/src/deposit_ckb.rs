@@ -2,6 +2,7 @@ use crate::deploy_scripts::ScriptsDeploymentResult;
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::utils::{get_network_type, run_cmd, wait_for_tx};
 use ckb_fixed_hash::H256;
+use ckb_jsonrpc_types::JsonBytes;
 use ckb_sdk::{Address, AddressPayload, HttpRpcClient, SECP256K1};
 use ckb_types::{
     bytes::Bytes as CKBBytes, core::ScriptHashType, packed::Script as CKBScript,
@@ -113,7 +114,12 @@ pub fn deposit_ckb(
     let address: Address = Address::new(network_type, address_payload);
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
-    let init_balance = get_balance_by_script_hash(&mut godwoken_rpc_client, &l2_lock_hash)?;
+
+    let short_address = &l2_lock_hash.as_bytes()[..20];
+    log::info!("short address: 0x{}", hex::encode(short_address));
+
+    let init_balance =
+        get_balance_by_short_address(&mut godwoken_rpc_client, short_address.to_vec())?;
 
     let output = run_cmd(vec![
         "--url",
@@ -193,7 +199,8 @@ fn wait_for_balance_change(
     while start_time.elapsed() < retry_timeout {
         std::thread::sleep(Duration::from_secs(2));
 
-        let balance = get_balance_by_script_hash(godwoken_rpc_client, from_script_hash)?;
+        let short_address = &from_script_hash.as_bytes()[..20];
+        let balance = get_balance_by_short_address(godwoken_rpc_client, short_address.to_vec())?;
         log::info!(
             "current balance: {}, waiting for {} secs.",
             balance,
@@ -212,16 +219,11 @@ fn wait_for_balance_change(
     Err(format!("Timeout: {:?}", retry_timeout))
 }
 
-fn get_balance_by_script_hash(
+fn get_balance_by_short_address(
     godwoken_rpc_client: &mut GodwokenRpcClient,
-    script_hash: &H256,
+    short_address: Vec<u8>,
 ) -> Result<u128, String> {
-    let account_id = godwoken_rpc_client.get_account_id_by_script_hash(script_hash.clone())?;
-    match account_id {
-        Some(id) => {
-            let balance = godwoken_rpc_client.get_balance(id, 1)?;
-            Ok(balance)
-        }
-        None => Ok(0u128),
-    }
+    let bytes = JsonBytes::from_vec(short_address);
+    let balance = godwoken_rpc_client.get_balance(bytes, 1)?;
+    Ok(balance)
 }
