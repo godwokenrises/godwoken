@@ -262,9 +262,9 @@ impl BlockProducer {
         median_time: Duration,
         rollup_cell: CellInfo,
     ) -> Result<()> {
-        if TestMode::Enable == self.tests_control.mode() {
-            match self.tests_control.payload().await {
-                Some(TestModePayload::None) => self.tests_control.clear_none().await?,
+        if let Some(ref tests_control) = self.tests_control {
+            match tests_control.payload().await {
+                Some(TestModePayload::None) => tests_control.clear_none().await?,
                 Some(TestModePayload::BadBlock { .. }) => (),
                 _ => unreachable!(),
             }
