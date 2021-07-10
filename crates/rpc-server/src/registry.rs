@@ -295,7 +295,7 @@ enum GetBalanceParams {
     Number(
         JsonBytes,
         AccountID,
-        Option<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64>,
+        Option<GwUint64>,
     ),
 }
 
