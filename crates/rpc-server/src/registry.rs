@@ -214,8 +214,8 @@ async fn execute_l2transaction(
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 enum ExecuteRawL2TransactionParams {
-    Tip(JsonBytes),
-    Number(JsonBytes, Option<GwUint64>),
+    Tip((JsonBytes,)),
+    Number((JsonBytes, Option<GwUint64>)),
 }
 
 async fn execute_raw_l2transaction(
@@ -224,8 +224,8 @@ async fn execute_raw_l2transaction(
     store: Data<Store>,
 ) -> Result<Option<RunResult>> {
     let (raw_l2tx, block_number) = match params {
-        ExecuteRawL2TransactionParams::Tip(raw_l2tx) => (raw_l2tx, None),
-        ExecuteRawL2TransactionParams::Number(raw_l2tx, block_number) => (raw_l2tx, block_number),
+        ExecuteRawL2TransactionParams::Tip(p) => (p.0, None),
+        ExecuteRawL2TransactionParams::Number(p) => p,
     };
 
     let raw_l2tx_bytes = raw_l2tx.into_bytes();
@@ -291,12 +291,8 @@ async fn submit_withdrawal_request(
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 enum GetBalanceParams {
-    Tip(JsonBytes, AccountID),
-    Number(
-        JsonBytes,
-        AccountID,
-        Option<GwUint64>,
-    ),
+    Tip((JsonBytes, AccountID)),
+    Number((JsonBytes, AccountID, Option<GwUint64>)),
 }
 
 async fn get_balance(
@@ -304,10 +300,8 @@ async fn get_balance(
     store: Data<Store>,
 ) -> Result<Uint128> {
     let (short_address, sudt_id, block_number) = match params {
-        GetBalanceParams::Tip(short_address, sudt_id) => (short_address, sudt_id, None),
-        GetBalanceParams::Number(short_address, sudt_id, block_number) => {
-            (short_address, sudt_id, block_number)
-        }
+        GetBalanceParams::Tip(p) => (p.0, p.1, None),
+        GetBalanceParams::Number(p) => p,
     };
 
     let db = store.begin_transaction();
@@ -330,8 +324,8 @@ async fn get_balance(
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 enum GetStorageAtParams {
-    Tip(AccountID, JsonH256),
-    Number(AccountID, JsonH256, Option<GwUint64>),
+    Tip((AccountID, JsonH256)),
+    Number((AccountID, JsonH256, Option<GwUint64>)),
 }
 
 async fn get_storage_at(
@@ -339,10 +333,8 @@ async fn get_storage_at(
     store: Data<Store>,
 ) -> Result<JsonH256> {
     let (account_id, key, block_number) = match params {
-        GetStorageAtParams::Tip(account_id, key) => (account_id, key, None),
-        GetStorageAtParams::Number(account_id, key, block_number) => {
-            (account_id, key, block_number)
-        }
+        GetStorageAtParams::Tip(p) => (p.0, p.1, None),
+        GetStorageAtParams::Number(p) => p,
     };
 
     let db = store.begin_transaction();
@@ -390,14 +382,14 @@ async fn get_account_id_by_script_hash(
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 enum GetNonceParams {
-    Tip(AccountID),
-    Number(AccountID, Option<GwUint64>),
+    Tip((AccountID,)),
+    Number((AccountID, Option<GwUint64>)),
 }
 
 async fn get_nonce(Params(params): Params<GetNonceParams>, store: Data<Store>) -> Result<Uint32> {
     let (account_id, block_number) = match params {
-        GetNonceParams::Tip(account_id) => (account_id, None),
-        GetNonceParams::Number(account_id, block_number) => (account_id, block_number),
+        GetNonceParams::Tip(p) => (p.0, None),
+        GetNonceParams::Number(p) => p,
     };
 
     let db = store.begin_transaction();
@@ -473,8 +465,8 @@ async fn get_script_hash_by_short_address(
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 enum GetDataParams {
-    Tip(JsonH256),
-    Number(JsonH256, Option<GwUint64>),
+    Tip((JsonH256,)),
+    Number((JsonH256, Option<GwUint64>)),
 }
 
 async fn get_data(
@@ -482,8 +474,8 @@ async fn get_data(
     store: Data<Store>,
 ) -> Result<Option<JsonBytes>> {
     let (data_hash, block_number) = match params {
-        GetDataParams::Tip(data_hash) => (data_hash, None),
-        GetDataParams::Number(data_hash, block_number) => (data_hash, block_number),
+        GetDataParams::Tip(p) => (p.0, None),
+        GetDataParams::Number(p) => p,
     };
 
     let db = store.begin_transaction();
