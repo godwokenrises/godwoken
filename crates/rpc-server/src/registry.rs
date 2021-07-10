@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{state::State, H256};
@@ -222,7 +222,7 @@ async fn execute_raw_l2transaction(
     Params(params): Params<ExecuteRawL2TransactionParams>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<Option<RunResult>> {
+) -> Result<RunResult> {
     let (raw_l2tx, block_number) = match params {
         ExecuteRawL2TransactionParams::Tip(p) => (p.0, None),
         ExecuteRawL2TransactionParams::Number(p) => p,
@@ -236,14 +236,15 @@ async fn execute_raw_l2transaction(
         Some(num) => num.value(),
         None => db.get_tip_block()?.raw().number().unpack(),
     };
+    let not_found_err = Err(anyhow!("header not found"));
     let block_hash = match db.get_block_hash_by_number(block_number)? {
         Some(block_hash) => block_hash,
-        None => return Ok(None),
+        None => return not_found_err,
     };
 
     let raw_block = match store.get_block(&block_hash)? {
         Some(block) => block.raw(),
-        None => return Ok(None),
+        None => return not_found_err,
     };
     let block_producer_id = raw_block.block_producer_id();
     let timestamp = raw_block.timestamp();
@@ -262,7 +263,7 @@ async fn execute_raw_l2transaction(
         .lock()
         .execute_raw_transaction(raw_l2tx, &block_info, block_number)?
         .into();
-    Ok(Some(run_result))
+    Ok(run_result)
 }
 
 async fn submit_l2transaction(
