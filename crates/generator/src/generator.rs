@@ -360,7 +360,7 @@ impl Generator {
                 Err(err) => {
                     let target = build_challenge_target(
                         block_hash.into(),
-                        ChallengeTargetType::TxSignature,
+                        ChallengeTargetType::TxExecution,
                         tx_index as u32,
                     );
 
