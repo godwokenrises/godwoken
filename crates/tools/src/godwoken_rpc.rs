@@ -2,7 +2,8 @@ use ckb_jsonrpc_types::Script;
 use ckb_types::H256;
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
-    godwoken::{RunResult, TxReceipt},
+    godwoken::{GlobalState, RunResult, TxReceipt},
+    test_mode::{ShouldProduceBlock, TestModePayload},
 };
 use std::{u128, u32};
 
@@ -106,6 +107,22 @@ impl GodwokenRpcClient {
         let params = serde_json::to_value((tx_hash,)).map_err(|err| err.to_string())?;
         self.rpc::<Option<TxReceipt>>("get_transaction_receipt", params)
             .map(|opt| opt.map(Into::into))
+    }
+
+    pub fn tests_should_produce_block(&mut self) -> Result<ShouldProduceBlock, String> {
+        self.rpc::<ShouldProduceBlock>("tests_should_produce_block", serde_json::Value::Null)
+    }
+
+    pub fn tests_get_global_state(&mut self) -> Result<GlobalState, String> {
+        self.rpc::<GlobalState>("tests_get_global_state", serde_json::Value::Null)
+    }
+
+    pub fn tests_produce_block(
+        &mut self,
+        test_mode_payload: TestModePayload,
+    ) -> Result<(), String> {
+        let params = serde_json::to_value((test_mode_payload,)).map_err(|err| err.to_string())?;
+        self.rpc("tests_produce_block", params)
     }
 
     fn rpc<SuccessResponse: serde::de::DeserializeOwned>(
