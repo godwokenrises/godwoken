@@ -298,6 +298,11 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     log::error!("syscall error: get script hash by account id: {:?}", err);
                     VMError::Unexpected
                 })?;
+                // return not found if script_hash is zero, otherwise we search the script from DB
+                if script_hash.is_zero() {
+                    machine.set_register(A0, Mac::REG::from_u8(ERROR_NOT_FOUND));
+                    return Ok(true);
+                }
                 let script = self.get_script(&script_hash).ok_or_else(|| {
                     log::error!(
                         "syscall error: script not found by script hash: {:?}",
