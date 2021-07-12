@@ -253,9 +253,12 @@ impl MemPool {
         &self,
         raw_tx: RawL2Transaction,
         block_info: &BlockInfo,
+        block_number: u64,
     ) -> Result<RunResult> {
         let db = self.store.begin_transaction();
-        let state_db = self.fetch_state_db(&db)?;
+        let check_point = CheckPoint::new(block_number, SubState::Block);
+        let state_db =
+            StateDBTransaction::from_checkpoint(&db, check_point, StateDBMode::ReadOnly)?;
         let state = state_db.account_state_tree()?;
         let tip_block_hash = self.store.get_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);

@@ -18,7 +18,7 @@ use gw_types::{
     packed::{self, BlockInfo},
     prelude::*,
 };
-use jsonrpc_v2::{Data, MapRouter, Params, Server, Server as JsonrpcServer};
+use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -28,6 +28,9 @@ type MemPool = Mutex<gw_mem_pool::pool::MemPool>;
 type AccountID = Uint32;
 type JsonH256 = ckb_fixed_hash::H256;
 type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
+type GwUint64 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint64;
+
+const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
 
 #[async_trait]
 pub trait TestModeRPC {
@@ -206,15 +209,45 @@ async fn execute_l2transaction(
     Ok(run_result)
 }
 
+// raw_l2tx, block_number
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum ExecuteRawL2TransactionParams {
+    Tip((JsonBytes,)),
+    Number((JsonBytes, Option<GwUint64>)),
+}
+
 async fn execute_raw_l2transaction(
-    Params((raw_l2tx,)): Params<(JsonBytes,)>,
+    Params(params): Params<ExecuteRawL2TransactionParams>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<RunResult> {
+) -> Result<RunResult, RpcError> {
+    let (raw_l2tx, block_number) = match params {
+        ExecuteRawL2TransactionParams::Tip(p) => (p.0, None),
+        ExecuteRawL2TransactionParams::Number(p) => p,
+    };
+
     let raw_l2tx_bytes = raw_l2tx.into_bytes();
     let raw_l2tx = packed::RawL2Transaction::from_slice(&raw_l2tx_bytes)?;
 
-    let raw_block = store.get_tip_block()?.raw();
+    let db = store.begin_transaction();
+    let block_number = match block_number {
+        Some(num) => num.value(),
+        None => db.get_tip_block()?.raw().number().unpack(),
+    };
+    let not_found_err = Err(RpcError::Provided {
+        code: HEADER_NOT_FOUND_ERR_CODE,
+        message: "header not found",
+    });
+    let block_hash = match db.get_block_hash_by_number(block_number)? {
+        Some(block_hash) => block_hash,
+        None => return not_found_err,
+    };
+
+    let raw_block = match store.get_block(&block_hash)? {
+        Some(block) => block.raw(),
+        None => return not_found_err,
+    };
     let block_producer_id = raw_block.block_producer_id();
     let timestamp = raw_block.timestamp();
     let number = {
@@ -230,7 +263,7 @@ async fn execute_raw_l2transaction(
 
     let run_result: RunResult = mem_pool
         .lock()
-        .execute_raw_transaction(raw_l2tx, &block_info)?
+        .execute_raw_transaction(raw_l2tx, &block_info, block_number)?
         .into();
     Ok(run_result)
 }
@@ -257,15 +290,38 @@ async fn submit_withdrawal_request(
     Ok(())
 }
 
+// short_address, sudt_id, block_number
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum GetBalanceParams {
+    Tip((JsonBytes, AccountID)),
+    Number((JsonBytes, AccountID, Option<GwUint64>)),
+}
+
 async fn get_balance(
-    Params((short_address, sudt_id)): Params<(JsonBytes, AccountID)>,
+    Params(params): Params<GetBalanceParams>,
     store: Data<Store>,
-) -> Result<Uint128> {
+) -> Result<Uint128, RpcError> {
+    let (short_address, sudt_id, block_number) = match params {
+        GetBalanceParams::Tip(p) => (p.0, p.1, None),
+        GetBalanceParams::Number(p) => p,
+    };
+
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
+    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
+    let block_number = match block_number {
+        Some(num) => num.value(),
+        None => tip_block_number,
+    };
+    if block_number > tip_block_number {
+        return Err(RpcError::Provided {
+            code: HEADER_NOT_FOUND_ERR_CODE,
+            message: "header not found",
+        });
+    }
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        CheckPoint::new(block_number, SubState::Block),
         StateDBMode::ReadOnly,
     )?;
 
@@ -274,15 +330,38 @@ async fn get_balance(
     Ok(balance.into())
 }
 
+// account_id, key, block_number
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum GetStorageAtParams {
+    Tip((AccountID, JsonH256)),
+    Number((AccountID, JsonH256, Option<GwUint64>)),
+}
+
 async fn get_storage_at(
-    Params((account_id, key)): Params<(AccountID, JsonH256)>,
+    Params(params): Params<GetStorageAtParams>,
     store: Data<Store>,
-) -> Result<JsonH256> {
+) -> Result<JsonH256, RpcError> {
+    let (account_id, key, block_number) = match params {
+        GetStorageAtParams::Tip(p) => (p.0, p.1, None),
+        GetStorageAtParams::Number(p) => p,
+    };
+
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
+    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
+    let block_number = match block_number {
+        Some(num) => num.value(),
+        None => tip_block_number,
+    };
+    if block_number > tip_block_number {
+        return Err(RpcError::Provided {
+            code: HEADER_NOT_FOUND_ERR_CODE,
+            message: "header not found",
+        });
+    }
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        CheckPoint::new(block_number, SubState::Block),
         StateDBMode::ReadOnly,
     )?;
 
@@ -316,15 +395,38 @@ async fn get_account_id_by_script_hash(
     Ok(account_id_opt)
 }
 
+// account_id, block_number
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum GetNonceParams {
+    Tip((AccountID,)),
+    Number((AccountID, Option<GwUint64>)),
+}
+
 async fn get_nonce(
-    Params((account_id,)): Params<(AccountID,)>,
+    Params(params): Params<GetNonceParams>,
     store: Data<Store>,
-) -> Result<Uint32> {
+) -> Result<Uint32, RpcError> {
+    let (account_id, block_number) = match params {
+        GetNonceParams::Tip(p) => (p.0, None),
+        GetNonceParams::Number(p) => p,
+    };
+
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
+    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
+    let block_number = match block_number {
+        Some(num) => num.value(),
+        None => tip_block_number,
+    };
+    if block_number > tip_block_number {
+        return Err(RpcError::Provided {
+            code: HEADER_NOT_FOUND_ERR_CODE,
+            message: "header not found",
+        });
+    }
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        CheckPoint::new(block_number, SubState::Block),
         StateDBMode::ReadOnly,
     )?;
     let tree = state_db.account_state_tree()?;
@@ -386,15 +488,38 @@ async fn get_script_hash_by_short_address(
     Ok(script_hash_opt.map(to_jsonh256))
 }
 
+// data_hash, block_number
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum GetDataParams {
+    Tip((JsonH256,)),
+    Number((JsonH256, Option<GwUint64>)),
+}
+
 async fn get_data(
-    Params((data_hash,)): Params<(JsonH256,)>,
+    Params(params): Params<GetDataParams>,
     store: Data<Store>,
-) -> Result<Option<JsonBytes>> {
+) -> Result<Option<JsonBytes>, RpcError> {
+    let (data_hash, block_number) = match params {
+        GetDataParams::Tip(p) => (p.0, None),
+        GetDataParams::Number(p) => p,
+    };
+
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
+    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
+    let block_number = match block_number {
+        Some(num) => num.value(),
+        None => tip_block_number,
+    };
+    if block_number > tip_block_number {
+        return Err(RpcError::Provided {
+            code: HEADER_NOT_FOUND_ERR_CODE,
+            message: "header not found",
+        });
+    }
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
+        CheckPoint::new(block_number, SubState::Block),
         StateDBMode::ReadOnly,
     )?;
     let tree = state_db.account_state_tree()?;
