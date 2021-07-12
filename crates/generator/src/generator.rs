@@ -366,7 +366,10 @@ impl Generator {
     }
 
     fn load_backend<S: State + CodeStore>(&self, state: &S, script_hash: &H256) -> Option<Backend> {
-        log::debug!("load_backend for script_hash: {:?}", script_hash);
+        log::debug!(
+            "load_backend for script_hash: {}",
+            hex::encode(script_hash.as_slice())
+        );
         state
             .get_script(&script_hash)
             .and_then(|script| {
