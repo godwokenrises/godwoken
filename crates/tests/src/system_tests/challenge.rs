@@ -1,5 +1,5 @@
 use ckb_jsonrpc_types::{Uint32, Uint64};
-use gw_jsonrpc_types::test_mode::{ChallengeType, ShouldProduceBlock, TestModePayload};
+use gw_jsonrpc_types::{godwoken::GlobalState, test_mode::{ChallengeType, ShouldProduceBlock, TestModePayload}};
 use gw_tools::godwoken_rpc::GodwokenRpcClient;
 use std::{thread::sleep, time::Duration};
 
@@ -10,6 +10,14 @@ struct TestModeRpc {
 }
 
 impl TestModeRpc {
+    fn get_global_state(&mut self) -> Result<GlobalState, String> {
+        self.godwoken_rpc.tests_get_global_state()
+    }
+
+    fn should_produce_block(&mut self) -> Result<ShouldProduceBlock, String> {
+        self.godwoken_rpc.tests_should_produce_block()
+    }
+    
     fn issue_block(&mut self) -> Result<(), String> {
         self.godwoken_rpc.tests_produce_block(TestModePayload::None)
     }
@@ -43,6 +51,22 @@ impl TestModeRpc {
 
 pub fn issue_test_blocks(count: i32) -> Result<(), String> {
     log::info!("[Test]: issue test blocks");
+    let mut test_mode_rpc = TestModeRpc {
+        godwoken_rpc: GodwokenRpcClient::new(GODWOKEN_RPC_URL),
+    };
+    let mut i = 0;
+    while i < count {
+        let ret = test_mode_rpc.should_produce_block()?;
+        if let ShouldProduceBlock::Yes = ret {
+            test_mode_rpc.issue_block()?;
+            let state = test_mode_rpc.get_global_state()?;
+            println!("state is: {:?}", state);
+            i += 1;
+            log::info!("issue blocks: {}", i);
+            sleep(Duration::from_secs(1));
+        }
+    }
+    log::info!("Finished.");
     Ok(())
 }
 
