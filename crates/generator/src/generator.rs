@@ -55,7 +55,7 @@ pub enum StateTransitionResult {
         target: ChallengeTarget,
         error: Error,
     },
-    Generator(Error),
+    Error(Error),
 }
 
 pub struct Generator {
@@ -306,14 +306,14 @@ impl Generator {
             match state.apply_withdrawal_request(&self.rollup_context, block_producer_id, &request)
             {
                 Ok(withdrawal_receipt) => withdrawal_receipts.push(withdrawal_receipt),
-                Err(err) => return StateTransitionResult::Generator(err),
+                Err(err) => return StateTransitionResult::Error(err),
             }
         }
 
         // apply deposition to state
         if let Err(err) = state.apply_deposit_requests(&self.rollup_context, &args.deposit_requests)
         {
-            return StateTransitionResult::Generator(err);
+            return StateTransitionResult::Error(err);
         }
 
         // handle transactions
@@ -335,7 +335,7 @@ impl Generator {
             // check nonce
             let raw_tx = tx.raw();
             let expected_nonce = match state.get_nonce(raw_tx.from_id().unpack()) {
-                Err(err) => return StateTransitionResult::Generator(Error::from(err)),
+                Err(err) => return StateTransitionResult::Error(Error::from(err)),
                 Ok(nonce) => nonce,
             };
             let actual_nonce: u32 = raw_tx.nonce().unpack();
@@ -403,7 +403,7 @@ impl Generator {
             };
 
             if let Err(err) = apply_result() {
-                return StateTransitionResult::Generator(err);
+                return StateTransitionResult::Error(err);
             }
         }
 

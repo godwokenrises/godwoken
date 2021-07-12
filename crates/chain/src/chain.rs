@@ -766,7 +766,7 @@ impl Chain {
                         witness: build_challenge_witness(db, l2block.raw())?,
                     }));
                 }
-                StateTransitionResult::Generator(err) => return Err(err.into()),
+                StateTransitionResult::Error(err) => return Err(err.into()),
             };
 
         // update chain
