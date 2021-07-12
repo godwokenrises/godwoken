@@ -5,6 +5,7 @@ mod generate_config;
 pub mod godwoken_rpc;
 mod prepare_scripts;
 mod setup;
+mod transfer;
 mod utils;
 mod withdraw;
 
@@ -362,6 +363,67 @@ fn main() {
                         .required(true)
                         .help("The godwoken nodes configs output dir path"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("transfer")
+                .about("transfer CKB / sUDT to another account")
+                .arg(arg_privkey_path.clone())
+                .arg(
+                    Arg::with_name("deployment-results-path")
+                        .short("d")
+                        .long("deployment-results-path")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The deployment results json file path"),
+                )
+                .arg(
+                    Arg::with_name("config-path")
+                        .short("o")
+                        .long("config-path")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The config.toml file path"),
+                )
+                .arg(
+                    Arg::with_name("amount")
+                        .short("m")
+                        .long("amount")
+                        .takes_value(true)
+                        .default_value("0")
+                        .help("sUDT amount to transfer, CKB in shannon"),
+                )
+                .arg(
+                    Arg::with_name("fee")
+                        .short("f")
+                        .long("fee")
+                        .takes_value(true)
+                        .required(true)
+                        .help("transfer fee"),
+                )
+                .arg(
+                    Arg::with_name("to")
+                        .short("t")
+                        .long("to")
+                        .takes_value(true)
+                        .required(true)
+                        .help("to short address OR to account id"),
+                )
+                .arg(
+                    Arg::with_name("sudt-id")
+                        .short("s")
+                        .long("sudt-id")
+                        .takes_value(true)
+                        .required(true)
+                        .help("sudt id"),
+                )
+                .arg(
+                    Arg::with_name("godwoken-rpc-url")
+                        .short("g")
+                        .long("godwoken-rpc-url")
+                        .takes_value(true)
+                        .default_value("http://127.0.0.1:8119")
+                        .help("Godwoken jsonrpc rpc sever URL"),
+                ),
         );
 
     let matches = app.clone().get_matches();
@@ -520,6 +582,34 @@ fn main() {
                 server_url,
                 output_dir,
             );
+        }
+        ("transfer", Some(m)) => {
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let amount = m.value_of("amount").unwrap();
+            let fee = m.value_of("fee").unwrap();
+            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let config_path = Path::new(m.value_of("config-path").unwrap());
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+            let to = m.value_of("to").unwrap();
+            let sudt_id = m
+                .value_of("sudt-id")
+                .unwrap()
+                .parse()
+                .expect("sudt id format error");
+
+            if let Err(err) = transfer::transfer(
+                godwoken_rpc_url,
+                privkey_path,
+                to.trim(),
+                sudt_id,
+                amount,
+                fee,
+                config_path,
+                deployment_results_path,
+            ) {
+                log::error!("Transfer error: {}", err);
+                std::process::exit(-1);
+            };
         }
         _ => {
             app.print_help().expect("print help");
