@@ -186,7 +186,7 @@ fn sign_message(msg: &H256, privkey_data: H256) -> Result<[u8; 65], String> {
     Ok(inner)
 }
 
-fn get_signature(msg: &H256, privkey: H256) -> Result<[u8; 65], String> {
+pub fn get_signature(msg: &H256, privkey: H256) -> Result<[u8; 65], String> {
     let mut signature = sign_message(msg, privkey)?;
     let v = &mut signature[64];
     if *v >= 27 {
@@ -195,7 +195,7 @@ fn get_signature(msg: &H256, privkey: H256) -> Result<[u8; 65], String> {
     Ok(signature)
 }
 
-fn privkey_to_short_address(
+pub fn privkey_to_short_address(
     privkey: &str,
     rollup_type_hash: &H256,
     deployment_result: &ScriptsDeploymentResult,
@@ -235,7 +235,7 @@ fn privkey_to_short_address(
     Ok(addr)
 }
 
-fn short_address_to_account_id(
+pub fn short_address_to_account_id(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     short_address: &GwBytes,
 ) -> Result<Option<u32>, String> {

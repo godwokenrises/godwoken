@@ -1,5 +1,8 @@
 use ckb_types::H256;
-use gw_jsonrpc_types::ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32};
+use gw_jsonrpc_types::{
+    ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
+    godwoken::{RunResult, TxReceipt},
+};
 use std::{u128, u32};
 
 type AccountID = Uint32;
@@ -72,6 +75,24 @@ impl GodwokenRpcClient {
 
         self.rpc::<H256>("get_script_hash_by_short_address", params)
             .map(Into::into)
+    }
+
+    pub fn submit_l2transaction(&mut self, l2tx: JsonBytes) -> Result<H256, String> {
+        let params = serde_json::to_value((l2tx,)).map_err(|err| err.to_string())?;
+        self.rpc::<H256>("submit_l2transaction", params)
+            .map(Into::into)
+    }
+
+    pub fn execute_l2transaction(&mut self, l2tx: JsonBytes) -> Result<RunResult, String> {
+        let params = serde_json::to_value((l2tx,)).map_err(|err| err.to_string())?;
+        self.rpc::<RunResult>("execute_l2transaction", params)
+            .map(Into::into)
+    }
+
+    pub fn get_transaction_receipt(&mut self, tx_hash: &H256) -> Result<Option<TxReceipt>, String> {
+        let params = serde_json::to_value((tx_hash,)).map_err(|err| err.to_string())?;
+        self.rpc::<Option<TxReceipt>>("get_transaction_receipt", params)
+            .map(|opt| opt.map(Into::into))
     }
 
     fn rpc<SuccessResponse: serde::de::DeserializeOwned>(
