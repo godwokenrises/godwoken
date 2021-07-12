@@ -56,7 +56,7 @@ pub struct WalletConfig {
 
 // NOTE: Rewards receiver lock must be different than lock in WalletConfig,
 // since stake_capacity(minus burnt) + challenge_capacity - tx_fee will never
-// every bigger or equal than stake_capacity(minus burnt) + challenge_capacity.
+// bigger or equal than stake_capacity(minus burnt) + challenge_capacity.
 // TODO: Support sudt stake ?
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ChallengerConfig {
