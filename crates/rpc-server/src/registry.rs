@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{state::State, H256};
@@ -19,7 +19,7 @@ use gw_types::{
     packed::{self, BlockInfo},
     prelude::*,
 };
-use jsonrpc_v2::{Data, MapRouter, Params, Server, Server as JsonrpcServer};
+use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -30,6 +30,8 @@ type AccountID = Uint32;
 type JsonH256 = ckb_fixed_hash::H256;
 type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
 type GwUint64 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint64;
+
+const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
 
 #[async_trait]
 pub trait TestModeRPC {
@@ -222,7 +224,7 @@ async fn execute_raw_l2transaction(
     Params(params): Params<ExecuteRawL2TransactionParams>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<RunResult> {
+) -> Result<RunResult, RpcError> {
     let (raw_l2tx, block_number) = match params {
         ExecuteRawL2TransactionParams::Tip(p) => (p.0, None),
         ExecuteRawL2TransactionParams::Number(p) => p,
@@ -236,7 +238,10 @@ async fn execute_raw_l2transaction(
         Some(num) => num.value(),
         None => db.get_tip_block()?.raw().number().unpack(),
     };
-    let not_found_err = Err(anyhow!("header not found"));
+    let not_found_err = Err(RpcError::Provided {
+        code: HEADER_NOT_FOUND_ERR_CODE,
+        message: "header not found",
+    });
     let block_hash = match db.get_block_hash_by_number(block_number)? {
         Some(block_hash) => block_hash,
         None => return not_found_err,
@@ -299,17 +304,24 @@ enum GetBalanceParams {
 async fn get_balance(
     Params(params): Params<GetBalanceParams>,
     store: Data<Store>,
-) -> Result<Uint128> {
+) -> Result<Uint128, RpcError> {
     let (short_address, sudt_id, block_number) = match params {
         GetBalanceParams::Tip(p) => (p.0, p.1, None),
         GetBalanceParams::Number(p) => p,
     };
 
     let db = store.begin_transaction();
+    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
     let block_number = match block_number {
         Some(num) => num.value(),
-        None => db.get_tip_block()?.raw().number().unpack(),
+        None => tip_block_number,
     };
+    if block_number > tip_block_number {
+        return Err(RpcError::Provided {
+            code: HEADER_NOT_FOUND_ERR_CODE,
+            message: "header not found",
+        });
+    }
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
         CheckPoint::new(block_number, SubState::Block),
@@ -332,17 +344,24 @@ enum GetStorageAtParams {
 async fn get_storage_at(
     Params(params): Params<GetStorageAtParams>,
     store: Data<Store>,
-) -> Result<JsonH256> {
+) -> Result<JsonH256, RpcError> {
     let (account_id, key, block_number) = match params {
         GetStorageAtParams::Tip(p) => (p.0, p.1, None),
         GetStorageAtParams::Number(p) => p,
     };
 
     let db = store.begin_transaction();
+    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
     let block_number = match block_number {
         Some(num) => num.value(),
-        None => db.get_tip_block()?.raw().number().unpack(),
+        None => tip_block_number,
     };
+    if block_number > tip_block_number {
+        return Err(RpcError::Provided {
+            code: HEADER_NOT_FOUND_ERR_CODE,
+            message: "header not found",
+        });
+    }
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
         CheckPoint::new(block_number, SubState::Block),
@@ -387,17 +406,27 @@ enum GetNonceParams {
     Number((AccountID, Option<GwUint64>)),
 }
 
-async fn get_nonce(Params(params): Params<GetNonceParams>, store: Data<Store>) -> Result<Uint32> {
+async fn get_nonce(
+    Params(params): Params<GetNonceParams>,
+    store: Data<Store>,
+) -> Result<Uint32, RpcError> {
     let (account_id, block_number) = match params {
         GetNonceParams::Tip(p) => (p.0, None),
         GetNonceParams::Number(p) => p,
     };
 
     let db = store.begin_transaction();
+    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
     let block_number = match block_number {
         Some(num) => num.value(),
-        None => db.get_tip_block()?.raw().number().unpack(),
+        None => tip_block_number,
     };
+    if block_number > tip_block_number {
+        return Err(RpcError::Provided {
+            code: HEADER_NOT_FOUND_ERR_CODE,
+            message: "header not found",
+        });
+    }
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
         CheckPoint::new(block_number, SubState::Block),
@@ -473,17 +502,24 @@ enum GetDataParams {
 async fn get_data(
     Params(params): Params<GetDataParams>,
     store: Data<Store>,
-) -> Result<Option<JsonBytes>> {
+) -> Result<Option<JsonBytes>, RpcError> {
     let (data_hash, block_number) = match params {
         GetDataParams::Tip(p) => (p.0, None),
         GetDataParams::Number(p) => p,
     };
 
     let db = store.begin_transaction();
+    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
     let block_number = match block_number {
         Some(num) => num.value(),
-        None => db.get_tip_block()?.raw().number().unpack(),
+        None => tip_block_number,
     };
+    if block_number > tip_block_number {
+        return Err(RpcError::Provided {
+            code: HEADER_NOT_FOUND_ERR_CODE,
+            message: "header not found",
+        });
+    }
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
         CheckPoint::new(block_number, SubState::Block),
