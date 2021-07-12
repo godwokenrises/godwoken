@@ -1,13 +1,12 @@
 use ckb_vm::Error as VMError;
 use gw_common::{error::Error as StateError, sparse_merkle_tree::error::Error as SMTError, H256};
-use gw_types::packed::ChallengeTarget;
 use thiserror::Error;
 
 /// Error
 #[derive(Error, PartialEq, Eq, Debug, Clone)]
 pub enum Error {
     #[error("Transaction error {0}")]
-    Transaction(TransactionErrorWithContext),
+    Transaction(TransactionError),
     #[error("State error {0:?}")]
     State(StateError),
     #[error("Account error {0:?}")]
@@ -100,12 +99,6 @@ impl From<AccountError> for Error {
     }
 }
 
-impl From<TransactionErrorWithContext> for Error {
-    fn from(err: TransactionErrorWithContext) -> Self {
-        Error::Transaction(err)
-    }
-}
-
 /// Transaction error
 #[derive(Error, Debug, PartialEq, Clone, Eq)]
 pub enum TransactionError {
@@ -147,20 +140,6 @@ impl From<StateError> for TransactionError {
 
 /// Transaction error with challenge context
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
-#[error("{error}")]
-pub struct TransactionErrorWithContext {
-    pub context: ChallengeTarget,
-    pub error: TransactionError,
-}
-
-impl TransactionErrorWithContext {
-    pub fn new(context: ChallengeTarget, error: TransactionError) -> Self {
-        Self { context, error }
-    }
-}
-
-/// Transaction error with challenge context
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum TransactionValidateError {
     #[error("Transaction error {0}")]
     Transaction(TransactionError),
@@ -193,5 +172,16 @@ impl From<LockAlgorithmError> for TransactionValidateError {
 impl From<StateError> for TransactionValidateError {
     fn from(err: StateError) -> Self {
         Self::State(err)
+    }
+}
+
+impl From<TransactionValidateError> for Error {
+    fn from(err: TransactionValidateError) -> Self {
+        match err {
+            TransactionValidateError::Transaction(err) => Error::Transaction(err),
+            TransactionValidateError::State(err) => Error::State(err),
+            TransactionValidateError::Account(err) => Error::Account(err),
+            TransactionValidateError::Unlock(err) => Error::Unlock(err),
+        }
     }
 }

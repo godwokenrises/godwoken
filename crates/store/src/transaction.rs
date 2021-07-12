@@ -4,9 +4,10 @@ use gw_db::schema::{
     Col, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
     COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD, COLUMN_CHECKPOINT,
     COLUMN_CUSTODIAN_ASSETS, COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META,
-    COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT,
-    META_ACCOUNT_SMT_COUNT_KEY, META_ACCOUNT_SMT_ROOT_KEY, META_BLOCK_SMT_ROOT_KEY,
-    META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
+    COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF, COLUMN_TRANSACTION,
+    COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY,
+    META_ACCOUNT_SMT_ROOT_KEY, META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY,
+    META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
 use gw_db::{
     error::Error, iter::DBIter, DBIterator, Direction::Forward, IteratorMode, RocksDBTransaction,
@@ -82,6 +83,35 @@ impl StoreTransaction {
         Ok(SMT::new(root, smt_store))
     }
 
+    pub fn get_reverted_block_smt_root(&self) -> Result<H256, Error> {
+        let slice = self
+            .get(COLUMN_META, META_REVERTED_BLOCK_SMT_ROOT_KEY)
+            .expect("must has root");
+        debug_assert_eq!(slice.len(), 32);
+        let mut root = [0u8; 32];
+        root.copy_from_slice(&slice);
+        Ok(root.into())
+    }
+
+    pub fn set_reverted_block_smt_root(&self, root: H256) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_META,
+            META_REVERTED_BLOCK_SMT_ROOT_KEY,
+            root.as_slice(),
+        )?;
+        Ok(())
+    }
+
+    pub fn reverted_block_smt(&self) -> Result<SMT<SMTStore<'_, Self>>, Error> {
+        let root = self.get_reverted_block_smt_root()?;
+        let smt_store = SMTStore::new(
+            COLUMN_REVERTED_BLOCK_SMT_LEAF,
+            COLUMN_REVERTED_BLOCK_SMT_BRANCH,
+            self,
+        );
+        Ok(SMT::new(root, smt_store))
+    }
+
     pub fn get_account_smt_root(&self) -> Result<H256, Error> {
         let slice = self
             .get(COLUMN_META, META_ACCOUNT_SMT_ROOT_KEY)
@@ -121,6 +151,11 @@ impl StoreTransaction {
                 .to_entity()
                 .unpack(),
         )
+    }
+
+    pub fn set_tip_block_hash(&self, block_hash: H256) -> Result<(), Error> {
+        let block_hash: [u8; 32] = block_hash.into();
+        self.insert_raw(COLUMN_META, &META_TIP_BLOCK_HASH_KEY, &block_hash)
     }
 
     pub fn get_tip_block(&self) -> Result<packed::L2Block, Error> {

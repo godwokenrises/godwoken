@@ -32,3 +32,13 @@ pub enum ChainEvent {
         new_block: Block,
     },
 }
+
+#[derive(Debug, Clone)]
+pub enum TxStatus {
+    /// Status "pending". The transaction is in the pool, and not proposed yet.
+    Pending,
+    /// Status "proposed". The transaction is in the pool and has been proposed.
+    Proposed,
+    /// Status "committed". The transaction has been committed to the canonical chain.
+    Committed,
+}

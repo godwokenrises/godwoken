@@ -5,8 +5,8 @@ use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_config::{
-    BackendConfig, BlockProducerConfig, ChainConfig, Config, GenesisConfig, NodeMode,
-    RPCClientConfig, RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
+    BackendConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config, GenesisConfig,
+    NodeMode, RPCClientConfig, RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
@@ -149,8 +149,67 @@ pub fn generate_config(
             scripts_results.withdrawal_lock.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
+    let challenge_cell_lock_dep = {
+        let dep: ckb_types::packed::CellDep =
+            scripts_results.challenge_lock.cell_dep.clone().into();
+        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
+    };
+
     // TODO: automatic generation
     let l1_sudt_type_dep = gw_types::packed::CellDep::default().into();
+
+    // Allowed eoa script deps
+    let mut allowed_eoa_deps = HashMap::new();
+    let eth_account_lock_dep = {
+        let dep: ckb_types::packed::CellDep =
+            scripts_results.eth_account_lock.cell_dep.clone().into();
+        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
+    };
+    allowed_eoa_deps.insert(
+        scripts_results.eth_account_lock.script_type_hash,
+        eth_account_lock_dep,
+    );
+
+    // Allowed contract script deps
+    let mut allowed_contract_deps = HashMap::new();
+    let meta_contract_validator_dep = {
+        let dep: ckb_types::packed::CellDep = scripts_results
+            .meta_contract_validator
+            .cell_dep
+            .clone()
+            .into();
+        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
+    };
+    allowed_contract_deps.insert(
+        scripts_results
+            .meta_contract_validator
+            .script_type_hash
+            .clone(),
+        meta_contract_validator_dep,
+    );
+    let l2_sudt_validator_dep = {
+        let dep: ckb_types::packed::CellDep =
+            scripts_results.l2_sudt_validator.cell_dep.clone().into();
+        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
+    };
+    allowed_contract_deps.insert(
+        scripts_results.l2_sudt_validator.script_type_hash.clone(),
+        l2_sudt_validator_dep,
+    );
+    let polyjuice_validator_dep = {
+        let dep: ckb_types::packed::CellDep =
+            scripts_results.polyjuice_validator.cell_dep.clone().into();
+        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
+    };
+    allowed_contract_deps.insert(
+        scripts_results.polyjuice_validator.script_type_hash.clone(),
+        polyjuice_validator_dep,
+    );
+
+    let challenger_config = ChallengerConfig {
+        rewards_receiver_lock: gw_types::packed::Script::default().into(),
+        burn_lock: gw_types::packed::Script::default().into(),
+    };
 
     let wallet_config: WalletConfig = WalletConfig {
         privkey_path: privkey_path.into(),
@@ -203,7 +262,11 @@ pub fn generate_config(
         stake_cell_lock_dep,
         custodian_cell_lock_dep,
         withdrawal_cell_lock_dep,
+        challenge_cell_lock_dep,
         l1_sudt_type_dep,
+        allowed_eoa_deps,
+        allowed_contract_deps,
+        challenger_config,
         wallet_config,
     });
     let genesis: GenesisConfig = GenesisConfig {

@@ -54,6 +54,7 @@ pub fn build_genesis_from_store(
     // initialize store
     db.set_account_smt_root(H256::zero())?;
     db.set_block_smt_root(H256::zero())?;
+    db.set_reverted_block_smt_root(H256::zero())?;
     db.set_account_count(0)?;
     let state_db =
         StateDBTransaction::from_checkpoint(&db, CheckPoint::from_genesis(), StateDBMode::Genesis)?;

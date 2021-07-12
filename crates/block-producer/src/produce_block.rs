@@ -45,6 +45,7 @@ pub struct ProduceBlockParam<'a> {
     pub deposit_requests: Vec<DepositRequest>,
     pub withdrawal_requests: Vec<WithdrawalRequest>,
     pub parent_block: &'a L2Block,
+    pub reverted_block_root: H256,
     pub rollup_config_hash: &'a H256,
     pub max_withdrawal_capacity: u128,
     pub available_custodians: AvailableCustodians,
@@ -64,6 +65,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         deposit_requests,
         withdrawal_requests,
         parent_block,
+        reverted_block_root,
         rollup_config_hash,
         max_withdrawal_capacity,
         stake_cell_owner_lock_hash,
@@ -337,6 +339,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         .block(post_block)
         .tip_block_hash(block.hash().pack())
         .last_finalized_block_number(last_finalized_block_number.pack())
+        .reverted_block_root(Into::<[u8; 32]>::into(reverted_block_root).pack())
         .rollup_config_hash(rollup_config_hash.pack())
         .status((Status::Running as u8).into())
         .build();

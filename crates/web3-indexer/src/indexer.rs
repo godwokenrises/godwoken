@@ -65,7 +65,11 @@ impl Web3Indexer {
     }
 
     pub async fn insert_to_sql(&self, store: Store, l1_transaction: &Transaction) -> Result<()> {
-        let l2_block = self.extract_l2_block(l1_transaction)?;
+        let l2_block = match self.extract_l2_block(l1_transaction)? {
+            Some(block) => block,
+            None => return Ok(()),
+        };
+
         let number: u64 = l2_block.raw().number().unpack();
         let row: Option<(Decimal,)> =
             sqlx::query_as("SELECT number FROM blocks ORDER BY number DESC LIMIT 1")
@@ -158,7 +162,7 @@ impl Web3Indexer {
         Ok(())
     }
 
-    fn extract_l2_block(&self, l1_transaction: &Transaction) -> Result<L2Block> {
+    fn extract_l2_block(&self, l1_transaction: &Transaction) -> Result<Option<L2Block>> {
         let witness = l1_transaction
             .witnesses()
             .get(0)
@@ -171,8 +175,8 @@ impl Web3Indexer {
             .unpack();
         match RollupActionReader::verify(&rollup_action_bytes, false) {
             Ok(_) => match RollupAction::new_unchecked(rollup_action_bytes).to_enum() {
-                RollupActionUnion::RollupSubmitBlock(args) => Ok(args.block()),
-                _ => unimplemented!(),
+                RollupActionUnion::RollupSubmitBlock(args) => Ok(Some(args.block())),
+                _ => Ok(None),
             },
             Err(_) => Err(anyhow!("invalid rollup action")),
         }

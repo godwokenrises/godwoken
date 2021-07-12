@@ -4,7 +4,7 @@ use gw_jsonrpc_types::{
     godwoken::{L2BlockCommittedInfo, RollupConfig},
 };
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
@@ -54,6 +54,16 @@ pub struct WalletConfig {
     pub lock: Script,
 }
 
+// NOTE: Rewards receiver lock must be different than lock in WalletConfig,
+// since stake_capacity(minus burnt) + challenge_capacity - tx_fee will never
+// bigger or equal than stake_capacity(minus burnt) + challenge_capacity.
+// TODO: Support sudt stake ?
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ChallengerConfig {
+    pub rewards_receiver_lock: Script,
+    pub burn_lock: Script,
+}
+
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockProducerConfig {
     pub account_id: u32,
@@ -66,7 +76,11 @@ pub struct BlockProducerConfig {
     pub poa_state_dep: CellDep,
     pub custodian_cell_lock_dep: CellDep,
     pub withdrawal_cell_lock_dep: CellDep,
+    pub challenge_cell_lock_dep: CellDep,
     pub l1_sudt_type_dep: CellDep,
+    pub allowed_eoa_deps: HashMap<H256, CellDep>,
+    pub allowed_contract_deps: HashMap<H256, CellDep>,
+    pub challenger_config: ChallengerConfig,
     pub wallet_config: WalletConfig,
 }
 

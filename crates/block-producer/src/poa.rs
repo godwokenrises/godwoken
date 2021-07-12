@@ -106,6 +106,7 @@ pub struct PoA {
     round_start_subtime: Option<Duration>,
 }
 
+#[derive(PartialEq, Eq)]
 pub enum ShouldIssueBlock {
     Yes,
     YesIfFull,

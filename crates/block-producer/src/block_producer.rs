@@ -4,6 +4,7 @@ use crate::{
     poa::{PoA, ShouldIssueBlock},
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
     rpc_client::{DepositInfo, RPCClient},
+    test_mode_control::TestModeControl,
     transaction_skeleton::TransactionSkeleton,
     types::ChainEvent,
     types::{CellInfo, InputCellInfo},
@@ -13,15 +14,16 @@ use crate::{
 use anyhow::{anyhow, Context, Result};
 use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
-use gw_chain::chain::Chain;
-use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_chain::chain::{Chain, SyncEvent};
+use gw_common::{h256_ext::H256Ext, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_config::BlockProducerConfig;
 use gw_generator::{Generator, RollupContext};
+use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_mem_pool::pool::MemPool;
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
-    core::{DepType, ScriptHashType},
+    core::{DepType, ScriptHashType, Status},
     packed::{
         Byte32, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, GlobalState,
         L2Block, OutPoint, OutPointVec, RollupAction, RollupActionUnion, RollupSubmitBlock, Script,
@@ -156,6 +158,7 @@ pub struct BlockProducer {
     config: BlockProducerConfig,
     rpc_client: RPCClient,
     ckb_genesis_info: CKBGenesisInfo,
+    tests_control: Option<TestModeControl>,
 }
 
 impl BlockProducer {
@@ -169,6 +172,7 @@ impl BlockProducer {
         rpc_client: RPCClient,
         ckb_genesis_info: CKBGenesisInfo,
         config: BlockProducerConfig,
+        tests_control: Option<TestModeControl>,
     ) -> Result<Self> {
         let wallet = Wallet::from_config(&config.wallet_config).with_context(|| "init wallet")?;
         let poa = PoA::new(
@@ -189,11 +193,28 @@ impl BlockProducer {
             poa,
             ckb_genesis_info,
             config,
+            tests_control,
         };
         Ok(block_producer)
     }
 
     pub async fn handle_event(&mut self, event: ChainEvent) -> Result<()> {
+        if let Some(ref tests_control) = self.tests_control {
+            match tests_control.payload().await {
+                Some(TestModePayload::Challenge { .. }) // Payload not match
+                | Some(TestModePayload::WaitForChallengeMaturity) // Payload not match
+                | None => return Ok(()), // Wait payload
+                Some(TestModePayload::None) // Produce block
+                | Some(TestModePayload::BadBlock { .. }) => (), // Produce block but create bad block
+            }
+        }
+
+        let last_sync_event = { self.chain.lock().last_sync_event().to_owned() };
+        match last_sync_event {
+            SyncEvent::Success => (),
+            _ => return Ok(()),
+        }
+
         // assume the chain is updated
         let tip_block = match event {
             ChainEvent::Reverted {
@@ -207,9 +228,17 @@ impl BlockProducer {
 
         // query median time & rollup cell
         let rollup_cell_opt = self.rpc_client.query_rollup_cell().await?;
-        let median_time = self.rpc_client.get_block_median_time(tip_hash).await?;
-        // let (rollup_cell_opt, median_time) = futures::try_join!(rollup_cell_fut, median_time_fut)?;
         let rollup_cell = rollup_cell_opt.ok_or_else(|| anyhow!("can't found rollup cell"))?;
+        let rollup_state = {
+            let global_state = GlobalState::from_slice(&rollup_cell.data)?;
+            let status: u8 = global_state.status().into();
+            Status::try_from(status).map_err(|n| anyhow!("invalid status {}", n))?
+        };
+        if Status::Halting == rollup_state {
+            return Ok(());
+        }
+
+        let median_time = self.rpc_client.get_block_median_time(tip_hash).await?;
         let poa_cell_input = InputCellInfo {
             input: CellInput::new_builder()
                 .previous_output(rollup_cell.out_point.clone())
@@ -233,6 +262,14 @@ impl BlockProducer {
         median_time: Duration,
         rollup_cell: CellInfo,
     ) -> Result<()> {
+        if let Some(ref tests_control) = self.tests_control {
+            match tests_control.payload().await {
+                Some(TestModePayload::None) => tests_control.clear_none().await?,
+                Some(TestModePayload::BadBlock { .. }) => (),
+                _ => unreachable!(),
+            }
+        }
+
         let block_producer_id = self.config.account_id;
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -322,6 +359,11 @@ impl BlockProducer {
         log::debug!("available custodians {:?}", available_custodians);
 
         // produce block
+        let reverted_block_root: H256 = {
+            let db = self.store.begin_transaction();
+            let smt = db.reverted_block_smt()?;
+            smt.root().to_owned()
+        };
         let param = ProduceBlockParam {
             db: self.store.begin_transaction(),
             generator: &self.generator,
@@ -332,14 +374,15 @@ impl BlockProducer {
             deposit_requests: deposit_cells.iter().map(|d| &d.request).cloned().collect(),
             withdrawal_requests,
             parent_block: &parent_block,
+            reverted_block_root,
             rollup_config_hash: &self.rollup_config_hash,
             max_withdrawal_capacity,
             available_custodians,
         };
         let block_result = produce_block(param)?;
         let ProduceBlockResult {
-            block,
-            global_state,
+            mut block,
+            mut global_state,
             unused_transactions,
             unused_withdrawal_requests,
         } = block_result;
@@ -352,6 +395,17 @@ impl BlockProducer {
             unused_transactions.len(),
             unused_withdrawal_requests.len()
         );
+
+        if let Some(ref tests_control) = self.tests_control {
+            if let Some(TestModePayload::BadBlock { .. }) = tests_control.payload().await {
+                let (bad_block, bad_global_state) = tests_control
+                    .generate_a_bad_block(block, global_state)
+                    .await?;
+
+                block = bad_block;
+                global_state = bad_global_state;
+            }
+        }
 
         // composit tx
         let tx = self
@@ -414,11 +468,38 @@ impl BlockProducer {
             .push(self.ckb_genesis_info.sighash_dep());
 
         // rollup action
-        // FIXME: rollup action
         let rollup_action = {
-            let submit_block = RollupSubmitBlock::new_builder()
-                .block(block.clone())
-                .build();
+            let revert_block = {
+                let chain = self.chain.lock();
+                let first_block = chain.pending_revert_blocks().first();
+                first_block.map(|b| b.to_owned())
+            };
+
+            let submit_builder = match revert_block {
+                Some(revert_block) => {
+                    let db = self.store.begin_transaction();
+                    let block_smt = db.reverted_block_smt()?;
+
+                    let local_root: &H256 = block_smt.root();
+                    let global_revert_block_root: H256 =
+                        global_state.reverted_block_root().unpack();
+                    assert_eq!(local_root, &global_revert_block_root);
+
+                    let revert_block_hash = revert_block.hash();
+                    let proof = block_smt
+                        .merkle_proof(vec![H256::from(revert_block_hash)])?
+                        .compile(vec![(H256::from(revert_block_hash), H256::one())])?;
+                    log::info!("submit revert block {}", hex::encode(revert_block_hash));
+
+                    RollupSubmitBlock::new_builder()
+                        .reverted_block_hashes(vec![revert_block.hash()].pack())
+                        .reverted_block_proof(proof.0.pack())
+                }
+                None => RollupSubmitBlock::new_builder(),
+            };
+
+            let submit_block = submit_builder.block(block.clone()).build();
+
             RollupAction::new_builder()
                 .set(RollupActionUnion::RollupSubmitBlock(submit_block))
                 .build()
@@ -579,6 +660,12 @@ impl BlockProducer {
             tx_skeleton
                 .outputs_mut()
                 .extend(reverted_withdrawals.outputs);
+        }
+
+        // check cell dep duplicate (deposits, withdrawals, reverted_withdrawals sudt type dep)
+        {
+            let deps: HashSet<_> = tx_skeleton.cell_deps_mut().iter().collect();
+            *tx_skeleton.cell_deps_mut() = deps.into_iter().cloned().collect();
         }
 
         // tx fee cell

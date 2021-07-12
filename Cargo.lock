@@ -2022,6 +2022,7 @@ dependencies = [
  "gw-store",
  "gw-traits",
  "gw-types",
+ "hex",
  "lazy_static",
  "log",
  "parking_lot 0.11.1",
@@ -2196,6 +2197,8 @@ dependencies = [
  "parking_lot 0.11.1",
  "rand 0.8.2",
  "secp256k1 0.20.0",
+ "serde",
+ "serde_json",
  "sha3",
  "thiserror",
 ]
