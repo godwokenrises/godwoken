@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use std::{env, ffi::OsStr, process::Command};
 
+use crate::godwoken_rpc::GodwokenRpcClient;
+
 // "TYPE_ID" in hex
 pub const TYPE_ID_CODE_HASH: H256 = h256!("0x545950455f4944");
 
@@ -144,4 +146,29 @@ pub fn read_config<P: AsRef<Path>>(path: P) -> Result<Config, String> {
     let content = fs::read(&path).map_err(|err| err.to_string())?;
     let config = toml::from_slice(&content).map_err(|err| err.to_string())?;
     Ok(config)
+}
+
+pub fn wait_for_l2_tx(
+    godwoken_rpc_client: &mut GodwokenRpcClient,
+    tx_hash: &H256,
+    timeout_secs: u64,
+) -> Result<(), String> {
+    let retry_timeout = Duration::from_secs(timeout_secs);
+    let start_time = Instant::now();
+    while start_time.elapsed() < retry_timeout {
+        std::thread::sleep(Duration::from_secs(2));
+
+        let receipt = godwoken_rpc_client.get_transaction_receipt(tx_hash)?;
+
+        match receipt {
+            Some(_) => {
+                log::info!("tx committed");
+                return Ok(());
+            }
+            None => {
+                log::info!("waiting for {} secs.", start_time.elapsed().as_secs());
+            }
+        }
+    }
+    Err(format!("Timeout: {:?}", retry_timeout))
 }

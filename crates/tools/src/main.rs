@@ -1,4 +1,5 @@
 mod account;
+mod create_creator_account;
 mod deploy_genesis;
 mod deploy_scripts;
 mod deposit_ckb;
@@ -381,6 +382,32 @@ fn main() {
                         .required(true)
                         .help("sudt id"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("create-creator-account")
+                .about("Create polyjuice contract account")
+                .arg(arg_privkey_path.clone())
+                .arg(arg_deployment_results_path.clone())
+                .arg(arg_config_path.clone())
+                .arg(arg_godwoken_rpc_url.clone())
+                .arg(
+                    Arg::with_name("fee")
+                        .short("f")
+                        .long("fee")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value("0")
+                        .help("transfer fee"),
+                )
+                .arg(
+                    Arg::with_name("sudt-id")
+                        .short("s")
+                        .long("sudt-id")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value("1")
+                        .help("sudt id"),
+                ),
         );
 
     let matches = app.clone().get_matches();
@@ -565,6 +592,30 @@ fn main() {
                 deployment_results_path,
             ) {
                 log::error!("Transfer error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("create-creator-account", Some(m)) => {
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let fee = m.value_of("fee").unwrap();
+            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let config_path = Path::new(m.value_of("config-path").unwrap());
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+            let sudt_id = m
+                .value_of("sudt-id")
+                .unwrap()
+                .parse()
+                .expect("sudt id format error");
+
+            if let Err(err) = create_creator_account::create_creator_account(
+                godwoken_rpc_url,
+                privkey_path,
+                sudt_id,
+                fee,
+                config_path,
+                deployment_results_path,
+            ) {
+                log::error!("Create creator account error: {}", err);
                 std::process::exit(-1);
             };
         }
