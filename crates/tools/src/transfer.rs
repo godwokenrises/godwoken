@@ -5,14 +5,13 @@ use crate::account::{
 use crate::deploy_scripts::ScriptsDeploymentResult;
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::hasher::{CkbHasher, EthHasher};
-use crate::utils::read_config;
+use crate::utils::{read_config, wait_for_l2_tx};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
 use gw_types::packed::{L2Transaction, RawL2Transaction, SUDTArgs, SUDTTransfer};
 use gw_types::prelude::Pack as GwPack;
 use std::path::Path;
-use std::time::{Duration, Instant};
 use std::u128;
 
 #[allow(clippy::too_many_arguments)]
@@ -91,14 +90,14 @@ pub fn transfer(
         faster_hex::hex_string(tx_hash.as_bytes()).map_err(|err| err.to_string())?
     );
 
-    wait_for_tx_commit(&mut godwoken_rpc_client, &tx_hash, 300)?;
+    wait_for_l2_tx(&mut godwoken_rpc_client, &tx_hash, 300)?;
 
     log::info!("transfer success!");
 
     Ok(())
 }
 
-fn generate_transaction_message_to_sign(
+pub fn generate_transaction_message_to_sign(
     raw_l2transaction: &RawL2Transaction,
     rollup_type_hash: &H256,
     sender_script_hash: &H256,
@@ -120,29 +119,4 @@ fn generate_transaction_message_to_sign(
         .finalize();
 
     message
-}
-
-fn wait_for_tx_commit(
-    godwoken_rpc_client: &mut GodwokenRpcClient,
-    tx_hash: &H256,
-    timeout_secs: u64,
-) -> Result<(), String> {
-    let retry_timeout = Duration::from_secs(timeout_secs);
-    let start_time = Instant::now();
-    while start_time.elapsed() < retry_timeout {
-        std::thread::sleep(Duration::from_secs(2));
-
-        let receipt = godwoken_rpc_client.get_transaction_receipt(tx_hash)?;
-
-        match receipt {
-            Some(_) => {
-                log::info!("tx committed");
-                return Ok(());
-            }
-            None => {
-                log::info!("waiting for {} secs.", start_time.elapsed().as_secs());
-            }
-        }
-    }
-    Err(format!("Timeout: {:?}", retry_timeout))
 }
