@@ -1,8 +1,10 @@
+mod account;
 mod deploy_genesis;
 mod deploy_scripts;
 mod deposit_ckb;
 mod generate_config;
 pub mod godwoken_rpc;
+mod hasher;
 mod prepare_scripts;
 mod setup;
 mod transfer;
@@ -25,6 +27,24 @@ fn main() {
         .takes_value(true)
         .default_value("http://127.0.0.1:8114")
         .help("CKB jsonrpc rpc sever URL");
+    let arg_deployment_results_path = Arg::with_name("deployment-results-path")
+        .short("d")
+        .long("deployment-results-path")
+        .takes_value(true)
+        .required(true)
+        .help("The deployment results json file path");
+    let arg_config_path = Arg::with_name("config-path")
+        .short("o")
+        .long("config-path")
+        .takes_value(true)
+        .required(true)
+        .help("The config.toml file path");
+    let arg_godwoken_rpc_url = Arg::with_name("godwoken-rpc-url")
+        .short("g")
+        .long("godwoken-rpc-url")
+        .takes_value(true)
+        .default_value("http://127.0.0.1:8119")
+        .help("Godwoken jsonrpc rpc sever URL");
 
     let mut app = App::new("godwoken tools")
         .about("Godwoken cli tools")
@@ -197,22 +217,9 @@ fn main() {
                 .about("Deposit CKB to godwoken")
                 .arg(arg_ckb_rpc.clone())
                 .arg(arg_privkey_path.clone())
-                .arg(
-                    Arg::with_name("deployment-results-path")
-                        .short("d")
-                        .long("deployment-results-path")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The deployment results json file path"),
-                )
-                .arg(
-                    Arg::with_name("config-path")
-                        .short("o")
-                        .long("config-path")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The config.toml file path"),
-                )
+                .arg(arg_deployment_results_path.clone())
+                .arg(arg_config_path.clone())
+                .arg(arg_godwoken_rpc_url.clone())
                 .arg(
                     Arg::with_name("capacity")
                         .short("c")
@@ -237,36 +244,15 @@ fn main() {
                         .required(false)
                         .default_value("0.0001")
                         .help("Transaction fee, default to 0.0001 CKB"),
-                )
-                .arg(
-                    Arg::with_name("godwoken-rpc-url")
-                        .short("g")
-                        .long("godwoken-rpc-url")
-                        .takes_value(true)
-                        .default_value("http://127.0.0.1:8119")
-                        .help("Godwoken jsonrpc rpc sever URL"),
                 ),
         )
         .subcommand(
             SubCommand::with_name("withdraw")
                 .about("withdraw CKB / sUDT from godwoken")
                 .arg(arg_privkey_path.clone())
-                .arg(
-                    Arg::with_name("deployment-results-path")
-                        .short("d")
-                        .long("deployment-results-path")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The deployment results json file path"),
-                )
-                .arg(
-                    Arg::with_name("config-path")
-                        .short("o")
-                        .long("config-path")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The config.toml file path"),
-                )
+                .arg(arg_deployment_results_path.clone())
+                .arg(arg_config_path.clone())
+                .arg(arg_godwoken_rpc_url.clone())
                 .arg(
                     Arg::with_name("capacity")
                         .short("c")
@@ -301,14 +287,6 @@ fn main() {
                             "0x0000000000000000000000000000000000000000000000000000000000000000",
                         )
                         .help("l1 sudt script hash, default for withdrawal CKB"),
-                )
-                .arg(
-                    Arg::with_name("godwoken-rpc-url")
-                        .short("g")
-                        .long("godwoken-rpc-url")
-                        .takes_value(true)
-                        .default_value("http://127.0.0.1:8119")
-                        .help("Godwoken jsonrpc rpc sever URL"),
                 ),
         )
         .subcommand(
@@ -368,22 +346,9 @@ fn main() {
             SubCommand::with_name("transfer")
                 .about("transfer CKB / sUDT to another account")
                 .arg(arg_privkey_path.clone())
-                .arg(
-                    Arg::with_name("deployment-results-path")
-                        .short("d")
-                        .long("deployment-results-path")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The deployment results json file path"),
-                )
-                .arg(
-                    Arg::with_name("config-path")
-                        .short("o")
-                        .long("config-path")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The config.toml file path"),
-                )
+                .arg(arg_deployment_results_path.clone())
+                .arg(arg_config_path.clone())
+                .arg(arg_godwoken_rpc_url.clone())
                 .arg(
                     Arg::with_name("amount")
                         .short("m")
@@ -415,14 +380,6 @@ fn main() {
                         .takes_value(true)
                         .required(true)
                         .help("sudt id"),
-                )
-                .arg(
-                    Arg::with_name("godwoken-rpc-url")
-                        .short("g")
-                        .long("godwoken-rpc-url")
-                        .takes_value(true)
-                        .default_value("http://127.0.0.1:8119")
-                        .help("Godwoken jsonrpc rpc sever URL"),
                 ),
         );
 

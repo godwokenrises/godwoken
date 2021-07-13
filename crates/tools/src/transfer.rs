@@ -1,18 +1,19 @@
+use crate::account::{
+    eth_sign, parse_account_short_address, privkey_to_short_address, read_privkey,
+    short_address_to_account_id,
+};
 use crate::deploy_scripts::ScriptsDeploymentResult;
-use crate::deposit_ckb::read_config;
 use crate::godwoken_rpc::GodwokenRpcClient;
-use crate::withdraw::{get_signature, privkey_to_short_address, short_address_to_account_id};
+use crate::hasher::{CkbHasher, EthHasher};
+use crate::utils::read_config;
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
-use gw_common::blake2b::new_blake2b;
 use gw_types::packed::{L2Transaction, RawL2Transaction, SUDTArgs, SUDTTransfer};
-use gw_types::{bytes::Bytes as GwBytes, prelude::Pack as GwPack};
-use sha3::{Digest, Keccak256};
-use std::str::FromStr;
+use gw_types::prelude::Pack as GwPack;
+use std::path::Path;
 use std::time::{Duration, Instant};
 use std::u128;
-use std::{fs, path::Path};
 
 #[allow(clippy::too_many_arguments)]
 pub fn transfer(
@@ -37,20 +38,13 @@ pub fn transfer(
 
     let to_address = parse_account_short_address(&mut godwoken_rpc_client, to)?;
 
-    let config = read_config(&config_path)?;
+    let config = read_config(config_path)?;
     let rollup_type_hash = &config.genesis.rollup_type_hash;
 
-    let privkey_string = fs::read_to_string(privkey_path)
-        .map_err(|err| err.to_string())?
-        .split_whitespace()
-        .next()
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| "Privkey file is empty".to_string())?;
-    let privkey = H256::from_str(&privkey_string.trim()[2..]).map_err(|err| err.to_string())?;
+    let privkey = read_privkey(privkey_path)?;
 
     // get from_id
-    let from_address =
-        privkey_to_short_address(&privkey_string, &rollup_type_hash, &deployment_result)?;
+    let from_address = privkey_to_short_address(&privkey, &rollup_type_hash, &deployment_result)?;
     let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
     let from_id = from_id.expect("from id not found!");
 
@@ -80,7 +74,7 @@ pub fn transfer(
         &sender_script_hash,
         &receiver_script_hash,
     );
-    let signature = get_signature(&message, privkey)?;
+    let signature = eth_sign(&message, privkey)?;
 
     let l2_transaction = L2Transaction::new_builder()
         .raw(raw_l2transaction)
@@ -113,26 +107,17 @@ fn generate_transaction_message_to_sign(
     let raw_data = raw_l2transaction.as_slice();
     let rollup_type_hash_data = rollup_type_hash.as_bytes();
 
-    let digest: H256 = {
-        let mut hasher = new_blake2b();
-        hasher.update(rollup_type_hash_data);
-        hasher.update(sender_script_hash.as_bytes());
-        hasher.update(receiver_script_hash.as_bytes());
-        hasher.update(raw_data);
-        let mut hash = [0u8; 32];
-        hasher.finalize(&mut hash);
-        hash.into()
-    };
+    let digest = CkbHasher::new()
+        .update(rollup_type_hash_data)
+        .update(sender_script_hash.as_bytes())
+        .update(receiver_script_hash.as_bytes())
+        .update(raw_data)
+        .finalize();
 
-    let message = {
-        let mut hasher = Keccak256::new();
-        hasher.update("\x19Ethereum Signed Message:\n32");
-        hasher.update(digest.as_bytes());
-        let buf = hasher.finalize();
-        let mut signing_message = [0u8; 32];
-        signing_message.copy_from_slice(&buf[..]);
-        H256::from(signing_message)
-    };
+    let message = EthHasher::new()
+        .update("\x19Ethereum Signed Message:\n32")
+        .update(digest.as_bytes())
+        .finalize();
 
     message
 }
@@ -160,22 +145,4 @@ fn wait_for_tx_commit(
         }
     }
     Err(format!("Timeout: {:?}", retry_timeout))
-}
-
-// address: 0x... / id: 1
-fn parse_account_short_address(
-    godwoken: &mut GodwokenRpcClient,
-    account: &str,
-) -> Result<GwBytes, String> {
-    // if match short address
-    if account.starts_with("0x") && account.len() == 42 {
-        let r = GwBytes::from(hex::decode(account[2..].as_bytes()).map_err(|err| err.to_string())?);
-        return Ok(r);
-    }
-
-    // if match id
-    let account_id: u32 = account.parse().expect("account id parse error!");
-    let script_hash = godwoken.get_script_hash(account_id)?;
-    let short_address = GwBytes::from((&script_hash.as_bytes()[..20]).to_vec());
-    Ok(short_address)
 }

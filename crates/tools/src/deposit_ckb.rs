@@ -1,6 +1,8 @@
+use crate::account::{privkey_to_eth_address, read_privkey};
 use crate::deploy_scripts::ScriptsDeploymentResult;
 use crate::godwoken_rpc::GodwokenRpcClient;
-use crate::utils::{get_network_type, run_cmd, wait_for_tx};
+use crate::hasher::CkbHasher;
+use crate::utils::{get_network_type, read_config, run_cmd, wait_for_tx};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_sdk::{Address, AddressPayload, HttpRpcClient, SECP256K1};
@@ -9,18 +11,15 @@ use ckb_types::{
     prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity, prelude::Pack as CKBPack,
     prelude::Unpack as CKBUnpack,
 };
-use gw_common::blake2b::new_blake2b;
-use gw_config::Config;
 use gw_types::{
     bytes::Bytes as GwBytes,
     packed::{Byte32, DepositLockArgs, Script},
     prelude::Pack as GwPack,
 };
-use sha3::{Digest, Keccak256};
+use std::path::Path;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 use std::u128;
-use std::{fs, path::Path};
 
 #[allow(clippy::too_many_arguments)]
 pub fn deposit_ckb(
@@ -40,12 +39,7 @@ pub fn deposit_ckb(
 
     let config = read_config(&config_path)?;
 
-    let privkey_string = fs::read_to_string(privkey_path)
-        .map_err(|err| err.to_string())?
-        .split_whitespace()
-        .next()
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| "Privkey file is empty".to_string())?;
+    let privkey = read_privkey(privkey_path)?;
 
     // Using private key to calculate eth address when eth_address not provided.
     let eth_address_bytes = match eth_address {
@@ -54,16 +48,13 @@ pub fn deposit_ckb(
             b.copy_from_slice(&addr.as_bytes()[2..]);
             CKBBytes::from(b.to_vec())
         }
-        None => {
-            let eth_address = privkey_to_eth_address(privkey_string.as_str())?;
-            eth_address
-        }
+        None => privkey_to_eth_address(&privkey)?,
     };
     log::info!("eth address: 0x{:#x}", eth_address_bytes);
 
     let rollup_type_hash = &config.genesis.rollup_type_hash;
 
-    let owner_lock_hash = Byte32::from_slice(privkey_to_lock_hash(&privkey_string)?.as_bytes())
+    let owner_lock_hash = Byte32::from_slice(privkey_to_lock_hash(&privkey)?.as_bytes())
         .map_err(|err| err.to_string())?;
 
     // build layer2 lock
@@ -79,13 +70,7 @@ pub fn deposit_ckb(
         .args(l2_lock_args)
         .build();
 
-    let l2_lock_hash: H256 = {
-        let mut hasher = new_blake2b();
-        hasher.update(&l2_lock.as_slice());
-        let mut hash = [0u8; 32];
-        hasher.finalize(&mut hash);
-        hash.into()
-    };
+    let l2_lock_hash = CkbHasher::new().update(&l2_lock.as_slice()).finalize();
 
     let l2_lock_hash_str = format!(
         "0x{}",
@@ -151,26 +136,8 @@ pub fn deposit_ckb(
     Ok(())
 }
 
-pub fn privkey_to_eth_address(privkey: &str) -> Result<CKBBytes, String> {
-    let privkey_data = H256::from_str(&privkey.trim()[2..]).map_err(|err| err.to_string())?;
-    let privkey = secp256k1::SecretKey::from_slice(privkey_data.as_bytes())
-        .map_err(|err| format!("Invalid secp256k1 secret key format, error: {}", err))?;
-    let pubkey = secp256k1::PublicKey::from_secret_key(&SECP256K1, &privkey);
-    let pubkey_hash = {
-        let mut hasher = Keccak256::new();
-        hasher.update(&pubkey.serialize_uncompressed()[1..]);
-        let buf = hasher.finalize();
-        let mut pubkey_hash = [0u8; 20];
-        pubkey_hash.copy_from_slice(&buf[12..]);
-        pubkey_hash
-    };
-    let s = CKBBytes::from(pubkey_hash.to_vec());
-    Ok(s)
-}
-
-fn privkey_to_lock_hash(privkey: &str) -> Result<H256, String> {
-    let privkey_data = H256::from_str(&privkey.trim()[2..]).map_err(|err| err.to_string())?;
-    let privkey = secp256k1::SecretKey::from_slice(privkey_data.as_bytes())
+fn privkey_to_lock_hash(privkey: &H256) -> Result<H256, String> {
+    let privkey = secp256k1::SecretKey::from_slice(privkey.as_bytes())
         .map_err(|err| format!("Invalid secp256k1 secret key format, error: {}", err))?;
     let pubkey = secp256k1::PublicKey::from_secret_key(&SECP256K1, &privkey);
     let address_payload = AddressPayload::from_pubkey(&pubkey);
@@ -179,13 +146,6 @@ fn privkey_to_lock_hash(privkey: &str) -> Result<H256, String> {
         .calc_script_hash()
         .unpack();
     Ok(lock_hash)
-}
-
-// Read config.toml
-pub fn read_config<P: AsRef<Path>>(path: P) -> Result<Config, String> {
-    let content = fs::read(&path).map_err(|err| err.to_string())?;
-    let config = toml::from_slice(&content).map_err(|err| err.to_string())?;
-    Ok(config)
 }
 
 fn wait_for_balance_change(

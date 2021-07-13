@@ -1,20 +1,19 @@
+use crate::account::{
+    eth_sign, privkey_to_short_address, read_privkey, short_address_to_account_id,
+};
 use crate::deploy_scripts::ScriptsDeploymentResult;
-use crate::deposit_ckb::{privkey_to_eth_address, read_config};
 use crate::godwoken_rpc::GodwokenRpcClient;
-use ckb_crypto::secp::Privkey;
+use crate::hasher::{CkbHasher, EthHasher};
+use crate::utils::read_config;
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_sdk::{Address, HumanCapacity};
-use ckb_types::{
-    core::ScriptHashType, prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity,
-};
-use gw_common::blake2b::new_blake2b;
+use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
 use gw_types::{
     bytes::Bytes as GwBytes,
-    packed::{Byte32, RawWithdrawalRequest, Script, WithdrawalRequest},
+    packed::{Byte32, RawWithdrawalRequest, WithdrawalRequest},
     prelude::Pack as GwPack,
 };
-use sha3::{Digest, Keccak256};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 use std::u128;
@@ -37,7 +36,7 @@ pub fn withdraw(
     let amount: u128 = amount.parse().expect("sUDT amount format error");
 
     let deployment_result_string =
-        std::fs::read_to_string(deployment_results_path).map_err(|err| err.to_string())?;
+        fs::read_to_string(deployment_results_path).map_err(|err| err.to_string())?;
     let deployment_result: ScriptsDeploymentResult =
         serde_json::from_str(&deployment_result_string).map_err(|err| err.to_string())?;
 
@@ -56,23 +55,14 @@ pub fn withdraw(
         let payload = address.payload();
         let owner_lock_script = ckb_types::packed::Script::from(payload);
 
-        let mut hasher = new_blake2b();
-        hasher.update(owner_lock_script.as_slice());
-        let mut hash = [0u8; 32];
-        hasher.finalize(&mut hash);
-        hash.into()
+        CkbHasher::new()
+            .update(owner_lock_script.as_slice())
+            .finalize()
     };
 
-    let privkey_string = fs::read_to_string(privkey_path)
-        .map_err(|err| err.to_string())?
-        .split_whitespace()
-        .next()
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| "Privkey file is empty".to_string())?;
-    let privkey = H256::from_str(&privkey_string.trim()[2..]).map_err(|err| err.to_string())?;
+    let privkey = read_privkey(privkey_path)?;
 
-    let from_address =
-        privkey_to_short_address(&privkey_string, &rollup_type_hash, &deployment_result)?;
+    let from_address = privkey_to_short_address(&privkey, &rollup_type_hash, &deployment_result)?;
 
     // get from_id
     let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
@@ -95,7 +85,7 @@ pub fn withdraw(
     )?;
 
     let message = generate_withdrawal_message_to_sign(&raw_request, rollup_type_hash);
-    let signature = get_signature(&message, privkey)?;
+    let signature = eth_sign(&message, privkey)?;
 
     let withdrawal_request = WithdrawalRequest::new_builder()
         .raw(raw_request)
@@ -154,96 +144,17 @@ fn generate_withdrawal_message_to_sign(
     let raw_data = raw_request.as_slice();
     let rollup_type_hash_data = rollup_type_hash.as_bytes();
 
-    let digest: H256 = {
-        let mut hasher = new_blake2b();
-        hasher.update(rollup_type_hash_data);
-        hasher.update(raw_data);
-        let mut hash = [0u8; 32];
-        hasher.finalize(&mut hash);
-        hash.into()
-    };
+    let digest = CkbHasher::new()
+        .update(rollup_type_hash_data)
+        .update(raw_data)
+        .finalize();
 
-    let message = {
-        let mut hasher = Keccak256::new();
-        hasher.update("\x19Ethereum Signed Message:\n32");
-        hasher.update(digest.as_bytes());
-        let buf = hasher.finalize();
-        let mut signing_message = [0u8; 32];
-        signing_message.copy_from_slice(&buf[..]);
-        H256::from(signing_message)
-    };
+    let message = EthHasher::new()
+        .update("\x19Ethereum Signed Message:\n32")
+        .update(digest.as_bytes())
+        .finalize();
 
     message
-}
-
-fn sign_message(msg: &H256, privkey_data: H256) -> Result<[u8; 65], String> {
-    let privkey = Privkey::from(privkey_data);
-    let signature = privkey
-        .sign_recoverable(msg)
-        .map_err(|err| err.to_string())?;
-    let mut inner = [0u8; 65];
-    inner.copy_from_slice(&signature.serialize());
-    Ok(inner)
-}
-
-pub fn get_signature(msg: &H256, privkey: H256) -> Result<[u8; 65], String> {
-    let mut signature = sign_message(msg, privkey)?;
-    let v = &mut signature[64];
-    if *v >= 27 {
-        *v -= 27;
-    }
-    Ok(signature)
-}
-
-pub fn privkey_to_short_address(
-    privkey: &str,
-    rollup_type_hash: &H256,
-    deployment_result: &ScriptsDeploymentResult,
-) -> Result<GwBytes, String> {
-    let eth_address = privkey_to_eth_address(privkey)?;
-
-    let code_hash = Byte32::from_slice(
-        deployment_result
-            .eth_account_lock
-            .script_type_hash
-            .as_bytes(),
-    )
-    .map_err(|err| err.to_string())?;
-
-    let mut args_vec = rollup_type_hash.as_bytes().to_vec();
-    args_vec.append(&mut eth_address.to_vec());
-    let args = GwPack::pack(&GwBytes::from(args_vec));
-
-    let script = Script::new_builder()
-        .code_hash(code_hash)
-        .hash_type(ScriptHashType::Type.into())
-        .args(args)
-        .build();
-
-    let script_hash: H256 = {
-        let mut hasher = new_blake2b();
-        hasher.update(script.as_slice());
-        let mut hash = [0u8; 32];
-        hasher.finalize(&mut hash);
-        hash.into()
-    };
-
-    let short_address = &script_hash.as_bytes()[..20];
-
-    let addr = GwBytes::from(short_address.to_vec());
-
-    Ok(addr)
-}
-
-pub fn short_address_to_account_id(
-    godwoken_rpc_client: &mut GodwokenRpcClient,
-    short_address: &GwBytes,
-) -> Result<Option<u32>, String> {
-    let bytes = JsonBytes::from_bytes(short_address.clone());
-    let script_hash = godwoken_rpc_client.get_script_hash_by_short_address(bytes)?;
-    let account_id = godwoken_rpc_client.get_account_id_by_script_hash(script_hash)?;
-
-    Ok(account_id)
 }
 
 fn wait_for_balance_change(
