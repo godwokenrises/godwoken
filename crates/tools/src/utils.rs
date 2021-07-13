@@ -4,6 +4,8 @@ use ckb_jsonrpc_types::Status;
 use ckb_sdk::rpc::TransactionView;
 use ckb_sdk::HttpRpcClient;
 use ckb_sdk::NetworkType;
+use gw_config::Config;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use std::{env, ffi::OsStr, process::Command};
@@ -135,4 +137,11 @@ pub fn make_path<P: AsRef<Path>>(parent_dir_path: &Path, paths: Vec<P>) -> PathB
         target.push(p);
     }
     target
+}
+
+// Read config.toml
+pub fn read_config<P: AsRef<Path>>(path: P) -> Result<Config, String> {
+    let content = fs::read(&path).map_err(|err| err.to_string())?;
+    let config = toml::from_slice(&content).map_err(|err| err.to_string())?;
+    Ok(config)
 }
