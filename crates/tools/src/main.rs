@@ -4,6 +4,7 @@ mod deploy_genesis;
 mod deploy_scripts;
 mod deposit_ckb;
 mod generate_config;
+mod get_balance;
 pub mod godwoken_rpc;
 mod hasher;
 mod prepare_scripts;
@@ -408,6 +409,27 @@ fn main() {
                         .default_value("1")
                         .help("sudt id"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("get-balance")
+                .about("Get balance")
+                .arg(arg_godwoken_rpc_url.clone())
+                .arg(
+                    Arg::with_name("account")
+                        .short("a")
+                        .long("account")
+                        .takes_value(true)
+                        .help("short address OR account id"),
+                )
+                .arg(
+                    Arg::with_name("sudt-id")
+                        .short("s")
+                        .long("sudt-id")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value("1")
+                        .help("sudt id"),
+                ),
         );
 
     let matches = app.clone().get_matches();
@@ -616,6 +638,20 @@ fn main() {
                 deployment_results_path,
             ) {
                 log::error!("Create creator account error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("get-balance", Some(m)) => {
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+            let account = m.value_of("account").unwrap();
+            let sudt_id = m
+                .value_of("sudt-id")
+                .unwrap()
+                .parse()
+                .expect("sudt id format error");
+
+            if let Err(err) = get_balance::get_balance(godwoken_rpc_url, account, sudt_id) {
+                log::error!("Get balance error: {}", err);
                 std::process::exit(-1);
             };
         }
