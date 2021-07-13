@@ -424,7 +424,7 @@ impl Generator {
                 // only accept type script hash type for now
                 if script.hash_type() == ScriptHashType::Type.into() {
                     let code_hash: [u8; 32] = script.code_hash().unpack();
-                    log::debug!("load_backend by code_hash: {:?}", code_hash);
+                    log::debug!("load_backend by code_hash: {}", hex::encode(code_hash));
                     self.backend_manage.get_backend(&code_hash.into())
                 } else {
                     log::error!(

@@ -475,7 +475,7 @@ fn main() {
                 scripts_config_path,
                 server_url,
             ) {
-                log::error!("Deploy genesis error: {}", err);
+                log::error!("Generate config error: {}", err);
                 std::process::exit(-1);
             };
         }
