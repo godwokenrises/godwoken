@@ -268,6 +268,7 @@ pub fn generate_config(
         allowed_contract_deps,
         challenger_config,
         wallet_config,
+        debug_tx_dump_path: "debug-tx-dump".into(),
     });
     let genesis: GenesisConfig = GenesisConfig {
         timestamp: genesis.timestamp,

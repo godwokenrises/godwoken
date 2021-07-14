@@ -1087,7 +1087,39 @@ impl RPCClient {
         Ok(verifier_cell)
     }
 
-    pub async fn get_transaction_block_number(&self, tx_hash: H256) -> Result<Option<u64>> {
+    pub async fn get_block(
+        &self,
+        block_hash: H256,
+    ) -> Result<Option<ckb_jsonrpc_types::BlockView>> {
+        let block: Option<ckb_jsonrpc_types::BlockView> = to_result(
+            self.ckb_client
+                .request(
+                    "get_block",
+                    Some(ClientParams::Array(vec![json!(to_jsonh256(block_hash))])),
+                )
+                .await?,
+        )?;
+
+        Ok(block)
+    }
+
+    pub async fn get_header(
+        &self,
+        block_hash: H256,
+    ) -> Result<Option<ckb_jsonrpc_types::HeaderView>> {
+        let block: Option<ckb_jsonrpc_types::HeaderView> = to_result(
+            self.ckb_client
+                .request(
+                    "get_header",
+                    Some(ClientParams::Array(vec![json!(to_jsonh256(block_hash))])),
+                )
+                .await?,
+        )?;
+
+        Ok(block)
+    }
+
+    pub async fn get_transaction_block_hash(&self, tx_hash: H256) -> Result<Option<[u8; 32]>> {
         let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = to_result(
             self.ckb_client
                 .request(
@@ -1097,22 +1129,26 @@ impl RPCClient {
                 .await?,
         )?;
 
-        let block_hash: ckb_fixed_hash::H256 = {
-            let tx_with_status = tx_with_status.ok_or_else(|| anyhow!("tx not found"))?;
-            let status = tx_with_status.tx_status;
-            status.block_hash.ok_or_else(|| anyhow!("no tx block hash"))
-        }?;
+        match tx_with_status {
+            Some(tx_with_status) => {
+                let block_hash: ckb_fixed_hash::H256 = {
+                    let status = tx_with_status.tx_status;
+                    status.block_hash.ok_or_else(|| anyhow!("no tx block hash"))
+                }?;
+                Ok(Some(block_hash.into()))
+            }
+            None => Ok(None),
+        }
+    }
 
-        let block: Option<ckb_jsonrpc_types::BlockView> = to_result(
-            self.ckb_client
-                .request(
-                    "get_block",
-                    Some(ClientParams::Array(vec![json!(block_hash)])),
-                )
-                .await?,
-        )?;
-
-        Ok(block.map(|b| b.header.inner.number.value()))
+    pub async fn get_transaction_block_number(&self, tx_hash: H256) -> Result<Option<u64>> {
+        match self.get_transaction_block_hash(tx_hash).await? {
+            Some(block_hash) => {
+                let block = self.get_block(block_hash.into()).await?;
+                Ok(block.map(|b| b.header.inner.number.value()))
+            }
+            None => Ok(None),
+        }
     }
 
     pub async fn get_transaction(&self, tx_hash: H256) -> Result<Option<Transaction>> {

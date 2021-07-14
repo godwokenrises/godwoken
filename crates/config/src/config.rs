@@ -82,6 +82,8 @@ pub struct BlockProducerConfig {
     pub allowed_contract_deps: HashMap<H256, CellDep>,
     pub challenger_config: ChallengerConfig,
     pub wallet_config: WalletConfig,
+    /// Directory to save debugging info of l1 transactions
+    pub debug_tx_dump_path: PathBuf,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
