@@ -1,5 +1,6 @@
 use clap::{App, Arg, SubCommand};
 use gw_tests::system_tests::{challenge_tests, test_mode_control};
+use std::path::Path;
 
 fn main() -> Result<(), String> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
@@ -22,17 +23,36 @@ fn main() -> Result<(), String> {
                         .help("Issue test blocks"),
                 )
                 .arg(
-                    Arg::with_name("bad-block")
-                        .long("bad-block")
-                        .short("b")
-                        .help("Issue bad block"),
-                )
-                .arg(
                     Arg::with_name("challenge")
                         .long("challenge")
                         .short("c")
                         .takes_value(true)
                         .help("Issue challenge of specific block number"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("bad-block")
+                .about("Issue bad block")
+                .arg(
+                    Arg::with_name("privkey-path")
+                        .short("p")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Privkey path"),
+                )
+                .arg(
+                    Arg::with_name("scripts-deploy-result-path")
+                        .short("d")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Scripts deploy result file path"),
+                )
+                .arg(
+                    Arg::with_name("config-file-path")
+                        .short("c")
+                        .takes_value(true)
+                        .required(true)
+                        .help("godwoken node config file path"),
                 ),
         )
         .subcommand(
@@ -75,8 +95,6 @@ fn main() -> Result<(), String> {
                     .map(|c| c.parse().expect("count of blocks"))
                     .unwrap();
                 test_mode_control::issue_test_blocks(count)?;
-            } else if m.is_present("bad-block") {
-                test_mode_control::issue_bad_block()?;
             } else if m.is_present("challenge") {
                 let block_number = m
                     .value_of("challenge")
@@ -85,6 +103,18 @@ fn main() -> Result<(), String> {
                 test_mode_control::issue_challenge(block_number)?;
             } else {
                 app.print_help().expect("print help");
+            }
+        }
+        ("bad-block", Some(m)) => {
+            let deployment_path = Path::new(m.value_of("scripts-deploy-result-path").unwrap());
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let config_path = Path::new(m.value_of("config-file-path").unwrap());
+
+            if let Err(err) =
+                test_mode_control::issue_bad_block(privkey_path, config_path, deployment_path)
+            {
+                log::error!("Issue bad block error: {}", err);
+                std::process::exit(-1);
             }
         }
         ("challenge-tests", Some(m)) => {
