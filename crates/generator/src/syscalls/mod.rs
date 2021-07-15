@@ -56,11 +56,11 @@ const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
 
 /* Syscall errors */
 pub const SUCCESS: u8 = 0;
-pub const ERROR_DUPLICATED_SCRIPT_HASH: u8 = 200;
-pub const ERROR_UNKNOWN_SCRIPT_CODE_HASH: u8 = 201;
-pub const ERROR_INVALID_CONTRACT_SCRIPT: u8 = 202;
-pub const ERROR_NOT_FOUND: u8 = 203;
-pub const ERROR_RECOVER: u8 = 204;
+pub const ERROR_DUPLICATED_SCRIPT_HASH: u8 = 80;
+pub const ERROR_UNKNOWN_SCRIPT_CODE_HASH: u8 = 81;
+pub const ERROR_INVALID_CONTRACT_SCRIPT: u8 = 82;
+pub const ERROR_NOT_FOUND: u8 = 83;
+pub const ERROR_RECOVER: u8 = 84;
 
 pub(crate) struct L2Syscalls<'a, S, C> {
     pub(crate) chain: &'a C,
