@@ -291,7 +291,7 @@ fn checkpoint_extract_block_number_and_index_number() {
 
     block_store
         .insert_block(
-            block.clone(),
+            block,
             L2BlockCommittedInfo::default(),
             GlobalState::default(),
             vec![WithdrawalReceipt::default(); 3],
@@ -325,11 +325,12 @@ fn checkpoint_extract_block_number_and_index_number() {
     assert!(maybe_block_idx.is_ok());
     assert_eq!(maybe_block_idx.unwrap(), (0, 5));
 
+    // Test PrevTxs across block
     let checkpoint = CheckPoint::new(0, SubState::PrevTxs);
     let maybe_block_idx =
         checkpoint.do_extract_block_number_and_index_number(&db, StateDBMode::ReadOnly);
     assert!(maybe_block_idx.is_ok());
-    assert_eq!(maybe_block_idx.unwrap(), (0, 4));
+    assert_eq!(maybe_block_idx.unwrap(), (0, 0));
 
     let checkpoint = CheckPoint::new(1, SubState::Block);
     let maybe_block_idx =
