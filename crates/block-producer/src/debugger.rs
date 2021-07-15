@@ -65,11 +65,11 @@ pub async fn build_mock_transaction(
         let input_cell = rpc_client
             .get_cell(input.previous_output())
             .await?
-            .ok_or(anyhow!("can't find input cell"))?;
+            .ok_or_else(|| anyhow!("can't find input cell"))?;
         let input_block_hash = rpc_client
             .get_transaction_block_hash(input.previous_output().tx_hash().unpack())
             .await?
-            .ok_or(anyhow!("not found input cell tx hash"))?;
+            .ok_or_else(|| anyhow!("not found input cell tx hash"))?;
         let mock_input = ReprMockInput {
             input: {
                 let ckb_input = ckb_types::packed::CellInput::new_unchecked(input.as_bytes());
@@ -92,11 +92,11 @@ pub async fn build_mock_transaction(
         let dep_cell = rpc_client
             .get_cell(cell_dep.out_point())
             .await?
-            .ok_or(anyhow!("can't find dep cell"))?;
+            .ok_or_else(|| anyhow!("can't find dep cell"))?;
         let dep_cell_block_hash = rpc_client
             .get_transaction_block_hash(cell_dep.out_point().tx_hash().unpack())
             .await?
-            .ok_or(anyhow!("not found dep cell tx hash"))?;
+            .ok_or_else(|| anyhow!("not found dep cell tx hash"))?;
         let mock_cell_dep = ReprMockCellDep {
             cell_dep: {
                 let ckb_cell_dep = ckb_types::packed::CellDep::new_unchecked(cell_dep.as_bytes());
@@ -128,7 +128,7 @@ pub async fn build_mock_transaction(
         let header = rpc_client
             .get_header(block_hash)
             .await?
-            .ok_or(anyhow!("block header not found"))?;
+            .ok_or_else(|| anyhow!("block header not found"))?;
         header_deps.push(header);
     }
 
