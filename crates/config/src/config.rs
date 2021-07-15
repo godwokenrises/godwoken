@@ -67,6 +67,8 @@ pub struct ChallengerConfig {
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockProducerConfig {
     pub account_id: u32,
+    /// Directory to save debugging info of l1 transactions
+    pub debug_tx_dump_path: PathBuf,
     // cell deps
     pub rollup_cell_type_dep: CellDep,
     pub rollup_config_cell_dep: CellDep,

@@ -1,6 +1,7 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
 use crate::{
+    debugger::dump_transaction,
     poa::{PoA, ShouldIssueBlock},
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
     rpc_client::{DepositInfo, RPCClient},
@@ -38,6 +39,8 @@ use std::{
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+const TRANSACTION_SRIPT_ERROR: &str = "TransactionScriptError";
 
 fn generate_custodian_cells(
     rollup_context: &RollupContext,
@@ -413,7 +416,7 @@ impl BlockProducer {
             .await?;
 
         // send transaction
-        match self.rpc_client.send_transaction(tx).await {
+        match self.rpc_client.send_transaction(tx.clone()).await {
             Ok(tx_hash) => {
                 log::info!(
                     "\nSubmitted l2 block {} in tx {}\n",
@@ -424,6 +427,26 @@ impl BlockProducer {
             Err(err) => {
                 log::error!("Submitting l2 block error: {}", err);
                 self.poa.reset_current_round();
+
+                // dumping script error transactions
+                if err.to_string().contains(TRANSACTION_SRIPT_ERROR) {
+                    // dumping failed tx
+                    if let Err(err) = dump_transaction(
+                        &self.config.debug_tx_dump_path,
+                        &self.rpc_client,
+                        tx.clone(),
+                    )
+                    .await
+                    {
+                        log::error!(
+                            "Faild to dump transaction {} error: {}",
+                            hex::encode(&tx.hash()),
+                            err
+                        );
+                    }
+                } else {
+                    log::debug!("Skip dumping non-script-error tx");
+                }
             }
         }
         Ok(())
