@@ -610,19 +610,20 @@ impl RPCClient {
             }
             cursor = Some(cells.last_cursor);
 
-            stake_cell = match last_finalized_block_number {
-                Some(last_finalized_block_number) => cells.objects.into_iter().find(|cell| {
-                    let args = cell.output.lock.args.clone().into_bytes();
-                    let stake_lock_args = match StakeLockArgsReader::verify(&args[32..], false) {
-                        Ok(()) => StakeLockArgs::new_unchecked(args.slice(32..)),
-                        Err(_) => return false,
-                    };
-
-                    stake_lock_args.stake_block_number().unpack() <= last_finalized_block_number
-                        && stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash
-                }),
-                None => cells.objects.into_iter().next(),
-            };
+            stake_cell = cells.objects.into_iter().find(|cell| {
+                let args = cell.output.lock.args.clone().into_bytes();
+                let stake_lock_args = match StakeLockArgsReader::verify(&args[32..], false) {
+                    Ok(()) => StakeLockArgs::new_unchecked(args.slice(32..)),
+                    Err(_) => return false,
+                };
+                match last_finalized_block_number {
+                    Some(last_finalized_block_number) => {
+                        stake_lock_args.stake_block_number().unpack() <= last_finalized_block_number
+                            && stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash
+                    }
+                    None => stake_lock_args.owner_lock_hash().as_slice() == owner_lock_hash,
+                }
+            });
         }
 
         let fetch_cell_info = |cell: Cell| {
