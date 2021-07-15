@@ -32,6 +32,37 @@ macro_rules! impl_std_ord {
     };
 }
 
+macro_rules! impl_std_reader_eq {
+    ($struct:ident) => {
+        impl<'a> PartialEq for packed::$struct<'a> {
+            #[inline]
+            fn eq(&self, other: &Self) -> bool {
+                self.as_slice() == other.as_slice()
+            }
+        }
+        impl<'a> Eq for packed::$struct<'a> {}
+    };
+}
+
+macro_rules! impl_std_reader_ord {
+    ($struct:ident) => {
+        impl<'a> PartialOrd for packed::$struct<'a> {
+            #[inline]
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        impl<'a> Ord for packed::$struct<'a> {
+            #[inline]
+            fn cmp(&self, other: &Self) -> Ordering {
+                self.as_slice().cmp(other.as_slice())
+            }
+        }
+    };
+}
+
+/* structs */
 impl_std_eq!(Byte32);
 impl_std_ord!(Byte32);
 impl_std_eq!(Script);
@@ -48,6 +79,24 @@ impl_std_eq!(L2Transaction);
 impl_std_eq!(WithdrawalRequest);
 impl_std_eq!(VerifyTransactionWitness);
 impl_std_eq!(AccountMerkleState);
+
+/* readers */
+impl_std_reader_eq!(Byte32Reader);
+impl_std_reader_ord!(Byte32Reader);
+impl_std_reader_eq!(ScriptReader);
+impl_std_reader_eq!(ChallengeLockArgsReader);
+impl_std_reader_eq!(ChallengeWitnessReader);
+impl_std_reader_eq!(ChallengeTargetReader);
+impl_std_reader_eq!(TransactionReader);
+impl_std_reader_eq!(DepositRequestReader);
+impl_std_reader_eq!(DepositLockArgsReader);
+impl_std_reader_eq!(GlobalStateReader);
+impl_std_reader_eq!(RollupConfigReader);
+impl_std_reader_eq!(StakeLockArgsReader);
+impl_std_reader_eq!(L2TransactionReader);
+impl_std_reader_eq!(WithdrawalRequestReader);
+impl_std_reader_eq!(VerifyTransactionWitnessReader);
+impl_std_reader_eq!(AccountMerkleStateReader);
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "std")] {

@@ -6,7 +6,7 @@ use gw_hash::blake2b::new_blake2b;
 
 macro_rules! impl_hash {
     ($struct:ident) => {
-        impl packed::$struct {
+        impl<'a> packed::$struct<'a> {
             pub fn hash(&self) -> [u8; 32] {
                 let mut hasher = new_blake2b();
                 hasher.update(self.as_slice());
@@ -20,7 +20,7 @@ macro_rules! impl_hash {
 
 macro_rules! impl_witness_hash {
     ($struct:ident) => {
-        impl packed::$struct {
+        impl<'a> packed::$struct<'a> {
             pub fn hash(&self) -> [u8; 32] {
                 self.raw().hash()
             }
@@ -36,6 +36,47 @@ macro_rules! impl_witness_hash {
     };
 }
 
+impl_hash!(RollupConfigReader);
+impl_hash!(ScriptReader);
+impl_hash!(RawL2BlockReader);
+impl_hash!(RawL2TransactionReader);
+impl_witness_hash!(L2TransactionReader);
+impl_hash!(RawWithdrawalRequestReader);
+impl_witness_hash!(WithdrawalRequestReader);
+impl_hash!(RawTransactionReader);
+impl_witness_hash!(TransactionReader);
+impl_hash!(HeaderReader);
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "std")] {
+        impl packed::TransactionKey {
+            pub fn build_transaction_key(block_hash: crate::packed::Byte32, index: u32) -> Self {
+                let mut key = [0u8; 36];
+                key[..32].copy_from_slice(block_hash.as_slice());
+                // use BE, so we have a sorted bytes representation
+                key[32..].copy_from_slice(&index.to_be_bytes());
+                key.pack()
+            }
+        }
+    }
+}
+
+impl packed::RawL2Transaction {
+    pub fn hash(&self) -> [u8; 32] {
+        self.as_reader().hash()
+    }
+}
+
+impl packed::L2Transaction {
+    pub fn hash(&self) -> [u8; 32] {
+        self.raw().hash()
+    }
+
+    pub fn witness_hash(&self) -> [u8; 32] {
+        self.as_reader().witness_hash()
+    }
+}
+
 impl packed::RawL2Block {
     pub fn smt_key(&self) -> [u8; 32] {
         Self::compute_smt_key(self.number().unpack())
@@ -46,6 +87,10 @@ impl packed::RawL2Block {
         let mut buf = [0u8; 32];
         buf[..size_of_val(&block_number)].copy_from_slice(&block_number.to_le_bytes());
         buf
+    }
+
+    pub fn hash(&self) -> [u8; 32] {
+        self.as_reader().hash()
     }
 }
 
@@ -59,27 +104,42 @@ impl packed::L2Block {
     }
 }
 
-impl_hash!(RollupConfig);
-impl_hash!(Script);
-impl_hash!(RawL2Block);
-impl_hash!(RawL2Transaction);
-impl_witness_hash!(L2Transaction);
-impl_hash!(RawWithdrawalRequest);
-impl_witness_hash!(WithdrawalRequest);
-impl_hash!(RawTransaction);
-impl_witness_hash!(Transaction);
-impl_hash!(Header);
+impl packed::Script {
+    pub fn hash(&self) -> [u8; 32] {
+        self.as_reader().hash()
+    }
+}
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "std")] {
-        impl packed::TransactionKey {
-            pub fn build_transaction_key(block_hash: crate::packed::Byte32, index: u32) -> Self {
-                let mut key = [0u8; 36];
-                key[..32].copy_from_slice(block_hash.as_slice());
-                // use BE, so we have a sorted bytes representation
-                key[32..].copy_from_slice(&index.to_be_bytes());
-                key.pack()
-            }
-        }
+impl packed::RawWithdrawalRequest {
+    pub fn hash(&self) -> [u8; 32] {
+        self.as_reader().hash()
+    }
+}
+
+impl packed::WithdrawalRequest {
+    pub fn hash(&self) -> [u8; 32] {
+        self.raw().hash()
+    }
+
+    pub fn witness_hash(&self) -> [u8; 32] {
+        self.as_reader().witness_hash()
+    }
+}
+
+impl packed::Header {
+    pub fn hash(&self) -> [u8; 32] {
+        self.as_reader().hash()
+    }
+}
+
+impl packed::Transaction {
+    pub fn hash(&self) -> [u8; 32] {
+        self.as_reader().hash()
+    }
+}
+
+impl packed::RollupConfig {
+    pub fn hash(&self) -> [u8; 32] {
+        self.as_reader().hash()
     }
 }
