@@ -156,6 +156,8 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         .block_producer_id(block_producer_id.pack())
         .build();
     let chain_view = ChainView::new(&db, parent_block_hash);
+
+    let has_txs = !txs.is_empty();
     for tx in txs {
         // 1. verify tx
         if let Err(err) = generator.check_transaction_signature(&state, &tx) {
@@ -218,6 +220,12 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         .collect();
     let post_account_state_root = state.calculate_root()?;
     let post_account_state_count = state.get_account_count()?;
+
+    if !has_txs {
+        let post_state_check_point = state.calculate_state_checkpoint()?;
+        assert_eq!(prev_state_check_point, post_state_check_point);
+    }
+
     // discard all changes
     drop(state);
     db.rollback()?;

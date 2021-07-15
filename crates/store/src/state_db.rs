@@ -45,6 +45,7 @@ pub enum StateDBMode {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SubState {
     Withdrawal(u32),
+    PrevTxs,
     Tx(u32),
     Block, // Block post state
 }
@@ -75,15 +76,27 @@ impl SubState {
     ) -> Result<AccountMerkleState, Error> {
         self.validate_in_block(block).map_err(|e| e.to_string())?;
 
+        enum CheckPointIdx {
+            PrevTxs,
+            Idx(usize),
+        }
+
         let checkpoint_idx = match *self {
-            SubState::Withdrawal(index) => index as usize,
-            SubState::Tx(index) => block.withdrawals().len() + index as usize,
+            SubState::Withdrawal(index) => CheckPointIdx::Idx(index as usize),
+            SubState::PrevTxs => CheckPointIdx::PrevTxs,
+            SubState::Tx(index) => CheckPointIdx::Idx(block.withdrawals().len() + index as usize),
             SubState::Block => return Ok(block.raw().post_account()),
         };
 
-        let checkpoint = {
-            let checkpoints = block.raw().state_checkpoint_list();
-            checkpoints.get(checkpoint_idx).expect("checkpoint exists")
+        let checkpoint = match checkpoint_idx {
+            CheckPointIdx::Idx(idx) => {
+                let checkpoints = block.as_reader().raw().state_checkpoint_list().to_entity();
+                checkpoints.get(idx).expect("checkpoint exists")
+            }
+            CheckPointIdx::PrevTxs => {
+                let txs = block.as_reader().raw().submit_transactions();
+                txs.prev_state_checkpoint().to_entity()
+            }
         };
 
         db.get_checkpoint_post_state(&checkpoint)?
@@ -145,6 +158,22 @@ impl CheckPoint {
     ) -> Result<(u64, u32), Error> {
         match self.sub_state {
             SubState::Withdrawal(index) => Ok((self.block_number, index)),
+            SubState::PrevTxs => match db_mode {
+                StateDBMode::Genesis => Ok((self.block_number, 0)),
+                StateDBMode::ReadOnly => {
+                    let block = {
+                        let block_hash = db
+                            .get_block_hash_by_number(self.block_number)?
+                            .ok_or_else(|| "can't find block hash".to_string())?;
+
+                        db.get_block(&block_hash)?
+                            .ok_or_else(|| "can't find block".to_string())?
+                    };
+
+                    Ok((self.block_number, block.withdrawals().len() as u32 + 1))
+                }
+                StateDBMode::Write(ctx) => Ok((self.block_number, ctx.tx_offset + 1)),
+            },
             SubState::Tx(index) => match db_mode {
                 StateDBMode::Genesis => Ok((self.block_number, 0)),
                 StateDBMode::ReadOnly => {
@@ -157,9 +186,12 @@ impl CheckPoint {
                             .ok_or_else(|| "can't find block".to_string())?
                     };
 
-                    Ok((self.block_number, block.withdrawals().len() as u32 + index))
+                    Ok((
+                        self.block_number,
+                        block.withdrawals().len() as u32 + 1 + index,
+                    ))
                 }
-                StateDBMode::Write(ctx) => Ok((self.block_number, ctx.tx_offset + index)),
+                StateDBMode::Write(ctx) => Ok((self.block_number, ctx.tx_offset + 1 + index)), // Plus one for PrevTxs
             },
             SubState::Block => Ok((self.block_number, 0)),
         }
@@ -282,7 +314,9 @@ impl<'db> StateDBTransaction<'db> {
 
         let account_merkle_state = match self.mode {
             StateDBMode::Genesis => {
-                if 0 != self.checkpoint.block_number || SubState::Block != self.checkpoint.sub_state
+                if 0 != self.checkpoint.block_number
+                    || (SubState::Block != self.checkpoint.sub_state
+                        && SubState::PrevTxs != self.checkpoint.sub_state)
                 {
                     return Err(Error::from(format!(
                         "invalid check point {:?} for StateDBMode::Genesis",
@@ -290,6 +324,8 @@ impl<'db> StateDBTransaction<'db> {
                     )));
                 }
 
+                // NOTE: Genesis doesn't have txs, so prev txs state is same as
+                // post account state.
                 match self.inner.get_block_hash_by_number(0)? {
                     Some(block_hash) => {
                         let block = inner_db
