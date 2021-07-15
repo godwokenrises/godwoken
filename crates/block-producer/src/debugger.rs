@@ -10,7 +10,11 @@ use gw_jsonrpc_types::{
     ckb_jsonrpc_types,
     debugger::{ReprMockCellDep, ReprMockInfo, ReprMockInput, ReprMockTransaction},
 };
-use gw_types::{packed::Transaction, prelude::*};
+use gw_types::{
+    core::DepType,
+    packed::{CellDep, OutPointVec, Transaction},
+    prelude::*,
+};
 
 use crate::rpc_client::RPCClient;
 
@@ -55,6 +59,30 @@ pub async fn build_mock_transaction(
     rpc_client: &RPCClient,
     tx: Transaction,
 ) -> Result<ReprMockTransaction> {
+    async fn resolve_dep_group(rpc_client: &RPCClient, dep: &CellDep) -> Result<Vec<CellDep>> {
+        // return dep
+        if dep.dep_type() == DepType::Code.into() {
+            return Ok(vec![]);
+        }
+        // parse dep group
+        let cell = rpc_client
+            .get_cell(dep.out_point())
+            .await?
+            .ok_or_else(|| anyhow!("can't find dep group cell"))?;
+        let out_points =
+            OutPointVec::from_slice(&cell.data).map_err(|_| anyhow!("invalid dep group"))?;
+        let cell_deps = out_points
+            .into_iter()
+            .map(|out_point| {
+                CellDep::new_builder()
+                    .out_point(out_point)
+                    .dep_type(DepType::Code.into())
+                    .build()
+            })
+            .collect();
+        Ok(cell_deps)
+    }
+
     // header deps hashes
     let mut header_deps_hashes: Vec<H256> = Vec::with_capacity(
         tx.raw().header_deps().len() + tx.raw().inputs().len() + tx.raw().cell_deps().len(),
@@ -87,8 +115,16 @@ pub async fn build_mock_transaction(
         header_deps_hashes.push(input_block_hash.into());
     }
 
-    let mut cell_deps: Vec<ReprMockCellDep> = Vec::with_capacity(tx.raw().cell_deps().len());
+    // resolve cell groups
+    let mut resolved_cell_deps = Vec::with_capacity(tx.raw().cell_deps().len());
     for cell_dep in tx.raw().cell_deps() {
+        let cell_deps = resolve_dep_group(rpc_client, &cell_dep).await?;
+        resolved_cell_deps.push(cell_dep);
+        resolved_cell_deps.extend(cell_deps);
+    }
+
+    let mut cell_deps: Vec<ReprMockCellDep> = Vec::with_capacity(resolved_cell_deps.len());
+    for cell_dep in resolved_cell_deps {
         let dep_cell = rpc_client
             .get_cell(cell_dep.out_point())
             .await?
