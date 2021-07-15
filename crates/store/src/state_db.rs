@@ -2,6 +2,7 @@
 
 use crate::{smt_store_impl::SMTStore, traits::KVStore, transaction::StoreTransaction};
 use anyhow::{anyhow, Result};
+use gw_common::merkle_utils::calculate_state_checkpoint;
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_db::schema::{
     Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_DATA, COLUMN_SCRIPT,
@@ -170,7 +171,25 @@ impl CheckPoint {
                             .ok_or_else(|| "can't find block".to_string())?
                     };
 
-                    Ok((self.block_number, block.withdrawals().len() as u32 + 1))
+                    let block = block.as_reader();
+                    let prev_txs_state_checkpoint: [u8; 32] = {
+                        let txs = block.raw().submit_transactions();
+                        txs.prev_state_checkpoint().unpack()
+                    };
+                    let prev_account_checkpoint: [u8; 32] = {
+                        let account = block.raw().prev_account();
+                        let root = account.merkle_root().unpack();
+                        let count = account.count().unpack();
+
+                        calculate_state_checkpoint(&root, count).into()
+                    };
+                    if prev_txs_state_checkpoint == prev_account_checkpoint {
+                        // No deposit, no withdrawal, state across block, should use
+                        // previous block.
+                        Ok((self.block_number.saturating_sub(1), 0))
+                    } else {
+                        Ok((self.block_number, block.withdrawals().len() as u32 + 1))
+                    }
                 }
                 StateDBMode::Write(ctx) => Ok((self.block_number, ctx.tx_offset + 1)),
             },
