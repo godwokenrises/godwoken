@@ -1,4 +1,7 @@
-use crate::{account_lock_manage::AccountLockManage, RollupContext};
+use crate::{
+    account_lock_manage::AccountLockManage, syscalls::error_codes::GW_FATAL_UNKNOWN_ARGS,
+    RollupContext,
+};
 use ckb_vm::{
     memory::Memory,
     registers::{A0, A1, A2, A3, A4, A5, A7},
@@ -22,6 +25,13 @@ use gw_types::{
     prelude::*,
 };
 use std::{cmp, convert::TryInto};
+
+use self::error_codes::{
+    GW_ERROR_ACCOUNT_NOT_FOUND, GW_ERROR_DUPLICATED_SCRIPT_HASH, GW_ERROR_INVALID_CONTRACT_SCRIPT,
+    GW_ERROR_NOT_FOUND, GW_ERROR_RECOVER, GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH, SUCCESS,
+};
+
+pub mod error_codes;
 
 /* Constants */
 // 24KB is max ethereum contract code size
@@ -53,14 +63,6 @@ const SYS_LOG: u64 = 3502;
 const SYS_RECOVER_ACCOUNT: u64 = 3503;
 /* CKB compatible syscalls */
 const DEBUG_PRINT_SYSCALL_NUMBER: u64 = 2177;
-
-/* Syscall errors */
-pub const SUCCESS: u8 = 0;
-pub const ERROR_DUPLICATED_SCRIPT_HASH: u8 = 80;
-pub const ERROR_UNKNOWN_SCRIPT_CODE_HASH: u8 = 81;
-pub const ERROR_INVALID_CONTRACT_SCRIPT: u8 = 82;
-pub const ERROR_NOT_FOUND: u8 = 83;
-pub const ERROR_RECOVER: u8 = 84;
 
 pub(crate) struct L2Syscalls<'a, S, C> {
     pub(crate) chain: &'a C,
@@ -185,14 +187,14 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     .get_account_id_by_script_hash(&script_hash.into())?
                     .is_some()
                 {
-                    machine.set_register(A0, Mac::REG::from_u8(ERROR_DUPLICATED_SCRIPT_HASH));
+                    machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_DUPLICATED_SCRIPT_HASH));
                     return Ok(true);
                 }
                 // Check script validity
                 let script_hash_type: ScriptHashType =
                     script.hash_type().try_into().expect("script hash type");
                 if script_hash_type != ScriptHashType::Type {
-                    machine.set_register(A0, Mac::REG::from_u8(ERROR_UNKNOWN_SCRIPT_CODE_HASH));
+                    machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH));
                     return Ok(true);
                 }
                 let is_eoa_account = self
@@ -209,7 +211,8 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                         .into_iter()
                         .any(|type_hash| type_hash == script.code_hash());
                     if !is_contract_account {
-                        machine.set_register(A0, Mac::REG::from_u8(ERROR_UNKNOWN_SCRIPT_CODE_HASH));
+                        machine
+                            .set_register(A0, Mac::REG::from_i8(GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH));
                         return Ok(true);
                     }
 
@@ -218,7 +221,8 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     if args.len() < 32
                         || !args.starts_with(self.rollup_context.rollup_script_hash.as_slice())
                     {
-                        machine.set_register(A0, Mac::REG::from_u8(ERROR_INVALID_CONTRACT_SCRIPT));
+                        machine
+                            .set_register(A0, Mac::REG::from_i8(GW_ERROR_INVALID_CONTRACT_SCRIPT));
                         return Ok(true);
                     }
                 }
@@ -269,7 +273,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 {
                     Some(id) => id,
                     None => {
-                        machine.set_register(A0, Mac::REG::from_u8(ERROR_NOT_FOUND));
+                        machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_ACCOUNT_NOT_FOUND));
                         return Ok(true);
                     }
                 };
@@ -300,7 +304,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 })?;
                 // return not found if script_hash is zero, otherwise we search the script from DB
                 if script_hash.is_zero() {
-                    machine.set_register(A0, Mac::REG::from_u8(ERROR_NOT_FOUND));
+                    machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_ACCOUNT_NOT_FOUND));
                     return Ok(true);
                 }
                 let script = self.get_script(&script_hash).ok_or_else(|| {
@@ -336,7 +340,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 let data = match self.get_data(&data_hash) {
                     Some(data) => data,
                     None => {
-                        machine.set_register(A0, Mac::REG::from_u8(ERROR_NOT_FOUND));
+                        machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_NOT_FOUND));
                         return Ok(true);
                     }
                 };
@@ -387,7 +391,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                         .store_bytes(script_hash_addr, script_hash.as_slice())?;
                     machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 } else {
-                    machine.set_register(A0, Mac::REG::from_u8(ERROR_NOT_FOUND));
+                    machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_NOT_FOUND));
                 }
                 Ok(true)
             }
@@ -425,10 +429,11 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                             .store_bytes(script_addr, account_script.as_slice())?;
                         machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                     } else {
-                        machine.set_register(A0, Mac::REG::from_u8(ERROR_RECOVER));
+                        machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_RECOVER));
                     }
                 } else {
-                    machine.set_register(A0, Mac::REG::from_u8(ERROR_NOT_FOUND));
+                    log::debug!("unexpected lock code hash: {:?}", code_hash);
+                    machine.set_register(A0, Mac::REG::from_i8(GW_FATAL_UNKNOWN_ARGS));
                 }
 
                 Ok(true)
