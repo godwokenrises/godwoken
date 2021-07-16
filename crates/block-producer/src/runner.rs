@@ -380,9 +380,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         log::info!("Rollup config hash: {}", rollup_config_hash);
     }
 
-    if NodeMode::Test == config.node_mode {
-        log::info!("Test mode enabled!!!");
-    }
+    log::info!("{:?} mode enabled!!!", config.node_mode);
 
     smol::block_on(async {
         select! {

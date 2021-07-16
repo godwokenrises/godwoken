@@ -3,12 +3,17 @@ use crate::deploy_scripts::deploy_scripts;
 use crate::generate_config::generate_config;
 use crate::prepare_scripts::{self, prepare_scripts, ScriptsBuildMode};
 use crate::utils;
+use ckb_types::{
+    core::ScriptHashType, packed as ckb_packed, prelude::Builder as CKBBuilder,
+    prelude::Pack as CKBPack, prelude::Unpack as CKBUnpack,
+};
+use gw_types::prelude::Entity as GwEntity;
 use rand::Rng;
 use serde::Serialize;
 use serde_json::json;
+use std::fs;
 use std::{
     collections::HashMap,
-    fs,
     path::{Path, PathBuf},
     thread, time,
 };
@@ -184,9 +189,14 @@ fn generate_poa_config(nodes_info: &HashMap<String, NodeWalletInfo>, poa_config_
 }
 
 fn generate_rollup_config(rollup_config_path: &Path) {
+    let burn_lock_script = ckb_packed::Script::new_builder()
+        .code_hash(CKBPack::pack(&[0u8; 32]))
+        .hash_type(ScriptHashType::Data.into())
+        .build();
+    let burn_lock_script_hash: [u8; 32] = burn_lock_script.calc_script_hash().unpack();
     let rollup_config = json!({
       "l1_sudt_script_type_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "burn_lock_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "burn_lock_hash": format!("0x{}", hex::encode(burn_lock_script_hash)),
       "required_staking_capacity": 10000000000u64,
       "challenge_maturity_blocks": 5,
       "finality_blocks": 20,

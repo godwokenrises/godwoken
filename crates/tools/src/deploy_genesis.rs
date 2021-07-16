@@ -264,8 +264,16 @@ pub fn deploy_genesis(
     let poa_setup = poa_config.poa_setup;
 
     if !skip_config_check {
-        if H256([0u8; 32]) != user_rollup_config.burn_lock_hash {
-            return Err("burn lock hash is not all zeros as expected".to_string());
+        let burn_lock_script = ckb_packed::Script::new_builder()
+            .code_hash(CKBPack::pack(&[0u8; 32]))
+            .hash_type(ScriptHashType::Data.into())
+            .build();
+        let burn_lock_script_hash: [u8; 32] = burn_lock_script.calc_script_hash().unpack();
+        if H256(burn_lock_script_hash) != user_rollup_config.burn_lock_hash {
+            return Err(format!(
+                "burn lock hash is not {} as expected, which is calculated by all zero burn lock script",
+                hex::encode(burn_lock_script_hash)
+            ));
         }
         if poa_setup.round_intervals == 0 {
             return Err("round intervals value must be greater than 0".to_string());
