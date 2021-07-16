@@ -360,7 +360,7 @@ fn build_tx_kv_witness(
     tree.get_nonce(sender_id)?;
 
     let return_data_hash = match tx_kv_state {
-        TxKvState::Execution { generator } => {
+        TxKvState::Execution { ref generator } => {
             let parent_block_hash = db
                 .get_block_hash_by_number(raw_block.number().unpack())?
                 .ok_or_else(|| anyhow!("parent block not found"))?;
@@ -393,19 +393,19 @@ fn build_tx_kv_witness(
         .ok_or_else(|| anyhow!("block tx checkpoint not found"))?
         .unpack();
 
-    // Check post tx account state
-    {
+    if matches!(tx_kv_state, TxKvState::Execution { .. }) {
+        // Check post tx account state
         let local_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
         assert_eq!(local_checkpoint, block_post_tx_checkpoint);
     }
 
-    let post_tx_account_count = tree.get_account_count()?;
     let touched_keys: Vec<H256> = {
         let opt_keys = tree.tracker_mut().touched_keys();
         let keys = opt_keys.ok_or_else(|| anyhow!("no key touched"))?;
         let clone_keys = keys.borrow().clone().into_iter();
         clone_keys.collect()
     };
+    let post_tx_account_count = tree.get_account_count()?;
     let post_kv_state = {
         let keys = touched_keys.iter();
         let to_kv = keys.map(|k| {
@@ -442,9 +442,11 @@ fn build_tx_kv_witness(
         let proof_checkpoint = calculate_state_checkpoint(&proof_root, prev_tx_account_count);
         assert_eq!(proof_checkpoint, block_prev_tx_checkpoint.into());
 
-        let proof_root = kv_state_proof.compute_root::<Blake2bHasher>(post_kv_state)?;
-        let proof_checkpoint = calculate_state_checkpoint(&proof_root, post_tx_account_count);
-        assert_eq!(proof_checkpoint, block_post_tx_checkpoint.into());
+        if matches!(tx_kv_state, TxKvState::Execution { .. }) {
+            let proof_root = kv_state_proof.compute_root::<Blake2bHasher>(post_kv_state)?;
+            let proof_checkpoint = calculate_state_checkpoint(&proof_root, post_tx_account_count);
+            assert_eq!(proof_checkpoint, block_post_tx_checkpoint.into());
+        }
     }
 
     let scripts = ScriptVec::new_builder()
