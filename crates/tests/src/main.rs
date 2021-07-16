@@ -34,11 +34,18 @@ fn main() -> Result<(), String> {
             SubCommand::with_name("bad-block")
                 .about("Issue bad block")
                 .arg(
-                    Arg::with_name("privkey-path")
-                        .short("p")
+                    Arg::with_name("from-privkey-path")
+                        .short("f")
                         .takes_value(true)
                         .required(true)
-                        .help("Privkey path"),
+                        .help("from user privkey path"),
+                )
+                .arg(
+                    Arg::with_name("to-privkey-path")
+                        .short("t")
+                        .takes_value(true)
+                        .required(true)
+                        .help("To user privkey path"),
                 )
                 .arg(
                     Arg::with_name("scripts-deploy-result-path")
@@ -107,12 +114,16 @@ fn main() -> Result<(), String> {
         }
         ("bad-block", Some(m)) => {
             let deployment_path = Path::new(m.value_of("scripts-deploy-result-path").unwrap());
-            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let from_privkey_path = Path::new(m.value_of("from-privkey-path").unwrap());
+            let to_privkey_path = Path::new(m.value_of("to-privkey-path").unwrap());
             let config_path = Path::new(m.value_of("config-file-path").unwrap());
 
-            if let Err(err) =
-                test_mode_control::issue_bad_block(privkey_path, config_path, deployment_path)
-            {
+            if let Err(err) = test_mode_control::issue_bad_block(
+                from_privkey_path,
+                to_privkey_path,
+                config_path,
+                deployment_path,
+            ) {
                 log::error!("Issue bad block error: {}", err);
                 std::process::exit(-1);
             }

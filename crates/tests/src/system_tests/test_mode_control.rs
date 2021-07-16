@@ -88,22 +88,30 @@ pub fn issue_test_blocks(count: i32) -> Result<(), String> {
 }
 
 pub fn issue_bad_block(
-    privkey_path: &Path,
+    from_privkey_path: &Path,
+    to_privkey_path: &Path,
     config_path: &Path,
     deployment_results_path: &Path,
 ) -> Result<(), String> {
     log::info!("[test mode control]: issue bad block");
 
-    let id = get_account(privkey_path, config_path, deployment_results_path)?;
+    let from_id = prepare_account(from_privkey_path, config_path, deployment_results_path)?;
+    let to_id = prepare_account(to_privkey_path, config_path, deployment_results_path)?;
 
-    submit_a_transaction_to_test_node(privkey_path, config_path, deployment_results_path, id)?;
+    log::info!("from id: {}, to id: {}", from_id, to_id);
+    submit_a_transaction_to_test_node(
+        from_privkey_path,
+        config_path,
+        deployment_results_path,
+        to_id,
+    )?;
 
     let mut test_mode_rpc = TestModeRpc::new();
     let mut i = 0;
     while i < 1 {
         let ret = test_mode_rpc.should_produce_block()?;
         if let ShouldProduceBlock::Yes = ret {
-            test_mode_rpc.issue_bad_block(0, ChallengeType::TxExecution)?;
+            test_mode_rpc.issue_bad_block(0, ChallengeType::TxSignature)?;
             i += 1;
             log::info!("issue bad block");
         }
@@ -118,7 +126,7 @@ pub fn issue_challenge(block_number: u64) -> Result<(), String> {
     while i < 1 {
         let ret = test_mode_rpc.should_produce_block()?;
         if let ShouldProduceBlock::Yes = ret {
-            test_mode_rpc.issue_challenge(block_number, 0, ChallengeType::TxExecution)?;
+            test_mode_rpc.issue_challenge(block_number, 0, ChallengeType::TxSignature)?;
             i += 1;
             log::info!(
                 "issue challenge: block number {}, target_index 0, ChallengeType TxExecution",
@@ -129,7 +137,7 @@ pub fn issue_challenge(block_number: u64) -> Result<(), String> {
     Ok(())
 }
 
-fn get_account(
+fn prepare_account(
     privkey_path: &Path,
     config_path: &Path,
     deployment_results_path: &Path,
@@ -167,14 +175,14 @@ fn get_account(
 }
 
 fn submit_a_transaction_to_test_node(
-    privkey_path: &Path,
+    from_privkey_path: &Path,
     config_path: &Path,
     deployment_results_path: &Path,
     to: u32,
 ) -> Result<(), String> {
     transfer::submit_l2_transaction(
         TEST_MODE_GODWOKEN_RPC_URL,
-        privkey_path,
+        from_privkey_path,
         &to.to_string(),
         1u32,
         "100",
