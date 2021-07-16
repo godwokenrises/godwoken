@@ -471,19 +471,6 @@ impl Generator {
                 return Err(TransactionError::InvalidExitCode(code));
             }
         }
-        // set nonce
-        let sender_id: u32 = raw_tx.from_id().unpack();
-        let nonce = state.get_nonce(sender_id)?;
-        let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE);
-        if run_result.read_values.get(&nonce_raw_key).is_none() {
-            run_result
-                .read_values
-                .insert(nonce_raw_key, H256::from_u32(nonce));
-        }
-        // increase nonce
-        run_result
-            .write_values
-            .insert(nonce_raw_key, H256::from_u32(nonce + 1));
 
         // check write data bytes
         let write_data_bytes: usize = run_result.write_data.values().map(|data| data.len()).sum();
