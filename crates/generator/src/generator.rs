@@ -445,6 +445,9 @@ impl Generator {
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
     ) -> Result<RunResult, TransactionError> {
+        let sender_id: u32 = raw_tx.from_id().unpack();
+        let nonce_before_execution = state.get_nonce(sender_id)?;
+
         let mut run_result = RunResult::default();
         {
             let core_machine = Box::<AsmCoreMachine>::default();
@@ -471,6 +474,20 @@ impl Generator {
                 return Err(TransactionError::InvalidExitCode(code));
             }
         }
+
+        // check nonce is increased by backends
+        let nonce_after_execution = {
+            let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE);
+            let value = run_result
+                .write_values
+                .get(&nonce_raw_key)
+                .expect("Backend must update nonce");
+            value.to_u32()
+        };
+        assert!(
+            nonce_after_execution > nonce_before_execution,
+            "nonce should increased by backends"
+        );
 
         // check write data bytes
         let write_data_bytes: usize = run_result.write_data.values().map(|data| data.len()).sum();
