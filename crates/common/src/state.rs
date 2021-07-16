@@ -29,7 +29,12 @@ pub const GW_ACCOUNT_SCRIPT_HASH: u8 = 2;
 /* Non-account types */
 pub const GW_SCRIPT_HASH_TO_ID_PREFIX: [u8; 5] = [0, 0, 0, 0, 3];
 pub const GW_DATA_HASH_PREFIX: [u8; 5] = [0, 0, 0, 0, 4];
+pub const GW_SHORT_SCRIPT_HASH_TO_SCRIPT_HASH_PREFIX: [u8; 5] = [0, 0, 0, 0, 5];
+
 pub const SUDT_KEY_FLAG_BALANCE: u32 = 1;
+
+// 20 Bytes
+pub const DEFAULT_SHORT_SCRIPT_HASH_LEN: usize = 20;
 
 /* Generate a SMT key
  * raw_key: blake2b(id | type | key)
@@ -79,6 +84,17 @@ pub fn build_data_hash_key(data_hash: &[u8]) -> H256 {
     key.into()
 }
 
+pub fn build_short_script_hash_to_script_hash_key(short_script_hash: &[u8]) -> H256 {
+    let mut key: [u8; 32] = H256::zero().into();
+    let mut hasher = new_blake2b();
+    hasher.update(&GW_SHORT_SCRIPT_HASH_TO_SCRIPT_HASH_PREFIX);
+    let len = short_script_hash.len() as u32;
+    hasher.update(&len.to_le_bytes());
+    hasher.update(&short_script_hash);
+    hasher.finalize(&mut key);
+    key.into()
+}
+
 /// NOTE: the length `20` is a hard-coded value, may be `16` for some LockAlgorithm.
 pub fn to_short_address(script_hash: &H256) -> &[u8] {
     &script_hash.as_slice()[0..20]
@@ -122,6 +138,13 @@ pub trait State {
         self.update_raw(
             build_script_hash_to_account_id_key(&script_hash.as_slice()),
             H256::from_u32(id),
+        )?;
+        // short script hash to script hash
+        self.update_raw(
+            build_short_script_hash_to_script_hash_key(
+                &script_hash.as_slice()[..DEFAULT_SHORT_SCRIPT_HASH_LEN],
+            ),
+            script_hash.into(),
         )?;
         // update account count
         self.set_account_count(id + 1)?;

@@ -11,8 +11,9 @@ use gw_common::{
     blake2b::new_blake2b,
     h256_ext::H256Ext,
     state::{
-        build_account_field_key, build_script_hash_to_account_id_key, State, GW_ACCOUNT_NONCE,
-        GW_ACCOUNT_SCRIPT_HASH,
+        build_account_field_key, build_script_hash_to_account_id_key,
+        build_short_script_hash_to_script_hash_key, State, DEFAULT_SHORT_SCRIPT_HASH_LEN,
+        GW_ACCOUNT_NONCE, GW_ACCOUNT_SCRIPT_HASH,
     },
     H256,
 };
@@ -36,8 +37,6 @@ pub mod error_codes;
 /* Constants */
 // 24KB is max ethereum contract code size
 const MAX_SET_RETURN_DATA_SIZE: u64 = 1024 * 24;
-// 20 Bytes
-const SCRIPT_HASH_SHORT_LEN: u64 = 20;
 
 /* Syscall account store / load / create */
 const SYS_CREATE: u64 = 3100;
@@ -238,6 +237,14 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     build_script_hash_to_account_id_key(&script_hash[..]),
                     H256::from_u32(id),
                 );
+                // short script hash to script_hash
+                self.result.write_values.insert(
+                    build_short_script_hash_to_script_hash_key(
+                        &script_hash[..DEFAULT_SHORT_SCRIPT_HASH_LEN],
+                    ),
+                    script_hash.into(),
+                );
+                // insert script
                 self.result
                     .new_scripts
                     .insert(script_hash.into(), script.as_slice().to_vec());
@@ -414,7 +421,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     let short_address_addr = machine.registers()[A0].to_u64();
                     let short_address_len = machine.registers()[A1].to_u64();
                     // check short address len
-                    if short_address_len != SCRIPT_HASH_SHORT_LEN {
+                    if short_address_len != DEFAULT_SHORT_SCRIPT_HASH_LEN as u64 {
                         log::error!("unexpected script hash short length: {}", short_address_len);
                         return Err(VMError::Unexpected);
                     }
