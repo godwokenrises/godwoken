@@ -9,7 +9,7 @@ use gw_db::schema::COLUMN_INDEX;
 use gw_types::{
     packed::{
         AccountMerkleState, Byte32, GlobalState, L2Block, L2BlockCommittedInfo, L2Transaction,
-        RawL2Block, TxReceipt, WithdrawalReceipt, WithdrawalRequest,
+        RawL2Block, SubmitTransactions, TxReceipt, WithdrawalReceipt, WithdrawalRequest,
     },
     prelude::*,
 };
@@ -29,13 +29,30 @@ fn construct_state_db_from_block_hash() {
     let store = Store::open_tmp().unwrap();
     let store_txn = store.begin_transaction();
 
-    let block = L2Block::default();
+    let default_state_checkpoint: Byte32 = {
+        let post_state = AccountMerkleState::default();
+        let root: [u8; 32] = post_state.merkle_root().unpack();
+        let checkpoint: [u8; 32] =
+            calculate_state_checkpoint(&root.into(), post_state.count().unpack()).into();
+        checkpoint.pack()
+    };
+
+    let submit_txs = SubmitTransactions::new_builder()
+        .prev_state_checkpoint(default_state_checkpoint)
+        .build();
+
+    let raw_block = RawL2Block::new_builder()
+        .submit_transactions(submit_txs)
+        .build();
+
+    let block = L2Block::new_builder().raw(raw_block).build();
     store_txn
         .insert_block(
             block.clone(),
             L2BlockCommittedInfo::default(),
             GlobalState::default(),
             Vec::new(),
+            AccountMerkleState::default(),
             Vec::new(),
             Vec::new(),
         )
@@ -104,8 +121,23 @@ fn construct_state_db_from_sub_state() {
         checkpoint.pack()
     };
 
+    let prev_txs_state = AccountMerkleState::new_builder()
+        .count(999u32.pack())
+        .build();
+    let prev_state_checkpoint: Byte32 = {
+        let root: [u8; 32] = prev_txs_state.merkle_root().unpack();
+        let count = prev_txs_state.count().unpack();
+        let checkpoint: [u8; 32] = calculate_state_checkpoint(&root.into(), count).into();
+        checkpoint.pack()
+    };
+
+    let submit_txs = SubmitTransactions::new_builder()
+        .prev_state_checkpoint(prev_state_checkpoint)
+        .build();
+
     let raw_block = RawL2Block::new_builder()
         .state_checkpoint_list(vec![default_state_checkpoint; 5].pack())
+        .submit_transactions(submit_txs)
         .build();
 
     let block = L2Block::new_builder()
@@ -113,13 +145,15 @@ fn construct_state_db_from_sub_state() {
         .withdrawals(vec![WithdrawalRequest::default(); 3].pack())
         .raw(raw_block)
         .build();
+
     store_txn
         .insert_block(
             block.clone(),
             L2BlockCommittedInfo::default(),
             GlobalState::default(),
-            vec![TxReceipt::default(); 2],
             vec![WithdrawalReceipt::default(); 3],
+            prev_txs_state,
+            vec![TxReceipt::default(); 2],
             Vec::new(),
         )
         .unwrap();
@@ -150,6 +184,13 @@ fn construct_state_db_from_sub_state() {
     assert!(state_db.is_ok());
     assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
 
+    let state_checkpoint = CheckPoint::new(block_number.into(), SubState::PrevTxs);
+    let db = store.begin_transaction();
+    let state_db =
+        StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::ReadOnly);
+    assert!(state_db.is_ok());
+    assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
+
     let state_checkpoint = CheckPoint::new(block_number.into(), SubState::Withdrawal(1u32));
     let db = store.begin_transaction();
     let state_db =
@@ -176,13 +217,30 @@ fn commit_on_readonly_mode() {
     let store = Store::open_tmp().unwrap();
     let store_txn = store.begin_transaction();
 
-    let block = L2Block::default();
+    let default_state_checkpoint: Byte32 = {
+        let post_state = AccountMerkleState::default();
+        let root: [u8; 32] = post_state.merkle_root().unpack();
+        let checkpoint: [u8; 32] =
+            calculate_state_checkpoint(&root.into(), post_state.count().unpack()).into();
+        checkpoint.pack()
+    };
+
+    let submit_txs = SubmitTransactions::new_builder()
+        .prev_state_checkpoint(default_state_checkpoint)
+        .build();
+
+    let raw_block = RawL2Block::new_builder()
+        .submit_transactions(submit_txs)
+        .build();
+
+    let block = L2Block::new_builder().raw(raw_block).build();
     store_txn
         .insert_block(
             block.clone(),
             L2BlockCommittedInfo::default(),
             GlobalState::default(),
             Vec::new(),
+            AccountMerkleState::default(),
             Vec::new(),
             Vec::new(),
         )
@@ -212,8 +270,13 @@ fn checkpoint_extract_block_number_and_index_number() {
         checkpoint.pack()
     };
 
+    let submit_txs = SubmitTransactions::new_builder()
+        .prev_state_checkpoint(default_state_checkpoint.clone())
+        .build();
+
     let raw_block = RawL2Block::new_builder()
         .state_checkpoint_list(vec![default_state_checkpoint; 5].pack())
+        .submit_transactions(submit_txs)
         .build();
 
     let block = L2Block::new_builder()
@@ -228,11 +291,12 @@ fn checkpoint_extract_block_number_and_index_number() {
 
     block_store
         .insert_block(
-            block.clone(),
+            block,
             L2BlockCommittedInfo::default(),
             GlobalState::default(),
-            vec![TxReceipt::default(); 2],
             vec![WithdrawalReceipt::default(); 3],
+            AccountMerkleState::default(),
+            vec![TxReceipt::default(); 2],
             Vec::new(),
         )
         .unwrap();
@@ -259,7 +323,14 @@ fn checkpoint_extract_block_number_and_index_number() {
     let maybe_block_idx =
         checkpoint.do_extract_block_number_and_index_number(&db, StateDBMode::ReadOnly);
     assert!(maybe_block_idx.is_ok());
-    assert_eq!(maybe_block_idx.unwrap(), (0, 4));
+    assert_eq!(maybe_block_idx.unwrap(), (0, 5));
+
+    // Test PrevTxs across block
+    let checkpoint = CheckPoint::new(0, SubState::PrevTxs);
+    let maybe_block_idx =
+        checkpoint.do_extract_block_number_and_index_number(&db, StateDBMode::ReadOnly);
+    assert!(maybe_block_idx.is_ok());
+    assert_eq!(maybe_block_idx.unwrap(), (0, 0));
 
     let checkpoint = CheckPoint::new(1, SubState::Block);
     let maybe_block_idx =
@@ -285,7 +356,7 @@ fn checkpoint_extract_block_number_and_index_number() {
     let maybe_block_idx = checkpoint
         .do_extract_block_number_and_index_number(&db, StateDBMode::Write(WriteContext::new(2)));
     assert!(maybe_block_idx.is_ok());
-    assert_eq!(maybe_block_idx.unwrap(), (1, 3));
+    assert_eq!(maybe_block_idx.unwrap(), (1, 4));
 }
 
 #[test]

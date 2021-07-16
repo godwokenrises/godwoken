@@ -49,6 +49,7 @@ pub struct StateTransitionArgs {
 pub enum StateTransitionResult {
     Success {
         withdrawal_receipts: Vec<WithdrawalReceipt>,
+        prev_txs_state: AccountMerkleState,
         tx_receipts: Vec<TxReceipt>,
     },
     Challenge {
@@ -316,6 +317,19 @@ impl Generator {
             return StateTransitionResult::Error(err);
         }
 
+        let prev_txs_state = {
+            let (account_root, account_count) =
+                match (|| Ok((state.calculate_root()?, state.get_account_count()?)))() {
+                    Err(err) => return StateTransitionResult::Error(err),
+                    Ok((root, count)) => (root, count),
+                };
+
+            AccountMerkleState::new_builder()
+                .merkle_root(account_root.pack())
+                .count(account_count.pack())
+                .build()
+        };
+
         // handle transactions
         let mut tx_receipts = Vec::with_capacity(args.l2block.transactions().len());
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
@@ -409,6 +423,7 @@ impl Generator {
 
         StateTransitionResult::Success {
             withdrawal_receipts,
+            prev_txs_state,
             tx_receipts,
         }
     }

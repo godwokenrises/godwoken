@@ -15,8 +15,8 @@ use gw_types::{
 use std::convert::TryInto;
 
 const GENESIS_BLOCK_HASH: [u8; 32] = [
-    161, 152, 90, 241, 75, 20, 189, 92, 201, 107, 247, 181, 136, 56, 95, 14, 128, 5, 91, 62, 125,
-    47, 254, 126, 173, 225, 77, 162, 203, 173, 123, 57,
+    32, 186, 99, 16, 154, 121, 234, 0, 56, 160, 78, 56, 77, 174, 1, 203, 199, 138, 104, 118, 113,
+    118, 82, 33, 106, 185, 100, 79, 219, 182, 108, 241,
 ];
 
 #[test]
@@ -45,6 +45,15 @@ fn test_init_genesis() {
             .unwrap();
     let tree = state_db.account_state_tree().unwrap();
     assert!(tree.get_account_count().unwrap() > 0);
+
+    // check prev txs state
+    let prev_txs_state: [u8; 32] = tree.calculate_state_checkpoint().unwrap().into();
+    let genesis_prev_state_checkpoint: [u8; 32] = {
+        let txs = genesis.genesis.as_reader().raw().submit_transactions();
+        txs.prev_state_checkpoint().unpack()
+    };
+    assert_eq!(prev_txs_state, genesis_prev_state_checkpoint);
+
     // get reserved account's script
     let meta_contract_script_hash = tree.get_script_hash(0).expect("script hash");
     assert_ne!(meta_contract_script_hash, H256::zero());

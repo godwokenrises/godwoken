@@ -752,12 +752,13 @@ impl Chain {
         // process transactions
         // TODO: run offchain validator before send challenge, to make sure the block is bad
         let generator = &self.generator;
-        let (tx_receipts, withdrawal_receipts) =
+        let (withdrawal_receipts, prev_txs_state, tx_receipts) =
             match generator.verify_and_apply_state_transition(&chain_view, &mut tree, args) {
                 StateTransitionResult::Success {
                     tx_receipts,
+                    prev_txs_state,
                     withdrawal_receipts,
-                } => (tx_receipts, withdrawal_receipts),
+                } => (withdrawal_receipts, prev_txs_state, tx_receipts),
                 StateTransitionResult::Challenge { target, error } => {
                     log::debug!("verify and apply state transition error {}", error);
 
@@ -774,8 +775,9 @@ impl Chain {
             l2block.clone(),
             l2block_committed_info,
             global_state,
-            tx_receipts,
             withdrawal_receipts,
+            prev_txs_state,
+            tx_receipts,
             deposit_requests,
         )?;
         let rollup_config = &self.generator.rollup_context().rollup_config;

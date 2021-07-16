@@ -309,13 +309,15 @@ impl StoreTransaction {
         }
     }
 
+    #[allow(clippy::clippy::too_many_arguments)]
     pub fn insert_block(
         &self,
         block: packed::L2Block,
         committed_info: packed::L2BlockCommittedInfo,
         global_state: packed::GlobalState,
-        tx_receipts: Vec<packed::TxReceipt>,
         withdrawal_receipts: Vec<WithdrawalReceipt>,
+        prev_txs_state: AccountMerkleState,
+        tx_receipts: Vec<packed::TxReceipt>,
         deposit_requests: Vec<packed::DepositRequest>,
     ) -> Result<(), Error> {
         debug_assert_eq!(block.transactions().len(), tx_receipts.len());
@@ -337,6 +339,35 @@ impl StoreTransaction {
             &block_hash,
             deposit_requests_vec.as_slice(),
         )?;
+
+        // Verify prev tx state and insert
+        {
+            let prev_txs_state_checkpoint = {
+                let txs = block.as_reader().raw().submit_transactions();
+                txs.prev_state_checkpoint().to_entity()
+            };
+
+            let root: [u8; 32] = prev_txs_state.merkle_root().unpack();
+            let count: u32 = prev_txs_state.count().unpack();
+            let checkpoint: Byte32 = {
+                let checkpoint: [u8; 32] = calculate_state_checkpoint(&root.into(), count).into();
+                checkpoint.pack()
+            };
+            if checkpoint != prev_txs_state_checkpoint {
+                return Err(Error::from("unexpected prev tx state".to_string()));
+            }
+
+            let block_post_state = block.as_reader().raw().post_account();
+            if tx_receipts.is_empty() && prev_txs_state.as_slice() != block_post_state.as_slice() {
+                return Err(Error::from("unexpected no tx post state".to_string()));
+            }
+
+            self.insert_raw(
+                COLUMN_CHECKPOINT,
+                checkpoint.as_slice(),
+                prev_txs_state.as_slice(),
+            )?;
+        }
 
         for (index, (tx, tx_receipt)) in block
             .transactions()

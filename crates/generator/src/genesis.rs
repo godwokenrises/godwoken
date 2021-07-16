@@ -19,7 +19,7 @@ use gw_types::{
     core::{ScriptHashType, Status},
     packed::{
         AccountMerkleState, BlockMerkleState, GlobalState, L2Block, L2BlockCommittedInfo,
-        RawL2Block, Script,
+        RawL2Block, Script, SubmitTransactions,
     },
     prelude::*,
 };
@@ -90,6 +90,11 @@ pub fn build_genesis_from_store(
         "ckb simple UDT account id"
     );
 
+    let prev_state_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
+    let submit_txs = SubmitTransactions::new_builder()
+        .prev_state_checkpoint(prev_state_checkpoint.pack())
+        .build();
+
     // calculate post state
     let post_account = {
         let root = tree.calculate_root()?;
@@ -106,6 +111,7 @@ pub fn build_genesis_from_store(
         .parent_block_hash([0u8; 32].pack())
         .timestamp(config.timestamp.pack())
         .post_account(post_account.clone())
+        .submit_transactions(submit_txs)
         .build();
 
     // generate block proof
@@ -191,11 +197,13 @@ pub fn init_genesis(
             global_state,
         },
     ) = build_genesis_from_store(db, config, secp_data)?;
+    let prev_txs_state = genesis.as_reader().raw().post_account().to_entity();
     db.insert_block(
         genesis.clone(),
         genesis_committed_info,
         global_state,
         Vec::new(),
+        prev_txs_state,
         Vec::new(),
         Vec::new(),
     )?;

@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use gw_common::h256_ext::H256Ext;
+use gw_common::merkle_utils::calculate_state_checkpoint;
 use gw_common::smt::{Blake2bHasher, SMT};
 use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::sparse_merkle_tree::CompiledMerkleProof;
@@ -18,7 +19,7 @@ use gw_types::packed::{
     VerifyTransactionContext, VerifyTransactionSignatureContext, VerifyTransactionSignatureWitness,
     VerifyTransactionWitness, VerifyWithdrawalWitness,
 };
-use gw_types::prelude::{Builder, Entity, Pack, Unpack};
+use gw_types::prelude::{Builder, Entity, Pack, Reader, Unpack};
 
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -188,7 +189,7 @@ fn build_verify_transaction_signature_witness(
     let (tx, tx_proof) = build_tx_proof(&block, tx_index)?;
     log::debug!("build tx proof");
 
-    let kv_witness = build_tx_kv_witness(db, &block, &tx.raw(), TxKvState::Signature)?;
+    let kv_witness = build_tx_kv_witness(db, &block, &tx.raw(), tx_index, TxKvState::Signature)?;
     log::debug!("build kv witness");
 
     let context = VerifyTransactionSignatureContext::new_builder()
@@ -226,8 +227,8 @@ fn build_verify_transaction_witness(
     let (tx, tx_proof) = build_tx_proof(&block, tx_index)?;
     log::debug!("build tx proof");
 
-    let kv_witness =
-        build_tx_kv_witness(db, &block, &tx.raw(), TxKvState::Execution { generator })?;
+    let tx_kv_state = TxKvState::Execution { generator };
+    let kv_witness = build_tx_kv_witness(db, &block, &tx.raw(), tx_index, tx_kv_state)?;
     log::debug!("build kv witness");
 
     let return_data_hash = kv_witness
@@ -296,34 +297,50 @@ fn build_tx_kv_witness(
     db: &StoreTransaction,
     block: &L2Block,
     raw_tx: &RawL2Transaction,
+    tx_index: u32,
     tx_kv_state: TxKvState,
 ) -> Result<TxKvWitness> {
-    let raw_block = block.raw();
-    let check_point = {
-        let withdrawal_len: u32 = raw_block.submit_withdrawals().withdrawal_count().unpack();
-        let mut txs = block.transactions().into_iter();
-        let tx_index = txs
-            .position(|tx| tx.hash() == raw_tx.hash())
-            .ok_or_else(|| anyhow!("tx not found in block"))?;
+    let raw_block = block.as_reader().raw();
+    let withdrawal_len: u32 = {
+        let withdrawals = raw_block.submit_withdrawals();
+        withdrawals.withdrawal_count().unpack()
+    };
 
-        if withdrawal_len + tx_index as u32 == 0 {
-            CheckPoint::new(raw_block.number().unpack() - 1, SubState::Block)
-        } else {
-            CheckPoint::new(raw_block.number().unpack(), SubState::Tx(tx_index as u32))
+    let (local_prev_tx_checkpoint, block_prev_tx_checkpoint): (CheckPoint, [u8; 32]) = {
+        let block_number = raw_block.number().unpack();
+        match (tx_index).checked_sub(1) {
+            Some(prev_tx_index) => {
+                let local_prev_tx_checkpoint =
+                    CheckPoint::new(block_number, SubState::Tx(prev_tx_index));
+
+                let block_prev_tx_checkpoint = raw_block
+                    .state_checkpoint_list()
+                    .get((withdrawal_len + prev_tx_index) as usize)
+                    .ok_or_else(|| anyhow!("block prev tx checkpoint not found"))?;
+
+                (local_prev_tx_checkpoint, block_prev_tx_checkpoint.unpack())
+            }
+            None => {
+                let local_prev_tx_checkpoint = CheckPoint::new(block_number, SubState::PrevTxs);
+                let block_prev_tx_checkpoint =
+                    raw_block.submit_transactions().prev_state_checkpoint();
+
+                (local_prev_tx_checkpoint, block_prev_tx_checkpoint.unpack())
+            }
         }
     };
 
-    let state_db = StateDBTransaction::from_checkpoint(db, check_point, StateDBMode::ReadOnly)?;
-    // Check account smt root
-    {
-        let local_smt = state_db.account_smt()?;
-        let local_smt_root = local_smt.root();
-        let prev_smt_root: H256 = raw_block.prev_account().merkle_root().unpack();
+    let state_db =
+        StateDBTransaction::from_checkpoint(db, local_prev_tx_checkpoint, StateDBMode::ReadOnly)?;
+    let mut tree = state_db.account_state_tree()?;
+    let prev_tx_account_count = tree.get_account_count()?;
 
-        assert_eq!(local_smt_root, &prev_smt_root);
+    // Check prev tx account state
+    {
+        let local_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
+        assert_eq!(local_checkpoint, block_prev_tx_checkpoint);
     }
 
-    let mut tree = state_db.account_state_tree()?;
     tree.tracker_mut().enable();
 
     let get_script = |state: &StateTree<'_, '_>, account_id: u32| -> Result<Option<Script>> {
@@ -343,15 +360,15 @@ fn build_tx_kv_witness(
     tree.get_nonce(sender_id)?;
 
     let return_data_hash = match tx_kv_state {
-        TxKvState::Execution { generator } => {
+        TxKvState::Execution { ref generator } => {
             let parent_block_hash = db
                 .get_block_hash_by_number(raw_block.number().unpack())?
                 .ok_or_else(|| anyhow!("parent block not found"))?;
             let chain_view = ChainView::new(&db, parent_block_hash);
             let block_info = BlockInfo::new_builder()
-                .number(raw_block.number())
-                .timestamp(raw_block.timestamp())
-                .block_producer_id(raw_block.block_producer_id())
+                .number(raw_block.number().to_entity())
+                .timestamp(raw_block.timestamp().to_entity())
+                .block_producer_id(raw_block.block_producer_id().to_entity())
                 .build();
 
             let run_result =
@@ -370,20 +387,40 @@ fn build_tx_kv_witness(
     };
     log::debug!("return data hash {:?}", return_data_hash);
 
-    let account_count = tree.get_account_count()?;
+    let block_post_tx_checkpoint: [u8; 32] = raw_block
+        .state_checkpoint_list()
+        .get((withdrawal_len + tx_index) as usize)
+        .ok_or_else(|| anyhow!("block tx checkpoint not found"))?
+        .unpack();
+
+    if matches!(tx_kv_state, TxKvState::Execution { .. }) {
+        // Check post tx account state
+        let local_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
+        assert_eq!(local_checkpoint, block_post_tx_checkpoint);
+    }
+
     let touched_keys: Vec<H256> = {
         let opt_keys = tree.tracker_mut().touched_keys();
         let keys = opt_keys.ok_or_else(|| anyhow!("no key touched"))?;
         let clone_keys = keys.borrow().clone().into_iter();
         clone_keys.collect()
     };
+    let post_tx_account_count = tree.get_account_count()?;
+    let post_kv_state = {
+        let keys = touched_keys.iter();
+        let to_kv = keys.map(|k| {
+            let v = tree.get_raw(k)?;
+            Ok((*k, v))
+        });
+        to_kv.collect::<Result<Vec<(H256, H256)>>>()
+    }?;
 
     // Discard all changes
     drop(tree);
     db.rollback()?;
 
     tree = state_db.account_state_tree()?;
-    let kv_state = {
+    let prev_kv_state = {
         let keys = touched_keys.iter();
         let to_kv = keys.map(|k| {
             let v = tree.get_raw(k)?;
@@ -394,15 +431,22 @@ fn build_tx_kv_witness(
 
     let kv_state_proof = {
         let smt = state_db.account_smt()?;
-        smt.merkle_proof(touched_keys)?.compile(kv_state.clone())?
+        let prev_kv_state = prev_kv_state.clone();
+        smt.merkle_proof(touched_keys)?.compile(prev_kv_state)?
     };
     log::debug!("build kv state proof");
 
     // Check proof
     {
-        let prev_smt_root: H256 = raw_block.as_reader().prev_account().merkle_root().unpack();
-        let proof_root = kv_state_proof.compute_root::<Blake2bHasher>(kv_state.clone())?;
-        assert_eq!(proof_root, prev_smt_root);
+        let proof_root = kv_state_proof.compute_root::<Blake2bHasher>(prev_kv_state.clone())?;
+        let proof_checkpoint = calculate_state_checkpoint(&proof_root, prev_tx_account_count);
+        assert_eq!(proof_checkpoint, block_prev_tx_checkpoint.into());
+
+        if matches!(tx_kv_state, TxKvState::Execution { .. }) {
+            let proof_root = kv_state_proof.compute_root::<Blake2bHasher>(post_kv_state)?;
+            let proof_checkpoint = calculate_state_checkpoint(&proof_root, post_tx_account_count);
+            assert_eq!(proof_checkpoint, block_post_tx_checkpoint.into());
+        }
     }
 
     let scripts = ScriptVec::new_builder()
@@ -411,11 +455,11 @@ fn build_tx_kv_witness(
         .build();
 
     let witness = TxKvWitness {
-        account_count: account_count.pack(),
+        account_count: prev_tx_account_count.pack(),
         scripts,
         sender_script,
         receiver_script,
-        kv_state: kv_state.pack(),
+        kv_state: prev_kv_state.pack(),
         kv_state_proof,
         return_data_hash,
     };
