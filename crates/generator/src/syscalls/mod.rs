@@ -43,10 +43,7 @@ const SCRIPT_HASH_SHORT_LEN: u64 = 20;
 const SYS_CREATE: u64 = 3100;
 const SYS_STORE: u64 = 3101;
 const SYS_LOAD: u64 = 3102;
-const SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID: u64 = 3103;
-const SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH: u64 = 3104;
 const SYS_LOAD_ACCOUNT_SCRIPT: u64 = 3105;
-const SYS_GET_SCRIPT_HASH_BY_SHORT_ADDRESS: u64 = 3106;
 /* Syscall call / return */
 const SYS_SET_RETURN_DATA: u64 = 3201;
 /* Syscall data store / load */
@@ -263,39 +260,6 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
-            SYS_LOAD_ACCOUNT_ID_BY_SCRIPT_HASH => {
-                let script_hash_addr = machine.registers()[A0].to_u64();
-                let account_id_addr = machine.registers()[A1].to_u64();
-                let script_hash = load_data_h256(machine, script_hash_addr)?;
-                let account_id = match self
-                    .get_account_id_by_script_hash(&script_hash)
-                    .map_err(|_err| VMError::Unexpected)?
-                {
-                    Some(id) => id,
-                    None => {
-                        machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_ACCOUNT_NOT_FOUND));
-                        return Ok(true);
-                    }
-                };
-                machine
-                    .memory_mut()
-                    .store_bytes(account_id_addr, &account_id.to_le_bytes()[..])?;
-                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
-                Ok(true)
-            }
-            SYS_LOAD_SCRIPT_HASH_BY_ACCOUNT_ID => {
-                let account_id = machine.registers()[A0].to_u32();
-                let script_hash_addr = machine.registers()[A1].to_u64();
-                let script_hash = self.get_script_hash(account_id).map_err(|err| {
-                    log::error!("syscall error: get script hash by account id: {:?}", err);
-                    VMError::Unexpected
-                })?;
-                machine
-                    .memory_mut()
-                    .store_bytes(script_hash_addr, script_hash.as_slice())?;
-                machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
-                Ok(true)
-            }
             SYS_LOAD_ACCOUNT_SCRIPT => {
                 let account_id = machine.registers()[A3].to_u32();
                 let script_hash = self.get_script_hash(account_id).map_err(|err| {
@@ -370,28 +334,6 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 } else {
                     // Can not get block hash by number
                     machine.set_register(A0, Mac::REG::from_u8(0xff));
-                }
-                Ok(true)
-            }
-            SYS_GET_SCRIPT_HASH_BY_SHORT_ADDRESS => {
-                let script_hash_addr = machine.registers()[A0].to_u64();
-                // fetch short script hash
-                let short_address_addr = machine.registers()[A1].to_u64();
-                let short_address_len = machine.registers()[A2].to_u64();
-                // check short address len
-                if short_address_len != SCRIPT_HASH_SHORT_LEN {
-                    log::error!("unexpected script hash short length: {}", short_address_len);
-                    return Err(VMError::Unexpected);
-                }
-                let short_address =
-                    load_bytes(machine, short_address_addr, short_address_len as usize)?;
-                if let Some(script_hash) = self.get_script_hash_by_short_address(&short_address) {
-                    machine
-                        .memory_mut()
-                        .store_bytes(script_hash_addr, script_hash.as_slice())?;
-                    machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
-                } else {
-                    machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_NOT_FOUND));
                 }
                 Ok(true)
             }
