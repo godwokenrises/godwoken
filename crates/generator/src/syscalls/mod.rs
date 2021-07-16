@@ -500,15 +500,6 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
             })?;
         Ok(value)
     }
-    fn get_script_hash_by_short_address(&mut self, short_address: &[u8]) -> Option<H256> {
-        for script_hash in self.result.new_scripts.keys() {
-            if script_hash.as_slice().starts_with(short_address) {
-                return Some(*script_hash);
-            }
-        }
-        self.code_store
-            .get_script_hash_by_short_address(short_address)
-    }
     fn get_account_id_by_script_hash(
         &mut self,
         script_hash: &H256,

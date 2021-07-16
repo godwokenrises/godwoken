@@ -144,7 +144,7 @@ pub trait State {
             build_short_script_hash_to_script_hash_key(
                 &script_hash.as_slice()[..DEFAULT_SHORT_SCRIPT_HASH_LEN],
             ),
-            script_hash.into(),
+            script_hash,
         )?;
         // update account count
         self.set_account_count(id + 1)?;
