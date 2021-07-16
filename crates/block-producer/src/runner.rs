@@ -178,6 +178,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 .clone()
                 .ok_or_else(|| anyhow!("not set block producer"))?;
             check_rollup_config_cell(&block_producer_config, &rollup_config, &rpc_client)?;
+            check_locks(&block_producer_config)?;
         }
     }
 
@@ -453,6 +454,35 @@ fn check_rollup_config_cell(
             unregistered contract type hashes: {:#?}",
             unregistered_eoas,
             unregistered_contracts
+        ));
+    }
+    Ok(())
+}
+
+fn check_locks(block_producer_config: &BlockProducerConfig) -> Result<()> {
+    let zeros = ckb_fixed_hash::H256([0u8; 32]);
+    if zeros != block_producer_config.challenger_config.burn_lock.code_hash {
+        return Err(anyhow!("Burn lock code hash is not all zeros as expected"));
+    }
+    if zeros
+        == block_producer_config
+            .challenger_config
+            .rewards_receiver_lock
+            .code_hash
+        || zeros == block_producer_config.wallet_config.lock.code_hash
+    {
+        return Err(anyhow!(
+            "Rewards receiver lock and wallet lock should be filled in correctly"
+        ));
+    }
+    if block_producer_config.wallet_config.lock.args
+        == block_producer_config
+            .challenger_config
+            .rewards_receiver_lock
+            .args
+    {
+        return Err(anyhow!(
+            "Rewards receiver and wallet cannot have the same address"
         ));
     }
     Ok(())
