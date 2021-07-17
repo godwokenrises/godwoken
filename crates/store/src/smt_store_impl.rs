@@ -47,7 +47,7 @@ impl<'a, DB: KVStore> Store<H256> for SMTStore<'a, DB> {
                 leaf.copy_from_slice(&slice.as_ref());
                 Ok(Some(H256::from(leaf)))
             }
-            Some(_) => Err(SMTError::Store(format!("get corrupted leaf"))),
+            Some(_) => Err(SMTError::Store("get corrupted leaf".to_string())),
             None => Ok(None),
         }
     }
