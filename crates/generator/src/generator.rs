@@ -15,7 +15,7 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     error::Error as StateError,
     h256_ext::H256Ext,
-    state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE},
+    state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE_TYPE},
     H256,
 };
 use gw_traits::{ChainStore, CodeStore};
@@ -492,7 +492,7 @@ impl Generator {
 
         // check nonce is increased by backends
         let nonce_after_execution = {
-            let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE);
+            let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE_TYPE);
             let value = run_result
                 .write_values
                 .get(&nonce_raw_key)

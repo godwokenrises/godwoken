@@ -13,7 +13,7 @@ use gw_common::{
     state::{
         build_account_field_key, build_script_hash_to_account_id_key,
         build_short_script_hash_to_script_hash_key, State, DEFAULT_SHORT_SCRIPT_HASH_LEN,
-        GW_ACCOUNT_NONCE, GW_ACCOUNT_SCRIPT_HASH,
+        GW_ACCOUNT_NONCE_TYPE, GW_ACCOUNT_SCRIPT_HASH_TYPE,
     },
     H256,
 };
@@ -225,11 +225,12 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
 
                 // Same logic from State::create_account()
                 let id = self.get_account_count()?;
-                self.result
-                    .write_values
-                    .insert(build_account_field_key(id, GW_ACCOUNT_NONCE), H256::zero());
                 self.result.write_values.insert(
-                    build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH),
+                    build_account_field_key(id, GW_ACCOUNT_NONCE_TYPE),
+                    H256::zero(),
+                );
+                self.result.write_values.insert(
+                    build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH_TYPE),
                     script_hash.into(),
                 );
                 // script hash to id
@@ -493,7 +494,7 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
     }
     fn get_script_hash(&mut self, id: u32) -> Result<H256, VMError> {
         let value = self
-            .get_raw(&build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH))
+            .get_raw(&build_account_field_key(id, GW_ACCOUNT_SCRIPT_HASH_TYPE))
             .map_err(|err| {
                 log::error!("syscall error: get script hash by account id : {:?}", err);
                 VMError::Unexpected
