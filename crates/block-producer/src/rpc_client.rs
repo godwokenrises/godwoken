@@ -1207,4 +1207,20 @@ impl RPCClient {
             to_result(self.ckb_client.request("local_node_info", None).await?)?;
         Ok(node.version)
     }
+
+    pub async fn dry_run_transaction(&self, tx: Transaction) -> Result<u64> {
+        let tx: ckb_jsonrpc_types::Transaction = {
+            let tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
+            tx.into()
+        };
+        let dry_run_result: ckb_jsonrpc_types::DryRunResult = to_result(
+            self.ckb_client
+                .request(
+                    "dry_run_transaction",
+                    Some(ClientParams::Array(vec![json!(tx)])),
+                )
+                .await?,
+        )?;
+        Ok(dry_run_result.cycles.into())
+    }
 }

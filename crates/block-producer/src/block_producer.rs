@@ -9,7 +9,7 @@ use crate::{
     transaction_skeleton::TransactionSkeleton,
     types::ChainEvent,
     types::{CellInfo, InputCellInfo},
-    utils::{fill_tx_fee, CKBGenesisInfo},
+    utils::{self, fill_tx_fee, CKBGenesisInfo},
     wallet::Wallet,
 };
 use anyhow::{anyhow, Context, Result};
@@ -414,6 +414,23 @@ impl BlockProducer {
         let tx = self
             .complete_tx_skeleton(deposit_cells, block, global_state, median_time, rollup_cell)
             .await?;
+
+        if utils::is_debug_env_var_set() {
+            let dry_run_result = self.rpc_client.dry_run_transaction(tx.clone()).await;
+            match dry_run_result {
+                Ok(cycles) => log::info!(
+                    "Tx (L2 block {}) {} execution cycles: {}",
+                    number,
+                    hex::encode(tx.hash()),
+                    cycles
+                ),
+                Err(err) => log::error!(
+                    "Fail to dry run transaction {}, error: {}",
+                    hex::encode(tx.hash()),
+                    err
+                ),
+            }
+        }
 
         // send transaction
         match self.rpc_client.send_transaction(tx.clone()).await {
