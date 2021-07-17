@@ -4,7 +4,7 @@ use crate::rpc_client::RPCClient;
 use crate::test_mode_control::TestModeControl;
 use crate::transaction_skeleton::TransactionSkeleton;
 use crate::types::{CellInfo, ChainEvent, InputCellInfo, TxStatus};
-use crate::utils::{fill_tx_fee, CKBGenesisInfo};
+use crate::utils::{self, fill_tx_fee, CKBGenesisInfo};
 use crate::wallet::Wallet;
 
 use anyhow::{anyhow, Result};
@@ -284,6 +284,22 @@ impl Challenger {
             )
             .await?;
 
+        if utils::is_debug_env_var_set() {
+            let dry_run_result = self.rpc_client.dry_run_transaction(tx.clone()).await;
+            match dry_run_result {
+                Ok(cycles) => log::info!(
+                    "Tx(cancel challenge) {} execution cycles: {}",
+                    hex::encode(tx.hash()),
+                    cycles
+                ),
+                Err(err) => log::error!(
+                    "Fail to dry run transaction {}, error: {}",
+                    hex::encode(tx.hash()),
+                    err
+                ),
+            }
+        }
+
         if let Err(err) = dump_transaction(
             &self.config.debug_tx_dump_path,
             &self.rpc_client,
@@ -426,6 +442,23 @@ impl Challenger {
         fill_tx_fee(&mut tx_skeleton, &self.rpc_client, challenger_lock).await?;
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
+
+        if utils::is_debug_env_var_set() {
+            let dry_run_result = self.rpc_client.dry_run_transaction(tx.clone()).await;
+            match dry_run_result {
+                Ok(cycles) => log::info!(
+                    "Tx(revert block) {} execution cycles: {}",
+                    hex::encode(tx.hash()),
+                    cycles
+                ),
+                Err(err) => log::error!(
+                    "Fail to dry run transaction {}, error: {}",
+                    hex::encode(tx.hash()),
+                    err
+                ),
+            }
+        }
+
         if let Err(err) = dump_transaction(
             &self.config.debug_tx_dump_path,
             &self.rpc_client,

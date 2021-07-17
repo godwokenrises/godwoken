@@ -287,3 +287,10 @@ impl CKBGenesisInfo {
             .build()
     }
 }
+
+pub fn is_debug_env_var_set() -> bool {
+    match std::env::var("GODWOKEN_DEBUG") {
+        Ok(s) => s.to_lowercase().trim() == "true",
+        _ => false,
+    }
+}

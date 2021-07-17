@@ -9,7 +9,7 @@ use crate::{
     transaction_skeleton::TransactionSkeleton,
     types::ChainEvent,
     types::{CellInfo, InputCellInfo},
-    utils::{fill_tx_fee, CKBGenesisInfo},
+    utils::{self, fill_tx_fee, CKBGenesisInfo},
     wallet::Wallet,
 };
 use anyhow::{anyhow, Context, Result};
@@ -36,7 +36,6 @@ use parking_lot::Mutex;
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
-    env,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -416,13 +415,7 @@ impl BlockProducer {
             .complete_tx_skeleton(deposit_cells, block, global_state, median_time, rollup_cell)
             .await?;
 
-        let env_is_set = || -> bool {
-            match env::var("GODWOKEN_DEBUG") {
-                Ok(s) => s.to_lowercase().trim() == "true",
-                _ => false,
-            }
-        };
-        if env_is_set() {
+        if utils::is_debug_env_var_set() {
             let dry_run_result = self.rpc_client.dry_run_transaction(tx.clone()).await;
             match dry_run_result {
                 Ok(cycles) => log::info!(
