@@ -75,7 +75,7 @@ impl Default for ScriptsBuildConfig {
                 ("stake_lock", "godwoken-scripts/build/release/stake-lock"),
                 (
                     "tron_account_lock",
-                    "godwoken-scripts/build/release/always-success",
+                    "godwoken-scripts/build/release/tron-account-lock",
                 ),
                 (
                     "state_validator",
