@@ -1,5 +1,5 @@
 use clap::{App, Arg, SubCommand};
-use gw_tests::system_tests::{challenge_tests, test_mode_control};
+use gw_tests::system_tests::{bad_block, bad_challenge, test_mode_control};
 use std::path::Path;
 
 fn main() -> Result<(), String> {
@@ -21,13 +21,6 @@ fn main() -> Result<(), String> {
                         .short("t")
                         .takes_value(true)
                         .help("Issue test blocks"),
-                )
-                .arg(
-                    Arg::with_name("challenge")
-                        .long("challenge")
-                        .short("c")
-                        .takes_value(true)
-                        .help("Issue challenge of specific block number"),
                 ),
         )
         .subcommand(
@@ -63,31 +56,13 @@ fn main() -> Result<(), String> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("challenge-tests")
-                .about("Challenge flow tests")
+            SubCommand::with_name("bad-challenge")
+                .about("Issue bad challenge")
                 .arg(
-                    Arg::with_name("bad-block-and-revert")
-                        .long("bad-block-and-revert")
+                    Arg::with_name("block-number")
                         .short("b")
-                        .help("Issue bad block and assert revert"),
-                )
-                .arg(
-                    Arg::with_name("bad-challenge-and-cancel")
-                        .long("bad-challenge-and-cancel")
-                        .short("c")
-                        .help("Issue bad challenge and assert cancel"),
-                )
-                .arg(
-                    Arg::with_name("balance-check-when-revert")
-                        .long("balance-check-when-revert")
-                        .short("r")
-                        .help("Check deposit and withdrawal status when revert"),
-                )
-                .arg(
-                    Arg::with_name("multi-bad-blocks-and-revert")
-                        .long("multi-bad-blocks-and-revert")
-                        .short("m")
-                        .help("Issue multiple bad blocks and assert revert"),
+                        .takes_value(true)
+                        .help("block number"),
                 ),
         );
     let matches = app.clone().get_matches();
@@ -102,12 +77,6 @@ fn main() -> Result<(), String> {
                     .map(|c| c.parse().expect("count of blocks"))
                     .unwrap();
                 test_mode_control::issue_test_blocks(count)?;
-            } else if m.is_present("challenge") {
-                let block_number = m
-                    .value_of("challenge")
-                    .map(|c| c.parse().expect("block number"))
-                    .unwrap();
-                test_mode_control::issue_challenge(block_number)?;
             } else {
                 app.print_help().expect("print help");
             }
@@ -118,7 +87,7 @@ fn main() -> Result<(), String> {
             let to_privkey_path = Path::new(m.value_of("to-privkey-path").unwrap());
             let config_path = Path::new(m.value_of("config-file-path").unwrap());
 
-            if let Err(err) = test_mode_control::issue_bad_block(
+            if let Err(err) = bad_block::issue_bad_block(
                 from_privkey_path,
                 to_privkey_path,
                 config_path,
@@ -128,17 +97,14 @@ fn main() -> Result<(), String> {
                 std::process::exit(-1);
             }
         }
-        ("challenge-tests", Some(m)) => {
-            if m.is_present("bad-block-and-revert") {
-                challenge_tests::issue_bad_block_and_revert()?;
-            } else if m.is_present("bad-challenge-and-cancel") {
-                challenge_tests::issue_bad_challenge_and_cancel()?;
-            } else if m.is_present("check-balance-when-revert") {
-                challenge_tests::check_balance_when_revert()?;
-            } else if m.is_present("multi-bad-blocks-and-revert") {
-                challenge_tests::issue_multi_bad_blocks_and_revert()?;
-            } else {
-                app.print_help().expect("print help");
+        ("bad-challenge", Some(m)) => {
+            let block_number = m
+                .value_of("block-number")
+                .map(|c| c.parse().expect("block number"))
+                .unwrap();
+            if let Err(err) = bad_challenge::issue_bad_challenge(block_number) {
+                log::error!("Issue bad challenge error: {}", err);
+                std::process::exit(-1);
             }
         }
         _ => {
