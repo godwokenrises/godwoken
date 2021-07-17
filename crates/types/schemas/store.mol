@@ -40,13 +40,12 @@ table WithdrawalReceipt {
     post_state: AccountMerkleState,
 }
 
-table SMTBranchNode {
-    fork_height: byte,
-    key: Byte32,
-    node: Bytes,
+struct SMTBranchKey {
+    height: byte,
+    node_key: Byte32,
 }
 
-struct SMTLeafNode {
-    key: Byte32,
-    value: Byte32,
+struct SMTBranchNode {
+    left: Byte32,
+    right: Byte32,
 }
