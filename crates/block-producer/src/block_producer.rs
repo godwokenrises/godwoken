@@ -36,6 +36,7 @@ use parking_lot::Mutex;
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
+    env,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -415,19 +416,27 @@ impl BlockProducer {
             .complete_tx_skeleton(deposit_cells, block, global_state, median_time, rollup_cell)
             .await?;
 
-        let dry_run_result = self.rpc_client.dry_run_transaction(tx.clone()).await;
-        match dry_run_result {
-            Ok(cycles) => log::info!(
-                "Tx (L2 block {}) {} execution cycles: {}",
-                number,
-                hex::encode(tx.hash()),
-                cycles
-            ),
-            Err(err) => log::error!(
-                "Fail to dry run transaction {}, error: {}",
-                hex::encode(tx.hash()),
-                err
-            ),
+        let env_is_set = || -> bool {
+            match env::var("GODWOKEN_DEBUG") {
+                Ok(s) => s.to_lowercase().trim() == "true",
+                _ => false,
+            }
+        };
+        if env_is_set() {
+            let dry_run_result = self.rpc_client.dry_run_transaction(tx.clone()).await;
+            match dry_run_result {
+                Ok(cycles) => log::info!(
+                    "Tx (L2 block {}) {} execution cycles: {}",
+                    number,
+                    hex::encode(tx.hash()),
+                    cycles
+                ),
+                Err(err) => log::error!(
+                    "Fail to dry run transaction {}, error: {}",
+                    hex::encode(tx.hash()),
+                    err
+                ),
+            }
         }
 
         // send transaction
