@@ -1,5 +1,6 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
+use crate::debugger;
 use crate::types::InputCellInfo;
 use crate::{rpc_client::RPCClient, transaction_skeleton::TransactionSkeleton};
 use anyhow::{anyhow, Result};
@@ -7,11 +8,12 @@ use async_jsonrpc_client::Output;
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_types::{
     core::DepType,
-    packed::{Block, CellDep, CellInput, CellOutput, Header, OutPoint, Script},
+    packed::{Block, CellDep, CellInput, CellOutput, Header, OutPoint, Script, Transaction},
     prelude::*,
 };
 use serde::de::DeserializeOwned;
 use serde_json::from_value;
+use std::path::Path;
 
 // convert json output to result
 pub fn to_result<T: DeserializeOwned>(output: Output) -> Result<T> {
@@ -292,5 +294,34 @@ pub fn is_debug_env_var_set() -> bool {
     match std::env::var("GODWOKEN_DEBUG") {
         Ok(s) => s.to_lowercase().trim() == "true",
         _ => false,
+    }
+}
+
+pub async fn dry_run_transaction(rpc_client: &RPCClient, tx: Transaction, action: &str) {
+    if is_debug_env_var_set() {
+        let dry_run_result = rpc_client.dry_run_transaction(tx.clone()).await;
+        match dry_run_result {
+            Ok(cycles) => log::info!(
+                "Tx({}) {} execution cycles: {}",
+                action,
+                hex::encode(tx.hash()),
+                cycles
+            ),
+            Err(err) => log::error!(
+                "Fail to dry run transaction {}, error: {}",
+                hex::encode(tx.hash()),
+                err
+            ),
+        }
+    }
+}
+
+pub async fn dump_transaction<P: AsRef<Path>>(dir: P, rpc_client: &RPCClient, tx: Transaction) {
+    if let Err(err) = debugger::dump_transaction(dir, rpc_client, tx.clone()).await {
+        log::error!(
+            "Faild to dump transaction {} error: {}",
+            hex::encode(&tx.hash()),
+            err
+        );
     }
 }

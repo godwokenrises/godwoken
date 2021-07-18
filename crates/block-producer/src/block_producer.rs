@@ -1,7 +1,6 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
 use crate::{
-    debugger::dump_transaction,
     poa::{PoA, ShouldIssueBlock},
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
     rpc_client::{DepositInfo, RPCClient},
@@ -416,22 +415,12 @@ impl BlockProducer {
             .complete_tx_skeleton(deposit_cells, block, global_state, median_time, rollup_cell)
             .await?;
 
-        if utils::is_debug_env_var_set() {
-            let dry_run_result = self.rpc_client.dry_run_transaction(tx.clone()).await;
-            match dry_run_result {
-                Ok(cycles) => log::info!(
-                    "Tx (L2 block {}) {} execution cycles: {}",
-                    number,
-                    hex::encode(tx.hash()),
-                    cycles
-                ),
-                Err(err) => log::error!(
-                    "Fail to dry run transaction {}, error: {}",
-                    hex::encode(tx.hash()),
-                    err
-                ),
-            }
-        }
+        utils::dry_run_transaction(
+            &self.rpc_client,
+            tx.clone(),
+            format!("L2 block {}", number).as_str(),
+        )
+        .await;
 
         // send transaction
         match self.rpc_client.send_transaction(tx.clone()).await {
@@ -449,19 +438,12 @@ impl BlockProducer {
                 // dumping script error transactions
                 if err.to_string().contains(TRANSACTION_SRIPT_ERROR) {
                     // dumping failed tx
-                    if let Err(err) = dump_transaction(
+                    utils::dump_transaction(
                         &self.config.debug_tx_dump_path,
                         &self.rpc_client,
                         tx.clone(),
                     )
-                    .await
-                    {
-                        log::error!(
-                            "Faild to dump transaction {} error: {}",
-                            hex::encode(&tx.hash()),
-                            err
-                        );
-                    }
+                    .await;
                 } else {
                     log::debug!("Skip dumping non-script-error tx");
                 }
