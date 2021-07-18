@@ -178,7 +178,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 .clone()
                 .ok_or_else(|| anyhow!("not set block producer"))?;
             check_rollup_config_cell(&block_producer_config, &rollup_config, &rpc_client)?;
-            check_locks(&block_producer_config)?;
+            check_locks(&block_producer_config, &rollup_config)?;
         }
     }
 
@@ -457,30 +457,56 @@ fn check_rollup_config_cell(
     Ok(())
 }
 
-fn check_locks(block_producer_config: &BlockProducerConfig) -> Result<()> {
+fn check_locks(
+    block_producer_config: &BlockProducerConfig,
+    rollup_config: &RollupConfig,
+) -> Result<()> {
     let zeros = ckb_fixed_hash::H256([0u8; 32]);
+
+    // check burn lock
     if zeros != block_producer_config.challenger_config.burn_lock.code_hash {
-        return Err(anyhow!("Burn lock code hash is not all zeros as expected"));
+        return Err(anyhow!(
+            "[block_producer.challenger.burn_lock.code_hash] is expected to be zero"
+        ));
     }
+
+    let burn_lock_hash = {
+        let script: gw_types::packed::Script = block_producer_config
+            .challenger_config
+            .burn_lock
+            .clone()
+            .into();
+        script.hash().pack()
+    };
+    if burn_lock_hash != rollup_config.burn_lock_hash() {
+        return Err(anyhow!("[block_producer.challenge.burn_lock] ({}) isn't match rollup config's burn_lock_hash ({})", burn_lock_hash, rollup_config.burn_lock_hash()));
+    }
+
+    // check challenge lock
     if zeros
         == block_producer_config
             .challenger_config
             .rewards_receiver_lock
             .code_hash
-        || zeros == block_producer_config.wallet_config.lock.code_hash
     {
         return Err(anyhow!(
-            "Rewards receiver lock and wallet lock should be filled in correctly"
+            "[block_producer.challenger.rewards_receiver_lock.code_hash] shouldn't be zero"
         ));
     }
-    if block_producer_config.wallet_config.lock.args
+
+    // check wallet lock
+    if zeros == block_producer_config.wallet_config.lock.code_hash {
+        return Err(anyhow!(
+            "[block_producer.wallet.lock.code_hash] shouldn't be zero"
+        ));
+    }
+    if block_producer_config.wallet_config.lock
         == block_producer_config
             .challenger_config
             .rewards_receiver_lock
-            .args
     {
         return Err(anyhow!(
-            "Rewards receiver and wallet cannot have the same address"
+            "[block_producer.challenger.rewards_receiver_lock] and [block_producer.wallet.lock] have the same address, which is not recommended"
         ));
     }
     Ok(())
