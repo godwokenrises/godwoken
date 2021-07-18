@@ -391,10 +391,11 @@ impl BlockProducer {
         } = block_result;
         let number: u64 = block.raw().number().unpack();
         log::info!(
-            "produce new block #{} (txs: {}, deposits: {}, staled txs: {}, staled withdrawals: {})",
+            "produce new block #{} (txs: {}, deposits: {}, withdrawals: {}, staled txs: {}, staled withdrawals: {})",
             number,
             block.transactions().len(),
             deposit_cells.len(),
+            block.withdrawals().len(),
             unused_transactions.len(),
             unused_withdrawal_requests.len()
         );
@@ -669,6 +670,36 @@ impl BlockProducer {
                 .extend(generated_withdrawal_cells.outputs);
         }
 
+        if let Some(reverted_deposits) = crate::deposit::revert(
+            &rollup_action,
+            &rollup_context,
+            &self.config,
+            &self.rpc_client,
+        )
+        .await?
+        {
+            log::info!("reverted deposits {}", reverted_deposits.inputs.len());
+
+            tx_skeleton.cell_deps_mut().extend(reverted_deposits.deps);
+
+            let input_len = tx_skeleton.inputs().len();
+            let witness_len = tx_skeleton.witnesses_mut().len();
+            if input_len != witness_len {
+                // append dummy witness args to align our reverted deposit witness args
+                let dummy_witness_argses = (0..input_len - witness_len)
+                    .into_iter()
+                    .map(|_| WitnessArgs::default())
+                    .collect::<Vec<_>>();
+                tx_skeleton.witnesses_mut().extend(dummy_witness_argses);
+            }
+
+            tx_skeleton.inputs_mut().extend(reverted_deposits.inputs);
+            tx_skeleton
+                .witnesses_mut()
+                .extend(reverted_deposits.witness_args);
+            tx_skeleton.outputs_mut().extend(reverted_deposits.outputs);
+        }
+
         // reverted withdrawal cells
         if let Some(reverted_withdrawals) = crate::withdrawal::revert(
             &rollup_action,
@@ -678,6 +709,8 @@ impl BlockProducer {
         )
         .await?
         {
+            log::info!("reverted withdrawals {}", reverted_withdrawals.inputs.len());
+
             tx_skeleton
                 .cell_deps_mut()
                 .extend(reverted_withdrawals.deps);

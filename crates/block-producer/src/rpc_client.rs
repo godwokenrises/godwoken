@@ -718,6 +718,70 @@ impl RPCClient {
         Ok(collected_cells)
     }
 
+    pub async fn query_custodian_cells_by_block_hashes(
+        &self,
+        block_hashes: &HashSet<[u8; 32]>,
+    ) -> Result<Vec<CellInfo>> {
+        let rollup_context = &self.rollup_context;
+
+        let custodian_lock = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .build();
+
+        let search_key = SearchKey {
+            script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
+            script_type: ScriptType::Lock,
+            filter: None,
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut collected = vec![];
+        let mut cursor = None;
+
+        while collected.is_empty() {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer_client
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            if cells.last_cursor.is_empty() {
+                return Ok(vec![]);
+            }
+            cursor = Some(cells.last_cursor);
+
+            for cell in cells.objects.into_iter() {
+                let args = cell.output.lock.args.clone().into_bytes();
+                let custodian_lock_args = match CustodianLockArgsReader::verify(&args[32..], false)
+                {
+                    Ok(()) => CustodianLockArgs::new_unchecked(args.slice(32..)),
+                    Err(_) => continue,
+                };
+
+                let deposit_block_hash: [u8; 32] =
+                    custodian_lock_args.deposit_block_hash().unpack();
+                if !block_hashes.contains(&deposit_block_hash) {
+                    continue;
+                }
+
+                collected.push(to_cell_info(cell));
+            }
+        }
+
+        Ok(collected)
+    }
+
     pub async fn query_finalized_custodian_cells(
         &self,
         withdrawals_amount: &WithdrawalsAmount,

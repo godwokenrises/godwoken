@@ -1,6 +1,7 @@
 pub mod block_producer;
 pub mod challenger;
 pub mod debugger;
+pub mod deposit;
 pub mod indexer_types;
 pub mod poa;
 pub mod poller;
