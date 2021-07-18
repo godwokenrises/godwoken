@@ -405,21 +405,24 @@ impl RPCClient {
                 )
                 .await?,
         )?;
-        let cell_info = cell_with_status.map(|cell_with_status| {
-            let cell = cell_with_status.cell.expect("get cell");
-            let output: ckb_types::packed::CellOutput = cell.output.into();
-            let output = CellOutput::new_unchecked(output.as_bytes());
-            let data = cell
-                .data
-                .map(|cell_data| cell_data.content.into_bytes())
-                .unwrap_or_else(Bytes::new);
-            let out_point = out_point.to_owned();
-            CellInfo {
-                output,
-                data,
-                out_point,
-            }
-        });
+        let cell_info = if let Some(cell_with_status) = cell_with_status {
+            cell_with_status.cell.map(|cell| {
+                let output: ckb_types::packed::CellOutput = cell.output.into();
+                let output = CellOutput::new_unchecked(output.as_bytes());
+                let data = cell
+                    .data
+                    .map(|cell_data| cell_data.content.into_bytes())
+                    .unwrap_or_else(Bytes::new);
+                let out_point = out_point.to_owned();
+                CellInfo {
+                    output,
+                    data,
+                    out_point,
+                }
+            })
+        } else {
+            None
+        };
         Ok(cell_info)
     }
 
