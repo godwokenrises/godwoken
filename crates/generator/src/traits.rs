@@ -92,8 +92,6 @@ impl<S: State + CodeStore> StateExt for S {
             self.insert_script(*script_hash, Script::from_slice(&script).expect("script"));
         }
         for (data_hash, data) in &run_result.write_data {
-            // register data hash into SMT
-            self.store_data_hash(*data_hash)?;
             self.insert_data(*data_hash, Bytes::from(data.clone()));
         }
         Ok(())

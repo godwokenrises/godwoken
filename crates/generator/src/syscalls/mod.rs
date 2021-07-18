@@ -11,7 +11,7 @@ use gw_common::{
     blake2b::new_blake2b,
     h256_ext::H256Ext,
     state::{
-        build_account_field_key, build_script_hash_to_account_id_key,
+        build_account_field_key, build_data_hash_key, build_script_hash_to_account_id_key,
         build_short_script_hash_to_script_hash_key, State, DEFAULT_SHORT_SCRIPT_HASH_LEN,
         GW_ACCOUNT_NONCE_TYPE, GW_ACCOUNT_SCRIPT_HASH_TYPE,
     },
@@ -300,6 +300,10 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 let mut hasher = new_blake2b();
                 hasher.update(data.as_ref());
                 hasher.finalize(&mut data_hash);
+                // insert data hash into SMT
+                let data_hash_key = build_data_hash_key(&data_hash);
+                self.result.write_values.insert(data_hash_key, H256::one());
+                // write data
                 self.result
                     .write_data
                     .insert(data_hash.into(), data.as_slice().to_vec());
