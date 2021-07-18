@@ -1,3 +1,5 @@
+#![allow(clippy::mutable_key_type)]
+
 use crate::poa::{PoA, ShouldIssueBlock};
 use crate::rpc_client::RPCClient;
 use crate::test_mode_control::TestModeControl;
@@ -17,11 +19,12 @@ use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_types::bytes::Bytes;
 use gw_types::core::{ChallengeTargetType, Status};
 use gw_types::packed::{
-    CellDep, CellInput, CellOutput, GlobalState, Script, Transaction, WitnessArgs,
+    CellDep, CellInput, CellOutput, GlobalState, OutPoint, Script, Transaction, WitnessArgs,
 };
 use gw_types::prelude::{Pack, Unpack};
 use smol::lock::Mutex;
 
+use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -270,24 +273,29 @@ impl Challenger {
             cancel_challenge::build_output(&self.rollup_context, prev_state, owner_lock, context)?;
 
         // Build verifier transaction
-        let tx = self.build_verifier_tx(cancel_output.verifier_cell.clone());
-        let verifier_tx_hash = self.rpc_client.send_transaction(tx.await?).await?;
+        let verifier_cell = cancel_output.verifier_cell.clone();
+        let tx = self.build_verifier_tx(verifier_cell).await?;
+        let verifier_spent_inputs = extract_inputs(&tx);
+        let verifier_tx_hash = self.rpc_client.send_transaction(tx).await?;
         log::info!("Create verifier in tx {}", to_hex(&verifier_tx_hash));
 
         self.wait_tx_proposed(verifier_tx_hash).await?;
 
         // Build cancellation transaction
         let challenge_input = to_input_cell_info(challenge_cell);
-        let verifier_dep = cancel_output.verifier_dep(&self.config)?.to_owned();
-        let verifier_input = cancel_output.verifier_input(verifier_tx_hash, 0);
-        let verifier_witness = cancel_output.verifier_witness.clone();
+        let verifier_context = {
+            let cell_dep = cancel_output.verifier_dep(&self.config)?;
+            let input = cancel_output.verifier_input(verifier_tx_hash, 0);
+            let witness = cancel_output.verifier_witness.clone();
+            VerifierContext::new(cell_dep, input, witness, Some(verifier_spent_inputs))
+        };
+
         let tx = self
             .build_cancel_tx(
                 rollup_state,
                 cancel_output,
                 challenge_input,
-                verifier_dep.clone(),
-                verifier_input.clone(),
+                verifier_context.clone(),
                 media_time,
             )
             .await?;
@@ -305,8 +313,7 @@ impl Challenger {
             Err(err) => {
                 log::error!("Cancel challenge failed: {}", err);
 
-                let tx =
-                    self.build_reclaim_verifier_tx(verifier_dep, verifier_input, verifier_witness);
+                let tx = self.build_reclaim_verifier_tx(verifier_context);
                 let tx_hash = self.rpc_client.send_transaction(tx.await?).await?;
                 log::info!("Reclaim verifier in tx {}", to_hex(&tx_hash));
             }
@@ -448,7 +455,8 @@ impl Challenger {
     async fn reclaim_verifier(&self, cell_dep: CellDep, cell_info: CellInfo) -> Result<()> {
         let input = to_input_cell_info(cell_info);
 
-        let tx = self.build_reclaim_verifier_tx(cell_dep, input, None);
+        let ctx = VerifierContext::new(cell_dep, input, None, None);
+        let tx = self.build_reclaim_verifier_tx(ctx);
         let tx_hash = self.rpc_client.send_transaction(tx.await?).await?;
         log::info!("Reclaim verifier in tx {}", to_hex(&tx_hash));
 
@@ -472,8 +480,7 @@ impl Challenger {
         rollup_state: RollupState,
         cancel_output: CancelChallengeOutput,
         challenge_input: InputCellInfo,
-        verifier_dep: CellDep,
-        verifier_input: InputCellInfo,
+        verifier_context: VerifierContext,
         media_time: Duration,
     ) -> Result<Transaction> {
         let mut tx_skeleton = TransactionSkeleton::default();
@@ -502,20 +509,20 @@ impl Challenger {
         tx_skeleton.witnesses_mut().push(challenge_witness);
 
         // Verifier
-        tx_skeleton.cell_deps_mut().push(verifier_dep);
-        tx_skeleton.inputs_mut().push(verifier_input.clone());
+        let verifier_tx_hash = verifier_context.tx_hash();
+        tx_skeleton.cell_deps_mut().push(verifier_context.cell_dep);
+        tx_skeleton.inputs_mut().push(verifier_context.input);
         if let Some(verifier_witness) = cancel_output.verifier_witness {
             tx_skeleton.witnesses_mut().push(verifier_witness);
         }
 
         // Signature verification needs an owner cell
-        let owner_lock = self.wallet.lock_script().to_owned();
-        if !has_lock_cell(&tx_skeleton, &owner_lock) {
-            let owner_input = {
-                let query = self.rpc_client.query_owner_cell(owner_lock.clone()).await?;
-                let cell = query.ok_or_else(|| anyhow!("can't find a owner cell for verifier"))?;
-                to_input_cell_info(cell)
-            };
+        if !has_lock_cell(&tx_skeleton, &self.wallet.lock_script()) {
+            let spent_inputs = verifier_context.spent_inputs;
+
+            let owner_input = self
+                .query_owner_cell_for_verifier(verifier_tx_hash, spent_inputs)
+                .await?;
             log::debug!("push an owner cell to unlock verifier cell");
 
             let owner_lock_dep = self.ckb_genesis_info.sighash_dep();
@@ -529,38 +536,60 @@ impl Challenger {
             poa.fill_poa(&mut tx_skeleton, 0, media_time).await?;
         }
 
+        let owner_lock = self.wallet.lock_script().to_owned();
         fill_tx_fee(&mut tx_skeleton, &self.rpc_client, owner_lock).await?;
         self.wallet.sign_tx_skeleton(tx_skeleton)
     }
 
     async fn build_reclaim_verifier_tx(
         &self,
-        verifier_dep: CellDep,
-        verifier_input: InputCellInfo,
-        verifier_witness: Option<WitnessArgs>,
+        verifier_context: VerifierContext,
     ) -> Result<Transaction> {
+        let verifier_tx_hash = verifier_context.tx_hash();
         let mut tx_skeleton = TransactionSkeleton::default();
 
-        tx_skeleton.cell_deps_mut().push(verifier_dep);
-        tx_skeleton.inputs_mut().push(verifier_input);
-        if let Some(verifier_witness) = verifier_witness {
+        tx_skeleton.cell_deps_mut().push(verifier_context.cell_dep);
+        tx_skeleton.inputs_mut().push(verifier_context.input);
+        if let Some(verifier_witness) = verifier_context.witness {
             tx_skeleton.witnesses_mut().push(verifier_witness);
         }
 
         // Verifier cell need an owner cell to unlock
-        let owner_lock = self.wallet.lock_script().to_owned();
-        let owner_input = {
-            let query = self.rpc_client.query_owner_cell(owner_lock.clone()).await?;
-            let cell = query.ok_or_else(|| anyhow!("can't find a owner cell for verifier"))?;
-            to_input_cell_info(cell)
-        };
+        let owner_input = self
+            .query_owner_cell_for_verifier(verifier_tx_hash, verifier_context.spent_inputs)
+            .await?;
 
         let owner_lock_dep = self.ckb_genesis_info.sighash_dep();
         tx_skeleton.cell_deps_mut().push(owner_lock_dep);
         tx_skeleton.inputs_mut().push(owner_input);
 
+        let owner_lock = self.wallet.lock_script().to_owned();
         fill_tx_fee(&mut tx_skeleton, &self.rpc_client, owner_lock).await?;
         self.wallet.sign_tx_skeleton(tx_skeleton)
+    }
+
+    async fn query_owner_cell_for_verifier(
+        &self,
+        verifier_tx_hash: H256,
+        spent_inputs: Option<HashSet<OutPoint>>,
+    ) -> Result<InputCellInfo> {
+        let rpc_client = &self.rpc_client;
+        let owner_lock = self.wallet.lock_script().to_owned();
+
+        if let Ok(Some(cell)) = rpc_client.query_owner_cell(owner_lock, spent_inputs).await {
+            return Ok(to_input_cell_info(cell));
+        }
+
+        log::debug!("can't find a owner cell for verifier, try wait verifier tx committed");
+        self.wait_tx_committed(verifier_tx_hash).await?;
+
+        let owner_lock = self.wallet.lock_script().to_owned();
+        let cell = {
+            let query = rpc_client.query_owner_cell(owner_lock, None).await?;
+            query.ok_or_else(|| anyhow!("can't find an owner cell for verifier"))?
+        };
+
+        Ok(to_input_cell_info(cell))
     }
 
     async fn wait_tx_proposed(&self, tx_hash: H256) -> Result<()> {
@@ -571,6 +600,25 @@ impl Challenger {
             match self.rpc_client.get_transaction_status(tx_hash).await? {
                 Some(TxStatus::Proposed) | Some(TxStatus::Committed) => return Ok(()),
                 Some(TxStatus::Pending) => (),
+                None => return Err(anyhow!("tx hash {} not found", to_hex(&tx_hash))),
+            }
+
+            if now.elapsed() >= timeout {
+                return Err(anyhow!("wait tx hash {} timeout", to_hex(&tx_hash)));
+            }
+
+            async_std::task::sleep(Duration::new(3, 0)).await;
+        }
+    }
+
+    async fn wait_tx_committed(&self, tx_hash: H256) -> Result<()> {
+        let timeout = Duration::new(30, 0);
+        let now = Instant::now();
+
+        loop {
+            match self.rpc_client.get_transaction_status(tx_hash).await? {
+                Some(TxStatus::Committed) => return Ok(()),
+                Some(TxStatus::Proposed) | Some(TxStatus::Pending) => (),
                 None => return Err(anyhow!("tx hash {} not found", to_hex(&tx_hash))),
             }
 
@@ -616,6 +664,34 @@ impl RollupState {
     fn status(&self) -> Result<Status> {
         let status: u8 = self.inner.status().into();
         Status::try_from(status).map_err(|n| anyhow!("invalid status {}", n))
+    }
+}
+
+#[derive(Clone)]
+struct VerifierContext {
+    cell_dep: CellDep,
+    input: InputCellInfo,
+    witness: Option<WitnessArgs>,
+    spent_inputs: Option<HashSet<OutPoint>>,
+}
+
+impl VerifierContext {
+    fn new(
+        cell_dep: CellDep,
+        input: InputCellInfo,
+        witness: Option<WitnessArgs>,
+        spent_inputs: Option<HashSet<OutPoint>>,
+    ) -> Self {
+        VerifierContext {
+            cell_dep,
+            input,
+            witness,
+            spent_inputs,
+        }
+    }
+
+    fn tx_hash(&self) -> H256 {
+        self.input.input.previous_output().tx_hash().unpack()
     }
 }
 
@@ -676,4 +752,9 @@ fn to_cell_info(cell: ChallengeCell) -> CellInfo {
         output: cell.output,
         data: cell.output_data,
     }
+}
+
+fn extract_inputs(tx: &Transaction) -> HashSet<OutPoint> {
+    let inputs = tx.raw().inputs().into_iter();
+    inputs.map(|i| i.previous_output()).collect()
 }

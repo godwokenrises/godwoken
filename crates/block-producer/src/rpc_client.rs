@@ -257,7 +257,11 @@ impl RPCClient {
     }
 
     /// this function return a cell that do not has data & _type fields
-    pub async fn query_owner_cell(&self, lock: Script) -> Result<Option<CellInfo>> {
+    pub async fn query_owner_cell(
+        &self,
+        lock: Script,
+        filter_inputs: Option<HashSet<OutPoint>>,
+    ) -> Result<Option<CellInfo>> {
         let search_key = SearchKey {
             script: {
                 let lock = ckb_types::packed::Script::new_unchecked(lock.as_bytes());
@@ -292,19 +296,13 @@ impl RPCClient {
                     return None;
                 }
                 let out_point = {
-                    let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
+                    let out_point: ckb_types::packed::OutPoint = cell.out_point.clone().into();
                     OutPoint::new_unchecked(out_point.as_bytes())
                 };
-                let output = {
-                    let output: ckb_types::packed::CellOutput = cell.output.into();
-                    CellOutput::new_unchecked(output.as_bytes())
-                };
-                let data = cell.output_data.into_bytes();
-                Some(CellInfo {
-                    out_point,
-                    output,
-                    data,
-                })
+                match filter_inputs {
+                    Some(ref filter_inputs) if filter_inputs.contains(&out_point) => None,
+                    _ => Some(to_cell_info(cell)),
+                }
             });
         }
         Ok(cell)
