@@ -24,7 +24,7 @@ use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use std::{fs, io::Read, path::PathBuf, sync::Arc};
 
-const SCRIPT_DIR: &'static str = "../../godwoken-scripts/build/debug";
+const SCRIPT_DIR: &'static str = "../../tests-deps/godwoken-scripts/build/debug";
 const ALWAYS_SUCCESS_PATH: &'static str = "always-success";
 
 lazy_static! {
@@ -47,13 +47,15 @@ lazy_static! {
 }
 
 // meta contract
-pub const META_VALIDATOR_PATH: &str = "../../godwoken-scripts/c/build/meta-contract-validator";
-pub const META_GENERATOR_PATH: &str = "../../godwoken-scripts/c/build/meta-contract-generator";
+pub const META_VALIDATOR_PATH: &str =
+    "../../tests-deps/godwoken-scripts/c/build/meta-contract-validator";
+pub const META_GENERATOR_PATH: &str =
+    "../../tests-deps/godwoken-scripts/c/build/meta-contract-generator";
 pub const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
 
 // simple UDT
-pub const SUDT_VALIDATOR_PATH: &str = "../../godwoken-scripts/c/build/sudt-validator";
-pub const SUDT_GENERATOR_PATH: &str = "../../godwoken-scripts/c/build/sudt-generator";
+pub const SUDT_VALIDATOR_PATH: &str = "../../tests-deps/godwoken-scripts/c/build/sudt-validator";
+pub const SUDT_GENERATOR_PATH: &str = "../../tests-deps/godwoken-scripts/c/build/sudt-generator";
 
 pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
     let sudt_validator_script_type_hash: [u8; 32] =
