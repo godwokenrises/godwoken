@@ -82,31 +82,34 @@ impl Registry {
             .with_data(Data(self.mem_pool.clone()))
             .with_data(Data(self.generator.clone()))
             .with_data(Data::new(self.store))
-            .with_method("ping", ping)
-            .with_method("get_tip_block_hash", get_tip_block_hash)
-            .with_method("get_block_hash", get_block_hash)
-            .with_method("get_block", get_block)
-            .with_method("get_block_by_number", get_block_by_number)
-            .with_method("get_balance", get_balance)
-            .with_method("get_storage_at", get_storage_at)
+            .with_method("gw_ping", ping)
+            .with_method("gw_get_tip_block_hash", get_tip_block_hash)
+            .with_method("gw_get_block_hash", get_block_hash)
+            .with_method("gw_get_block", get_block)
+            .with_method("gw_get_block_by_number", get_block_by_number)
+            .with_method("gw_get_balance", get_balance)
+            .with_method("gw_get_storage_at", get_storage_at)
             .with_method(
-                "get_account_id_by_script_hash",
+                "gw_get_account_id_by_script_hash",
                 get_account_id_by_script_hash,
             )
-            .with_method("get_nonce", get_nonce)
-            .with_method("get_script", get_script)
-            .with_method("get_script_hash", get_script_hash)
+            .with_method("gw_get_nonce", get_nonce)
+            .with_method("gw_get_script", get_script)
+            .with_method("gw_get_script_hash", get_script_hash)
             .with_method(
-                "get_script_hash_by_short_address",
+                "gw_get_script_hash_by_short_address",
                 get_script_hash_by_short_address,
             )
-            .with_method("get_data", get_data)
-            .with_method("get_transaction_receipt", get_transaction_receipt)
-            .with_method("execute_l2transaction", execute_l2transaction)
-            .with_method("execute_raw_l2transaction", execute_raw_l2transaction)
-            .with_method("submit_l2transaction", submit_l2transaction)
-            .with_method("submit_withdrawal_request", submit_withdrawal_request)
-            .with_method("compute_l2_sudt_script_hash", compute_l2_sudt_script_hash);
+            .with_method("gw_get_data", get_data)
+            .with_method("gw_get_transaction_receipt", get_transaction_receipt)
+            .with_method("gw_execute_l2transaction", execute_l2transaction)
+            .with_method("gw_execute_raw_l2transaction", execute_raw_l2transaction)
+            .with_method("gw_submit_l2transaction", submit_l2transaction)
+            .with_method("gw_submit_withdrawal_request", submit_withdrawal_request)
+            .with_method(
+                "gw_compute_l2_sudt_script_hash",
+                compute_l2_sudt_script_hash,
+            );
 
         // Tests
         if let Some(tests_rpc_impl) = self.tests_rpc_impl {
