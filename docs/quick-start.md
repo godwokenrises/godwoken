@@ -23,7 +23,7 @@ The setup subcommand in gw-tools crate can complete all the settings before the 
 RUST_LOG=info cargo +nightly run --bin gw-tools -- setup -s deploy/scripts-build.json -k deploy/pk -o deploy/
 ```
 
-The input file scripts-build.json for this command is as follows:
+The input file scripts-build.json for this command is as follows(you need to modify the prebuild_image & repos):
 
 ```json
 {
@@ -36,20 +36,20 @@ The input file scripts-build.json for this command is as follows:
 }
 ```
 
-**NOTES**: By default, the setup command is executed in `build` mode. You can specify the `copy` mode with the additional parameter `-m copy` and directly grab the precompiled scripts, which can save a lot of time to complete the setup process..
+**NOTES**: By default, the setup command is executed in `build` mode. You can specify the `copy` mode with the additional parameter `-m copy` to copy the precompiled scripts  from prebuilt docker image, which can save a lot of time to complete the setup process..
 
 After the setup command is successfully completed, you need to fill in the custom reward lock information in the node's config.toml(default relative path: deploy/node1/config.toml):
 
 ```toml
 [block_producer.challenger_config.rewards_receiver_lock]
-code_hash = '0x0000000000000000000000000000000000000000000000000000000000000000'
-hash_type = 'data'
+code_hash = '<code_hash>'
+hash_type = 'type'
 args = '0x'
 ```
 
 ## Start Node
 
-Now you can start godwoken node directly.
+Now you can start godwoken node.
 
 ```bash
 RUST_LOG=info cargo +nightly run --bin godwoken run -c deploy/node1/config.toml
