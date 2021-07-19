@@ -31,22 +31,22 @@ jobs:
         RUSTFLAGS: -D warnings
       run: cargo clippy
     - name: Init submodules
-      run: git submodule init && git submodule update -r && cd godwoken-scripts && git submodule init && git submodule update -r
+      run: git submodule init && git submodule update -r && cd tests-deps/godwoken-scripts && git submodule init && git submodule update -r
     - name: Compile C contracts
-      run: cd godwoken-scripts/c && make
+      run: cd tests-deps/godwoken-scripts/c && make
     - uses: actions/cache@v2
       id: fetch-capsule-cache
       with:
         path: |
-          godwoken-scripts/.tmp/capsule-cache.tar
+          tests-deps/godwoken-scripts/.tmp/capsule-cache.tar
         key: ${{ runner.os }}-capsule-cache-${{ hashFiles('contracts/Cargo.lock') }}
     - name: Restore capsule cache
       if: steps.fetch-capsule-cache.outputs.cache-hit == 'true'
-      run: cd godwoken-scripts && tools/restore-capsule-cache.sh
+      run: cd tests-deps/godwoken-scripts && tools/restore-capsule-cache.sh
     - name: Build Rust contracts
-      run: cd godwoken-scripts && capsule build
+      run: cd tests-deps/godwoken-scripts && capsule build
     - name: Backup capsule cache
       if: steps.fetch-capsule-cache.outputs.cache-hit != 'true'
-      run: cd godwoken-scripts && tools/backup-capsule-cache.sh
+      run: cd tests-deps/godwoken-scripts && tools/backup-capsule-cache.sh
     - name: Tests
       run: cargo test --all-targets
