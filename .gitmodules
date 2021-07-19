@@ -5,5 +5,5 @@
 	path = c/deps/ckb-miscellaneous-scripts
 	url = https://github.com/nervosnetwork/ckb-miscellaneous-scripts.git
 [submodule "godwoken-scripts"]
-	path = godwoken-scripts
+	path = tests-deps/godwoken-scripts
 	url = https://github.com/nervosnetwork/godwoken-scripts.git
