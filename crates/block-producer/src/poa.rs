@@ -338,7 +338,7 @@ impl PoA {
         if !exists_owner_cell {
             let owner_cell = self
                 .client
-                .query_owner_cell(self.owner_lock.clone())
+                .query_owner_cell(self.owner_lock.clone(), None)
                 .await?
                 .ok_or_else(|| anyhow!("can't find usable owner cell"))?;
             // put owner cell to input, the change cell will complete the output
