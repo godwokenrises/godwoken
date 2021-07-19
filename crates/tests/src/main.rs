@@ -1,5 +1,5 @@
 use clap::{App, Arg, SubCommand};
-use gw_tests::system_tests::{bad_block, bad_challenge, utils};
+use gw_tests::system_tests::{bad_block, bad_challenge, deposit, utils};
 use std::path::Path;
 
 fn main() -> Result<(), String> {
@@ -7,7 +7,7 @@ fn main() -> Result<(), String> {
     let mut app = App::new("godwoken tests")
         .about("Godwoken tests")
         .subcommand(
-            SubCommand::with_name("test-mode")
+            SubCommand::with_name("utils")
                 .about("Test mode control")
                 .arg(
                     Arg::with_name("global-state")
@@ -53,6 +53,14 @@ fn main() -> Result<(), String> {
                         .takes_value(true)
                         .required(true)
                         .help("godwoken node config file path"),
+                )
+                .arg(
+                    Arg::with_name("godwoken-rpc-url")
+                        .short("r")
+                        .takes_value(true)
+                        .required(true)
+                        .default_value("http://127.0.0.1:8119")
+                        .help("godwoken rpc url"),
                 ),
         )
         .subcommand(
@@ -96,10 +104,43 @@ fn main() -> Result<(), String> {
                         .takes_value(true)
                         .help("block number"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("deposit")
+                .about("Deposit ckb")
+                .arg(
+                    Arg::with_name("privkey-path")
+                        .short("p")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Privkey path"),
+                )
+                .arg(
+                    Arg::with_name("scripts-deploy-result-path")
+                        .short("d")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Scripts deploy result file path"),
+                )
+                .arg(
+                    Arg::with_name("config-file-path")
+                        .short("c")
+                        .takes_value(true)
+                        .required(true)
+                        .help("godwoken node config file path"),
+                )
+                .arg(
+                    Arg::with_name("times")
+                        .short("t")
+                        .takes_value(true)
+                        .required(true)
+                        .default_value("1")
+                        .help("deposit call times"),
+                ),
         );
     let matches = app.clone().get_matches();
     match matches.subcommand() {
-        ("test-mode", Some(m)) => {
+        ("utils", Some(m)) => {
             if m.is_present("global-state") {
                 let state = utils::get_global_state()?;
                 println!("global state is: {:?}", state);
@@ -118,12 +159,14 @@ fn main() -> Result<(), String> {
             let from_privkey_path = Path::new(m.value_of("from-privkey-path").unwrap());
             let to_privkey_path = Path::new(m.value_of("to-privkey-path").unwrap());
             let config_path = Path::new(m.value_of("config-file-path").unwrap());
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
 
             if let Err(err) = bad_block::issue_bad_block(
                 from_privkey_path,
                 to_privkey_path,
                 config_path,
                 deployment_path,
+                godwoken_rpc_url,
             ) {
                 log::error!("Issue bad block error: {}", err);
                 std::process::exit(-1);
@@ -152,6 +195,19 @@ fn main() -> Result<(), String> {
                 .unwrap();
             if let Err(err) = bad_challenge::issue_bad_challenge(block_number) {
                 log::error!("Issue bad challenge error: {}", err);
+                std::process::exit(-1);
+            }
+        }
+        ("deposit", Some(m)) => {
+            let deployment_path = Path::new(m.value_of("scripts-deploy-result-path").unwrap());
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let config_path = Path::new(m.value_of("config-file-path").unwrap());
+            let times = m
+                .value_of("times")
+                .map(|c| c.parse().expect("deposit call times"))
+                .unwrap();
+            if let Err(err) = deposit::deposit(privkey_path, deployment_path, config_path, times) {
+                log::error!("Deposit error: {}", err);
                 std::process::exit(-1);
             }
         }

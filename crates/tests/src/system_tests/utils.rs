@@ -19,9 +19,9 @@ pub struct TestModeRpc {
 }
 
 impl TestModeRpc {
-    pub fn new() -> Self {
+    pub fn new(godwoken_rpc_url: &str) -> Self {
         TestModeRpc {
-            godwoken_rpc: GodwokenRpcClient::new(TEST_MODE_GODWOKEN_RPC_URL),
+            godwoken_rpc: GodwokenRpcClient::new(godwoken_rpc_url),
         }
     }
 
@@ -66,13 +66,13 @@ impl TestModeRpc {
 
 pub fn get_global_state() -> Result<GlobalState, String> {
     log::info!("[test mode control]: get global state");
-    let mut test_mode_rpc = TestModeRpc::new();
+    let mut test_mode_rpc = TestModeRpc::new(TEST_MODE_GODWOKEN_RPC_URL);
     test_mode_rpc.get_global_state()
 }
 
 pub fn issue_blocks(count: i32) -> Result<(), String> {
     log::info!("[test mode control]: issue test block");
-    let mut test_mode_rpc = TestModeRpc::new();
+    let mut test_mode_rpc = TestModeRpc::new(TEST_MODE_GODWOKEN_RPC_URL);
     let mut i = 0;
     while i < count {
         let ret = test_mode_rpc.should_produce_block()?;
@@ -93,13 +93,13 @@ pub fn package_a_transaction(
     config_path: &Path,
     deployment_results_path: &Path,
 ) -> Result<(), String> {
-    let from_id = prepare_account(
+    let from_id = get_account(
         TEST_MODE_GODWOKEN_RPC_URL,
         from_privkey_path,
         config_path,
         deployment_results_path,
     )?;
-    let to_id = prepare_account(
+    let to_id = get_account(
         TEST_MODE_GODWOKEN_RPC_URL,
         to_privkey_path,
         config_path,
@@ -115,13 +115,13 @@ pub fn package_a_transaction(
         to_id,
     )?;
 
-    let mut test_mode_rpc = TestModeRpc::new();
+    let mut test_mode_rpc = TestModeRpc::new(TEST_MODE_GODWOKEN_RPC_URL);
     test_mode_rpc.issue_block()?;
 
     Ok(())
 }
 
-pub fn prepare_account(
+pub fn get_account(
     godwoken_rpc_url: &str,
     privkey_path: &Path,
     config_path: &Path,
