@@ -1,4 +1,3 @@
-use crate::debugger::dump_transaction;
 use crate::poa::{PoA, ShouldIssueBlock};
 use crate::rpc_client::RPCClient;
 use crate::test_mode_control::TestModeControl;
@@ -238,6 +237,15 @@ impl Challenger {
         fill_tx_fee(&mut tx_skeleton, &self.rpc_client, challenger_lock).await?;
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
+
+        utils::dry_run_transaction(&self.rpc_client, tx.clone(), "challenge block").await;
+        utils::dump_transaction(
+            &self.config.debug_tx_dump_path,
+            &self.rpc_client,
+            tx.clone(),
+        )
+        .await;
+
         let tx_hash = self.rpc_client.send_transaction(tx).await?;
         log::info!("Challenge block {} in tx {}", block_numer, to_hex(&tx_hash));
         Ok(())
@@ -284,35 +292,13 @@ impl Challenger {
             )
             .await?;
 
-        if utils::is_debug_env_var_set() {
-            let dry_run_result = self.rpc_client.dry_run_transaction(tx.clone()).await;
-            match dry_run_result {
-                Ok(cycles) => log::info!(
-                    "Tx(cancel challenge) {} execution cycles: {}",
-                    hex::encode(tx.hash()),
-                    cycles
-                ),
-                Err(err) => log::error!(
-                    "Fail to dry run transaction {}, error: {}",
-                    hex::encode(tx.hash()),
-                    err
-                ),
-            }
-        }
-
-        if let Err(err) = dump_transaction(
+        utils::dry_run_transaction(&self.rpc_client, tx.clone(), "cancel challenge").await;
+        utils::dump_transaction(
             &self.config.debug_tx_dump_path,
             &self.rpc_client,
             tx.clone(),
         )
-        .await
-        {
-            log::error!(
-                "Faild to dump transaction {} error: {}",
-                hex::encode(&tx.hash()),
-                err
-            );
-        }
+        .await;
 
         match self.rpc_client.send_transaction(tx).await {
             Ok(tx_hash) => log::info!("Cancel challenge in tx {}", to_hex(&tx_hash)),
@@ -443,35 +429,14 @@ impl Challenger {
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
-        if utils::is_debug_env_var_set() {
-            let dry_run_result = self.rpc_client.dry_run_transaction(tx.clone()).await;
-            match dry_run_result {
-                Ok(cycles) => log::info!(
-                    "Tx(revert block) {} execution cycles: {}",
-                    hex::encode(tx.hash()),
-                    cycles
-                ),
-                Err(err) => log::error!(
-                    "Fail to dry run transaction {}, error: {}",
-                    hex::encode(tx.hash()),
-                    err
-                ),
-            }
-        }
-
-        if let Err(err) = dump_transaction(
+        utils::dry_run_transaction(&self.rpc_client, tx.clone(), "revert block").await;
+        utils::dump_transaction(
             &self.config.debug_tx_dump_path,
             &self.rpc_client,
             tx.clone(),
         )
-        .await
-        {
-            log::error!(
-                "Faild to dump transaction {} error: {}",
-                hex::encode(&tx.hash()),
-                err
-            );
-        }
+        .await;
+
         let tx_hash = self.rpc_client.send_transaction(tx).await?;
         log::info!("Revert block in tx {}", to_hex(&tx_hash));
 
