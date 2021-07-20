@@ -1,5 +1,9 @@
 use clap::{App, Arg, SubCommand};
-use gw_tests::system_tests::{bad_block, bad_challenge, deposit, utils};
+use gw_tests::system_tests::{
+    bad_block, bad_challenge, deposit,
+    test_mode_control::{self, TestModeConfig},
+    utils,
+};
 use std::path::Path;
 
 fn main() -> Result<(), String> {
@@ -7,8 +11,19 @@ fn main() -> Result<(), String> {
     let mut app = App::new("godwoken tests")
         .about("Godwoken tests")
         .subcommand(
-            SubCommand::with_name("utils")
+            SubCommand::with_name("test-mode-control")
                 .about("Test mode control")
+                .arg(
+                    Arg::with_name("config-file-path")
+                        .short("c")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Test mode config file path"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("utils")
+                .about("Test mode utils")
                 .arg(
                     Arg::with_name("global-state")
                         .long("global-state")
@@ -103,6 +118,14 @@ fn main() -> Result<(), String> {
                         .short("b")
                         .takes_value(true)
                         .help("block number"),
+                )
+                .arg(
+                    Arg::with_name("godwoken-rpc-url")
+                        .short("r")
+                        .takes_value(true)
+                        .required(true)
+                        .default_value("http://127.0.0.1:8119")
+                        .help("godwoken rpc url"),
                 ),
         )
         .subcommand(
@@ -140,6 +163,19 @@ fn main() -> Result<(), String> {
         );
     let matches = app.clone().get_matches();
     match matches.subcommand() {
+        ("test-mode-control", Some(m)) => {
+            let _config_path = Path::new(m.value_of("config-file-path").unwrap());
+            let config = TestModeConfig {
+                godwoken_rpc_url: "http://127.0.0.1:8129".to_owned(),
+                ckb_url: "http://127.0.0.1:8114".to_owned(),
+                poll_interval: 2,
+                issue_block_rand_range: 2,
+            };
+            if let Err(err) = test_mode_control::run(config) {
+                log::error!("Test mode control run error: {}", err);
+                std::process::exit(-1);
+            }
+        }
         ("utils", Some(m)) => {
             if m.is_present("global-state") {
                 let state = utils::get_global_state()?;
@@ -193,7 +229,9 @@ fn main() -> Result<(), String> {
                 .value_of("block-number")
                 .map(|c| c.parse().expect("block number"))
                 .unwrap();
-            if let Err(err) = bad_challenge::issue_bad_challenge(block_number) {
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+
+            if let Err(err) = bad_challenge::issue_bad_challenge(block_number, godwoken_rpc_url) {
                 log::error!("Issue bad challenge error: {}", err);
                 std::process::exit(-1);
             }

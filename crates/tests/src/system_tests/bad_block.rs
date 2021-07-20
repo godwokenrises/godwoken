@@ -2,10 +2,6 @@ use crate::system_tests::utils::{self, TestModeRpc};
 use gw_jsonrpc_types::test_mode::{ChallengeType, ShouldProduceBlock};
 use std::path::Path;
 
-pub const FULL_NODE_MODE_GODWOKEN_RPC_URL: &str = "http://127.0.0.1:8119";
-pub const TEST_MODE_GODWOKEN_RPC_URL: &str = "http://127.0.0.1:8129";
-pub const CKB_RPC_URL: &str = "http://127.0.0.1:8114";
-
 pub fn issue_bad_block(
     from_privkey_path: &Path,
     to_privkey_path: &Path,
