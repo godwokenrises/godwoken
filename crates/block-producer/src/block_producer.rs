@@ -492,11 +492,12 @@ impl BlockProducer {
 
         // rollup action
         let rollup_action = {
-            let revert_block = {
-                let chain = self.chain.lock();
-                let first_block = chain.pending_revert_blocks().first();
-                first_block.map(|b| b.to_owned())
-            };
+            // let revert_block = {
+            //     let chain = self.chain.lock();
+            //     let first_block = chain.pending_revert_blocks().first();
+            //     first_block.map(|b| b.to_owned())
+            // };
+            let revert_block: Option<L2Block> = None;
 
             let submit_builder = match revert_block {
                 Some(revert_block) => {
