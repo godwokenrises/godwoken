@@ -1,6 +1,5 @@
 use clap::{App, Arg, SubCommand};
 use gw_tests::system_tests::{
-    bad_block, bad_challenge, deposit,
     test_mode_control::{self, TestModeConfig},
     utils,
 };
@@ -36,6 +35,14 @@ fn main() -> Result<(), String> {
                         .short("i")
                         .takes_value(true)
                         .help("Issue empty blocks"),
+                )
+                .arg(
+                    Arg::with_name("godwoken-rpc-url")
+                        .short("r")
+                        .takes_value(true)
+                        .required(true)
+                        .default_value("http://127.0.0.1:8119")
+                        .help("godwoken rpc url"),
                 ),
         )
         .subcommand(
@@ -80,7 +87,7 @@ fn main() -> Result<(), String> {
         )
         .subcommand(
             SubCommand::with_name("package-tx")
-                .about("Issue a test block containing tx")
+                .about("Issue a test block containing a tx")
                 .arg(
                     Arg::with_name("from-privkey-path")
                         .short("f")
@@ -108,6 +115,14 @@ fn main() -> Result<(), String> {
                         .takes_value(true)
                         .required(true)
                         .help("godwoken node config file path"),
+                )
+                .arg(
+                    Arg::with_name("godwoken-rpc-url")
+                        .short("r")
+                        .takes_value(true)
+                        .required(true)
+                        .default_value("http://127.0.0.1:8119")
+                        .help("godwoken rpc url"),
                 ),
         )
         .subcommand(
@@ -130,7 +145,7 @@ fn main() -> Result<(), String> {
         )
         .subcommand(
             SubCommand::with_name("deposit")
-                .about("Deposit ckb")
+                .about("Deposit ckb multiple times")
                 .arg(
                     Arg::with_name("privkey-path")
                         .short("p")
@@ -151,6 +166,14 @@ fn main() -> Result<(), String> {
                         .takes_value(true)
                         .required(true)
                         .help("godwoken node config file path"),
+                )
+                .arg(
+                    Arg::with_name("ckb-rpc-url")
+                        .short("r")
+                        .takes_value(true)
+                        .required(true)
+                        .default_value("http://127.0.0.1:8114")
+                        .help("Ckb rpc url"),
                 )
                 .arg(
                     Arg::with_name("times")
@@ -177,15 +200,16 @@ fn main() -> Result<(), String> {
             }
         }
         ("utils", Some(m)) => {
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
             if m.is_present("global-state") {
-                let state = utils::get_global_state()?;
+                let state = utils::get_global_state(godwoken_rpc_url)?;
                 println!("global state is: {:?}", state);
             } else if m.is_present("issue-blocks") {
                 let count = m
                     .value_of("issue-blocks")
                     .map(|c| c.parse().expect("count of blocks"))
                     .unwrap();
-                utils::issue_blocks(count)?;
+                utils::issue_blocks(godwoken_rpc_url, count)?;
             } else {
                 app.print_help().expect("print help");
             }
@@ -197,7 +221,7 @@ fn main() -> Result<(), String> {
             let config_path = Path::new(m.value_of("config-file-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
 
-            if let Err(err) = bad_block::issue_bad_block(
+            if let Err(err) = utils::issue_bad_block(
                 from_privkey_path,
                 to_privkey_path,
                 config_path,
@@ -213,12 +237,14 @@ fn main() -> Result<(), String> {
             let from_privkey_path = Path::new(m.value_of("from-privkey-path").unwrap());
             let to_privkey_path = Path::new(m.value_of("to-privkey-path").unwrap());
             let config_path = Path::new(m.value_of("config-file-path").unwrap());
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
 
             if let Err(err) = utils::package_a_transaction(
                 from_privkey_path,
                 to_privkey_path,
                 config_path,
                 deployment_path,
+                godwoken_rpc_url,
             ) {
                 log::error!("Package a transaction error: {}", err);
                 std::process::exit(-1);
@@ -231,7 +257,7 @@ fn main() -> Result<(), String> {
                 .unwrap();
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
 
-            if let Err(err) = bad_challenge::issue_bad_challenge(block_number, godwoken_rpc_url) {
+            if let Err(err) = utils::issue_bad_challenge(block_number, godwoken_rpc_url) {
                 log::error!("Issue bad challenge error: {}", err);
                 std::process::exit(-1);
             }
@@ -240,11 +266,18 @@ fn main() -> Result<(), String> {
             let deployment_path = Path::new(m.value_of("scripts-deploy-result-path").unwrap());
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let config_path = Path::new(m.value_of("config-file-path").unwrap());
+            let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
             let times = m
                 .value_of("times")
                 .map(|c| c.parse().expect("deposit call times"))
                 .unwrap();
-            if let Err(err) = deposit::deposit(privkey_path, deployment_path, config_path, times) {
+            if let Err(err) = utils::deposit(
+                privkey_path,
+                deployment_path,
+                config_path,
+                ckb_rpc_url,
+                times,
+            ) {
                 log::error!("Deposit error: {}", err);
                 std::process::exit(-1);
             }

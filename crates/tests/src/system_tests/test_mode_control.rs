@@ -27,6 +27,11 @@ pub fn run(config: TestModeConfig) -> Result<(), String> {
     }
 }
 
+fn produce_normal_block(test_mode_rpc: &mut TestModeRpc) -> Result<(), String> {
+    log::info!("produce normal block");
+    test_mode_rpc.issue_block()
+}
+
 fn attack(test_mode_rpc: &mut TestModeRpc) -> Result<(), String> {
     let mut rng = rand::thread_rng();
     let dice = rng.gen_range(0..2);
@@ -34,11 +39,6 @@ fn attack(test_mode_rpc: &mut TestModeRpc) -> Result<(), String> {
         0 => issue_bad_challenge(test_mode_rpc)?,
         _ => produce_bad_block(test_mode_rpc)?,
     }
-    test_mode_rpc.issue_block()
-}
-
-fn produce_normal_block(test_mode_rpc: &mut TestModeRpc) -> Result<(), String> {
-    log::info!("produce normal block");
     test_mode_rpc.issue_block()
 }
 
