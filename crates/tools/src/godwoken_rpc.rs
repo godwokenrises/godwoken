@@ -1,7 +1,7 @@
 use ckb_jsonrpc_types::Script;
 use ckb_types::H256;
 use gw_jsonrpc_types::{
-    ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
+    ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64},
     godwoken::{GlobalState, RunResult, TxReceipt},
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
@@ -101,6 +101,12 @@ impl GodwokenRpcClient {
         let params = serde_json::to_value((raw_l2tx,)).map_err(|err| err.to_string())?;
         self.rpc::<RunResult>("execute_raw_l2transaction", params)
             .map(Into::into)
+    }
+
+    pub fn get_block_hash(&mut self, block_number: u64) -> Result<H256, String> {
+        let params =
+            serde_json::to_value((Uint64::from(block_number),)).map_err(|err| err.to_string())?;
+        self.rpc::<H256>("get_block_hash", params).map(Into::into)
     }
 
     pub fn get_transaction_receipt(&mut self, tx_hash: &H256) -> Result<Option<TxReceipt>, String> {

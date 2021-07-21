@@ -1,4 +1,5 @@
 use ckb_jsonrpc_types::{Uint32, Uint64};
+use ckb_types::H256;
 use gw_jsonrpc_types::{
     godwoken::GlobalState,
     test_mode::TestModePayload,
@@ -61,9 +62,12 @@ impl TestModeRpc {
 }
 
 pub fn get_global_state(godwoken_rpc_url: &str) -> Result<GlobalState, String> {
-    log::info!("[test mode control]: get global state");
     let mut test_mode_rpc = TestModeRpc::new(godwoken_rpc_url);
     test_mode_rpc.get_global_state()
+}
+
+pub fn get_block_hash(godwoken_rpc_url: &str, block_number: u64) -> Result<H256, String> {
+    GodwokenRpcClient::new(godwoken_rpc_url).get_block_hash(block_number)
 }
 
 pub fn issue_blocks(godwoken_rpc_url: &str, count: i32) -> Result<(), String> {
@@ -75,11 +79,10 @@ pub fn issue_blocks(godwoken_rpc_url: &str, count: i32) -> Result<(), String> {
         if let ShouldProduceBlock::Yes = ret {
             test_mode_rpc.issue_block()?;
             i += 1;
-            log::info!("issue blocks: {}", i);
+            log::info!("issue blocks count: {}", i);
             sleep(Duration::from_secs(1));
         }
     }
-    log::info!("Finished.");
     Ok(())
 }
 
@@ -103,7 +106,7 @@ pub fn package_a_transaction(
         deployment_results_path,
     )?;
 
-    log::info!("from id: {}, to id: {}", from_id, to_id);
+    log::info!("transfer: from id {} to id {}", from_id, to_id);
     submit_a_transaction(
         godwoken_rpc_url,
         from_privkey_path,
@@ -167,7 +170,7 @@ pub fn submit_a_transaction(
         from_privkey_path,
         &to.to_string(),
         1u32,
-        "100",
+        "1",
         "1",
         config_path,
         deployment_results_path,
@@ -196,7 +199,7 @@ pub fn issue_bad_block(
         deployment_results_path,
     )?;
 
-    log::info!("from id: {}, to id: {}", from_id, to_id);
+    log::info!("transfer: from id {} to id {}", from_id, to_id);
     submit_a_transaction(
         godwoken_rpc_url,
         from_privkey_path,

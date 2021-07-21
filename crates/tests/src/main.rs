@@ -1,6 +1,6 @@
 use clap::{App, Arg, SubCommand};
 use gw_tests::system_tests::{
-    test_mode_control::{self, TestModeConfig},
+    test_mode_control::{TestModeConfig, TestModeControl},
     utils,
 };
 use std::path::Path;
@@ -189,15 +189,19 @@ fn main() -> Result<(), String> {
         ("test-mode-control", Some(m)) => {
             let _config_path = Path::new(m.value_of("config-file-path").unwrap());
             let config = TestModeConfig {
+                loop_interval_secs: 2,
+                attack_rand_range: 2,
+                track_record_interval_min: 2,
+                rpc_timeout_secs: 180,
+                transfer_from_privkey_path: "deploy/user_1_pk".into(),
+                transfer_to_privkey_path: "deploy/user_2_pk".into(),
                 godwoken_rpc_url: "http://127.0.0.1:8129".to_owned(),
                 ckb_url: "http://127.0.0.1:8114".to_owned(),
-                poll_interval: 2,
-                issue_block_rand_range: 2,
+                godwoken_config_path: "deploy/node2/config.toml".into(),
+                deployment_results_path: "deploy/scripts-deploy-result.json".into(),
             };
-            if let Err(err) = test_mode_control::run(config) {
-                log::error!("Test mode control run error: {}", err);
-                std::process::exit(-1);
-            }
+            let mut control = TestModeControl::new(config);
+            control.run();
         }
         ("utils", Some(m)) => {
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();

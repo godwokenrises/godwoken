@@ -187,12 +187,12 @@ pub fn submit_l2_transaction(
         .signature(signature.pack())
         .build();
 
-    log::info!("l2 transaction: {}", l2_transaction);
+    log::debug!("l2 transaction: {}", l2_transaction);
 
     let bytes = JsonBytes::from_bytes(l2_transaction.as_bytes());
     let tx_hash = godwoken_rpc_client.submit_l2transaction(bytes)?;
 
-    log::info!(
+    log::debug!(
         "tx_hash: 0x{}",
         faster_hex::hex_string(tx_hash.as_bytes()).map_err(|err| err.to_string())?
     );
