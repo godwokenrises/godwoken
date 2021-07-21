@@ -7,6 +7,7 @@ mod generate_config;
 mod get_balance;
 pub mod godwoken_rpc;
 mod hasher;
+mod polyjuice;
 mod prepare_scripts;
 mod setup;
 mod transfer;
@@ -430,6 +431,168 @@ fn main() {
                         .default_value("1")
                         .help("sudt id"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("polyjuice-deploy")
+                .about("Deploy a EVM contract")
+                .arg(arg_godwoken_rpc_url.clone())
+                .arg(arg_privkey_path.clone())
+                .arg(arg_config_path.clone())
+                .arg(arg_deployment_results_path.clone())
+                .arg(
+                    Arg::with_name("creator-account-id")
+                        .short("c")
+                        .long("creator-account-id")
+                        .takes_value(true)
+                        .required(true)
+                        .help("creator account id"),
+                )
+                .arg(
+                    Arg::with_name("gas-limit")
+                        .short("l")
+                        .long("gas-limit")
+                        .takes_value(true)
+                        .required(true)
+                        .help("gas limit"),
+                )
+                .arg(
+                    Arg::with_name("gas-price")
+                        .short("p")
+                        .long("gas-price")
+                        .takes_value(true)
+                        .required(true)
+                        .help("gas price"),
+                )
+                .arg(
+                    Arg::with_name("data")
+                        .short("a")
+                        .long("data")
+                        .takes_value(true)
+                        .required(true)
+                        .help("data"),
+                )
+                .arg(
+                    Arg::with_name("value")
+                        .short("v")
+                        .long("value")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value("0")
+                        .help("value"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("polyjuice-send")
+                .about("Send a transaction to godwoken by `eth_sendRawTransaction`")
+                .arg(arg_godwoken_rpc_url.clone())
+                .arg(arg_privkey_path.clone())
+                .arg(arg_config_path.clone())
+                .arg(arg_deployment_results_path.clone())
+                .arg(
+                    Arg::with_name("creator-account-id")
+                        .short("c")
+                        .long("creator-account-id")
+                        .takes_value(true)
+                        .required(true)
+                        .help("creator account id"),
+                )
+                .arg(
+                    Arg::with_name("gas-limit")
+                        .short("l")
+                        .long("gas-limit")
+                        .takes_value(true)
+                        .required(true)
+                        .help("gas limit"),
+                )
+                .arg(
+                    Arg::with_name("gas-price")
+                        .short("p")
+                        .long("gas-price")
+                        .takes_value(true)
+                        .required(true)
+                        .help("gas price"),
+                )
+                .arg(
+                    Arg::with_name("data")
+                        .short("a")
+                        .long("data")
+                        .takes_value(true)
+                        .required(true)
+                        .help("data"),
+                )
+                .arg(
+                    Arg::with_name("to-address")
+                        .short("t")
+                        .long("to-address")
+                        .takes_value(true)
+                        .required(true)
+                        .help("to eth address"),
+                )
+                .arg(
+                    Arg::with_name("value")
+                        .short("v")
+                        .long("value")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value("0")
+                        .help("value"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("polyjuice-call")
+                .about("Static Call a EVM contract by `eth_call`")
+                .arg(arg_godwoken_rpc_url.clone())
+                .arg(
+                    Arg::with_name("from")
+                        .short("f")
+                        .long("from")
+                        .takes_value(true)
+                        .required(true)
+                        .help("from address OR from id"),
+                )
+                .arg(
+                    Arg::with_name("gas-limit")
+                        .short("l")
+                        .long("gas-limit")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value("16777216")
+                        .help("gas limit"),
+                )
+                .arg(
+                    Arg::with_name("gas-price")
+                        .short("p")
+                        .long("gas-price")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value("1")
+                        .help("gas price"),
+                )
+                .arg(
+                    Arg::with_name("data")
+                        .short("a")
+                        .long("data")
+                        .takes_value(true)
+                        .required(true)
+                        .help("data"),
+                )
+                .arg(
+                    Arg::with_name("value")
+                        .short("v")
+                        .long("value")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value("0")
+                        .help("value"),
+                )
+                .arg(
+                    Arg::with_name("to-address")
+                        .short("t")
+                        .long("to-address")
+                        .takes_value(true)
+                        .required(true)
+                        .help("to eth address"),
+                ),
         );
 
     let matches = app.clone().get_matches();
@@ -652,6 +815,129 @@ fn main() {
 
             if let Err(err) = get_balance::get_balance(godwoken_rpc_url, account, sudt_id) {
                 log::error!("Get balance error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("polyjuice-deploy", Some(m)) => {
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let config_path = Path::new(m.value_of("config-path").unwrap());
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+
+            let data = m.value_of("data").unwrap();
+            let gas_price = m
+                .value_of("gas-price")
+                .unwrap()
+                .parse()
+                .expect("gas price format error");
+            let gas_limit = m
+                .value_of("gas-limit")
+                .unwrap()
+                .parse()
+                .expect("gas limit format error");
+            let creator_account_id = m
+                .value_of("creator-account-id")
+                .unwrap()
+                .parse()
+                .expect("creator account id format error");
+            let value = m
+                .value_of("value")
+                .unwrap()
+                .parse()
+                .expect("value format error");
+
+            if let Err(err) = polyjuice::deploy(
+                godwoken_rpc_url,
+                config_path,
+                deployment_results_path,
+                privkey_path,
+                creator_account_id,
+                gas_limit,
+                gas_price,
+                data,
+                value,
+            ) {
+                log::error!("Polyjuice deploy error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("polyjuice-send", Some(m)) => {
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let config_path = Path::new(m.value_of("config-path").unwrap());
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+
+            let data = m.value_of("data").unwrap();
+            let gas_price = m
+                .value_of("gas-price")
+                .unwrap()
+                .parse()
+                .expect("gas price format error");
+            let gas_limit = m
+                .value_of("gas-limit")
+                .unwrap()
+                .parse()
+                .expect("gas limit format error");
+            let creator_account_id = m
+                .value_of("creator-account-id")
+                .unwrap()
+                .parse()
+                .expect("creator account id format error");
+            let value = m
+                .value_of("value")
+                .unwrap()
+                .parse()
+                .expect("value format error");
+            let to_address = m.value_of("to-address").unwrap();
+
+            if let Err(err) = polyjuice::send_transaction(
+                godwoken_rpc_url,
+                config_path,
+                deployment_results_path,
+                privkey_path,
+                creator_account_id,
+                gas_limit,
+                gas_price,
+                data,
+                value,
+                to_address,
+            ) {
+                log::error!("Polyjuice send error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("polyjuice-call", Some(m)) => {
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+
+            let data = m.value_of("data").unwrap();
+            let from = m.value_of("from").unwrap();
+            let gas_price = m
+                .value_of("gas-price")
+                .unwrap()
+                .parse()
+                .expect("gas price format error");
+            let gas_limit = m
+                .value_of("gas-limit")
+                .unwrap()
+                .parse()
+                .expect("gas limit format error");
+            let value = m
+                .value_of("value")
+                .unwrap()
+                .parse()
+                .expect("value format error");
+            let to_address = m.value_of("to-address").unwrap();
+
+            if let Err(err) = polyjuice::polyjuice_call(
+                godwoken_rpc_url,
+                gas_limit,
+                gas_price,
+                data,
+                value,
+                to_address,
+                from,
+            ) {
+                log::error!("Polyjuice call error: {}", err);
                 std::process::exit(-1);
             };
         }

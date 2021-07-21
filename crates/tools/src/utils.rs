@@ -5,6 +5,7 @@ use ckb_sdk::rpc::TransactionView;
 use ckb_sdk::HttpRpcClient;
 use ckb_sdk::NetworkType;
 use gw_config::Config;
+use gw_jsonrpc_types::godwoken::TxReceipt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -152,7 +153,7 @@ pub fn wait_for_l2_tx(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     tx_hash: &H256,
     timeout_secs: u64,
-) -> Result<(), String> {
+) -> Result<Option<TxReceipt>, String> {
     let retry_timeout = Duration::from_secs(timeout_secs);
     let start_time = Instant::now();
     while start_time.elapsed() < retry_timeout {
@@ -163,7 +164,7 @@ pub fn wait_for_l2_tx(
         match receipt {
             Some(_) => {
                 log::info!("tx committed");
-                return Ok(());
+                return Ok(receipt);
             }
             None => {
                 log::info!("waiting for {} secs.", start_time.elapsed().as_secs());

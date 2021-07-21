@@ -1,5 +1,5 @@
-use crate::deploy_scripts::ScriptsDeploymentResult;
 use crate::godwoken_rpc::GodwokenRpcClient;
+use crate::{deploy_scripts::ScriptsDeploymentResult, hasher::CkbHasher};
 use ckb_crypto::secp::Privkey;
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
@@ -8,7 +8,6 @@ use ckb_types::{
     bytes::Bytes as CKBBytes, core::ScriptHashType, prelude::Builder as CKBBuilder,
     prelude::Entity as CKBEntity,
 };
-use gw_common::blake2b::new_blake2b;
 use gw_types::{
     bytes::Bytes as GwBytes,
     packed::{Byte32, Script},
@@ -53,11 +52,11 @@ pub fn eth_sign(msg: &H256, privkey: H256) -> Result<[u8; 65], String> {
     Ok(signature)
 }
 
-pub fn privkey_to_short_address(
+pub fn privkey_to_l2_script_hash(
     privkey: &H256,
     rollup_type_hash: &H256,
     deployment_result: &ScriptsDeploymentResult,
-) -> Result<GwBytes, String> {
+) -> Result<H256, String> {
     let eth_address = privkey_to_eth_address(privkey)?;
 
     let code_hash = Byte32::from_slice(
@@ -78,19 +77,26 @@ pub fn privkey_to_short_address(
         .args(args)
         .build();
 
-    let script_hash: H256 = {
-        let mut hasher = new_blake2b();
-        hasher.update(script.as_slice());
-        let mut hash = [0u8; 32];
-        hasher.finalize(&mut hash);
-        hash.into()
-    };
+    let script_hash = CkbHasher::new().update(script.as_slice()).finalize();
 
+    Ok(script_hash)
+}
+
+pub fn l2_script_hash_to_short_address(script_hash: &H256) -> GwBytes {
     let short_address = &script_hash.as_bytes()[..20];
 
-    let addr = GwBytes::from(short_address.to_vec());
+    GwBytes::from(short_address.to_vec())
+}
 
-    Ok(addr)
+pub fn privkey_to_short_address(
+    privkey: &H256,
+    rollup_type_hash: &H256,
+    deployment_result: &ScriptsDeploymentResult,
+) -> Result<GwBytes, String> {
+    let script_hash = privkey_to_l2_script_hash(privkey, rollup_type_hash, deployment_result)?;
+
+    let short_address = l2_script_hash_to_short_address(&script_hash);
+    Ok(short_address)
 }
 
 pub fn short_address_to_account_id(
@@ -98,7 +104,15 @@ pub fn short_address_to_account_id(
     short_address: &GwBytes,
 ) -> Result<Option<u32>, String> {
     let bytes = JsonBytes::from_bytes(short_address.clone());
-    let script_hash = godwoken_rpc_client.get_script_hash_by_short_address(bytes)?;
+    let script_hash = match godwoken_rpc_client.get_script_hash_by_short_address(bytes)? {
+        Some(h) => h,
+        None => {
+            return Err(format!(
+                "script hash by short address: 0x{} not found",
+                hex::encode(short_address.to_vec()),
+            ))
+        }
+    };
     let account_id = godwoken_rpc_client.get_account_id_by_script_hash(script_hash)?;
 
     Ok(account_id)
@@ -116,7 +130,10 @@ pub fn parse_account_short_address(
     }
 
     // if match id
-    let account_id: u32 = account.parse().expect("account id parse error!");
+    let account_id: u32 = match account.parse() {
+        Ok(a) => a,
+        Err(_) => return Err("account id parse error!".to_owned()),
+    };
     let script_hash = godwoken.get_script_hash(account_id)?;
     let short_address = GwBytes::from((&script_hash.as_bytes()[..20]).to_vec());
     Ok(short_address)

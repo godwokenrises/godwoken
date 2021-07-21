@@ -70,11 +70,11 @@ impl GodwokenRpcClient {
     pub fn get_script_hash_by_short_address(
         &mut self,
         short_address: JsonBytes,
-    ) -> Result<H256, String> {
+    ) -> Result<Option<H256>, String> {
         let params = serde_json::to_value((short_address,)).map_err(|err| err.to_string())?;
 
-        self.rpc::<H256>("get_script_hash_by_short_address", params)
-            .map(Into::into)
+        self.rpc::<Option<H256>>("get_script_hash_by_short_address", params)
+            .map(|opt| opt.map(Into::into))
     }
 
     pub fn submit_l2transaction(&mut self, l2tx: JsonBytes) -> Result<H256, String> {
@@ -86,6 +86,12 @@ impl GodwokenRpcClient {
     pub fn execute_l2transaction(&mut self, l2tx: JsonBytes) -> Result<RunResult, String> {
         let params = serde_json::to_value((l2tx,)).map_err(|err| err.to_string())?;
         self.rpc::<RunResult>("execute_l2transaction", params)
+            .map(Into::into)
+    }
+
+    pub fn execute_raw_l2transaction(&mut self, raw_l2tx: JsonBytes) -> Result<RunResult, String> {
+        let params = serde_json::to_value((raw_l2tx,)).map_err(|err| err.to_string())?;
+        self.rpc::<RunResult>("execute_raw_l2transaction", params)
             .map(Into::into)
     }
 
