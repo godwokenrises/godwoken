@@ -571,8 +571,8 @@ impl Chain {
                     let local_valid_tip = db.get_last_valid_tip_block()?;
                     assert_eq!(local_tip.hash(), local_valid_tip.hash());
 
-                    let parent_block_hash: [u8; 32] = l2block.raw().parent_block_hash().unpack();
-                    assert_eq!(parent_block_hash, local_tip.hash());
+                    let parent_block_hash: H256 = l2block.raw().parent_block_hash().unpack();
+                    assert_eq!(parent_block_hash, local_tip.hash().into());
 
                     let l2block_number: u64 = l2block.raw().number().unpack();
                     let local_tip_number: u64 = local_tip.raw().number().unpack();
@@ -582,7 +582,7 @@ impl Chain {
                     let expected_state = l2block.raw().prev_account();
                     let state_db = StateDBTransaction::from_checkpoint(
                         &db,
-                        CheckPoint::from_block_hash(&db, local_state_tip_hash, SubState::Block)?,
+                        CheckPoint::from_block_hash(&db, parent_block_hash, SubState::Block)?,
                         StateDBMode::ReadOnly,
                     )?;
                     let tree = state_db.account_state_tree()?;
