@@ -1,7 +1,9 @@
 use crate::testing_tool::chain::{
     build_sync_tx, construct_block, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
 };
-use gw_chain::chain::{Chain, L1Action, L1ActionContext, RevertedL1Action, SyncParam};
+use gw_chain::chain::{
+    Chain, L1Action, L1ActionContext, RevertL1ActionContext, RevertedL1Action, SyncParam,
+};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     state::{to_short_address, State},
@@ -34,7 +36,6 @@ fn produce_a_block(
         context: L1ActionContext::SubmitBlock {
             l2block,
             deposit_requests: vec![deposit.clone()],
-            reverted_block_hashes: vec![],
         },
         transaction,
         l2block_committed_info,
@@ -181,7 +182,6 @@ fn test_layer1_fork() {
             context: L1ActionContext::SubmitBlock {
                 l2block: block_result.block.clone(),
                 deposit_requests: vec![deposit],
-                reverted_block_hashes: vec![],
             },
             transaction: build_sync_tx(rollup_cell.clone(), block_result),
             l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -211,7 +211,6 @@ fn test_layer1_fork() {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit.clone()],
-            reverted_block_hashes: vec![],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -246,7 +245,6 @@ fn test_layer1_fork() {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit],
-            reverted_block_hashes: vec![],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -271,13 +269,17 @@ fn test_layer1_fork() {
         .map(|action| {
             let prev_global_state = GlobalState::default();
             let L1Action {
-                transaction,
+                transaction: _,
                 l2block_committed_info,
                 context,
             } = action;
+            let l2block = match context {
+                L1ActionContext::SubmitBlock { l2block, .. } => l2block,
+                _ => unreachable!(),
+            };
+            let context = RevertL1ActionContext::SubmitValidBlock { l2block };
             RevertedL1Action {
                 prev_global_state,
-                transaction,
                 l2block_committed_info,
                 context,
             }
@@ -354,7 +356,6 @@ fn test_layer1_revert() {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit.clone()],
-            reverted_block_hashes: vec![],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -389,7 +390,6 @@ fn test_layer1_revert() {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit],
-            reverted_block_hashes: vec![],
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -414,13 +414,17 @@ fn test_layer1_revert() {
         .map(|action| {
             let prev_global_state = GlobalState::default();
             let L1Action {
-                transaction,
+                transaction: _,
                 l2block_committed_info,
                 context,
             } = action;
+            let l2block = match context {
+                L1ActionContext::SubmitBlock { l2block, .. } => l2block,
+                _ => unreachable!(),
+            };
+            let context = RevertL1ActionContext::SubmitValidBlock { l2block };
             RevertedL1Action {
                 prev_global_state,
-                transaction,
                 l2block_committed_info,
                 context,
             }
