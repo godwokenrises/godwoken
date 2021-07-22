@@ -721,8 +721,8 @@ impl RPCClient {
 
     pub async fn query_custodian_cells_by_block_hashes(
         &self,
-        block_hashes: &HashSet<[u8; 32]>,
-    ) -> Result<Vec<CellInfo>> {
+        block_hashes: &HashSet<H256>,
+    ) -> Result<(Vec<CellInfo>, HashSet<H256>)> {
         let rollup_context = &self.rollup_context;
 
         let custodian_lock = Script::new_builder()
@@ -740,6 +740,7 @@ impl RPCClient {
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
 
         let mut collected = vec![];
+        let mut collected_block_hashes = HashSet::new();
         let mut cursor = None;
 
         while collected.is_empty() {
@@ -758,7 +759,7 @@ impl RPCClient {
             )?;
 
             if cells.last_cursor.is_empty() {
-                return Ok(vec![]);
+                return Ok((collected, collected_block_hashes));
             }
             cursor = Some(cells.last_cursor);
 
@@ -770,17 +771,17 @@ impl RPCClient {
                     Err(_) => continue,
                 };
 
-                let deposit_block_hash: [u8; 32] =
-                    custodian_lock_args.deposit_block_hash().unpack();
+                let deposit_block_hash: H256 = custodian_lock_args.deposit_block_hash().unpack();
                 if !block_hashes.contains(&deposit_block_hash) {
                     continue;
                 }
 
                 collected.push(to_cell_info(cell));
+                collected_block_hashes.insert(deposit_block_hash);
             }
         }
 
-        Ok(collected)
+        Ok((collected, collected_block_hashes))
     }
 
     pub async fn query_finalized_custodian_cells(
@@ -1007,8 +1008,8 @@ impl RPCClient {
 
     pub async fn query_withdrawal_cells_by_block_hashes(
         &self,
-        block_hashes: &HashSet<[u8; 32]>,
-    ) -> Result<Vec<CellInfo>> {
+        block_hashes: &HashSet<H256>,
+    ) -> Result<(Vec<CellInfo>, HashSet<H256>)> {
         let rollup_context = &self.rollup_context;
 
         let withdrawal_lock = Script::new_builder()
@@ -1026,6 +1027,7 @@ impl RPCClient {
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
 
         let mut collected = vec![];
+        let mut collected_block_hashes = HashSet::new();
         let mut cursor = None;
 
         while collected.is_empty() {
@@ -1044,7 +1046,7 @@ impl RPCClient {
             )?;
 
             if cells.last_cursor.is_empty() {
-                return Ok(vec![]);
+                return Ok((collected, collected_block_hashes));
             }
             cursor = Some(cells.last_cursor);
 
@@ -1056,33 +1058,18 @@ impl RPCClient {
                         Err(_) => continue,
                     };
 
-                let withdrawal_block_hash: [u8; 32] =
+                let withdrawal_block_hash: H256 =
                     withdrawal_lock_args.withdrawal_block_hash().unpack();
                 if !block_hashes.contains(&withdrawal_block_hash) {
                     continue;
                 }
 
-                let out_point = {
-                    let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-                    OutPoint::new_unchecked(out_point.as_bytes())
-                };
-
-                let output = {
-                    let output: ckb_types::packed::CellOutput = cell.output.into();
-                    CellOutput::new_unchecked(output.as_bytes())
-                };
-
-                let info = CellInfo {
-                    out_point,
-                    output,
-                    data: cell.output_data.into_bytes(),
-                };
-
-                collected.push(info);
+                collected.push(to_cell_info(cell));
+                collected_block_hashes.insert(withdrawal_block_hash);
             }
         }
 
-        Ok(collected)
+        Ok((collected, collected_block_hashes))
     }
 
     pub async fn query_verifier_cell(
