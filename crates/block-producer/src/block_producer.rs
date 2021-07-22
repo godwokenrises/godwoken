@@ -495,17 +495,17 @@ impl BlockProducer {
         let reverted_block_hashes = db.get_reverted_block_hashes()?;
 
         let rpc_client = &self.rpc_client;
-        let (revert_custodians, mut reverted_block_hashes) = rpc_client
+        let (revert_custodians, mut collected_block_hashes) = rpc_client
             .query_custodian_cells_by_block_hashes(&reverted_block_hashes)
             .await?;
         let (revert_withdrawals, block_hashes) = rpc_client
             .query_withdrawal_cells_by_block_hashes(&reverted_block_hashes)
             .await?;
-        reverted_block_hashes.extend(block_hashes);
+        collected_block_hashes.extend(block_hashes);
 
         // rollup action
         let rollup_action = {
-            let submit_builder = if !reverted_block_hashes.is_empty() {
+            let submit_builder = if !collected_block_hashes.is_empty() {
                 let db = self.store.begin_transaction();
                 let block_smt = db.reverted_block_smt()?;
 
@@ -513,12 +513,14 @@ impl BlockProducer {
                 let global_revert_block_root: H256 = global_state.reverted_block_root().unpack();
                 assert_eq!(local_root, &global_revert_block_root);
 
-                let keys: Vec<H256> = reverted_block_hashes.into_iter().collect();
+                let keys: Vec<H256> = collected_block_hashes.into_iter().collect();
                 let leaves = keys.iter().map(|hash| (hash.clone(), H256::one()));
                 let proof = block_smt
                     .merkle_proof(keys.clone())?
                     .compile(leaves.collect())?;
-                log::info!("submit revert block {:?}", keys);
+                for key in keys.iter() {
+                    log::info!("submit revert block {:?}", hex::encode(key.as_slice()));
+                }
 
                 RollupSubmitBlock::new_builder()
                     .reverted_block_hashes(keys.pack())
