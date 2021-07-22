@@ -181,13 +181,21 @@ pub fn init_genesis(
     genesis_committed_info: L2BlockCommittedInfo,
     secp_data: Bytes,
 ) -> Result<()> {
-    if store.has_genesis()? {
-        panic!("The store is already initialized!");
-    }
     let rollup_script_hash: H256 = {
         let rollup_script_hash: [u8; 32] = config.rollup_type_hash.clone().into();
         rollup_script_hash.into()
     };
+    if store.has_genesis()? {
+        let chain_id = store.get_chain_id()?;
+        if chain_id == rollup_script_hash {
+            return Ok(());
+        } else {
+            panic!(
+                "The store is already initialized by rollup_type_hash: 0x{}!",
+                hex::encode(chain_id.as_slice())
+            );
+        }
+    }
     let db = store.begin_transaction();
     db.setup_chain_id(rollup_script_hash)?;
     let (
