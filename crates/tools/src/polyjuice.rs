@@ -239,7 +239,7 @@ fn send(
             .logs
             .into_iter()
             .find(|item| item.service_flag.value() as u8 == GW_LOG_POLYJUICE_SYSTEM)
-            .ok_or_else(|| "no system logs")?;
+            .ok_or("no system logs")?;
         let data = polyjuice_system_log.data.as_bytes();
         let mut contract_address = [0u8; 20];
         contract_address.copy_from_slice(&data[16..36]);
