@@ -439,6 +439,13 @@ impl Chain {
                     db.revert_bad_blocks(&local_reverted_blocks)?;
                     log::debug!("bad blocks reverted");
 
+                    let reverted_block_hashes =
+                        local_reverted_blocks.iter().map(|b| b.hash().into());
+                    db.set_reverted_block_hashes(
+                        &db.get_reverted_block_smt_root()?,
+                        reverted_block_hashes.collect(),
+                    )?;
+
                     // Check reverted block root
                     let global_reverted_block_root: H256 =
                         global_state.reverted_block_root().unpack();
@@ -577,6 +584,36 @@ impl Chain {
                     let l2block_number: u64 = l2block.raw().number().unpack();
                     let local_tip_number: u64 = local_tip.raw().number().unpack();
                     assert_eq!(l2block_number.saturating_sub(1), local_tip_number);
+
+                    // Check reverted block smt
+                    let prev_state_reverted_block_root: H256 =
+                        prev_global_state.reverted_block_root().unpack();
+                    let local_state_reverted_block_root: H256 =
+                        local_state_global_state.reverted_block_root().unpack();
+                    if local_state_reverted_block_root != prev_state_reverted_block_root {
+                        // Rewind reverted block smt
+                        let genesis_hash = db.get_block_hash_by_number(0)?.expect("genesis hash");
+                        let genesis_reverted_block_root: H256 = {
+                            let genesis_global_state = db
+                                .get_block_post_global_state(&genesis_hash)?
+                                .expect("genesis global state should exists");
+                            genesis_global_state.reverted_block_root().unpack()
+                        };
+                        let mut current_reverted_block_root = local_state_reverted_block_root;
+                        while current_reverted_block_root != prev_state_reverted_block_root {
+                            if current_reverted_block_root == genesis_reverted_block_root {
+                                break;
+                            }
+
+                            let reverted_block_hashes = db
+                                .get_reverted_block_hashes(&current_reverted_block_root)?
+                                .expect("reverted block hashes should exists");
+
+                            db.rewind_reverted_block_smt(reverted_block_hashes)?;
+                            current_reverted_block_root = db.get_reverted_block_smt_root()?;
+                        }
+                        assert_eq!(current_reverted_block_root, prev_state_reverted_block_root);
+                    }
 
                     // Check current state
                     let expected_state = l2block.raw().prev_account();
