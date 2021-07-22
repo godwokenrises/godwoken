@@ -262,34 +262,49 @@ fn test_layer1_fork() {
     assert_eq!(tip_block_number, 2);
 
     // revert blocks
-    let updates = vec![action1, action2];
-    let reverts = updates
-        .into_iter()
-        .rev()
-        .map(|action| {
-            let prev_global_state = GlobalState::default();
-            let L1Action {
-                transaction: _,
-                l2block_committed_info,
-                context,
-            } = action;
-            let l2block = match context {
-                L1ActionContext::SubmitBlock { l2block, .. } => l2block,
-                _ => unreachable!(),
-            };
-            let context = RevertL1ActionContext::SubmitValidBlock { l2block };
-            RevertedL1Action {
-                prev_global_state,
-                l2block_committed_info,
-                context,
-            }
-        })
-        .collect::<Vec<_>>();
+    let db = chain.store().begin_transaction();
+    let tip_block_parent_hash: H256 = tip_block.raw().parent_block_hash().unpack();
+    let revert_action2 = {
+        let prev_global_state = db
+            .get_block_post_global_state(&tip_block_parent_hash)
+            .unwrap()
+            .unwrap();
+        let l2block_committed_info = db
+            .get_l2block_committed_info(&tip_block_parent_hash)
+            .unwrap()
+            .unwrap();
+        let context = RevertL1ActionContext::SubmitValidBlock { l2block: tip_block };
+        RevertedL1Action {
+            prev_global_state,
+            l2block_committed_info,
+            context,
+        }
+    };
+    let tip_parent_block = db.get_block(&tip_block_parent_hash).unwrap().unwrap();
+    let tip_grandpa_block_hash: H256 = tip_parent_block.raw().parent_block_hash().unpack();
+    let revert_action1 = {
+        let prev_global_state = db
+            .get_block_post_global_state(&tip_grandpa_block_hash)
+            .unwrap()
+            .unwrap();
+        let l2block_committed_info = db
+            .get_l2block_committed_info(&tip_grandpa_block_hash)
+            .unwrap()
+            .unwrap();
+        let context = RevertL1ActionContext::SubmitValidBlock {
+            l2block: tip_parent_block,
+        };
+        RevertedL1Action {
+            prev_global_state,
+            l2block_committed_info,
+            context,
+        }
+    };
     let forks = vec![fork_action];
 
     let param = SyncParam {
         updates: forks,
-        reverts,
+        reverts: vec![revert_action2, revert_action1],
     };
     chain.sync(param).unwrap();
     assert_eq!(chain.last_sync_event().is_success(), true);
