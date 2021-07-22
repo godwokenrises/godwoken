@@ -275,7 +275,7 @@ impl ChainUpdater {
             let local_valid_parent_block_hash: [u8; 32] =
                 local_valid_block.raw().parent_block_hash().unpack();
             let local_valid_global_state = db
-                .get_block_post_global_state(&local_valid_block.hash().into())?
+                .get_block_post_global_state(&local_valid_parent_block_hash.into())?
                 .expect("valid tip global status should exists");
             let revert_submit_valid_block = RevertedL1Action {
                 prev_global_state: local_valid_global_state,
