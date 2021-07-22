@@ -1,7 +1,7 @@
 use clap::{App, Arg, SubCommand};
 use gw_tests::system_tests::{
     test_mode_control::{TestModeConfig, TestModeControl},
-    utils,
+    utils::{self, TestModeControlType},
 };
 use std::path::Path;
 
@@ -225,7 +225,8 @@ fn main() -> Result<(), String> {
             let config_path = Path::new(m.value_of("config-file-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
 
-            if let Err(err) = utils::issue_bad_block(
+            if let Err(err) = utils::transfer_and_issue_block(
+                utils::TestModeControlType::BadBlock,
                 from_privkey_path,
                 to_privkey_path,
                 config_path,
@@ -243,7 +244,8 @@ fn main() -> Result<(), String> {
             let config_path = Path::new(m.value_of("config-file-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
 
-            if let Err(err) = utils::package_a_transaction(
+            if let Err(err) = utils::transfer_and_issue_block(
+                utils::TestModeControlType::NormalBlock,
                 from_privkey_path,
                 to_privkey_path,
                 config_path,
@@ -257,11 +259,14 @@ fn main() -> Result<(), String> {
         ("bad-challenge", Some(m)) => {
             let block_number = m
                 .value_of("block-number")
-                .map(|c| c.parse().expect("block number"))
-                .unwrap();
+                .map(|c| c.parse().expect("block number"));
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
 
-            if let Err(err) = utils::issue_bad_challenge(block_number, godwoken_rpc_url) {
+            if let Err(err) = utils::issue_control(
+                TestModeControlType::Challenge,
+                godwoken_rpc_url,
+                block_number,
+            ) {
                 log::error!("Issue bad challenge error: {}", err);
                 std::process::exit(-1);
             }

@@ -1,5 +1,4 @@
 use ckb_jsonrpc_types::{Uint32, Uint64};
-use ckb_types::H256;
 use gw_jsonrpc_types::{
     godwoken::GlobalState,
     test_mode::TestModePayload,
@@ -9,7 +8,15 @@ use gw_tools::{
     account, deploy_scripts::ScriptsDeploymentResult, deposit_ckb, godwoken_rpc::GodwokenRpcClient,
     transfer, utils,
 };
-use std::{path::Path, thread::sleep, time::Duration};
+use rand::Rng;
+use std::path::Path;
+
+#[derive(Clone, Copy, Debug)]
+pub enum TestModeControlType {
+    BadBlock,
+    NormalBlock,
+    Challenge,
+}
 
 pub struct TestModeRpc {
     pub godwoken_rpc: GodwokenRpcClient,
@@ -66,33 +73,61 @@ pub fn get_global_state(godwoken_rpc_url: &str) -> Result<GlobalState, String> {
     test_mode_rpc.get_global_state()
 }
 
-pub fn get_block_hash(godwoken_rpc_url: &str, block_number: u64) -> Result<H256, String> {
-    GodwokenRpcClient::new(godwoken_rpc_url).get_block_hash(block_number)
-}
-
-pub fn issue_blocks(godwoken_rpc_url: &str, count: i32) -> Result<(), String> {
+pub fn issue_control(
+    test_block_type: TestModeControlType,
+    godwoken_rpc_url: &str,
+    block_number: Option<u64>,
+) -> Result<(), String> {
     log::info!("[test mode control]: issue test block");
     let mut test_mode_rpc = TestModeRpc::new(godwoken_rpc_url);
     let mut i = 0;
-    while i < count {
+    while i < 1 {
         let ret = test_mode_rpc.should_produce_block()?;
         if let ShouldProduceBlock::Yes = ret {
-            test_mode_rpc.issue_block()?;
+            match test_block_type {
+                TestModeControlType::BadBlock => {
+                    test_mode_rpc.issue_bad_block(0, ChallengeType::TxSignature)?;
+                    log::info!("issue bad block");
+                }
+                TestModeControlType::Challenge => {
+                    let block_number = block_number.ok_or_else(|| "valid block number")?;
+                    let challenge_type = ChallengeType::TxSignature;
+                    test_mode_rpc.issue_challenge(block_number, 0, challenge_type)?;
+                    log::info!(
+                        "issue challenge: block number {}, target_index 0, ChallengeType {:?}",
+                        block_number,
+                        challenge_type
+                    );
+                }
+                _ => {
+                    test_mode_rpc.issue_block()?;
+                    log::info!("issue normal block");
+                }
+            }
             i += 1;
-            log::info!("issue blocks count: {}", i);
-            sleep(Duration::from_secs(1));
         }
     }
     Ok(())
 }
 
-pub fn package_a_transaction(
+pub fn issue_blocks(godwoken_rpc_url: &str, count: i32) -> Result<(), String> {
+    log::info!("[test mode control]: issue blocks");
+    for i in 0..count {
+        issue_control(TestModeControlType::NormalBlock, godwoken_rpc_url, None)?;
+        log::info!("issue blocks: {}/{}", i + 1, count);
+    }
+    Ok(())
+}
+
+pub fn transfer_and_issue_block(
+    test_block_type: TestModeControlType,
     from_privkey_path: &Path,
     to_privkey_path: &Path,
     config_path: &Path,
     deployment_results_path: &Path,
     godwoken_rpc_url: &str,
 ) -> Result<(), String> {
+    log::info!("[test mode control]: transfer and issue block");
     let from_id = get_account(
         godwoken_rpc_url,
         from_privkey_path,
@@ -105,23 +140,53 @@ pub fn package_a_transaction(
         config_path,
         deployment_results_path,
     )?;
-
-    log::info!("transfer: from id {} to id {}", from_id, to_id);
-    submit_a_transaction(
+    let mut rng = rand::thread_rng();
+    let amount = rng.gen_range(0..10);
+    log::info!(
+        "transfer: from id {} to id {} amount {}",
+        from_id,
+        to_id,
+        &amount
+    );
+    transfer::submit_l2_transaction(
         godwoken_rpc_url,
         from_privkey_path,
+        &to_id.to_string(),
+        1u32,
+        &amount.to_string(),
+        "1",
         config_path,
         deployment_results_path,
-        to_id,
     )?;
+    issue_control(test_block_type, godwoken_rpc_url, None)?;
+    Ok(())
+}
 
-    let mut test_mode_rpc = TestModeRpc::new(godwoken_rpc_url);
-    test_mode_rpc.issue_block()?;
+pub fn deposit(
+    privkey_path: &Path,
+    deployment_results_path: &Path,
+    config_path: &Path,
+    ckb_rpc_url: &str,
+    times: u32,
+) -> Result<(), String> {
+    log::info!("[test mode contro]: deposit");
+
+    for _ in 0..times {
+        deposit_ckb::deposit_ckb_to_layer1(
+            privkey_path,
+            deployment_results_path,
+            config_path,
+            "10000",
+            "0.0001",
+            ckb_rpc_url,
+            None,
+        )?;
+    }
 
     Ok(())
 }
 
-pub fn get_account(
+fn get_account(
     godwoken_rpc_url: &str,
     privkey_path: &Path,
     config_path: &Path,
@@ -156,107 +221,4 @@ pub fn get_account(
     // }
 
     from_id?.ok_or("get account error".to_owned())
-}
-
-pub fn submit_a_transaction(
-    godwoken_rpc_url: &str,
-    from_privkey_path: &Path,
-    config_path: &Path,
-    deployment_results_path: &Path,
-    to: u32,
-) -> Result<(), String> {
-    transfer::submit_l2_transaction(
-        godwoken_rpc_url,
-        from_privkey_path,
-        &to.to_string(),
-        1u32,
-        "1",
-        "1",
-        config_path,
-        deployment_results_path,
-    )
-}
-
-pub fn issue_bad_block(
-    from_privkey_path: &Path,
-    to_privkey_path: &Path,
-    config_path: &Path,
-    deployment_results_path: &Path,
-    godwoken_rpc_url: &str,
-) -> Result<(), String> {
-    log::info!("[test mode control]: issue bad block");
-
-    let from_id = get_account(
-        godwoken_rpc_url,
-        from_privkey_path,
-        config_path,
-        deployment_results_path,
-    )?;
-    let to_id = get_account(
-        godwoken_rpc_url,
-        to_privkey_path,
-        config_path,
-        deployment_results_path,
-    )?;
-
-    log::info!("transfer: from id {} to id {}", from_id, to_id);
-    submit_a_transaction(
-        godwoken_rpc_url,
-        from_privkey_path,
-        config_path,
-        deployment_results_path,
-        to_id,
-    )?;
-
-    let mut test_mode_rpc = TestModeRpc::new(godwoken_rpc_url);
-    let mut i = 0;
-    while i < 1 {
-        let ret = test_mode_rpc.should_produce_block()?;
-        if let ShouldProduceBlock::Yes = ret {
-            test_mode_rpc.issue_bad_block(0, ChallengeType::TxSignature)?;
-            i += 1;
-            log::info!("issue bad block");
-        }
-    }
-    Ok(())
-}
-
-pub fn issue_bad_challenge(block_number: u64, godwoken_rpc_url: &str) -> Result<(), String> {
-    log::info!("[test mode contro]: issue bad challenge");
-
-    let mut test_mode_rpc = TestModeRpc::new(godwoken_rpc_url);
-
-    let challenge_type = ChallengeType::TxSignature;
-    test_mode_rpc.issue_challenge(block_number, 0, challenge_type)?;
-    log::info!(
-        "issue challenge: block number {}, target_index 0, ChallengeType {:?}",
-        block_number,
-        challenge_type
-    );
-
-    Ok(())
-}
-
-pub fn deposit(
-    privkey_path: &Path,
-    deployment_results_path: &Path,
-    config_path: &Path,
-    ckb_rpc_url: &str,
-    times: u32,
-) -> Result<(), String> {
-    log::info!("[test mode contro]: deposit");
-
-    for _ in 0..times {
-        deposit_ckb::deposit_ckb_to_layer1(
-            privkey_path,
-            deployment_results_path,
-            config_path,
-            "10000",
-            "0.0001",
-            ckb_rpc_url,
-            None,
-        )?;
-    }
-
-    Ok(())
 }

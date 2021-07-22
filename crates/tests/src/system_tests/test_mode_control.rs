@@ -1,8 +1,8 @@
-use crate::system_tests::utils::{self, issue_blocks, TestModeRpc};
+use crate::system_tests::utils::{self, TestModeControlType, TestModeRpc};
 use chrono::prelude::*;
 use ckb_types::H256;
 use gw_jsonrpc_types::{godwoken::GlobalState, test_mode::ShouldProduceBlock};
-use gw_tools::godwoken_rpc;
+use gw_tools::godwoken_rpc::{self, GodwokenRpcClient};
 use rand::Rng;
 use std::{
     collections::HashMap,
@@ -31,13 +31,21 @@ struct EventRecord {
     attack_type: AttackType,
     issue_time: DateTime<Utc>,
     check_time: Option<DateTime<Utc>>,
-    // check_result: L2BlockStatus, // TODO: Add
+    // block_status: L2BlockStatus, // TODO: Add
+    result: RecordResult,
 }
 
 #[derive(Debug)]
 enum AttackType {
     BadBlock,
     BadChallenge,
+}
+
+#[derive(Debug)]
+enum RecordResult {
+    None,
+    Ok,
+    Error,
 }
 
 pub struct TestModeControl {
@@ -70,12 +78,12 @@ impl TestModeControl {
                 let dice = rng.gen_range(0..self.config.attack_rand_range);
                 match dice {
                     0 => {
-                        if let Err(err) = self.attack(&mut test_mode_rpc) {
+                        if let Err(err) = self.attack() {
                             log::info!("Attack failed: {}", err);
                         }
                     }
                     _ => {
-                        if let Err(err) = self.produce_normal_block() {
+                        if let Err(err) = self.issue_normal_block() {
                             log::info!("Produce normal block failed: {}", err);
                         }
                     }
@@ -89,51 +97,82 @@ impl TestModeControl {
         }
     }
 
-    fn produce_normal_block(&self) -> Result<(), String> {
+    fn issue_normal_block(&self) -> Result<(), String> {
         log::info!("produce normal block");
-        issue_blocks(&self.config.godwoken_rpc_url, 1)
+        utils::issue_blocks(&self.config.godwoken_rpc_url, 1)
     }
 
-    fn attack(&mut self, test_mode_rpc: &mut TestModeRpc) -> Result<(), String> {
+    fn attack(&mut self) -> Result<(), String> {
         let mut rng = rand::thread_rng();
-        let dice = rng.gen_range(0..50); // TODO: 2
+        let dice = rng.gen_range(0..2);
         match dice {
-            0 => self.issue_bad_challenge(test_mode_rpc),
-            _ => self.produce_bad_block(),
+            0 => self.issue_bad_block(),
+            _ => self.issue_bad_challenge(),
         }
     }
 
-    fn produce_bad_block(&mut self) -> Result<(), String> {
+    fn issue_bad_block(&mut self) -> Result<(), String> {
         log::info!("try to produce bad block");
         let global_state = utils::get_global_state(&self.config.godwoken_rpc_url)?;
-        utils::issue_bad_block(
+        utils::transfer_and_issue_block(
+            TestModeControlType::BadBlock,
             self.config.transfer_from_privkey_path.as_ref(),
             self.config.transfer_to_privkey_path.as_ref(),
             self.config.godwoken_config_path.as_ref(),
             self.config.deployment_results_path.as_ref(),
             &self.config.godwoken_rpc_url,
         )?;
-        let block_number = self.wait_state_change(
+        let block_number = self.wait_block_state_change(
             &self.config.godwoken_rpc_url,
             global_state,
             self.config.rpc_timeout_secs,
         )?;
         let block_number = block_number - 1; // TODO: delete this line
         log::info!("issue bad block: {}", block_number);
-        if let Ok(block_hash) = utils::get_block_hash(&self.config.godwoken_rpc_url, block_number) {
-            self.record_attack(block_hash, block_number, AttackType::BadBlock)
+        if let Ok(block_hash) =
+            GodwokenRpcClient::new(&self.config.godwoken_rpc_url).get_block_hash(block_number)
+        {
+            self.new_attack_record(block_hash, block_number, AttackType::BadBlock)
         } else {
             log::info!("record attack failed");
             Ok(())
         }
     }
 
-    fn issue_bad_challenge(&self, test_mode_rpc: &mut TestModeRpc) -> Result<(), String> {
+    fn issue_bad_challenge(&mut self) -> Result<(), String> {
         log::info!("issue bad challenge");
-        test_mode_rpc.issue_block()
+        let global_state = utils::get_global_state(&self.config.godwoken_rpc_url)?;
+        utils::transfer_and_issue_block(
+            TestModeControlType::NormalBlock,
+            &self.config.transfer_from_privkey_path,
+            &self.config.transfer_to_privkey_path,
+            &self.config.godwoken_config_path,
+            &self.config.deployment_results_path,
+            &self.config.godwoken_rpc_url,
+        )?;
+        let block_number = self.wait_block_state_change(
+            &self.config.godwoken_rpc_url,
+            global_state,
+            self.config.rpc_timeout_secs,
+        )?;
+        utils::issue_control(
+            TestModeControlType::Challenge,
+            &self.config.godwoken_rpc_url,
+            Some(block_number),
+        )?;
+        let block_number = block_number - 1; // TODO: delete this line
+        log::info!("issue normal block: {}", block_number);
+        if let Ok(block_hash) =
+            GodwokenRpcClient::new(&self.config.godwoken_rpc_url).get_block_hash(block_number)
+        {
+            self.new_attack_record(block_hash, block_number, AttackType::BadChallenge)
+        } else {
+            log::info!("record attack failed");
+            Ok(())
+        }
     }
 
-    fn wait_state_change(
+    fn wait_block_state_change(
         &self,
         godwoken_rpc_url: &str,
         old_state: GlobalState,
@@ -153,7 +192,7 @@ impl TestModeControl {
         Err(format!("Timeout: {:?}", retry_timeout))
     }
 
-    fn record_attack(
+    fn new_attack_record(
         &mut self,
         block_hash: H256,
         block_number: u64,
@@ -167,6 +206,7 @@ impl TestModeControl {
                 attack_type,
                 issue_time: Utc::now(),
                 check_time: None,
+                result: RecordResult::None,
             },
         );
         Ok(())
@@ -190,6 +230,7 @@ impl TestModeControl {
             let entry = self.records.get_mut(block_hash).unwrap();
             entry.check_time = Some(now);
             // TODO get block status
+            // TODO get result
         });
         log::info!("records: {:#?}", self.records);
     }
