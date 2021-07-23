@@ -85,6 +85,11 @@ impl Cleaner {
         let rpc_client = &self.rpc_client;
         let tip_l1_block_number = rpc_client.get_tip().await?.number().unpack();
         for tx_hash in consumed_txs {
+            let tx_status = rpc_client.get_transaction_status(tx_hash).await?;
+            if !matches!(tx_status, Some(TxStatus::Committed)) {
+                continue;
+            }
+
             if let Some(block_nubmer) = rpc_client.get_transaction_block_number(tx_hash).await? {
                 if block_nubmer < tip_l1_block_number.saturating_sub(L1_FINALITY_BLOCKS) {
                     confirmed.insert(tx_hash);
