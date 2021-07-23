@@ -378,7 +378,13 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     };
 
     // RPC registry
-    let rpc_registry = Registry::new(store, mem_pool, generator, test_mode_control.map(Box::new));
+    let rpc_registry = Registry::new(
+        store,
+        mem_pool,
+        generator,
+        test_mode_control.map(Box::new),
+        rollup_config,
+    );
 
     let (s, ctrl_c) = async_channel::bounded(100);
     let handle = move || {

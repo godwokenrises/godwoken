@@ -475,8 +475,8 @@ impl Default for L2BlockStatus {
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct L2BlockWithStatus {
-    pub l2_block_view: L2BlockView,
-    pub l2_block_status: L2BlockStatus,
+    pub block: L2BlockView,
+    pub status: L2BlockStatus,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
