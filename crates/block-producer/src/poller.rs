@@ -69,7 +69,6 @@ impl ChainUpdater {
         }
 
         // Check l1 fork
-        let rpc_client = &self.rpc_client;
         let local_tip_committed_info = { self.chain.lock().local_state().last_synced().to_owned() };
         if !self.find_l2block_on_l1(local_tip_committed_info).await? {
             self.revert_to_valid_tip_on_l1().await?;
@@ -244,8 +243,6 @@ impl ChainUpdater {
 
     async fn revert_to_valid_tip_on_l1(&self) -> Result<()> {
         let db = { self.chain.lock().store().begin_transaction() };
-        let rpc_client = &self.rpc_client;
-
         let mut revert_l1_actions = Vec::new();
 
         // First rewind to last valid tip
