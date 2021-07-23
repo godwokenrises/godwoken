@@ -327,10 +327,15 @@ impl Challenger {
         };
         let challenge_cell = to_cell_info(challenge_cell);
         let challenge_tx_block_number = {
-            let tx_hash: [u8; 32] = challenge_cell.out_point.tx_hash().unpack();
-            let query = self.rpc_client.get_transaction_block_number(tx_hash.into());
-            let block_number = query.await?;
-            block_number.ok_or_else(|| anyhow!("challenge tx block number not found"))?
+            let tx_hash: H256 = challenge_cell.out_point.tx_hash().unpack();
+            let tx_status = self.rpc_client.get_transaction_status(tx_hash).await?;
+            if !matches!(tx_status, Some(TxStatus::Committed)) {
+                log::debug!("challenge tx isn't committed");
+                return Ok(());
+            }
+
+            let query = self.rpc_client.get_transaction_block_number(tx_hash).await;
+            query?.ok_or_else(|| anyhow!("challenge tx block number not found"))?
         };
 
         const FLAG_SINCE_RELATIVE: u64 =
