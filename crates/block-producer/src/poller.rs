@@ -34,6 +34,7 @@ pub struct ChainUpdater {
     rollup_context: RollupContext,
     rollup_type_script: ckb_types::packed::Script,
     web3_indexer: Option<Web3Indexer>,
+    initialized: bool,
 }
 
 impl ChainUpdater {
@@ -54,11 +55,18 @@ impl ChainUpdater {
             rollup_type_script,
             last_tx_hash: None,
             web3_indexer,
+            initialized: false,
         }
     }
 
     // Start syncing
     pub async fn handle_event(&mut self, _event: ChainEvent) -> Result<()> {
+        // Always start from last valid tip on l1
+        if !self.initialized {
+            self.revert_to_valid_tip_on_l1().await?;
+            self.initialized = true;
+        }
+
         // Check l1 fork
         let rpc_client = &self.rpc_client;
         let (local_tip_l1_block_hash, local_tip_l1_tx_hash): ([u8; 32], [u8; 32]) = {
