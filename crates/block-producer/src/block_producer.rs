@@ -514,7 +514,7 @@ impl BlockProducer {
                 assert_eq!(local_root, &global_revert_block_root);
 
                 let keys: Vec<H256> = collected_block_hashes.into_iter().collect();
-                let leaves = keys.iter().map(|hash| (hash.clone(), H256::one()));
+                let leaves = keys.iter().map(|hash| (*hash, H256::one()));
                 let proof = block_smt
                     .merkle_proof(keys.clone())?
                     .compile(leaves.collect())?;
