@@ -78,7 +78,6 @@ pub fn issue_control(
     godwoken_rpc_url: &str,
     block_number: Option<u64>,
 ) -> Result<(), String> {
-    log::info!("[test mode control]: issue test block");
     let mut test_mode_rpc = TestModeRpc::new(godwoken_rpc_url);
     let mut i = 0;
     while i < 1 {

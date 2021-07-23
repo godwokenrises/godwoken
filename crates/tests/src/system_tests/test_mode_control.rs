@@ -23,6 +23,7 @@ pub struct TestModeConfig {
     pub ckb_url: String,
     pub godwoken_config_path: PathBuf,
     pub deployment_results_path: PathBuf,
+    pub sentry_dsn: Option<String>,
 }
 
 #[derive(Debug)]
@@ -232,6 +233,6 @@ impl TestModeControl {
             // TODO get block status
             // TODO get result
         });
-        log::info!("records: {:#?}", self.records);
+        log::info!("records: {:?}", self.records);
     }
 }

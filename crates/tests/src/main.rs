@@ -199,7 +199,20 @@ fn main() -> Result<(), String> {
                 ckb_url: "http://127.0.0.1:8114".to_owned(),
                 godwoken_config_path: "deploy/node2/config.toml".into(),
                 deployment_results_path: "deploy/scripts-deploy-result.json".into(),
+                sentry_dsn: Some(
+                    "https://879d4062ceec42fea69263394692080b@o927318.ingest.sentry.io/5876644"
+                        .to_owned(),
+                ),
             };
+            let guard = sentry::init((
+                config.sentry_dsn.clone(),
+                sentry::ClientOptions {
+                    release: sentry::release_name!(),
+                    ..Default::default()
+                },
+            ));
+            log::info!("Sentry guard enabled: {}", guard.is_enabled());
+            sentry::capture_message("Test mode control program boot", sentry::Level::Info);
             let mut control = TestModeControl::new(config);
             control.run();
         }
