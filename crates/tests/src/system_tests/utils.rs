@@ -110,7 +110,6 @@ pub fn issue_control(
 }
 
 pub fn issue_blocks(godwoken_rpc_url: &str, count: i32) -> Result<(), String> {
-    log::info!("[test mode control]: issue blocks");
     for i in 0..count {
         issue_control(TestModeControlType::NormalBlock, godwoken_rpc_url, None)?;
         log::info!("issue blocks: {}/{}", i + 1, count);

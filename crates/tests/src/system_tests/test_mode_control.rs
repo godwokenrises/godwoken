@@ -15,7 +15,8 @@ use std::{
 pub struct TestModeConfig {
     pub loop_interval_secs: u64,
     pub attack_rand_range: u32,
-    pub track_record_interval_min: i64,
+    pub track_record_interval_secs: u64,
+    pub block_status_check_interval_min: i64,
     pub rpc_timeout_secs: u64,
     pub transfer_from_privkey_path: PathBuf,
     pub transfer_to_privkey_path: PathBuf,
@@ -33,7 +34,7 @@ struct EventRecord {
     issue_time: DateTime<Utc>,
     check_time: Option<DateTime<Utc>>,
     // block_status: L2BlockStatus, // TODO: Add
-    result: RecordResult,
+    result: Option<Result<(), ()>>,
 }
 
 #[derive(Debug)]
@@ -42,16 +43,12 @@ enum AttackType {
     BadChallenge,
 }
 
-#[derive(Debug)]
-enum RecordResult {
-    None,
-    Ok,
-    Error,
-}
-
 pub struct TestModeControl {
     config: TestModeConfig,
     records: HashMap<String, EventRecord>,
+    issue_normal_block_requests: i32,
+    totol_attacks: i32,
+    error_number: i32,
 }
 
 impl TestModeControl {
@@ -59,6 +56,9 @@ impl TestModeControl {
         TestModeControl {
             config,
             records: HashMap::new(),
+            issue_normal_block_requests: 0,
+            totol_attacks: 0,
+            error_number: 0,
         }
     }
 
@@ -66,8 +66,6 @@ impl TestModeControl {
         let mut rng = rand::thread_rng();
         let mut test_mode_rpc = TestModeRpc::new(&self.config.godwoken_rpc_url);
         let mut start_time = Instant::now();
-        let track_record_interval_secs =
-            Duration::from_secs(self.config.track_record_interval_min as u64 * 60);
         loop {
             let should_produce_block = test_mode_rpc.should_produce_block();
             if let Err(err) = should_produce_block {
@@ -90,7 +88,7 @@ impl TestModeControl {
                     }
                 }
             }
-            if start_time.elapsed() >= track_record_interval_secs {
+            if start_time.elapsed() >= Duration::from_secs(self.config.track_record_interval_secs) {
                 self.track_record();
                 start_time = Instant::now();
             }
@@ -98,9 +96,11 @@ impl TestModeControl {
         }
     }
 
-    fn issue_normal_block(&self) -> Result<(), String> {
+    fn issue_normal_block(&mut self) -> Result<(), String> {
         log::info!("produce normal block");
-        utils::issue_blocks(&self.config.godwoken_rpc_url, 1)
+        utils::issue_blocks(&self.config.godwoken_rpc_url, 1)?;
+        self.issue_normal_block_requests += 1;
+        Ok(())
     }
 
     fn attack(&mut self) -> Result<(), String> {
@@ -200,16 +200,16 @@ impl TestModeControl {
         attack_type: AttackType,
     ) -> Result<(), String> {
         let block_hash = hex::encode(block_hash);
-        self.records.insert(
-            block_hash,
-            EventRecord {
-                block_number,
-                attack_type,
-                issue_time: Utc::now(),
-                check_time: None,
-                result: RecordResult::None,
-            },
-        );
+        let event_record = EventRecord {
+            block_number,
+            attack_type,
+            issue_time: Utc::now(),
+            check_time: None,
+            result: None,
+        };
+        log::info!("new attack: 0x{} {:?}", block_hash, event_record);
+        self.records.insert(block_hash, event_record);
+        self.totol_attacks += 1;
         Ok(())
     }
 
@@ -223,16 +223,32 @@ impl TestModeControl {
             .filter(|(_, record)| {
                 record.check_time.is_none()
                     && now.signed_duration_since(record.issue_time).num_minutes()
-                        > self.config.track_record_interval_min
+                        > self.config.block_status_check_interval_min
             })
             .map(|(block_hash, _)| block_hash.clone())
             .collect::<Vec<String>>();
-        track_items.iter().for_each(|block_hash| {
-            let entry = self.records.get_mut(block_hash).unwrap();
+        for item in track_items {
+            let entry = self.records.get_mut(&item).unwrap();
             entry.check_time = Some(now);
             // TODO get block status
             // TODO get result
-        });
-        log::info!("records: {:?}", self.records);
+            if let Some(Err(())) = entry.result {
+                let error_message = format!(
+                    "Attack may be success. block hash: 0x{}\n {:#?}",
+                    item, entry
+                );
+                sentry::capture_message(&error_message, sentry::Level::Error);
+                self.error_number += 1;
+            }
+            log::info!("track attack: block hash: 0x{}\n {:?}", item, entry);
+            self.records.remove(&item);
+        }
+        log::info!(
+            "Issue normal block requests: {}, total attacks: {}, error_number: {}, unchecked attacks: {}",
+            self.issue_normal_block_requests,
+            self.totol_attacks,
+            self.error_number,
+            self.records.len(),
+        );
     }
 }
