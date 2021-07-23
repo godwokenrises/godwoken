@@ -38,13 +38,15 @@ impl VerifierCell {
     }
 }
 
+type ConsumedVerifiers = Arc<parking_lot::Mutex<Vec<(VerifierCell, Option<H256>)>>>;
+
 // TODO: verifier persistent, signature verifier needs witness to unlock, but verifier itself
 // doesn't provides context to restore this witness.
 pub struct Cleaner {
     rpc_client: RPCClient,
     ckb_genesis_info: CKBGenesisInfo,
     wallet: Wallet,
-    consumed_verifiers: Arc<parking_lot::Mutex<Vec<(VerifierCell, Option<H256>)>>>,
+    consumed_verifiers: ConsumedVerifiers,
 }
 
 impl Cleaner {
@@ -77,7 +79,7 @@ impl Cleaner {
             let verifiers = self.consumed_verifiers.lock();
             verifiers
                 .iter()
-                .filter_map(|(_, consumed_tx_hash)| consumed_tx_hash.clone())
+                .filter_map(|(_, consumed_tx_hash)| *consumed_tx_hash)
                 .collect()
         };
 
