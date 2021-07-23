@@ -289,7 +289,12 @@ impl RPCClient {
                     )
                     .await?,
             )?;
+
+            if cells.last_cursor.is_empty() {
+                return Err(anyhow!("no owner cell"));
+            }
             cursor = Some(cells.last_cursor);
+
             cell = cells.objects.into_iter().find_map(|cell| {
                 // delete cells with data & type
                 if !cell.output_data.is_empty() || cell.output.type_.is_some() {
