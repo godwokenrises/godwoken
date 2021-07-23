@@ -614,10 +614,10 @@ impl RollupState {
 
 #[derive(Clone)]
 struct VerifierContext {
-    pub cell_dep: CellDep,
-    pub input: InputCellInfo,
-    pub witness: Option<WitnessArgs>,
-    pub spent_inputs: Option<HashSet<OutPoint>>,
+    cell_dep: CellDep,
+    input: InputCellInfo,
+    witness: Option<WitnessArgs>,
+    spent_inputs: Option<HashSet<OutPoint>>,
 }
 
 impl VerifierContext {
