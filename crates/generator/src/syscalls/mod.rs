@@ -25,10 +25,10 @@ use gw_types::{
     packed::{BlockInfo, LogItem, RawL2Transaction, Script},
     prelude::*,
 };
-use std::{cmp, convert::TryInto};
+use std::cmp;
 
 use self::error_codes::{
-    GW_ERROR_ACCOUNT_NOT_FOUND, GW_ERROR_DUPLICATED_SCRIPT_HASH, GW_ERROR_INVALID_CONTRACT_SCRIPT,
+    GW_ERROR_ACCOUNT_NOT_FOUND, GW_ERROR_DUPLICATED_SCRIPT_HASH, GW_ERROR_INVALID_ACCOUNT_SCRIPT,
     GW_ERROR_NOT_FOUND, GW_ERROR_RECOVER, GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH, SUCCESS,
 };
 
@@ -172,10 +172,15 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 let account_id_addr = machine.registers()[A2].clone();
 
                 let script_data = load_bytes(machine, script_addr, script_len as usize)?;
-                let script = Script::from_slice(&script_data[..]).map_err(|err| {
-                    log::error!("syscall error: invalid script to create : {:?}", err);
-                    VMError::Unexpected
-                })?;
+                let script = match Script::from_slice(&script_data[..]) {
+                    Ok(script) => script,
+                    Err(err) => {
+                        log::error!("syscall error: invalid script to create : {:?}", err);
+                        machine
+                            .set_register(A0, Mac::REG::from_i8(GW_ERROR_INVALID_ACCOUNT_SCRIPT));
+                        return Ok(true);
+                    }
+                };
                 let script_hash = script.hash();
 
                 // Return error if script_hash is exists
@@ -186,39 +191,60 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_DUPLICATED_SCRIPT_HASH));
                     return Ok(true);
                 }
+
                 // Check script validity
-                let script_hash_type: ScriptHashType =
-                    script.hash_type().try_into().expect("script hash type");
-                if script_hash_type != ScriptHashType::Type {
-                    machine.set_register(A0, Mac::REG::from_i8(GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH));
-                    return Ok(true);
-                }
-                let is_eoa_account = self
-                    .rollup_context
-                    .rollup_config
-                    .allowed_eoa_type_hashes()
-                    .into_iter()
-                    .any(|type_hash| type_hash == script.code_hash());
-                if !is_eoa_account {
+                {
+                    // check hash type
+                    if script.hash_type() != ScriptHashType::Type.into() {
+                        log::debug!("Invalid deposit account script: unexpected hash_type: Data");
+                        machine
+                            .set_register(A0, Mac::REG::from_i8(GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH));
+                        return Ok(true);
+                    }
+
+                    // check code hash
+                    let is_eoa_account = self
+                        .rollup_context
+                        .rollup_config
+                        .allowed_eoa_type_hashes()
+                        .into_iter()
+                        .any(|type_hash| type_hash == script.code_hash());
                     let is_contract_account = self
                         .rollup_context
                         .rollup_config
                         .allowed_contract_type_hashes()
                         .into_iter()
                         .any(|type_hash| type_hash == script.code_hash());
-                    if !is_contract_account {
+                    if !is_eoa_account && !is_contract_account {
+                        log::debug!(
+                            "Invalid deposit account script: unknown code_hash: {:?}",
+                            hex::encode(script.code_hash().as_slice())
+                        );
                         machine
                             .set_register(A0, Mac::REG::from_i8(GW_ERROR_UNKNOWN_SCRIPT_CODE_HASH));
                         return Ok(true);
                     }
 
-                    // check contract script short length
+                    // check args
                     let args: Bytes = script.args().unpack();
-                    if args.len() < 32
-                        || !args.starts_with(self.rollup_context.rollup_script_hash.as_slice())
-                    {
+                    if args.len() < 32 {
+                        log::debug!(
+                            "Invalid deposit account args, expect len: 32, got: {}",
+                            args.len()
+                        );
                         machine
-                            .set_register(A0, Mac::REG::from_i8(GW_ERROR_INVALID_CONTRACT_SCRIPT));
+                            .set_register(A0, Mac::REG::from_i8(GW_ERROR_INVALID_ACCOUNT_SCRIPT));
+                        return Ok(true);
+                    }
+                    if &args[..32] != self.rollup_context.rollup_script_hash.as_slice() {
+                        log::debug!(
+                            "Invalid deposit account args, expect rollup_script_hash: {}, got: {}",
+                            hex::encode(self.rollup_context.rollup_script_hash.as_slice()),
+                            hex::encode(&args[..32])
+                        );
+
+                        machine
+                            .set_register(A0, Mac::REG::from_i8(GW_ERROR_INVALID_ACCOUNT_SCRIPT));
                         return Ok(true);
                     }
                 }
