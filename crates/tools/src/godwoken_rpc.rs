@@ -116,11 +116,11 @@ impl GodwokenRpcClient {
     }
 
     pub fn tests_should_produce_block(&mut self) -> Result<ShouldProduceBlock, String> {
-        self.rpc::<ShouldProduceBlock>("tests_should_produce_block", serde_json::Value::Null)
+        self.post::<ShouldProduceBlock>("tests_should_produce_block", serde_json::Value::Null)
     }
 
     pub fn tests_get_global_state(&mut self) -> Result<GlobalState, String> {
-        self.rpc::<GlobalState>("tests_get_global_state", serde_json::Value::Null)
+        self.post::<GlobalState>("tests_get_global_state", serde_json::Value::Null)
     }
 
     pub fn tests_produce_block(
@@ -128,7 +128,7 @@ impl GodwokenRpcClient {
         test_mode_payload: TestModePayload,
     ) -> Result<(), String> {
         let params = serde_json::to_value((test_mode_payload,)).map_err(|err| err.to_string())?;
-        self.rpc("tests_produce_block", params)
+        self.post("tests_produce_block", params)
     }
 
     fn rpc<SuccessResponse: serde::de::DeserializeOwned>(
@@ -137,15 +137,19 @@ impl GodwokenRpcClient {
         params: serde_json::Value,
     ) -> Result<SuccessResponse, String> {
         let method_name = format!("gw_{}", method);
+        self.post(&method_name, params)
+    }
 
+    fn post<SuccessResponse: serde::de::DeserializeOwned>(
+        &mut self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<SuccessResponse, String> {
         self.id += 1;
         let mut req_json = serde_json::Map::new();
         req_json.insert("id".to_owned(), serde_json::to_value(&self.id).unwrap());
         req_json.insert("jsonrpc".to_owned(), serde_json::to_value(&"2.0").unwrap());
-        req_json.insert(
-            "method".to_owned(),
-            serde_json::to_value(method_name).unwrap(),
-        );
+        req_json.insert("method".to_owned(), serde_json::to_value(method).unwrap());
         req_json.insert("params".to_owned(), params);
 
         let resp = self
