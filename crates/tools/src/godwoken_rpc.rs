@@ -1,3 +1,4 @@
+use ckb_jsonrpc_types::Script;
 use ckb_types::H256;
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
@@ -65,6 +66,12 @@ impl GodwokenRpcClient {
         let params =
             serde_json::to_value((AccountID::from(account_id),)).map_err(|err| err.to_string())?;
         self.rpc::<H256>("get_script_hash", params).map(Into::into)
+    }
+
+    pub fn get_script(&mut self, script_hash: H256) -> Result<Option<Script>, String> {
+        let params = serde_json::to_value((script_hash,)).map_err(|err| err.to_string())?;
+        self.rpc::<Option<Script>>("get_script", params)
+            .map(|opt| opt.map(Into::into))
     }
 
     pub fn get_script_hash_by_short_address(

@@ -1,4 +1,5 @@
 mod account;
+mod address;
 mod create_creator_account;
 mod deploy_genesis;
 mod deploy_scripts;
@@ -593,6 +594,31 @@ fn main() {
                         .required(true)
                         .help("to eth address"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("to-short-address")
+                .about("Eth eoa address to godwoken short address")
+                .arg(arg_config_path.clone())
+                .arg(arg_deployment_results_path.clone())
+                .arg(
+                    Arg::with_name("eth-address")
+                        .short("a")
+                        .long("eth-address")
+                        .takes_value(true)
+                        .help("eth eoa address"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("to-eth-address")
+                .about("Godwoken short address to eth eoa address")
+                .arg(arg_godwoken_rpc_url.clone())
+                .arg(
+                    Arg::with_name("short-address")
+                        .short("a")
+                        .long("short-address")
+                        .takes_value(true)
+                        .help("godwoken short address"),
+                ),
         );
 
     let matches = app.clone().get_matches();
@@ -938,6 +964,29 @@ fn main() {
                 from,
             ) {
                 log::error!("Polyjuice call error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("to-short-address", Some(m)) => {
+            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let config_path = Path::new(m.value_of("config-path").unwrap());
+            let eth_address = m.value_of("eth-address").unwrap();
+
+            if let Err(err) = address::to_godwoken_short_address(
+                eth_address,
+                config_path,
+                deployment_results_path,
+            ) {
+                log::error!("To short address error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("to-eth-address", Some(m)) => {
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+            let short_address = m.value_of("short-address").unwrap();
+
+            if let Err(err) = address::to_eth_eoa_address(godwoken_rpc_url, short_address) {
+                log::error!("To eth address error: {}", err);
                 std::process::exit(-1);
             };
         }
