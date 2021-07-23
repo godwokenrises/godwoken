@@ -1,6 +1,7 @@
 use crate::{
     indexer_types::{Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx},
     rpc_client::RPCClient,
+    types::TxStatus,
 };
 use crate::{types::ChainEvent, utils::to_result};
 use anyhow::{anyhow, Result};
@@ -69,21 +70,8 @@ impl ChainUpdater {
 
         // Check l1 fork
         let rpc_client = &self.rpc_client;
-        let (local_tip_l1_block_hash, local_tip_l1_tx_hash): ([u8; 32], [u8; 32]) = {
-            let chain = self.chain.lock();
-            let committed_info = chain.local_state().last_synced();
-            (
-                committed_info.block_hash().unpack(),
-                committed_info.transaction_hash().unpack(),
-            )
-        };
-        let global_tip_l1_block_hash = rpc_client
-            .get_transaction_block_hash(local_tip_l1_tx_hash.into())
-            .await?;
-
-        if global_tip_l1_block_hash.is_none()
-            || global_tip_l1_block_hash != Some(local_tip_l1_block_hash)
-        {
+        let local_tip_committed_info = { self.chain.lock().local_state().last_synced().to_owned() };
+        if !self.find_l2block_on_l1(local_tip_committed_info).await? {
             self.revert_to_valid_tip_on_l1().await?;
         }
 
@@ -240,6 +228,20 @@ impl ChainUpdater {
         Ok(())
     }
 
+    async fn find_l2block_on_l1(&self, committed_info: L2BlockCommittedInfo) -> Result<bool> {
+        let rpc_client = &self.rpc_client;
+        let tx_hash: gw_common::H256 =
+            From::<[u8; 32]>::from(committed_info.transaction_hash().unpack());
+        let tx_status = rpc_client.get_transaction_status(tx_hash).await?;
+        if !matches!(tx_status, Some(TxStatus::Committed)) {
+            return Ok(false);
+        }
+
+        let block_hash: [u8; 32] = committed_info.block_hash().unpack();
+        let l1_block_hash = rpc_client.get_transaction_block_hash(tx_hash).await?;
+        Ok(l1_block_hash == Some(block_hash))
+    }
+
     async fn revert_to_valid_tip_on_l1(&self) -> Result<()> {
         let db = { self.chain.lock().store().begin_transaction() };
         let rpc_client = &self.rpc_client;
@@ -265,17 +267,9 @@ impl ChainUpdater {
         let mut local_valid_committed_info = last_valid_tip_committed_info;
         let mut local_valid_block = db.get_last_valid_tip_block()?;
         loop {
-            let (local_valid_l1_block_hash, local_valid_l1_tx_hash): ([u8; 32], [u8; 32]) = {
-                (
-                    local_valid_committed_info.block_hash().unpack(),
-                    local_valid_committed_info.transaction_hash().unpack(),
-                )
-            };
-            let valid_l1_block_hash = rpc_client
-                .get_transaction_block_hash(local_valid_l1_tx_hash.into())
-                .await?;
-            if valid_l1_block_hash.is_some()
-                && valid_l1_block_hash == Some(local_valid_l1_block_hash)
+            if self
+                .find_l2block_on_l1(local_valid_committed_info.clone())
+                .await?
             {
                 break;
             }
