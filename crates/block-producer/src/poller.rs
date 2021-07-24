@@ -271,25 +271,26 @@ impl ChainUpdater {
                 break;
             }
 
-            let local_valid_parent_block_hash: [u8; 32] =
+            let parent_valid_block_hash: [u8; 32] =
                 local_valid_block.raw().parent_block_hash().unpack();
-            let local_valid_global_state = db
-                .get_block_post_global_state(&local_valid_parent_block_hash.into())?
+            let parent_valid_global_state = db
+                .get_block_post_global_state(&parent_valid_block_hash.into())?
                 .expect("valid tip global status should exists");
+            let parent_valid_committed_info = db
+                .get_l2block_committed_info(&parent_valid_block_hash.into())?
+                .expect("valid block l2 committed info should exists");
             let revert_submit_valid_block = RevertedL1Action {
-                prev_global_state: local_valid_global_state,
-                l2block_committed_info: local_valid_committed_info,
+                prev_global_state: parent_valid_global_state,
+                l2block_committed_info: parent_valid_committed_info.clone(),
                 context: RevertL1ActionContext::SubmitValidBlock {
                     l2block: local_valid_block,
                 },
             };
             revert_l1_actions.push(revert_submit_valid_block);
 
-            local_valid_committed_info = db
-                .get_l2block_committed_info(&local_valid_parent_block_hash.into())?
-                .expect("valid block l2 committed info should exists");
+            local_valid_committed_info = parent_valid_committed_info;
             local_valid_block = db
-                .get_block(&local_valid_parent_block_hash.into())?
+                .get_block(&parent_valid_block_hash.into())?
                 .expect("valid block should exists");
         }
 
