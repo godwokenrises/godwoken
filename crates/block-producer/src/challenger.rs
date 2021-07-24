@@ -268,9 +268,16 @@ impl Challenger {
 
         let challenge_cell = to_cell_info(challenge_cell);
         let prev_state = rollup_state.get_state().to_owned();
+        let burn_lock = self.config.challenger_config.burn_lock.clone().into();
         let owner_lock = self.wallet.lock_script().to_owned();
-        let cancel_output =
-            cancel_challenge::build_output(&self.rollup_context, prev_state, owner_lock, context)?;
+        let cancel_output = cancel_challenge::build_output(
+            &self.rollup_context,
+            prev_state,
+            &challenge_cell,
+            burn_lock,
+            owner_lock,
+            context,
+        )?;
 
         // Build verifier transaction
         let verifier_cell = cancel_output.verifier_cell.clone();
@@ -515,6 +522,9 @@ impl Challenger {
         if let Some(verifier_witness) = cancel_output.verifier_witness {
             tx_skeleton.witnesses_mut().push(verifier_witness);
         }
+
+        // Burn
+        tx_skeleton.outputs_mut().extend(cancel_output.burn_cells);
 
         // Signature verification needs an owner cell
         if !has_lock_cell(&tx_skeleton, &self.wallet.lock_script()) {

@@ -15,10 +15,13 @@ use gw_types::packed::{
 use gw_types::prelude::Unpack;
 use gw_types::{bytes::Bytes, prelude::Pack as GWPack};
 
-pub struct CancelChallenge<W: Entity> {
+pub struct CancelChallenge<'a, W: Entity> {
     rollup_type_hash: H256,
+    reward_burn_rate: u8,
     prev_global_state: GlobalState,
+    challenge_cell: &'a CellInfo,
     verifier_lock: Script,
+    burn_lock: Script,
     owner_lock: Script,
     verify_witness: W,
 }
@@ -26,6 +29,7 @@ pub struct CancelChallenge<W: Entity> {
 pub struct CancelChallengeOutput {
     pub post_global_state: GlobalState,
     pub verifier_cell: (CellOutput, Bytes),
+    pub burn_cells: Vec<(CellOutput, Bytes)>,
     pub verifier_witness: Option<WitnessArgs>, // Some for signature verification
     pub challenge_witness: WitnessArgs,
     pub rollup_witness: WitnessArgs,
@@ -69,6 +73,8 @@ impl CancelChallengeOutput {
 pub fn build_output(
     rollup_context: &RollupContext,
     prev_global_state: GlobalState,
+    challenge_cell: &CellInfo,
+    burn_lock: Script,
     owner_lock: Script,
     context: VerifyContext,
 ) -> Result<CancelChallengeOutput> {
@@ -86,6 +92,8 @@ pub fn build_output(
             let cancel: CancelChallenge<VerifyWithdrawalWitness> = CancelChallenge::new(
                 prev_global_state,
                 rollup_context,
+                challenge_cell,
+                burn_lock,
                 owner_lock,
                 verifier_lock,
                 witness,
@@ -110,6 +118,8 @@ pub fn build_output(
             let cancel: CancelChallenge<VerifyTransactionSignatureWitness> = CancelChallenge::new(
                 prev_global_state,
                 rollup_context,
+                challenge_cell,
+                burn_lock,
                 owner_lock,
                 verifier_lock,
                 witness,
@@ -126,6 +136,8 @@ pub fn build_output(
             let cancel: CancelChallenge<VerifyTransactionWitness> = CancelChallenge::new(
                 prev_global_state,
                 rollup_context,
+                challenge_cell,
+                burn_lock,
                 owner_lock,
                 verifier_lock,
                 witness,
@@ -137,19 +149,25 @@ pub fn build_output(
     }
 }
 
-impl<W: Entity> CancelChallenge<W> {
+impl<'a, W: Entity> CancelChallenge<'a, W> {
     pub fn new(
         prev_global_state: GlobalState,
         rollup_context: &RollupContext,
+        challenge_cell: &'a CellInfo,
+        burn_lock: Script,
         owner_lock: Script,
         verifier_lock: Script,
         verify_witness: W,
     ) -> Self {
         let rollup_type_hash = rollup_context.rollup_script_hash;
+        let reward_burn_rate = rollup_context.rollup_config.reward_burn_rate().into();
 
         Self {
             rollup_type_hash,
+            reward_burn_rate,
             prev_global_state,
+            challenge_cell,
+            burn_lock,
             owner_lock,
             verifier_lock,
             verify_witness,
@@ -170,6 +188,9 @@ impl<W: Entity> CancelChallenge<W> {
             .build();
         let verifier_cell = (verifier, verifier_data);
 
+        let burn = Burn::new(self.challenge_cell, self.reward_burn_rate);
+        let burn_output = burn.build_output(self.burn_lock);
+
         let post_global_state = build_post_global_state(self.prev_global_state);
         let challenge_witness = WitnessArgs::new_builder()
             .lock(Some(self.verify_witness.as_bytes()).pack())
@@ -178,6 +199,7 @@ impl<W: Entity> CancelChallenge<W> {
         CancelChallengeOutput {
             post_global_state,
             verifier_cell,
+            burn_cells: burn_output.burn_cells,
             verifier_witness,
             challenge_witness,
             rollup_witness: build_rollup_witness(),
@@ -185,13 +207,13 @@ impl<W: Entity> CancelChallenge<W> {
     }
 }
 
-impl CancelChallenge<VerifyTransactionWitness> {
+impl<'a> CancelChallenge<'a, VerifyTransactionWitness> {
     fn build_verifier_data(&self) -> Bytes {
         self.owner_lock.hash().to_vec().into()
     }
 }
 
-impl CancelChallenge<VerifyTransactionSignatureWitness> {
+impl<'a> CancelChallenge<'a, VerifyTransactionSignatureWitness> {
     // owner_lock_hash(32 bytes) | message(32 bytes)
     pub fn build_verifier_data(&self, receiver_script_hash: H256) -> Bytes {
         let owner_lock_hash = self.owner_lock.hash();
@@ -216,7 +238,7 @@ impl CancelChallenge<VerifyTransactionSignatureWitness> {
     }
 }
 
-impl CancelChallenge<VerifyWithdrawalWitness> {
+impl<'a> CancelChallenge<'a, VerifyWithdrawalWitness> {
     // owner_lock_hash(32 bytes) | message(32 bytes)
     pub fn build_verifier_data(&self) -> Bytes {
         let owner_lock_hash = self.owner_lock.hash();
@@ -232,6 +254,72 @@ impl CancelChallenge<VerifyWithdrawalWitness> {
     fn calc_withdrawal_message(&self) -> [u8; 32] {
         let raw_withdrawal = self.verify_witness.withdrawal_request().raw();
         raw_withdrawal.calc_message(&self.rollup_type_hash).into()
+    }
+}
+
+struct Burn {
+    burn_capacity: u128,
+}
+
+struct BurnOutput {
+    burn_cells: Vec<(CellOutput, Bytes)>,
+}
+
+impl Burn {
+    fn new(challenge_cell: &CellInfo, reward_burn_rate: u8) -> Self {
+        let to_capacity = |c: &CellInfo| c.output.capacity().unpack() as u128;
+        let challenge_capacity = to_capacity(challenge_cell);
+
+        let burn_capacity = challenge_capacity.saturating_mul(reward_burn_rate.into()) / 100;
+
+        Self { burn_capacity }
+    }
+
+    fn build_output(self, burn_lock: Script) -> BurnOutput {
+        let build_outputs = |total_capacity: u128, lock: Script| -> Vec<(CellOutput, Bytes)> {
+            let build = |capacity: u64, lock: Script| -> (CellOutput, Bytes) {
+                let output = CellOutput::new_builder()
+                    .capacity(capacity.pack())
+                    .lock(lock)
+                    .build();
+                (output, Bytes::new())
+            };
+
+            let mut outputs = Vec::new();
+            if total_capacity < u64::MAX as u128 {
+                outputs.push(build(total_capacity as u64, lock));
+                return outputs;
+            }
+
+            let min_capacity = (8 + lock.as_slice().len()) as u64 * 100_000_000;
+            let mut remaind = total_capacity;
+            while remaind > 0 {
+                let max = remaind.saturating_sub(min_capacity as u128);
+                match max.checked_sub(u64::MAX as u128) {
+                    Some(cap) => {
+                        outputs.push(build(u64::MAX, lock.clone()));
+                        remaind = cap.saturating_add(min_capacity as u128);
+                    }
+                    None if max.saturating_add(min_capacity as u128) > u64::MAX as u128 => {
+                        let max = max.saturating_add(min_capacity as u128);
+                        let half = max / 2;
+                        outputs.push(build(half as u64, lock.clone()));
+                        outputs.push(build(max.saturating_sub(half) as u64, lock.clone()));
+                        remaind = 0;
+                    }
+                    None => {
+                        let cap = (max as u64).saturating_add(min_capacity);
+                        outputs.push(build(cap, lock.clone()));
+                        remaind = 0;
+                    }
+                }
+            }
+            outputs
+        };
+
+        BurnOutput {
+            burn_cells: build_outputs(self.burn_capacity, burn_lock),
+        }
     }
 }
 
