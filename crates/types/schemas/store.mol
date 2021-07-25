@@ -45,7 +45,22 @@ struct SMTBranchKey {
     node_key: Byte32,
 }
 
-struct SMTBranchNode {
-    left: Byte32,
-    right: Byte32,
+table SMTBranchNode {
+    left: SMTMergeValue,
+    right: SMTMergeValue,
+}
+
+union SMTMergeValue {
+    SMTValue,
+    SMTMergeWithZero,
+}
+
+struct SMTMergeWithZero {
+    base_node: Byte32,
+    zero_bits: Byte32,
+    zero_count: byte,
+}
+
+struct SMTValue {
+    value: Byte32,
 }
