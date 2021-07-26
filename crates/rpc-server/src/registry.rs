@@ -142,6 +142,9 @@ async fn get_block(
     let block_opt = db.get_block(&block_hash)?;
     let mut status = L2BlockStatus::Unfinalized;
     if let Some(ref block) = block_opt {
+        if db.block_smt()?.get(&block.smt_key().into())?.is_zero() {
+            return Ok(None);
+        }
         if !db.reverted_block_smt()?.get(&block_hash)?.is_zero() {
             status = L2BlockStatus::Reverted;
         } else {
