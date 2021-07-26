@@ -4334,9 +4334,9 @@ dependencies = [
 
 [[package]]
 name = "sparse-merkle-tree"
-version = "0.5.0-rc2"
+version = "0.5.2-rc1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4edfa0fa43ab341aa5985e6c745c04836f465480c52a8e35d16d26be31f7dbea"
+checksum = "73c8673a5932f28e2a4d229784c9382c423b5d1cf62321f66036eaf9921540ef"
 dependencies = [
  "cfg-if 0.1.10",
 ]
