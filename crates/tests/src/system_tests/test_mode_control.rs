@@ -1,7 +1,10 @@
 use crate::system_tests::utils::{self, TestModeControlType, TestModeRpc};
 use chrono::prelude::*;
 use ckb_types::H256;
-use gw_jsonrpc_types::{godwoken::GlobalState, test_mode::ShouldProduceBlock};
+use gw_jsonrpc_types::{
+    godwoken::{GlobalState, L2BlockStatus},
+    test_mode::ShouldProduceBlock,
+};
 use gw_tools::godwoken_rpc::{self, GodwokenRpcClient};
 use rand::Rng;
 use std::{
@@ -29,11 +32,12 @@ pub struct TestModeConfig {
 
 #[derive(Debug)]
 struct EventRecord {
+    block_hash: String,
     block_number: u64,
     attack_type: AttackType,
     issue_time: DateTime<Utc>,
     check_time: Option<DateTime<Utc>>,
-    // block_status: L2BlockStatus, // TODO: Add
+    block_status: Option<L2BlockStatus>,
     result: Option<Result<(), ()>>,
 }
 
@@ -45,7 +49,7 @@ enum AttackType {
 
 pub struct TestModeControl {
     config: TestModeConfig,
-    records: HashMap<String, EventRecord>,
+    records: HashMap<H256, EventRecord>,
     issue_normal_block_requests: i32,
     totol_attacks: i32,
     error_number: i32,
@@ -89,7 +93,9 @@ impl TestModeControl {
                 }
             }
             if start_time.elapsed() >= Duration::from_secs(self.config.track_record_interval_secs) {
-                self.track_record();
+                if let Err(err) = self.track_record() {
+                    log::info!("track record failed: {}", err);
+                }
                 start_time = Instant::now();
             }
             thread::sleep(Duration::from_secs(self.config.loop_interval_secs))
@@ -128,7 +134,6 @@ impl TestModeControl {
             global_state,
             self.config.rpc_timeout_secs,
         )?;
-        let block_number = block_number - 1; // TODO: delete this line
         log::info!("issue bad block: {}", block_number);
         if let Ok(block_hash) =
             GodwokenRpcClient::new(&self.config.godwoken_rpc_url).get_block_hash(block_number)
@@ -161,7 +166,6 @@ impl TestModeControl {
             &self.config.godwoken_rpc_url,
             Some(block_number),
         )?;
-        let block_number = block_number - 1; // TODO: delete this line
         log::info!("issue normal block: {}", block_number);
         if let Ok(block_hash) =
             GodwokenRpcClient::new(&self.config.godwoken_rpc_url).get_block_hash(block_number)
@@ -199,22 +203,24 @@ impl TestModeControl {
         block_number: u64,
         attack_type: AttackType,
     ) -> Result<(), String> {
-        let block_hash = hex::encode(block_hash);
+        let block_hash_string = hex::encode(&block_hash);
         let event_record = EventRecord {
+            block_hash: block_hash_string,
             block_number,
             attack_type,
             issue_time: Utc::now(),
             check_time: None,
+            block_status: None,
             result: None,
         };
-        log::info!("new attack: 0x{} {:?}", block_hash, event_record);
+        log::info!("new attack: {:?}", event_record);
         self.records.insert(block_hash, event_record);
         self.totol_attacks += 1;
         Ok(())
     }
 
-    fn track_record(&mut self) {
-        let _godwoken_rpc_client =
+    fn track_record(&mut self) -> Result<(), String> {
+        let mut godwoken_rpc_client =
             godwoken_rpc::GodwokenRpcClient::new(&self.config.godwoken_rpc_url);
         let now = Utc::now();
         let track_items = self
@@ -226,12 +232,29 @@ impl TestModeControl {
                         > self.config.block_status_check_interval_min
             })
             .map(|(block_hash, _)| block_hash.clone())
-            .collect::<Vec<String>>();
+            .collect::<Vec<H256>>();
         for item in track_items {
             let entry = self.records.get_mut(&item).unwrap();
             entry.check_time = Some(now);
-            // TODO get block status
-            // TODO get result
+            entry.block_status = godwoken_rpc_client
+                .get_block(&item)?
+                .map(|block_with_status| block_with_status.status);
+            entry.result = match entry.attack_type {
+                AttackType::BadChallenge => {
+                    if entry.block_status != Some(L2BlockStatus::Reverted) {
+                        Some(Ok(()))
+                    } else {
+                        Some(Err(()))
+                    }
+                }
+                AttackType::BadBlock => {
+                    if entry.block_status == Some(L2BlockStatus::Reverted) {
+                        Some(Ok(()))
+                    } else {
+                        Some(Err(()))
+                    }
+                }
+            };
             if let Some(Err(())) = entry.result {
                 let error_message = format!(
                     "Attack may be success. block hash: 0x{}\n {:#?}",
@@ -250,5 +273,6 @@ impl TestModeControl {
             self.error_number,
             self.records.len(),
         );
+        Ok(())
     }
 }
