@@ -135,9 +135,17 @@ impl TestModeControl {
             self.config.rpc_timeout_secs,
         )?;
         log::info!("issue bad block: {}", block_number);
-        if let Ok(block_hash) =
-            GodwokenRpcClient::new(&self.config.godwoken_rpc_url).get_block_hash(block_number)
-        {
+        let mut block_hash_ret = Err("".to_owned());
+        for _ in 0..10 {
+            block_hash_ret =
+                GodwokenRpcClient::new(&self.config.godwoken_rpc_url).get_block_hash(block_number);
+            println!("block hash ret is: {:?}", block_hash_ret);
+            if block_hash_ret.is_ok() {
+                break;
+            }
+            thread::sleep(Duration::from_secs(5));
+        }
+        if let Ok(block_hash) = block_hash_ret {
             self.new_attack_record(block_hash, block_number, AttackType::BadBlock)
         } else {
             log::info!("record attack failed");

@@ -192,7 +192,7 @@ fn main() -> Result<(), String> {
                 loop_interval_secs: 2,
                 attack_rand_range: 2,
                 track_record_interval_secs: 120,
-                block_status_check_interval_min: 2,
+                block_status_check_interval_min: 10,
                 rpc_timeout_secs: 180,
                 transfer_from_privkey_path: "deploy/user_1_pk".into(),
                 transfer_to_privkey_path: "deploy/user_2_pk".into(),
