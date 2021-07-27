@@ -7,6 +7,7 @@ use gw_jsonrpc_types::{
 };
 use gw_tools::godwoken_rpc::{self, GodwokenRpcClient};
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -14,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TestModeConfig {
     pub loop_interval_secs: u64,
     pub attack_rand_range: u32,

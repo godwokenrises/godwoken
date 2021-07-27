@@ -3,7 +3,7 @@ use gw_tests::system_tests::{
     test_mode_control::{TestModeConfig, TestModeControl},
     utils::{self, TestModeControlType},
 };
-use std::path::Path;
+use std::{fs, path::Path};
 
 fn main() -> Result<(), String> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
@@ -187,24 +187,9 @@ fn main() -> Result<(), String> {
     let matches = app.clone().get_matches();
     match matches.subcommand() {
         ("test-mode-control", Some(m)) => {
-            let _config_path = Path::new(m.value_of("config-file-path").unwrap());
-            let config = TestModeConfig {
-                loop_interval_secs: 2,
-                attack_rand_range: 2,
-                track_record_interval_secs: 120,
-                block_status_check_interval_min: 10,
-                rpc_timeout_secs: 180,
-                transfer_from_privkey_path: "deploy/user_1_pk".into(),
-                transfer_to_privkey_path: "deploy/user_2_pk".into(),
-                godwoken_rpc_url: "http://127.0.0.1:8129".to_owned(),
-                ckb_url: "http://127.0.0.1:8114".to_owned(),
-                godwoken_config_path: "deploy/node2/config.toml".into(),
-                deployment_results_path: "deploy/scripts-deploy-result.json".into(),
-                sentry_dsn: Some(
-                    "https://879d4062ceec42fea69263394692080b@o927318.ingest.sentry.io/5876644"
-                        .to_owned(),
-                ),
-            };
+            let config_path = Path::new(m.value_of("config-file-path").unwrap());
+            let content = fs::read(&config_path).map_err(|op| op.to_string())?;
+            let config: TestModeConfig = toml::from_slice(&content).map_err(|op| op.to_string())?;
             let guard = sentry::init((
                 config.sentry_dsn.clone(),
                 sentry::ClientOptions {
