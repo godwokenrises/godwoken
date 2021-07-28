@@ -297,16 +297,23 @@ pub fn is_debug_env_var_set() -> bool {
     }
 }
 
-pub async fn dry_run_transaction(rpc_client: &RPCClient, tx: Transaction, action: &str) {
+pub async fn dry_run_transaction(
+    rpc_client: &RPCClient,
+    tx: Transaction,
+    action: &str,
+) -> Option<u64> {
     if is_debug_env_var_set() {
         let dry_run_result = rpc_client.dry_run_transaction(tx.clone()).await;
         match dry_run_result {
-            Ok(cycles) => log::info!(
-                "Tx({}) {} execution cycles: {}",
-                action,
-                hex::encode(tx.hash()),
-                cycles
-            ),
+            Ok(cycles) => {
+                log::info!(
+                    "Tx({}) {} execution cycles: {}",
+                    action,
+                    hex::encode(tx.hash()),
+                    cycles
+                );
+                return Some(cycles);
+            }
             Err(err) => log::error!(
                 "Fail to dry run transaction {}, error: {}",
                 hex::encode(tx.hash()),
@@ -314,6 +321,7 @@ pub async fn dry_run_transaction(rpc_client: &RPCClient, tx: Transaction, action
             ),
         }
     }
+    None
 }
 
 pub async fn dump_transaction<P: AsRef<Path>>(dir: P, rpc_client: &RPCClient, tx: Transaction) {
