@@ -442,7 +442,7 @@ impl BlockProducer {
         match self.rpc_client.send_transaction(tx.clone()).await {
             Ok(tx_hash) => {
                 log::info!(
-                    "Submitted l2 block {} in tx {}\n",
+                    "Submitted l2 block {} in tx {}",
                     number,
                     hex::encode(tx_hash.as_slice())
                 );
