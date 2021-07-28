@@ -85,12 +85,12 @@ pub fn issue_control(
         if let ShouldProduceBlock::Yes = ret {
             match test_block_type {
                 TestModeControlType::BadBlock => {
-                    test_mode_rpc.issue_bad_block(0, ChallengeType::TxSignature)?;
+                    test_mode_rpc.issue_bad_block(0, ChallengeType::TxExecution)?;
                     log::info!("issue bad block");
                 }
                 TestModeControlType::Challenge => {
                     let block_number = block_number.ok_or_else(|| "valid block number")?;
-                    let challenge_type = ChallengeType::TxSignature;
+                    let challenge_type = ChallengeType::TxExecution;
                     test_mode_rpc.issue_challenge(block_number, 0, challenge_type)?;
                     log::info!(
                         "issue challenge: block number {}, target_index 0, ChallengeType {:?}",

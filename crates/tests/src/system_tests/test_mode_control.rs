@@ -42,7 +42,7 @@ struct EventRecord {
     result: Option<Result<(), ()>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum AttackType {
     BadBlock,
     BadChallenge,
@@ -51,8 +51,9 @@ enum AttackType {
 pub struct TestModeControl {
     config: TestModeConfig,
     records: HashMap<H256, EventRecord>,
-    issue_normal_block_requests: i32,
-    totol_attacks: i32,
+    normal_block_requests: i32,
+    bad_block_attacks: i32,
+    bad_challenge_attacks: i32,
     error_number: i32,
 }
 
@@ -61,8 +62,9 @@ impl TestModeControl {
         TestModeControl {
             config,
             records: HashMap::new(),
-            issue_normal_block_requests: 0,
-            totol_attacks: 0,
+            normal_block_requests: 0,
+            bad_block_attacks: 0,
+            bad_challenge_attacks: 0,
             error_number: 0,
         }
     }
@@ -106,7 +108,7 @@ impl TestModeControl {
     fn issue_normal_block(&mut self) -> Result<(), String> {
         log::info!("produce normal block");
         utils::issue_blocks(&self.config.godwoken_rpc_url, 1)?;
-        self.issue_normal_block_requests += 1;
+        self.normal_block_requests += 1;
         Ok(())
     }
 
@@ -170,12 +172,13 @@ impl TestModeControl {
             global_state,
             self.config.rpc_timeout_secs,
         )?;
+        log::info!("issue normal block: {}", block_number);
         utils::issue_control(
             TestModeControlType::Challenge,
             &self.config.godwoken_rpc_url,
             Some(block_number),
         )?;
-        log::info!("issue normal block: {}", block_number);
+        thread::sleep(Duration::from_secs(30));
         if let Ok(block_hash) =
             GodwokenRpcClient::new(&self.config.godwoken_rpc_url).get_block_hash(block_number)
         {
@@ -224,7 +227,10 @@ impl TestModeControl {
         };
         log::info!("new attack: {:?}", event_record);
         self.records.insert(block_hash, event_record);
-        self.totol_attacks += 1;
+        match attack_type {
+            AttackType::BadBlock => self.bad_block_attacks += 1,
+            AttackType::BadChallenge => self.bad_challenge_attacks += 1,
+        }
         Ok(())
     }
 
@@ -276,9 +282,10 @@ impl TestModeControl {
             self.records.remove(&item);
         }
         log::info!(
-            "Issue normal block requests: {}, total attacks: {}, error_number: {}, unchecked attacks: {}",
-            self.issue_normal_block_requests,
-            self.totol_attacks,
+            "Normal block requests: {}, bad block attacks: {}, bad challenge attacks: {}, error_number: {}, unchecked attacks: {}",
+            self.normal_block_requests,
+            self.bad_block_attacks,
+            self.bad_challenge_attacks,
             self.error_number,
             self.records.len(),
         );
