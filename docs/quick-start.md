@@ -27,7 +27,7 @@ The input file scripts-build.json for this command is as follows(you need to mod
 
 ```json
 {
-    "prebuild_image": "nervos/godwoken-prebuilds:v0.5.0-rc2-with-debugger",
+    "prebuild_image": "nervos/godwoken-prebuilds:<tags>",
     "repos": {
         "godwoken_scripts": "https://github.com/nervosnetwork/godwoken-scripts#master",
         "godwoken_polyjuice": "https://github.com/nervosnetwork/godwoken-polyjuice#main",
@@ -36,9 +36,9 @@ The input file scripts-build.json for this command is as follows(you need to mod
 }
 ```
 
-**NOTES**: By default, the setup command is executed in `build` mode. You can specify the `copy` mode with the additional parameter `-m copy` to copy the precompiled scripts  from prebuilt docker image, which can save a lot of time to complete the setup process..
+**NOTES**: By default, the setup command is executed in `build` mode. You can specify the `copy` mode with the additional parameter `-m copy`, then the deployment process will copy the scripts from prebuilt docker image instead of building it, which saves a lot of time.
 
-After the setup command is successfully completed, you need to fill in the custom reward lock information in the node's config.toml(default relative path: deploy/node1/config.toml):
+After the setup command is successfully completed, you need to set a reward lock in the node's config.toml(default relative path: deploy/node1/config.toml):
 
 ```toml
 [block_producer.challenger_config.rewards_receiver_lock]
