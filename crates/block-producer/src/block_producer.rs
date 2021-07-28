@@ -40,6 +40,7 @@ use std::{
 };
 
 const TRANSACTION_SRIPT_ERROR: &str = "TransactionScriptError";
+const EXPECTED_TX_CYCLES_UPPER_BOUND: u64 = 15000000u64;
 
 fn generate_custodian_cells(
     rollup_context: &RollupContext,
@@ -415,18 +416,33 @@ impl BlockProducer {
             .complete_tx_skeleton(deposit_cells, block, global_state, median_time, rollup_cell)
             .await?;
 
-        utils::dry_run_transaction(
+        let cycles = utils::dry_run_transaction(
             &self.rpc_client,
             tx.clone(),
             format!("L2 block {}", number).as_str(),
         )
-        .await;
+        .await
+        .unwrap_or(0);
+
+        if cycles > EXPECTED_TX_CYCLES_UPPER_BOUND {
+            log::warn!(
+                "Submitting l2 block is cost unexpected cycles: {}, expected upper bound: {}",
+                cycles,
+                EXPECTED_TX_CYCLES_UPPER_BOUND
+            );
+            utils::dump_transaction(
+                &self.config.debug_tx_dump_path,
+                &self.rpc_client,
+                tx.clone(),
+            )
+            .await;
+        }
 
         // send transaction
         match self.rpc_client.send_transaction(tx.clone()).await {
             Ok(tx_hash) => {
                 log::info!(
-                    "\nSubmitted l2 block {} in tx {}\n",
+                    "Submitted l2 block {} in tx {}\n",
                     number,
                     hex::encode(tx_hash.as_slice())
                 );
