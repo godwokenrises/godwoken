@@ -6,7 +6,7 @@ use gw_generator::{sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
-    godwoken::{GlobalState, L2BlockView, RunResult, TxReceipt},
+    godwoken::{GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus, RunResult, TxReceipt},
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
 use gw_store::{
@@ -15,7 +15,7 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    packed::{self, BlockInfo},
+    packed::{self, BlockInfo, RollupConfig},
     prelude::*,
 };
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
@@ -54,6 +54,7 @@ pub struct Registry {
     mem_pool: Arc<MemPool>,
     store: Store,
     tests_rpc_impl: Option<Arc<BoxedTestsRPCImpl>>,
+    rollup_config: RollupConfig,
 }
 
 impl Registry {
@@ -62,6 +63,7 @@ impl Registry {
         mem_pool: Arc<MemPool>,
         generator: Arc<Generator>,
         tests_rpc_impl: Option<Box<T>>,
+        rollup_config: RollupConfig,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -72,6 +74,7 @@ impl Registry {
             generator,
             tests_rpc_impl: tests_rpc_impl
                 .map(|r| Arc::new(r as Box<dyn TestModeRPC + Sync + Send + 'static>)),
+            rollup_config,
         }
     }
 
@@ -82,6 +85,7 @@ impl Registry {
             .with_data(Data(self.mem_pool.clone()))
             .with_data(Data(self.generator.clone()))
             .with_data(Data::new(self.store))
+            .with_data(Data::new(self.rollup_config))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -131,14 +135,38 @@ async fn ping() -> Result<String> {
 async fn get_block(
     Params((block_hash,)): Params<(JsonH256,)>,
     store: Data<Store>,
-) -> Result<Option<L2BlockView>> {
+    rollup_config: Data<RollupConfig>,
+) -> Result<Option<L2BlockWithStatus>> {
     let block_hash = to_h256(block_hash);
     let db = store.begin_transaction();
-    let block_opt = db.get_block(&block_hash)?.map(|block| {
-        let block_view: L2BlockView = block.into();
-        block_view
-    });
-    Ok(block_opt)
+    let block = match db.get_block(&block_hash)? {
+        Some(block) => block,
+        None => return Ok(None),
+    };
+
+    // check block status
+    let mut status = L2BlockStatus::Unfinalized;
+    if !db.reverted_block_smt()?.get(&block_hash)?.is_zero() {
+        // block is reverted
+        status = L2BlockStatus::Reverted;
+    } else {
+        // return None if block is not on the main chain
+        if db.block_smt()?.get(&block.smt_key().into())? != block_hash {
+            return Ok(None);
+        }
+
+        // block is on main chain
+        let tip_block_number = db.get_last_valid_tip_block()?.raw().number().unpack();
+        let block_number = block.raw().number().unpack();
+        if tip_block_number >= block_number + rollup_config.finality_blocks().unpack() {
+            status = L2BlockStatus::Finalized;
+        }
+    }
+
+    Ok(Some(L2BlockWithStatus {
+        block: block.into(),
+        status,
+    }))
 }
 
 async fn get_block_by_number(
