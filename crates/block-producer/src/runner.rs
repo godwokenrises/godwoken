@@ -342,6 +342,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 rpc_client.clone(),
                 ckb_genesis_info.clone(),
                 block_producer_config.clone(),
+                config.debug.clone(),
                 tests_control.clone(),
             )
             .with_context(|| "init block producer")?;
@@ -361,6 +362,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 rpc_client.clone(),
                 wallet,
                 block_producer_config,
+                config.debug.clone(),
                 ckb_genesis_info,
                 Arc::clone(&chain),
                 Arc::clone(&poa),

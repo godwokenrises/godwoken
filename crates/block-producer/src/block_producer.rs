@@ -16,7 +16,7 @@ use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
 use gw_chain::chain::{Chain, SyncEvent};
 use gw_common::{h256_ext::H256Ext, CKB_SUDT_SCRIPT_ARGS, H256};
-use gw_config::BlockProducerConfig;
+use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::{Generator, RollupContext};
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_mem_pool::pool::MemPool;
@@ -40,7 +40,6 @@ use std::{
 };
 
 const TRANSACTION_SRIPT_ERROR: &str = "TransactionScriptError";
-const EXPECTED_TX_CYCLES_UPPER_BOUND: u64 = 15000000u64;
 
 fn generate_custodian_cells(
     rollup_context: &RollupContext,
@@ -159,6 +158,7 @@ pub struct BlockProducer {
     poa: PoA,
     wallet: Wallet,
     config: BlockProducerConfig,
+    debug_config: DebugConfig,
     rpc_client: RPCClient,
     ckb_genesis_info: CKBGenesisInfo,
     tests_control: Option<TestModeControl>,
@@ -175,6 +175,7 @@ impl BlockProducer {
         rpc_client: RPCClient,
         ckb_genesis_info: CKBGenesisInfo,
         config: BlockProducerConfig,
+        debug_config: DebugConfig,
         tests_control: Option<TestModeControl>,
     ) -> Result<Self> {
         let wallet = Wallet::from_config(&config.wallet_config).with_context(|| "init wallet")?;
@@ -196,6 +197,7 @@ impl BlockProducer {
             poa,
             ckb_genesis_info,
             config,
+            debug_config,
             tests_control,
         };
         Ok(block_producer)
@@ -417,6 +419,7 @@ impl BlockProducer {
             .await?;
 
         let cycles = utils::dry_run_transaction(
+            &self.debug_config,
             &self.rpc_client,
             tx.clone(),
             format!("L2 block {}", number).as_str(),
@@ -424,14 +427,14 @@ impl BlockProducer {
         .await
         .unwrap_or(0);
 
-        if cycles > EXPECTED_TX_CYCLES_UPPER_BOUND {
+        if cycles > self.debug_config.expected_l1_tx_upper_bound_cycles {
             log::warn!(
                 "Submitting l2 block is cost unexpected cycles: {}, expected upper bound: {}",
                 cycles,
-                EXPECTED_TX_CYCLES_UPPER_BOUND
+                self.debug_config.expected_l1_tx_upper_bound_cycles
             );
             utils::dump_transaction(
-                &self.config.debug_tx_dump_path,
+                &self.debug_config.debug_tx_dump_path,
                 &self.rpc_client,
                 tx.clone(),
             )
@@ -455,7 +458,7 @@ impl BlockProducer {
                 if err.to_string().contains(TRANSACTION_SRIPT_ERROR) {
                     // dumping failed tx
                     utils::dump_transaction(
-                        &self.config.debug_tx_dump_path,
+                        &self.debug_config.debug_tx_dump_path,
                         &self.rpc_client,
                         tx.clone(),
                     )
