@@ -139,23 +139,31 @@ async fn get_block(
 ) -> Result<Option<L2BlockWithStatus>> {
     let block_hash = to_h256(block_hash);
     let db = store.begin_transaction();
-    let block_opt = db.get_block(&block_hash)?;
+    let block = match db.get_block(&block_hash)? {
+        Some(block) => block,
+        None => return Ok(None),
+    };
+
+    // check block status
     let mut status = L2BlockStatus::Unfinalized;
-    if let Some(ref block) = block_opt {
-        if db.block_smt()?.get(&block.smt_key().into())?.is_zero() {
+    if !db.reverted_block_smt()?.get(&block_hash)?.is_zero() {
+        // block is reverted
+        status = L2BlockStatus::Reverted;
+    } else {
+        // return None if block is not on the main chain
+        if db.block_smt()?.get(&block.smt_key().into())? != block_hash {
             return Ok(None);
         }
-        if !db.reverted_block_smt()?.get(&block_hash)?.is_zero() {
-            status = L2BlockStatus::Reverted;
-        } else {
-            let tip_block_number = db.get_last_valid_tip_block()?.raw().number().unpack();
-            let block_number = block.raw().number().unpack();
-            if tip_block_number >= block_number + rollup_config.finality_blocks().unpack() {
-                status = L2BlockStatus::Finalized;
-            }
+
+        // block is on main chain
+        let tip_block_number = db.get_last_valid_tip_block()?.raw().number().unpack();
+        let block_number = block.raw().number().unpack();
+        if tip_block_number >= block_number + rollup_config.finality_blocks().unpack() {
+            status = L2BlockStatus::Finalized;
         }
-    };
-    Ok(block_opt.map(|block| L2BlockWithStatus {
+    }
+
+    Ok(Some(L2BlockWithStatus {
         block: block.into(),
         status,
     }))
