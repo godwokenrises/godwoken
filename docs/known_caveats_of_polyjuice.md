@@ -3,13 +3,18 @@
 When designing and building polyjuice, we aim at the highest level of compatibility, meaning:
 
 * The EVM used in polyjuice shall be almost 100% compatible with the latest fork version of Ethereum;
-* Via a [Web3 layer](https://github.com/bitrocks/godwoken-web3) and [Polyjuice web3 provider](https://github.com/RetricSu/polyjuice-providers-http), polyjuice shall be 100% compatible with Ethereum with respect to Web3 interfaces;
+* Via a [Web3 layer](https://github.com/nervosnetwork/godwoken-web3) and [Polyjuice web3 provider](https://github.com/nervosnetwork/polyjuice-provider), polyjuice shall be 100% compatible with Ethereum with respect to Web3 interfaces;
 
 However, due to drastically different architecture and design considerations, there will inevitably be some differences when working on polyjuice. This article aims to document and communicate such caveats.
 
 ## Account Creation
 
-One must create an account on a godwoken chain in order to use polyjuice on that godwoken chain. The only way to create an account is to deposit funds into godwoken.
+One must create an account on a godwoken chain in order to use polyjuice on that godwoken chain.
+
+There are two ways to create a layer 2 account:
+
+1. Deposit funds to Godwoken at layer 1.
+2. Calling Godwoken builtin contract to create an account at layer 2.
 
 ## pETH
 
@@ -41,13 +46,13 @@ Yet this aspiration comes with a price: Ethereum uses 20 byte address format at 
 
 For this consideration, we are obliged to introduce the concept of godwoken address heres:
 
-Godwoken address is created when godwoken creates an account via a deposit request. It uniquely identifies the identity address used on godwoken. When a user deposits funds to godwoken and successfully creates an account, the godwoken address will be created. The user then uses this address to uniquely locate the account on this very godwoken chain, no matter the account is a EVM contract, a Diem contract, or another EoA.
+Godwoken address is created when godwoken creates an account. It uniquely identifies the identity address used on godwoken. When a user deposits funds to godwoken and successfully creates an account, the godwoken address will be created. The user then uses this address to uniquely locate the account on this very godwoken chain, no matter the account is a EVM contract, a Diem contract, or another EoA.
 
 We do understand the hassles of adding a new address concept here, but we are confident that the merits will outweigh the demerits and accordingly, we have provided utilities that can tackle the problem here:
 
 1. For each supported address formats, we will provide helper functions to convert between godwoken addresses, and the identity addresses.
 2. Transaction signing will be catered entirely, so that one will only sign the transactions by using the identity address of each wallet.
-3. A web3 provider tool will be introduced, so when we know a parameter is an address(such as `data` in `eth_getStorageAt`, or `to` in `eth_call`), we will perform the address translation automatically.
+3. A web3 provider tool is introduced, so when we know a parameter is an address(such as `data` in `eth_getStorageAt`, or `to` in `eth_call`), we will perform the address translation automatically.
 4. We have provided a new syscall `recover_account` to replace the `ecrecover` pre-compiled contract to return godwoken address format. This way polyjuice can deal with not only Ethereum EoA, but all EoAs that godwoken supported.
 
 Based on these changes, a few suggestions on building a polyjuice application are as follows:
