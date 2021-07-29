@@ -16,10 +16,10 @@ use gw_types::core::ChallengeTargetType;
 use gw_types::packed::{
     BlockHashEntry, BlockHashEntryVec, BlockInfo, Byte32, ChallengeTarget, ChallengeWitness,
     KVPairVec, L2Block, L2Transaction, RawL2Block, RawL2BlockVec, RawL2Transaction, Script,
-    ScriptVec, Uint32, VerifyTransactionContext, VerifyTransactionSignatureContext,
+    ScriptReader, ScriptVec, Uint32, VerifyTransactionContext, VerifyTransactionSignatureContext,
     VerifyTransactionSignatureWitness, VerifyTransactionWitness, VerifyWithdrawalWitness,
 };
-use gw_types::prelude::{Builder, Entity, Pack, Reader, Unpack};
+use gw_types::prelude::{Builder, Entity, FromSliceShouldBeOk, Pack, Reader, Unpack};
 
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -382,7 +382,7 @@ fn build_tx_kv_witness(
     // To verify transaction signature
     tree.get_nonce(sender_id)?;
 
-    let return_data_hash = match tx_kv_state {
+    let opt_run_result = match tx_kv_state {
         TxKvState::Execution { ref generator } => {
             let parent_block_hash = db
                 .get_block_hash_by_number(raw_block.number().unpack())?
@@ -396,19 +396,12 @@ fn build_tx_kv_witness(
 
             let run_result =
                 generator.execute_transaction(&chain_view, &tree, &block_info, raw_tx)?;
-            let return_data_hash: [u8; 32] = {
-                let mut hasher = new_blake2b();
-                hasher.update(&run_result.return_data.as_slice());
-                let mut hash = [0u8; 32];
-                hasher.finalize(&mut hash);
-                hash
-            };
             tree.apply_run_result(&run_result)?;
-            Some(return_data_hash.pack())
+
+            Some(run_result)
         }
         TxKvState::Signature => None,
     };
-    log::debug!("return data hash {:?}", return_data_hash);
 
     let block_post_tx_checkpoint: [u8; 32] = raw_block
         .state_checkpoint_list()
@@ -472,10 +465,42 @@ fn build_tx_kv_witness(
         }
     }
 
-    let scripts = ScriptVec::new_builder()
-        .push(sender_script.clone())
-        .push(receiver_script.clone())
-        .build();
+    let scripts = {
+        let mut builder = ScriptVec::new_builder()
+            .push(sender_script.clone())
+            .push(receiver_script.clone());
+
+        if let Some(ref run_result) = opt_run_result {
+            let sender_script_hash = sender_script.hash();
+            let receiver_script_hash = receiver_script.hash();
+
+            for slice in run_result.get_scripts.iter() {
+                let script = ScriptReader::from_slice_should_be_ok(slice);
+
+                let script_hash = script.hash();
+                if script_hash == sender_script_hash || script_hash == receiver_script_hash {
+                    continue;
+                }
+
+                builder = builder.push(script.to_entity());
+            }
+        }
+
+        builder.build()
+    };
+
+    let return_data_hash = opt_run_result.map(|result| {
+        let return_data_hash: [u8; 32] = {
+            let mut hasher = new_blake2b();
+            hasher.update(&result.return_data.as_slice());
+            let mut hash = [0u8; 32];
+            hasher.finalize(&mut hash);
+            hash
+        };
+
+        return_data_hash.pack()
+    });
+    log::debug!("return data hash {:?}", return_data_hash);
 
     let witness = TxKvWitness {
         account_count: prev_tx_account_count.pack(),

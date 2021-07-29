@@ -508,12 +508,19 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
     fn set_account_count(&mut self, count: u32) {
         self.result.account_count = Some(count);
     }
-    fn get_script(&self, script_hash: &H256) -> Option<Script> {
-        self.result
+    fn get_script(&mut self, script_hash: &H256) -> Option<Script> {
+        let opt_script = self
+            .result
             .new_scripts
             .get(script_hash)
             .map(|data| Script::from_slice(&data).expect("Script"))
-            .or_else(|| self.code_store.get_script(&script_hash))
+            .or_else(|| self.code_store.get_script(&script_hash));
+
+        if let Some(ref script) = opt_script {
+            self.result.get_scripts.insert(script.as_slice().to_vec());
+        }
+
+        opt_script
     }
     fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
         self.result
