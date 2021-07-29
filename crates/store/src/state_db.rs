@@ -454,6 +454,7 @@ impl<'db> StateDBTransaction<'db> {
 
 /// Tracker state changes
 pub struct StateTracker {
+    enabled: bool,
     touched_keys: Option<RefCell<HashSet<H256>>>,
 }
 
@@ -465,14 +466,22 @@ impl Default for StateTracker {
 
 impl StateTracker {
     pub fn new() -> Self {
-        StateTracker { touched_keys: None }
+        StateTracker {
+            enabled: false,
+            touched_keys: None,
+        }
     }
 
     /// Enable state tracking
     pub fn enable(&mut self) {
-        if self.touched_keys.is_none() {
+        if !self.enabled && self.touched_keys.is_none() {
             self.touched_keys = Some(Default::default())
         }
+        self.enabled = true;
+    }
+
+    pub fn disable(&mut self) {
+        self.enabled = false;
     }
 
     /// Return touched keys
@@ -482,6 +491,10 @@ impl StateTracker {
 
     /// Record a key in the tracker
     pub fn touch_key(&self, key: &H256) {
+        if !self.enabled {
+            return;
+        }
+
         if let Some(touched_keys) = self.touched_keys.as_ref() {
             touched_keys.borrow_mut().insert(*key);
         }
