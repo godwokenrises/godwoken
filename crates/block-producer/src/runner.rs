@@ -40,6 +40,8 @@ use std::{
 };
 
 const MIN_CKB_VERSION: &str = "0.40.0";
+const SMOL_THREADS_ENV_VAR: &str = "SMOL_THREADS";
+const DEFAULT_RUNTIME_THREADS: usize = 4;
 
 async fn poll_loop(
     rpc_client: RPCClient,
@@ -159,6 +161,21 @@ async fn poll_loop(
 }
 
 pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
+    // Enable smol threads before smol::spawn
+    let runtime_threads = match std::env::var(SMOL_THREADS_ENV_VAR) {
+        Ok(s) => s.parse()?,
+        Err(_) => {
+            let threads = DEFAULT_RUNTIME_THREADS;
+            std::env::set_var(SMOL_THREADS_ENV_VAR, format!("{}", threads));
+            threads
+        }
+    };
+    log::info!(
+        "Runtime threads: {}. (set environment '{}' to tune this value)",
+        runtime_threads,
+        SMOL_THREADS_ENV_VAR
+    );
+
     let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
     let rollup_context = RollupContext {
         rollup_config: rollup_config.clone(),
@@ -416,7 +433,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         log::info!("Rollup config hash: {}", rollup_config_hash);
     }
 
-    log::info!("{:?} mode enabled!!!", config.node_mode);
+    log::info!("{:?} mode", config.node_mode);
 
     smol::block_on(async {
         select! {
