@@ -144,6 +144,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
     state.apply_deposit_requests(rollup_context, &deposit_requests)?;
     // calculate state after withdrawals & deposits
     let prev_state_check_point = state.calculate_state_checkpoint()?;
+    state.tracker_mut().disable();
     // execute txs
     let mut tx_receipts = Vec::with_capacity(txs.len());
     let mut used_transactions = Vec::with_capacity(txs.len());
