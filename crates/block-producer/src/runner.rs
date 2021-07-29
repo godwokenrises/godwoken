@@ -5,7 +5,6 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
-use futures::{select, FutureExt};
 use gw_chain::chain::Chain;
 use gw_common::H256;
 use gw_config::{BlockProducerConfig, Config, NodeMode};
@@ -34,7 +33,6 @@ use sqlx::{
 };
 use std::{
     net::{SocketAddr, ToSocketAddrs},
-    process::exit,
     sync::Arc,
     time::Duration,
 };
@@ -100,10 +98,8 @@ async fn poll_loop(
                 }
             };
             // must execute chain update before block producer, otherwise we may run into an invalid chain state
-            // smol::spawn({
             let event = event.clone();
             let inner = inner.clone();
-            // async move {
             let mut inner = inner.lock().await;
             if let Err(err) = inner.chain_updater.handle_event(event.clone()).await {
                 log::error!(
@@ -143,9 +139,6 @@ async fn poll_loop(
                 }
             }
 
-            // }
-            // })
-            // .detach();
             // update tip
             tip_number = raw_header.number().unpack();
             tip_hash = block.header().hash().into();
@@ -435,17 +428,27 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     log::info!("{:?} mode", config.node_mode);
 
+    let chain_task = smol::spawn(poll_loop(
+        rpc_client,
+        chain_updater,
+        block_producer,
+        challenger,
+        cleaner,
+        Duration::from_secs(3),
+    ));
+    let rpc_task = smol::spawn(start_jsonrpc_server(rpc_address, rpc_registry));
+
     smol::block_on(async {
-        select! {
-            _ = ctrl_c.recv().fuse() => log::info!("Exiting..."),
-            e = poll_loop(rpc_client, chain_updater, block_producer, challenger, cleaner, Duration::from_secs(3)).fuse() => {
-                log::error!("Error in main poll loop: {:?}", e);
-            }
-            e = start_jsonrpc_server(rpc_address, rpc_registry).fuse() => {
-                log::error!("Error running JSONRPC server: {:?}", e);
-                exit(1);
-            },
-        };
+        let _ = ctrl_c.recv().await;
+        log::info!("Exiting...");
+
+        if let Some(Err(err)) = rpc_task.cancel().await {
+            log::error!("Error running JSONRPC server: {:?}", err);
+        }
+
+        if let Some(Err(err)) = chain_task.cancel().await {
+            log::error!("Error in chain poll loop: {:?}", err);
+        }
     });
 
     Ok(())
