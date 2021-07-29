@@ -268,7 +268,6 @@ pub fn generate_config(
         allowed_contract_deps,
         challenger_config,
         wallet_config,
-        debug_tx_dump_path: "debug-tx-dump".into(),
     });
     let genesis: GenesisConfig = GenesisConfig {
         timestamp: genesis.timestamp,
@@ -301,6 +300,7 @@ pub fn generate_config(
         block_producer,
         web3_indexer,
         node_mode: NodeMode::ReadOnly,
+        debug: Default::default(),
     };
 
     let output_content = toml::to_string_pretty(&config).expect("serde toml to string pretty");

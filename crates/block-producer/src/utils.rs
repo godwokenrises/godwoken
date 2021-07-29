@@ -6,6 +6,7 @@ use crate::{rpc_client::RPCClient, transaction_skeleton::TransactionSkeleton};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::Output;
 use gw_common::{blake2b::new_blake2b, H256};
+use gw_config::DebugConfig;
 use gw_types::{
     core::DepType,
     packed::{Block, CellDep, CellInput, CellOutput, Header, OutPoint, Script, Transaction},
@@ -290,19 +291,13 @@ impl CKBGenesisInfo {
     }
 }
 
-pub fn is_debug_env_var_set() -> bool {
-    match std::env::var("GODWOKEN_DEBUG") {
-        Ok(s) => s.to_lowercase().trim() == "true",
-        _ => false,
-    }
-}
-
 pub async fn dry_run_transaction(
+    debug_config: &DebugConfig,
     rpc_client: &RPCClient,
     tx: Transaction,
     action: &str,
 ) -> Option<u64> {
-    if is_debug_env_var_set() {
+    if debug_config.output_l1_tx_cycles {
         let dry_run_result = rpc_client.dry_run_transaction(tx.clone()).await;
         match dry_run_result {
             Ok(cycles) => {

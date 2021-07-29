@@ -113,6 +113,8 @@ pub struct GenesisDeploymentResult {
     pub rollup_type_script: ckb_jsonrpc_types::Script,
     pub rollup_config: gw_jsonrpc_types::godwoken::RollupConfig,
     pub rollup_config_cell_dep: ckb_jsonrpc_types::CellDep,
+    pub layer2_genesis_hash: H256,
+    pub genesis_config: GenesisConfig,
 }
 
 struct DeployContext<'a> {
@@ -542,6 +544,8 @@ pub fn deploy_genesis(
         rollup_type_script: rollup_type_script.into(),
         rollup_config: rollup_config.into(),
         rollup_config_cell_dep: rollup_config_cell_dep.into(),
+        genesis_config,
+        layer2_genesis_hash: genesis_with_global_state.genesis.hash().into(),
     };
     let output_content = serde_json::to_string_pretty(&genesis_deployment_result)
         .expect("serde json to string pretty");

@@ -14,7 +14,7 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::{Chain, ChallengeCell, SyncEvent};
 use gw_chain::challenge::{RevertContext, VerifyContext};
 use gw_common::H256;
-use gw_config::BlockProducerConfig;
+use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::{ChallengeContext, RollupContext};
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_types::bytes::Bytes;
@@ -48,6 +48,7 @@ pub struct Challenger {
     poa: Arc<Mutex<PoA>>,
     tests_control: Option<TestModeControl>,
     cleaner: Arc<Cleaner>,
+    debug_config: DebugConfig,
 }
 
 impl Challenger {
@@ -57,6 +58,7 @@ impl Challenger {
         rpc_client: RPCClient,
         wallet: Wallet,
         config: BlockProducerConfig,
+        debug_config: DebugConfig,
         ckb_genesis_info: CKBGenesisInfo,
         chain: Arc<parking_lot::Mutex<Chain>>,
         poa: Arc<Mutex<PoA>>,
@@ -68,6 +70,7 @@ impl Challenger {
             rpc_client,
             wallet,
             config,
+            debug_config,
             ckb_genesis_info,
             poa,
             chain,
@@ -221,9 +224,15 @@ impl Challenger {
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
-        utils::dry_run_transaction(&self.rpc_client, tx.clone(), "challenge block").await;
+        utils::dry_run_transaction(
+            &self.debug_config,
+            &self.rpc_client,
+            tx.clone(),
+            "challenge block",
+        )
+        .await;
         utils::dump_transaction(
-            &self.config.debug_tx_dump_path,
+            &self.debug_config.debug_tx_dump_path,
             &self.rpc_client,
             tx.clone(),
         )
@@ -287,9 +296,15 @@ impl Challenger {
             )
             .await?;
 
-        utils::dry_run_transaction(&self.rpc_client, tx.clone(), "cancel challenge").await;
+        utils::dry_run_transaction(
+            &self.debug_config,
+            &self.rpc_client,
+            tx.clone(),
+            "cancel challenge",
+        )
+        .await;
         utils::dump_transaction(
-            &self.config.debug_tx_dump_path,
+            &self.debug_config.debug_tx_dump_path,
             &self.rpc_client,
             tx.clone(),
         )
@@ -433,9 +448,15 @@ impl Challenger {
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
-        utils::dry_run_transaction(&self.rpc_client, tx.clone(), "revert block").await;
+        utils::dry_run_transaction(
+            &self.debug_config,
+            &self.rpc_client,
+            tx.clone(),
+            "revert block",
+        )
+        .await;
         utils::dump_transaction(
-            &self.config.debug_tx_dump_path,
+            &self.debug_config.debug_tx_dump_path,
             &self.rpc_client,
             tx.clone(),
         )

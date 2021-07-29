@@ -15,6 +15,8 @@ pub struct Config {
     pub chain: ChainConfig,
     pub rpc_client: RPCClientConfig,
     pub rpc_server: RPCServerConfig,
+    #[serde(default)]
+    pub debug: DebugConfig,
     pub block_producer: Option<BlockProducerConfig>,
     pub web3_indexer: Option<Web3IndexerConfig>,
 }
@@ -38,7 +40,7 @@ pub struct ChainConfig {
 }
 
 /// Genesis config
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GenesisConfig {
     pub timestamp: u64,
     pub rollup_type_hash: H256,
@@ -67,8 +69,6 @@ pub struct ChallengerConfig {
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockProducerConfig {
     pub account_id: u32,
-    /// Directory to save debugging info of l1 transactions
-    pub debug_tx_dump_path: PathBuf,
     // cell deps
     pub rollup_cell_type_dep: CellDep,
     pub rollup_config_cell_dep: CellDep,
@@ -96,6 +96,27 @@ pub struct BackendConfig {
     pub validator_path: PathBuf,
     pub generator_path: PathBuf,
     pub validator_script_type_hash: H256,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DebugConfig {
+    pub output_l1_tx_cycles: bool,
+    pub expected_l1_tx_upper_bound_cycles: u64,
+    /// Directory to save debugging info of l1 transactions
+    pub debug_tx_dump_path: PathBuf,
+}
+
+impl Default for DebugConfig {
+    fn default() -> Self {
+        const EXPECTED_TX_UPPER_BOUND_CYCLES: u64 = 15000000u64;
+        const DEFAULT_DEBUG_TX_DUMP_PATH: &str = "debug-tx-dump";
+
+        Self {
+            debug_tx_dump_path: DEFAULT_DEBUG_TX_DUMP_PATH.into(),
+            output_l1_tx_cycles: true,
+            expected_l1_tx_upper_bound_cycles: EXPECTED_TX_UPPER_BOUND_CYCLES,
+        }
+    }
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
