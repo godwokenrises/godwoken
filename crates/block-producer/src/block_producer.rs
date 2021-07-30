@@ -390,16 +390,18 @@ impl BlockProducer {
             mut global_state,
             unused_transactions,
             unused_withdrawal_requests,
+            l2tx_offchain_used_cycles,
         } = block_result;
         let number: u64 = block.raw().number().unpack();
         log::info!(
-            "produce new block #{} (txs: {}, deposits: {}, withdrawals: {}, staled txs: {}, staled withdrawals: {})",
+            "produce new block #{} (txs: {}, deposits: {}, withdrawals: {}, staled txs: {}, staled withdrawals: {}, offchain cycles: {})",
             number,
             block.transactions().len(),
             deposit_cells.len(),
             block.withdrawals().len(),
             unused_transactions.len(),
-            unused_withdrawal_requests.len()
+            unused_withdrawal_requests.len(),
+            l2tx_offchain_used_cycles
         );
 
         if let Some(ref tests_control) = self.tests_control {

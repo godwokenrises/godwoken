@@ -33,6 +33,7 @@ pub struct ProduceBlockResult {
     pub global_state: GlobalState,
     pub unused_transactions: Vec<L2Transaction>,
     pub unused_withdrawal_requests: Vec<WithdrawalRequest>,
+    pub l2tx_offchain_used_cycles: u64,
 }
 
 pub struct ProduceBlockParam<'a> {
@@ -158,6 +159,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         .build();
     let chain_view = ChainView::new(&db, parent_block_hash);
 
+    let mut l2tx_offchain_used_cycles: u64 = 0;
     let has_txs = !txs.is_empty();
     for tx in txs {
         // 1. verify tx
@@ -177,7 +179,11 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
             match generator.execute_transaction(&chain_view, &state, &block_info, &raw_tx) {
                 Ok(run_result) => run_result,
                 Err(err) => {
-                    log::debug!("produce_block.execute tx error: {:?}", err);
+                    log::info!(
+                        "[produce_block] execute tx {} error: {:?}",
+                        hex::encode(&tx.hash()),
+                        err
+                    );
                     unused_transactions.push(tx);
                     continue;
                 }
@@ -209,6 +215,8 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
             .build();
         used_transactions.push(tx);
         tx_receipts.push(receipt);
+        l2tx_offchain_used_cycles =
+            l2tx_offchain_used_cycles.saturating_add(run_result.used_cycles);
     }
     assert_eq!(used_transactions.len(), tx_receipts.len());
     let touched_keys: Vec<H256> = state
@@ -357,5 +365,6 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         global_state,
         unused_transactions,
         unused_withdrawal_requests,
+        l2tx_offchain_used_cycles,
     })
 }

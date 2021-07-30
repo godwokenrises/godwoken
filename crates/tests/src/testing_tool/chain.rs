@@ -140,6 +140,7 @@ pub fn build_sync_tx(
         global_state,
         unused_transactions,
         unused_withdrawal_requests,
+        l2tx_offchain_used_cycles: _,
     } = produce_block_result;
     assert!(unused_transactions.is_empty());
     assert!(unused_withdrawal_requests.is_empty());

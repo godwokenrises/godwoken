@@ -830,7 +830,16 @@ impl Chain {
                     tx_receipts,
                     prev_txs_state,
                     withdrawal_receipts,
-                } => (withdrawal_receipts, prev_txs_state, tx_receipts),
+                    offchain_used_cycles,
+                } => {
+                    log::debug!(
+                        "Process #{} txs: {} offchain used cycles {}",
+                        block_number,
+                        tx_receipts.len(),
+                        offchain_used_cycles
+                    );
+                    (withdrawal_receipts, prev_txs_state, tx_receipts)
+                }
                 StateTransitionResult::Challenge { target, error } => {
                     log::debug!("verify and apply state transition error {}", error);
                     return Ok(Some(target));
