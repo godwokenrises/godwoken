@@ -40,6 +40,8 @@ const MIN_WITHDRAWAL_CAPACITY: u64 = 100_00000000;
 const MAX_WRITE_DATA_BYTES_LIMIT: usize = 25_000;
 // 2MB
 const MAX_READ_DATA_BYTES_LIMIT: usize = 1024 * 1024 * 2;
+// max cycles
+const L2TX_MAX_CYCLES: u64 = 3500_0000;
 
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
@@ -465,7 +467,7 @@ impl Generator {
 
         let mut run_result = RunResult::default();
         {
-            let core_machine = Box::<AsmCoreMachine>::default();
+            let core_machine = AsmCoreMachine::new_with_max_cycles(L2TX_MAX_CYCLES);
             let machine_builder =
                 DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls {
                     chain,
