@@ -273,9 +273,10 @@ pub fn deploy_genesis(
         let burn_lock_script_hash: [u8; 32] = burn_lock_script.calc_script_hash().unpack();
         if H256(burn_lock_script_hash) != user_rollup_config.burn_lock_hash {
             return Err(format!(
-                "The burn lock hash: 0x{} is not default, we suggest to use default burn lock\
-                (code_hash: 0x, hash_type: Data, args: empty)",
-                hex::encode(user_rollup_config.burn_lock_hash)
+                "The burn lock hash: 0x{} is not default, we suggest to use default burn lock \
+                0x{} (code_hash: 0x, hash_type: Data, args: empty)",
+                hex::encode(user_rollup_config.burn_lock_hash),
+                hex::encode(burn_lock_script_hash)
             ));
         }
         if poa_setup.round_intervals == 0 {
