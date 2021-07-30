@@ -347,7 +347,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                     }
                 };
                 store_data(machine, data.as_ref())?;
-                self.result.read_data.insert(data_hash, data.len());
+                self.result.read_data.insert(data_hash, data.to_vec());
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }

@@ -1,6 +1,6 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::cleaner::{Cleaner, VerifierCell};
+use crate::cleaner::{Cleaner, Verifier};
 use crate::poa::{PoA, ShouldIssueBlock};
 use crate::rpc_client::RPCClient;
 use crate::test_mode_control::TestModeControl;
@@ -18,14 +18,14 @@ use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::{ChallengeContext, RollupContext};
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_types::bytes::Bytes;
-use gw_types::core::{ChallengeTargetType, Status};
+use gw_types::core::{ChallengeTargetType, DepType, Status};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, GlobalState, OutPoint, Script, Transaction, WitnessArgs,
 };
 use gw_types::prelude::{Pack, Unpack};
 use smol::lock::Mutex;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -44,6 +44,7 @@ pub struct Challenger {
     wallet: Wallet,
     config: BlockProducerConfig,
     ckb_genesis_info: CKBGenesisInfo,
+    builtin_load_data: HashMap<H256, CellDep>,
     chain: Arc<parking_lot::Mutex<Chain>>,
     poa: Arc<Mutex<PoA>>,
     tests_control: Option<TestModeControl>,
@@ -59,6 +60,7 @@ impl Challenger {
         wallet: Wallet,
         config: BlockProducerConfig,
         debug_config: DebugConfig,
+        builtin_load_data: HashMap<H256, CellDep>,
         ckb_genesis_info: CKBGenesisInfo,
         chain: Arc<parking_lot::Mutex<Chain>>,
         poa: Arc<Mutex<PoA>>,
@@ -72,6 +74,7 @@ impl Challenger {
             config,
             debug_config,
             ckb_genesis_info,
+            builtin_load_data,
             poa,
             chain,
             tests_control,
@@ -270,7 +273,13 @@ impl Challenger {
 
         // Build verifier transaction
         let verifier_cell = cancel_output.verifier_cell.clone();
-        let tx = self.build_verifier_tx(verifier_cell).await?;
+        let load_data = {
+            let load = cancel_output.load_data_cells.as_ref();
+            load.map(|ld| LoadData::new(ld, &self.builtin_load_data))
+        };
+        let tx = self
+            .build_verifier_tx(verifier_cell, load_data.clone())
+            .await?;
         let verifier_spent_inputs = extract_inputs(&tx);
         let verifier_tx_hash = self.rpc_client.send_transaction(tx).await?;
         log::info!("Create verifier in tx {}", to_hex(&verifier_tx_hash));
@@ -283,7 +292,14 @@ impl Challenger {
             let cell_dep = cancel_output.verifier_dep(&self.config)?;
             let input = cancel_output.verifier_input(verifier_tx_hash, 0);
             let witness = cancel_output.verifier_witness.clone();
-            VerifierContext::new(cell_dep, input, witness, Some(verifier_spent_inputs))
+            let load_data_context = load_data.map(|ld| ld.to_context(verifier_tx_hash, 0));
+            VerifierContext::new(
+                cell_dep,
+                input,
+                witness,
+                load_data_context,
+                Some(verifier_spent_inputs),
+            )
         };
 
         let tx = self
@@ -310,18 +326,20 @@ impl Challenger {
         )
         .await;
 
-        let verifier_cell = VerifierCell::new(
+        let load_data_inputs = verifier_context.load_data_context.map(|d| d.inputs);
+        let verifier = Verifier::new(
+            load_data_inputs.unwrap_or_default(),
             verifier_context.cell_dep,
             verifier_context.input,
             verifier_context.witness,
         );
         match self.rpc_client.send_transaction(tx).await {
             Ok(tx_hash) => {
-                self.cleaner.watch_verifier(verifier_cell, Some(tx_hash));
+                self.cleaner.watch_verifier(verifier, Some(tx_hash));
                 log::info!("Cancel challenge in tx {}", to_hex(&tx_hash));
             }
             Err(err) => {
-                self.cleaner.watch_verifier(verifier_cell, None);
+                self.cleaner.watch_verifier(verifier, None);
                 log::warn!("Cancel challenge failed {}", err);
             }
         }
@@ -468,9 +486,17 @@ impl Challenger {
         Ok(())
     }
 
-    async fn build_verifier_tx(&self, verifier: (CellOutput, Bytes)) -> Result<Transaction> {
+    async fn build_verifier_tx(
+        &self,
+        verifier: (CellOutput, Bytes),
+        load_data: Option<LoadData>,
+    ) -> Result<Transaction> {
         let mut tx_skeleton = TransactionSkeleton::default();
         tx_skeleton.outputs_mut().push(verifier);
+
+        if let Some(load_data) = load_data {
+            tx_skeleton.outputs_mut().extend(load_data.cells);
+        }
 
         let challenger_lock_dep = self.ckb_genesis_info.sighash_dep();
         let challenger_lock = self.wallet.lock_script().to_owned();
@@ -516,6 +542,12 @@ impl Challenger {
         // Verifier
         let verifier_tx_hash = verifier_context.tx_hash();
         tx_skeleton.cell_deps_mut().push(verifier_context.cell_dep);
+        if let Some(load_data_context) = verifier_context.load_data_context {
+            let builtin_cell_deps = load_data_context.builtin_cell_deps;
+            let cell_deps = load_data_context.cell_deps;
+            tx_skeleton.cell_deps_mut().extend(builtin_cell_deps);
+            tx_skeleton.cell_deps_mut().extend(cell_deps);
+        }
         tx_skeleton.inputs_mut().push(verifier_context.input);
         if let Some(verifier_witness) = cancel_output.verifier_witness {
             tx_skeleton.witnesses_mut().push(verifier_witness);
@@ -649,10 +681,85 @@ impl RollupState {
 }
 
 #[derive(Clone)]
+struct LoadData {
+    builtin: Vec<CellDep>,
+    cells: Vec<(CellOutput, Bytes)>,
+}
+
+#[derive(Clone)]
+struct LoadDataContext {
+    builtin_cell_deps: Vec<CellDep>,
+    cell_deps: Vec<CellDep>,
+    inputs: Vec<InputCellInfo>,
+}
+
+impl LoadData {
+    fn new(
+        load_data_cells: &HashMap<H256, (CellOutput, Bytes)>,
+        builtin: &HashMap<H256, CellDep>,
+    ) -> Self {
+        let (load_builtin, load_data_cells): (HashMap<_, _>, HashMap<_, _>) = load_data_cells
+            .into_iter()
+            .partition(|(k, _v)| builtin.contains_key(k));
+
+        let cells = load_data_cells.values().map(|v| (*v).to_owned()).collect();
+        let builtin = {
+            let to_dep = |k| -> CellDep { builtin.get(k).cloned().expect("should exists") };
+            load_builtin.iter().map(|(k, _)| to_dep(k)).collect()
+        };
+
+        LoadData { builtin, cells }
+    }
+
+    fn to_context(self, verifier_tx_hash: H256, verifier_tx_index: u32) -> LoadDataContext {
+        assert_eq!(verifier_tx_index, 0, "verifier cell should be first one");
+
+        let to_context = |(idx, (output, data))| -> (CellDep, InputCellInfo) {
+            let out_point = OutPoint::new_builder()
+                .tx_hash(Into::<[u8; 32]>::into(verifier_tx_hash).pack())
+                .index((idx as u32).pack())
+                .build();
+
+            let cell_dep = CellDep::new_builder()
+                .out_point(out_point.clone())
+                .dep_type(DepType::Code.into())
+                .build();
+
+            let input = CellInput::new_builder()
+                .previous_output(out_point.clone())
+                .build();
+
+            let cell = CellInfo {
+                out_point,
+                output,
+                data,
+            };
+
+            let cell_info = InputCellInfo { input, cell };
+
+            (cell_dep, cell_info)
+        };
+
+        let (cell_deps, inputs) = {
+            let cells = self.cells.into_iter().enumerate();
+            let to_ctx = cells.map(|(idx, cell)| (idx + 1, cell)).map(to_context);
+            to_ctx.unzip()
+        };
+
+        LoadDataContext {
+            builtin_cell_deps: self.builtin,
+            cell_deps,
+            inputs,
+        }
+    }
+}
+
+#[derive(Clone)]
 struct VerifierContext {
     cell_dep: CellDep,
     input: InputCellInfo,
     witness: Option<WitnessArgs>,
+    load_data_context: Option<LoadDataContext>,
     spent_inputs: Option<HashSet<OutPoint>>,
 }
 
@@ -661,12 +768,14 @@ impl VerifierContext {
         cell_dep: CellDep,
         input: InputCellInfo,
         witness: Option<WitnessArgs>,
+        load_data_context: Option<LoadDataContext>,
         spent_inputs: Option<HashSet<OutPoint>>,
     ) -> Self {
         VerifierContext {
             cell_dep,
             input,
             witness,
+            load_data_context,
             spent_inputs,
         }
     }
