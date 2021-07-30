@@ -179,7 +179,11 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
             match generator.execute_transaction(&chain_view, &state, &block_info, &raw_tx) {
                 Ok(run_result) => run_result,
                 Err(err) => {
-                    log::debug!("produce_block.execute tx error: {:?}", err);
+                    log::info!(
+                        "[produce_block] execute tx {} error: {:?}",
+                        hex::encode(&tx.hash()),
+                        err
+                    );
                     unused_transactions.push(tx);
                     continue;
                 }
