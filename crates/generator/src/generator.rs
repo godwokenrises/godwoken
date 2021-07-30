@@ -42,7 +42,7 @@ const MAX_WRITE_DATA_BYTES_LIMIT: usize = 25_000;
 // 2MB
 const MAX_READ_DATA_BYTES_LIMIT: usize = 1024 * 1024 * 2;
 // max cycles
-const L2TX_MAX_CYCLES: u64 = 3500_0000;
+const L2TX_MAX_CYCLES: u64 = 4500_0000;
 
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
