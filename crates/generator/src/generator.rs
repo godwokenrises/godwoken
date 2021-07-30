@@ -524,7 +524,7 @@ impl Generator {
             });
         }
         // check read data bytes
-        let read_data_bytes: usize = run_result.read_data.values().sum();
+        let read_data_bytes: usize = run_result.read_data.values().map(Vec::len).sum();
         if read_data_bytes > MAX_READ_DATA_BYTES_LIMIT {
             return Err(TransactionError::ExceededMaxReadData {
                 max_bytes: MAX_READ_DATA_BYTES_LIMIT,

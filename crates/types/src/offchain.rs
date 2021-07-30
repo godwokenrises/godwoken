@@ -12,7 +12,7 @@ pub struct RunResult {
     pub get_scripts: HashSet<Vec<u8>>,
     pub write_data: HashMap<H256, Vec<u8>>,
     // data hash -> data full size
-    pub read_data: HashMap<H256, usize>,
+    pub read_data: HashMap<H256, Vec<u8>>,
     // log data
     pub logs: Vec<LogItem>,
     // used cycles

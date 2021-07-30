@@ -14,12 +14,13 @@ use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::ChallengeTargetType;
 use gw_types::packed::{
-    BlockHashEntry, BlockHashEntryVec, BlockInfo, Byte32, ChallengeTarget, ChallengeWitness,
-    KVPairVec, L2Block, L2Transaction, RawL2Block, RawL2BlockVec, RawL2Transaction, Script,
-    ScriptReader, ScriptVec, Uint32, VerifyTransactionContext, VerifyTransactionSignatureContext,
-    VerifyTransactionSignatureWitness, VerifyTransactionWitness, VerifyWithdrawalWitness,
+    BlockHashEntry, BlockHashEntryVec, BlockInfo, Byte32, BytesVec, ChallengeTarget,
+    ChallengeWitness, KVPairVec, L2Block, L2Transaction, RawL2Block, RawL2BlockVec,
+    RawL2Transaction, Script, ScriptReader, ScriptVec, Uint32, VerifyTransactionContext,
+    VerifyTransactionSignatureContext, VerifyTransactionSignatureWitness, VerifyTransactionWitness,
+    VerifyWithdrawalWitness,
 };
-use gw_types::prelude::{Builder, Entity, FromSliceShouldBeOk, Pack, Reader, Unpack};
+use gw_types::prelude::{Builder, Entity, FromSliceShouldBeOk, Pack, PackVec, Reader, Unpack};
 
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -263,6 +264,7 @@ fn build_verify_transaction_witness(
         .account_count(kv_witness.account_count)
         .kv_state(kv_witness.kv_state)
         .scripts(kv_witness.scripts)
+        .load_data(kv_witness.load_data)
         .return_data_hash(return_data_hash)
         .build();
 
@@ -309,6 +311,7 @@ enum TxKvState {
 struct TxKvWitness {
     account_count: Uint32,
     scripts: ScriptVec,
+    load_data: BytesVec,
     sender_script: Script,
     receiver_script: Script,
     kv_state: KVPairVec,
@@ -489,6 +492,14 @@ fn build_tx_kv_witness(
         builder.build()
     };
 
+    let load_data = match opt_run_result {
+        Some(ref run_result) => {
+            let load_data = run_result.read_data.values().cloned();
+            load_data.map(|d| d.pack()).collect::<Vec<_>>().pack()
+        }
+        None => BytesVec::default(),
+    };
+
     let return_data_hash = opt_run_result.map(|result| {
         let return_data_hash: [u8; 32] = {
             let mut hasher = new_blake2b();
@@ -505,6 +516,7 @@ fn build_tx_kv_witness(
     let witness = TxKvWitness {
         account_count: prev_tx_account_count.pack(),
         scripts,
+        load_data,
         sender_script,
         receiver_script,
         kv_state: prev_kv_state.pack(),
