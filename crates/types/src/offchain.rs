@@ -15,4 +15,6 @@ pub struct RunResult {
     pub read_data: HashMap<H256, usize>,
     // log data
     pub logs: Vec<LogItem>,
+    // used cycles
+    pub used_cycles: u64,
 }

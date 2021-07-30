@@ -31,7 +31,7 @@ use gw_types::{
 
 use ckb_vm::{
     machine::asm::{AsmCoreMachine, AsmMachine},
-    DefaultMachineBuilder,
+    DefaultMachineBuilder, SupportMachine,
 };
 
 // TODO ensure this value
@@ -53,6 +53,7 @@ pub enum StateTransitionResult {
         withdrawal_receipts: Vec<WithdrawalReceipt>,
         prev_txs_state: AccountMerkleState,
         tx_receipts: Vec<TxReceipt>,
+        offchain_used_cycles: u64,
     },
     Challenge {
         target: ChallengeTarget,
@@ -333,6 +334,7 @@ impl Generator {
         };
 
         // handle transactions
+        let mut offchain_used_cycles: u64 = 0;
         let mut tx_receipts = Vec::with_capacity(args.l2block.transactions().len());
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
             if let Err(err) = self.check_transaction_signature(state, &tx) {
@@ -414,7 +416,7 @@ impl Generator {
                     .build();
 
                 tx_receipts.push(tx_receipt);
-
+                offchain_used_cycles = offchain_used_cycles.saturating_add(run_result.used_cycles);
                 Ok(())
             };
 
@@ -427,6 +429,7 @@ impl Generator {
             withdrawal_receipts,
             prev_txs_state,
             tx_receipts,
+            offchain_used_cycles,
         }
     }
 
@@ -466,6 +469,7 @@ impl Generator {
         let nonce_before_execution = state.get_nonce(sender_id)?;
 
         let mut run_result = RunResult::default();
+        let used_cycles;
         {
             let core_machine = AsmCoreMachine::new_with_max_cycles(L2TX_MAX_CYCLES);
             let machine_builder =
@@ -490,7 +494,10 @@ impl Generator {
             if code != 0 {
                 return Err(TransactionError::InvalidExitCode(code));
             }
+            used_cycles = machine.machine.cycles();
         }
+        // record used cycles
+        run_result.used_cycles = used_cycles;
 
         // check nonce is increased by backends
         let nonce_after_execution = {
