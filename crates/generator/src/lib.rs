@@ -11,6 +11,7 @@ pub mod sudt;
 pub mod syscalls;
 pub mod traits;
 pub mod types;
+pub mod vm_cost_model;
 
 #[cfg(test)]
 mod tests;

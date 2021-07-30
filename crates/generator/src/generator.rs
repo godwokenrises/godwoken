@@ -2,6 +2,7 @@ use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
     error::{TransactionValidateError, WithdrawalError},
+    vm_cost_model::instruction_cycles,
     RollupContext,
 };
 use crate::{
@@ -472,8 +473,8 @@ impl Generator {
         let used_cycles;
         {
             let core_machine = AsmCoreMachine::new_with_max_cycles(L2TX_MAX_CYCLES);
-            let machine_builder =
-                DefaultMachineBuilder::new(core_machine).syscall(Box::new(L2Syscalls {
+            let machine_builder = DefaultMachineBuilder::new(core_machine)
+                .syscall(Box::new(L2Syscalls {
                     chain,
                     state,
                     block_info,
@@ -482,7 +483,8 @@ impl Generator {
                     account_lock_manage: &self.account_lock_manage,
                     result: &mut run_result,
                     code_store: state,
-                }));
+                }))
+                .instruction_cycle_func(Box::new(instruction_cycles));
             let mut machine = AsmMachine::new(machine_builder.build(), None);
             let account_id = raw_tx.to_id().unpack();
             let script_hash = state.get_script_hash(account_id)?;
