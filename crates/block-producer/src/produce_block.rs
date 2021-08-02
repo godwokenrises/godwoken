@@ -99,17 +99,13 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         crate::withdrawal::Generator::new(rollup_context, available_custodians);
     for request in withdrawal_requests {
         // check withdrawal request
-        if generator
-            .check_withdrawal_request_signature(&state, &request)
-            .is_err()
-        {
+        if let Err(err) = generator.check_withdrawal_request_signature(&state, &request) {
+            log::info!("[produce_block] withdrawal signature error: {:?}", err);
             unused_withdrawal_requests.push(request);
             continue;
         }
-        if generator
-            .verify_withdrawal_request(&state, &request)
-            .is_err()
-        {
+        if let Err(err) = generator.verify_withdrawal_request(&state, &request) {
+            log::info!("[produce_block] withdrawal verification error: {:?}", err);
             unused_withdrawal_requests.push(request);
             continue;
         }
@@ -119,13 +115,21 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
             .ok_or_else(|| anyhow!("total withdrawal capacity overflow"))?;
         // skip package withdrwal if overdraft the Rollup capacity
         if new_total_withdrwal_capacity > max_withdrawal_capacity {
+            log::info!(
+                "[produce_block] max_withdrawal_capacity({}) is not enough to withdraw({})",
+                max_withdrawal_capacity,
+                new_total_withdrwal_capacity
+            );
             unused_withdrawal_requests.push(request);
             continue;
         }
         total_withdrawal_capacity = new_total_withdrwal_capacity;
 
         if let Err(err) = withdrawal_verifier.include_and_verify(&request, &L2Block::default()) {
-            log::debug!("skip withdrawal: {}", err);
+            log::info!(
+                "[produce_block] withdrawal contextual verification failed : {}",
+                err
+            );
             unused_withdrawal_requests.push(request);
             continue;
         }
@@ -136,7 +140,8 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
                 used_withdrawal_requests.push(request);
                 state_checkpoint_list.push(state.calculate_state_checkpoint()?);
             }
-            Err(_err) => {
+            Err(err) => {
+                log::info!("[produce_block] withdrawal execution failed : {}", err);
                 unused_withdrawal_requests.push(request);
             }
         }
@@ -164,12 +169,12 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
     for tx in txs {
         // 1. verify tx
         if let Err(err) = generator.check_transaction_signature(&state, &tx) {
-            log::debug!("produce_block.check tx signature error: {:?}", err);
+            log::info!("[produce_block] check tx signature error: {:?}", err);
             unused_transactions.push(tx);
             continue;
         }
         if let Err(err) = generator.verify_transaction(&state, &tx) {
-            log::debug!("produce_block.verify tx error: {:?}", err);
+            log::info!("[produce_block] verify tx error: {:?}", err);
             unused_transactions.push(tx);
             continue;
         }
