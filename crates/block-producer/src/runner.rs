@@ -246,18 +246,16 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             .allowed_eoa_type_hashes()
             .get(0)
             .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
-        let tron_lock_script_type_hash = rollup_config
-            .allowed_eoa_type_hashes()
-            .get(1)
-            .ok_or_else(|| anyhow!("Tron: No allowed EoA type hashes in the rollup config"))?;
         account_lock_manage.register_lock_algorithm(
             eth_lock_script_type_hash.unpack(),
             Box::new(Secp256k1Eth::default()),
         );
-        account_lock_manage.register_lock_algorithm(
-            tron_lock_script_type_hash.unpack(),
-            Box::new(Secp256k1Tron::default()),
-        );
+        let tron_lock_script_type_hash = rollup_config.allowed_eoa_type_hashes().get(1);
+        match tron_lock_script_type_hash {
+            Some(code_hash) => account_lock_manage
+                .register_lock_algorithm(code_hash.unpack(), Box::new(Secp256k1Tron::default())),
+            None => (),
+        }
         Arc::new(Generator::new(
             backend_manage,
             account_lock_manage,
