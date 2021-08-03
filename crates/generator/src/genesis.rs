@@ -52,10 +52,8 @@ pub fn build_genesis_from_store(
         rollup_config: config.rollup_config.clone().into(),
     };
     // initialize store
-    db.set_account_smt_root(H256::zero())?;
     db.set_block_smt_root(H256::zero())?;
     db.set_reverted_block_smt_root(H256::zero())?;
-    db.set_account_count(0)?;
     let state_db =
         StateDBTransaction::from_checkpoint(&db, CheckPoint::from_genesis(), StateDBMode::Genesis)?;
     let mut tree = state_db.account_state_tree()?;
@@ -166,7 +164,6 @@ pub fn build_genesis_from_store(
     };
     tree.insert_data(secp_data_hash.into(), secp_data);
 
-    tree.submit_tree()?;
     db.set_block_smt_root(global_state.block().merkle_root().unpack())?;
     let genesis_with_global_state = GenesisWithGlobalState {
         genesis,

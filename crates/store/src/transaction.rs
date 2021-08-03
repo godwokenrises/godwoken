@@ -10,9 +10,8 @@ use gw_db::schema::{
     COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD, COLUMN_CHECKPOINT, COLUMN_CUSTODIAN_ASSETS,
     COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_BRANCH,
     COLUMN_REVERTED_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION,
-    COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY,
-    META_ACCOUNT_SMT_ROOT_KEY, META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY,
-    META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY,
+    COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, META_BLOCK_SMT_ROOT_KEY,
+    META_CHAIN_ID_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY,
     META_MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY, META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
 use gw_db::{
@@ -155,36 +154,6 @@ impl StoreTransaction {
     pub fn get_mem_block_account_count(&self) -> Result<u32, Error> {
         let slice = self
             .get(COLUMN_META, META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY)
-            .expect("account count");
-        let count = packed::Uint32Reader::from_slice_should_be_ok(&slice.as_ref()).to_entity();
-        Ok(count.unpack())
-    }
-
-    pub fn get_account_smt_root(&self) -> Result<H256, Error> {
-        let slice = self
-            .get(COLUMN_META, META_ACCOUNT_SMT_ROOT_KEY)
-            .expect("must has root");
-        debug_assert_eq!(slice.len(), 32);
-        let mut root = [0u8; 32];
-        root.copy_from_slice(&slice);
-        Ok(root.into())
-    }
-
-    pub fn set_account_smt_root(&self, root: H256) -> Result<(), Error> {
-        self.insert_raw(COLUMN_META, META_ACCOUNT_SMT_ROOT_KEY, root.as_slice())?;
-        Ok(())
-    }
-
-    pub fn set_account_count(&self, count: u32) -> Result<(), Error> {
-        let count: packed::Uint32 = count.pack();
-        self.insert_raw(COLUMN_META, META_ACCOUNT_SMT_COUNT_KEY, count.as_slice())
-            .expect("insert");
-        Ok(())
-    }
-
-    pub fn get_account_count(&self) -> Result<u32, Error> {
-        let slice = self
-            .get(COLUMN_META, META_ACCOUNT_SMT_COUNT_KEY)
             .expect("account count");
         let count = packed::Uint32Reader::from_slice_should_be_ok(&slice.as_ref()).to_entity();
         Ok(count.unpack())
@@ -907,8 +876,6 @@ impl StoreTransaction {
 
         // reset account root
         let block_prev_merkle_state = block.raw().prev_account();
-        self.set_account_count(block_prev_merkle_state.count().unpack())?;
-        self.set_account_smt_root(block_prev_merkle_state.merkle_root().unpack())?;
 
         Ok(())
     }

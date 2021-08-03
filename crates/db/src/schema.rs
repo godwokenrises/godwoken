@@ -65,10 +65,6 @@ pub const META_TIP_BLOCK_HASH_KEY: &[u8] = b"TIP_BLOCK_HASH";
 pub const META_BLOCK_SMT_ROOT_KEY: &[u8] = b"BLOCK_SMT_ROOT_KEY";
 /// reverted block SMT root
 pub const META_REVERTED_BLOCK_SMT_ROOT_KEY: &[u8] = b"REVERTED_BLOCK_SMT_ROOT_KEY";
-/// account SMT root
-pub const META_ACCOUNT_SMT_ROOT_KEY: &[u8] = b"ACCOUNT_SMT_ROOT_KEY";
-/// account SMT count
-pub const META_ACCOUNT_SMT_COUNT_KEY: &[u8] = b"ACCOUNT_SMT_COUNT_KEY";
 /// track the latest known valid block hash
 pub const META_LAST_VALID_TIP_BLOCK_HASH_KEY: &[u8] = b"LAST_VALID_TIP_BLOCK_HASH";
 /// account SMT root

@@ -545,20 +545,6 @@ impl<'a, 'db> StateTree<'a, 'db> {
             .build()
     }
 
-    /// submit tree changes into transaction
-    /// notice, this function do not commit the DBTransaction
-    pub fn submit_tree(&self) -> Result<(), Error> {
-        self.db
-            .inner
-            .set_account_smt_root(*self.tree.root())
-            .expect("set smt root");
-        self.db
-            .inner
-            .set_account_count(self.account_count)
-            .expect("set smt root");
-        Ok(())
-    }
-
     /// submit tree changes into memory block
     /// notice, this function do not commit the DBTransaction
     pub fn submit_tree_to_mem_block(&self) -> Result<(), Error> {

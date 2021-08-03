@@ -494,10 +494,6 @@ impl Chain {
                         let prev_account_smt = first_reverted_block.prev_account();
                         let global_account_smt = global_state.account();
                         assert_eq!(prev_account_smt.as_slice(), global_account_smt.as_slice());
-
-                        let prev_account_root: H256 = prev_account_smt.merkle_root().unpack();
-                        db.set_account_smt_root(prev_account_root)?;
-                        db.set_account_count(prev_account_smt.count().unpack())?;
                     }
 
                     // If our bad block isn't reverted, just challenge it
@@ -867,7 +863,6 @@ impl Chain {
 
         let rollup_config = &self.generator.rollup_context().rollup_config;
         db.attach_block(l2block.clone(), rollup_config)?;
-        tree.submit_tree()?;
         let post_merkle_root: H256 = l2block.raw().post_account().merkle_root().unpack();
         assert_eq!(
             tree.calculate_root()?,

@@ -39,7 +39,6 @@ fn test_init_genesis() {
     let db = store.begin_transaction();
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());
-    assert_ne!(db.get_account_smt_root().unwrap(), H256::zero());
     let state_db =
         StateDBTransaction::from_checkpoint(&db, CheckPoint::from_genesis(), StateDBMode::Genesis)
             .unwrap();
