@@ -1,4 +1,5 @@
 pub mod chain_view;
+mod constant;
 pub mod smt_store_impl;
 pub mod state_db;
 mod store_impl;

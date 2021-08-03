@@ -18,7 +18,7 @@ use gw_generator::{
     genesis::init_genesis,
     Generator, RollupContext,
 };
-use gw_mem_pool::pool::MemPool;
+use gw_mem_pool::pool::{MemPool, MemPoolMode};
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
 use gw_types::prelude::{Pack, Unpack};
@@ -263,7 +263,12 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         ))
     };
     let mem_pool = Arc::new(Mutex::new(
-        MemPool::create(store.clone(), generator.clone()).with_context(|| "create mem-pool")?,
+        MemPool::create(
+            MemPoolMode::InstantFinality,
+            store.clone(),
+            generator.clone(),
+        )
+        .with_context(|| "create mem-pool")?,
     ));
     let chain = Arc::new(Mutex::new(
         Chain::create(

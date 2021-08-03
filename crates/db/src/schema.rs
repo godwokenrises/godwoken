@@ -71,6 +71,10 @@ pub const META_ACCOUNT_SMT_ROOT_KEY: &[u8] = b"ACCOUNT_SMT_ROOT_KEY";
 pub const META_ACCOUNT_SMT_COUNT_KEY: &[u8] = b"ACCOUNT_SMT_COUNT_KEY";
 /// track the latest known valid block hash
 pub const META_LAST_VALID_TIP_BLOCK_HASH_KEY: &[u8] = b"LAST_VALID_TIP_BLOCK_HASH";
+/// account SMT root
+pub const META_MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY: &[u8] = b"MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY";
+/// account SMT count
+pub const META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY: &[u8] = b"MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY";
 
 /// CHAIN_SPEC_HASH_KEY tracks the hash of chain spec which created current database
 pub const CHAIN_SPEC_HASH_KEY: &[u8] = b"chain-spec-hash";

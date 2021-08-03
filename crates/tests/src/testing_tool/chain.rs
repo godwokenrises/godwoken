@@ -10,7 +10,7 @@ use gw_generator::{
     types::RollupContext,
     Generator,
 };
-use gw_mem_pool::pool::MemPool;
+use gw_mem_pool::pool::{MemPool, MemPoolMode};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
@@ -123,7 +123,8 @@ pub fn setup_chain_with_account_lock_manage(
         Bytes::default(),
     )
     .unwrap();
-    let mem_pool = MemPool::create(store.clone(), Arc::clone(&generator)).unwrap();
+    let mem_pool =
+        MemPool::create(MemPoolMode::Normal, store.clone(), Arc::clone(&generator)).unwrap();
     Chain::create(
         &rollup_config,
         &rollup_type_script,

@@ -25,16 +25,16 @@ use gw_common::{
     state::{to_short_address, State},
     H256,
 };
-use gw_generator::Generator;
+use gw_generator::{traits::StateExt, Generator};
 use gw_store::{
     chain_view::ChainView,
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, StateTree, SubState, WriteContext},
     transaction::StoreTransaction,
     Store,
 };
 use gw_types::{
     offchain::RunResult,
-    packed::{BlockInfo, L2Transaction, RawL2Transaction, WithdrawalRequest},
+    packed::{AccountMerkleState, BlockInfo, L2Transaction, RawL2Transaction, WithdrawalRequest},
     prelude::{Entity, Unpack},
 };
 use rand::Rng;
@@ -123,12 +123,10 @@ pub enum MemPoolMode {
 pub struct MemPool {
     /// mem pool mode
     mode: MemPoolMode,
-    /// current state checkpoint
-    state_checkpoint: CheckPoint,
     /// store
     store: Store,
     /// current tip
-    current_tip: Option<H256>,
+    current_tip: (H256, u64),
     /// generator instance
     generator: Arc<Generator>,
     /// pending queue, contains executable contents(can be pacakged into block)
@@ -145,16 +143,13 @@ impl MemPool {
         let all_txs = Default::default();
         let all_withdrawals = Default::default();
 
-        let tip = store.get_tip_block_hash()?;
-
-        let state_checkpoint =
-            CheckPoint::from_block_hash(&store.begin_transaction(), tip, SubState::Block)?;
+        let tip_block = store.get_tip_block()?;
+        let tip = (tip_block.hash().into(), tip_block.raw().number().unpack());
 
         let mut mem_pool = MemPool {
             mode,
             store,
-            state_checkpoint,
-            current_tip: None,
+            current_tip: tip,
             generator,
             pending,
             all_txs,
@@ -162,15 +157,16 @@ impl MemPool {
         };
 
         // set tip
-        mem_pool.reset(None, Some(tip))?;
+        mem_pool.reset(None, Some(tip.0))?;
         Ok(mem_pool)
     }
 
     pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
+        let offset = (self.all_withdrawals.len() + self.all_txs.len()) as u32;
         StateDBTransaction::from_checkpoint(
             db,
-            self.state_checkpoint.clone(),
-            StateDBMode::ReadOnly,
+            CheckPoint::new(self.current_tip.1, SubState::MemBlock(offset)),
+            StateDBMode::Write(WriteContext::default()),
         )
         .map_err(|err| anyhow!("err: {}", err))
     }
@@ -367,8 +363,7 @@ impl MemPool {
     /// this method update current state of mem pool
     pub fn notify_new_tip(&mut self, new_tip: H256) -> Result<()> {
         // reset pool state
-        self.reset(self.current_tip, Some(new_tip))?;
-        self.current_tip = Some(new_tip);
+        self.reset(Some(self.current_tip.0), Some(new_tip))?;
         // under instant finality mode, all txs & withdrawal get executed or reject,
         // so we can skip promote / demote phase
         if self.mode == MemPoolMode::Normal {
@@ -518,12 +513,23 @@ impl MemPool {
         }
 
         // update current state
-        let tip_block_hash = new_tip_block.hash().into();
-        self.state_checkpoint = CheckPoint::from_block_hash(
-            &self.store.begin_transaction(),
-            tip_block_hash,
-            SubState::Block,
-        )?;
+        // let tip_block_hash = new_tip_block.hash().into();
+        // self.state_checkpoint = CheckPoint::from_block_hash(
+        //     &self.store.begin_transaction(),
+        //     tip_block_hash,
+        //     SubState::Block,
+        // )?;
+
+        // clear mem block status
+        let db = self.store.begin_transaction();
+        db.clear_mem_block_state()?;
+        let merkle_state = new_tip_block.raw().post_account();
+        db.set_mem_block_account_count(merkle_state.count().unpack())?;
+        db.set_mem_block_account_smt_root(merkle_state.merkle_root().unpack())?;
+        db.commit()?;
+
+        // set tip
+        self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
 
         // re-inject withdrawals
         for withdrawal in reinject_withdrawals {
@@ -542,15 +548,15 @@ impl MemPool {
     }
 
     /// Execute withdrawal & update local state
-    fn finalize_withdrawals(&self) -> Result<()> {
+    fn finalize_withdrawal(&self) -> Result<()> {
         Ok(())
     }
 
     /// Execute tx & update local state
-    fn finalize_txs(&self, tx: L2Transaction, block_info: &BlockInfo) -> Result<RunResult> {
+    fn finalize_tx(&self, tx: L2Transaction, block_info: &BlockInfo) -> Result<RunResult> {
         let db = self.store.begin_transaction();
         let state_db = self.fetch_state_db(&db)?;
-        let state = state_db.account_state_tree()?;
+        let mut state = state_db.account_state_tree()?;
         let tip_block_hash = self.store.get_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
         // execute tx
@@ -558,6 +564,10 @@ impl MemPool {
         let run_result =
             self.generator
                 .execute_transaction(&chain_view, &state, &block_info, &raw_tx)?;
+        // apply run result
+        state.apply_run_result(&run_result)?;
+        state.submit_tree_to_mem_block()?;
+        db.commit()?;
         Ok(run_result)
     }
 }

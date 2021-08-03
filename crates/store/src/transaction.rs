@@ -1,5 +1,6 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
+use crate::constant::MEMORY_BLOCK_NUMBER;
 use crate::{smt_store_impl::SMTStore, traits::KVStore};
 use gw_common::h256_ext::H256Ext;
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, CKB_SUDT_SCRIPT_ARGS, H256};
@@ -11,7 +12,8 @@ use gw_db::schema::{
     COLUMN_REVERTED_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION,
     COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY,
     META_ACCOUNT_SMT_ROOT_KEY, META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY,
-    META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
+    META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY,
+    META_MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY, META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
 use gw_db::{
     error::Error, iter::DBIter, DBIterator, Direction::Forward, IteratorMode, RocksDBTransaction,
@@ -118,6 +120,44 @@ impl StoreTransaction {
             self,
         );
         Ok(SMT::new(root, smt_store))
+    }
+
+    pub fn set_mem_block_account_smt_root(&self, root: H256) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_META,
+            META_MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY,
+            root.as_slice(),
+        )?;
+        Ok(())
+    }
+
+    pub fn set_mem_block_account_count(&self, count: u32) -> Result<(), Error> {
+        let count: packed::Uint32 = count.pack();
+        self.insert_raw(
+            COLUMN_META,
+            META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY,
+            count.as_slice(),
+        )
+        .expect("insert");
+        Ok(())
+    }
+
+    pub fn get_mem_block_account_smt_root(&self) -> Result<H256, Error> {
+        let slice = self
+            .get(COLUMN_META, META_MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY)
+            .expect("must has root");
+        debug_assert_eq!(slice.len(), 32);
+        let mut root = [0u8; 32];
+        root.copy_from_slice(&slice);
+        Ok(root.into())
+    }
+
+    pub fn get_mem_block_account_count(&self) -> Result<u32, Error> {
+        let slice = self
+            .get(COLUMN_META, META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY)
+            .expect("account count");
+        let count = packed::Uint32Reader::from_slice_should_be_ok(&slice.as_ref()).to_entity();
+        Ok(count.unpack())
     }
 
     pub fn get_account_smt_root(&self) -> Result<H256, Error> {
@@ -776,7 +816,7 @@ impl StoreTransaction {
 
         // update tip
         self.insert_raw(COLUMN_META, &META_TIP_BLOCK_HASH_KEY, &block_hash)?;
-        self.prune_block_state_record(raw_number.unpack())?;
+        self.prune_finalized_block_state_record(raw_number.unpack())?;
         self.set_last_valid_tip_block_hash(&block_hash.into())?;
 
         Ok(())
@@ -884,23 +924,28 @@ impl StoreTransaction {
         self.insert_raw(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice(), &[])
     }
 
-    fn prune_block_state_record(&self, current_block_number: u64) -> Result<(), Error> {
-        if current_block_number <= NUMBER_OF_CONFIRMATION {
+    /// prune finalized block state record
+    fn prune_finalized_block_state_record(&self, tip_number: u64) -> Result<(), Error> {
+        if tip_number <= NUMBER_OF_CONFIRMATION {
             return Ok(());
         }
-        let to_be_pruned_block_number = current_block_number - NUMBER_OF_CONFIRMATION - 1;
+        let to_be_pruned_block_number = tip_number - NUMBER_OF_CONFIRMATION - 1;
         if to_be_pruned_block_number == 0 {
             return Ok(());
         }
-        self.clear_block_state_record(to_be_pruned_block_number)
+        self.prune_block_state_record(to_be_pruned_block_number)
     }
 
-    pub(crate) fn clear_block_state_record(&self, block_number: u64) -> Result<(), Error> {
+    pub(crate) fn prune_block_state_record(&self, block_number: u64) -> Result<(), Error> {
         let iter = self.iter_block_state_record(block_number);
         for record_key in iter {
             self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
         }
         Ok(())
+    }
+
+    pub fn clear_mem_block_state(&self) -> Result<(), Error> {
+        self.clear_block_state(MEMORY_BLOCK_NUMBER)
     }
 
     pub(crate) fn clear_block_state(&self, block_number: u64) -> Result<(), Error> {
