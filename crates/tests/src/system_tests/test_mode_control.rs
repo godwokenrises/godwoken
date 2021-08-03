@@ -149,7 +149,8 @@ impl TestModeControl {
             thread::sleep(Duration::from_secs(5));
         }
         if let Ok(block_hash) = block_hash_ret {
-            self.new_attack_record(block_hash, block_number, AttackType::BadBlock)
+            self.new_attack_record(block_hash, block_number, AttackType::BadBlock);
+            Ok(())
         } else {
             log::info!("record attack failed");
             Ok(())
@@ -182,7 +183,8 @@ impl TestModeControl {
         if let Ok(block_hash) =
             GodwokenRpcClient::new(&self.config.godwoken_rpc_url).get_block_hash(block_number)
         {
-            self.new_attack_record(block_hash, block_number, AttackType::BadChallenge)
+            self.new_attack_record(block_hash, block_number, AttackType::BadChallenge);
+            Ok(())
         } else {
             log::info!("record attack failed");
             Ok(())
@@ -209,12 +211,7 @@ impl TestModeControl {
         Err(format!("Timeout: {:?}", retry_timeout))
     }
 
-    fn new_attack_record(
-        &mut self,
-        block_hash: H256,
-        block_number: u64,
-        attack_type: AttackType,
-    ) -> Result<(), String> {
+    fn new_attack_record(&mut self, block_hash: H256, block_number: u64, attack_type: AttackType) {
         let block_hash_string = hex::encode(&block_hash);
         let event_record = EventRecord {
             block_hash: block_hash_string,
@@ -231,7 +228,6 @@ impl TestModeControl {
             AttackType::BadBlock => self.bad_block_attacks += 1,
             AttackType::BadChallenge => self.bad_challenge_attacks += 1,
         }
-        Ok(())
     }
 
     fn track_record(&mut self) -> Result<(), String> {

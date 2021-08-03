@@ -89,7 +89,7 @@ pub fn issue_control(
                     log::info!("issue bad block");
                 }
                 TestModeControlType::Challenge => {
-                    let block_number = block_number.ok_or_else(|| "valid block number")?;
+                    let block_number = block_number.ok_or("valid block number")?;
                     let challenge_type = ChallengeType::TxExecution;
                     test_mode_rpc.issue_challenge(block_number, 0, challenge_type)?;
                     log::info!(
@@ -181,5 +181,5 @@ fn get_account(
         account::privkey_to_short_address(&privkey, &rollup_type_hash, &deployment_result)?;
     let from_id = account::short_address_to_account_id(&mut full_node_godwoken_rpc, &from_address);
 
-    from_id?.ok_or("get account error".to_owned())
+    from_id?.ok_or_else(|| "get account error".to_owned())
 }
