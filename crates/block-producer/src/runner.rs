@@ -248,7 +248,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
         let tron_lock_script_type_hash = rollup_config
             .allowed_eoa_type_hashes()
-            .get(2)
+            .get(1)
             .ok_or_else(|| anyhow!("Tron: No allowed EoA type hashes in the rollup config"))?;
         account_lock_manage.register_lock_algorithm(
             eth_lock_script_type_hash.unpack(),
