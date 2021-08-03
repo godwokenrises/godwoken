@@ -168,7 +168,11 @@ impl<'a> Generator<'a> {
             // Consume all remaind ckb
             None if req_ckb == ckb_custodian.capacity => Ok(output),
             // No able to cover withdrawal cell and ckb custodian change
-            None => Err(anyhow!("no enough custodian capacity(*change) for {}", req)),
+            None => Err(anyhow!(
+                "no enough finalized custodian capacity, custodian ckb: {}, required ckb: {}",
+                ckb_custodian.capacity,
+                req_ckb
+            )),
         }
     }
 
