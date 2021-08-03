@@ -251,10 +251,9 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             Box::new(Secp256k1Eth::default()),
         );
         let tron_lock_script_type_hash = rollup_config.allowed_eoa_type_hashes().get(1);
-        match tron_lock_script_type_hash {
-            Some(code_hash) => account_lock_manage
-                .register_lock_algorithm(code_hash.unpack(), Box::new(Secp256k1Tron::default())),
-            None => (),
+        if let Some(code_hash) = tron_lock_script_type_hash {
+            account_lock_manage
+                .register_lock_algorithm(code_hash.unpack(), Box::new(Secp256k1Tron::default()))
         }
         Arc::new(Generator::new(
             backend_manage,
