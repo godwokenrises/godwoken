@@ -10,7 +10,10 @@ use gw_common::H256;
 use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
 use gw_generator::{
-    account_lock_manage::{secp256k1::{Secp256k1Eth, Secp256k1Tron}, AccountLockManage},
+    account_lock_manage::{
+        secp256k1::{Secp256k1Eth, Secp256k1Tron},
+        AccountLockManage,
+    },
     backend_manage::BackendManage,
     genesis::init_genesis,
     Generator, RollupContext,
@@ -245,7 +248,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
         let tron_lock_script_type_hash = rollup_config
             .allowed_eoa_type_hashes()
-            .get(1)
+            .get(2)
             .ok_or_else(|| anyhow!("Tron: No allowed EoA type hashes in the rollup config"))?;
         account_lock_manage.register_lock_algorithm(
             eth_lock_script_type_hash.unpack(),
