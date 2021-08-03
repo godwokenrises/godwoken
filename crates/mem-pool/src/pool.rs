@@ -2,15 +2,22 @@
 #![allow(clippy::unnecessary_unwrap)]
 //! MemPool
 //!
-//! MemPool does not guarantee that tx & withdraw is fully valid,
-//! the block producer need to verify them again before put them into a block.
+//! MemPool supports two mode: Normal & InstantFinality
 //!
-//! The main function of MemPool is to sort txs & withdrawls in memory,
-//! so we can easily discard invalid objects and return sorted objects to block producer.
-//!
+//! Normal mode:
+//! MemPool do not actually execute the transactions & withdrawals,
+//! the execution is delayed to the producing of the next block.
+//! In this mode, the block producer need to execute txs & withdrawals before produce new block.
 //! The design of Godwoken MemPool is highly inspired by the Geth TxPool.
 //! We maintain a pending list which contains executable txs & withdrawals (executable means can be packaged into the next block),
 //! we also maintain a queue list which contains non-executable txs & withdrawals (these objects may become executable in the future).
+//!
+//! Instant mode:
+//! The mem pool will update txs & withdrawals 'instantly' by running background tasks.
+//! So a user could query the tx receipt 'instantly'.
+//! Since we already got the next block status, the block prodcuer would not need to execute
+//! txs & withdrawals again.
+//!
 
 use anyhow::{anyhow, Result};
 use gw_common::{
@@ -103,13 +110,24 @@ impl EntryList {
     }
 }
 
+/// Mem pool mode
+#[derive(Debug, PartialEq, Eq)]
+pub enum MemPoolMode {
+    /// Normal mode, transactions are not executed until produce the next block
+    Normal,
+    /// InstantFinality mode, transactions are executed instantly
+    InstantFinality,
+}
+
+/// MemPool
 pub struct MemPool {
+    /// mem pool mode
+    mode: MemPoolMode,
     /// current state checkpoint
     state_checkpoint: CheckPoint,
     /// store
     store: Store,
     /// current tip
-    /// TODO remove me after version based storage
     current_tip: Option<H256>,
     /// generator instance
     generator: Arc<Generator>,
@@ -122,7 +140,7 @@ pub struct MemPool {
 }
 
 impl MemPool {
-    pub fn create(store: Store, generator: Arc<Generator>) -> Result<Self> {
+    pub fn create(mode: MemPoolMode, store: Store, generator: Arc<Generator>) -> Result<Self> {
         let pending = Default::default();
         let all_txs = Default::default();
         let all_withdrawals = Default::default();
@@ -133,6 +151,7 @@ impl MemPool {
             CheckPoint::from_block_hash(&store.begin_transaction(), tip, SubState::Block)?;
 
         let mut mem_pool = MemPool {
+            mode,
             store,
             state_checkpoint,
             current_tip: None,
@@ -188,10 +207,15 @@ impl MemPool {
         // Check replace-by-fee
         // TODO
 
+        if self.mode == MemPoolMode::InstantFinality {
+            // instantly run tx in background & update local state
+        }
+
         // Add to pool
         // TODO check nonce conflict
         self.all_txs.insert(tx_hash, tx.clone());
         entry_list.txs.push(tx);
+
         Ok(())
     }
 
@@ -297,6 +321,10 @@ impl MemPool {
         // Check replace-by-fee
         // TODO
 
+        if self.mode == MemPoolMode::InstantFinality {
+            // instantly run withdrawal in background & update local state
+        }
+
         // Add to pool
         // TODO check nonce conflict
         self.all_withdrawals
@@ -341,10 +369,14 @@ impl MemPool {
         // reset pool state
         self.reset(self.current_tip, Some(new_tip))?;
         self.current_tip = Some(new_tip);
-        // try promote executables
-        self.promote_executables(self.pending.iter())?;
-        // try demote unexecutables, this function also discards objects that already in the chain
-        self.demote_unexecutables()?;
+        // under instant finality mode, all txs & withdrawal get executed or reject,
+        // so we can skip promote / demote phase
+        if self.mode == MemPoolMode::Normal {
+            // try promote executables
+            self.promote_executables(self.pending.iter())?;
+            // try demote unexecutables, this function also discards objects that already in the chain
+            self.demote_unexecutables()?;
+        }
         Ok(())
     }
 
@@ -493,18 +525,39 @@ impl MemPool {
             SubState::Block,
         )?;
 
-        // re-inject txs
-        for tx in reinject_txs {
-            if self.push_transaction(tx.clone()).is_err() {
-                log::info!("MemPool: drop tx {:?}", tx.hash());
-            }
-        }
         // re-inject withdrawals
         for withdrawal in reinject_withdrawals {
             if self.push_withdrawal_request(withdrawal.clone()).is_err() {
                 log::info!("MemPool: drop withdrawal {:?}", withdrawal);
             }
         }
+
+        // re-inject txs
+        for tx in reinject_txs {
+            if self.push_transaction(tx.clone()).is_err() {
+                log::info!("MemPool: drop tx {:?}", tx.hash());
+            }
+        }
         Ok(())
+    }
+
+    /// Execute withdrawal & update local state
+    fn finalize_withdrawals(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Execute tx & update local state
+    fn finalize_txs(&self, tx: L2Transaction, block_info: &BlockInfo) -> Result<RunResult> {
+        let db = self.store.begin_transaction();
+        let state_db = self.fetch_state_db(&db)?;
+        let state = state_db.account_state_tree()?;
+        let tip_block_hash = self.store.get_tip_block_hash()?;
+        let chain_view = ChainView::new(&db, tip_block_hash);
+        // execute tx
+        let raw_tx = tx.raw();
+        let run_result =
+            self.generator
+                .execute_transaction(&chain_view, &state, &block_info, &raw_tx)?;
+        Ok(run_result)
     }
 }
