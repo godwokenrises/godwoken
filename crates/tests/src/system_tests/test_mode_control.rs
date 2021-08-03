@@ -20,7 +20,7 @@ pub struct TestModeConfig {
     pub loop_interval_secs: u64,
     pub attack_rand_range: u32,
     pub track_record_interval_secs: u64,
-    pub block_status_check_interval_min: i64,
+    pub check_block_status_interval_min: i64,
     pub rpc_timeout_secs: u64,
     pub transfer_from_privkey_path: PathBuf,
     pub transfer_to_privkey_path: PathBuf,
@@ -244,7 +244,7 @@ impl TestModeControl {
             .filter(|(_, record)| {
                 record.check_time.is_none()
                     && now.signed_duration_since(record.issue_time).num_minutes()
-                        > self.config.block_status_check_interval_min
+                        > self.config.check_block_status_interval_min
             })
             .map(|(block_hash, _)| block_hash.clone())
             .collect::<Vec<H256>>();

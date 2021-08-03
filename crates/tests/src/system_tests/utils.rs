@@ -5,8 +5,8 @@ use gw_jsonrpc_types::{
     test_mode::{ChallengeType, ShouldProduceBlock},
 };
 use gw_tools::{
-    account, deploy_scripts::ScriptsDeploymentResult, deposit_ckb, godwoken_rpc::GodwokenRpcClient,
-    transfer, utils,
+    account, deploy_scripts::ScriptsDeploymentResult, godwoken_rpc::GodwokenRpcClient, transfer,
+    utils,
 };
 use rand::Rng;
 use std::path::Path;
@@ -146,8 +146,9 @@ pub fn transfer_and_issue_block(
         to_id,
         &amount
     );
-    transfer::submit_l2_transaction(
-        godwoken_rpc_url,
+    let mut godwoken_rpc = GodwokenRpcClient::new(godwoken_rpc_url);
+    transfer::submit_transfer_tx(
+        &mut godwoken_rpc,
         from_privkey_path,
         &to_id.to_string(),
         1u32,
@@ -157,30 +158,6 @@ pub fn transfer_and_issue_block(
         deployment_results_path,
     )?;
     issue_control(test_block_type, godwoken_rpc_url, None)?;
-    Ok(())
-}
-
-pub fn deposit(
-    privkey_path: &Path,
-    deployment_results_path: &Path,
-    config_path: &Path,
-    ckb_rpc_url: &str,
-    times: u32,
-) -> Result<(), String> {
-    log::info!("[test mode contro]: deposit");
-
-    for _ in 0..times {
-        deposit_ckb::deposit_ckb_to_layer1(
-            privkey_path,
-            deployment_results_path,
-            config_path,
-            "10000",
-            "0.0001",
-            ckb_rpc_url,
-            None,
-        )?;
-    }
-
     Ok(())
 }
 
@@ -203,20 +180,6 @@ fn get_account(
     let from_address =
         account::privkey_to_short_address(&privkey, &rollup_type_hash, &deployment_result)?;
     let from_id = account::short_address_to_account_id(&mut full_node_godwoken_rpc, &from_address);
-
-    // // deposit to create a account
-    // if from_id.is_err() {
-    //     deposit_ckb::deposit_ckb(
-    //         privkey_path,
-    //         deployment_results_path,
-    //         config_path,
-    //         "10000",
-    //         "0.0001",
-    //         CKB_RPC_URL,
-    //         None,
-    //         FULL_NODE_MODE_GODWOKEN_RPC_URL,
-    //     )?;
-    // }
 
     from_id?.ok_or("get account error".to_owned())
 }

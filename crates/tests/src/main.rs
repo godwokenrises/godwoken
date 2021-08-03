@@ -86,8 +86,8 @@ fn main() -> Result<(), String> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("package-tx")
-                .about("Issue a test block containing a tx")
+            SubCommand::with_name("normal-block")
+                .about("Issue normal block containing a transfer tx")
                 .arg(
                     Arg::with_name("from-privkey-path")
                         .short("f")
@@ -142,47 +142,6 @@ fn main() -> Result<(), String> {
                         .default_value("http://127.0.0.1:8119")
                         .help("godwoken rpc url"),
                 ),
-        )
-        .subcommand(
-            SubCommand::with_name("deposit")
-                .about("Deposit ckb multiple times")
-                .arg(
-                    Arg::with_name("privkey-path")
-                        .short("p")
-                        .takes_value(true)
-                        .required(true)
-                        .help("Privkey path"),
-                )
-                .arg(
-                    Arg::with_name("scripts-deploy-result-path")
-                        .short("d")
-                        .takes_value(true)
-                        .required(true)
-                        .help("Scripts deploy result file path"),
-                )
-                .arg(
-                    Arg::with_name("config-file-path")
-                        .short("c")
-                        .takes_value(true)
-                        .required(true)
-                        .help("godwoken node config file path"),
-                )
-                .arg(
-                    Arg::with_name("ckb-rpc-url")
-                        .short("r")
-                        .takes_value(true)
-                        .required(true)
-                        .default_value("http://127.0.0.1:8114")
-                        .help("Ckb rpc url"),
-                )
-                .arg(
-                    Arg::with_name("times")
-                        .short("t")
-                        .takes_value(true)
-                        .required(true)
-                        .default_value("1")
-                        .help("deposit call times"),
-                ),
         );
     let matches = app.clone().get_matches();
     match matches.subcommand() {
@@ -236,7 +195,7 @@ fn main() -> Result<(), String> {
                 std::process::exit(-1);
             }
         }
-        ("package-tx", Some(m)) => {
+        ("normal-block", Some(m)) => {
             let deployment_path = Path::new(m.value_of("scripts-deploy-result-path").unwrap());
             let from_privkey_path = Path::new(m.value_of("from-privkey-path").unwrap());
             let to_privkey_path = Path::new(m.value_of("to-privkey-path").unwrap());
@@ -251,7 +210,7 @@ fn main() -> Result<(), String> {
                 deployment_path,
                 godwoken_rpc_url,
             ) {
-                log::error!("Package a transaction error: {}", err);
+                log::error!("Issue normal block error: {}", err);
                 std::process::exit(-1);
             }
         }
@@ -267,26 +226,6 @@ fn main() -> Result<(), String> {
                 block_number,
             ) {
                 log::error!("Issue bad challenge error: {}", err);
-                std::process::exit(-1);
-            }
-        }
-        ("deposit", Some(m)) => {
-            let deployment_path = Path::new(m.value_of("scripts-deploy-result-path").unwrap());
-            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
-            let config_path = Path::new(m.value_of("config-file-path").unwrap());
-            let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
-            let times = m
-                .value_of("times")
-                .map(|c| c.parse().expect("deposit call times"))
-                .unwrap();
-            if let Err(err) = utils::deposit(
-                privkey_path,
-                deployment_path,
-                config_path,
-                ckb_rpc_url,
-                times,
-            ) {
-                log::error!("Deposit error: {}", err);
                 std::process::exit(-1);
             }
         }
