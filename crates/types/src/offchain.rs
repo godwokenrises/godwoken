@@ -1,4 +1,5 @@
-use crate::packed::LogItem;
+use crate::packed::{CellOutput, LogItem};
+use molecule::prelude::Entity;
 use sparse_merkle_tree::H256;
 use std::collections::{HashMap, HashSet};
 
@@ -17,4 +18,13 @@ pub struct RunResult {
     pub logs: Vec<LogItem>,
     // used cycles
     pub used_cycles: u64,
+}
+
+impl CellOutput {
+    pub fn occupied_capacity(&self, data_capacity: usize) -> ckb_types::core::CapacityResult<u64> {
+        let output = ckb_types::packed::CellOutput::new_unchecked(self.as_bytes());
+        output
+            .occupied_capacity(ckb_types::core::Capacity::bytes(data_capacity)?)
+            .map(|c| c.as_u64())
+    }
 }

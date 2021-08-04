@@ -143,12 +143,3 @@ impl packed::RollupConfig {
         self.as_reader().hash()
     }
 }
-
-impl packed::CellOutput {
-    pub fn occupied_capacity(&self, data_capacity: usize) -> ckb_types::core::CapacityResult<u64> {
-        let output = ckb_types::packed::CellOutput::new_unchecked(self.as_bytes());
-        output
-            .occupied_capacity(ckb_types::core::Capacity::bytes(data_capacity)?)
-            .map(|c| c.as_u64())
-    }
-}

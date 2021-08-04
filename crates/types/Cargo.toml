@@ -8,7 +8,7 @@ edition = "2018"
 
 [features]
 default = ["std"]
-std = ["molecule/std", "sparse-merkle-tree/std", "ckb-fixed-hash"]
+std = ["molecule/std", "sparse-merkle-tree/std", "ckb-fixed-hash", "ckb-types"]
 
 [dependencies]
 molecule = { version = "0.6", default-features = false }
@@ -16,4 +16,4 @@ cfg-if = "0.1"
 gw-hash = { path = "../hash", default-features = false }
 ckb-fixed-hash = { version = "0.38.0", optional = true }
 sparse-merkle-tree = { version = "0.5.2-rc1", default-features = false }
-ckb-types = { version = "0.38.0", default-features = false }
+ckb-types = { version = "0.38.0", default-features = false, optional = true }
