@@ -26,7 +26,7 @@ use gw_types::{
 use gw_web3_indexer::indexer::Web3Indexer;
 use parking_lot::Mutex;
 use serde_json::json;
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 pub struct ChainUpdater {
     chain: Arc<Mutex<Chain>>,
@@ -178,11 +178,12 @@ impl ChainUpdater {
         let rollup_action = self.extract_rollup_action(&tx)?;
         let context = match rollup_action.to_enum() {
             RollupActionUnion::RollupSubmitBlock(submitted) => {
-                let requests = self.extract_deposit_requests(&tx).await?;
+                let (requests, asset_type_scripts) = self.extract_deposit_requests(&tx).await?;
 
                 L1ActionContext::SubmitBlock {
                     l2block: submitted.block(),
                     deposit_requests: requests,
+                    deposit_asset_scripts: asset_type_scripts,
                 }
             }
             RollupActionUnion::RollupEnterChallenge(entered) => {
@@ -383,8 +384,12 @@ impl ChainUpdater {
         unreachable!("challenge output not found");
     }
 
-    async fn extract_deposit_requests(&self, tx: &Transaction) -> Result<Vec<DepositRequest>> {
+    async fn extract_deposit_requests(
+        &self,
+        tx: &Transaction,
+    ) -> Result<(Vec<DepositRequest>, HashSet<Script>)> {
         let mut results = vec![];
+        let mut asset_type_scripts = HashSet::new();
         for input in tx.raw().inputs().into_iter() {
             // Load cell denoted by the transaction input
             let tx_hash: H256 = input.previous_output().tx_hash().unpack();
@@ -420,9 +425,12 @@ impl ChainUpdater {
                 try_parse_deposit_request(&cell_output, &cell_data.unpack(), &self.rollup_context)
             {
                 results.push(deposit_request);
+                if let Some(type_) = &cell_output.type_().to_opt() {
+                    asset_type_scripts.insert(type_.clone());
+                }
             }
         }
-        Ok(results)
+        Ok((results, asset_type_scripts))
     }
 }
 

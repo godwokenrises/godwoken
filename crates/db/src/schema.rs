@@ -3,7 +3,7 @@
 /// Column families alias type
 pub type Col = u8;
 /// Total column number
-pub const COLUMNS: u32 = 25;
+pub const COLUMNS: u32 = 26;
 /// Column store meta data
 pub const COLUMN_META: Col = 0;
 /// Column store chain index
@@ -54,6 +54,8 @@ pub const COLUMN_REVERTED_BLOCK_SMT_LEAF: Col = 22;
 pub const COLUMN_BAD_BLOCK_CHALLENGE_TARGET: Col = 23;
 /// Column reverted block smt root => reverted block hashes
 pub const COLUMN_REVERTED_BLOCK_SMT_ROOT: Col = 24;
+/// Column asset script
+pub const COLUMN_ASSET_SCRIPT: Col = 25;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";

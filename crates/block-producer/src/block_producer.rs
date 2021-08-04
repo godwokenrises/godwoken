@@ -340,10 +340,7 @@ impl BlockProducer {
                         return Some((hash, script));
                     }
 
-                    // Try rpc
-                    match smol::block_on(
-                        self.rpc_client.query_verified_custodian_type_script(&hash),
-                    ) {
+                    match db.get_asset_script(&hash.into()) {
                         Ok(opt_script) => opt_script.map(|script| {
                             sudt_scripts.insert(hash, script.clone());
                             (hash, script)

@@ -2,6 +2,8 @@
 //! Block producer assemble serveral Godwoken components into a single executor.
 //! A block producer can act without the ability of produce block.
 
+use std::collections::HashMap;
+
 use crate::withdrawal::AvailableCustodians;
 
 use anyhow::{anyhow, Result};
@@ -22,7 +24,7 @@ use gw_types::{
     core::Status,
     packed::{
         AccountMerkleState, BlockInfo, BlockMerkleState, DepositRequest, GlobalState, L2Block,
-        L2Transaction, RawL2Block, SubmitTransactions, SubmitWithdrawals, TxReceipt,
+        L2Transaction, RawL2Block, Script, SubmitTransactions, SubmitWithdrawals, TxReceipt,
         WithdrawalRequest,
     },
     prelude::*,
@@ -75,6 +77,12 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
     let rollup_context = generator.rollup_context();
     let parent_block_number: u64 = parent_block.raw().number().unpack();
     let parent_block_hash = parent_block.hash().into();
+    let asset_scripts: HashMap<H256, Script> = {
+        let sudt_value = available_custodians.sudt.values();
+        sudt_value.map(|(_, script)| (script.hash().into(), script.to_owned()))
+    }
+    .collect();
+
     // create overlay storage
     let state_db = {
         let tip_block_hash = db.get_tip_block_hash()?;
@@ -104,7 +112,10 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
             unused_withdrawal_requests.push(request);
             continue;
         }
-        if let Err(err) = generator.verify_withdrawal_request(&state, &request) {
+        let asset_script = asset_scripts
+            .get(&request.raw().sudt_script_hash().unpack())
+            .cloned();
+        if let Err(err) = generator.verify_withdrawal_request(&state, &request, asset_script) {
             log::info!("[produce_block] withdrawal verification error: {:?}", err);
             unused_withdrawal_requests.push(request);
             continue;

@@ -5,7 +5,7 @@ use crate::{
 };
 
 use anyhow::{anyhow, Result};
-use gw_common::CKB_SUDT_SCRIPT_ARGS;
+use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_config::BlockProducerConfig;
 use gw_generator::RollupContext;
 use gw_types::{
@@ -14,7 +14,7 @@ use gw_types::{
     packed::{
         CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, GlobalState, L2Block,
         Script, UnlockWithdrawalViaRevert, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
-        WithdrawalLockArgs, WithdrawalRequest, WitnessArgs,
+        WithdrawalRequest, WitnessArgs,
     },
     prelude::*,
 };
@@ -131,8 +131,16 @@ impl<'a> Generator<'a> {
             let sudt_custodian = self.sudt_custodians.get(&sudt_type_hash);
             sudt_custodian.map(|sudt| sudt.script.to_owned())
         };
-        let output = generate_withdrawal_output(req, self.rollup_context, block, sudt_script)
-            .map_err(|min_capacity| anyhow!("{} minimal capacity for {}", min_capacity, req))?;
+        let block_hash: H256 = block.hash().into();
+        let block_number = block.raw().number().unpack();
+        let output = gw_generator::Generator::build_withdrawal_cell_output(
+            &self.rollup_context,
+            req,
+            &block_hash,
+            block_number,
+            sudt_script,
+        )
+        .map_err(|min_capacity| anyhow!("{} minimal capacity for {}", min_capacity, req))?;
 
         // Verify remaind sudt
         let mut ckb_custodian = self.ckb_custodian.clone();
@@ -487,38 +495,6 @@ fn sum<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmoun
     )
 }
 
-fn build_withdrawal_lock(
-    req: &WithdrawalRequest,
-    rollup_context: &RollupContext,
-    block: &L2Block,
-) -> Script {
-    let withdrawal_capacity: u64 = req.raw().capacity().unpack();
-    let lock_args: Bytes = {
-        let withdrawal_lock_args = WithdrawalLockArgs::new_builder()
-            .account_script_hash(req.raw().account_script_hash())
-            .withdrawal_block_hash(block.hash().pack())
-            .withdrawal_block_number(block.raw().number())
-            .sudt_script_hash(req.raw().sudt_script_hash())
-            .sell_amount(req.raw().sell_amount())
-            .sell_capacity(withdrawal_capacity.pack())
-            .owner_lock_hash(req.raw().owner_lock_hash())
-            .payment_lock_hash(req.raw().payment_lock_hash())
-            .build();
-
-        let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
-        rollup_type_hash
-            .chain(withdrawal_lock_args.as_slice().iter())
-            .cloned()
-            .collect()
-    };
-
-    Script::new_builder()
-        .code_hash(rollup_context.rollup_config.withdrawal_script_type_hash())
-        .hash_type(ScriptHashType::Type.into())
-        .args(lock_args.pack())
-        .build()
-}
-
 fn build_finalized_custodian_lock(rollup_context: &RollupContext) -> Script {
     let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
     let custodian_lock_args = CustodianLockArgs::default();
@@ -533,35 +509,6 @@ fn build_finalized_custodian_lock(rollup_context: &RollupContext) -> Script {
         .hash_type(ScriptHashType::Type.into())
         .args(args.pack())
         .build()
-}
-
-fn generate_withdrawal_output(
-    req: &WithdrawalRequest,
-    rollup_context: &RollupContext,
-    block: &L2Block,
-    type_script: Option<Script>,
-) -> std::result::Result<(CellOutput, Bytes), u64> {
-    let req_ckb: u64 = req.raw().capacity().unpack();
-    let lock = build_withdrawal_lock(req, rollup_context, block);
-    let (type_, data) = match type_script {
-        Some(type_) => (Some(type_).pack(), req.raw().amount().as_bytes()),
-        None => (None::<Script>.pack(), Bytes::new()),
-    };
-
-    let size = 8 + data.len() + type_.as_slice().len() + lock.as_slice().len();
-    let min_capacity = size as u64 * 100_000_000;
-
-    if req_ckb < min_capacity {
-        return Err(min_capacity);
-    }
-
-    let withdrawal = CellOutput::new_builder()
-        .capacity(req_ckb.pack())
-        .lock(lock)
-        .type_(type_)
-        .build();
-
-    Ok((withdrawal, data))
 }
 
 fn generate_finalized_custodian(
