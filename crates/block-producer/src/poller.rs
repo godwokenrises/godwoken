@@ -1,3 +1,5 @@
+#![allow(clippy::clippy::mutable_key_type)]
+
 use crate::{
     indexer_types::{Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx},
     rpc_client::RPCClient,
