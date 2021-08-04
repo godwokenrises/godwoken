@@ -17,7 +17,7 @@ use futures::{future::select_all, FutureExt};
 use gw_chain::chain::{Chain, SyncEvent};
 use gw_common::{h256_ext::H256Ext, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_config::{BlockProducerConfig, DebugConfig};
-use gw_generator::{Generator, RollupContext};
+use gw_generator::{constants::MIN_DEPOSIT_CAPACITY, Generator, RollupContext};
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_mem_pool::pool::MemPool;
 use gw_store::Store;
@@ -807,6 +807,16 @@ impl BlockProducer {
                     hex::encode(&args[..32])
                 ));
             }
+        }
+
+        // check capacity
+        let capacity = cell.cell.output.capacity().unpack();
+        if capacity < MIN_DEPOSIT_CAPACITY {
+            return Err(anyhow!(
+                "Deposit capacity({}) in less then MIN_DEPOSIT_CAPACITY({})",
+                capacity,
+                MIN_DEPOSIT_CAPACITY
+            ));
         }
 
         // check sUDT
