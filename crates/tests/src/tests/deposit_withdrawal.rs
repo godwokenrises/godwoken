@@ -1,3 +1,5 @@
+use std::{collections::HashSet, iter::FromIterator};
+
 use anyhow::Result;
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
@@ -25,7 +27,8 @@ fn deposite_to_chain(
     rollup_cell: CellOutput,
     user_script: Script,
     capacity: u64,
-    sudt_script_hash: H256,
+    sudt_script_hash: H256, // To allow deposit ckb only
+    sudt_script: Script,
     amount: u128,
 ) -> Result<()> {
     let deposit_requests = vec![DepositRequest::new_builder()
@@ -38,8 +41,20 @@ fn deposite_to_chain(
         let mem_pool = chain.mem_pool().lock();
         construct_block(chain, &mem_pool, deposit_requests.clone())?
     };
+    let asset_scripts = if sudt_script_hash == H256::zero() {
+        HashSet::new()
+    } else {
+        HashSet::from_iter(vec![sudt_script])
+    };
+
     // deposit
-    apply_block_result(chain, rollup_cell.clone(), block_result, deposit_requests);
+    apply_block_result(
+        chain,
+        rollup_cell.clone(),
+        block_result,
+        deposit_requests,
+        asset_scripts,
+    );
     Ok(())
 }
 
@@ -65,8 +80,15 @@ fn withdrawal_from_chain(
         mem_pool.push_withdrawal_request(withdrawal)?;
         construct_block(chain, &mem_pool, Vec::default()).unwrap()
     };
+
     // deposit
-    apply_block_result(chain, rollup_cell.clone(), block_result, Vec::new());
+    apply_block_result(
+        chain,
+        rollup_cell.clone(),
+        block_result,
+        Vec::new(),
+        HashSet::new(),
+    );
     Ok(())
 }
 
@@ -96,6 +118,7 @@ fn test_deposit_and_withdrawal() {
         user_script,
         capacity,
         H256::zero(),
+        Script::default(),
         0,
     )
     .unwrap();
@@ -222,6 +245,7 @@ fn test_overdraft() {
         user_script,
         capacity,
         H256::zero(),
+        Script::default(),
         0,
     )
     .unwrap();
@@ -265,6 +289,7 @@ fn test_deposit_faked_ckb() {
         user_script,
         capacity,
         H256::zero(),
+        Script::default(),
         42_00000000,
     )
     .unwrap_err();
