@@ -1,16 +1,18 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
-use crate::types::{CellInfo, TxStatus};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{HttpClient, Output, Params as ClientParams, Transport};
 use ckb_types::prelude::Entity;
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
-use gw_generator::RollupContext;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Uint32};
+use gw_types::offchain::{
+    CollectedCustodianCells, DepositInfo, RollupContext, TxStatus, WithdrawalsAmount,
+};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    offchain::CellInfo,
     packed::{
         Block, CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositLockArgs,
         DepositLockArgsReader, DepositRequest, NumberHash, OutPoint, Script, StakeLockArgs,
@@ -36,12 +38,6 @@ lazy_static::lazy_static! {
         faster_hex::hex_decode(hexed_type_id_code_hash.as_bytes(), &mut code_hash).expect("dehex type id code_hash");
         code_hash
     };
-}
-
-#[derive(Debug, Clone)]
-pub struct DepositInfo {
-    pub request: DepositRequest,
-    pub cell: CellInfo,
 }
 
 type JsonH256 = ckb_fixed_hash::H256;
@@ -110,38 +106,6 @@ fn parse_deposit_request(
         .sudt_script_hash(sudt_script_hash.pack())
         .build();
     Some(request)
-}
-
-#[derive(Debug)]
-pub struct WithdrawalsAmount {
-    pub capacity: u128,
-    pub sudt: HashMap<[u8; 32], u128>,
-}
-
-impl Default for WithdrawalsAmount {
-    fn default() -> Self {
-        WithdrawalsAmount {
-            capacity: 0,
-            sudt: Default::default(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct CollectedCustodianCells {
-    pub cells_info: Vec<CellInfo>,
-    pub capacity: u128,
-    pub sudt: HashMap<[u8; 32], (u128, Script)>,
-}
-
-impl Default for CollectedCustodianCells {
-    fn default() -> Self {
-        CollectedCustodianCells {
-            cells_info: Default::default(),
-            capacity: 0,
-            sudt: Default::default(),
-        }
-    }
 }
 
 #[derive(Clone)]

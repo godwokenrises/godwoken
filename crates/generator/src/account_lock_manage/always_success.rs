@@ -1,10 +1,11 @@
 use gw_common::H256;
 use gw_types::{
     bytes::Bytes,
+    offchain::RollupContext,
     packed::{L2Transaction, Script},
 };
 
-use crate::{error::LockAlgorithmError, RollupContext};
+use crate::error::LockAlgorithmError;
 
 use super::LockAlgorithm;
 

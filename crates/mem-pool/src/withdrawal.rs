@@ -1,18 +1,22 @@
+// use crate::types::InputCellInfo;
+// use crate::{
+//     rpc_client::{CollectedCustodianCells, RPCClient, WithdrawalsAmount},
+//     types::CellInfo,
+// };
+
 use anyhow::{anyhow, Result};
-use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
-use gw_config::BlockProducerConfig;
+use gw_common::CKB_SUDT_SCRIPT_ARGS;
 use gw_rpc_client::RPCClient;
+// use gw_config::BlockProducerConfig;
 use gw_store::transaction::StoreTransaction;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{
-        CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext, WithdrawalsAmount,
-    },
+    offchain::{CollectedCustodianCells, InputCellInfo, RollupContext, WithdrawalsAmount},
     packed::{
         CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, GlobalState, L2Block,
         Script, UnlockWithdrawalViaRevert, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
-        WithdrawalRequest, WitnessArgs,
+        WithdrawalLockArgs, WithdrawalRequest, WitnessArgs,
     },
     prelude::*,
 };
@@ -155,7 +159,10 @@ impl<'a> Generator<'a> {
             sudt_custodians.insert(sudt_type_hash, sudt_custodian);
         }
 
-        let ckb_custodian_min_capacity = ckb_custodian_min_capacity(rollup_context);
+        let ckb_custodian_min_capacity = {
+            let lock = build_finalized_custodian_lock(rollup_context);
+            (8 + lock.as_slice().len() as u64) * 100000000
+        };
         let ckb_custodian_capacity = available_custodians
             .capacity
             .saturating_sub(total_sudt_capacity);
@@ -192,16 +199,8 @@ impl<'a> Generator<'a> {
             let sudt_custodian = self.sudt_custodians.get(&sudt_type_hash);
             sudt_custodian.map(|sudt| sudt.script.to_owned())
         };
-        let block_hash: H256 = block.hash().into();
-        let block_number = block.raw().number().unpack();
-        let output = gw_generator::Generator::build_withdrawal_cell_output(
-            &self.rollup_context,
-            req,
-            &block_hash,
-            block_number,
-            sudt_script,
-        )
-        .map_err(|min_capacity| anyhow!("{} minimal capacity for {}", min_capacity, req))?;
+        let output = generate_withdrawal_output(req, self.rollup_context, block, sudt_script)
+            .map_err(|min_capacity| anyhow!("{} minimal capacity for {}", min_capacity, req))?;
 
         // Verify remaind sudt
         let mut ckb_custodian = self.ckb_custodian.clone();
@@ -366,62 +365,58 @@ pub struct GeneratedWithdrawals {
     pub outputs: Vec<(CellOutput, Bytes)>,
 }
 
-// Note: custodian lock search rollup cell in inputs
-pub async fn generate(
-    input_rollup_cell: &CellInfo,
-    rollup_context: &RollupContext,
-    block: &L2Block,
-    block_producer_config: &BlockProducerConfig,
-    rpc_client: &RPCClient,
-) -> Result<Option<GeneratedWithdrawals>> {
-    if block.withdrawals().is_empty() {
-        return Ok(None);
-    }
+// // Note: custodian lock search rollup cell in inputs
+// pub async fn generate(
+//     input_rollup_cell: &CellInfo,
+//     rollup_context: &RollupContext,
+//     block: &L2Block,
+//     block_producer_config: &BlockProducerConfig,
+//     rpc_client: &RPCClient,
+// ) -> Result<Option<GeneratedWithdrawals>> {
+//     if block.withdrawals().is_empty() {
+//         return Ok(None);
+//     }
 
-    let global_state = GlobalState::from_slice(&input_rollup_cell.data)
-        .map_err(|_| anyhow!("parse rollup cell global state"))?;
-    let last_finalized_block_number = global_state.last_finalized_block_number().unpack();
+//     let global_state = GlobalState::from_slice(&input_rollup_cell.data)
+//         .map_err(|_| anyhow!("parse rollup cell global state"))?;
+//     let last_finalized_block_number = global_state.last_finalized_block_number().unpack();
 
-    let total_withdrawal_amount = sum(block.withdrawals().into_iter());
-    let custodian_cells = rpc_client
-        .query_finalized_custodian_cells(
-            &total_withdrawal_amount,
-            ckb_custodian_min_capacity(rollup_context),
-            last_finalized_block_number,
-        )
-        .await?;
-    log::debug!("custodian inputs {:?}", custodian_cells);
+//     let total_withdrawal_amount = sum(block.withdrawals().into_iter());
+//     let custodian_cells = rpc_client
+//         .query_finalized_custodian_cells(&total_withdrawal_amount, last_finalized_block_number)
+//         .await?;
+//     log::debug!("custodian inputs {:?}", custodian_cells);
 
-    let mut generator = Generator::new(rollup_context, (&custodian_cells).into());
-    for req in block.withdrawals().into_iter() {
-        generator
-            .include_and_verify(&req, block)
-            .map_err(|err| anyhow!("unexpected withdrawal err {}", err))?
-    }
-    log::debug!("included withdrawals {}", generator.withdrawals.len());
+//     let mut generator = Generator::new(rollup_context, (&custodian_cells).into());
+//     for req in block.withdrawals().into_iter() {
+//         generator
+//             .include_and_verify(&req, block)
+//             .map_err(|err| anyhow!("unexpected withdrawal err {}", err))?
+//     }
+//     log::debug!("included withdrawals {}", generator.withdrawals.len());
 
-    let custodian_lock_dep = block_producer_config.custodian_cell_lock_dep.clone();
-    let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
-    let mut cell_deps = vec![custodian_lock_dep.into()];
-    if !total_withdrawal_amount.sudt.is_empty() {
-        cell_deps.push(sudt_type_dep.into());
-    }
+//     let custodian_lock_dep = block_producer_config.custodian_cell_lock_dep.clone();
+//     let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
+//     let mut cell_deps = vec![custodian_lock_dep.into()];
+//     if !total_withdrawal_amount.sudt.is_empty() {
+//         cell_deps.push(sudt_type_dep.into());
+//     }
 
-    let custodian_inputs = custodian_cells.cells_info.into_iter().map(|cell| {
-        let input = CellInput::new_builder()
-            .previous_output(cell.out_point.clone())
-            .build();
-        InputCellInfo { input, cell }
-    });
+//     let custodian_inputs = custodian_cells.cells_info.into_iter().map(|cell| {
+//         let input = CellInput::new_builder()
+//             .previous_output(cell.out_point.clone())
+//             .build();
+//         InputCellInfo { input, cell }
+//     });
 
-    let generated_withdrawals = GeneratedWithdrawals {
-        deps: cell_deps,
-        inputs: custodian_inputs.collect(),
-        outputs: generator.finish(),
-    };
+//     let generated_withdrawals = GeneratedWithdrawals {
+//         deps: cell_deps,
+//         inputs: custodian_inputs.collect(),
+//         outputs: generator.finish(),
+//     };
 
-    Ok(Some(generated_withdrawals))
-}
+//     Ok(Some(generated_withdrawals))
+// }
 
 pub struct RevertedWithdrawals {
     pub deps: Vec<CellDep>,
@@ -430,107 +425,107 @@ pub struct RevertedWithdrawals {
     pub outputs: Vec<(CellOutput, Bytes)>,
 }
 
-pub fn revert(
-    rollup_context: &RollupContext,
-    block_producer_config: &BlockProducerConfig,
-    withdrawal_cells: Vec<CellInfo>,
-) -> Result<Option<RevertedWithdrawals>> {
-    if withdrawal_cells.is_empty() {
-        return Ok(None);
-    }
+// pub fn revert(
+//     rollup_context: &RollupContext,
+//     block_producer_config: &BlockProducerConfig,
+//     withdrawal_cells: Vec<CellInfo>,
+// ) -> Result<Option<RevertedWithdrawals>> {
+//     if withdrawal_cells.is_empty() {
+//         return Ok(None);
+//     }
 
-    let mut withdrawal_inputs = vec![];
-    let mut withdrawal_witness = vec![];
-    let mut custodian_outputs = vec![];
+//     let mut withdrawal_inputs = vec![];
+//     let mut withdrawal_witness = vec![];
+//     let mut custodian_outputs = vec![];
 
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("unexpected timestamp")
-        .as_millis() as u64;
+//     let timestamp = SystemTime::now()
+//         .duration_since(UNIX_EPOCH)
+//         .expect("unexpected timestamp")
+//         .as_millis() as u64;
 
-    // We use timestamp plus idx and rollup_type_hash to create different custodian lock
-    // hash for every reverted withdrawal input. Withdrawal lock use custodian lock hash to
-    // index corresponding custodian output.
-    // NOTE: These locks must also be different from custodian change cells created by
-    // withdrawal requests processing.
-    let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
-    for (idx, withdrawal) in withdrawal_cells.into_iter().enumerate() {
-        let custodian_lock = {
-            let deposit_lock_args = DepositLockArgs::new_builder()
-                .owner_lock_hash(rollup_context.rollup_script_hash.pack())
-                .cancel_timeout((idx as u64 + timestamp).pack())
-                .build();
+//     // We use timestamp plus idx and rollup_type_hash to create different custodian lock
+//     // hash for every reverted withdrawal input. Withdrawal lock use custodian lock hash to
+//     // index corresponding custodian output.
+//     // NOTE: These locks must also be different from custodian change cells created by
+//     // withdrawal requests processing.
+//     let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
+//     for (idx, withdrawal) in withdrawal_cells.into_iter().enumerate() {
+//         let custodian_lock = {
+//             let deposit_lock_args = DepositLockArgs::new_builder()
+//                 .owner_lock_hash(rollup_context.rollup_script_hash.pack())
+//                 .cancel_timeout((idx as u64 + timestamp).pack())
+//                 .build();
 
-            let custodian_lock_args = CustodianLockArgs::new_builder()
-                .deposit_lock_args(deposit_lock_args)
-                .build();
+//             let custodian_lock_args = CustodianLockArgs::new_builder()
+//                 .deposit_lock_args(deposit_lock_args)
+//                 .build();
 
-            let lock_args: Bytes = rollup_type_hash
-                .clone()
-                .chain(custodian_lock_args.as_slice().iter())
-                .cloned()
-                .collect();
+//             let lock_args: Bytes = rollup_type_hash
+//                 .clone()
+//                 .chain(custodian_lock_args.as_slice().iter())
+//                 .cloned()
+//                 .collect();
 
-            Script::new_builder()
-                .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
-                .hash_type(ScriptHashType::Type.into())
-                .args(lock_args.pack())
-                .build()
-        };
+//             Script::new_builder()
+//                 .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+//                 .hash_type(ScriptHashType::Type.into())
+//                 .args(lock_args.pack())
+//                 .build()
+//         };
 
-        let custodian_output = {
-            let output_builder = withdrawal.output.clone().as_builder();
-            output_builder.lock(custodian_lock.clone()).build()
-        };
+//         let custodian_output = {
+//             let output_builder = withdrawal.output.clone().as_builder();
+//             output_builder.lock(custodian_lock.clone()).build()
+//         };
 
-        let withdrawal_input = {
-            let input = CellInput::new_builder()
-                .previous_output(withdrawal.out_point.clone())
-                .build();
+//         let withdrawal_input = {
+//             let input = CellInput::new_builder()
+//                 .previous_output(withdrawal.out_point.clone())
+//                 .build();
 
-            InputCellInfo {
-                input,
-                cell: withdrawal.clone(),
-            }
-        };
+//             InputCellInfo {
+//                 input,
+//                 cell: withdrawal.clone(),
+//             }
+//         };
 
-        let unlock_withdrawal_witness = {
-            let unlock_withdrawal_via_revert = UnlockWithdrawalViaRevert::new_builder()
-                .custodian_lock_hash(custodian_lock.hash().pack())
-                .build();
+//         let unlock_withdrawal_witness = {
+//             let unlock_withdrawal_via_revert = UnlockWithdrawalViaRevert::new_builder()
+//                 .custodian_lock_hash(custodian_lock.hash().pack())
+//                 .build();
 
-            UnlockWithdrawalWitness::new_builder()
-                .set(UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(
-                    unlock_withdrawal_via_revert,
-                ))
-                .build()
-        };
-        let withdrawal_witness_args = WitnessArgs::new_builder()
-            .lock(Some(unlock_withdrawal_witness.as_bytes()).pack())
-            .build();
+//             UnlockWithdrawalWitness::new_builder()
+//                 .set(UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(
+//                     unlock_withdrawal_via_revert,
+//                 ))
+//                 .build()
+//         };
+//         let withdrawal_witness_args = WitnessArgs::new_builder()
+//             .lock(Some(unlock_withdrawal_witness.as_bytes()).pack())
+//             .build();
 
-        withdrawal_inputs.push(withdrawal_input);
-        withdrawal_witness.push(withdrawal_witness_args);
-        custodian_outputs.push((custodian_output, withdrawal.data.clone()));
-    }
+//         withdrawal_inputs.push(withdrawal_input);
+//         withdrawal_witness.push(withdrawal_witness_args);
+//         custodian_outputs.push((custodian_output, withdrawal.data.clone()));
+//     }
 
-    let withdrawal_lock_dep = block_producer_config.withdrawal_cell_lock_dep.clone();
-    let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
-    let mut cell_deps = vec![withdrawal_lock_dep.into()];
-    if withdrawal_inputs
-        .iter()
-        .any(|info| info.cell.output.type_().to_opt().is_some())
-    {
-        cell_deps.push(sudt_type_dep.into())
-    }
+//     let withdrawal_lock_dep = block_producer_config.withdrawal_cell_lock_dep.clone();
+//     let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
+//     let mut cell_deps = vec![withdrawal_lock_dep.into()];
+//     if withdrawal_inputs
+//         .iter()
+//         .any(|info| info.cell.output.type_().to_opt().is_some())
+//     {
+//         cell_deps.push(sudt_type_dep.into())
+//     }
 
-    Ok(Some(RevertedWithdrawals {
-        deps: cell_deps,
-        inputs: withdrawal_inputs,
-        outputs: custodian_outputs,
-        witness_args: withdrawal_witness,
-    }))
-}
+//     Ok(Some(RevertedWithdrawals {
+//         deps: cell_deps,
+//         inputs: withdrawal_inputs,
+//         outputs: custodian_outputs,
+//         witness_args: withdrawal_witness,
+//     }))
+// }
 
 fn sum<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmount {
     reqs.fold(
@@ -560,6 +555,38 @@ fn sum<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmoun
     )
 }
 
+fn build_withdrawal_lock(
+    req: &WithdrawalRequest,
+    rollup_context: &RollupContext,
+    block: &L2Block,
+) -> Script {
+    let withdrawal_capacity: u64 = req.raw().capacity().unpack();
+    let lock_args: Bytes = {
+        let withdrawal_lock_args = WithdrawalLockArgs::new_builder()
+            .account_script_hash(req.raw().account_script_hash())
+            .withdrawal_block_hash(block.hash().pack())
+            .withdrawal_block_number(block.raw().number())
+            .sudt_script_hash(req.raw().sudt_script_hash())
+            .sell_amount(req.raw().sell_amount())
+            .sell_capacity(withdrawal_capacity.pack())
+            .owner_lock_hash(req.raw().owner_lock_hash())
+            .payment_lock_hash(req.raw().payment_lock_hash())
+            .build();
+
+        let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
+        rollup_type_hash
+            .chain(withdrawal_lock_args.as_slice().iter())
+            .cloned()
+            .collect()
+    };
+
+    Script::new_builder()
+        .code_hash(rollup_context.rollup_config.withdrawal_script_type_hash())
+        .hash_type(ScriptHashType::Type.into())
+        .args(lock_args.pack())
+        .build()
+}
+
 fn build_finalized_custodian_lock(rollup_context: &RollupContext) -> Script {
     let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
     let custodian_lock_args = CustodianLockArgs::default();
@@ -576,9 +603,33 @@ fn build_finalized_custodian_lock(rollup_context: &RollupContext) -> Script {
         .build()
 }
 
-fn ckb_custodian_min_capacity(rollup_context: &RollupContext) -> u64 {
-    let lock = build_finalized_custodian_lock(rollup_context);
-    (8 + lock.as_slice().len() as u64).saturating_mul(100000000)
+fn generate_withdrawal_output(
+    req: &WithdrawalRequest,
+    rollup_context: &RollupContext,
+    block: &L2Block,
+    type_script: Option<Script>,
+) -> std::result::Result<(CellOutput, Bytes), u64> {
+    let req_ckb: u64 = req.raw().capacity().unpack();
+    let lock = build_withdrawal_lock(req, rollup_context, block);
+    let (type_, data) = match type_script {
+        Some(type_) => (Some(type_).pack(), req.raw().amount().as_bytes()),
+        None => (None::<Script>.pack(), Bytes::new()),
+    };
+
+    let size = 8 + data.len() + type_.as_slice().len() + lock.as_slice().len();
+    let min_capacity = size as u64 * 100_000_000;
+
+    if req_ckb < min_capacity {
+        return Err(min_capacity);
+    }
+
+    let withdrawal = CellOutput::new_builder()
+        .capacity(req_ckb.pack())
+        .lock(lock)
+        .type_(type_)
+        .build();
+
+    Ok((withdrawal, data))
 }
 
 fn generate_finalized_custodian(

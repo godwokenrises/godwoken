@@ -3,4 +3,7 @@
 //! MemPool only do basic verification on l2transactions & withdrawal requests,
 //! the block producer need to verify the fully verification itself.
 
+mod deposit;
+mod mem_block;
 pub mod pool;
+mod withdrawal;

@@ -1,7 +1,7 @@
 use crate::{
     block_producer::BlockProducer, challenger::Challenger, cleaner::Cleaner, poa::PoA,
-    poller::ChainUpdater, rpc_client::RPCClient, test_mode_control::TestModeControl,
-    types::ChainEvent, utils::CKBGenesisInfo, wallet::Wallet,
+    poller::ChainUpdater, test_mode_control::TestModeControl, types::ChainEvent,
+    utils::CKBGenesisInfo, wallet::Wallet,
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
@@ -16,14 +16,16 @@ use gw_generator::{
     },
     backend_manage::BackendManage,
     genesis::init_genesis,
-    Generator, RollupContext,
+    Generator,
 };
-use gw_mem_pool::pool::{MemPool, MemPoolMode};
+use gw_mem_pool::pool::MemPool;
+use gw_rpc_client::RPCClient;
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
 use gw_types::prelude::{Pack, Unpack};
 use gw_types::{
     bytes::Bytes,
+    offchain::RollupContext,
     packed::{NumberHash, RollupConfig, Script},
     prelude::*,
 };
@@ -263,12 +265,8 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         ))
     };
     let mem_pool = Arc::new(Mutex::new(
-        MemPool::create(
-            MemPoolMode::InstantFinality,
-            store.clone(),
-            generator.clone(),
-        )
-        .with_context(|| "create mem-pool")?,
+        MemPool::create(store.clone(), generator.clone(), rpc_client.clone())
+            .with_context(|| "create mem-pool")?,
     ));
     let chain = Arc::new(Mutex::new(
         Chain::create(

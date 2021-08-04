@@ -1,14 +1,15 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
 use crate::debugger;
-use crate::types::InputCellInfo;
-use crate::{rpc_client::RPCClient, transaction_skeleton::TransactionSkeleton};
+use crate::transaction_skeleton::TransactionSkeleton;
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::Output;
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::DebugConfig;
+use gw_rpc_client::RPCClient;
 use gw_types::{
     core::DepType,
+    offchain::InputCellInfo,
     packed::{Block, CellDep, CellInput, CellOutput, Header, OutPoint, Script, Transaction},
     prelude::*,
 };

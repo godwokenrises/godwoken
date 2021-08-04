@@ -3,11 +3,9 @@
 use crate::{
     poa::{PoA, ShouldIssueBlock},
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
-    rpc_client::{DepositInfo, RPCClient},
     test_mode_control::TestModeControl,
     transaction_skeleton::TransactionSkeleton,
     types::ChainEvent,
-    types::{CellInfo, InputCellInfo},
     utils::{self, fill_tx_fee, CKBGenesisInfo},
     wallet::Wallet,
 };
@@ -17,13 +15,15 @@ use futures::{future::select_all, FutureExt};
 use gw_chain::chain::{Chain, SyncEvent};
 use gw_common::{h256_ext::H256Ext, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_config::{BlockProducerConfig, DebugConfig};
-use gw_generator::{Generator, RollupContext};
+use gw_generator::Generator;
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_mem_pool::pool::MemPool;
+use gw_rpc_client::RPCClient;
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     core::{DepType, ScriptHashType, Status},
+    offchain::{CellInfo, DepositInfo, InputCellInfo, RollupContext},
     packed::{
         CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, GlobalState, L2Block,
         OutPoint, OutPointVec, RollupAction, RollupActionUnion, RollupSubmitBlock, Script,
@@ -809,120 +809,5 @@ impl BlockProducer {
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
         log::debug!("final tx size: {}", tx.as_slice().len());
         Ok(CommittedTxResult::Ok(tx))
-    }
-
-    // check deposit cells again to prevent upstream components errors.
-    fn sanitize_deposit_cells(&self, unsanitize_deposits: Vec<DepositInfo>) -> Vec<DepositInfo> {
-        let mut deposit_cells = Vec::with_capacity(unsanitize_deposits.len());
-        for cell in unsanitize_deposits {
-            // check deposit lock
-            // the lock should be correct unless the upstream ckb-indexer has bugs
-            if let Err(err) = self.check_deposit_cell(&cell) {
-                log::debug!("[sanitize deposit cell] {}", err);
-                continue;
-            }
-            deposit_cells.push(cell);
-        }
-        deposit_cells
-    }
-
-    // check deposit cell
-    fn check_deposit_cell(&self, cell: &DepositInfo) -> Result<()> {
-        let ctx = self.generator.rollup_context();
-        let hash_type = ScriptHashType::Type.into();
-
-        // check deposit lock
-        // the lock should be correct unless the upstream ckb-indexer has bugs
-        {
-            let lock = cell.cell.output.lock();
-            if lock.code_hash() != ctx.rollup_config.deposit_script_type_hash()
-                || lock.hash_type() != hash_type
-            {
-                return Err(anyhow!(
-                    "Invalid deposit lock, expect code_hash: {}, hash_type: Type, got: {}, {}",
-                    ctx.rollup_config.deposit_script_type_hash(),
-                    lock.code_hash(),
-                    lock.hash_type()
-                ));
-            }
-            let args: Bytes = lock.args().unpack();
-            if args.len() < 32 {
-                return Err(anyhow!(
-                    "Invalid deposit args, expect len: 32, got: {}",
-                    args.len()
-                ));
-            }
-            if &args[..32] != ctx.rollup_script_hash.as_slice() {
-                return Err(anyhow!(
-                    "Invalid deposit args, expect rollup_script_hash: {}, got: {}",
-                    hex::encode(ctx.rollup_script_hash.as_slice()),
-                    hex::encode(&args[..32])
-                ));
-            }
-        }
-
-        // check sUDT
-        // sUDT may be invalid, this may caused by malicious user
-        if let Some(type_) = cell.cell.output.type_().to_opt() {
-            if type_.code_hash() != ctx.rollup_config.l1_sudt_script_type_hash()
-                || type_.hash_type() != hash_type
-            {
-                return Err(anyhow!(
-                    "Invalid deposit sUDT, expect code_hash: {}, hash_type: Type, got: {}, {}",
-                    ctx.rollup_config.l1_sudt_script_type_hash(),
-                    type_.code_hash(),
-                    type_.hash_type()
-                ));
-            }
-        }
-
-        // check request
-        // request deposit account maybe invalid, this may caused by malicious user
-        {
-            let script = cell.request.script();
-            if script.hash_type() != ScriptHashType::Type.into() {
-                return Err(anyhow!(
-                    "Invalid deposit account script: unexpected hash_type: Data"
-                ));
-            }
-            if ctx
-                .rollup_config
-                .allowed_eoa_type_hashes()
-                .into_iter()
-                .all(|type_hash| script.code_hash() != type_hash)
-            {
-                return Err(anyhow!(
-                    "Invalid deposit account script: unknown code_hash: {:?}",
-                    hex::encode(script.code_hash().as_slice())
-                ));
-            }
-            let args: Bytes = script.args().unpack();
-            if args.len() < 32 {
-                return Err(anyhow!(
-                    "Invalid deposit account args, expect len: 32, got: {}",
-                    args.len()
-                ));
-            }
-            if &args[..32] != ctx.rollup_script_hash.as_slice() {
-                return Err(anyhow!(
-                    "Invalid deposit account args, expect rollup_script_hash: {}, got: {}",
-                    hex::encode(ctx.rollup_script_hash.as_slice()),
-                    hex::encode(&args[..32])
-                ));
-            }
-        }
-
-        // check capacity (use dummy block hash and number)
-        let rollup_context = self.generator.rollup_context();
-        if let Err(minimal_capacity) = to_custodian_cell(rollup_context, &H256::one(), 1, cell) {
-            let deposit_capacity = cell.cell.output.capacity().unpack();
-            return Err(anyhow!(
-                "Invalid deposit capacity, unable to generate custodian, minimal required: {}, got: {}",
-                minimal_capacity,
-                deposit_capacity
-            ));
-        }
-
-        Ok(())
     }
 }

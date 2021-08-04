@@ -2,12 +2,13 @@
 
 use crate::cleaner::{Cleaner, Verifier};
 use crate::poa::{PoA, ShouldIssueBlock};
-use crate::rpc_client::RPCClient;
 use crate::test_mode_control::TestModeControl;
 use crate::transaction_skeleton::TransactionSkeleton;
-use crate::types::{CellInfo, ChainEvent, InputCellInfo, TxStatus};
+use crate::types::ChainEvent;
 use crate::utils::{self, fill_tx_fee, CKBGenesisInfo};
 use crate::wallet::Wallet;
+use gw_rpc_client::RPCClient;
+use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, TxStatus};
 
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
@@ -15,7 +16,7 @@ use gw_chain::chain::{Chain, ChallengeCell, SyncEvent};
 use gw_chain::challenge::{RevertContext, VerifyContext};
 use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig};
-use gw_generator::{ChallengeContext, RollupContext};
+use gw_generator::ChallengeContext;
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_types::bytes::Bytes;
 use gw_types::core::{ChallengeTargetType, DepType, Status};

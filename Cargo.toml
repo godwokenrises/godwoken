@@ -12,6 +12,7 @@ members = [
   "crates/block-producer",
   "crates/jsonrpc-types",
   "crates/rpc-server",
+  "crates/rpc-client",
   "crates/tools",
   "crates/tests",
   "crates/web3-indexer",

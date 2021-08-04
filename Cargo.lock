@@ -1992,6 +1992,7 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
+ "gw-rpc-client",
  "gw-rpc-server",
  "gw-store",
  "gw-types",
@@ -2108,11 +2109,45 @@ dependencies = [
  "anyhow",
  "gw-common",
  "gw-generator",
+ "gw-rpc-client",
  "gw-store",
  "gw-traits",
  "gw-types",
+ "hex",
  "log",
  "rand 0.8.2",
+ "smol",
+]
+
+[[package]]
+name = "gw-rpc-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "async-jsonrpc-client",
+ "async-native-tls",
+ "async-std",
+ "async-trait",
+ "ckb-crypto",
+ "ckb-fixed-hash",
+ "ckb-types",
+ "env_logger",
+ "faster-hex 0.4.1",
+ "futures 0.3.13",
+ "gw-common",
+ "gw-config",
+ "gw-jsonrpc-types",
+ "gw-types",
+ "hex",
+ "lazy_static",
+ "log",
+ "parking_lot 0.11.1",
+ "semver 1.0.3",
+ "serde",
+ "serde_json",
+ "smol",
+ "toml",
 ]
 
 [[package]]

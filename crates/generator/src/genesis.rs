@@ -1,4 +1,4 @@
-use crate::{traits::StateExt, RollupContext};
+use crate::traits::StateExt;
 use anyhow::Result;
 use gw_common::{
     blake2b::new_blake2b,
@@ -17,6 +17,7 @@ use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
     core::{ScriptHashType, Status},
+    offchain::RollupContext,
     packed::{
         AccountMerkleState, BlockMerkleState, GlobalState, L2Block, L2BlockCommittedInfo,
         RawL2Block, Script, SubmitTransactions,

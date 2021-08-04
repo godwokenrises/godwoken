@@ -1,16 +1,13 @@
-use crate::{
-    rpc_client::RPCClient,
-    types::{CellInfo, InputCellInfo},
-};
 use anyhow::Result;
 use ckb_types::{
     bytes::Bytes,
     prelude::{Builder, Entity},
 };
 use gw_config::BlockProducerConfig;
-use gw_generator::RollupContext;
+use gw_rpc_client::RPCClient;
 use gw_types::{
     core::{DepType, ScriptHashType},
+    offchain::{CellInfo, InputCellInfo, RollupContext},
     packed::{CellDep, CellInput, CellOutput, L2Block, Script, StakeLockArgs},
     prelude::{Pack, Unpack},
 };

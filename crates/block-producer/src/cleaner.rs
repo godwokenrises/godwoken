@@ -1,13 +1,14 @@
-use crate::rpc_client::RPCClient;
 use crate::transaction_skeleton::TransactionSkeleton;
-use crate::types::{CellInfo, ChainEvent, InputCellInfo, TxStatus};
+use crate::types::ChainEvent;
 use crate::utils::{fill_tx_fee, CKBGenesisInfo};
 use crate::wallet::Wallet;
 
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
+use gw_rpc_client::RPCClient;
 use gw_types::core::Status;
+use gw_types::offchain::{CellInfo, InputCellInfo, TxStatus};
 use gw_types::packed::{CellDep, CellInput, GlobalState, Transaction, WitnessArgs};
 use gw_types::prelude::Unpack;
 

@@ -1,29 +1,16 @@
 [package]
-name = "gw-block-producer"
-version = "0.2.0-rc1"
+name = "gw-rpc-client"
+version = "0.1.0"
 authors = ["Nervos Network"]
 edition = "2018"
 
-[lib]
-path = "src/lib.rs"
-
-[[bin]]
-name = "godwoken"
-path = "src/main.rs"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 gw-common = { path = "../common" }
 gw-config = { path = "../config" }
-gw-chain = { path = "../chain" }
 gw-types = { path = "../types" }
-gw-db = { path = "../db" }
-gw-store = { path = "../store" }
-gw-generator = { path = "../generator" }
-gw-mem-pool = { path = "../mem-pool" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
-gw-rpc-server = { path = "../rpc-server" }
-gw-rpc-client = { path = "../rpc-client" }
-gw-web3-indexer = { path = "../web3-indexer" }
 faster-hex = "0.4"
 ckb-crypto = "0.38.0"
 ckb-fixed-hash = "0.38.0"
@@ -36,15 +23,12 @@ async-channel = "1.4.2"
 async-jsonrpc-client = { version = "0.3.0", default-features = false, features = ["http-async-std"] }
 async-native-tls = "0.3.3"
 async-std = "1.9.0"
-clap = "2.33.3"
-ctrlc = "3.1.6"
 env_logger = "0.8.3"
 futures = "0.3.13"
 log = "0.4.14"
 serde_json = "1.0"
 smol = "1.2.5"
 lazy_static = "1.4"
-sqlx = { version = "0.5", features = [ "runtime-async-std-native-tls", "postgres", "sqlite", "chrono", "decimal" ] }
 hex = "0.4"
 async-trait = "0.1"
 semver = "1.0"

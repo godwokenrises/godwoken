@@ -1,17 +1,15 @@
 //! POA lock off-chain module
 //! Reference implementation: https://github.com/nervosnetwork/clerkb/blob/main/src/generator.ts
 
-use crate::{
-    rpc_client::RPCClient,
-    transaction_skeleton::TransactionSkeleton,
-    types::{CellInfo, InputCellInfo},
-};
+use crate::transaction_skeleton::TransactionSkeleton;
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
+use gw_rpc_client::RPCClient;
 use gw_types::{
     bytes::Bytes,
     core::DepType,
+    offchain::{CellInfo, InputCellInfo},
     packed::{CellDep, CellInput, PoAData, Script},
     prelude::{Pack, Unpack},
 };

@@ -10,13 +10,13 @@ use gw_jsonrpc_types::{
     ckb_jsonrpc_types,
     debugger::{ReprMockCellDep, ReprMockInfo, ReprMockInput, ReprMockTransaction},
 };
+use gw_rpc_client::RPCClient;
 use gw_types::{
     core::DepType,
+    offchain::TxStatus,
     packed::{CellDep, OutPointVec, Transaction},
     prelude::*,
 };
-
-use crate::{rpc_client::RPCClient, types::TxStatus};
 
 pub async fn dump_transaction<P: AsRef<Path>>(
     dir: P,

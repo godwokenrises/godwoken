@@ -2,17 +2,6 @@
 #![allow(clippy::unnecessary_unwrap)]
 //! MemPool
 //!
-//! MemPool supports two mode: Normal & InstantFinality
-//!
-//! Normal mode:
-//! MemPool do not actually execute the transactions & withdrawals,
-//! the execution is delayed to the producing of the next block.
-//! In this mode, the block producer need to execute txs & withdrawals before produce new block.
-//! The design of Godwoken MemPool is highly inspired by the Geth TxPool.
-//! We maintain a pending list which contains executable txs & withdrawals (executable means can be packaged into the next block),
-//! we also maintain a queue list which contains non-executable txs & withdrawals (these objects may become executable in the future).
-//!
-//! Instant mode:
 //! The mem pool will update txs & withdrawals 'instantly' by running background tasks.
 //! So a user could query the tx receipt 'instantly'.
 //! Since we already got the next block status, the block prodcuer would not need to execute
@@ -26,6 +15,7 @@ use gw_common::{
     H256,
 };
 use gw_generator::{traits::StateExt, Generator};
+use gw_rpc_client::RPCClient;
 use gw_store::{
     chain_view::ChainView,
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, StateTree, SubState, WriteContext},
@@ -33,9 +23,12 @@ use gw_store::{
     Store,
 };
 use gw_types::{
-    offchain::RunResult,
-    packed::{AccountMerkleState, BlockInfo, L2Transaction, RawL2Transaction, WithdrawalRequest},
-    prelude::{Entity, Unpack},
+    offchain::{DepositInfo, RunResult},
+    packed::{
+        AccountMerkleState, BlockInfo, L2Block, L2Transaction, RawL2Transaction, Script, TxReceipt,
+        WithdrawalRequest,
+    },
+    prelude::{Entity, Pack, Unpack},
 };
 use rand::Rng;
 use std::{
@@ -44,13 +37,21 @@ use std::{
     sync::Arc,
 };
 
+use crate::{mem_block::MemBlock, withdrawal::AvailableCustodians};
+
+/// MAX deposits in the mem block
+const MAX_MEM_BLOCK_DEPOSITS: usize = 50;
+/// MAX withdrawals in the mem block
+const MAX_MEM_BLOCK_WITHDRAWALS: usize = 50;
+/// MAX withdrawals in the mem block
+const MAX_MEM_BLOCK_TXS: usize = 500;
 /// MAX mem pool txs
 const MAX_IN_POOL_TXS: usize = 6000;
-/// MAX mem pool withdrawal requests
+/// MAX mem pool withdrawals
 const MAX_IN_POOL_WITHDRAWAL: usize = 3000;
-/// MAX tx size
+/// MAX tx size 50 KB
 const MAX_TX_SIZE: usize = 50_000;
-/// MAX withdrawal size
+/// MAX withdrawal size 50 KB
 const MAX_WITHDRAWAL_SIZE: usize = 50_000;
 
 #[derive(Default)]
@@ -110,19 +111,8 @@ impl EntryList {
     }
 }
 
-/// Mem pool mode
-#[derive(Debug, PartialEq, Eq)]
-pub enum MemPoolMode {
-    /// Normal mode, transactions are not executed until produce the next block
-    Normal,
-    /// InstantFinality mode, transactions are executed instantly
-    InstantFinality,
-}
-
 /// MemPool
 pub struct MemPool {
-    /// mem pool mode
-    mode: MemPoolMode,
     /// store
     store: Store,
     /// current tip
@@ -135,10 +125,14 @@ pub struct MemPool {
     all_txs: HashMap<H256, L2Transaction>,
     /// all withdrawals in the pool
     all_withdrawals: HashMap<H256, WithdrawalRequest>,
+    /// memory block
+    mem_block: MemBlock,
+    /// RPC client
+    rpc_client: RPCClient,
 }
 
 impl MemPool {
-    pub fn create(mode: MemPoolMode, store: Store, generator: Arc<Generator>) -> Result<Self> {
+    pub fn create(store: Store, generator: Arc<Generator>, rpc_client: RPCClient) -> Result<Self> {
         let pending = Default::default();
         let all_txs = Default::default();
         let all_withdrawals = Default::default();
@@ -147,13 +141,14 @@ impl MemPool {
         let tip = (tip_block.hash().into(), tip_block.raw().number().unpack());
 
         let mut mem_pool = MemPool {
-            mode,
             store,
             current_tip: tip,
             generator,
             pending,
             all_txs,
             all_withdrawals,
+            rpc_client,
+            mem_block: Default::default(),
         };
 
         // set tip
@@ -162,7 +157,7 @@ impl MemPool {
     }
 
     pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
-        let offset = (self.all_withdrawals.len() + self.all_txs.len()) as u32;
+        let offset = (self.mem_block.withdrawals().len() + self.mem_block.txs().len()) as u32;
         StateDBTransaction::from_checkpoint(
             db,
             CheckPoint::new(self.current_tip.1, SubState::MemBlock(offset)),
@@ -191,25 +186,32 @@ impl MemPool {
             ));
         }
 
+        // reject if mem block is full
+        // TODO: we can use the pool as a buffer
+        if self.mem_block.txs().len() >= MAX_MEM_BLOCK_TXS {
+            return Err(anyhow!(
+                "Mem block is full, MAX_MEM_BLOCK_TXS: {}",
+                MAX_MEM_BLOCK_TXS
+            ));
+        }
+
         // remove withdrawal request with lower or equal tx nonce
         let account_id: u32 = tx.raw().from_id().unpack();
-        let entry_list = self.pending.entry(account_id).or_default();
-        let tx_nonce: u32 = tx.raw().nonce().unpack();
-        entry_list.withdrawals.retain(|withdrawal| {
-            let withdrawal_nonce: u32 = withdrawal.raw().nonce().unpack();
-            withdrawal_nonce > tx_nonce
-        });
 
         // Check replace-by-fee
         // TODO
 
-        if self.mode == MemPoolMode::InstantFinality {
-            // instantly run tx in background & update local state
-        }
+        // instantly run tx in background & update local state
+        let db = self.store.begin_transaction();
+        let tx_receipt = self.finalize_tx(&db, tx.clone())?;
+        db.commit()?;
+        // save tx receipt in mem pool
+        self.mem_block.push_tx(tx.hash().into(), tx_receipt);
 
         // Add to pool
         // TODO check nonce conflict
         self.all_txs.insert(tx_hash, tx.clone());
+        let entry_list = self.pending.entry(account_id).or_default();
         entry_list.txs.push(tx);
 
         Ok(())
@@ -317,10 +319,6 @@ impl MemPool {
         // Check replace-by-fee
         // TODO
 
-        if self.mode == MemPoolMode::InstantFinality {
-            // instantly run withdrawal in background & update local state
-        }
-
         // Add to pool
         // TODO check nonce conflict
         self.all_withdrawals
@@ -364,14 +362,8 @@ impl MemPool {
     pub fn notify_new_tip(&mut self, new_tip: H256) -> Result<()> {
         // reset pool state
         self.reset(Some(self.current_tip.0), Some(new_tip))?;
-        // under instant finality mode, all txs & withdrawal get executed or reject,
-        // so we can skip promote / demote phase
-        if self.mode == MemPoolMode::Normal {
-            // try promote executables
-            self.promote_executables(self.pending.iter())?;
-            // try demote unexecutables, this function also discards objects that already in the chain
-            self.demote_unexecutables()?;
-        }
+        // finalize next mem block
+        self.finalize_next_mem_block()?;
         Ok(())
     }
 
@@ -396,47 +388,13 @@ impl MemPool {
         Ok(deleted_count)
     }
 
-    /// Move executables into pending.
-    /// TODO
-    #[allow(clippy::unnecessary_wraps)]
-    fn promote_executables<I: Iterator>(&self, _accounts: I) -> Result<()> {
-        Ok(())
-    }
-
-    /// Discard unexecutables from pending.
-    fn demote_unexecutables(&mut self) -> Result<()> {
-        let db = self.store.begin_transaction();
-        let state_db = self.fetch_state_db(&db)?;
-        let state = state_db.account_state_tree()?;
-        let mut remove_list = Vec::default();
-        // iter pending accounts and demote any non-executable objects
-        for (&account_id, list) in &mut self.pending {
-            let nonce = state.get_nonce(account_id)?;
-
-            // drop txs if tx.nonce lower than nonce
-            let deprecated_txs = list.remove_lower_nonce_txs(nonce);
-            for tx in deprecated_txs {
-                let tx_hash = tx.hash().into();
-                self.all_txs.remove(&tx_hash);
-            }
-            // Drop all withdrawals that are have no enough balance
-            let script_hash = state.get_script_hash(account_id)?;
-            let capacity =
-                state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash))?;
-            let deprecated_withdrawals =
-                list.remove_lower_nonce_balance_withdrawals(nonce, capacity);
-            for withdrawal in deprecated_withdrawals {
-                let withdrawal_hash: H256 = withdrawal.hash().into();
-                self.all_withdrawals.remove(&withdrawal_hash);
-            }
-            // Delete empty entry
-            if list.is_empty() {
-                remove_list.push(account_id);
-            }
-        }
-        for account_id in remove_list {
-            self.pending.remove(&account_id);
-        }
+    /// Re-package mem block
+    /// This function reset mem block status & re-package current pool into mem block
+    pub fn repackage(&mut self) -> Result<()> {
+        // reset pool state
+        self.reset(Some(self.current_tip.0), Some(self.current_tip.0))?;
+        // finalize next mem block
+        self.finalize_next_mem_block()?;
         Ok(())
     }
 
@@ -512,21 +470,10 @@ impl MemPool {
             }
         }
 
-        // update current state
-        // let tip_block_hash = new_tip_block.hash().into();
-        // self.state_checkpoint = CheckPoint::from_block_hash(
-        //     &self.store.begin_transaction(),
-        //     tip_block_hash,
-        //     SubState::Block,
-        // )?;
-
-        // clear mem block status
-        let db = self.store.begin_transaction();
-        db.clear_mem_block_state()?;
+        // reset mem block state
         let merkle_state = new_tip_block.raw().post_account();
-        db.set_mem_block_account_count(merkle_state.count().unpack())?;
-        db.set_mem_block_account_smt_root(merkle_state.merkle_root().unpack())?;
-        db.commit()?;
+        self.reset_mem_block_state_db(merkle_state)?;
+        self.mem_block.reset(&new_tip_block);
 
         // set tip
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
@@ -538,36 +485,201 @@ impl MemPool {
             }
         }
 
-        // re-inject txs
-        for tx in reinject_txs {
-            if self.push_transaction(tx.clone()).is_err() {
-                log::info!("MemPool: drop tx {:?}", tx.hash());
+        if !reinject_txs.is_empty() {
+            // re-inject txs
+            for tx in reinject_txs {
+                if self.push_transaction(tx.clone()).is_err() {
+                    log::info!("MemPool: drop tx {:?}", tx.hash());
+                }
             }
         }
         Ok(())
     }
 
+    fn reset_mem_block_state_db(&self, merkle_state: AccountMerkleState) -> Result<()> {
+        let db = self.store.begin_transaction();
+        db.clear_mem_block_state()?;
+        db.set_mem_block_account_count(merkle_state.count().unpack())?;
+        db.set_mem_block_account_smt_root(merkle_state.merkle_root().unpack())?;
+        db.commit()?;
+        Ok(())
+    }
+
+    /// finalize next mem block
+    fn finalize_next_mem_block(&mut self) -> Result<()> {
+        if self.mem_block.txs().is_empty() {
+            // query deposit cells
+            let task = {
+                let rpc_client = self.rpc_client.clone();
+                smol::spawn(async move { rpc_client.query_deposit_cells().await })
+            };
+            // finalize withdrawals
+            let db = self.store.begin_transaction();
+            self.finalize_withdrawals(&db)?;
+            // finalize deposits
+            let deposit_cells = {
+                let cells = smol::block_on(task)?;
+                crate::deposit::sanitize_deposit_cells(self.generator.rollup_context(), cells)
+            };
+            self.finalize_deposits(&db, deposit_cells)?;
+        }
+        Ok(())
+    }
+
+    fn finalize_deposits(
+        &mut self,
+        db: &StoreTransaction,
+        deposit_cells: Vec<DepositInfo>,
+    ) -> Result<()> {
+        let state_db = self.fetch_state_db(db)?;
+        let mut state = state_db.account_state_tree()?;
+        // update deposits
+        let deposits: Vec<_> = deposit_cells.iter().map(|c| c.request.clone()).collect();
+        state.apply_deposit_requests(self.generator.rollup_context(), &deposits)?;
+        // calculate state after withdrawals & deposits
+        let prev_state_checkpoint = state.calculate_state_checkpoint()?;
+        self.mem_block
+            .push_deposits(deposit_cells, prev_state_checkpoint);
+        state.submit_tree_to_mem_block()?;
+        Ok(())
+    }
+
     /// Execute withdrawal & update local state
-    fn finalize_withdrawal(&self) -> Result<()> {
+    fn finalize_withdrawals(&mut self, db: &StoreTransaction) -> Result<()> {
+        // check mem block state
+        assert!(self.mem_block.withdrawals().is_empty());
+        assert!(self.mem_block.state_checkpoints().is_empty());
+        assert!(self.mem_block.deposits().is_empty());
+        assert!(self.mem_block.tx_receipts().is_empty());
+
+        let mut withdrawal_requests = Vec::new();
+
+        // find withdrawals from pending
+        {
+            for entry in self.pending().values() {
+                if !entry.withdrawals.is_empty()
+                    && withdrawal_requests.len() < MAX_MEM_BLOCK_WITHDRAWALS
+                {
+                    withdrawal_requests.push(entry.withdrawals.first().unwrap().clone());
+                }
+            }
+        };
+
+        let max_withdrawal_capacity = std::u128::MAX;
+        let available_custodians =
+            AvailableCustodians::build(db, &self.rpc_client, &withdrawal_requests)?;
+        let asset_scripts: HashMap<H256, Script> = {
+            let sudt_value = available_custodians.sudt.values();
+            sudt_value.map(|(_, script)| (script.hash().into(), script.to_owned()))
+        }
+        .collect();
+        let state_db = self.fetch_state_db(db)?;
+        let mut state = state_db.account_state_tree()?;
+        // verify the withdrawals
+        let mut unused_withdrawal_requests = Vec::with_capacity(withdrawal_requests.len());
+        let mut total_withdrawal_capacity: u128 = 0;
+        let mut withdrawal_verifier = crate::withdrawal::Generator::new(
+            self.generator.rollup_context(),
+            available_custodians,
+        );
+        for request in withdrawal_requests {
+            // check withdrawal request
+            if let Err(err) = self
+                .generator
+                .check_withdrawal_request_signature(&state, &request)
+            {
+                log::info!("[mem-pool] withdrawal signature error: {:?}", err);
+                unused_withdrawal_requests.push(request);
+                continue;
+            }
+            let asset_script = asset_scripts
+                .get(&request.raw().sudt_script_hash().unpack())
+                .cloned();
+            if let Err(err) =
+                self.generator
+                    .verify_withdrawal_request(&state, &request, asset_script)
+            {
+                log::info!("[mem-pool] withdrawal verification error: {:?}", err);
+                unused_withdrawal_requests.push(request);
+                continue;
+            }
+            let capacity: u64 = request.raw().capacity().unpack();
+            let new_total_withdrwal_capacity = total_withdrawal_capacity
+                .checked_add(capacity as u128)
+                .ok_or_else(|| anyhow!("total withdrawal capacity overflow"))?;
+            // skip package withdrwal if overdraft the Rollup capacity
+            if new_total_withdrwal_capacity > max_withdrawal_capacity {
+                log::info!(
+                    "[mem-pool] max_withdrawal_capacity({}) is not enough to withdraw({})",
+                    max_withdrawal_capacity,
+                    new_total_withdrwal_capacity
+                );
+                unused_withdrawal_requests.push(request);
+                continue;
+            }
+            total_withdrawal_capacity = new_total_withdrwal_capacity;
+
+            if let Err(err) = withdrawal_verifier.include_and_verify(&request, &L2Block::default())
+            {
+                log::info!(
+                    "[mem-pool] withdrawal contextual verification failed : {}",
+                    err
+                );
+                unused_withdrawal_requests.push(request);
+                continue;
+            }
+
+            // update the state
+            match state.apply_withdrawal_request(
+                self.generator.rollup_context(),
+                self.mem_block.block_producer_id(),
+                &request,
+            ) {
+                Ok(_) => {
+                    self.mem_block.push_withdrawal(
+                        request.hash().into(),
+                        state.calculate_state_checkpoint()?,
+                    );
+                }
+                Err(err) => {
+                    log::info!("[mem-pool] withdrawal execution failed : {}", err);
+                    unused_withdrawal_requests.push(request);
+                }
+            }
+        }
+        state.submit_tree_to_mem_block()?;
+        log::info!(
+            "[mem-pool] finalize withdrawals: {} staled withdrawals: {}",
+            self.mem_block.withdrawals().len(),
+            unused_withdrawal_requests.len()
+        );
         Ok(())
     }
 
     /// Execute tx & update local state
-    fn finalize_tx(&self, tx: L2Transaction, block_info: &BlockInfo) -> Result<RunResult> {
-        let db = self.store.begin_transaction();
+    fn finalize_tx(&mut self, db: &StoreTransaction, tx: L2Transaction) -> Result<TxReceipt> {
         let state_db = self.fetch_state_db(&db)?;
         let mut state = state_db.account_state_tree()?;
-        let tip_block_hash = self.store.get_tip_block_hash()?;
+        let tip_block_hash = db.get_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
+
+        let block_info = self.mem_block.block_info();
+
         // execute tx
         let raw_tx = tx.raw();
         let run_result =
             self.generator
                 .execute_transaction(&chain_view, &state, &block_info, &raw_tx)?;
+
         // apply run result
         state.apply_run_result(&run_result)?;
         state.submit_tree_to_mem_block()?;
-        db.commit()?;
-        Ok(run_result)
+
+        // generate tx receipt
+        let merkle_state = state.merkle_state()?;
+        let tx_receipt =
+            TxReceipt::build_receipt(tx.witness_hash().into(), run_result, merkle_state);
+
+        Ok(tx_receipt)
     }
 }

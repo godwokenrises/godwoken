@@ -1,9 +1,10 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
-use crate::types::{CellInfo, InputCellInfo, SignatureEntry};
+use crate::types::SignatureEntry;
 use anyhow::{anyhow, Result};
 use gw_types::{
     bytes::Bytes,
+    offchain::{CellInfo, InputCellInfo},
     packed::{CellDep, CellInput, CellOutput, OutPoint, RawTransaction, Transaction, WitnessArgs},
     prelude::*,
 };

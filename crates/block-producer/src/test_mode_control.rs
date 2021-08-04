@@ -1,7 +1,4 @@
 use crate::poa::{PoA, ShouldIssueBlock};
-use crate::rpc_client::RPCClient;
-use crate::types::InputCellInfo;
-
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
@@ -15,9 +12,11 @@ use gw_jsonrpc_types::{
     godwoken::GlobalState as JsonGlobalState,
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
+use gw_rpc_client::RPCClient;
 use gw_rpc_server::registry::TestModeRPC;
 use gw_store::Store;
 use gw_types::core::{ChallengeTargetType, Status};
+use gw_types::offchain::InputCellInfo;
 use gw_types::packed::{
     BlockMerkleState, ChallengeTarget, ChallengeWitness, GlobalState, L2Block, L2Transaction,
     SubmitWithdrawals, WithdrawalRequest,

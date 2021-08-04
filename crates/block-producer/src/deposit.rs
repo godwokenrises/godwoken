@@ -1,11 +1,9 @@
-use crate::types::{CellInfo, InputCellInfo};
-
 use anyhow::Result;
 use ckb_types::prelude::Entity;
 use gw_config::BlockProducerConfig;
-use gw_generator::RollupContext;
 use gw_types::bytes::Bytes;
 use gw_types::core::ScriptHashType;
+use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, CustodianLockArgs, Script, UnlockCustodianViaRevertWitness,
     WitnessArgs,

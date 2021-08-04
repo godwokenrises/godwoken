@@ -1,0 +1,71 @@
+use crate::packed::{
+    AccountMerkleState, Byte32, DepositRequest, LogItem, Script, TransactionKey, TxReceipt,
+};
+use crate::prelude::*;
+use crate::{
+    bytes::Bytes,
+    packed::{Block, CellInput, CellOutput, NumberHash, OutPoint},
+};
+use sparse_merkle_tree::H256;
+use std::collections::{HashMap, HashSet};
+
+#[derive(Debug, Clone)]
+pub struct CellInfo {
+    pub out_point: OutPoint,
+    pub output: CellOutput,
+    pub data: Bytes,
+}
+
+#[derive(Debug, Clone)]
+pub struct InputCellInfo {
+    pub input: CellInput,
+    pub cell: CellInfo,
+}
+
+#[derive(Debug)]
+pub struct CollectedCustodianCells {
+    pub cells_info: Vec<CellInfo>,
+    pub capacity: u128,
+    pub sudt: HashMap<[u8; 32], (u128, Script)>,
+}
+
+impl Default for CollectedCustodianCells {
+    fn default() -> Self {
+        CollectedCustodianCells {
+            cells_info: Default::default(),
+            capacity: 0,
+            sudt: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct WithdrawalsAmount {
+    pub capacity: u128,
+    pub sudt: HashMap<[u8; 32], u128>,
+}
+
+impl Default for WithdrawalsAmount {
+    fn default() -> Self {
+        WithdrawalsAmount {
+            capacity: 0,
+            sudt: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TxStatus {
+    /// Status "pending". The transaction is in the pool, and not proposed yet.
+    Pending,
+    /// Status "proposed". The transaction is in the pool and has been proposed.
+    Proposed,
+    /// Status "committed". The transaction has been committed to the canonical chain.
+    Committed,
+}
+
+#[derive(Debug, Clone)]
+pub struct DepositInfo {
+    pub request: DepositRequest,
+    pub cell: CellInfo,
+}

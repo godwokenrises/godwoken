@@ -1,7 +1,8 @@
 use super::LockAlgorithm;
-use crate::{error::LockAlgorithmError, RollupContext};
+use crate::error::LockAlgorithmError;
 use gw_common::blake2b::new_blake2b;
 use gw_common::H256;
+use gw_types::offchain::RollupContext;
 use gw_types::prelude::*;
 use gw_types::{
     bytes::Bytes,
