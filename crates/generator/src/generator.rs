@@ -1,6 +1,10 @@
 use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
+    constants::{
+        L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT,
+        MIN_WITHDRAWAL_CAPACITY,
+    },
     error::{TransactionValidateError, WithdrawalError},
     vm_cost_model::instruction_cycles,
     RollupContext,
@@ -34,15 +38,6 @@ use ckb_vm::{
     machine::asm::{AsmCoreMachine, AsmMachine},
     DefaultMachineBuilder, SupportMachine,
 };
-
-// TODO ensure this value
-const MIN_WITHDRAWAL_CAPACITY: u64 = 100_00000000;
-// 25 KB
-const MAX_WRITE_DATA_BYTES_LIMIT: usize = 25_000;
-// 2MB
-const MAX_READ_DATA_BYTES_LIMIT: usize = 1024 * 1024 * 2;
-// max cycles
-const L2TX_MAX_CYCLES: u64 = 5000_0000;
 
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
