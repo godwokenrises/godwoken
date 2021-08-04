@@ -74,7 +74,7 @@ fn to_custodian_cell(
     // Use custodian lock
     let output = {
         let builder = deposit_info.cell.output.clone().as_builder();
-        builder.lock(lock.clone()).build()
+        builder.lock(lock).build()
     };
     let data = deposit_info.cell.data.clone();
 
