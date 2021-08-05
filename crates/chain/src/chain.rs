@@ -623,7 +623,7 @@ impl Chain {
                         CheckPoint::from_block_hash(&db, parent_block_hash, SubState::Block)?,
                         StateDBMode::ReadOnly,
                     )?;
-                    let tree = state_db.account_state_tree()?;
+                    let tree = state_db.state_tree()?;
                     let expected_root: H256 = expected_state.merkle_root().unpack();
                     let expected_count: u32 = expected_state.count().unpack();
                     assert_eq!(tree.calculate_root()?, expected_root);
@@ -770,7 +770,7 @@ impl Chain {
             "account root consistent in DB"
         );
 
-        let tree = state_db.account_state_tree()?;
+        let tree = state_db.state_tree()?;
         let current_account_root = tree.calculate_root().unwrap();
 
         assert_eq!(
@@ -814,7 +814,7 @@ impl Chain {
             CheckPoint::new(block_number, SubState::Block),
             StateDBMode::Write(WriteContext::new(l2block.withdrawals().len() as u32)),
         )?;
-        let mut tree = state_db.account_state_tree()?;
+        let mut tree = state_db.state_tree()?;
 
         let prev_merkle_root: H256 = l2block.raw().prev_account().merkle_root().unpack();
         assert_eq!(

@@ -356,7 +356,7 @@ async fn get_balance(
         StateDBMode::ReadOnly,
     )?;
 
-    let tree = state_db.account_state_tree()?;
+    let tree = state_db.state_tree()?;
     let balance = tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?;
     Ok(balance.into())
 }
@@ -396,7 +396,7 @@ async fn get_storage_at(
         StateDBMode::ReadOnly,
     )?;
 
-    let tree = state_db.account_state_tree()?;
+    let tree = state_db.state_tree()?;
     let key: H256 = to_h256(key);
     let value = tree.get_value(account_id.into(), &key)?;
 
@@ -415,7 +415,7 @@ async fn get_account_id_by_script_hash(
         CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
         StateDBMode::ReadOnly,
     )?;
-    let tree = state_db.account_state_tree()?;
+    let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
 
@@ -460,7 +460,7 @@ async fn get_nonce(
         CheckPoint::new(block_number, SubState::Block),
         StateDBMode::ReadOnly,
     )?;
-    let tree = state_db.account_state_tree()?;
+    let tree = state_db.state_tree()?;
 
     let nonce = tree.get_nonce(account_id.into())?;
 
@@ -478,7 +478,7 @@ async fn get_script(
         CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
         StateDBMode::ReadOnly,
     )?;
-    let tree = state_db.account_state_tree()?;
+    let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
     let script_opt = tree.get_script(&script_hash).map(Into::into);
@@ -497,7 +497,7 @@ async fn get_script_hash(
         CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
         StateDBMode::ReadOnly,
     )?;
-    let tree = state_db.account_state_tree()?;
+    let tree = state_db.state_tree()?;
 
     let script_hash = tree.get_script_hash(account_id.into())?;
     Ok(to_jsonh256(script_hash))
@@ -514,7 +514,7 @@ async fn get_script_hash_by_short_address(
         CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
         StateDBMode::ReadOnly,
     )?;
-    let tree = state_db.account_state_tree()?;
+    let tree = state_db.state_tree()?;
     let script_hash_opt = tree.get_script_hash_by_short_address(&short_address.into_bytes());
     Ok(script_hash_opt.map(to_jsonh256))
 }
@@ -553,7 +553,7 @@ async fn get_data(
         CheckPoint::new(block_number, SubState::Block),
         StateDBMode::ReadOnly,
     )?;
-    let tree = state_db.account_state_tree()?;
+    let tree = state_db.state_tree()?;
 
     let data_opt = tree
         .get_data(&to_h256(data_hash))

@@ -308,82 +308,19 @@ impl BlockProducer {
 
         // get deposit cells
         // check deposit cells again to prevent upstream components errors.
-        let deposit_cells =
-            self.sanitize_deposit_cells(self.rpc_client.query_deposit_cells().await?);
+        let deposit_cells;
 
         // get txs & withdrawal requests from mem pool
-        let mut txs = Vec::new();
-        let mut withdrawal_requests = Vec::new();
+        // let mut txs = Vec::new();
+        // let mut withdrawal_requests = Vec::new();
         {
             let mem_pool = self.mem_pool.lock();
-            for entry in mem_pool.pending().values() {
-                if let Some(withdrawal) = entry.withdrawals.first() {
-                    withdrawal_requests.push(withdrawal.clone());
-                } else {
-                    txs.extend(entry.txs.iter().cloned());
-                }
-            }
+            let mem_block = mem_pool.mem_block();
+            deposit_cells = mem_block.deposits().to_vec();
+            // withdrawals = mem_block.withdrawals_requests().to_vec();
+            // txs = mem_block.txs().to_vec();
         };
         let parent_block = self.chain.lock().local_state().tip().clone();
-        let max_withdrawal_capacity = std::u128::MAX;
-
-        let available_custodians = if withdrawal_requests.is_empty() {
-            crate::withdrawal::AvailableCustodians::default()
-        } else {
-            let db = self.store.begin_transaction();
-            let mut sudt_scripts: HashMap<[u8; 32], Script> = HashMap::new();
-            let sudt_custodians = {
-                let reqs = withdrawal_requests.iter();
-                let sudt_reqs = reqs.filter(|req| {
-                    let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
-                    0 != req.raw().amount().unpack() && CKB_SUDT_SCRIPT_ARGS != sudt_script_hash
-                });
-
-                let to_hash = sudt_reqs.map(|req| req.raw().sudt_script_hash().unpack());
-                let has_script = to_hash.filter_map(|hash: [u8; 32]| {
-                    if let Some(script) = sudt_scripts.get(&hash).cloned() {
-                        return Some((hash, script));
-                    }
-
-                    match db.get_asset_script(&hash.into()) {
-                        Ok(opt_script) => opt_script.map(|script| {
-                            sudt_scripts.insert(hash, script.clone());
-                            (hash, script)
-                        }),
-                        Err(err) => {
-                            log::debug!("get custodian type script err {}", err);
-                            None
-                        }
-                    }
-                });
-
-                let to_custodian = has_script.filter_map(|(hash, script)| {
-                    match db.get_finalized_custodian_asset(hash.into()) {
-                        Ok(custodian_balance) => Some((hash, (custodian_balance, script))),
-                        Err(err) => {
-                            log::warn!("get custodian err {}", err);
-                            None
-                        }
-                    }
-                });
-                to_custodian.collect::<HashMap<[u8; 32], (u128, Script)>>()
-            };
-
-            let ckb_custodian = match db.get_finalized_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
-            {
-                Ok(balance) => balance,
-                Err(err) => {
-                    log::warn!("get ckb custodian err {}", err);
-                    0
-                }
-            };
-
-            crate::withdrawal::AvailableCustodians {
-                capacity: ckb_custodian,
-                sudt: sudt_custodians,
-            }
-        };
-        log::debug!("available custodians {:?}", available_custodians);
 
         // produce block
         let reverted_block_root: H256 = {
@@ -391,39 +328,32 @@ impl BlockProducer {
             let smt = db.reverted_block_smt()?;
             smt.root().to_owned()
         };
-        let param = ProduceBlockParam {
-            db: self.store.begin_transaction(),
-            generator: &self.generator,
-            block_producer_id,
-            stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
-            timestamp,
-            txs,
-            deposit_requests: deposit_cells.iter().map(|d| &d.request).cloned().collect(),
-            withdrawal_requests,
-            parent_block: &parent_block,
-            reverted_block_root,
-            rollup_config_hash: &self.rollup_config_hash,
-            max_withdrawal_capacity,
-            available_custodians,
-        };
-        let block_result = produce_block(param)?;
+        // let param = ProduceBlockParam {
+        //     db: self.store.begin_transaction(),
+        //     generator: &self.generator,
+        //     block_producer_id,
+        //     stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
+        //     timestamp,
+        //     txs,
+        //     deposit_requests: deposit_cells.iter().map(|d| &d.request).cloned().collect(),
+        //     withdrawal_requests,
+        //     parent_block: &parent_block,
+        //     reverted_block_root,
+        //     rollup_config_hash: &self.rollup_config_hash,
+        // };
+        // let block_result = produce_block(param)?;
+        let block_result = unreachable!();
         let ProduceBlockResult {
             mut block,
             mut global_state,
-            unused_transactions,
-            unused_withdrawal_requests,
-            l2tx_offchain_used_cycles,
         } = block_result;
         let number: u64 = block.raw().number().unpack();
         log::info!(
-            "produce new block #{} (txs: {}, deposits: {}, withdrawals: {}, staled txs: {}, staled withdrawals: {}, offchain cycles: {})",
+            "produce new block #{} (txs: {}, deposits: {}, withdrawals: {})",
             number,
             block.transactions().len(),
             deposit_cells.len(),
             block.withdrawals().len(),
-            unused_transactions.len(),
-            unused_withdrawal_requests.len(),
-            l2tx_offchain_used_cycles
         );
 
         if let Some(ref tests_control) = self.tests_control {

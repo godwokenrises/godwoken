@@ -123,7 +123,7 @@ fn test_produce_blocks() {
             StateDBMode::ReadOnly,
         )
         .unwrap();
-        let tree = state_db.account_state_tree().unwrap();
+        let tree = state_db.state_tree().unwrap();
         let script_hash_a: H256 = user_script_a.hash().into();
         let script_hash_b: H256 = user_script_b.hash().into();
         let id_a = tree
@@ -326,7 +326,7 @@ fn test_layer1_fork() {
             StateDBMode::ReadOnly,
         )
         .unwrap();
-        let tree = db.account_state_tree().unwrap();
+        let tree = db.state_tree().unwrap();
         let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
@@ -472,7 +472,7 @@ fn test_layer1_revert() {
             StateDBMode::ReadOnly,
         )
         .unwrap();
-        let tree = db.account_state_tree().unwrap();
+        let tree = db.state_tree().unwrap();
         let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
@@ -521,7 +521,7 @@ fn test_layer1_revert() {
             StateDBMode::ReadOnly,
         )
         .unwrap();
-        let tree = db.account_state_tree().unwrap();
+        let tree = db.state_tree().unwrap();
         let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
@@ -634,7 +634,7 @@ fn test_sync_blocks() {
             StateDBMode::ReadOnly,
         )
         .unwrap();
-        let tree = state_db.account_state_tree().unwrap();
+        let tree = state_db.state_tree().unwrap();
         let script_hash_a: H256 = user_script_a.hash().into();
         let id_a = tree
             .get_account_id_by_script_hash(&script_hash_a)

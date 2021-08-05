@@ -185,7 +185,7 @@ fn build_verify_withdrawal_witness(
         let raw_block = block.raw();
         let check_point = CheckPoint::new(raw_block.number().unpack() - 1, SubState::Block);
         let state_db = StateDBTransaction::from_checkpoint(db, check_point, StateDBMode::ReadOnly)?;
-        let tree = state_db.account_state_tree()?;
+        let tree = state_db.state_tree()?;
 
         tree.get_script(&sender_script_hash.into())
             .ok_or_else(|| anyhow!("sender script not found"))?
@@ -363,7 +363,7 @@ fn build_tx_kv_witness(
 
     let state_db =
         StateDBTransaction::from_checkpoint(db, local_prev_tx_checkpoint, StateDBMode::ReadOnly)?;
-    let mut tree = state_db.account_state_tree()?;
+    let mut tree = state_db.state_tree()?;
     let prev_tx_account_count = tree.get_account_count()?;
 
     // Check prev tx account state
@@ -443,7 +443,7 @@ fn build_tx_kv_witness(
     drop(tree);
     db.rollback()?;
 
-    tree = state_db.account_state_tree()?;
+    tree = state_db.state_tree()?;
     let prev_kv_state = {
         let keys = touched_keys.iter();
         let to_kv = keys.map(|k| {

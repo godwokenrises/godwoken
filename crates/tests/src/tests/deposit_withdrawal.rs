@@ -150,7 +150,7 @@ fn test_deposit_and_withdrawal() {
             StateDBMode::ReadOnly,
         )
         .unwrap();
-        let tree = state_db.account_state_tree().unwrap();
+        let tree = state_db.state_tree().unwrap();
         // check user account
         assert_eq!(
             tree.get_account_count().unwrap(),
@@ -179,7 +179,7 @@ fn test_deposit_and_withdrawal() {
         let mem_pool = chain.mem_pool().lock();
         let db = chain.store().begin_transaction();
         let state_db = mem_pool.fetch_state_db(&db).unwrap();
-        let state = state_db.account_state_tree().unwrap();
+        let state = state_db.state_tree().unwrap();
         assert_eq!(
             state
                 .get_account_id_by_script_hash(&user_script_hash.into())
@@ -214,7 +214,7 @@ fn test_deposit_and_withdrawal() {
         StateDBMode::ReadOnly,
     )
     .unwrap();
-    let tree = state_db.account_state_tree().unwrap();
+    let tree = state_db.state_tree().unwrap();
     let ckb_balance2 = tree
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&user_script_hash))
         .unwrap();
@@ -225,7 +225,7 @@ fn test_deposit_and_withdrawal() {
     {
         let mem_pool = chain.mem_pool().lock();
         let state_db = mem_pool.fetch_state_db(&db).unwrap();
-        let state = state_db.account_state_tree().unwrap();
+        let state = state_db.state_tree().unwrap();
         assert_eq!(
             state
                 .get_account_id_by_script_hash(&user_script_hash.into())

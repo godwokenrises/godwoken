@@ -57,7 +57,7 @@ pub fn build_genesis_from_store(
     db.set_reverted_block_smt_root(H256::zero())?;
     let state_db =
         StateDBTransaction::from_checkpoint(&db, CheckPoint::from_genesis(), StateDBMode::Genesis)?;
-    let mut tree = state_db.account_state_tree()?;
+    let mut tree = state_db.state_tree()?;
 
     // create a reserved account
     // this account is reserved for special use

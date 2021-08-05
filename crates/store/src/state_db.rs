@@ -315,7 +315,7 @@ impl<'db> StateDBTransaction<'db> {
         Ok(SMT::new(merkle_state.merkle_root().unpack(), smt_store))
     }
 
-    pub fn account_state_tree_with_merkle_state(
+    pub fn state_tree_with_merkle_state(
         &self,
         merkle_state: AccountMerkleState,
     ) -> Result<StateTree<'_, 'db>, Error> {
@@ -335,9 +335,9 @@ impl<'db> StateDBTransaction<'db> {
         self.account_smt_with_merkle_state(merkle_state)
     }
 
-    pub fn account_state_tree(&self) -> Result<StateTree<'_, 'db>, Error> {
+    pub fn state_tree(&self) -> Result<StateTree<'_, 'db>, Error> {
         let merkle_state = self.get_checkpoint_merkle_state()?;
-        self.account_state_tree_with_merkle_state(merkle_state)
+        self.state_tree_with_merkle_state(merkle_state)
     }
 
     fn get_checkpoint_merkle_state(&self) -> Result<AccountMerkleState, Error> {
@@ -466,7 +466,6 @@ impl<'db> StateDBTransaction<'db> {
 
 /// Tracker state changes
 pub struct StateTracker {
-    enabled: bool,
     touched_keys: Option<RefCell<HashSet<H256>>>,
 }
 
@@ -478,22 +477,14 @@ impl Default for StateTracker {
 
 impl StateTracker {
     pub fn new() -> Self {
-        StateTracker {
-            enabled: false,
-            touched_keys: None,
-        }
+        StateTracker { touched_keys: None }
     }
 
     /// Enable state tracking
     pub fn enable(&mut self) {
-        if !self.enabled && self.touched_keys.is_none() {
+        if self.touched_keys.is_none() {
             self.touched_keys = Some(Default::default())
         }
-        self.enabled = true;
-    }
-
-    pub fn disable(&mut self) {
-        self.enabled = false;
     }
 
     /// Return touched keys
@@ -503,10 +494,6 @@ impl StateTracker {
 
     /// Record a key in the tracker
     pub fn touch_key(&self, key: &H256) {
-        if !self.enabled {
-            return;
-        }
-
         if let Some(touched_keys) = self.touched_keys.as_ref() {
             touched_keys.borrow_mut().insert(*key);
         }

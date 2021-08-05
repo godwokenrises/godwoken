@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use gw_common::{merkle_utils::calculate_state_checkpoint, H256};
 use gw_types::{
     offchain::DepositInfo,
-    packed::{BlockInfo, L2Block, TxReceipt},
+    packed::{AccountMerkleState, BlockInfo, L2Block, TxReceipt},
     prelude::*,
 };
 
@@ -24,6 +24,10 @@ pub struct MemBlock {
     txs_prev_state_checkpoint: Option<H256>,
     /// Mem block info
     block_info: BlockInfo,
+    /// Mem block prev merkle state
+    prev_merkle_state: AccountMerkleState,
+    /// touched keys
+    touched_keys: Vec<H256>,
 }
 
 impl MemBlock {
@@ -33,6 +37,7 @@ impl MemBlock {
 
     pub fn reset(&mut self, tip: &L2Block) {
         unreachable!();
+        self.prev_merkle_state = tip.raw().post_account();
         let estimate_timestamp = unreachable!();
         let tip_number: u64 = tip.raw().number().unpack();
         let number = tip_number + 1;
@@ -67,6 +72,10 @@ impl MemBlock {
         self.state_checkpoints.push(state_checkpoint);
     }
 
+    pub fn append_touched_keys<I: Iterator<Item = H256>>(&mut self, keys: I) {
+        self.touched_keys.extend(keys)
+    }
+
     pub fn withdrawals(&self) -> &[H256] {
         &self.withdrawals
     }
@@ -89,5 +98,17 @@ impl MemBlock {
 
     pub fn block_producer_id(&self) -> u32 {
         self.block_producer_id
+    }
+
+    pub fn touched_keys(&self) -> &[H256] {
+        &self.touched_keys
+    }
+
+    pub fn txs_prev_state_checkpoint(&self) -> Option<H256> {
+        self.txs_prev_state_checkpoint
+    }
+
+    pub fn prev_merkle_state(&self) -> &AccountMerkleState {
+        &self.prev_merkle_state
     }
 }
