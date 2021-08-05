@@ -78,7 +78,7 @@ impl From<WithdrawalError> for Error {
 #[derive(Error, Debug, PartialEq, Clone, Eq)]
 pub enum AccountError {
     #[error("Insufficient capacity expected {expected} actual {actual}")]
-    InsufficientCapacity { expected: u64, actual: u64 },
+    InsufficientCapacity { expected: u128, actual: u64 },
     #[error("Invalid SUDT operation")]
     InvalidSUDTOperation,
     #[error("Unknown SUDT")]

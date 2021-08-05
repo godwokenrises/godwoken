@@ -22,6 +22,7 @@ use gw_types::{
 };
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
+use std::collections::HashSet;
 use std::{fs, io::Read, path::PathBuf, sync::Arc};
 
 const SCRIPT_DIR: &'static str = "../../tests-deps/godwoken-scripts/build/debug";
@@ -168,6 +169,7 @@ pub fn apply_block_result(
     rollup_cell: CellOutput,
     block_result: ProduceBlockResult,
     deposit_requests: Vec<DepositRequest>,
+    deposit_asset_scripts: HashSet<Script>,
 ) {
     let l2block = block_result.block.clone();
     let transaction = build_sync_tx(rollup_cell, block_result);
@@ -177,6 +179,7 @@ pub fn apply_block_result(
         context: L1ActionContext::SubmitBlock {
             l2block,
             deposit_requests,
+            deposit_asset_scripts,
         },
         transaction,
         l2block_committed_info,

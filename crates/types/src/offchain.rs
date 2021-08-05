@@ -1,4 +1,5 @@
-use crate::packed::{CellOutput, LogItem};
+use crate::packed::{CellOutput, LogItem, Script};
+use ckb_types::prelude::Reader;
 use molecule::prelude::Entity;
 use sparse_merkle_tree::H256;
 use std::collections::{HashMap, HashSet};
@@ -26,5 +27,11 @@ impl CellOutput {
         output
             .occupied_capacity(ckb_types::core::Capacity::bytes(data_capacity)?)
             .map(|c| c.as_u64())
+    }
+}
+
+impl std::hash::Hash for Script {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_reader().as_slice().hash(state)
     }
 }

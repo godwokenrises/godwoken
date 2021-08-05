@@ -320,9 +320,12 @@ impl MemPool {
         // verify withdrawal signature
         self.generator
             .check_withdrawal_request_signature(&state, withdrawal_request)?;
+
         // withdrawal basic verification
+        let asset_script =
+            db.get_asset_script(&withdrawal_request.raw().sudt_script_hash().unpack())?;
         self.generator
-            .verify_withdrawal_request(&state, withdrawal_request)
+            .verify_withdrawal_request(&state, withdrawal_request, asset_script)
             .map_err(Into::into)
     }
 

@@ -1,11 +1,13 @@
+#![allow(clippy::clippy::mutable_key_type)]
+
 use crate::{smt_store_impl::SMTStore, traits::KVStore};
 use gw_common::h256_ext::H256Ext;
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_db::schema::{
-    Col, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSIT_REQUESTS,
-    COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF,
-    COLUMN_BLOCK_STATE_RECORD, COLUMN_CHECKPOINT, COLUMN_CUSTODIAN_ASSETS, COLUMN_INDEX,
-    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_BRANCH,
+    Col, COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
+    COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH,
+    COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD, COLUMN_CHECKPOINT, COLUMN_CUSTODIAN_ASSETS,
+    COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_BRANCH,
     COLUMN_REVERTED_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION,
     COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, META_ACCOUNT_SMT_COUNT_KEY,
     META_ACCOUNT_SMT_ROOT_KEY, META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY,
@@ -14,6 +16,7 @@ use gw_db::schema::{
 use gw_db::{
     error::Error, iter::DBIter, DBIterator, Direction::Forward, IteratorMode, RocksDBTransaction,
 };
+use gw_types::packed::Script;
 use gw_types::{
     packed::{
         self, AccountMerkleState, Byte32, ChallengeTarget, RollupConfig, TransactionKey,
@@ -603,6 +606,23 @@ impl StoreTransaction {
         }
 
         Ok(())
+    }
+
+    pub fn insert_asset_scripts(&self, scripts: HashSet<Script>) -> Result<(), Error> {
+        for script in scripts.into_iter() {
+            self.insert_raw(COLUMN_ASSET_SCRIPT, &script.hash(), script.as_slice())?;
+        }
+
+        Ok(())
+    }
+
+    pub fn get_asset_script(&self, script_hash: &H256) -> Result<Option<Script>, Error> {
+        match self.get(COLUMN_ASSET_SCRIPT, script_hash.as_slice()) {
+            Some(slice) => Ok(Some(
+                packed::ScriptReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+            )),
+            None => Ok(None),
+        }
     }
 
     /// Update finalized custodian assets
