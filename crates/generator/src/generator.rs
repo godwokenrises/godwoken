@@ -1,6 +1,7 @@
 use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
+    constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
     error::{TransactionValidateError, WithdrawalError},
     vm_cost_model::instruction_cycles,
     RollupContext,
@@ -21,11 +22,13 @@ use gw_common::{
 };
 use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
+    bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType},
     offchain::RunResult,
     packed::{
-        AccountMerkleState, BlockInfo, ChallengeTarget, DepositRequest, L2Block, L2Transaction,
-        RawL2Block, RawL2Transaction, TxReceipt, WithdrawalReceipt, WithdrawalRequest,
+        AccountMerkleState, BlockInfo, CellOutput, ChallengeTarget, DepositRequest, L2Block,
+        L2Transaction, RawL2Block, RawL2Transaction, Script, TxReceipt, WithdrawalLockArgs,
+        WithdrawalReceipt, WithdrawalRequest,
     },
     prelude::*,
 };
@@ -34,15 +37,6 @@ use ckb_vm::{
     machine::asm::{AsmCoreMachine, AsmMachine},
     DefaultMachineBuilder, SupportMachine,
 };
-
-// TODO ensure this value
-const MIN_WITHDRAWAL_CAPACITY: u64 = 100_00000000;
-// 25 KB
-const MAX_WRITE_DATA_BYTES_LIMIT: usize = 25_000;
-// 2MB
-const MAX_READ_DATA_BYTES_LIMIT: usize = 1024 * 1024 * 2;
-// max cycles
-const L2TX_MAX_CYCLES: u64 = 5000_0000;
 
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
@@ -96,6 +90,7 @@ impl Generator {
         &self,
         state: &S,
         withdrawal_request: &WithdrawalRequest,
+        asset_script: Option<Script>,
     ) -> Result<(), Error> {
         let raw = withdrawal_request.raw();
         let account_script_hash: H256 = raw.account_script_hash().unpack();
@@ -107,10 +102,17 @@ impl Generator {
         let fee_amount: u128 = fee.amount().unpack();
         let account_short_address = to_short_address(&account_script_hash);
 
-        // check capacity
-        if capacity < MIN_WITHDRAWAL_CAPACITY {
+        // check capacity (use dummy block hash and number)
+        let rollup_context = self.rollup_context();
+        if let Err(min_capacity) = Self::build_withdrawal_cell_output(
+            rollup_context,
+            withdrawal_request,
+            &H256::one(),
+            1,
+            asset_script,
+        ) {
             return Err(AccountError::InsufficientCapacity {
-                expected: MIN_WITHDRAWAL_CAPACITY,
+                expected: min_capacity,
                 actual: capacity,
             }
             .into());
@@ -533,6 +535,64 @@ impl Generator {
         }
 
         Ok(run_result)
+    }
+
+    pub fn build_withdrawal_cell_output(
+        rollup_context: &RollupContext,
+        req: &WithdrawalRequest,
+        block_hash: &H256,
+        block_number: u64,
+        asset_script: Option<Script>,
+    ) -> Result<(CellOutput, Bytes), u128> {
+        let withdrawal_capacity: u64 = req.raw().capacity().unpack();
+        let lock_args: Bytes = {
+            let withdrawal_lock_args = WithdrawalLockArgs::new_builder()
+                .account_script_hash(req.raw().account_script_hash())
+                .withdrawal_block_hash(Into::<[u8; 32]>::into(*block_hash).pack())
+                .withdrawal_block_number(block_number.pack())
+                .sudt_script_hash(req.raw().sudt_script_hash())
+                .sell_amount(req.raw().sell_amount())
+                .sell_capacity(withdrawal_capacity.pack())
+                .owner_lock_hash(req.raw().owner_lock_hash())
+                .payment_lock_hash(req.raw().payment_lock_hash())
+                .build();
+
+            let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
+            rollup_type_hash
+                .chain(withdrawal_lock_args.as_slice().iter())
+                .cloned()
+                .collect()
+        };
+
+        let lock = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.withdrawal_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .args(lock_args.pack())
+            .build();
+
+        let (type_, data) = match asset_script {
+            Some(type_) => (Some(type_).pack(), req.raw().amount().as_bytes()),
+            None => (None::<Script>.pack(), Bytes::new()),
+        };
+
+        let output = CellOutput::new_builder()
+            .capacity(withdrawal_capacity.pack())
+            .type_(type_)
+            .lock(lock)
+            .build();
+
+        match output.occupied_capacity(data.len()) {
+            Ok(min_capacity) if min_capacity > withdrawal_capacity => {
+                return Err(min_capacity as u128)
+            }
+            Err(err) => {
+                log::debug!("calculate withdrawal capacity {}", err); // Overflow
+                return Err(u64::MAX as u128 + 1);
+            }
+            _ => (),
+        }
+
+        Ok((output, data))
     }
 }
 

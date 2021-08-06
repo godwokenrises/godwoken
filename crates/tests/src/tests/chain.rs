@@ -36,6 +36,7 @@ fn produce_a_block(
         context: L1ActionContext::SubmitBlock {
             l2block,
             deposit_requests: vec![deposit.clone()],
+            deposit_asset_scripts: Default::default(),
         },
         transaction,
         l2block_committed_info,
@@ -182,6 +183,7 @@ fn test_layer1_fork() {
             context: L1ActionContext::SubmitBlock {
                 l2block: block_result.block.clone(),
                 deposit_requests: vec![deposit],
+                deposit_asset_scripts: Default::default(),
             },
             transaction: build_sync_tx(rollup_cell.clone(), block_result),
             l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -211,6 +213,7 @@ fn test_layer1_fork() {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit.clone()],
+            deposit_asset_scripts: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -245,6 +248,7 @@ fn test_layer1_fork() {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit],
+            deposit_asset_scripts: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -371,6 +375,7 @@ fn test_layer1_revert() {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit.clone()],
+            deposit_asset_scripts: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -405,6 +410,7 @@ fn test_layer1_revert() {
         context: L1ActionContext::SubmitBlock {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit],
+            deposit_asset_scripts: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()

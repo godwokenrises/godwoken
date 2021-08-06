@@ -1,3 +1,5 @@
+#![allow(clippy::clippy::mutable_key_type)]
+
 use anyhow::{anyhow, Result};
 use gw_common::{sparse_merkle_tree, state::State, H256};
 use gw_generator::{
@@ -21,7 +23,7 @@ use gw_types::{
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
 use parking_lot::Mutex;
-use std::{convert::TryFrom, sync::Arc};
+use std::{collections::HashSet, convert::TryFrom, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub struct ChallengeCell {
@@ -45,6 +47,7 @@ pub enum L1ActionContext {
         /// deposit requests
         l2block: L2Block,
         deposit_requests: Vec<DepositRequest>,
+        deposit_asset_scripts: HashSet<Script>,
     },
     Challenge {
         cell: ChallengeCell,
@@ -257,6 +260,7 @@ impl Chain {
                     L1ActionContext::SubmitBlock {
                         l2block,
                         deposit_requests,
+                        deposit_asset_scripts,
                     },
                 ) => {
                     let local_tip = self.local_state.tip();
@@ -299,6 +303,7 @@ impl Chain {
                         l2block_committed_info.clone(),
                         global_state.clone(),
                         deposit_requests,
+                        deposit_asset_scripts,
                     )? {
                         db.rollback()?;
                         log::info!("bad block found, rollback db");
@@ -787,6 +792,7 @@ impl Chain {
         l2block_committed_info: L2BlockCommittedInfo,
         global_state: GlobalState,
         deposit_requests: Vec<DepositRequest>,
+        deposit_asset_scripts: HashSet<Script>,
     ) -> Result<Option<ChallengeTarget>> {
         let tip_number: u64 = self.local_state.tip.raw().number().unpack();
         let tip_block_hash = self.local_state.tip.raw().hash();
@@ -857,6 +863,8 @@ impl Chain {
             tx_receipts,
             deposit_requests,
         )?;
+        db.insert_asset_scripts(deposit_asset_scripts)?;
+
         let rollup_config = &self.generator.rollup_context().rollup_config;
         db.attach_block(l2block.clone(), rollup_config)?;
         tree.submit_tree()?;
