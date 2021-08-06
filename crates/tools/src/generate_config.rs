@@ -2,6 +2,7 @@ use crate::deploy_genesis::{get_secp_data, GenesisDeploymentResult};
 use crate::deploy_scripts::ScriptsDeploymentResult;
 use crate::setup::get_wallet_info;
 use anyhow::{anyhow, Result};
+use ckb_fixed_hash::H256;
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_config::{
@@ -281,11 +282,18 @@ pub fn generate_config(
         .allowed_eoa_type_hashes
         .get(0)
         .ok_or_else(|| anyhow!("No allowed EoA type hashes in the rollup config"))?;
+    let tron_allowed_eoa = genesis.rollup_config.allowed_eoa_type_hashes.get(1);
+    let default_tron = &H256([0u8; 32]);
+    let tron_account_lock_hash = match tron_allowed_eoa {
+        Some(code_hash) => code_hash,
+        _ => default_tron, // set a default value
+    };
     let web3_indexer = match database_url {
         Some(database_url) => Some(Web3IndexerConfig {
             database_url: database_url.to_owned(),
             polyjuice_script_type_hash: scripts_results.polyjuice_validator.script_type_hash,
             eth_account_lock_hash: eth_account_lock_hash.to_owned(),
+            tron_account_lock_hash: tron_account_lock_hash.to_owned(),
         }),
         None => None,
     };

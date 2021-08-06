@@ -36,6 +36,7 @@ pub struct Web3Indexer {
     polyjuice_type_script_hash: H256,
     rollup_type_hash: H256,
     eth_account_lock_hash: H256,
+    tron_account_lock_hash: H256,
 }
 
 impl Web3Indexer {
@@ -45,6 +46,7 @@ impl Web3Indexer {
         polyjuice_type_script_hash: H256,
         rollup_type_hash: H256,
         eth_account_lock_hash: H256,
+        tron_account_lock_hash: H256,
     ) -> Self {
         Web3Indexer {
             pool,
@@ -52,6 +54,7 @@ impl Web3Indexer {
             polyjuice_type_script_hash,
             rollup_type_hash,
             eth_account_lock_hash,
+            tron_account_lock_hash,
         }
     }
 
@@ -203,8 +206,10 @@ impl Web3Indexer {
                     anyhow!("Can't get script by script_hash: {:?}", from_script_hash)
                 })?;
             let from_script_code_hash: H256 = from_script.code_hash().unpack();
-            // skip tx with non eth_account_lock from_id
-            if from_script_code_hash != self.eth_account_lock_hash {
+            // skip tx with non eth_account_lock or non tron_account_lock from_id
+            if from_script_code_hash != self.eth_account_lock_hash
+                || from_script_code_hash != self.tron_account_lock_hash
+            {
                 continue;
             }
             // from_address is the script's args in eth account lock

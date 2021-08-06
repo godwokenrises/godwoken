@@ -289,6 +289,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             })?;
             let polyjuce_type_script_hash = web3_indexer_config.polyjuice_script_type_hash;
             let eth_account_lock_hash = web3_indexer_config.eth_account_lock_hash;
+            let tron_account_lock_hash = web3_indexer_config.tron_account_lock_hash;
             let web3_indexer = Web3Indexer::new(
                 pool,
                 config
@@ -298,6 +299,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 polyjuce_type_script_hash,
                 config.genesis.rollup_type_hash,
                 eth_account_lock_hash,
+                tron_account_lock_hash,
             );
             Some(web3_indexer)
         }
