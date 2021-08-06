@@ -1,7 +1,6 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
 use crate::{
-    poa::{PoA, ShouldIssueBlock},
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
     test_mode_control::TestModeControl,
     transaction_skeleton::TransactionSkeleton,
@@ -18,6 +17,7 @@ use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::Generator;
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_mem_pool::pool::MemPool;
+use gw_poa::{PoA, ShouldIssueBlock};
 use gw_rpc_client::RPCClient;
 use gw_store::Store;
 use gw_types::{
@@ -308,18 +308,15 @@ impl BlockProducer {
 
         // get deposit cells
         // check deposit cells again to prevent upstream components errors.
-        let deposit_cells;
 
         // get txs & withdrawal requests from mem pool
         // let mut txs = Vec::new();
         // let mut withdrawal_requests = Vec::new();
-        {
+        let block_param = {
             let mem_pool = self.mem_pool.lock();
-            let mem_block = mem_pool.mem_block();
-            deposit_cells = mem_block.deposits().to_vec();
-            // withdrawals = mem_block.withdrawals_requests().to_vec();
-            // txs = mem_block.txs().to_vec();
+            mem_pool.output_mem_block()?
         };
+        let deposit_cells = block_param.deposits.clone();
         let parent_block = self.chain.lock().local_state().tip().clone();
 
         // produce block
@@ -328,21 +325,14 @@ impl BlockProducer {
             let smt = db.reverted_block_smt()?;
             smt.root().to_owned()
         };
-        // let param = ProduceBlockParam {
-        //     db: self.store.begin_transaction(),
-        //     generator: &self.generator,
-        //     block_producer_id,
-        //     stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
-        //     timestamp,
-        //     txs,
-        //     deposit_requests: deposit_cells.iter().map(|d| &d.request).cloned().collect(),
-        //     withdrawal_requests,
-        //     parent_block: &parent_block,
-        //     reverted_block_root,
-        //     rollup_config_hash: &self.rollup_config_hash,
-        // };
-        // let block_result = produce_block(param)?;
-        let block_result = unreachable!();
+        let param = ProduceBlockParam {
+            stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
+            reverted_block_root,
+            rollup_config_hash: self.rollup_config_hash,
+            block_param,
+        };
+        let db = self.store.begin_transaction();
+        let block_result = produce_block(&db, &self.generator, param)?;
         let ProduceBlockResult {
             mut block,
             mut global_state,
@@ -613,10 +603,15 @@ impl BlockProducer {
         // custodian cells
         let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
         tx_skeleton.outputs_mut().extend(custodian_cells);
-        self.poa
-            .fill_poa(&mut tx_skeleton, rollup_cell_input_index, median_time)
-            .await?;
-
+        // fill PoA cells
+        {
+            let rollup_cell_input = &tx_skeleton.inputs()[rollup_cell_input_index];
+            let generated_poa = self
+                .poa
+                .generate(rollup_cell_input, tx_skeleton.inputs(), median_time)
+                .await?;
+            tx_skeleton.fill_poa(generated_poa, rollup_cell_input_index)?;
+        }
         // stake cell
         let generated_stake = crate::stake::generate(
             &rollup_cell,

@@ -2,6 +2,7 @@
 
 use crate::types::SignatureEntry;
 use anyhow::{anyhow, Result};
+use gw_poa::GeneratedPoA;
 use gw_types::{
     bytes::Bytes,
     offchain::{CellInfo, InputCellInfo},
@@ -213,5 +214,41 @@ impl TransactionSkeleton {
             }
         }
         Ok(taken_outpoints)
+    }
+
+    pub fn fill_poa(&mut self, poa: GeneratedPoA, poa_cell_input_index: usize) -> Result<()> {
+        let GeneratedPoA {
+            poa_input_cell_since,
+            owner_input_cell,
+            input_cells,
+            output_cells,
+            cell_deps,
+        } = poa;
+        // put cell deps
+        self.cell_deps_mut().extend(cell_deps);
+        // push PoA data cell
+        self.inputs_mut().extend(input_cells);
+
+        // Update PoA cell since time
+        // TODO: block interval handling
+        self.inputs_mut()[poa_cell_input_index] = {
+            let mut poa_cell = self.inputs()[poa_cell_input_index].clone();
+            poa_cell.input = poa_cell
+                .input
+                .as_builder()
+                .since(poa_input_cell_since.pack())
+                .build();
+            poa_cell
+        };
+
+        self.outputs_mut().extend(output_cells);
+
+        // Push owner cell if not exists
+        if let Some(owner_input) = owner_input_cell {
+            // put owner cell to input, the change cell will complete the output
+            self.inputs_mut().push(owner_input);
+        }
+
+        Ok(())
     }
 }

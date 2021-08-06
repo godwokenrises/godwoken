@@ -1,4 +1,3 @@
-use crate::poa::{PoA, ShouldIssueBlock};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
@@ -12,6 +11,7 @@ use gw_jsonrpc_types::{
     godwoken::GlobalState as JsonGlobalState,
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
+use gw_poa::{PoA, ShouldIssueBlock};
 use gw_rpc_client::RPCClient;
 use gw_rpc_server::registry::TestModeRPC;
 use gw_store::Store;

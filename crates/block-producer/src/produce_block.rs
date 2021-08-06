@@ -75,7 +75,6 @@ pub fn produce_block(
     } = param;
 
     let rollup_context = generator.rollup_context();
-    let parent_block_number: u64 = parent_block.raw().number().unpack();
     let parent_block_hash: H256 = parent_block.hash().into();
 
     // assemble block

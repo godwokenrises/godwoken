@@ -1,7 +1,6 @@
 use crate::{
-    block_producer::BlockProducer, challenger::Challenger, cleaner::Cleaner, poa::PoA,
-    poller::ChainUpdater, test_mode_control::TestModeControl, types::ChainEvent,
-    utils::CKBGenesisInfo, wallet::Wallet,
+    block_producer::BlockProducer, challenger::Challenger, cleaner::Cleaner, poller::ChainUpdater,
+    test_mode_control::TestModeControl, types::ChainEvent, utils::CKBGenesisInfo, wallet::Wallet,
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
@@ -19,6 +18,7 @@ use gw_generator::{
     Generator,
 };
 use gw_mem_pool::pool::MemPool;
+use gw_poa::PoA;
 use gw_rpc_client::RPCClient;
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;

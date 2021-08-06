@@ -1992,6 +1992,7 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
+ "gw-poa",
  "gw-rpc-client",
  "gw-rpc-server",
  "gw-store",
@@ -2116,6 +2117,21 @@ dependencies = [
  "hex",
  "log",
  "rand 0.8.2",
+ "smol",
+]
+
+[[package]]
+name = "gw-poa"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gw-common",
+ "gw-generator",
+ "gw-rpc-client",
+ "gw-traits",
+ "gw-types",
+ "hex",
+ "log",
  "smol",
 ]
 

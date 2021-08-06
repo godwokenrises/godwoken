@@ -30,7 +30,9 @@ use gw_types::{
     },
     prelude::{Entity, Pack, Unpack},
 };
+use gw_poa::PoA;
 use rand::Rng;
+use smol::lock::Mutex;
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
@@ -129,10 +131,17 @@ pub struct MemPool {
     mem_block: MemBlock,
     /// RPC client
     rpc_client: RPCClient,
+    /// POA Context
+    poa: Arc<Mutex<PoA>>,
 }
 
 impl MemPool {
-    pub fn create(store: Store, generator: Arc<Generator>, rpc_client: RPCClient) -> Result<Self> {
+    pub fn create(
+        store: Store,
+        generator: Arc<Generator>,
+        poa: Arc<Mutex<PoA>>,
+        rpc_client: RPCClient,
+    ) -> Result<Self> {
         let pending = Default::default();
         let all_txs = Default::default();
         let all_withdrawals = Default::default();
@@ -148,6 +157,7 @@ impl MemPool {
             all_txs,
             all_withdrawals,
             rpc_client,
+            poa,
             mem_block: Default::default(),
         };
 
@@ -535,6 +545,18 @@ impl MemPool {
                     .cloned()
                     .collect();
             }
+        }
+
+        // update current state
+        // let tip_block_hash = new_tip_block.hash().into();
+        // self.state_checkpoint = CheckPoint::from_block_hash(
+        //     &self.store.begin_transaction(),
+        //     tip_block_hash,
+        //     SubState::Block,
+        // )?;
+        {
+            let db = self.store.begin_transaction();
+            let mut timestamp: u64 = new_tip_block.raw().timestamp().unpack();
         }
 
         // reset mem block state

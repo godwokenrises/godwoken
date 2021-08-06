@@ -1,17 +1,16 @@
 //! POA lock off-chain module
 //! Reference implementation: https://github.com/nervosnetwork/clerkb/blob/main/src/generator.ts
 
-use crate::transaction_skeleton::TransactionSkeleton;
+// use crate::transaction_skeleton::TransactionSkeleton;
 use anyhow::{anyhow, Result};
-use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
 use gw_rpc_client::RPCClient;
 use gw_types::{
     bytes::Bytes,
     core::DepType,
     offchain::{CellInfo, InputCellInfo},
-    packed::{CellDep, CellInput, PoAData, Script},
-    prelude::{Pack, Unpack},
+    packed::{CellDep, CellInput, CellOutput, PoAData, Script},
+    prelude::*,
 };
 use std::convert::TryInto;
 use std::time::Duration;
@@ -88,7 +87,7 @@ impl PoASetup {
     }
 }
 
-struct PoAContext {
+pub struct PoAContext {
     poa_data: PoAData,
     poa_data_cell: CellInfo,
     poa_setup: PoASetup,
@@ -133,7 +132,7 @@ impl PoA {
         Ok(cell)
     }
 
-    async fn query_poa_context(&self, input_info: &InputCellInfo) -> Result<PoAContext> {
+    pub async fn query_poa_context(&self, input_info: &InputCellInfo) -> Result<PoAContext> {
         let args: Bytes = input_info.cell.output.lock().args().unpack();
         if args.len() != 64 {
             return Err(anyhow!("invalid poa cell lock args"));
@@ -198,31 +197,13 @@ impl PoA {
         self.owner_lock.hash().into()
     }
 
-    pub async fn should_issue_next_block(
-        &mut self,
-        median_time: Duration,
-        poa_cell_input: &InputCellInfo,
-    ) -> Result<ShouldIssueBlock> {
+    pub fn estimate_next_round_start_time(&self, ctx: PoAContext) -> u64 {
         let PoAContext {
             poa_data,
             poa_setup,
             block_producer_index,
             ..
-        } = self.query_poa_context(poa_cell_input).await?;
-
-        if let Some(round_start_subtime) = self.round_start_subtime {
-            let next_round_time = round_start_subtime
-                .as_secs()
-                .saturating_add(poa_setup.round_intervals.try_into()?);
-            if next_round_time > median_time.as_secs() {
-                // within current block produce round
-                return Ok(ShouldIssueBlock::YesIfFull);
-            } else {
-                // reset current round
-                self.round_start_subtime = None;
-            }
-        }
-
+        } = ctx;
         // calculate the steps to next round for us
         let identities_len = poa_setup.identities.len() as u64;
         let mut steps = (block_producer_index as u64)
@@ -238,9 +219,30 @@ impl PoA {
 
         let initial_time: u64 = poa_data.round_initial_subtime().unpack();
         let next_start_time = initial_time + poa_setup.round_intervals as u64 * steps;
+        next_start_time
+    }
 
-        log::debug!("block producer index: {}, steps: {}, initial time: {}, next start time: {}, median time: {}",
-    block_producer_index, steps, initial_time, next_start_time, median_time.as_secs());
+    pub async fn should_issue_next_block(
+        &mut self,
+        median_time: Duration,
+        poa_cell_input: &InputCellInfo,
+    ) -> Result<ShouldIssueBlock> {
+        let poa_ctx = self.query_poa_context(poa_cell_input).await?;
+
+        if let Some(round_start_subtime) = self.round_start_subtime {
+            let next_round_time = round_start_subtime
+                .as_secs()
+                .saturating_add(poa_ctx.poa_setup.round_intervals.try_into()?);
+            if next_round_time > median_time.as_secs() {
+                // within current block produce round
+                return Ok(ShouldIssueBlock::YesIfFull);
+            } else {
+                // reset current round
+                self.round_start_subtime = None;
+            }
+        }
+
+        let next_start_time = self.estimate_next_round_start_time(poa_ctx);
 
         // check next start time again
         if next_start_time <= median_time.as_secs() {
@@ -254,14 +256,12 @@ impl PoA {
         self.round_start_subtime = None;
     }
 
-    pub async fn fill_poa(
+    pub async fn generate(
         &self,
-        tx_skeleton: &mut TransactionSkeleton,
-        poa_cell_input_index: usize,
+        poa_cell_input: &InputCellInfo,
+        inputs: &[InputCellInfo],
         median_time: Duration,
-    ) -> Result<()> {
-        // assume the first input is rollup cell
-        let poa_cell_input = &tx_skeleton.inputs()[poa_cell_input_index];
+    ) -> Result<GeneratedPoA> {
         let PoAContext {
             poa_data,
             poa_data_cell,
@@ -270,20 +270,23 @@ impl PoA {
             block_producer_index,
         } = self.query_poa_context(poa_cell_input).await?;
 
+        let mut cell_deps = Vec::new();
+
         // put cell deps
-        tx_skeleton.cell_deps_mut().push(self.lock_cell_dep.clone());
-        tx_skeleton
-            .cell_deps_mut()
-            .push(self.state_cell_dep.clone());
+        cell_deps.push(self.lock_cell_dep.clone());
+        cell_deps.push(self.state_cell_dep.clone());
         // push PoA setup cell to dep
-        tx_skeleton.cell_deps_mut().push(
+        cell_deps.push(
             CellDep::new_builder()
                 .out_point(poa_setup_cell.out_point)
                 .dep_type(DepType::Code.into())
                 .build(),
         );
+
+        let mut input_cells = Vec::new();
+
         // push PoA data cell
-        tx_skeleton.inputs_mut().push(InputCellInfo {
+        input_cells.push(InputCellInfo {
             input: CellInput::new_builder()
                 .previous_output(poa_data_cell.out_point.clone())
                 .build(),
@@ -317,19 +320,15 @@ impl PoA {
 
         // Update PoA cell since time
         // TODO: block interval handling
-        tx_skeleton.inputs_mut()[poa_cell_input_index] = {
-            let since = SINCE_BLOCK_TIMESTAMP_FLAG | new_poa_data.subblock_subtime().unpack();
-            let mut poa_cell = tx_skeleton.inputs()[poa_cell_input_index].clone();
-            poa_cell.input = poa_cell.input.as_builder().since(since.pack()).build();
-            poa_cell
-        };
+        let poa_input_cell_since =
+            SINCE_BLOCK_TIMESTAMP_FLAG | new_poa_data.subblock_subtime().unpack();
 
-        tx_skeleton
-            .outputs_mut()
-            .push((poa_data_cell.output, new_poa_data.as_bytes()));
+        let mut output_cells = Vec::new();
+        output_cells.push((poa_data_cell.output, new_poa_data.as_bytes()));
 
         // Push owner cell if not exists
-        let exists_owner_cell = tx_skeleton.inputs().iter().any(|input_info| {
+        let mut owner_input_cell = None;
+        let exists_owner_cell = inputs.iter().any(|input_info| {
             let lock_hash: H256 = input_info.cell.output.lock().hash().into();
             lock_hash == self.owner_lock_hash()
         });
@@ -340,16 +339,30 @@ impl PoA {
                 .await?
                 .ok_or_else(|| anyhow!("can't find usable owner cell"))?;
             // put owner cell to input, the change cell will complete the output
-            tx_skeleton.inputs_mut().push({
-                InputCellInfo {
-                    input: CellInput::new_builder()
-                        .previous_output(owner_cell.out_point.clone())
-                        .build(),
-                    cell: owner_cell,
-                }
+            owner_input_cell = Some(InputCellInfo {
+                input: CellInput::new_builder()
+                    .previous_output(owner_cell.out_point.clone())
+                    .build(),
+                cell: owner_cell,
             });
         }
 
-        Ok(())
+        let poa = GeneratedPoA {
+            poa_input_cell_since,
+            owner_input_cell,
+            input_cells,
+            output_cells,
+            cell_deps,
+        };
+
+        Ok(poa)
     }
+}
+
+pub struct GeneratedPoA {
+    pub poa_input_cell_since: u64,
+    pub owner_input_cell: Option<InputCellInfo>,
+    pub input_cells: Vec<InputCellInfo>,
+    pub output_cells: Vec<(CellOutput, Bytes)>,
+    pub cell_deps: Vec<CellDep>,
 }

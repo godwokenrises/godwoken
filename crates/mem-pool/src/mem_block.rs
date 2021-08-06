@@ -35,15 +35,13 @@ impl MemBlock {
         &self.block_info
     }
 
-    pub fn reset(&mut self, tip: &L2Block) {
-        unreachable!();
+    pub fn reset(&mut self, tip: &L2Block, estimated_timestamp: u64) {
         self.prev_merkle_state = tip.raw().post_account();
-        let estimate_timestamp = unreachable!();
         let tip_number: u64 = tip.raw().number().unpack();
         let number = tip_number + 1;
         self.block_info = BlockInfo::new_builder()
             .block_producer_id(self.block_producer_id.pack())
-            .timestamp(estimate_timestamp)
+            .timestamp(estimated_timestamp.pack())
             .number(number.pack())
             .build();
     }

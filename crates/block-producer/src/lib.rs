@@ -3,7 +3,6 @@ pub mod challenger;
 pub mod cleaner;
 pub mod debugger;
 pub mod deposit;
-pub mod poa;
 pub mod poller;
 pub mod produce_block;
 pub mod runner;
