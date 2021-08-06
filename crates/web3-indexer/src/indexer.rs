@@ -36,7 +36,7 @@ pub struct Web3Indexer {
     polyjuice_type_script_hash: H256,
     rollup_type_hash: H256,
     eth_account_lock_hash: H256,
-    tron_account_lock_hash: H256,
+    tron_account_lock_hash: Option<H256>,
 }
 
 impl Web3Indexer {
@@ -46,7 +46,7 @@ impl Web3Indexer {
         polyjuice_type_script_hash: H256,
         rollup_type_hash: H256,
         eth_account_lock_hash: H256,
-        tron_account_lock_hash: H256,
+        tron_account_lock_hash: Option<H256>,
     ) -> Self {
         Web3Indexer {
             pool,
@@ -206,10 +206,12 @@ impl Web3Indexer {
                     anyhow!("Can't get script by script_hash: {:?}", from_script_hash)
                 })?;
             let from_script_code_hash: H256 = from_script.code_hash().unpack();
-            // skip tx with neither eth_account_lock nor tron_account_lock from_id
-            if from_script_code_hash != self.eth_account_lock_hash
-                && from_script_code_hash != self.tron_account_lock_hash
-            {
+            let mut allowed_account_lock_hashes = vec![self.eth_account_lock_hash.to_owned()];
+            if let Some(code_hash) = self.tron_account_lock_hash.to_owned() {
+                allowed_account_lock_hashes.push(code_hash)
+            };
+            // skip tx not in the allowed eoa account lock
+            if !allowed_account_lock_hashes.contains(&from_script_code_hash) {
                 continue;
             }
             // from_address is the script's args in eth account lock

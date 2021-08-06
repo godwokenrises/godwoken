@@ -124,7 +124,7 @@ pub struct Web3IndexerConfig {
     pub database_url: String,
     pub polyjuice_script_type_hash: H256,
     pub eth_account_lock_hash: H256,
-    pub tron_account_lock_hash: H256,
+    pub tron_account_lock_hash: Option<H256>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
