@@ -206,9 +206,9 @@ impl Web3Indexer {
                     anyhow!("Can't get script by script_hash: {:?}", from_script_hash)
                 })?;
             let from_script_code_hash: H256 = from_script.code_hash().unpack();
-            // skip tx with non eth_account_lock or non tron_account_lock from_id
+            // skip tx with neither eth_account_lock nor tron_account_lock from_id
             if from_script_code_hash != self.eth_account_lock_hash
-                || from_script_code_hash != self.tron_account_lock_hash
+                && from_script_code_hash != self.tron_account_lock_hash
             {
                 continue;
             }
