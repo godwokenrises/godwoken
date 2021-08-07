@@ -291,7 +291,7 @@ pub fn generate_config(
             database_url: database_url.to_owned(),
             polyjuice_script_type_hash: scripts_results.polyjuice_validator.script_type_hash,
             eth_account_lock_hash: eth_account_lock_hash.to_owned(),
-            tron_account_lock_hash: tron_account_lock_hash,
+            tron_account_lock_hash,
         }),
         None => None,
     };
