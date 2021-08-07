@@ -58,6 +58,8 @@ pub const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
 pub const SUDT_VALIDATOR_PATH: &str = "../../tests-deps/godwoken-scripts/c/build/sudt-validator";
 pub const SUDT_GENERATOR_PATH: &str = "../../tests-deps/godwoken-scripts/c/build/sudt-generator";
 
+pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
+
 pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
     let sudt_validator_script_type_hash: [u8; 32] =
         rollup_config.l2_sudt_validator_script_type_hash().unpack();
@@ -80,7 +82,7 @@ pub fn setup_chain(rollup_type_script: Script) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
     let rollup_config = RollupConfig::new_builder()
         .allowed_eoa_type_hashes(vec![ALWAYS_SUCCESS_CODE_HASH.clone()].pack())
-        .finality_blocks(6.pack())
+        .finality_blocks(DEFAULT_FINALITY_BLOCKS.pack())
         .build();
     account_lock_manage.register_lock_algorithm(
         ALWAYS_SUCCESS_CODE_HASH.clone().into(),
