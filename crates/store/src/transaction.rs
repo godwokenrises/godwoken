@@ -723,37 +723,34 @@ impl StoreTransaction {
         }
 
         // update finalized custodian assets
-        let finality_blocks = rollup_config.finality_blocks().unpack();
-        let last_finalized_block_number = raw_number.unpack().saturating_sub(finality_blocks);
-        if last_finalized_block_number > 0 {
-            let last_finalized_block_hash = self
-                .get_block_hash_by_number(last_finalized_block_number)?
-                .ok_or_else(|| {
-                    Error::from(format!(
-                        "last finalized block {} hash not found",
-                        last_finalized_block_number
-                    ))
-                })?;
-            let last_finalized_block =
-                self.get_block(&last_finalized_block_hash)?.ok_or_else(|| {
-                    Error::from(format!(
-                        "last finalized block {} not found",
-                        last_finalized_block_number
-                    ))
-                })?;
+        {
+            let finality_blocks = rollup_config.finality_blocks().unpack();
+            let last_finalized_block_number = raw_number.unpack().saturating_sub(finality_blocks);
+            let deposit_assets = if last_finalized_block_number > 0 {
+                let last_finalized_block_hash = self
+                    .get_block_hash_by_number(last_finalized_block_number)?
+                    .ok_or_else(|| {
+                        Error::from(format!(
+                            "last finalized block {} hash not found",
+                            last_finalized_block_number
+                        ))
+                    })?;
 
-            let deposit_assets = self
-                .get_block_deposit_requests(&last_finalized_block_hash)?
-                .expect("finalized deposits")
-                .into_iter()
-                .map(|deposit| CustodianChange {
-                    sudt_script_hash: deposit.sudt_script_hash().unpack(),
-                    amount: deposit.amount().unpack(),
-                    capacity: deposit.capacity().unpack(),
-                });
+                self.get_block_deposit_requests(&last_finalized_block_hash)?
+                    .expect("finalized deposits")
+            } else {
+                Vec::new()
+            };
+            // deposit assets is from last finalized block
+            let deposit_assets = deposit_assets.into_iter().map(|deposit| CustodianChange {
+                sudt_script_hash: deposit.sudt_script_hash().unpack(),
+                amount: deposit.amount().unpack(),
+                capacity: deposit.capacity().unpack(),
+            });
+            // withdrawal is from current block
             let withdrawal_assets = {
-                let last_finalized_withdrawals = last_finalized_block.withdrawals().into_iter();
-                last_finalized_withdrawals.map(|withdrawal| {
+                let withdrawals = block.withdrawals().into_iter();
+                withdrawals.map(|withdrawal| {
                     let raw = withdrawal.raw();
                     CustodianChange {
                         sudt_script_hash: raw.sudt_script_hash().unpack(),
@@ -804,7 +801,7 @@ impl StoreTransaction {
             let block_number = block.raw().number().unpack();
             block_number.saturating_sub(finality_blocks)
         };
-        if last_finalized_block_number > 0 {
+        let deposit_assets = if last_finalized_block_number > 0 {
             let last_finalized_block_hash = self
                 .get_block_hash_by_number(last_finalized_block_number)?
                 .ok_or_else(|| {
@@ -813,36 +810,32 @@ impl StoreTransaction {
                         last_finalized_block_number
                     ))
                 })?;
-            let last_finalized_block =
-                self.get_block(&last_finalized_block_hash)?.ok_or_else(|| {
-                    Error::from(format!(
-                        "last finalized block {} not found",
-                        last_finalized_block_number
-                    ))
-                })?;
 
-            let deposit_assets = self
-                .get_block_deposit_requests(&last_finalized_block_hash)?
+            self.get_block_deposit_requests(&last_finalized_block_hash)?
                 .expect("finalized deposits")
-                .into_iter()
-                .map(|deposit| CustodianChange {
-                    sudt_script_hash: deposit.sudt_script_hash().unpack(),
-                    amount: deposit.amount().unpack(),
-                    capacity: deposit.capacity().unpack(),
-                });
-            let withdrawal_assets = {
-                let last_finalized_withdrawals = last_finalized_block.withdrawals().into_iter();
-                last_finalized_withdrawals.map(|withdrawal| {
-                    let raw = withdrawal.raw();
-                    CustodianChange {
-                        sudt_script_hash: raw.sudt_script_hash().unpack(),
-                        amount: raw.amount().unpack(),
-                        capacity: raw.capacity().unpack(),
-                    }
-                })
-            };
-            self.update_finalized_custodian_assets(withdrawal_assets, deposit_assets)?;
-        }
+        } else {
+            Vec::new()
+        };
+
+        // last finalized block's deposited assets
+        let deposit_assets = deposit_assets.into_iter().map(|deposit| CustodianChange {
+            sudt_script_hash: deposit.sudt_script_hash().unpack(),
+            amount: deposit.amount().unpack(),
+            capacity: deposit.capacity().unpack(),
+        });
+        // current block withdrawal assets
+        let withdrawal_assets = {
+            let withdrawals = block.withdrawals().into_iter();
+            withdrawals.map(|withdrawal| {
+                let raw = withdrawal.raw();
+                CustodianChange {
+                    sudt_script_hash: raw.sudt_script_hash().unpack(),
+                    amount: raw.amount().unpack(),
+                    capacity: raw.capacity().unpack(),
+                }
+            })
+        };
+        self.update_finalized_custodian_assets(withdrawal_assets, deposit_assets)?;
 
         let block_number = block.raw().number();
         self.delete(COLUMN_INDEX, block_number.as_slice())?;
