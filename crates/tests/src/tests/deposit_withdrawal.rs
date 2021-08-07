@@ -19,8 +19,27 @@ use gw_types::{
 
 use crate::testing_tool::chain::{
     apply_block_result, construct_block, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
+    DEFAULT_FINALITY_BLOCKS,
 };
 use gw_chain::chain::Chain;
+
+fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) -> Result<()> {
+    let block_result = {
+        let mem_pool = chain.mem_pool().lock();
+        construct_block(chain, &mem_pool, Default::default())?
+    };
+    let asset_scripts = HashSet::new();
+
+    // deposit
+    apply_block_result(
+        chain,
+        rollup_cell.clone(),
+        block_result,
+        vec![],
+        asset_scripts,
+    );
+    Ok(())
+}
 
 fn deposite_to_chain(
     chain: &mut Chain,
@@ -150,6 +169,11 @@ fn test_deposit_and_withdrawal() {
         assert_eq!(ckb_balance, capacity as u128);
         (user_id, user_script_hash, ckb_balance)
     };
+
+    // wait for deposit finalize
+    for _ in 0..DEFAULT_FINALITY_BLOCKS {
+        produce_empty_block(&mut chain, rollup_cell.clone()).unwrap();
+    }
     // check tx pool state
     {
         let mem_pool = chain.mem_pool().lock();
