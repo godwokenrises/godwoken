@@ -169,6 +169,11 @@ async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Ve
     Ok(cells)
 }
 
+enum CommittedTxResult {
+    Ok(Transaction),
+    FailedToGenWithdrawal(anyhow::Error),
+}
+
 pub struct BlockProducer {
     rollup_config_hash: H256,
     store: Store,
@@ -433,9 +438,25 @@ impl BlockProducer {
         }
 
         // composite tx
-        let tx = self
+        let tx = match self
             .complete_tx_skeleton(deposit_cells, block, global_state, median_time, rollup_cell)
-            .await?;
+            .await?
+        {
+            CommittedTxResult::Ok(tx) => tx,
+            CommittedTxResult::FailedToGenWithdrawal(err) => {
+                log::error!(
+                    "[produce_next_block] Failed to generate withdrawal cells: {}",
+                    err
+                );
+                let mut mem_pool = self.mem_pool.lock();
+                let deleted_count = mem_pool.randomly_drop_withdrawals()?;
+                log::error!(
+                    "[produce_next_block] Try to recover by drop withdrawals, deleted {}",
+                    deleted_count
+                );
+                return Err(err);
+            }
+        };
 
         let cycles = utils::dry_run_transaction(
             &self.debug_config,
@@ -497,7 +518,7 @@ impl BlockProducer {
         global_state: GlobalState,
         median_time: Duration,
         rollup_cell: CellInfo,
-    ) -> Result<Transaction> {
+    ) -> Result<CommittedTxResult> {
         let rollup_context = self.generator.rollup_context();
         let mut tx_skeleton = TransactionSkeleton::default();
         let rollup_cell_input_index = tx_skeleton.inputs().len();
@@ -682,24 +703,32 @@ impl BlockProducer {
             .push((generated_stake.output, generated_stake.output_data));
 
         // withdrawal cells
-        if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
+        match crate::withdrawal::generate(
             &rollup_cell,
             rollup_context,
             &block,
             &self.config,
             &self.rpc_client,
         )
-        .await?
+        .await
         {
-            tx_skeleton
-                .cell_deps_mut()
-                .extend(generated_withdrawal_cells.deps);
-            tx_skeleton
-                .inputs_mut()
-                .extend(generated_withdrawal_cells.inputs);
-            tx_skeleton
-                .outputs_mut()
-                .extend(generated_withdrawal_cells.outputs);
+            Ok(Some(generated_withdrawal_cells)) => {
+                tx_skeleton
+                    .cell_deps_mut()
+                    .extend(generated_withdrawal_cells.deps);
+                tx_skeleton
+                    .inputs_mut()
+                    .extend(generated_withdrawal_cells.inputs);
+                tx_skeleton
+                    .outputs_mut()
+                    .extend(generated_withdrawal_cells.outputs);
+            }
+            Err(err) => {
+                return Ok(CommittedTxResult::FailedToGenWithdrawal(err));
+            }
+            _ => {
+                // do nothing
+            }
         }
 
         if let Some(reverted_deposits) =
@@ -778,7 +807,7 @@ impl BlockProducer {
         // sign
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
         log::debug!("final tx size: {}", tx.as_slice().len());
-        Ok(tx)
+        Ok(CommittedTxResult::Ok(tx))
     }
 
     // check deposit cells again to prevent upstream components errors.

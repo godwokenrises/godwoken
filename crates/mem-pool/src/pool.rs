@@ -30,6 +30,7 @@ use gw_types::{
     packed::{BlockInfo, L2Transaction, RawL2Transaction, WithdrawalRequest},
     prelude::{Entity, Unpack},
 };
+use rand::Rng;
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
@@ -345,6 +346,27 @@ impl MemPool {
         // try demote unexecutables, this function also discards objects that already in the chain
         self.demote_unexecutables()?;
         Ok(())
+    }
+
+    /// FIXME: remove this hotfix function
+    pub fn randomly_drop_withdrawals(&mut self) -> Result<usize> {
+        const DEL_RATE: (u32, u32) = (1, 2);
+
+        let mut rng = rand::thread_rng();
+        let mut is_delete = || rng.gen_ratio(DEL_RATE.0, DEL_RATE.1);
+
+        let mut deleted_count = 0;
+
+        for list in self.pending.values_mut() {
+            if !list.withdrawals.is_empty() && is_delete() {
+                for w in &list.withdrawals {
+                    self.all_withdrawals.remove(&w.hash().into());
+                }
+                deleted_count += list.withdrawals.len();
+                list.withdrawals.clear();
+            }
+        }
+        Ok(deleted_count)
     }
 
     /// Move executables into pending.
