@@ -48,7 +48,7 @@ impl<'a> From<&'a CollectedCustodianCells> for AvailableCustodians {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct CkbCustodian {
     capacity: u128,
     balance: u128,
@@ -91,10 +91,7 @@ impl<'a> Generator<'a> {
             sudt_custodians.insert(sudt_type_hash, sudt_custodian);
         }
 
-        let ckb_custodian_min_capacity = {
-            let lock = build_finalized_custodian_lock(rollup_context);
-            (8 + lock.as_slice().len() as u64) * 100000000
-        };
+        let ckb_custodian_min_capacity = ckb_custodian_min_capacity(rollup_context);
         let ckb_custodian_capacity = available_custodians
             .capacity
             .saturating_sub(total_sudt_capacity);
@@ -323,7 +320,11 @@ pub async fn generate(
 
     let total_withdrawal_amount = sum(block.withdrawals().into_iter());
     let custodian_cells = rpc_client
-        .query_finalized_custodian_cells(&total_withdrawal_amount, last_finalized_block_number)
+        .query_finalized_custodian_cells(
+            &total_withdrawal_amount,
+            ckb_custodian_min_capacity(rollup_context),
+            last_finalized_block_number,
+        )
         .await?;
     log::debug!("custodian inputs {:?}", custodian_cells);
 
@@ -509,6 +510,11 @@ fn build_finalized_custodian_lock(rollup_context: &RollupContext) -> Script {
         .hash_type(ScriptHashType::Type.into())
         .args(args.pack())
         .build()
+}
+
+fn ckb_custodian_min_capacity(rollup_context: &RollupContext) -> u64 {
+    let lock = build_finalized_custodian_lock(rollup_context);
+    (8 + lock.as_slice().len() as u64).saturating_mul(100000000)
 }
 
 fn generate_finalized_custodian(

@@ -2112,6 +2112,7 @@ dependencies = [
  "gw-traits",
  "gw-types",
  "log",
+ "rand 0.8.2",
 ]
 
 [[package]]
