@@ -284,7 +284,9 @@ impl Challenger {
         let verifier_tx_hash = self.rpc_client.send_transaction(tx).await?;
         log::info!("Create verifier in tx {}", to_hex(&verifier_tx_hash));
 
-        self.wait_tx_proposed(verifier_tx_hash).await?;
+        // FIXME: able to dump tx in proposed
+        // self.wait_tx_proposed(verifier_tx_hash).await?;
+        self.wait_tx_committed(verifier_tx_hash).await?;
 
         // Build cancellation transaction
         let challenge_input = to_input_cell_info(challenge_cell);
@@ -605,6 +607,7 @@ impl Challenger {
         Ok(to_input_cell_info(cell))
     }
 
+    #[allow(dead_code)]
     async fn wait_tx_proposed(&self, tx_hash: H256) -> Result<()> {
         let timeout = Duration::new(30, 0);
         let now = Instant::now();
