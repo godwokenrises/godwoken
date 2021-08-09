@@ -282,7 +282,7 @@ fn build_verify_transaction_witness(
         sender_script: kv_witness.sender_script,
         receiver_script: Some(kv_witness.receiver_script),
         verify_witness: VerifyWitness::TxExecution {
-            load_data: kv_witness.load_data.unwrap_or_else(|| HashMap::default()),
+            load_data: kv_witness.load_data.unwrap_or_else(HashMap::default),
             witness: verify_witness,
         },
     })
