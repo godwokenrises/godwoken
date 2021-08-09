@@ -7,6 +7,11 @@ use gw_types::{
     prelude::*,
 };
 
+pub struct MemBlockContent {
+    pub withdrawals: Vec<H256>,
+    pub txs: Vec<H256>,
+}
+
 #[derive(Debug, Default)]
 pub struct MemBlock {
     block_producer_id: u32,
@@ -35,7 +40,8 @@ impl MemBlock {
         &self.block_info
     }
 
-    pub fn reset(&mut self, tip: &L2Block, estimated_timestamp: u64) {
+    pub fn reset(&mut self, tip: &L2Block, estimated_timestamp: u64) -> MemBlockContent {
+        dbg!("reset mem block");
         // update block info
         let tip_number: u64 = tip.raw().number().unpack();
         let number = tip_number + 1;
@@ -45,6 +51,11 @@ impl MemBlock {
             .number(number.pack())
             .build();
         self.prev_merkle_state = tip.raw().post_account();
+        // mem block content
+        let content = MemBlockContent {
+            txs: self.txs.clone(),
+            withdrawals: self.withdrawals.clone(),
+        };
         // reset status
         self.tx_receipts.clear();
         self.txs.clear();
@@ -53,6 +64,7 @@ impl MemBlock {
         self.state_checkpoints.clear();
         self.txs_prev_state_checkpoint = None;
         self.touched_keys.clear();
+        content
     }
 
     pub fn push_withdrawal(&mut self, withdrawal_hash: H256, state_checkpoint: H256) {
@@ -73,6 +85,11 @@ impl MemBlock {
         let state_checkpoint = calculate_state_checkpoint(
             &post_state.merkle_root().unpack(),
             post_state.count().unpack(),
+        );
+        dbg!(
+            "mem block push tx",
+            hex::encode(tx_hash.as_slice()),
+            hex::encode(state_checkpoint.as_slice())
         );
         self.txs.push(tx_hash);
         self.tx_receipts.insert(tx_hash, receipt);

@@ -368,12 +368,6 @@ impl BlockProducer {
                     "[produce_next_block] Failed to generate withdrawal cells: {}",
                     err
                 );
-                let mut mem_pool = self.mem_pool.lock();
-                let deleted_count = mem_pool.randomly_drop_withdrawals()?;
-                log::error!(
-                    "[produce_next_block] Try to recover by drop withdrawals, deleted {}",
-                    deleted_count
-                );
                 return Err(err);
             }
         };
