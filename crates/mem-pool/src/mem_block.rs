@@ -36,7 +36,7 @@ impl MemBlock {
     }
 
     pub fn reset(&mut self, tip: &L2Block, estimated_timestamp: u64) {
-        self.prev_merkle_state = tip.raw().post_account();
+        // update block info
         let tip_number: u64 = tip.raw().number().unpack();
         let number = tip_number + 1;
         self.block_info = BlockInfo::new_builder()
@@ -44,6 +44,15 @@ impl MemBlock {
             .timestamp(estimated_timestamp.pack())
             .number(number.pack())
             .build();
+        self.prev_merkle_state = tip.raw().post_account();
+        // reset status
+        self.tx_receipts.clear();
+        self.txs.clear();
+        self.withdrawals.clear();
+        self.deposits.clear();
+        self.state_checkpoints.clear();
+        self.txs_prev_state_checkpoint = None;
+        self.touched_keys.clear();
     }
 
     pub fn push_withdrawal(&mut self, withdrawal_hash: H256, state_checkpoint: H256) {
