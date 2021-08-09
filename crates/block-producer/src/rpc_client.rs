@@ -439,7 +439,7 @@ impl RPCClient {
         let raw_tx = tx.raw();
 
         let output: CellOutput = match raw_tx.outputs().get(index as usize) {
-            Some(output) => output.into(),
+            Some(output) => output,
             None => return Ok(None),
         };
         let data = {
