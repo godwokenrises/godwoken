@@ -16,7 +16,7 @@ use gw_types::{
     prelude::*,
 };
 
-use crate::rpc_client::RPCClient;
+use crate::{rpc_client::RPCClient, types::TxStatus};
 
 pub async fn dump_transaction<P: AsRef<Path>>(
     dir: P,
@@ -100,10 +100,15 @@ pub async fn build_mock_transaction(
             }
         }
         .ok_or_else(|| anyhow!("can't find input cell"))?;
-        let input_block_hash = rpc_client
-            .get_transaction_block_hash(input.previous_output().tx_hash().unpack())
-            .await?
-            .ok_or_else(|| anyhow!("not found input cell tx hash"))?;
+
+        let input_tx_hash = input.previous_output().tx_hash().unpack();
+        let input_block_hash = match rpc_client.get_transaction_status(input_tx_hash).await? {
+            Some(TxStatus::Committed) => {
+                let block_hash = rpc_client.get_transaction_block_hash(input_tx_hash).await?;
+                Some(block_hash.ok_or_else(|| anyhow!("not found input cell tx hash"))?)
+            }
+            _ => None,
+        };
         let mock_input = ReprMockInput {
             input: {
                 let ckb_input = ckb_types::packed::CellInput::new_unchecked(input.as_bytes());
@@ -115,10 +120,12 @@ pub async fn build_mock_transaction(
                 ckb_output.into()
             },
             data: ckb_jsonrpc_types::JsonBytes::from_bytes(input_cell.data),
-            header: Some(input_block_hash.into()),
+            header: input_block_hash.clone().map(|h| h.into()),
         };
         inputs.push(mock_input);
-        header_deps_hashes.push(input_block_hash.into());
+        if let Some(input_block_hash) = input_block_hash {
+            header_deps_hashes.push(input_block_hash.into());
+        }
     }
 
     // resolve cell groups
@@ -140,10 +147,16 @@ pub async fn build_mock_transaction(
             }
         }
         .ok_or_else(|| anyhow!("can't find dep cell"))?;
-        let dep_cell_block_hash = rpc_client
-            .get_transaction_block_hash(cell_dep.out_point().tx_hash().unpack())
-            .await?
-            .ok_or_else(|| anyhow!("not found dep cell tx hash"))?;
+        let dep_cell_tx_hash = cell_dep.out_point().tx_hash().unpack();
+        let dep_cell_block_hash = match rpc_client.get_transaction_status(dep_cell_tx_hash).await? {
+            Some(TxStatus::Committed) => {
+                let query = rpc_client
+                    .get_transaction_block_hash(dep_cell_tx_hash)
+                    .await?;
+                Some(query.ok_or_else(|| anyhow!("not found dep cell tx hash"))?)
+            }
+            _ => None,
+        };
         let mock_cell_dep = ReprMockCellDep {
             cell_dep: {
                 let ckb_cell_dep = ckb_types::packed::CellDep::new_unchecked(cell_dep.as_bytes());
@@ -155,10 +168,12 @@ pub async fn build_mock_transaction(
                 ckb_output.into()
             },
             data: { ckb_jsonrpc_types::JsonBytes::from_bytes(dep_cell.data) },
-            header: Some(dep_cell_block_hash.into()),
+            header: dep_cell_block_hash.clone().map(|h| h.into()),
         };
         cell_deps.push(mock_cell_dep);
-        header_deps_hashes.push(dep_cell_block_hash.into());
+        if let Some(dep_cell_block_hash) = dep_cell_block_hash {
+            header_deps_hashes.push(dep_cell_block_hash.into());
+        }
     }
 
     header_deps_hashes.extend(
