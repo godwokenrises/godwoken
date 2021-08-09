@@ -14,6 +14,7 @@ gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
 rand = "0.8"
 gw-rpc-client = { path = "../rpc-client" }
+gw-poa = { path = "../poa" }
 smol = "1.2.5"
 anyhow = "1.0"
 log = "0.4"

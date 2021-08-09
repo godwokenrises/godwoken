@@ -15,6 +15,7 @@ use gw_common::{
     H256,
 };
 use gw_generator::{traits::StateExt, Generator};
+use gw_poa::PoA;
 use gw_rpc_client::RPCClient;
 use gw_store::{
     chain_view::ChainView,
@@ -23,14 +24,13 @@ use gw_store::{
     Store,
 };
 use gw_types::{
-    offchain::{BlockParam, DepositInfo, RunResult},
+    offchain::{BlockParam, CellInfo, DepositInfo, InputCellInfo, RunResult},
     packed::{
-        AccountMerkleState, BlockInfo, L2Block, L2Transaction, RawL2Transaction, Script, TxReceipt,
-        WithdrawalRequest,
+        AccountMerkleState, BlockInfo, CellInput, L2Block, L2BlockCommittedInfo, L2Transaction,
+        RawL2Transaction, Script, TxReceipt, WithdrawalRequest,
     },
-    prelude::{Entity, Pack, Unpack},
+    prelude::{Builder, Entity, Pack, Unpack},
 };
-use gw_poa::PoA;
 use rand::Rng;
 use smol::lock::Mutex;
 use std::{
@@ -562,7 +562,26 @@ impl MemPool {
         // reset mem block state
         let merkle_state = new_tip_block.raw().post_account();
         self.reset_mem_block_state_db(merkle_state)?;
-        self.mem_block.reset(&new_tip_block);
+        // estimate next l2block timestamp
+        let estimated_timestamp: Result<u64> = smol::block_on(async {
+            let poa = self.poa.lock().await;
+            let rollup_cell = self
+                .rpc_client
+                .query_rollup_cell()
+                .await?
+                .ok_or_else(|| anyhow!("can't find rollup cell"))?;
+            let input_cell = InputCellInfo {
+                input: CellInput::new_builder()
+                    .previous_output(rollup_cell.out_point.clone())
+                    .build(),
+                cell: rollup_cell,
+            };
+            let ctx = poa.query_poa_context(&input_cell).await?;
+            // TODO how to estimate a more accurate timestamp?
+            let timestamp = poa.estimate_next_round_start_time(ctx);
+            Ok(timestamp)
+        });
+        self.mem_block.reset(&new_tip_block, estimated_timestamp?);
 
         // set tip
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());

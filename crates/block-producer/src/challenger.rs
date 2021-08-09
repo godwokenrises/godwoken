@@ -1,7 +1,6 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::cleaner::{Cleaner, Verifier};
-use crate::poa::{PoA, ShouldIssueBlock};
 use crate::test_mode_control::TestModeControl;
 use crate::transaction_skeleton::TransactionSkeleton;
 use crate::types::ChainEvent;
@@ -18,12 +17,8 @@ use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_poa::{PoA, ShouldIssueBlock};
 use gw_rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
-<<<<<<< HEAD
 use gw_types::core::{ChallengeTargetType, DepType, Status};
-=======
-use gw_types::core::{ChallengeTargetType, Status};
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, TxStatus};
->>>>>>> refactor: make PoA crate standalone
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, GlobalState, OutPoint, Script, Transaction, WitnessArgs,
 };

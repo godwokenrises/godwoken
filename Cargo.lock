@@ -2110,6 +2110,7 @@ dependencies = [
  "anyhow",
  "gw-common",
  "gw-generator",
+ "gw-poa",
  "gw-rpc-client",
  "gw-store",
  "gw-traits",

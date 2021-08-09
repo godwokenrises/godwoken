@@ -264,10 +264,35 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             rollup_context.clone(),
         ))
     };
+
+    let block_producer_config = config
+        .block_producer
+        .clone()
+        .ok_or_else(|| anyhow!("not set block producer"))?;
+
+    let wallet =
+        Wallet::from_config(&block_producer_config.wallet_config).with_context(|| "init wallet")?;
+
+    let poa = {
+        let poa = PoA::new(
+            rpc_client.clone(),
+            wallet.lock_script().to_owned(),
+            block_producer_config.poa_lock_dep.clone().into(),
+            block_producer_config.poa_state_dep.clone().into(),
+        );
+        Arc::new(smol::lock::Mutex::new(poa))
+    };
+
     let mem_pool = Arc::new(Mutex::new(
-        MemPool::create(store.clone(), generator.clone(), rpc_client.clone())
-            .with_context(|| "create mem-pool")?,
+        MemPool::create(
+            store.clone(),
+            generator.clone(),
+            Arc::clone(&poa),
+            rpc_client.clone(),
+        )
+        .with_context(|| "create mem-pool")?,
     ));
+
     let chain = Arc::new(Mutex::new(
         Chain::create(
             &rollup_config,
@@ -328,24 +353,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     let (block_producer, challenger, test_mode_control, cleaner) = match config.node_mode {
         NodeMode::ReadOnly => (None, None, None, None),
         _ => {
-            let block_producer_config = config
-                .block_producer
-                .clone()
-                .ok_or_else(|| anyhow!("not set block producer"))?;
-
-            let wallet = Wallet::from_config(&block_producer_config.wallet_config)
-                .with_context(|| "init wallet")?;
-
-            let poa = {
-                let poa = PoA::new(
-                    rpc_client.clone(),
-                    wallet.lock_script().to_owned(),
-                    block_producer_config.poa_lock_dep.clone().into(),
-                    block_producer_config.poa_state_dep.clone().into(),
-                );
-                Arc::new(smol::lock::Mutex::new(poa))
-            };
-
             let tests_control = if let NodeMode::Test = config.node_mode {
                 Some(TestModeControl::new(
                     rpc_client.clone(),
