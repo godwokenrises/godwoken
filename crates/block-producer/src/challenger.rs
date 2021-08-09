@@ -262,7 +262,7 @@ impl Challenger {
         let prev_state = rollup_state.get_state().to_owned();
         let burn_lock = self.config.challenger_config.burn_lock.clone().into();
         let owner_lock = self.wallet.lock_script().to_owned();
-        let cancel_output = cancel_challenge::build_output(
+        let mut cancel_output = cancel_challenge::build_output(
             &self.rollup_context,
             prev_state,
             &challenge_cell,
@@ -274,7 +274,7 @@ impl Challenger {
         // Build verifier transaction
         let verifier_cell = cancel_output.verifier_cell.clone();
         let load_data = {
-            let load = cancel_output.load_data_cells.as_ref();
+            let load = cancel_output.load_data_cells.take();
             load.map(|ld| LoadData::new(ld, &self.builtin_load_data))
         };
         let tx = self
@@ -294,7 +294,7 @@ impl Challenger {
             let cell_dep = cancel_output.verifier_dep(&self.config)?;
             let input = cancel_output.verifier_input(verifier_tx_hash, 0);
             let witness = cancel_output.verifier_witness.clone();
-            let load_data_context = load_data.map(|ld| ld.to_context(verifier_tx_hash, 0));
+            let load_data_context = load_data.map(|ld| ld.into_context(verifier_tx_hash, 0));
             VerifierContext::new(
                 cell_dep,
                 input,
@@ -698,7 +698,7 @@ struct LoadDataContext {
 
 impl LoadData {
     fn new(
-        load_data_cells: &HashMap<H256, (CellOutput, Bytes)>,
+        load_data_cells: HashMap<H256, (CellOutput, Bytes)>,
         builtin: &HashMap<H256, CellDep>,
     ) -> Self {
         let (load_builtin, load_data_cells): (HashMap<_, _>, HashMap<_, _>) = load_data_cells
@@ -714,7 +714,7 @@ impl LoadData {
         LoadData { builtin, cells }
     }
 
-    fn to_context(self, verifier_tx_hash: H256, verifier_tx_index: u32) -> LoadDataContext {
+    fn into_context(self, verifier_tx_hash: H256, verifier_tx_index: u32) -> LoadDataContext {
         assert_eq!(verifier_tx_index, 0, "verifier cell should be first one");
 
         let to_context = |(idx, (output, data))| -> (CellDep, InputCellInfo) {
