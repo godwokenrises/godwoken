@@ -65,10 +65,11 @@ pub async fn build_mock_transaction(
             return Ok(vec![]);
         }
         // parse dep group
-        let cell = rpc_client
-            .get_cell(dep.out_point())
-            .await?
-            .ok_or_else(|| anyhow!("can't find dep group cell"))?;
+        let cell = match rpc_client.get_cell(dep.out_point()).await? {
+            Some(cell) => Some(cell),
+            None => rpc_client.get_cell_from_mempool(dep.out_point()).await?,
+        }
+        .ok_or_else(|| anyhow!("can't find dep group cell"))?;
         let out_points =
             OutPointVec::from_slice(&cell.data).map_err(|_| anyhow!("invalid dep group"))?;
         let cell_deps = out_points
@@ -90,10 +91,15 @@ pub async fn build_mock_transaction(
 
     let mut inputs: Vec<ReprMockInput> = Vec::with_capacity(tx.raw().inputs().len());
     for input in tx.raw().inputs() {
-        let input_cell = rpc_client
-            .get_cell(input.previous_output())
-            .await?
-            .ok_or_else(|| anyhow!("can't find input cell"))?;
+        let input_cell = match rpc_client.get_cell(input.previous_output()).await? {
+            Some(cell) => Some(cell),
+            None => {
+                rpc_client
+                    .get_cell_from_mempool(input.previous_output())
+                    .await?
+            }
+        }
+        .ok_or_else(|| anyhow!("can't find input cell"))?;
         let input_block_hash = rpc_client
             .get_transaction_block_hash(input.previous_output().tx_hash().unpack())
             .await?
@@ -125,10 +131,15 @@ pub async fn build_mock_transaction(
 
     let mut cell_deps: Vec<ReprMockCellDep> = Vec::with_capacity(resolved_cell_deps.len());
     for cell_dep in resolved_cell_deps {
-        let dep_cell = rpc_client
-            .get_cell(cell_dep.out_point())
-            .await?
-            .ok_or_else(|| anyhow!("can't find dep cell"))?;
+        let dep_cell = match rpc_client.get_cell(cell_dep.out_point()).await? {
+            Some(cell) => Some(cell),
+            None => {
+                rpc_client
+                    .get_cell_from_mempool(cell_dep.out_point())
+                    .await?
+            }
+        }
+        .ok_or_else(|| anyhow!("can't find dep cell"))?;
         let dep_cell_block_hash = rpc_client
             .get_transaction_block_hash(cell_dep.out_point().tx_hash().unpack())
             .await?
