@@ -166,6 +166,10 @@ impl MemPool {
         Ok(mem_pool)
     }
 
+    pub fn mem_block(&self) -> &MemBlock {
+        &self.mem_block
+    }
+
     pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
         let offset = (self.mem_block.withdrawals().len() + self.mem_block.txs().len()) as u32;
         StateDBTransaction::from_checkpoint(
@@ -268,12 +272,16 @@ impl MemPool {
         &self,
         raw_tx: RawL2Transaction,
         block_info: &BlockInfo,
-        block_number: u64,
+        block_number_opt: Option<u64>,
     ) -> Result<RunResult> {
         let db = self.store.begin_transaction();
-        let check_point = CheckPoint::new(block_number, SubState::Block);
-        let state_db =
-            StateDBTransaction::from_checkpoint(&db, check_point, StateDBMode::ReadOnly)?;
+        let state_db = match block_number_opt {
+            Some(block_number) => {
+                let check_point = CheckPoint::new(block_number, SubState::Block);
+                StateDBTransaction::from_checkpoint(&db, check_point, StateDBMode::ReadOnly)?
+            }
+            None => self.fetch_state_db(&db)?,
+        };
         let state = state_db.state_tree()?;
         let tip_block_hash = self.store.get_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
@@ -347,10 +355,6 @@ impl MemPool {
     /// Return pending contents
     pub fn pending(&self) -> &HashMap<u32, EntryList> {
         &self.pending
-    }
-
-    fn mem_block(&self) -> &MemBlock {
-        &self.mem_block
     }
 
     /// Notify new tip
