@@ -281,11 +281,17 @@ pub fn generate_config(
         .allowed_eoa_type_hashes
         .get(0)
         .ok_or_else(|| anyhow!("No allowed EoA type hashes in the rollup config"))?;
+    let tron_allowed_eoa_hash = genesis.rollup_config.allowed_eoa_type_hashes.get(1);
+    let tron_account_lock_hash = match tron_allowed_eoa_hash {
+        Some(code_hash) => Some(code_hash.to_owned()),
+        None => None,
+    };
     let web3_indexer = match database_url {
         Some(database_url) => Some(Web3IndexerConfig {
             database_url: database_url.to_owned(),
             polyjuice_script_type_hash: scripts_results.polyjuice_validator.script_type_hash,
             eth_account_lock_hash: eth_account_lock_hash.to_owned(),
+            tron_account_lock_hash,
         }),
         None => None,
     };

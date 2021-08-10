@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{
     helper::{
         account_id_to_eth_address, hex, parse_log, GwLog, PolyjuiceArgs, GW_LOG_POLYJUICE_SYSTEM,
@@ -35,7 +37,7 @@ pub struct Web3Indexer {
     l2_sudt_type_script_hash: H256,
     polyjuice_type_script_hash: H256,
     rollup_type_hash: H256,
-    eth_account_lock_hash: H256,
+    allowed_eoa_hashes: HashSet<H256>,
 }
 
 impl Web3Indexer {
@@ -45,13 +47,19 @@ impl Web3Indexer {
         polyjuice_type_script_hash: H256,
         rollup_type_hash: H256,
         eth_account_lock_hash: H256,
+        tron_account_lock_hash: Option<H256>,
     ) -> Self {
+        let mut allowed_eoa_hashes = HashSet::default();
+        allowed_eoa_hashes.insert(eth_account_lock_hash);
+        if let Some(code_hash) = tron_account_lock_hash {
+            allowed_eoa_hashes.insert(code_hash);
+        };
         Web3Indexer {
             pool,
             l2_sudt_type_script_hash,
             polyjuice_type_script_hash,
             rollup_type_hash,
-            eth_account_lock_hash,
+            allowed_eoa_hashes,
         }
     }
 
@@ -203,8 +211,8 @@ impl Web3Indexer {
                     anyhow!("Can't get script by script_hash: {:?}", from_script_hash)
                 })?;
             let from_script_code_hash: H256 = from_script.code_hash().unpack();
-            // skip tx with non eth_account_lock from_id
-            if from_script_code_hash != self.eth_account_lock_hash {
+            // skip tx not in the allowed eoa account lock
+            if !self.allowed_eoa_hashes.contains(&from_script_code_hash) {
                 continue;
             }
             // from_address is the script's args in eth account lock
