@@ -429,6 +429,31 @@ impl RPCClient {
         Ok(cell_info)
     }
 
+    pub async fn get_cell_from_mempool(&self, out_point: OutPoint) -> Result<Option<CellInfo>> {
+        let tx = match self.get_transaction(out_point.tx_hash().unpack()).await? {
+            Some(tx) => tx,
+            None => return Ok(None),
+        };
+
+        let index: u32 = out_point.index().unpack();
+        let raw_tx = tx.raw();
+
+        let output: CellOutput = match raw_tx.outputs().get(index as usize) {
+            Some(output) => output,
+            None => return Ok(None),
+        };
+        let data = {
+            let data = raw_tx.outputs_data().get(index as usize);
+            data.map(|b| b.unpack()).unwrap_or_else(Bytes::new)
+        };
+
+        Ok(Some(CellInfo {
+            output,
+            data,
+            out_point,
+        }))
+    }
+
     pub async fn get_tip(&self) -> Result<NumberHash> {
         let number_hash: gw_jsonrpc_types::blockchain::NumberHash =
             to_result(self.indexer_client.request("get_tip", None).await?)?;

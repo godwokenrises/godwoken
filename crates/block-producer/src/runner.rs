@@ -6,7 +6,7 @@ use crate::{
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use gw_chain::chain::Chain;
-use gw_common::H256;
+use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
 use gw_generator::{
@@ -35,6 +35,7 @@ use sqlx::{
     ConnectOptions,
 };
 use std::{
+    collections::HashMap,
     net::{SocketAddr, ToSocketAddrs},
     sync::Arc,
     time::Duration,
@@ -233,7 +234,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         &store,
         &config.genesis,
         config.chain.genesis_committed_info.clone().into(),
-        secp_data,
+        secp_data.clone(),
     )
     .with_context(|| "init genesis")?;
 
@@ -375,12 +376,26 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 .with_context(|| "init wallet")?;
 
             // Challenger
+            let to_hash = |data| -> [u8; 32] {
+                let mut hasher = new_blake2b();
+                hasher.update(data);
+                let mut hash = [0u8; 32];
+                hasher.finalize(&mut hash);
+                hash
+            };
+            let mut builtin_load_data = HashMap::new();
+            builtin_load_data.insert(
+                to_hash(secp_data.as_ref()).into(),
+                config.genesis.secp_data_dep.clone().into(),
+            );
+
             let challenger = Challenger::new(
                 rollup_context,
                 rpc_client.clone(),
                 wallet,
                 block_producer_config,
                 config.debug.clone(),
+                builtin_load_data,
                 ckb_genesis_info,
                 Arc::clone(&chain),
                 Arc::clone(&poa),

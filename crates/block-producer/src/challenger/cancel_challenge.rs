@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::types::{CellInfo, InputCellInfo};
 
 use anyhow::{anyhow, Result};
@@ -29,6 +31,7 @@ pub struct CancelChallenge<'a, W: Entity> {
 pub struct CancelChallengeOutput {
     pub post_global_state: GlobalState,
     pub verifier_cell: (CellOutput, Bytes),
+    pub load_data_cells: Option<HashMap<H256, (CellOutput, Bytes)>>, // Some for transaction execution verifiction, sys_load_data
     pub burn_cells: Vec<(CellOutput, Bytes)>,
     pub verifier_witness: Option<WitnessArgs>, // Some for signature verification
     pub challenge_witness: WitnessArgs,
@@ -100,7 +103,7 @@ pub fn build_output(
             );
 
             let data = cancel.build_verifier_data();
-            Ok(cancel.build_output(data, Some(verifier_witness)))
+            Ok(cancel.build_output(data, Some(verifier_witness), None))
         }
         VerifyWitness::TxSignature(witness) => {
             let verifier_lock = context.sender_script;
@@ -126,9 +129,9 @@ pub fn build_output(
             );
 
             let data = cancel.build_verifier_data(receiver_script.hash().into());
-            Ok(cancel.build_output(data, Some(verifier_witness)))
+            Ok(cancel.build_output(data, Some(verifier_witness), None))
         }
-        VerifyWitness::TxExecution(witness) => {
+        VerifyWitness::TxExecution { witness, load_data } => {
             let verifier_lock = context
                 .receiver_script
                 .ok_or_else(|| anyhow!("receiver script not found"))?;
@@ -144,7 +147,8 @@ pub fn build_output(
             );
 
             let data = cancel.build_verifier_data();
-            Ok(cancel.build_output(data, None))
+            let load_data = load_data.into_iter().map(|(k, v)| (k, v.unpack()));
+            Ok(cancel.build_output(data, None, Some(load_data.collect())))
         }
     }
 }
@@ -178,15 +182,31 @@ impl<'a, W: Entity> CancelChallenge<'a, W> {
         self,
         verifier_data: Bytes,
         verifier_witness: Option<WitnessArgs>,
+        load_data: Option<HashMap<H256, Bytes>>,
     ) -> CancelChallengeOutput {
-        let verifier_size = 8 + verifier_data.len() + self.verifier_lock.as_slice().len();
-        let verifier_capacity = verifier_size as u64 * 100_000_000;
+        let build_cell = |data: Bytes, lock: Script| -> (CellOutput, Bytes) {
+            let dummy_output = CellOutput::new_builder()
+                .capacity(100_000_000u64.pack())
+                .lock(lock)
+                .build();
 
-        let verifier = CellOutput::new_builder()
-            .capacity(verifier_capacity.pack())
-            .lock(self.verifier_lock)
-            .build();
-        let verifier_cell = (verifier, verifier_data);
+            let capacity = dummy_output
+                .occupied_capacity(data.len())
+                .expect("impossible cancel challenge verify cell overflow");
+
+            let output = dummy_output.as_builder().capacity(capacity.pack()).build();
+
+            (output, data)
+        };
+
+        let verifier_cell = build_cell(verifier_data, self.verifier_lock);
+
+        let owner_lock = self.owner_lock;
+        let load_data_cells = load_data.map(|data| {
+            data.into_iter()
+                .map(|(k, v)| (k, build_cell(v, owner_lock.clone())))
+                .collect()
+        });
 
         let burn = Burn::new(self.challenge_cell, self.reward_burn_rate);
         let burn_output = burn.build_output(self.burn_lock);
@@ -199,6 +219,7 @@ impl<'a, W: Entity> CancelChallenge<'a, W> {
         CancelChallengeOutput {
             post_global_state,
             verifier_cell,
+            load_data_cells,
             burn_cells: burn_output.burn_cells,
             verifier_witness,
             challenge_witness,

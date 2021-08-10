@@ -14,13 +14,14 @@ use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::ChallengeTargetType;
 use gw_types::packed::{
-    BlockHashEntry, BlockHashEntryVec, BlockInfo, Byte32, ChallengeTarget, ChallengeWitness,
+    BlockHashEntry, BlockHashEntryVec, BlockInfo, Byte32, Bytes, ChallengeTarget, ChallengeWitness,
     KVPairVec, L2Block, L2Transaction, RawL2Block, RawL2BlockVec, RawL2Transaction, Script,
     ScriptReader, ScriptVec, Uint32, VerifyTransactionContext, VerifyTransactionSignatureContext,
     VerifyTransactionSignatureWitness, VerifyTransactionWitness, VerifyWithdrawalWitness,
 };
 use gw_types::prelude::{Builder, Entity, FromSliceShouldBeOk, Pack, Reader, Unpack};
 
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::sync::Arc;
 
@@ -49,7 +50,10 @@ pub fn build_challenge_context(
 
 #[derive(Debug, Clone)]
 pub enum VerifyWitness {
-    TxExecution(VerifyTransactionWitness),
+    TxExecution {
+        load_data: HashMap<H256, Bytes>,
+        witness: VerifyTransactionWitness,
+    },
     TxSignature(VerifyTransactionSignatureWitness),
     Withdrawal(VerifyWithdrawalWitness),
 }
@@ -277,7 +281,10 @@ fn build_verify_transaction_witness(
     Ok(VerifyContext {
         sender_script: kv_witness.sender_script,
         receiver_script: Some(kv_witness.receiver_script),
-        verify_witness: VerifyWitness::TxExecution(verify_witness),
+        verify_witness: VerifyWitness::TxExecution {
+            load_data: kv_witness.load_data.unwrap_or_else(HashMap::default),
+            witness: verify_witness,
+        },
     })
 }
 
@@ -309,6 +316,7 @@ enum TxKvState {
 struct TxKvWitness {
     account_count: Uint32,
     scripts: ScriptVec,
+    load_data: Option<HashMap<H256, Bytes>>,
     sender_script: Script,
     receiver_script: Script,
     kv_state: KVPairVec,
@@ -489,6 +497,11 @@ fn build_tx_kv_witness(
         builder.build()
     };
 
+    let load_data = {
+        let to_read_data = opt_run_result.as_ref().map(|r| r.read_data.iter());
+        to_read_data.map(|d| d.map(|(k, v)| (*k, v.pack())).collect())
+    };
+
     let return_data_hash = opt_run_result.map(|result| {
         let return_data_hash: [u8; 32] = {
             let mut hasher = new_blake2b();
@@ -505,6 +518,7 @@ fn build_tx_kv_witness(
     let witness = TxKvWitness {
         account_count: prev_tx_account_count.pack(),
         scripts,
+        load_data,
         sender_script,
         receiver_script,
         kv_state: prev_kv_state.pack(),

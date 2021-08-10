@@ -18,15 +18,22 @@ use std::sync::Arc;
 const L1_FINALITY_BLOCKS: u64 = 100;
 
 #[derive(Clone)]
-pub struct VerifierCell {
+pub struct Verifier {
+    load_data_inputs: Vec<InputCellInfo>,
     cell_dep: CellDep,
     input: InputCellInfo,
     witness: Option<WitnessArgs>,
 }
 
-impl VerifierCell {
-    pub fn new(cell_dep: CellDep, input: InputCellInfo, witness: Option<WitnessArgs>) -> Self {
-        VerifierCell {
+impl Verifier {
+    pub fn new(
+        load_data_inputs: Vec<InputCellInfo>,
+        cell_dep: CellDep,
+        input: InputCellInfo,
+        witness: Option<WitnessArgs>,
+    ) -> Self {
+        Verifier {
+            load_data_inputs,
             cell_dep,
             input,
             witness,
@@ -38,7 +45,7 @@ impl VerifierCell {
     }
 }
 
-type ConsumedVerifiers = Arc<parking_lot::Mutex<Vec<(VerifierCell, Option<H256>)>>>;
+type ConsumedVerifiers = Arc<parking_lot::Mutex<Vec<(Verifier, Option<H256>)>>>;
 
 // TODO: verifier persistent, signature verifier needs witness to unlock, but verifier itself
 // doesn't provides context to restore this witness.
@@ -70,8 +77,8 @@ impl Cleaner {
         Ok(())
     }
 
-    pub fn watch_verifier(&self, cell: VerifierCell, consumed_tx: Option<H256>) {
-        self.consumed_verifiers.lock().push((cell, consumed_tx));
+    pub fn watch_verifier(&self, verifier: Verifier, consumed_tx: Option<H256>) {
+        self.consumed_verifiers.lock().push((verifier, consumed_tx));
     }
 
     pub async fn prune(&self) -> Result<()> {
@@ -130,19 +137,19 @@ impl Cleaner {
                 continue;
             }
 
-            let verifier_cell = {
+            let verifier = {
                 let verifiers = self.consumed_verifiers.lock();
                 verifiers.get(idx).expect("exists").to_owned().0
             };
             let verifier_status = rpc_client
-                .get_transaction_status(verifier_cell.tx_hash())
+                .get_transaction_status(verifier.tx_hash())
                 .await?;
             if !matches!(verifier_status, Some(TxStatus::Committed)) {
                 continue;
             }
 
-            let verifier_tx = verifier_cell.tx_hash();
-            let tx = self.build_reclaim_verifier_tx(verifier_cell).await?;
+            let verifier_tx = verifier.tx_hash();
+            let tx = self.build_reclaim_verifier_tx(verifier).await?;
             let tx_hash = rpc_client.send_transaction(tx).await?;
 
             {
@@ -169,12 +176,13 @@ impl Cleaner {
         Status::try_from(status).map_err(|n| anyhow!("invalid status {}", n))
     }
 
-    async fn build_reclaim_verifier_tx(&self, verifier_cell: VerifierCell) -> Result<Transaction> {
+    async fn build_reclaim_verifier_tx(&self, verifier: Verifier) -> Result<Transaction> {
         let mut tx_skeleton = TransactionSkeleton::default();
 
-        tx_skeleton.cell_deps_mut().push(verifier_cell.cell_dep);
-        tx_skeleton.inputs_mut().push(verifier_cell.input);
-        if let Some(verifier_witness) = verifier_cell.witness {
+        tx_skeleton.cell_deps_mut().push(verifier.cell_dep);
+        tx_skeleton.inputs_mut().push(verifier.input);
+        tx_skeleton.inputs_mut().extend(verifier.load_data_inputs);
+        if let Some(verifier_witness) = verifier.witness {
             tx_skeleton.witnesses_mut().push(verifier_witness);
         }
 
