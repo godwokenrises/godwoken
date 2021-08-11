@@ -6,7 +6,10 @@ use gw_generator::{sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
-    godwoken::{GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus, RunResult, TxReceipt},
+    godwoken::{
+        GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus, L2TransactionStatus,
+        L2TransactionWithStatus, RunResult, TxReceipt,
+    },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
 use gw_store::{
@@ -16,7 +19,7 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    packed::{self, BlockInfo, RollupConfig},
+    packed::{self, BlockInfo, RawL2Block, RollupConfig},
     prelude::*,
 };
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
@@ -135,6 +138,7 @@ impl Registry {
                 get_script_hash_by_short_address,
             )
             .with_method("gw_get_data", get_data)
+            .with_method("gw_get_transaction", get_transaction)
             .with_method("gw_get_transaction_receipt", get_transaction_receipt)
             .with_method("gw_execute_l2transaction", execute_l2transaction)
             .with_method("gw_execute_raw_l2transaction", execute_raw_l2transaction)
@@ -160,6 +164,45 @@ impl Registry {
 
 async fn ping() -> Result<String> {
     Ok("pong".to_string())
+}
+
+async fn get_transaction(
+    Params((tx_hash,)): Params<(JsonH256,)>,
+    mem_pool: Data<MemPool>,
+    store: Data<Store>,
+) -> Result<Option<L2TransactionWithStatus>> {
+    let tx_hash = to_h256(tx_hash);
+    let db = store.begin_transaction();
+    let tx_opt;
+    let status;
+    match db.get_transaction_info(&tx_hash)? {
+        Some(tx_info) => {
+            let tx_block_number = tx_info.block_number().unpack();
+
+            // return None if tx's committed block is reverted
+            if !db
+                .reverted_block_smt()?
+                .get(&RawL2Block::compute_smt_key(tx_block_number).into())?
+                .is_zero()
+            {
+                // block is reverted
+                return Ok(None);
+            }
+
+            tx_opt = db.get_transaction_by_key(&tx_info.key())?;
+            status = L2TransactionStatus::Committed;
+        }
+        None => {
+            let mem_pool = mem_pool.lock();
+            tx_opt = mem_pool.all_txs().get(&tx_hash).cloned();
+            status = L2TransactionStatus::Pending;
+        }
+    };
+
+    Ok(tx_opt.map(|tx| L2TransactionWithStatus {
+        transaction: tx.into(),
+        status,
+    }))
 }
 
 async fn get_block(

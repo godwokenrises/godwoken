@@ -479,6 +479,26 @@ pub struct L2BlockWithStatus {
     pub status: L2BlockStatus,
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum L2TransactionStatus {
+    Pending,
+    Committed,
+}
+
+impl Default for L2TransactionStatus {
+    fn default() -> Self {
+        Self::Pending
+    }
+}
+
+#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct L2TransactionWithStatus {
+    pub transaction: L2TransactionView,
+    pub status: L2TransactionStatus,
+}
+
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct SubmitTransactions {

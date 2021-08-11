@@ -28,7 +28,8 @@ use gw_types::{
 use std::collections::HashSet;
 use std::{borrow::BorrowMut, collections::HashMap};
 
-const NUMBER_OF_CONFIRMATION: u64 = 100;
+/// TODO use a variable instead of hardcode
+const NUMBER_OF_CONFIRMATION: u64 = 10000;
 
 pub struct StoreTransaction {
     pub(crate) inner: RocksDBTransaction,
@@ -239,19 +240,35 @@ impl StoreTransaction {
     }
 
     pub fn get_transaction(&self, tx_hash: &H256) -> Result<Option<packed::L2Transaction>, Error> {
-        if let Some(slice) = self.get(COLUMN_TRANSACTION_INFO, tx_hash.as_slice()) {
-            let info =
-                packed::TransactionInfoReader::from_slice_should_be_ok(&slice.as_ref()).to_entity();
-            let tx_key = info.key();
-            Ok(self
-                .get(COLUMN_TRANSACTION, &tx_key.as_slice())
-                .map(|slice| {
-                    packed::L2TransactionReader::from_slice_should_be_ok(&slice.as_ref())
-                        .to_entity()
-                }))
-        } else {
-            Ok(None)
+        match self.get_transaction_info(tx_hash)? {
+            Some(tx_info) => self.get_transaction_by_key(&tx_info.key()),
+            None => Ok(None),
         }
+    }
+
+    pub fn get_transaction_info(
+        &self,
+        tx_hash: &H256,
+    ) -> Result<Option<packed::TransactionInfo>, Error> {
+        let tx_info_opt = self
+            .get(COLUMN_TRANSACTION_INFO, tx_hash.as_slice())
+            .and_then(|slice| {
+                let info = packed::TransactionInfoReader::from_slice_should_be_ok(&slice.as_ref())
+                    .to_entity();
+                Some(info)
+            });
+        Ok(tx_info_opt)
+    }
+
+    pub fn get_transaction_by_key(
+        &self,
+        tx_key: &TransactionKey,
+    ) -> Result<Option<packed::L2Transaction>, Error> {
+        Ok(self
+            .get(COLUMN_TRANSACTION, &tx_key.as_slice())
+            .map(|slice| {
+                packed::L2TransactionReader::from_slice_should_be_ok(&slice.as_ref()).to_entity()
+            }))
     }
 
     pub fn get_transaction_receipt(

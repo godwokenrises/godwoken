@@ -170,6 +170,14 @@ impl MemPool {
         &self.mem_block
     }
 
+    pub fn all_txs(&self) -> &HashMap<H256, L2Transaction> {
+        &self.all_txs
+    }
+
+    pub fn all_withdrawals(&self) -> &HashMap<H256, WithdrawalRequest> {
+        &self.all_withdrawals
+    }
+
     pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
         let offset = (self.mem_block.withdrawals().len() + self.mem_block.txs().len()) as u32;
         StateDBTransaction::from_checkpoint(
