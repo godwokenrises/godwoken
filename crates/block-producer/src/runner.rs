@@ -158,6 +158,10 @@ async fn poll_loop(
 }
 
 pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
+    // Enable metrics config.
+    if let Some(metrics_config) = config.metrics {
+        gw_metrics::config(metrics_config.endpoint, metrics_config.worker_threads);
+    }
     // Enable smol threads before smol::spawn
     let runtime_threads = match std::env::var(SMOL_THREADS_ENV_VAR) {
         Ok(s) => s.parse()?,

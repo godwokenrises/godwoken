@@ -19,6 +19,7 @@ pub struct Config {
     pub debug: DebugConfig,
     pub block_producer: Option<BlockProducerConfig>,
     pub web3_indexer: Option<Web3IndexerConfig>,
+    pub metrics: Option<MetricConfig>,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -138,5 +139,21 @@ pub enum NodeMode {
 impl Default for NodeMode {
     fn default() -> Self {
         NodeMode::ReadOnly
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub struct MetricConfig {
+    pub endpoint: String,
+    pub worker_threads: usize,
+}
+
+impl Default for MetricConfig {
+    fn default() -> Self {
+        Self {
+            endpoint: "http://localhost:4317".to_string(),
+            worker_threads: 1,
+        }
     }
 }

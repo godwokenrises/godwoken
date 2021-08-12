@@ -3,6 +3,7 @@
 //! A block producer can act without the ability of produce block.
 
 use std::collections::HashMap;
+use std::time::Instant;
 
 use crate::withdrawal::AvailableCustodians;
 
@@ -74,6 +75,7 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         stake_cell_owner_lock_hash,
         available_custodians,
     } = param;
+    let time = Instant::now();
     let rollup_context = generator.rollup_context();
     let parent_block_number: u64 = parent_block.raw().number().unpack();
     let parent_block_hash = parent_block.hash().into();
@@ -376,6 +378,9 @@ pub fn produce_block(param: ProduceBlockParam<'_>) -> Result<ProduceBlockResult>
         .rollup_config_hash(rollup_config_hash.pack())
         .status((Status::Running as u8).into())
         .build();
+    let ms = time.elapsed().as_millis();
+    gw_metrics::utils::u64_gauge("block.produce.duration", ms as u64);
+    gw_metrics::utils::u64_counter("block.produce.new", 1);
     Ok(ProduceBlockResult {
         block,
         global_state,

@@ -1,2 +1,9 @@
 target/
 build/
+
+crates/block-producer/pkg/
+deploy/
+scripts/
+tmp/
+
+.vscode/

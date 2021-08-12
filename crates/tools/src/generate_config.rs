@@ -307,6 +307,7 @@ pub fn generate_config(
         web3_indexer,
         node_mode: NodeMode::ReadOnly,
         debug: Default::default(),
+        metrics: Default::default(),
     };
 
     let output_content = toml::to_string_pretty(&config).expect("serde toml to string pretty");
