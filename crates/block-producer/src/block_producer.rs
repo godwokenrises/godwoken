@@ -464,12 +464,13 @@ impl BlockProducer {
             tx.clone(),
             format!("L2 block {}", number).as_str(),
         )
-        .await
-        .unwrap_or(0);
+        .await;
 
-        if cycles > self.debug_config.expected_l1_tx_upper_bound_cycles {
+        if cycles.is_none()
+            || cycles.unwrap_or(0) > self.debug_config.expected_l1_tx_upper_bound_cycles
+        {
             log::warn!(
-                "Submitting l2 block is cost unexpected cycles: {}, expected upper bound: {}",
+                "Submitting l2 block is cost unexpected cycles: {:?}, expected upper bound: {}",
                 cycles,
                 self.debug_config.expected_l1_tx_upper_bound_cycles
             );
