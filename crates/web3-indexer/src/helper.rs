@@ -36,10 +36,9 @@ impl PolyjuiceArgs {
     }
 }
 
-pub fn account_id_to_eth_address(account_script_hash: H256, id: u32) -> [u8; 20] {
+pub fn account_script_hash_to_eth_address(account_script_hash: H256) -> [u8; 20] {
     let mut data = [0u8; 20];
-    data[..16].copy_from_slice(&account_script_hash.as_slice()[0..16]);
-    data[16..20].copy_from_slice(&id.to_le_bytes()[..]);
+    data.copy_from_slice(&account_script_hash.as_slice()[0..20]);
     data
 }
 
