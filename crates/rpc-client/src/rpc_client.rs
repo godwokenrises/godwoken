@@ -105,6 +105,34 @@ fn parse_deposit_request(
     Some(request)
 }
 
+pub enum QueryResult<T> {
+    Full(T),
+    NotEnough(T),
+}
+
+impl<T> QueryResult<T> {
+    pub fn expect_full(self, msg: &str) -> Result<T> {
+        match self {
+            Self::Full(r) => Ok(r),
+            Self::NotEnough(_r) => Err(anyhow!(msg.to_string())),
+        }
+    }
+
+    pub fn expect_any(self) -> T {
+        match self {
+            Self::Full(r) => r,
+            Self::NotEnough(r) => r,
+        }
+    }
+
+    pub fn map<R, F: FnOnce(T) -> R>(self, f: F) -> QueryResult<R> {
+        match self {
+            Self::Full(r) => QueryResult::Full(f(r)),
+            Self::NotEnough(r) => QueryResult::NotEnough(f(r)),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct RPCClient {
     pub indexer_client: HttpClient,
@@ -779,7 +807,7 @@ impl RPCClient {
         withdrawals_amount: &WithdrawalsAmount,
         min_refund_cell_capacity: u64,
         last_finalized_block_number: u64,
-    ) -> Result<CollectedCustodianCells> {
+    ) -> Result<QueryResult<CollectedCustodianCells>> {
         let rollup_context = &self.rollup_context;
 
         let parse_sudt_amount = |cell: &Cell| -> Result<u128> {
@@ -837,7 +865,7 @@ impl RPCClient {
             )?;
 
             if cells.last_cursor.is_empty() {
-                return Err(anyhow!("no enough finalized custodians"));
+                return Ok(QueryResult::NotEnough(collected));
             }
             cursor = Some(cells.last_cursor);
 
@@ -929,7 +957,7 @@ impl RPCClient {
             }
         }
 
-        Ok(collected)
+        Ok(QueryResult::Full(collected))
     }
 
     pub async fn query_verified_custodian_type_script(

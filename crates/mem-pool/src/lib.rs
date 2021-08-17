@@ -7,4 +7,4 @@ mod deposit;
 mod mem_block;
 pub mod pool;
 mod types;
-mod withdrawal;
+pub mod withdrawal;

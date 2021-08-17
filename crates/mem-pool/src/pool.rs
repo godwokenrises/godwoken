@@ -612,7 +612,7 @@ impl MemPool {
         // Handle state before txs
         let db = self.store.begin_transaction();
         // withdrawal
-        self.finalize_withdrawals(&db, withdrawals)?;
+        self.finalize_withdrawals(&db, withdrawals.collect())?;
         // deposits
         let deposit_cells = {
             let cells = smol::block_on(task)?;
@@ -659,18 +659,16 @@ impl MemPool {
     }
 
     /// Execute withdrawal & update local state
-    fn finalize_withdrawals<WithdrawalIter: Iterator<Item = WithdrawalRequest>>(
+    fn finalize_withdrawals(
         &mut self,
         db: &StoreTransaction,
-        withdrawals: WithdrawalIter,
+        mut withdrawals: Vec<WithdrawalRequest>,
     ) -> Result<()> {
         // check mem block state
         assert!(self.mem_block.withdrawals().is_empty());
         assert!(self.mem_block.state_checkpoints().is_empty());
         assert!(self.mem_block.deposits().is_empty());
         assert!(self.mem_block.tx_receipts().is_empty());
-
-        let mut withdrawals: Vec<_> = withdrawals.collect();
 
         // find withdrawals from pending
         if withdrawals.is_empty() {
@@ -682,7 +680,23 @@ impl MemPool {
         }
 
         let max_withdrawal_capacity = std::u128::MAX;
-        let available_custodians = AvailableCustodians::build(db, &self.rpc_client, &withdrawals)?;
+        let available_custodians = {
+            // query withdrawals from ckb-indexer
+            let last_finalized_block_number = self
+                .generator
+                .rollup_context()
+                .last_finalized_block_number(self.current_tip.1);
+            smol::block_on(async {
+                AvailableCustodians::build_from_withdrawals(
+                    &self.rpc_client,
+                    withdrawals.clone().into_iter(),
+                    self.generator.rollup_context(),
+                    last_finalized_block_number,
+                )
+                .await
+            })?
+            .expect_any()
+        };
         let asset_scripts: HashMap<H256, Script> = {
             let sudt_value = available_custodians.sudt.values();
             sudt_value.map(|(_, script)| (script.hash().into(), script.to_owned()))

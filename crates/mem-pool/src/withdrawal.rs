@@ -1,14 +1,11 @@
 use anyhow::{anyhow, Result};
-use gw_common::CKB_SUDT_SCRIPT_ARGS;
-use gw_rpc_client::RPCClient;
-use gw_store::transaction::StoreTransaction;
+use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_rpc_client::{QueryResult, RPCClient};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{CollectedCustodianCells, RollupContext},
-    packed::{
-        CellOutput, CustodianLockArgs, L2Block, Script, WithdrawalLockArgs, WithdrawalRequest,
-    },
+    offchain::{CollectedCustodianCells, RollupContext, WithdrawalsAmount},
+    packed::{CellOutput, CustodianLockArgs, L2Block, Script, WithdrawalRequest},
     prelude::*,
 };
 
@@ -39,67 +36,22 @@ impl<'a> From<&'a CollectedCustodianCells> for AvailableCustodians {
 }
 
 impl AvailableCustodians {
-    pub fn build(
-        db: &StoreTransaction,
+    pub async fn build_from_withdrawals<WithdrawalIter: Iterator<Item = WithdrawalRequest>>(
         rpc_client: &RPCClient,
-        withdrawal_requests: &[WithdrawalRequest],
-    ) -> Result<Self> {
-        if withdrawal_requests.is_empty() {
-            Ok(AvailableCustodians::default())
-        } else {
-            let mut sudt_scripts: HashMap<[u8; 32], Script> = HashMap::new();
-            let sudt_custodians = {
-                let reqs = withdrawal_requests.iter();
-                let sudt_reqs = reqs.filter(|req| {
-                    let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
-                    0 != req.raw().amount().unpack() && CKB_SUDT_SCRIPT_ARGS != sudt_script_hash
-                });
-
-                let to_hash = sudt_reqs.map(|req| req.raw().sudt_script_hash().unpack());
-                let has_script = to_hash.filter_map(|hash: [u8; 32]| {
-                    if let Some(script) = sudt_scripts.get(&hash).cloned() {
-                        return Some((hash, script));
-                    }
-
-                    // Try rpc
-                    match smol::block_on(rpc_client.query_verified_custodian_type_script(&hash)) {
-                        Ok(opt_script) => opt_script.map(|script| {
-                            sudt_scripts.insert(hash, script.clone());
-                            (hash, script)
-                        }),
-                        Err(err) => {
-                            log::debug!("get custodian type script err {}", err);
-                            None
-                        }
-                    }
-                });
-
-                let to_custodian = has_script.filter_map(|(hash, script)| {
-                    match db.get_finalized_custodian_asset(hash.into()) {
-                        Ok(custodian_balance) => Some((hash, (custodian_balance, script))),
-                        Err(err) => {
-                            log::warn!("get custodian err {}", err);
-                            None
-                        }
-                    }
-                });
-                to_custodian.collect::<HashMap<[u8; 32], (u128, Script)>>()
-            };
-
-            let ckb_custodian = match db.get_finalized_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
-            {
-                Ok(balance) => balance,
-                Err(err) => {
-                    log::warn!("get ckb custodian err {}", err);
-                    0
-                }
-            };
-
-            Ok(AvailableCustodians {
-                capacity: ckb_custodian,
-                sudt: sudt_custodians,
-            })
-        }
+        withdrawals: WithdrawalIter,
+        rollup_context: &RollupContext,
+        last_finalized_block_number: u64,
+    ) -> Result<QueryResult<Self>> {
+        let total_withdrawal_amount = sum(withdrawals);
+        let available_custodians = rpc_client
+            .query_finalized_custodian_cells(
+                &total_withdrawal_amount,
+                calc_ckb_custodian_min_capacity(rollup_context),
+                last_finalized_block_number,
+            )
+            .await?
+            .map(|custodian_cells| (&custodian_cells).into());
+        Ok(available_custodians)
     }
 }
 
@@ -146,10 +98,7 @@ impl<'a> Generator<'a> {
             sudt_custodians.insert(sudt_type_hash, sudt_custodian);
         }
 
-        let ckb_custodian_min_capacity = {
-            let lock = build_finalized_custodian_lock(rollup_context);
-            (8 + lock.as_slice().len() as u64) * 100000000
-        };
+        let ckb_custodian_min_capacity = calc_ckb_custodian_min_capacity(rollup_context);
         let ckb_custodian_capacity = available_custodians
             .capacity
             .saturating_sub(total_sudt_capacity);
@@ -169,6 +118,10 @@ impl<'a> Generator<'a> {
         }
     }
 
+    pub fn withdrawals(&self) -> &[(CellOutput, Bytes)] {
+        &self.withdrawals
+    }
+
     pub fn verified_output(
         &self,
         req: &WithdrawalRequest,
@@ -186,8 +139,16 @@ impl<'a> Generator<'a> {
             let sudt_custodian = self.sudt_custodians.get(&sudt_type_hash);
             sudt_custodian.map(|sudt| sudt.script.to_owned())
         };
-        let output = generate_withdrawal_output(req, self.rollup_context, block, sudt_script)
-            .map_err(|min_capacity| anyhow!("{} minimal capacity for {}", min_capacity, req))?;
+        let block_hash: H256 = block.hash().into();
+        let block_number = block.raw().number().unpack();
+        let output = gw_generator::Generator::build_withdrawal_cell_output(
+            &self.rollup_context,
+            req,
+            &block_hash,
+            block_number,
+            sudt_script,
+        )
+        .map_err(|min_capacity| anyhow!("{} minimal capacity for {}", min_capacity, req))?;
 
         // Verify remaind sudt
         let mut ckb_custodian = self.ckb_custodian.clone();
@@ -280,38 +241,98 @@ impl<'a> Generator<'a> {
         self.withdrawals.push(verified_output);
         Ok(())
     }
+
+    pub fn finish(self) -> Vec<(CellOutput, Bytes)> {
+        let mut outputs = self.withdrawals;
+        let custodian_lock = build_finalized_custodian_lock(self.rollup_context);
+
+        // Generate sudt custodian changes
+        let sudt_changes = {
+            let custodians = self.sudt_custodians.into_iter();
+            custodians.filter(|(_, custodian)| 0 != custodian.capacity && 0 != custodian.balance)
+        };
+        for custodian in sudt_changes.map(|(_, c)| c) {
+            let output = CellOutput::new_builder()
+                .capacity(custodian.capacity.pack())
+                .type_(Some(custodian.script).pack())
+                .lock(custodian_lock.clone())
+                .build();
+
+            outputs.push((output, custodian.balance.pack().as_bytes()));
+        }
+
+        // Generate ckb custodian change
+        let build_ckb_output = |capacity: u64| -> (CellOutput, Bytes) {
+            let output = CellOutput::new_builder()
+                .capacity(capacity.pack())
+                .lock(custodian_lock.clone())
+                .build();
+            (output, Bytes::new())
+        };
+        if 0 != self.ckb_custodian.capacity {
+            if self.ckb_custodian.capacity < u64::MAX as u128 {
+                outputs.push(build_ckb_output(self.ckb_custodian.capacity as u64));
+                return outputs;
+            }
+
+            let ckb_custodian = self.ckb_custodian;
+            let mut remaind = ckb_custodian.capacity;
+            while remaind > 0 {
+                let max = remaind.saturating_sub(ckb_custodian.min_capacity as u128);
+                match max.checked_sub(u64::MAX as u128) {
+                    Some(cap) => {
+                        outputs.push(build_ckb_output(u64::MAX));
+                        remaind = cap.saturating_add(ckb_custodian.min_capacity as u128);
+                    }
+                    None if max.saturating_add(ckb_custodian.min_capacity as u128)
+                        > u64::MAX as u128 =>
+                    {
+                        let max = max.saturating_add(ckb_custodian.min_capacity as u128);
+                        let half = max / 2;
+                        outputs.push(build_ckb_output(half as u64));
+                        outputs.push(build_ckb_output(max.saturating_sub(half) as u64));
+                        remaind = 0;
+                    }
+                    None => {
+                        outputs.push(build_ckb_output(
+                            (max as u64).saturating_add(ckb_custodian.min_capacity),
+                        ));
+                        remaind = 0;
+                    }
+                }
+            }
+        }
+
+        outputs
+    }
 }
 
-fn build_withdrawal_lock(
-    req: &WithdrawalRequest,
-    rollup_context: &RollupContext,
-    block: &L2Block,
-) -> Script {
-    let withdrawal_capacity: u64 = req.raw().capacity().unpack();
-    let lock_args: Bytes = {
-        let withdrawal_lock_args = WithdrawalLockArgs::new_builder()
-            .account_script_hash(req.raw().account_script_hash())
-            .withdrawal_block_hash(block.hash().pack())
-            .withdrawal_block_number(block.raw().number())
-            .sudt_script_hash(req.raw().sudt_script_hash())
-            .sell_amount(req.raw().sell_amount())
-            .sell_capacity(withdrawal_capacity.pack())
-            .owner_lock_hash(req.raw().owner_lock_hash())
-            .payment_lock_hash(req.raw().payment_lock_hash())
-            .build();
+fn sum<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmount {
+    reqs.fold(
+        WithdrawalsAmount::default(),
+        |mut total_amount, withdrawal| {
+            total_amount.capacity = total_amount
+                .capacity
+                .saturating_add(withdrawal.raw().capacity().unpack() as u128);
 
-        let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
-        rollup_type_hash
-            .chain(withdrawal_lock_args.as_slice().iter())
-            .cloned()
-            .collect()
-    };
+            let sudt_script_hash = withdrawal.raw().sudt_script_hash().unpack();
+            let sudt_amount = withdrawal.raw().amount().unpack();
+            if sudt_amount != 0 {
+                match sudt_script_hash {
+                    CKB_SUDT_SCRIPT_ARGS => {
+                        let account = withdrawal.raw().account_script_hash();
+                        log::warn!("{} withdrawal request non-zero sudt amount but it's type hash ckb, ignore this amount", account);
+                    }
+                    _ => {
+                        let total_sudt_amount = total_amount.sudt.entry(sudt_script_hash).or_insert(0u128);
+                        *total_sudt_amount = total_sudt_amount.saturating_add(sudt_amount);
+                    }
+                }
+            }
 
-    Script::new_builder()
-        .code_hash(rollup_context.rollup_config.withdrawal_script_type_hash())
-        .hash_type(ScriptHashType::Type.into())
-        .args(lock_args.pack())
-        .build()
+            total_amount
+        }
+    )
 }
 
 fn build_finalized_custodian_lock(rollup_context: &RollupContext) -> Script {
@@ -330,33 +351,9 @@ fn build_finalized_custodian_lock(rollup_context: &RollupContext) -> Script {
         .build()
 }
 
-fn generate_withdrawal_output(
-    req: &WithdrawalRequest,
-    rollup_context: &RollupContext,
-    block: &L2Block,
-    type_script: Option<Script>,
-) -> std::result::Result<(CellOutput, Bytes), u64> {
-    let req_ckb: u64 = req.raw().capacity().unpack();
-    let lock = build_withdrawal_lock(req, rollup_context, block);
-    let (type_, data) = match type_script {
-        Some(type_) => (Some(type_).pack(), req.raw().amount().as_bytes()),
-        None => (None::<Script>.pack(), Bytes::new()),
-    };
-
-    let size = 8 + data.len() + type_.as_slice().len() + lock.as_slice().len();
-    let min_capacity = size as u64 * 100_000_000;
-
-    if req_ckb < min_capacity {
-        return Err(min_capacity);
-    }
-
-    let withdrawal = CellOutput::new_builder()
-        .capacity(req_ckb.pack())
-        .lock(lock)
-        .type_(type_)
-        .build();
-
-    Ok((withdrawal, data))
+fn calc_ckb_custodian_min_capacity(rollup_context: &RollupContext) -> u64 {
+    let lock = build_finalized_custodian_lock(rollup_context);
+    (8 + lock.as_slice().len() as u64).saturating_mul(100000000)
 }
 
 fn generate_finalized_custodian(
