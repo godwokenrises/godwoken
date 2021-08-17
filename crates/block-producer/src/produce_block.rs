@@ -2,6 +2,9 @@
 //! Block producer assemble serveral Godwoken components into a single executor.
 //! A block producer can act without the ability of produce block.
 
+// FIXME:
+use crate::challenger::offchain::{OffChainCancelChallengeValidator, OffChainContext};
+
 use anyhow::{anyhow, Result};
 use gw_common::{h256_ext::H256Ext, merkle_utils::calculate_merkle_root, smt::Blake2bHasher, H256};
 use gw_generator::Generator;
@@ -25,6 +28,7 @@ pub struct ProduceBlockParam {
     pub reverted_block_root: H256,
     pub rollup_config_hash: H256,
     pub block_param: BlockParam,
+    pub offchain_context: OffChainContext,
 }
 
 /// Produce block
@@ -56,6 +60,7 @@ pub fn produce_block(
                 kv_state_proof,
                 post_merkle_state,
             },
+        offchain_context,
     } = param;
 
     let rollup_context = generator.rollup_context();

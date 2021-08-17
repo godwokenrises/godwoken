@@ -64,13 +64,17 @@ impl EnterChallenge {
             .args(lock_args.pack())
             .build();
 
-        let size = 8 + challenge_lock.as_slice().len();
-        let capacity = size as u64 * 100_000_000;
+        let challenge = {
+            let dummy = CellOutput::new_builder()
+                .capacity(u64::MAX.pack())
+                .lock(challenge_lock)
+                .build();
 
-        let challenge = CellOutput::new_builder()
-            .capacity(capacity.pack())
-            .lock(challenge_lock)
-            .build();
+            let capacity = dummy
+                .occupied_capacity(0)
+                .expect("challenge cell capacity overflow");
+            dummy.as_builder().capacity(capacity.pack()).build()
+        };
         let challenge_cell = (challenge, Bytes::default());
 
         let halting_status: u8 = Status::Halting.into();

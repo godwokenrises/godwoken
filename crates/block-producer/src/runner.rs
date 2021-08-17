@@ -1,6 +1,12 @@
 use crate::{
-    block_producer::BlockProducer, challenger::Challenger, cleaner::Cleaner, poller::ChainUpdater,
-    test_mode_control::TestModeControl, types::ChainEvent, utils::CKBGenesisInfo, wallet::Wallet,
+    block_producer::BlockProducer,
+    challenger::{offchain::OffChainContext, Challenger},
+    cleaner::Cleaner,
+    poller::ChainUpdater,
+    test_mode_control::TestModeControl,
+    types::ChainEvent,
+    utils::CKBGenesisInfo,
+    wallet::Wallet,
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
@@ -374,21 +380,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 None
             };
 
-            // Block Producer
-            let block_producer = BlockProducer::create(
-                rollup_config_hash,
-                store.clone(),
-                generator.clone(),
-                Arc::clone(&chain),
-                mem_pool,
-                rpc_client.clone(),
-                ckb_genesis_info.clone(),
-                block_producer_config.clone(),
-                config.debug.clone(),
-                tests_control.clone(),
-            )
-            .with_context(|| "init block producer")?;
-
             let cleaner = Arc::new(Cleaner::new(
                 rpc_client.clone(),
                 ckb_genesis_info.clone(),
@@ -413,18 +404,55 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             );
 
             let challenger = Challenger::new(
-                rollup_context,
+                rollup_context.clone(),
                 rpc_client.clone(),
                 wallet,
-                block_producer_config,
+                block_producer_config.clone(),
                 config.debug.clone(),
-                builtin_load_data,
-                ckb_genesis_info,
+                builtin_load_data.clone(),
+                ckb_genesis_info.clone(),
                 Arc::clone(&chain),
                 Arc::clone(&poa),
                 tests_control.clone(),
                 Arc::clone(&cleaner),
             );
+
+            let wallet = Wallet::from_config(&block_producer_config.wallet_config)
+                .with_context(|| "init wallet")?;
+
+            let offchain_context = {
+                let debug_config = config.debug.clone();
+                smol::block_on(async {
+                    let poa = poa.lock().await;
+                    OffChainContext::build(
+                        &rpc_client,
+                        &poa,
+                        rollup_context,
+                        wallet,
+                        block_producer_config.clone(),
+                        debug_config,
+                        ckb_genesis_info.clone(),
+                        builtin_load_data,
+                    )
+                    .await
+                })?
+            };
+
+            // Block Producer
+            let block_producer = BlockProducer::create(
+                rollup_config_hash,
+                store.clone(),
+                generator.clone(),
+                Arc::clone(&chain),
+                mem_pool,
+                rpc_client.clone(),
+                ckb_genesis_info,
+                block_producer_config,
+                config.debug,
+                offchain_context,
+                tests_control.clone(),
+            )
+            .with_context(|| "init block producer")?;
 
             (
                 Some(block_producer),

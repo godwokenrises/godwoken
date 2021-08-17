@@ -26,10 +26,14 @@ gw-rpc-client = { path = "../rpc-client" }
 gw-web3-indexer = { path = "../web3-indexer" }
 gw-poa = { path = "../poa" }
 gw-version = { path = "../version" }
+gw-traits = { path = "../traits" }
 faster-hex = "0.4"
 ckb-crypto = "0.38.0"
 ckb-fixed-hash = "0.38.0"
 ckb-types = "0.38.0"
+ckb-script = "0.38.0"
+ckb-traits = "0.38.0"
+ckb-chain-spec = "0.38.0"
 toml = "0.5"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -49,3 +53,4 @@ sqlx = { version = "0.5", features = [ "runtime-async-std-native-tls", "postgres
 hex = "0.4"
 async-trait = "0.1"
 semver = "1.0"
+rand = "0.8"

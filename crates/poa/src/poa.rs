@@ -18,13 +18,13 @@ use std::time::Duration;
 /// Transaction since flag
 const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
 
-struct PoASetup {
-    identity_size: u8,
-    round_interval_uses_seconds: bool,
-    identities: Vec<Vec<u8>>,
-    block_producers_change_threshold: u8,
-    round_intervals: u32,
-    subblocks_per_round: u32,
+pub struct PoASetup {
+    pub identity_size: u8,
+    pub round_interval_uses_seconds: bool,
+    pub identities: Vec<Vec<u8>>,
+    pub block_producers_change_threshold: u8,
+    pub round_intervals: u32,
+    pub subblocks_per_round: u32,
 }
 
 impl PoASetup {
@@ -87,12 +87,12 @@ impl PoASetup {
     }
 }
 
-pub struct PoAContext {
-    poa_data: PoAData,
-    poa_data_cell: CellInfo,
-    poa_setup: PoASetup,
-    poa_setup_cell: CellInfo,
-    block_producer_index: u16,
+pub(crate) struct PoAContext {
+    pub poa_data: PoAData,
+    pub poa_data_cell: CellInfo,
+    pub poa_setup: PoASetup,
+    pub poa_setup_cell: CellInfo,
+    pub block_producer_index: u16,
 }
 
 pub struct PoA {
@@ -132,7 +132,7 @@ impl PoA {
         Ok(cell)
     }
 
-    pub async fn query_poa_context(&self, input_info: &InputCellInfo) -> Result<PoAContext> {
+    pub(crate) async fn query_poa_context(&self, input_info: &InputCellInfo) -> Result<PoAContext> {
         let args: Bytes = input_info.cell.output.lock().args().unpack();
         if args.len() != 64 {
             return Err(anyhow!("invalid poa cell lock args"));

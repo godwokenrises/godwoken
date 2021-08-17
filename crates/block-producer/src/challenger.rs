@@ -32,6 +32,7 @@ use std::time::{Duration, Instant};
 
 mod cancel_challenge;
 mod enter_challenge;
+pub mod offchain;
 mod revert;
 
 use cancel_challenge::CancelChallengeOutput;
