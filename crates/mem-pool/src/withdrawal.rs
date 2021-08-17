@@ -47,7 +47,6 @@ impl AvailableCustodians {
         if withdrawal_requests.is_empty() {
             Ok(AvailableCustodians::default())
         } else {
-            // let db = self.store.begin_transaction();
             let mut sudt_scripts: HashMap<[u8; 32], Script> = HashMap::new();
             let sudt_custodians = {
                 let reqs = withdrawal_requests.iter();

@@ -9,7 +9,11 @@
 //!
 
 use anyhow::{anyhow, Result};
-use gw_common::{state::State, H256};
+use gw_common::{
+    builtins::CKB_SUDT_ACCOUNT_ID,
+    state::{to_short_address, State},
+    H256,
+};
 use gw_generator::{traits::StateExt, Generator};
 use gw_poa::PoA;
 use gw_rpc_client::RPCClient;
@@ -34,7 +38,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{mem_block::MemBlock, withdrawal::AvailableCustodians};
+use crate::{mem_block::MemBlock, types::EntryList, withdrawal::AvailableCustodians};
 
 /// MAX deposits in the mem block
 const MAX_MEM_BLOCK_DEPOSITS: usize = 50;
@@ -50,14 +54,6 @@ const MAX_IN_POOL_WITHDRAWAL: usize = 3000;
 const MAX_TX_SIZE: usize = 50_000;
 /// MAX withdrawal size 50 KB
 const MAX_WITHDRAWAL_SIZE: usize = 50_000;
-
-#[derive(Default)]
-pub struct EntryList {
-    // txs sorted by nonce
-    pub txs: Vec<L2Transaction>,
-    // withdrawals sorted by nonce
-    pub withdrawals: Vec<WithdrawalRequest>,
-}
 
 /// MemPool
 pub struct MemPool {
@@ -167,10 +163,9 @@ impl MemPool {
         let db = self.store.begin_transaction();
         let tx_receipt = self.finalize_tx(&db, tx.clone())?;
         db.commit()?;
-        dbg!("push tx to mem block", self.mem_block.txs().len());
+
         // save tx receipt in mem pool
         self.mem_block.push_tx(tx_hash, tx_receipt);
-        dbg!("pushed tx to mem block", self.mem_block.txs().len());
 
         // Add to pool
         let account_id: u32 = tx.raw().from_id().unpack();
@@ -307,7 +302,7 @@ impl MemPool {
     }
 
     /// Return pending contents
-    pub fn pending(&self) -> &HashMap<u32, EntryList> {
+    fn pending(&self) -> &HashMap<u32, EntryList> {
         &self.pending
     }
 
@@ -337,13 +332,6 @@ impl MemPool {
         )?;
         // generate kv state & merkle proof from tip state
         let state = state_db.state_tree()?;
-        dbg!(hex::encode(state.calculate_state_checkpoint()?.as_slice()));
-        dbg!(hex::encode(
-            self.mem_block
-                .txs_prev_state_checkpoint()
-                .unwrap()
-                .as_slice()
-        ));
 
         let kv_state: Vec<(H256, H256)> = self
             .mem_block
@@ -556,6 +544,45 @@ impl MemPool {
         // re-inject txs
         let txs_iter = reinject_txs.into_iter().chain(mem_block_txs.into_iter());
         self.prepare_next_mem_block(withdrawals_iter, txs_iter)?;
+        // remove from pending
+        self.remove_unexecutables()?;
+
+        Ok(())
+    }
+
+    /// Discard unexecutables from pending.
+    fn remove_unexecutables(&mut self) -> Result<()> {
+        let db = self.store.begin_transaction();
+        let state_db = self.fetch_state_db(&db)?;
+        let state = state_db.state_tree()?;
+        let mut remove_list = Vec::default();
+        // iter pending accounts and demote any non-executable objects
+        for (&account_id, list) in &mut self.pending {
+            let nonce = state.get_nonce(account_id)?;
+
+            // drop txs if tx.nonce lower than nonce
+            let deprecated_txs = list.remove_lower_nonce_txs(nonce);
+            for tx in deprecated_txs {
+                let tx_hash = tx.hash().into();
+                self.all_txs.remove(&tx_hash);
+            }
+            // Drop all withdrawals that are have no enough balance
+            let script_hash = state.get_script_hash(account_id)?;
+            let capacity =
+                state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash))?;
+            let deprecated_withdrawals = list.remove_lower_nonce_withdrawals(nonce, capacity);
+            for withdrawal in deprecated_withdrawals {
+                let withdrawal_hash: H256 = withdrawal.hash().into();
+                self.all_withdrawals.remove(&withdrawal_hash);
+            }
+            // Delete empty entry
+            if list.is_empty() {
+                remove_list.push(account_id);
+            }
+        }
+        for account_id in remove_list {
+            self.pending.remove(&account_id);
+        }
         Ok(())
     }
 
@@ -598,14 +625,14 @@ impl MemPool {
         for tx in txs {
             if let Err(err) = self.push_transaction(tx.clone()) {
                 let tx_hash = tx.hash();
-                self.all_txs.remove(&tx_hash.into());
                 log::info!(
-                    "[mem pool] drop tx {}, error: {}",
+                    "[mem pool] fail to re-inject tx {}, error: {}",
                     hex::encode(&tx_hash),
                     err
                 );
             }
         }
+
         Ok(())
     }
 
@@ -749,9 +776,6 @@ impl MemPool {
             self.mem_block.withdrawals().len(),
             unused_withdrawals.len()
         );
-        for withdrawal_hash in unused_withdrawals {
-            self.all_withdrawals.remove(&withdrawal_hash.into());
-        }
         Ok(())
     }
 
