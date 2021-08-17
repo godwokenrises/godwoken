@@ -2,31 +2,15 @@
 //! Block producer assemble serveral Godwoken components into a single executor.
 //! A block producer can act without the ability of produce block.
 
-use std::collections::HashMap;
-
-use crate::withdrawal::AvailableCustodians;
-
 use anyhow::{anyhow, Result};
-use gw_common::{
-    h256_ext::H256Ext,
-    merkle_utils::{calculate_merkle_root, calculate_state_checkpoint},
-    smt::Blake2bHasher,
-    state::State,
-    H256,
-};
-use gw_generator::{traits::StateExt, Generator};
-use gw_store::{
-    chain_view::ChainView,
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
-    transaction::StoreTransaction,
-};
+use gw_common::{h256_ext::H256Ext, merkle_utils::calculate_merkle_root, smt::Blake2bHasher, H256};
+use gw_generator::Generator;
+use gw_store::transaction::StoreTransaction;
 use gw_types::{
     core::Status,
     offchain::BlockParam,
     packed::{
-        AccountMerkleState, BlockInfo, BlockMerkleState, DepositRequest, GlobalState, L2Block,
-        L2Transaction, RawL2Block, Script, SubmitTransactions, SubmitWithdrawals, TxReceipt,
-        WithdrawalRequest,
+        BlockMerkleState, GlobalState, L2Block, RawL2Block, SubmitTransactions, SubmitWithdrawals,
     },
     prelude::*,
 };
@@ -62,7 +46,7 @@ pub fn produce_block(
                 block_producer_id,
                 timestamp,
                 txs,
-                deposits,
+                deposits: _,
                 withdrawals,
                 parent_block,
                 prev_merkle_state,

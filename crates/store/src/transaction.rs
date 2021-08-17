@@ -887,12 +887,8 @@ impl StoreTransaction {
             parent_block_hash.as_slice(),
         )?;
         self.set_last_valid_tip_block_hash(&parent_block_hash)?;
-
         // clear block state
         self.clear_block_state(block_number)?;
-
-        // reset account root
-        let block_prev_merkle_state = block.raw().prev_account();
 
         Ok(())
     }

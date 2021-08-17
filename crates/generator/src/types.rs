@@ -1,5 +1,4 @@
-use gw_common::H256;
-use gw_types::packed::{ChallengeTarget, ChallengeWitness, RollupConfig};
+use gw_types::packed::{ChallengeTarget, ChallengeWitness};
 use std::fmt::{self, Display};
 
 #[derive(Debug, Clone, Eq, PartialEq)]

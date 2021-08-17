@@ -1,13 +1,9 @@
-use crate::packed::{
-    AccountMerkleState, Byte32, DepositRequest, LogItem, Script, TransactionKey, TxReceipt,
-};
-use crate::prelude::*;
+use crate::packed::{DepositRequest, Script};
 use crate::{
     bytes::Bytes,
-    packed::{Block, CellInput, CellOutput, NumberHash, OutPoint},
+    packed::{CellInput, CellOutput, OutPoint},
 };
-use sparse_merkle_tree::H256;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct CellInfo {

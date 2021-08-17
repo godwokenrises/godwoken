@@ -1,7 +1,4 @@
-use gw_types::{
-    bytes::Bytes,
-    packed::{Block, CellInput, CellOutput, NumberHash, OutPoint},
-};
+use gw_types::packed::{Block, NumberHash};
 
 #[derive(Clone)]
 pub struct SignatureEntry {

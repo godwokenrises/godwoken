@@ -2117,7 +2117,6 @@ dependencies = [
  "gw-types",
  "hex",
  "log",
- "rand 0.8.2",
  "smol",
 ]
 

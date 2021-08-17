@@ -2,7 +2,6 @@ use anyhow::{anyhow, Result};
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_config::BlockProducerConfig;
 use gw_rpc_client::RPCClient;
-use gw_store::transaction::StoreTransaction;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -42,72 +41,6 @@ impl<'a> From<&'a CollectedCustodianCells> for AvailableCustodians {
         AvailableCustodians {
             capacity: collected.capacity,
             sudt: collected.sudt.clone(),
-        }
-    }
-}
-
-impl AvailableCustodians {
-    pub fn build(
-        db: &StoreTransaction,
-        rpc_client: &RPCClient,
-        withdrawal_requests: &[WithdrawalRequest],
-    ) -> Result<Self> {
-        if withdrawal_requests.is_empty() {
-            Ok(AvailableCustodians::default())
-        } else {
-            // let db = self.store.begin_transaction();
-            let mut sudt_scripts: HashMap<[u8; 32], Script> = HashMap::new();
-            let sudt_custodians = {
-                let reqs = withdrawal_requests.iter();
-                let sudt_reqs = reqs.filter(|req| {
-                    let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
-                    0 != req.raw().amount().unpack() && CKB_SUDT_SCRIPT_ARGS != sudt_script_hash
-                });
-
-                let to_hash = sudt_reqs.map(|req| req.raw().sudt_script_hash().unpack());
-                let has_script = to_hash.filter_map(|hash: [u8; 32]| {
-                    if let Some(script) = sudt_scripts.get(&hash).cloned() {
-                        return Some((hash, script));
-                    }
-
-                    // Try rpc
-                    match smol::block_on(rpc_client.query_verified_custodian_type_script(&hash)) {
-                        Ok(opt_script) => opt_script.map(|script| {
-                            sudt_scripts.insert(hash, script.clone());
-                            (hash, script)
-                        }),
-                        Err(err) => {
-                            log::debug!("get custodian type script err {}", err);
-                            None
-                        }
-                    }
-                });
-
-                let to_custodian = has_script.filter_map(|(hash, script)| {
-                    match db.get_finalized_custodian_asset(hash.into()) {
-                        Ok(custodian_balance) => Some((hash, (custodian_balance, script))),
-                        Err(err) => {
-                            log::warn!("get custodian err {}", err);
-                            None
-                        }
-                    }
-                });
-                to_custodian.collect::<HashMap<[u8; 32], (u128, Script)>>()
-            };
-
-            let ckb_custodian = match db.get_finalized_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
-            {
-                Ok(balance) => balance,
-                Err(err) => {
-                    log::warn!("get ckb custodian err {}", err);
-                    0
-                }
-            };
-
-            Ok(AvailableCustodians {
-                capacity: ckb_custodian,
-                sudt: sudt_custodians,
-            })
         }
     }
 }

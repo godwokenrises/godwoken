@@ -23,10 +23,7 @@ use gw_types::{
 use serde::de::DeserializeOwned;
 use serde_json::{from_value, json};
 
-use std::{
-    collections::{HashMap, HashSet},
-    time::Duration,
-};
+use std::{collections::HashSet, time::Duration};
 
 const DEFAULT_QUERY_LIMIT: usize = 1000;
 
@@ -454,9 +451,8 @@ impl RPCClient {
 
     /// return all lived deposit requests
     /// NOTICE the returned cells may contains invalid cells.
-    pub async fn query_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
+    pub async fn query_deposit_cells(&self, count: usize) -> Result<Vec<DepositInfo>> {
         const BLOCKS_TO_SEARCH: u64 = 100;
-        const LIMIT: u32 = 100;
 
         let tip_number = self.get_tip().await?.number().unpack();
         let mut deposit_infos = Vec::new();
@@ -493,7 +489,7 @@ impl RPCClient {
             }),
         };
         let order = Order::Asc;
-        let limit = Uint32::from(LIMIT);
+        let limit = Uint32::from((count - deposit_infos.len()) as u32);
 
         let cells: Pagination<Cell> = to_result(
             self.indexer_client

@@ -1,4 +1,4 @@
-use crate::packed::{AccountMerkleState, Byte32, LogItem, TransactionKey, TxReceipt, CellOutput, Script};
+use crate::packed::{CellOutput, LogItem, Script};
 use crate::prelude::*;
 use sparse_merkle_tree::H256;
 use std::collections::{HashMap, HashSet};

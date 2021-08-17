@@ -9,29 +9,24 @@
 //!
 
 use anyhow::{anyhow, Result};
-use gw_common::{
-    builtins::CKB_SUDT_ACCOUNT_ID,
-    state::{to_short_address, State},
-    H256,
-};
+use gw_common::{state::State, H256};
 use gw_generator::{traits::StateExt, Generator};
 use gw_poa::PoA;
 use gw_rpc_client::RPCClient;
 use gw_store::{
     chain_view::ChainView,
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, StateTree, SubState, WriteContext},
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
     transaction::StoreTransaction,
     Store,
 };
 use gw_types::{
-    offchain::{BlockParam, CellInfo, DepositInfo, InputCellInfo, RunResult},
+    offchain::{BlockParam, DepositInfo, InputCellInfo, RunResult},
     packed::{
-        AccountMerkleState, BlockInfo, CellInput, L2Block, L2BlockCommittedInfo, L2Transaction,
-        RawL2Transaction, Script, TxReceipt, WithdrawalRequest,
+        AccountMerkleState, BlockInfo, CellInput, L2Block, L2Transaction, RawL2Transaction, Script,
+        TxReceipt, WithdrawalRequest,
     },
-    prelude::{Builder, Entity, Pack, Unpack},
+    prelude::{Builder, Entity, Unpack},
 };
-use rand::Rng;
 use smol::lock::Mutex;
 use std::{
     cmp::{max, min},
@@ -62,55 +57,6 @@ pub struct EntryList {
     pub txs: Vec<L2Transaction>,
     // withdrawals sorted by nonce
     pub withdrawals: Vec<WithdrawalRequest>,
-}
-
-impl EntryList {
-    fn is_empty(&self) -> bool {
-        self.txs.is_empty() && self.withdrawals.is_empty()
-    }
-
-    // remove and return txs which tx.nonce is lower than nonce
-    fn remove_lower_nonce_txs(&mut self, nonce: u32) -> Vec<L2Transaction> {
-        let mut removed = Vec::default();
-        while !self.txs.is_empty() {
-            let tx_nonce: u32 = self.txs[0].raw().nonce().unpack();
-            if tx_nonce >= nonce {
-                break;
-            }
-            removed.push(self.txs.remove(0));
-        }
-        removed
-    }
-
-    // remove and return withdrawals which withdrawal.nonce is lower than nonce & have not enough balance
-    fn remove_lower_nonce_balance_withdrawals(
-        &mut self,
-        nonce: u32,
-        capacity: u128,
-    ) -> Vec<WithdrawalRequest> {
-        let mut removed = Vec::default();
-
-        // remove lower nonce withdrawals
-        while !self.withdrawals.is_empty() {
-            let withdrawal_nonce: u32 = self.withdrawals[0].raw().nonce().unpack();
-            if withdrawal_nonce >= nonce {
-                break;
-            }
-            removed.push(self.withdrawals.remove(0));
-        }
-
-        // remove lower balance withdrawals
-        if let Some(withdrawal) = self.withdrawals.get(0) {
-            let withdrawal_capacity: u64 = withdrawal.raw().capacity().unpack();
-            if (withdrawal_capacity as u128) > capacity {
-                // TODO instead of remove all withdrawals, put them into future queue
-                removed.extend_from_slice(&self.withdrawals);
-                self.withdrawals.clear();
-            }
-        }
-
-        removed
-    }
 }
 
 /// MemPool
@@ -373,6 +319,14 @@ impl MemPool {
         Ok(())
     }
 
+    /// Clear mem block state and recollect deposits
+    pub fn reset_mem_block(&mut self) -> Result<()> {
+        log::info!("[mem-pool] reset mem block");
+        // reset pool state
+        self.reset(Some(self.current_tip.0), Some(self.current_tip.0))?;
+        Ok(())
+    }
+
     /// output mem block
     pub fn output_mem_block(&self) -> Result<BlockParam> {
         let db = self.store.begin_transaction();
@@ -470,9 +424,8 @@ impl MemPool {
             kv_state_proof,
         };
 
-        dbg!(
-            "output mem block",
-            param.txs.len(),
+        log::debug!(
+            "output mem block, txs: {} tx receipts: {} state_checkpoints: {}",
             self.mem_block.txs().len(),
             self.mem_block.tx_receipts().len(),
             self.mem_block.state_checkpoints().len(),
@@ -553,18 +506,6 @@ impl MemPool {
             }
         }
 
-        // update current state
-        // let tip_block_hash = new_tip_block.hash().into();
-        // self.state_checkpoint = CheckPoint::from_block_hash(
-        //     &self.store.begin_transaction(),
-        //     tip_block_hash,
-        //     SubState::Block,
-        // )?;
-        {
-            let db = self.store.begin_transaction();
-            let mut timestamp: u64 = new_tip_block.raw().timestamp().unpack();
-        }
-
         // reset mem block state
         let merkle_state = new_tip_block.raw().post_account();
         self.reset_mem_block_state_db(merkle_state)?;
@@ -627,7 +568,7 @@ impl MemPool {
         Ok(())
     }
 
-    /// prepare for next mem block
+    /// Prepare for next mem block
     fn prepare_next_mem_block<
         WithdrawalIter: Iterator<Item = WithdrawalRequest>,
         TxIter: Iterator<Item = L2Transaction>,
@@ -639,7 +580,7 @@ impl MemPool {
         // query deposit cells
         let task = {
             let rpc_client = self.rpc_client.clone();
-            smol::spawn(async move { rpc_client.query_deposit_cells().await })
+            smol::spawn(async move { rpc_client.query_deposit_cells(MAX_MEM_BLOCK_DEPOSITS).await })
         };
         // Handle state before txs
         let db = self.store.begin_transaction();
