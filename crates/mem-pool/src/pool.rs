@@ -112,6 +112,10 @@ impl MemPool {
         &self.mem_block
     }
 
+    pub fn poa(&self) -> &Arc<Mutex<PoA>> {
+        &self.poa
+    }
+
     pub fn all_txs(&self) -> &HashMap<H256, L2Transaction> {
         &self.all_txs
     }

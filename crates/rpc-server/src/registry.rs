@@ -28,13 +28,27 @@ use std::sync::Arc;
 
 // type alias
 type RPCServer = Arc<Server<MapRouter>>;
-type MemPool = Mutex<gw_mem_pool::pool::MemPool>;
+type MemPool = Option<Arc<Mutex<gw_mem_pool::pool::MemPool>>>;
 type AccountID = Uint32;
 type JsonH256 = ckb_fixed_hash::H256;
 type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
 type GwUint64 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint64;
 
 const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
+const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
+
+fn header_not_found_err() -> RpcError {
+    RpcError::Provided {
+        code: HEADER_NOT_FOUND_ERR_CODE,
+        message: "header not found",
+    }
+}
+fn mem_pool_is_disabled_err() -> RpcError {
+    RpcError::Provided {
+        code: METHOD_NOT_AVAILABLE_ERR_CODE,
+        message: "mem-pool is disabled",
+    }
+}
 
 #[async_trait]
 pub trait TestModeRPC {
@@ -62,10 +76,7 @@ fn get_state_db_at_block<'a>(
     match block_number.map(|n| n.value()) {
         Some(block_number) => {
             if block_number > tip_block_number {
-                return Err(RpcError::Provided {
-                    code: HEADER_NOT_FOUND_ERR_CODE,
-                    message: "header not found",
-                });
+                return Err(header_not_found_err());
             }
             StateDBTransaction::from_checkpoint(
                 &db,
@@ -74,16 +85,27 @@ fn get_state_db_at_block<'a>(
             )
             .map_err(Into::into)
         }
-        None => {
-            let mem_pool = mem_pool.lock();
-            mem_pool.fetch_state_db(&db).map_err(Into::into)
-        }
+        None => match mem_pool {
+            Some(mem_pool) => {
+                let mem_pool = mem_pool.lock();
+                mem_pool.fetch_state_db(&db).map_err(Into::into)
+            }
+            None => {
+                // fallback to tip number
+                StateDBTransaction::from_checkpoint(
+                    &db,
+                    CheckPoint::new(tip_block_number, SubState::Block),
+                    StateDBMode::ReadOnly,
+                )
+                .map_err(Into::into)
+            }
+        },
     }
 }
 
 pub struct Registry {
     generator: Arc<Generator>,
-    mem_pool: Arc<MemPool>,
+    mem_pool: MemPool,
     store: Store,
     tests_rpc_impl: Option<Arc<BoxedTestsRPCImpl>>,
     rollup_config: RollupConfig,
@@ -92,7 +114,7 @@ pub struct Registry {
 impl Registry {
     pub fn new<T>(
         store: Store,
-        mem_pool: Arc<MemPool>,
+        mem_pool: MemPool,
         generator: Arc<Generator>,
         tests_rpc_impl: Option<Box<T>>,
         rollup_config: RollupConfig,
@@ -114,7 +136,7 @@ impl Registry {
         let mut server = JsonrpcServer::new();
 
         server = server
-            .with_data(Data(self.mem_pool.clone()))
+            .with_data(Data::new(self.mem_pool))
             .with_data(Data(self.generator.clone()))
             .with_data(Data::new(self.store))
             .with_data(Data::new(self.rollup_config))
@@ -191,11 +213,17 @@ async fn get_transaction(
             tx_opt = db.get_transaction_by_key(&tx_info.key())?;
             status = L2TransactionStatus::Committed;
         }
-        None => {
-            let mem_pool = mem_pool.lock();
-            tx_opt = mem_pool.all_txs().get(&tx_hash).cloned();
-            status = L2TransactionStatus::Pending;
-        }
+        None => match &*mem_pool {
+            Some(mem_pool) => {
+                let mem_pool = mem_pool.lock();
+                tx_opt = mem_pool.all_txs().get(&tx_hash).cloned();
+                status = L2TransactionStatus::Pending;
+            }
+            None => {
+                tx_opt = None;
+                status = L2TransactionStatus::Pending;
+            }
+        },
     };
 
     Ok(tx_opt.map(|tx| L2TransactionWithStatus {
@@ -288,13 +316,15 @@ async fn get_transaction_receipt(
         return Ok(Some(receipt));
     }
     // search from mem pool
-    let receipt_opt = mem_pool
-        .lock()
-        .mem_block()
-        .tx_receipts()
-        .get(&tx_hash)
-        .map(ToOwned::to_owned)
-        .map(Into::into);
+    let receipt_opt = mem_pool.as_deref().and_then(|mem_pool| {
+        mem_pool
+            .lock()
+            .mem_block()
+            .tx_receipts()
+            .get(&tx_hash)
+            .map(ToOwned::to_owned)
+            .map(Into::into)
+    });
     Ok(receipt_opt)
 }
 
@@ -302,7 +332,13 @@ async fn execute_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<RunResult> {
+) -> Result<RunResult, RpcError> {
+    let mem_pool = match &*mem_pool {
+        Some(mem_pool) => mem_pool,
+        None => {
+            return Err(mem_pool_is_disabled_err());
+        }
+    };
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
 
@@ -337,6 +373,12 @@ async fn execute_raw_l2transaction(
     mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<RunResult, RpcError> {
+    let mem_pool = match &*mem_pool {
+        Some(mem_pool) => mem_pool,
+        None => {
+            return Err(mem_pool_is_disabled_err());
+        }
+    };
     let (raw_l2tx, block_number_opt) = match params {
         ExecuteRawL2TransactionParams::Tip(p) => (p.0, None),
         ExecuteRawL2TransactionParams::Number(p) => p,
@@ -347,20 +389,16 @@ async fn execute_raw_l2transaction(
     let raw_l2tx = packed::RawL2Transaction::from_slice(&raw_l2tx_bytes)?;
 
     let db = store.begin_transaction();
-    let not_found_err = Err(RpcError::Provided {
-        code: HEADER_NOT_FOUND_ERR_CODE,
-        message: "header not found",
-    });
 
     let block_info = match block_number_opt {
         Some(block_number) => {
             let block_hash = match db.get_block_hash_by_number(block_number)? {
                 Some(block_hash) => block_hash,
-                None => return not_found_err,
+                None => return Err(header_not_found_err()),
             };
             let raw_block = match store.get_block(&block_hash)? {
                 Some(block) => block.raw(),
-                None => return not_found_err,
+                None => return Err(header_not_found_err()),
             };
             let block_producer_id = raw_block.block_producer_id();
             let timestamp = raw_block.timestamp();
@@ -385,7 +423,13 @@ async fn execute_raw_l2transaction(
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
-) -> Result<JsonH256> {
+) -> Result<JsonH256, RpcError> {
+    let mem_pool = match &*mem_pool {
+        Some(mem_pool) => mem_pool,
+        None => {
+            return Err(mem_pool_is_disabled_err());
+        }
+    };
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
     let tx_hash = to_jsonh256(tx.hash().into());
@@ -396,7 +440,13 @@ async fn submit_l2transaction(
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
-) -> Result<()> {
+) -> Result<(), RpcError> {
+    let mem_pool = match &*mem_pool {
+        Some(mem_pool) => mem_pool,
+        None => {
+            return Err(mem_pool_is_disabled_err());
+        }
+    };
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequest::from_slice(&withdrawal_bytes)?;
 
@@ -462,9 +512,9 @@ async fn get_account_id_by_script_hash(
     Params((script_hash,)): Params<(JsonH256,)>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<Option<AccountID>> {
+) -> Result<Option<AccountID>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = mem_pool.lock().fetch_state_db(&db)?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, None)?;
     let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
@@ -507,9 +557,9 @@ async fn get_script(
     Params((script_hash,)): Params<(JsonH256,)>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<Option<Script>> {
+) -> Result<Option<Script>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = mem_pool.lock().fetch_state_db(&db)?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, None)?;
     let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
@@ -522,9 +572,9 @@ async fn get_script_hash(
     Params((account_id,)): Params<(AccountID,)>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<JsonH256> {
+) -> Result<JsonH256, RpcError> {
     let db = store.begin_transaction();
-    let state_db = mem_pool.lock().fetch_state_db(&db)?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, None)?;
     let tree = state_db.state_tree()?;
 
     let script_hash = tree.get_script_hash(account_id.into())?;
@@ -535,9 +585,9 @@ async fn get_script_hash_by_short_address(
     Params((short_address,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<Option<JsonH256>> {
+) -> Result<Option<JsonH256>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = mem_pool.lock().fetch_state_db(&db)?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, None)?;
     let tree = state_db.state_tree()?;
     let script_hash_opt = tree.get_script_hash_by_short_address(&short_address.into_bytes());
     Ok(script_hash_opt.map(to_jsonh256))

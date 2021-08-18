@@ -147,7 +147,7 @@ pub struct Chain {
     last_sync_event: SyncEvent,
     local_state: LocalState,
     generator: Arc<Generator>,
-    mem_pool: Arc<Mutex<MemPool>>,
+    mem_pool: Option<Arc<Mutex<MemPool>>>,
 }
 
 impl Chain {
@@ -156,7 +156,7 @@ impl Chain {
         rollup_type_script: &Script,
         store: Store,
         generator: Arc<Generator>,
-        mem_pool: Arc<Mutex<MemPool>>,
+        mem_pool: Option<Arc<Mutex<MemPool>>>,
     ) -> Result<Self> {
         // convert serde types to gw-types
         assert_eq!(
@@ -204,7 +204,7 @@ impl Chain {
         &self.store
     }
 
-    pub fn mem_pool(&self) -> &Mutex<MemPool> {
+    pub fn mem_pool(&self) -> &Option<Arc<Mutex<MemPool>>> {
         &self.mem_pool
     }
 
@@ -748,8 +748,10 @@ impl Chain {
 
         let tip_block_hash: H256 = self.local_state.tip.hash().into();
         if let SyncEvent::Success = self.last_sync_event {
-            // update mem pool state
-            self.mem_pool.lock().notify_new_tip(tip_block_hash)?;
+            if let Some(mem_pool) = &self.mem_pool {
+                // update mem pool state
+                mem_pool.lock().notify_new_tip(tip_block_hash)?;
+            }
         }
 
         // check consistency of account SMT
