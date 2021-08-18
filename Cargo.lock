@@ -2252,6 +2252,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
+ "smol",
  "thiserror",
 ]
 

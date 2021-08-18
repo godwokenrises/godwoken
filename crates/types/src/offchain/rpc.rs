@@ -5,7 +5,7 @@ use crate::{
 };
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CellInfo {
     pub out_point: OutPoint,
     pub output: CellOutput,

@@ -17,7 +17,7 @@ use gw_generator::{
     genesis::init_genesis,
     Generator,
 };
-use gw_mem_pool::pool::MemPool;
+use gw_mem_pool::{default_provider::DefaultMemPoolProvider, pool::MemPool};
 use gw_poa::PoA;
 use gw_rpc_client::RPCClient;
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
@@ -265,7 +265,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         ))
     };
 
-    let (mem_pool, wallet) = match config.block_producer.clone() {
+    let (mem_pool, wallet, poa) = match config.block_producer.clone() {
         Some(block_producer_config) => {
             let wallet = Wallet::from_config(&block_producer_config.wallet_config)
                 .with_context(|| "init wallet")?;
@@ -279,18 +279,19 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 );
                 Arc::new(smol::lock::Mutex::new(poa))
             };
+            let mem_pool_provider =
+                DefaultMemPoolProvider::new(rpc_client.clone(), Arc::clone(&poa));
             let mem_pool = Arc::new(Mutex::new(
                 MemPool::create(
                     store.clone(),
                     generator.clone(),
-                    Arc::clone(&poa),
-                    rpc_client.clone(),
+                    Box::new(mem_pool_provider),
                 )
                 .with_context(|| "create mem-pool")?,
             ));
-            (Some(mem_pool), Some(wallet))
+            (Some(mem_pool), Some(wallet), Some(poa))
         }
-        None => (None, None),
+        None => (None, None, None),
     };
 
     let chain = Arc::new(Mutex::new(
@@ -362,7 +363,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 .ok_or_else(|| anyhow!("mem-pool must be enabled in mode: {:?}", mode))?;
             let wallet =
                 wallet.ok_or_else(|| anyhow!("wallet must be enabled in mode: {:?}", mode))?;
-            let poa = Arc::clone(&mem_pool.lock().poa());
+            let poa = poa.ok_or_else(|| anyhow!("poa must be enabled in mode: {:?}", mode))?;
             let tests_control = if let NodeMode::Test = config.node_mode {
                 Some(TestModeControl::new(
                     rpc_client.clone(),

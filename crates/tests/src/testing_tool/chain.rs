@@ -1,5 +1,4 @@
 use gw_block_producer::produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult};
-use gw_block_producer::withdrawal::AvailableCustodians;
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BackendConfig, GenesisConfig};
@@ -7,13 +6,14 @@ use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
     genesis::init_genesis,
-    types::RollupContext,
     Generator,
 };
-use gw_mem_pool::pool::{MemPool, MemPoolMode};
+use gw_mem_pool::{pool::MemPool, withdrawal::AvailableCustodians};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
+    core::ScriptHashType,
+    offchain::{CellInfo, DepositInfo, RollupContext},
     packed::{
         CellOutput, DepositRequest, L2BlockCommittedInfo, RawTransaction, RollupAction,
         RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, Transaction, WitnessArgs,
@@ -24,6 +24,8 @@ use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use std::collections::HashSet;
 use std::{fs, io::Read, path::PathBuf, sync::Arc};
+
+use super::mem_pool_provider::DummyMemPoolProvider;
 
 const SCRIPT_DIR: &'static str = "../../tests-deps/godwoken-scripts/build/debug";
 const ALWAYS_SUCCESS_PATH: &'static str = "always-success";
@@ -123,14 +125,15 @@ pub fn setup_chain_with_account_lock_manage(
         Bytes::default(),
     )
     .unwrap();
+    let provider = DummyMemPoolProvider::default();
     let mem_pool =
-        MemPool::create(MemPoolMode::Normal, store.clone(), Arc::clone(&generator)).unwrap();
+        MemPool::create(store.clone(), Arc::clone(&generator), Box::new(provider)).unwrap();
     Chain::create(
         &rollup_config,
         &rollup_type_script,
         store,
         generator,
-        Arc::new(Mutex::new(mem_pool)),
+        Some(Arc::new(Mutex::new(mem_pool))),
     )
     .unwrap()
 }
@@ -142,12 +145,7 @@ pub fn build_sync_tx(
     let ProduceBlockResult {
         block,
         global_state,
-        unused_transactions,
-        unused_withdrawal_requests,
-        l2tx_offchain_used_cycles: _,
     } = produce_block_result;
-    assert!(unused_transactions.is_empty());
-    assert!(unused_withdrawal_requests.is_empty());
     let rollup_action = {
         let submit_block = RollupSubmitBlock::new_builder().block(block).build();
         RollupAction::new_builder()
@@ -197,31 +195,18 @@ pub fn apply_block_result(
 
 pub fn construct_block(
     chain: &Chain,
-    mem_pool: &MemPool,
+    mem_pool: &mut MemPool,
     deposit_requests: Vec<DepositRequest>,
 ) -> anyhow::Result<ProduceBlockResult> {
-    let block_producer_id = 0u32;
-    let timestamp = 0;
     let stake_cell_owner_lock_hash = H256::zero();
-    let max_withdrawal_capacity = std::u128::MAX;
     let db = chain.store().begin_transaction();
     let generator = chain.generator();
-    let parent_block = chain.store().get_tip_block().unwrap();
     let rollup_config_hash = chain.rollup_config_hash().clone().into();
-    let mut txs = Vec::new();
-    let mut withdrawal_requests = Vec::new();
-    let mut available_custodians = AvailableCustodians::default();
-    for (_, entry) in mem_pool.pending() {
-        // notice we either choice txs or withdrawals from an entry to avoid nonce conflict
-        if !entry.txs.is_empty() {
-            txs.extend(entry.txs.iter().cloned());
-        } else if !entry.withdrawals.is_empty() {
-            withdrawal_requests.extend(entry.withdrawals.iter().cloned());
-        }
-    }
 
+    let mut available_custodians = AvailableCustodians::default();
     available_custodians.capacity = std::u128::MAX;
-    for req in withdrawal_requests.iter() {
+    for withdrawal_hash in mem_pool.mem_block().withdrawals().iter() {
+        let req = mem_pool.all_withdrawals().get(withdrawal_hash).unwrap();
         if 0 == req.raw().amount().unpack() {
             continue;
         }
@@ -232,20 +217,47 @@ pub fn construct_block(
             .insert(sudt_script_hash, (std::u128::MAX, Script::default()));
     }
 
-    let param = ProduceBlockParam {
-        db,
-        generator,
-        block_producer_id,
-        stake_cell_owner_lock_hash,
-        timestamp,
-        txs,
-        deposit_requests,
-        withdrawal_requests,
-        parent_block: &parent_block,
-        rollup_config_hash: &rollup_config_hash,
-        max_withdrawal_capacity,
+    let deposit_lock_type_hash = generator
+        .rollup_context()
+        .rollup_config
+        .deposit_script_type_hash();
+    let rollup_script_hash = generator.rollup_context().rollup_script_hash;
+
+    let deposit_cells = deposit_requests
+        .into_iter()
+        .map(|deposit| DepositInfo {
+            cell: CellInfo {
+                out_point: Default::default(),
+                output: CellOutput::new_builder()
+                    .lock(
+                        Script::new_builder()
+                            .code_hash(deposit_lock_type_hash.clone())
+                            .hash_type(ScriptHashType::Type.into())
+                            .args(rollup_script_hash.as_slice().to_vec().pack())
+                            .build(),
+                    )
+                    .capacity(deposit.capacity())
+                    .build(),
+                data: Default::default(),
+            },
+            request: deposit,
+        })
+        .collect();
+    let provider = DummyMemPoolProvider {
+        deposit_cells,
+        fake_blocktime: 0,
         available_custodians,
-        reverted_block_root: H256::default(),
     };
-    produce_block(param)
+    mem_pool.set_provider(Box::new(provider));
+    // refresh mem block
+    mem_pool.reset_mem_block()?;
+
+    let block_param = mem_pool.output_mem_block().unwrap();
+    let param = ProduceBlockParam {
+        stake_cell_owner_lock_hash,
+        rollup_config_hash,
+        reverted_block_root: H256::default(),
+        block_param,
+    };
+    produce_block(&db, &generator, param)
 }

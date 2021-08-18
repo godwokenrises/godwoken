@@ -23,8 +23,9 @@ fn produce_a_block(
     expected_tip: u64,
 ) -> SyncParam {
     let block_result = {
-        let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let l2block = block_result.block.clone();
     let transaction = build_sync_tx(rollup_cell, block_result);
@@ -176,8 +177,9 @@ fn test_layer1_fork() {
             .script(charlie_script)
             .build();
         let chain = setup_chain(rollup_type_script.clone());
-        let mem_pool = chain.mem_pool().lock();
-        let block_result = construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap();
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        let block_result = construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap();
 
         L1Action {
             context: L1ActionContext::SubmitBlock {
@@ -206,8 +208,9 @@ fn test_layer1_fork() {
         .script(alice_script)
         .build();
     let block_result = {
-        let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -241,8 +244,9 @@ fn test_layer1_fork() {
         .script(bob_script)
         .build();
     let block_result = {
-        let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action2 = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -368,8 +372,9 @@ fn test_layer1_revert() {
         .script(alice_script.clone())
         .build();
     let block_result = {
-        let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -403,8 +408,9 @@ fn test_layer1_revert() {
         .script(bob_script.clone())
         .build();
     let block_result = {
-        let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action2 = L1Action {
         context: L1ActionContext::SubmitBlock {

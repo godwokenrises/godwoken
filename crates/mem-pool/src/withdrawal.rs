@@ -11,7 +11,7 @@ use gw_types::{
 
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AvailableCustodians {
     pub capacity: u128,
     pub sudt: HashMap<[u8; 32], (u128, Script)>,

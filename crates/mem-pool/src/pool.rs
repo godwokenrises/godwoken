@@ -15,8 +15,6 @@ use gw_common::{
     H256,
 };
 use gw_generator::{traits::StateExt, Generator};
-use gw_poa::PoA;
-use gw_rpc_client::RPCClient;
 use gw_store::{
     chain_view::ChainView,
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
@@ -24,36 +22,28 @@ use gw_store::{
     Store,
 };
 use gw_types::{
-    offchain::{BlockParam, DepositInfo, InputCellInfo, RunResult},
+    offchain::{BlockParam, DepositInfo, RunResult},
     packed::{
-        AccountMerkleState, BlockInfo, CellInput, L2Block, L2Transaction, RawL2Transaction, Script,
-        TxReceipt, WithdrawalRequest,
+        AccountMerkleState, BlockInfo, L2Block, L2Transaction, RawL2Transaction, Script, TxReceipt,
+        WithdrawalRequest,
     },
-    prelude::{Builder, Entity, Unpack},
+    prelude::{Entity, Unpack},
 };
-use smol::lock::Mutex;
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
     sync::Arc,
 };
 
-use crate::{mem_block::MemBlock, types::EntryList, withdrawal::AvailableCustodians};
-
-/// MAX deposits in the mem block
-const MAX_MEM_BLOCK_DEPOSITS: usize = 50;
-/// MAX withdrawals in the mem block
-const MAX_MEM_BLOCK_WITHDRAWALS: usize = 50;
-/// MAX withdrawals in the mem block
-const MAX_MEM_BLOCK_TXS: usize = 500;
-/// MAX mem pool txs
-const MAX_IN_POOL_TXS: usize = 6000;
-/// MAX mem pool withdrawals
-const MAX_IN_POOL_WITHDRAWAL: usize = 3000;
-/// MAX tx size 50 KB
-const MAX_TX_SIZE: usize = 50_000;
-/// MAX withdrawal size 50 KB
-const MAX_WITHDRAWAL_SIZE: usize = 50_000;
+use crate::{
+    constants::{
+        MAX_IN_POOL_TXS, MAX_IN_POOL_WITHDRAWAL, MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS,
+        MAX_TX_SIZE, MAX_WITHDRAWAL_SIZE,
+    },
+    mem_block::MemBlock,
+    traits::MemPoolProvider,
+    types::EntryList,
+};
 
 /// MemPool
 pub struct MemPool {
@@ -71,18 +61,15 @@ pub struct MemPool {
     all_withdrawals: HashMap<H256, WithdrawalRequest>,
     /// memory block
     mem_block: MemBlock,
-    /// RPC client
-    rpc_client: RPCClient,
-    /// POA Context
-    poa: Arc<Mutex<PoA>>,
+    /// Mem pool provider
+    provider: Box<dyn MemPoolProvider + Send>,
 }
 
 impl MemPool {
     pub fn create(
         store: Store,
         generator: Arc<Generator>,
-        poa: Arc<Mutex<PoA>>,
-        rpc_client: RPCClient,
+        provider: Box<dyn MemPoolProvider + Send>,
     ) -> Result<Self> {
         let pending = Default::default();
         let all_txs = Default::default();
@@ -98,9 +85,8 @@ impl MemPool {
             pending,
             all_txs,
             all_withdrawals,
-            rpc_client,
-            poa,
             mem_block: Default::default(),
+            provider,
         };
 
         // set tip
@@ -112,16 +98,16 @@ impl MemPool {
         &self.mem_block
     }
 
-    pub fn poa(&self) -> &Arc<Mutex<PoA>> {
-        &self.poa
-    }
-
     pub fn all_txs(&self) -> &HashMap<H256, L2Transaction> {
         &self.all_txs
     }
 
     pub fn all_withdrawals(&self) -> &HashMap<H256, WithdrawalRequest> {
         &self.all_withdrawals
+    }
+
+    pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send>) {
+        self.provider = provider;
     }
 
     pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
@@ -381,7 +367,12 @@ impl MemPool {
                 self.all_withdrawals
                     .get(withdrawal_hash)
                     .map(ToOwned::to_owned)
-                    .ok_or_else(|| anyhow!("can't find withdrawal_hash from mem pool"))
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "can't find withdrawal_hash from mem pool {}",
+                            hex::encode(withdrawal_hash.as_slice())
+                        )
+                    })
             })
             .collect::<Result<_>>()?;
         let state_checkpoint_list = self.mem_block.state_checkpoints().to_vec();
@@ -502,25 +493,8 @@ impl MemPool {
         let merkle_state = new_tip_block.raw().post_account();
         self.reset_mem_block_state_db(merkle_state)?;
         // estimate next l2block timestamp
-        let estimated_timestamp: Result<u64> = smol::block_on(async {
-            let poa = self.poa.lock().await;
-            let rollup_cell = self
-                .rpc_client
-                .query_rollup_cell()
-                .await?
-                .ok_or_else(|| anyhow!("can't find rollup cell"))?;
-            let input_cell = InputCellInfo {
-                input: CellInput::new_builder()
-                    .previous_output(rollup_cell.out_point.clone())
-                    .build(),
-                cell: rollup_cell,
-            };
-            let ctx = poa.query_poa_context(&input_cell).await?;
-            // TODO how to estimate a more accurate timestamp?
-            let timestamp = poa.estimate_next_round_start_time(ctx);
-            Ok(timestamp)
-        });
-        let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp?);
+        let estimated_timestamp = smol::block_on(self.provider.estimate_next_blocktime())?;
+        let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
 
         // set tip
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
@@ -545,11 +519,12 @@ impl MemPool {
             .cloned()
             .collect();
 
+        // remove from pending
+        self.remove_unexecutables()?;
+
         // re-inject txs
         let txs_iter = reinject_txs.into_iter().chain(mem_block_txs.into_iter());
         self.prepare_next_mem_block(withdrawals_iter, txs_iter)?;
-        // remove from pending
-        self.remove_unexecutables()?;
 
         Ok(())
     }
@@ -609,10 +584,7 @@ impl MemPool {
         txs: TxIter,
     ) -> Result<()> {
         // query deposit cells
-        let task = {
-            let rpc_client = self.rpc_client.clone();
-            smol::spawn(async move { rpc_client.query_deposit_cells(MAX_MEM_BLOCK_DEPOSITS).await })
-        };
+        let task = self.provider.collect_deposit_cells();
         // Handle state before txs
         let db = self.store.begin_transaction();
         // withdrawal
@@ -690,16 +662,12 @@ impl MemPool {
                 .generator
                 .rollup_context()
                 .last_finalized_block_number(self.current_tip.1);
-            smol::block_on(async {
-                AvailableCustodians::build_from_withdrawals(
-                    &self.rpc_client,
-                    withdrawals.clone().into_iter(),
-                    self.generator.rollup_context(),
-                    last_finalized_block_number,
-                )
-                .await
-            })?
-            .expect_any()
+            let task = self.provider.query_available_custodians(
+                withdrawals.clone(),
+                last_finalized_block_number,
+                self.generator.rollup_context().to_owned(),
+            );
+            smol::block_on(task)?
         };
         let asset_scripts: HashMap<H256, Script> = {
             let sudt_value = available_custodians.sudt.values();

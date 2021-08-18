@@ -6,10 +6,7 @@ use gw_common::{
     state::{to_short_address, State},
     H256,
 };
-use gw_generator::{
-    error::{DepositError, WithdrawalError},
-    Error,
-};
+use gw_generator::{error::DepositError, Error};
 use gw_store::state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState};
 use gw_types::{
     core::ScriptHashType,
@@ -25,8 +22,9 @@ use gw_chain::chain::Chain;
 
 fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) -> Result<()> {
     let block_result = {
-        let mem_pool = chain.mem_pool().lock();
-        construct_block(chain, &mem_pool, Default::default())?
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        construct_block(chain, &mut mem_pool, Default::default())?
     };
     let asset_scripts = HashSet::new();
 
@@ -57,8 +55,9 @@ fn deposite_to_chain(
         .script(user_script)
         .build()];
     let block_result = {
-        let mem_pool = chain.mem_pool().lock();
-        construct_block(chain, &mem_pool, deposit_requests.clone())?
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        construct_block(chain, &mut mem_pool, deposit_requests.clone())?
     };
     let asset_scripts = if sudt_script_hash == H256::zero() {
         HashSet::new()
@@ -95,9 +94,10 @@ fn withdrawal_from_chain(
         WithdrawalRequest::new_builder().raw(raw).build()
     };
     let block_result = {
-        let mut mem_pool = chain.mem_pool().lock();
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
         mem_pool.push_withdrawal_request(withdrawal)?;
-        construct_block(chain, &mem_pool, Vec::default()).unwrap()
+        construct_block(chain, &mut mem_pool, Vec::default()).unwrap()
     };
 
     // deposit
@@ -176,7 +176,8 @@ fn test_deposit_and_withdrawal() {
     }
     // check tx pool state
     {
-        let mem_pool = chain.mem_pool().lock();
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mem_pool = mem_pool.lock();
         let db = chain.store().begin_transaction();
         let state_db = mem_pool.fetch_state_db(&db).unwrap();
         let state = state_db.state_tree().unwrap();
@@ -223,7 +224,8 @@ fn test_deposit_and_withdrawal() {
     assert_eq!(nonce, 1);
     // check tx pool state
     {
-        let mem_pool = chain.mem_pool().lock();
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mem_pool = mem_pool.lock();
         let state_db = mem_pool.fetch_state_db(&db).unwrap();
         let state = state_db.state_tree().unwrap();
         assert_eq!(
@@ -275,7 +277,7 @@ fn test_overdraft() {
     .unwrap();
     // withdrawal
     let withdraw_capacity = 600_00000000u64;
-    let err = withdrawal_from_chain(
+    withdrawal_from_chain(
         &mut chain,
         rollup_cell,
         user_script_hash.into(),
@@ -283,9 +285,24 @@ fn test_overdraft() {
         H256::zero(),
         0,
     )
-    .unwrap_err();
-    let err: Error = err.downcast().unwrap();
-    assert_eq!(err, Error::Withdrawal(WithdrawalError::Overdraft));
+    .unwrap();
+    // check tx pool state
+    {
+        let db = chain.store().begin_transaction();
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mem_pool = mem_pool.lock();
+        let state_db = mem_pool.fetch_state_db(&db).unwrap();
+        let state = state_db.state_tree().unwrap();
+        assert_eq!(
+            state
+                .get_sudt_balance(
+                    CKB_SUDT_ACCOUNT_ID,
+                    to_short_address(&user_script_hash.into())
+                )
+                .unwrap(),
+            capacity as u128
+        );
+    }
 }
 
 #[test]
