@@ -365,7 +365,7 @@ impl MemPool {
                 self.all_txs
                     .get(tx_hash)
                     .map(ToOwned::to_owned)
-                    .ok_or(anyhow!("can't find tx_hash from mem pool"))
+                    .ok_or_else(|| anyhow!("can't find tx_hash from mem pool"))
             })
             .collect::<Result<_>>()?;
         let deposits = self.mem_block.deposits().to_vec();
@@ -377,14 +377,14 @@ impl MemPool {
                 self.all_withdrawals
                     .get(withdrawal_hash)
                     .map(ToOwned::to_owned)
-                    .ok_or(anyhow!("can't find withdrawal_hash from mem pool"))
+                    .ok_or_else(|| anyhow!("can't find withdrawal_hash from mem pool"))
             })
             .collect::<Result<_>>()?;
         let state_checkpoint_list = self.mem_block.state_checkpoints().to_vec();
         let txs_prev_state_checkpoint = self
             .mem_block
             .txs_prev_state_checkpoint()
-            .ok_or(anyhow!("Mem block has no txs prev state checkpoint"))?;
+            .ok_or_else(|| anyhow!("Mem block has no txs prev state checkpoint"))?;
         let prev_merkle_state = self.mem_block.prev_merkle_state().clone();
         let post_merkle_state = {
             let mem_db_state = self.fetch_state_db(&db)?;
@@ -393,7 +393,7 @@ impl MemPool {
         };
         let parent_block = db
             .get_block(&self.current_tip.0)?
-            .ok_or(anyhow!("can't found tip block"))?;
+            .ok_or_else(|| anyhow!("can't found tip block"))?;
 
         let block_info = self.mem_block.block_info();
         let param = BlockParam {

@@ -218,8 +218,7 @@ impl PoA {
         }
 
         let initial_time: u64 = poa_data.round_initial_subtime().unpack();
-        let next_start_time = initial_time + poa_setup.round_intervals as u64 * steps;
-        next_start_time
+        initial_time + poa_setup.round_intervals as u64 * steps
     }
 
     pub async fn should_issue_next_block(

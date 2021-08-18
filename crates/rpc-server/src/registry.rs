@@ -65,8 +65,7 @@ fn get_state_db_at_block<'a>(
                 return Err(RpcError::Provided {
                     code: HEADER_NOT_FOUND_ERR_CODE,
                     message: "header not found",
-                }
-                .into());
+                });
             }
             StateDBTransaction::from_checkpoint(
                 &db,

@@ -252,10 +252,8 @@ impl StoreTransaction {
     ) -> Result<Option<packed::TransactionInfo>, Error> {
         let tx_info_opt = self
             .get(COLUMN_TRANSACTION_INFO, tx_hash.as_slice())
-            .and_then(|slice| {
-                let info = packed::TransactionInfoReader::from_slice_should_be_ok(&slice.as_ref())
-                    .to_entity();
-                Some(info)
+            .map(|slice| {
+                packed::TransactionInfoReader::from_slice_should_be_ok(&slice.as_ref()).to_entity()
             });
         Ok(tx_info_opt)
     }
