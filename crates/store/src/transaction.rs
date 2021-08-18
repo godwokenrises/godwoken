@@ -3,12 +3,12 @@
 use crate::constant::MEMORY_BLOCK_NUMBER;
 use crate::{smt_store_impl::SMTStore, traits::KVStore};
 use gw_common::h256_ext::H256Ext;
-use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
 use gw_db::schema::{
     Col, COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
     COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH,
-    COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD, COLUMN_CHECKPOINT, COLUMN_CUSTODIAN_ASSETS,
-    COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_BRANCH,
+    COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD, COLUMN_CHECKPOINT, COLUMN_INDEX,
+    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_BRANCH,
     COLUMN_REVERTED_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION,
     COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, META_BLOCK_SMT_ROOT_KEY,
     META_CHAIN_ID_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY,
@@ -26,7 +26,6 @@ use gw_types::{
     prelude::*,
 };
 use std::collections::HashSet;
-use std::{borrow::BorrowMut, collections::HashMap};
 
 /// TODO use a variable instead of hardcode
 const NUMBER_OF_CONFIRMATION: u64 = 10000;
@@ -346,27 +345,6 @@ impl StoreTransaction {
         }
     }
 
-    /// key: sudt_script_hash
-    fn set_custodian_asset(&self, key: H256, value: u128) -> Result<(), Error> {
-        self.insert_raw(
-            COLUMN_CUSTODIAN_ASSETS,
-            key.as_slice(),
-            &value.to_le_bytes(),
-        )
-    }
-
-    /// key: sudt_script_hash
-    pub fn get_finalized_custodian_asset(&self, key: H256) -> Result<u128, Error> {
-        match self.get(COLUMN_CUSTODIAN_ASSETS, key.as_slice()) {
-            Some(slice) => {
-                let mut buf = [0u8; 16];
-                buf.copy_from_slice(&slice);
-                Ok(u128::from_le_bytes(buf))
-            }
-            None => Ok(0),
-        }
-    }
-
     pub fn get_bad_block_challenge_target(
         &self,
         block_hash: &H256,
@@ -649,87 +627,11 @@ impl StoreTransaction {
         }
     }
 
-    /// Update finalized custodian assets
-    fn update_finalized_custodian_assets<
-        AddIter: Iterator<Item = CustodianChange>,
-        RemIter: Iterator<Item = CustodianChange>,
-    >(
-        &self,
-        addition: AddIter,
-        removed: RemIter,
-    ) -> Result<(), Error> {
-        let mut touched_custodian_assets: HashMap<H256, u128> = Default::default();
-        for request in addition {
-            let CustodianChange {
-                sudt_script_hash,
-                amount,
-                capacity,
-            } = request;
-
-            // update ckb balance
-            let ckb_balance = touched_custodian_assets
-                .entry(CKB_SUDT_SCRIPT_ARGS.into())
-                .or_insert_with(|| {
-                    self.get_finalized_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
-                        .expect("get custodian asset")
-                })
-                .borrow_mut();
-            *ckb_balance = ckb_balance
-                .checked_add(capacity as u128)
-                .expect("deposit overflow");
-
-            // update sUDT balance
-            let balance = touched_custodian_assets
-                .entry(sudt_script_hash)
-                .or_insert_with(|| {
-                    self.get_finalized_custodian_asset(sudt_script_hash)
-                        .expect("get custodian asset")
-                })
-                .borrow_mut();
-            *balance = balance.checked_add(amount).expect("deposit overflow");
-        }
-        for request in removed {
-            let CustodianChange {
-                sudt_script_hash,
-                amount,
-                capacity,
-            } = request;
-
-            // update ckb balance
-            let ckb_balance = touched_custodian_assets
-                .entry(CKB_SUDT_SCRIPT_ARGS.into())
-                .or_insert_with(|| {
-                    self.get_finalized_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
-                        .expect("get custodian asset")
-                })
-                .borrow_mut();
-
-            *ckb_balance = ckb_balance
-                .checked_sub(capacity as u128)
-                .expect("withdrawal overflow");
-
-            // update sUDT balance
-            let balance = touched_custodian_assets
-                .entry(sudt_script_hash)
-                .or_insert_with(|| {
-                    self.get_finalized_custodian_asset(sudt_script_hash)
-                        .expect("get custodian asset")
-                })
-                .borrow_mut();
-            *balance = balance.checked_sub(amount).expect("withdrawal overflow");
-        }
-        // write touched assets to storage
-        for (key, balance) in touched_custodian_assets {
-            self.set_custodian_asset(key, balance)?;
-        }
-        Ok(())
-    }
-
     /// Attach block to the rollup main chain
     pub fn attach_block(
         &self,
         block: packed::L2Block,
-        rollup_config: &RollupConfig,
+        _rollup_config: &RollupConfig,
     ) -> Result<(), Error> {
         let raw = block.raw();
         let raw_number = raw.number();
@@ -744,46 +646,6 @@ impl StoreTransaction {
                 .build();
             let tx_hash = tx.hash();
             self.insert_raw(COLUMN_TRANSACTION_INFO, &tx_hash, info.as_slice())?;
-        }
-
-        // update finalized custodian assets
-        {
-            let finality_blocks = rollup_config.finality_blocks().unpack();
-            let last_finalized_block_number = raw_number.unpack().saturating_sub(finality_blocks);
-            let deposit_assets = if last_finalized_block_number > 0 {
-                let last_finalized_block_hash = self
-                    .get_block_hash_by_number(last_finalized_block_number)?
-                    .ok_or_else(|| {
-                        Error::from(format!(
-                            "last finalized block {} hash not found",
-                            last_finalized_block_number
-                        ))
-                    })?;
-
-                self.get_block_deposit_requests(&last_finalized_block_hash)?
-                    .expect("finalized deposits")
-            } else {
-                Vec::new()
-            };
-            // deposit assets is from last finalized block
-            let deposit_assets = deposit_assets.into_iter().map(|deposit| CustodianChange {
-                sudt_script_hash: deposit.sudt_script_hash().unpack(),
-                amount: deposit.amount().unpack(),
-                capacity: deposit.capacity().unpack(),
-            });
-            // withdrawal is from current block
-            let withdrawal_assets = {
-                let withdrawals = block.withdrawals().into_iter();
-                withdrawals.map(|withdrawal| {
-                    let raw = withdrawal.raw();
-                    CustodianChange {
-                        sudt_script_hash: raw.sudt_script_hash().unpack(),
-                        amount: raw.amount().unpack(),
-                        capacity: raw.capacity().unpack(),
-                    }
-                })
-            };
-            self.update_finalized_custodian_assets(deposit_assets, withdrawal_assets)?;
         }
 
         // build main chain index
@@ -809,7 +671,7 @@ impl StoreTransaction {
     pub fn detach_block(
         &self,
         block: &packed::L2Block,
-        rollup_config: &RollupConfig,
+        _rollup_config: &RollupConfig,
     ) -> Result<(), Error> {
         // remove transaction info
         for tx in block.transactions().into_iter() {
@@ -819,48 +681,7 @@ impl StoreTransaction {
 
         let block_hash: H256 = block.hash().into();
 
-        // update finalized custodian assets
-        let finality_blocks = rollup_config.finality_blocks().unpack();
-        let last_finalized_block_number = {
-            let block_number = block.raw().number().unpack();
-            block_number.saturating_sub(finality_blocks)
-        };
-        let deposit_assets = if last_finalized_block_number > 0 {
-            let last_finalized_block_hash = self
-                .get_block_hash_by_number(last_finalized_block_number)?
-                .ok_or_else(|| {
-                    Error::from(format!(
-                        "last finalized block {} hash not found",
-                        last_finalized_block_number
-                    ))
-                })?;
-
-            self.get_block_deposit_requests(&last_finalized_block_hash)?
-                .expect("finalized deposits")
-        } else {
-            Vec::new()
-        };
-
-        // last finalized block's deposited assets
-        let deposit_assets = deposit_assets.into_iter().map(|deposit| CustodianChange {
-            sudt_script_hash: deposit.sudt_script_hash().unpack(),
-            amount: deposit.amount().unpack(),
-            capacity: deposit.capacity().unpack(),
-        });
-        // current block withdrawal assets
-        let withdrawal_assets = {
-            let withdrawals = block.withdrawals().into_iter();
-            withdrawals.map(|withdrawal| {
-                let raw = withdrawal.raw();
-                CustodianChange {
-                    sudt_script_hash: raw.sudt_script_hash().unpack(),
-                    amount: raw.amount().unpack(),
-                    capacity: raw.capacity().unpack(),
-                }
-            })
-        };
-        self.update_finalized_custodian_assets(withdrawal_assets, deposit_assets)?;
-
+        // remove index
         let block_number = block.raw().number();
         self.delete(COLUMN_INDEX, block_number.as_slice())?;
         self.delete(COLUMN_INDEX, block_hash.as_slice())?;
@@ -948,12 +769,6 @@ impl StoreTransaction {
         .map(|(key, _value)| BlockStateRecordKey::from_vec(key.to_vec()))
         .take_while(move |key| key.is_same_block(block_number))
     }
-}
-
-struct CustodianChange {
-    capacity: u64,
-    sudt_script_hash: H256,
-    amount: u128,
 }
 
 // block_number(8 bytes) | tx_index(4 bytes) | col (1 byte) | key (n bytes)

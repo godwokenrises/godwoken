@@ -38,8 +38,8 @@ pub const COLUMN_SCRIPT: Col = 14;
 pub const COLUMN_DATA: Col = 15;
 /// Column block deposit requests
 pub const COLUMN_BLOCK_DEPOSIT_REQUESTS: Col = 16;
-/// Column custodian assets
-pub const COLUMN_CUSTODIAN_ASSETS: Col = 17;
+/// TODO remove this column Column ~custodian assets~ deprecated
+const _COLUMN_UNUSED: Col = 17;
 /// Column block state record
 pub const COLUMN_BLOCK_STATE_RECORD: Col = 18;
 /// Column script prefix
