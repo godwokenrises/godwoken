@@ -1,14 +1,12 @@
+use crate::error::{AccountError, DepositError, Error, WithdrawalError};
 use crate::sudt::build_l2_sudt_script;
-use crate::{
-    error::{AccountError, DepositError, Error, WithdrawalError},
-    RollupContext,
-};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     state::{to_short_address, State},
     CKB_SUDT_SCRIPT_ARGS, H256,
 };
 use gw_traits::CodeStore;
+use gw_types::offchain::RollupContext;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -19,6 +17,7 @@ use gw_types::{
 
 pub trait StateExt {
     fn create_account_from_script(&mut self, script: Script) -> Result<u32, Error>;
+    fn merkle_state(&self) -> Result<AccountMerkleState, Error>;
     fn apply_run_result(&mut self, run_result: &RunResult) -> Result<(), Error>;
     fn apply_deposit_request(
         &mut self,
@@ -81,6 +80,16 @@ impl<S: State + CodeStore> StateExt for S {
         Ok(id)
     }
 
+    fn merkle_state(&self) -> Result<AccountMerkleState, Error> {
+        let account_root = self.calculate_root()?;
+        let account_count = self.get_account_count()?;
+        let merkle_state = AccountMerkleState::new_builder()
+            .merkle_root(account_root.pack())
+            .count(account_count.pack())
+            .build();
+        Ok(merkle_state)
+    }
+
     fn apply_run_result(&mut self, run_result: &RunResult) -> Result<(), Error> {
         for (k, v) in &run_result.write_values {
             self.update_raw(*k, *v)?;
@@ -94,6 +103,7 @@ impl<S: State + CodeStore> StateExt for S {
         for (data_hash, data) in &run_result.write_data {
             self.insert_data(*data_hash, Bytes::from(data.clone()));
         }
+
         Ok(())
     }
 

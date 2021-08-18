@@ -1,14 +1,10 @@
-use std::collections::HashMap;
-
-use crate::types::{CellInfo, InputCellInfo};
-
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::challenge::{VerifyContext, VerifyWitness};
 use gw_common::H256;
 use gw_config::BlockProducerConfig;
-use gw_generator::RollupContext;
 use gw_types::core::Status;
+use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, GlobalState, OutPoint, RollupAction, RollupActionUnion,
     RollupCancelChallenge, Script, VerifyTransactionSignatureWitness, VerifyTransactionWitness,
@@ -16,6 +12,7 @@ use gw_types::packed::{
 };
 use gw_types::prelude::Unpack;
 use gw_types::{bytes::Bytes, prelude::Pack as GWPack};
+use std::collections::HashMap;
 
 pub struct CancelChallenge<'a, W: Entity> {
     rollup_type_hash: H256,

@@ -494,7 +494,7 @@ async fn get_script_hash(store: Store, account_id: u32) -> Result<gw_common::H25
         CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
         StateDBMode::ReadOnly,
     )?;
-    let tree = state_db.account_state_tree()?;
+    let tree = state_db.state_tree()?;
 
     let script_hash = tree.get_script_hash(account_id)?;
     Ok(script_hash)
@@ -508,7 +508,7 @@ async fn get_script(store: Store, script_hash: gw_common::H256) -> Result<Option
         CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
         StateDBMode::ReadOnly,
     )?;
-    let tree = state_db.account_state_tree()?;
+    let tree = state_db.state_tree()?;
 
     let script_opt = tree.get_script(&script_hash);
     Ok(script_opt)

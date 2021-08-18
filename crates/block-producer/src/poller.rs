@@ -1,10 +1,5 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
-use crate::{
-    indexer_types::{Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx},
-    rpc_client::RPCClient,
-    types::TxStatus,
-};
 use crate::{types::ChainEvent, utils::to_result};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{Params as ClientParams, Transport};
@@ -13,11 +8,15 @@ use gw_chain::chain::{
     Chain, ChallengeCell, L1Action, L1ActionContext, RevertL1ActionContext, RevertedL1Action,
     SyncParam,
 };
-use gw_generator::RollupContext;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, TransactionWithStatus, Uint32};
+use gw_rpc_client::{
+    indexer_types::{Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx},
+    RPCClient,
+};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    offchain::{RollupContext, TxStatus},
     packed::{
         CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositLockArgs,
         DepositRequest, L2BlockCommittedInfo, OutPoint, RollupAction, RollupActionUnion, Script,

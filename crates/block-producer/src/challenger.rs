@@ -1,24 +1,24 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::cleaner::{Cleaner, Verifier};
-use crate::poa::{PoA, ShouldIssueBlock};
-use crate::rpc_client::RPCClient;
 use crate::test_mode_control::TestModeControl;
 use crate::transaction_skeleton::TransactionSkeleton;
-use crate::types::{CellInfo, ChainEvent, InputCellInfo, TxStatus};
+use crate::types::ChainEvent;
 use crate::utils::{self, fill_tx_fee, CKBGenesisInfo};
 use crate::wallet::Wallet;
-
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::{Chain, ChallengeCell, SyncEvent};
 use gw_chain::challenge::{RevertContext, VerifyContext};
 use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig};
-use gw_generator::{ChallengeContext, RollupContext};
+use gw_generator::ChallengeContext;
 use gw_jsonrpc_types::test_mode::TestModePayload;
+use gw_poa::{PoA, ShouldIssueBlock};
+use gw_rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
 use gw_types::core::{ChallengeTargetType, DepType, Status};
+use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, TxStatus};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, GlobalState, OutPoint, Script, Transaction, WitnessArgs,
 };
@@ -174,7 +174,7 @@ impl Challenger {
         &self,
         rollup_state: RollupState,
         context: ChallengeContext,
-        media_time: Duration,
+        median_time: Duration,
     ) -> Result<()> {
         if Status::Halting == rollup_state.status()? {
             // Already entered challenge
@@ -213,7 +213,10 @@ impl Challenger {
         // Poa
         {
             let poa = self.poa.lock().await;
-            poa.fill_poa(&mut tx_skeleton, 0, media_time).await?;
+            let generated_poa = poa
+                .generate(&tx_skeleton.inputs()[0], tx_skeleton.inputs(), median_time)
+                .await?;
+            tx_skeleton.fill_poa(generated_poa, 0)?;
         }
 
         // Challenge
@@ -353,7 +356,7 @@ impl Challenger {
         challenge_cell: ChallengeCell,
         context: RevertContext,
         tip_block_number: u64,
-        media_time: Duration,
+        median_time: Duration,
     ) -> Result<()> {
         if Status::Running == rollup_state.status()? {
             // Already reverted
@@ -438,7 +441,10 @@ impl Challenger {
         // Poa
         {
             let poa = self.poa.lock().await;
-            poa.fill_poa(&mut tx_skeleton, 0, media_time).await?;
+            let generated_poa = poa
+                .generate(&tx_skeleton.inputs()[0], tx_skeleton.inputs(), median_time)
+                .await?;
+            tx_skeleton.fill_poa(generated_poa, 0)?;
         }
 
         // Challenge
@@ -512,7 +518,7 @@ impl Challenger {
         cancel_output: CancelChallengeOutput,
         challenge_input: InputCellInfo,
         verifier_context: VerifierContext,
-        media_time: Duration,
+        median_time: Duration,
     ) -> Result<Transaction> {
         let mut tx_skeleton = TransactionSkeleton::default();
 
@@ -573,7 +579,10 @@ impl Challenger {
         // Poa
         {
             let poa = self.poa.lock().await;
-            poa.fill_poa(&mut tx_skeleton, 0, media_time).await?;
+            let generated_poa = poa
+                .generate(&tx_skeleton.inputs()[0], tx_skeleton.inputs(), median_time)
+                .await?;
+            tx_skeleton.fill_poa(generated_poa, 0)?;
         }
 
         let owner_lock = self.wallet.lock_script().to_owned();

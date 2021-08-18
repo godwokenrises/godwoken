@@ -4,7 +4,6 @@ use crate::{
     constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
     error::{TransactionValidateError, WithdrawalError},
     vm_cost_model::instruction_cycles,
-    RollupContext,
 };
 use crate::{
     backend_manage::Backend,
@@ -24,7 +23,7 @@ use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType},
-    offchain::RunResult,
+    offchain::{RollupContext, RunResult},
     packed::{
         AccountMerkleState, BlockInfo, CellOutput, ChallengeTarget, DepositRequest, L2Block,
         L2Transaction, RawL2Block, RawL2Transaction, Script, TxReceipt, WithdrawalLockArgs,
@@ -395,31 +394,13 @@ impl Generator {
             let apply_result = || -> Result<(), Error> {
                 state.apply_run_result(&run_result)?;
 
-                let post_state = {
-                    let account_root = state.calculate_root()?;
-                    let account_count = state.get_account_count()?;
-                    AccountMerkleState::new_builder()
-                        .merkle_root(account_root.pack())
-                        .count(account_count.pack())
-                        .build()
-                };
-
-                let tx_receipt = TxReceipt::new_builder()
-                    .tx_witness_hash(tx.witness_hash().pack())
-                    .post_state(post_state)
-                    .read_data_hashes(
-                        run_result
-                            .read_data
-                            .into_iter()
-                            .map(|(hash, _)| hash.pack())
-                            .collect::<Vec<_>>()
-                            .pack(),
-                    )
-                    .logs(run_result.logs.pack())
-                    .build();
+                let used_cycles = run_result.used_cycles;
+                let post_state = state.merkle_state()?;
+                let tx_receipt =
+                    TxReceipt::build_receipt(tx.witness_hash().into(), run_result, post_state);
 
                 tx_receipts.push(tx_receipt);
-                offchain_used_cycles = offchain_used_cycles.saturating_add(run_result.used_cycles);
+                offchain_used_cycles = offchain_used_cycles.saturating_add(used_cycles);
                 Ok(())
             };
 

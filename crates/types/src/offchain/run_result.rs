@@ -1,6 +1,5 @@
 use crate::packed::{CellOutput, LogItem, Script};
-use ckb_types::prelude::Reader;
-use molecule::prelude::Entity;
+use crate::prelude::*;
 use sparse_merkle_tree::H256;
 use std::collections::{HashMap, HashSet};
 

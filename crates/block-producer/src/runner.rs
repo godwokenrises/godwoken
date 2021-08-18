@@ -1,7 +1,6 @@
 use crate::{
-    block_producer::BlockProducer, challenger::Challenger, cleaner::Cleaner, poa::PoA,
-    poller::ChainUpdater, rpc_client::RPCClient, test_mode_control::TestModeControl,
-    types::ChainEvent, utils::CKBGenesisInfo, wallet::Wallet,
+    block_producer::BlockProducer, challenger::Challenger, cleaner::Cleaner, poller::ChainUpdater,
+    test_mode_control::TestModeControl, types::ChainEvent, utils::CKBGenesisInfo, wallet::Wallet,
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
@@ -16,14 +15,17 @@ use gw_generator::{
     },
     backend_manage::BackendManage,
     genesis::init_genesis,
-    Generator, RollupContext,
+    Generator,
 };
-use gw_mem_pool::pool::MemPool;
+use gw_mem_pool::{default_provider::DefaultMemPoolProvider, pool::MemPool};
+use gw_poa::PoA;
+use gw_rpc_client::RPCClient;
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
 use gw_types::prelude::{Pack, Unpack};
 use gw_types::{
     bytes::Bytes,
+    offchain::RollupContext,
     packed::{NumberHash, RollupConfig, Script},
     prelude::*,
 };
@@ -262,9 +264,36 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             rollup_context.clone(),
         ))
     };
-    let mem_pool = Arc::new(Mutex::new(
-        MemPool::create(store.clone(), generator.clone()).with_context(|| "create mem-pool")?,
-    ));
+
+    let (mem_pool, wallet, poa) = match config.block_producer.clone() {
+        Some(block_producer_config) => {
+            let wallet = Wallet::from_config(&block_producer_config.wallet_config)
+                .with_context(|| "init wallet")?;
+
+            let poa = {
+                let poa = PoA::new(
+                    rpc_client.clone(),
+                    wallet.lock_script().to_owned(),
+                    block_producer_config.poa_lock_dep.clone().into(),
+                    block_producer_config.poa_state_dep.into(),
+                );
+                Arc::new(smol::lock::Mutex::new(poa))
+            };
+            let mem_pool_provider =
+                DefaultMemPoolProvider::new(rpc_client.clone(), Arc::clone(&poa));
+            let mem_pool = Arc::new(Mutex::new(
+                MemPool::create(
+                    store.clone(),
+                    generator.clone(),
+                    Box::new(mem_pool_provider),
+                )
+                .with_context(|| "create mem-pool")?,
+            ));
+            (Some(mem_pool), Some(wallet), Some(poa))
+        }
+        None => (None, None, None),
+    };
+
     let chain = Arc::new(Mutex::new(
         Chain::create(
             &rollup_config,
@@ -324,25 +353,17 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     let (block_producer, challenger, test_mode_control, cleaner) = match config.node_mode {
         NodeMode::ReadOnly => (None, None, None, None),
-        _ => {
+        mode => {
             let block_producer_config = config
                 .block_producer
                 .clone()
-                .ok_or_else(|| anyhow!("not set block producer"))?;
-
-            let wallet = Wallet::from_config(&block_producer_config.wallet_config)
-                .with_context(|| "init wallet")?;
-
-            let poa = {
-                let poa = PoA::new(
-                    rpc_client.clone(),
-                    wallet.lock_script().to_owned(),
-                    block_producer_config.poa_lock_dep.clone().into(),
-                    block_producer_config.poa_state_dep.clone().into(),
-                );
-                Arc::new(smol::lock::Mutex::new(poa))
-            };
-
+                .ok_or_else(|| anyhow!("must provide block producer config in mode: {:?}", mode))?;
+            let mem_pool = mem_pool
+                .clone()
+                .ok_or_else(|| anyhow!("mem-pool must be enabled in mode: {:?}", mode))?;
+            let wallet =
+                wallet.ok_or_else(|| anyhow!("wallet must be enabled in mode: {:?}", mode))?;
+            let poa = poa.ok_or_else(|| anyhow!("poa must be enabled in mode: {:?}", mode))?;
             let tests_control = if let NodeMode::Test = config.node_mode {
                 Some(TestModeControl::new(
                     rpc_client.clone(),
@@ -359,7 +380,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 store.clone(),
                 generator.clone(),
                 Arc::clone(&chain),
-                mem_pool.clone(),
+                mem_pool,
                 rpc_client.clone(),
                 ckb_genesis_info.clone(),
                 block_producer_config.clone(),

@@ -16,6 +16,8 @@ use gw_types::{
     prelude::*,
 };
 
+const CKB: u64 = 100000000;
+
 fn produce_a_block(
     chain: &mut Chain,
     deposit: DepositRequest,
@@ -23,8 +25,9 @@ fn produce_a_block(
     expected_tip: u64,
 ) -> SyncParam {
     let block_result = {
-        let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let l2block = block_result.block.clone();
     let transaction = build_sync_tx(rollup_cell, block_result);
@@ -85,14 +88,14 @@ fn test_produce_blocks() {
         })
         .build();
     let deposit = DepositRequest::new_builder()
-        .capacity(100u64.pack())
+        .capacity((290u64 * CKB).pack())
         .script(user_script_a.clone())
         .build();
     produce_a_block(&mut chain, deposit, rollup_cell.clone(), 1);
 
     // block #2
     let deposit = DepositRequest::new_builder()
-        .capacity(200u64.pack())
+        .capacity((200u64 * CKB).pack())
         .script(user_script_a.clone())
         .build();
     produce_a_block(&mut chain, deposit, rollup_cell.clone(), 2);
@@ -108,7 +111,7 @@ fn test_produce_blocks() {
         })
         .build();
     let deposit = DepositRequest::new_builder()
-        .capacity(500u64.pack())
+        .capacity((500u64 * CKB).pack())
         .script(user_script_b.clone())
         .build();
     produce_a_block(&mut chain, deposit, rollup_cell.clone(), 3);
@@ -123,7 +126,7 @@ fn test_produce_blocks() {
             StateDBMode::ReadOnly,
         )
         .unwrap();
-        let tree = state_db.account_state_tree().unwrap();
+        let tree = state_db.state_tree().unwrap();
         let script_hash_a: H256 = user_script_a.hash().into();
         let script_hash_b: H256 = user_script_b.hash().into();
         let id_a = tree
@@ -143,8 +146,8 @@ fn test_produce_blocks() {
         let balance_b = tree
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash_b))
             .unwrap();
-        assert_eq!(balance_a, 300);
-        assert_eq!(balance_b, 500);
+        assert_eq!(balance_a, 490 * CKB as u128);
+        assert_eq!(balance_b, 500 * CKB as u128);
     }
 
     drop(chain);
@@ -172,12 +175,13 @@ fn test_layer1_fork() {
             })
             .build();
         let deposit = DepositRequest::new_builder()
-            .capacity(120u64.pack())
+            .capacity((190u64 * CKB).pack())
             .script(charlie_script)
             .build();
         let chain = setup_chain(rollup_type_script.clone());
-        let mem_pool = chain.mem_pool().lock();
-        let block_result = construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap();
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        let block_result = construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap();
 
         L1Action {
             context: L1ActionContext::SubmitBlock {
@@ -202,12 +206,13 @@ fn test_layer1_fork() {
         })
         .build();
     let deposit = DepositRequest::new_builder()
-        .capacity(100u64.pack())
+        .capacity((200u64 * CKB).pack())
         .script(alice_script)
         .build();
     let block_result = {
-        let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -237,12 +242,13 @@ fn test_layer1_fork() {
         })
         .build();
     let deposit = DepositRequest::new_builder()
-        .capacity(500u64.pack())
+        .capacity((500u64 * CKB).pack())
         .script(bob_script)
         .build();
     let block_result = {
-        let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action2 = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -326,7 +332,7 @@ fn test_layer1_fork() {
             StateDBMode::ReadOnly,
         )
         .unwrap();
-        let tree = db.account_state_tree().unwrap();
+        let tree = db.state_tree().unwrap();
         let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
@@ -364,12 +370,13 @@ fn test_layer1_revert() {
         })
         .build();
     let deposit = DepositRequest::new_builder()
-        .capacity(100u64.pack())
+        .capacity((200u64 * CKB).pack())
         .script(alice_script.clone())
         .build();
     let block_result = {
-        let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -399,12 +406,13 @@ fn test_layer1_revert() {
         })
         .build();
     let deposit = DepositRequest::new_builder()
-        .capacity(500u64.pack())
+        .capacity((500u64 * CKB).pack())
         .script(bob_script.clone())
         .build();
     let block_result = {
-        let mem_pool = chain.mem_pool().lock();
-        construct_block(&chain, &mem_pool, vec![deposit.clone()]).unwrap()
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = mem_pool.lock();
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action2 = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -472,7 +480,7 @@ fn test_layer1_revert() {
             StateDBMode::ReadOnly,
         )
         .unwrap();
-        let tree = db.account_state_tree().unwrap();
+        let tree = db.state_tree().unwrap();
         let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
@@ -490,7 +498,7 @@ fn test_layer1_revert() {
         let alice_balance = tree
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&alice_script_hash))
             .unwrap();
-        assert_eq!(alice_balance, 100);
+        assert_eq!(alice_balance, 200 * CKB as u128);
 
         let bob_id_opt = tree
             .get_account_id_by_script_hash(&bob_script.hash().into())
@@ -521,7 +529,7 @@ fn test_layer1_revert() {
             StateDBMode::ReadOnly,
         )
         .unwrap();
-        let tree = db.account_state_tree().unwrap();
+        let tree = db.state_tree().unwrap();
         let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
@@ -539,7 +547,7 @@ fn test_layer1_revert() {
         let alice_balance = tree
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&alice_script_hash))
             .unwrap();
-        assert_eq!(alice_balance, 100);
+        assert_eq!(alice_balance, 200 * CKB as u128);
 
         let bob_script_hash: H256 = bob_script.hash().into();
         let bob_id = tree
@@ -551,7 +559,7 @@ fn test_layer1_revert() {
         let bob_balance = tree
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&bob_script_hash))
             .unwrap();
-        assert_eq!(bob_balance, 500);
+        assert_eq!(bob_balance, 500 * CKB as u128);
     }
 }
 
@@ -578,7 +586,7 @@ fn test_sync_blocks() {
         .build();
     let sudt_script_hash: H256 = [42u8; 32].into();
     let deposit = DepositRequest::new_builder()
-        .capacity(100u64.pack())
+        .capacity((200u64 * CKB).pack())
         .script(user_script_a.clone())
         .sudt_script_hash(sudt_script_hash.pack())
         .build();
@@ -586,7 +594,7 @@ fn test_sync_blocks() {
 
     // block #2
     let deposit = DepositRequest::new_builder()
-        .capacity(200u64.pack())
+        .capacity((200u64 * CKB).pack())
         .script(user_script_a.clone())
         .build();
     let sync_2 = produce_a_block(&mut chain1, deposit, rollup_cell.clone(), 2);
@@ -602,7 +610,7 @@ fn test_sync_blocks() {
         })
         .build();
     let deposit = DepositRequest::new_builder()
-        .capacity(500u64.pack())
+        .capacity((500u64 * CKB).pack())
         .script(user_script_b.clone())
         .sudt_script_hash(sudt_script_hash.pack())
         .build();
@@ -634,7 +642,7 @@ fn test_sync_blocks() {
             StateDBMode::ReadOnly,
         )
         .unwrap();
-        let tree = state_db.account_state_tree().unwrap();
+        let tree = state_db.state_tree().unwrap();
         let script_hash_a: H256 = user_script_a.hash().into();
         let id_a = tree
             .get_account_id_by_script_hash(&script_hash_a)
@@ -654,8 +662,8 @@ fn test_sync_blocks() {
         let balance_b = tree
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash_b))
             .unwrap();
-        assert_eq!(balance_a, 300);
-        assert_eq!(balance_b, 500);
+        assert_eq!(balance_a, 400 * CKB as u128);
+        assert_eq!(balance_b, 500 * CKB as u128);
     }
 
     drop(chain2);

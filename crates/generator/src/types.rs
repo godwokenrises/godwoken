@@ -1,12 +1,5 @@
-use gw_common::H256;
-use gw_types::packed::{ChallengeTarget, ChallengeWitness, RollupConfig};
+use gw_types::packed::{ChallengeTarget, ChallengeWitness};
 use std::fmt::{self, Display};
-
-#[derive(Clone)]
-pub struct RollupContext {
-    pub rollup_script_hash: H256,
-    pub rollup_config: RollupConfig,
-}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ChallengeContext {

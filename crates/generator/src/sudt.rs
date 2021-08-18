@@ -1,7 +1,7 @@
 use gw_common::H256;
-use gw_types::{bytes::Bytes, core::ScriptHashType, packed::Script, prelude::*};
-
-use crate::RollupContext;
+use gw_types::{
+    bytes::Bytes, core::ScriptHashType, offchain::RollupContext, packed::Script, prelude::*,
+};
 
 pub fn build_l2_sudt_script(rollup_context: &RollupContext, l1_sudt_script_hash: &H256) -> Script {
     let args = {

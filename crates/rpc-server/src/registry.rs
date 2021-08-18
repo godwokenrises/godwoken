@@ -6,16 +6,20 @@ use gw_generator::{sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
-    godwoken::{GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus, RunResult, TxReceipt},
+    godwoken::{
+        GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus, L2TransactionStatus,
+        L2TransactionWithStatus, RunResult, TxReceipt,
+    },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
 use gw_store::{
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
+    transaction::StoreTransaction,
     Store,
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    packed::{self, BlockInfo, RollupConfig},
+    packed::{self, BlockInfo, RawL2Block, RollupConfig},
     prelude::*,
 };
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
@@ -24,13 +28,27 @@ use std::sync::Arc;
 
 // type alias
 type RPCServer = Arc<Server<MapRouter>>;
-type MemPool = Mutex<gw_mem_pool::pool::MemPool>;
+type MemPool = Option<Arc<Mutex<gw_mem_pool::pool::MemPool>>>;
 type AccountID = Uint32;
 type JsonH256 = ckb_fixed_hash::H256;
 type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
 type GwUint64 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint64;
 
 const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
+const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
+
+fn header_not_found_err() -> RpcError {
+    RpcError::Provided {
+        code: HEADER_NOT_FOUND_ERR_CODE,
+        message: "header not found",
+    }
+}
+fn mem_pool_is_disabled_err() -> RpcError {
+    RpcError::Provided {
+        code: METHOD_NOT_AVAILABLE_ERR_CODE,
+        message: "mem-pool is disabled",
+    }
+}
 
 #[async_trait]
 pub trait TestModeRPC {
@@ -49,9 +67,45 @@ fn to_jsonh256(v: H256) -> JsonH256 {
     h.into()
 }
 
+fn get_state_db_at_block<'a>(
+    db: &'a StoreTransaction,
+    mem_pool: &MemPool,
+    block_number: Option<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64>,
+) -> Result<StateDBTransaction<'a>, RpcError> {
+    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
+    match block_number.map(|n| n.value()) {
+        Some(block_number) => {
+            if block_number > tip_block_number {
+                return Err(header_not_found_err());
+            }
+            StateDBTransaction::from_checkpoint(
+                &db,
+                CheckPoint::new(block_number, SubState::Block),
+                StateDBMode::ReadOnly,
+            )
+            .map_err(Into::into)
+        }
+        None => match mem_pool {
+            Some(mem_pool) => {
+                let mem_pool = mem_pool.lock();
+                mem_pool.fetch_state_db(&db).map_err(Into::into)
+            }
+            None => {
+                // fallback to tip number
+                StateDBTransaction::from_checkpoint(
+                    &db,
+                    CheckPoint::new(tip_block_number, SubState::Block),
+                    StateDBMode::ReadOnly,
+                )
+                .map_err(Into::into)
+            }
+        },
+    }
+}
+
 pub struct Registry {
     generator: Arc<Generator>,
-    mem_pool: Arc<MemPool>,
+    mem_pool: MemPool,
     store: Store,
     tests_rpc_impl: Option<Arc<BoxedTestsRPCImpl>>,
     rollup_config: RollupConfig,
@@ -60,7 +114,7 @@ pub struct Registry {
 impl Registry {
     pub fn new<T>(
         store: Store,
-        mem_pool: Arc<MemPool>,
+        mem_pool: MemPool,
         generator: Arc<Generator>,
         tests_rpc_impl: Option<Box<T>>,
         rollup_config: RollupConfig,
@@ -82,7 +136,7 @@ impl Registry {
         let mut server = JsonrpcServer::new();
 
         server = server
-            .with_data(Data(self.mem_pool.clone()))
+            .with_data(Data::new(self.mem_pool))
             .with_data(Data(self.generator.clone()))
             .with_data(Data::new(self.store))
             .with_data(Data::new(self.rollup_config))
@@ -105,6 +159,7 @@ impl Registry {
                 get_script_hash_by_short_address,
             )
             .with_method("gw_get_data", get_data)
+            .with_method("gw_get_transaction", get_transaction)
             .with_method("gw_get_transaction_receipt", get_transaction_receipt)
             .with_method("gw_execute_l2transaction", execute_l2transaction)
             .with_method("gw_execute_raw_l2transaction", execute_raw_l2transaction)
@@ -130,6 +185,51 @@ impl Registry {
 
 async fn ping() -> Result<String> {
     Ok("pong".to_string())
+}
+
+async fn get_transaction(
+    Params((tx_hash,)): Params<(JsonH256,)>,
+    mem_pool: Data<MemPool>,
+    store: Data<Store>,
+) -> Result<Option<L2TransactionWithStatus>> {
+    let tx_hash = to_h256(tx_hash);
+    let db = store.begin_transaction();
+    let tx_opt;
+    let status;
+    match db.get_transaction_info(&tx_hash)? {
+        Some(tx_info) => {
+            let tx_block_number = tx_info.block_number().unpack();
+
+            // return None if tx's committed block is reverted
+            if !db
+                .reverted_block_smt()?
+                .get(&RawL2Block::compute_smt_key(tx_block_number).into())?
+                .is_zero()
+            {
+                // block is reverted
+                return Ok(None);
+            }
+
+            tx_opt = db.get_transaction_by_key(&tx_info.key())?;
+            status = L2TransactionStatus::Committed;
+        }
+        None => match &*mem_pool {
+            Some(mem_pool) => {
+                let mem_pool = mem_pool.lock();
+                tx_opt = mem_pool.all_txs().get(&tx_hash).cloned();
+                status = L2TransactionStatus::Pending;
+            }
+            None => {
+                tx_opt = None;
+                status = L2TransactionStatus::Pending;
+            }
+        },
+    };
+
+    Ok(tx_opt.map(|tx| L2TransactionWithStatus {
+        transaction: tx.into(),
+        status,
+    }))
 }
 
 async fn get_block(
@@ -203,13 +303,27 @@ async fn get_tip_block_hash(store: Data<Store>) -> Result<JsonH256> {
 
 async fn get_transaction_receipt(
     Params((tx_hash,)): Params<(JsonH256,)>,
+    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<Option<TxReceipt>> {
     let tx_hash = to_h256(tx_hash);
     let db = store.begin_transaction();
-    let receipt_opt = db.get_transaction_receipt(&tx_hash)?.map(|receipt| {
+    // search from db
+    if let Some(receipt) = db.get_transaction_receipt(&tx_hash)?.map(|receipt| {
         let receipt: TxReceipt = receipt.into();
         receipt
+    }) {
+        return Ok(Some(receipt));
+    }
+    // search from mem pool
+    let receipt_opt = mem_pool.as_deref().and_then(|mem_pool| {
+        mem_pool
+            .lock()
+            .mem_block()
+            .tx_receipts()
+            .get(&tx_hash)
+            .map(ToOwned::to_owned)
+            .map(Into::into)
     });
     Ok(receipt_opt)
 }
@@ -218,7 +332,13 @@ async fn execute_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<RunResult> {
+) -> Result<RunResult, RpcError> {
+    let mem_pool = match &*mem_pool {
+        Some(mem_pool) => mem_pool,
+        None => {
+            return Err(mem_pool_is_disabled_err());
+        }
+    };
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
 
@@ -253,48 +373,49 @@ async fn execute_raw_l2transaction(
     mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<RunResult, RpcError> {
-    let (raw_l2tx, block_number) = match params {
+    let mem_pool = match &*mem_pool {
+        Some(mem_pool) => mem_pool,
+        None => {
+            return Err(mem_pool_is_disabled_err());
+        }
+    };
+    let (raw_l2tx, block_number_opt) = match params {
         ExecuteRawL2TransactionParams::Tip(p) => (p.0, None),
         ExecuteRawL2TransactionParams::Number(p) => p,
     };
+    let block_number_opt = block_number_opt.map(|n| n.value());
 
     let raw_l2tx_bytes = raw_l2tx.into_bytes();
     let raw_l2tx = packed::RawL2Transaction::from_slice(&raw_l2tx_bytes)?;
 
     let db = store.begin_transaction();
-    let block_number = match block_number {
-        Some(num) => num.value(),
-        None => db.get_tip_block()?.raw().number().unpack(),
-    };
-    let not_found_err = Err(RpcError::Provided {
-        code: HEADER_NOT_FOUND_ERR_CODE,
-        message: "header not found",
-    });
-    let block_hash = match db.get_block_hash_by_number(block_number)? {
-        Some(block_hash) => block_hash,
-        None => return not_found_err,
-    };
 
-    let raw_block = match store.get_block(&block_hash)? {
-        Some(block) => block.raw(),
-        None => return not_found_err,
-    };
-    let block_producer_id = raw_block.block_producer_id();
-    let timestamp = raw_block.timestamp();
-    let number = {
-        let number: u64 = raw_block.number().unpack();
-        number.saturating_add(1)
-    };
+    let block_info = match block_number_opt {
+        Some(block_number) => {
+            let block_hash = match db.get_block_hash_by_number(block_number)? {
+                Some(block_hash) => block_hash,
+                None => return Err(header_not_found_err()),
+            };
+            let raw_block = match store.get_block(&block_hash)? {
+                Some(block) => block.raw(),
+                None => return Err(header_not_found_err()),
+            };
+            let block_producer_id = raw_block.block_producer_id();
+            let timestamp = raw_block.timestamp();
+            let number: u64 = raw_block.number().unpack();
 
-    let block_info = BlockInfo::new_builder()
-        .block_producer_id(block_producer_id)
-        .timestamp(timestamp)
-        .number(number.pack())
-        .build();
+            BlockInfo::new_builder()
+                .block_producer_id(block_producer_id)
+                .timestamp(timestamp)
+                .number(number.pack())
+                .build()
+        }
+        None => mem_pool.lock().mem_block().block_info().to_owned(),
+    };
 
     let run_result: RunResult = mem_pool
         .lock()
-        .execute_raw_transaction(raw_l2tx, &block_info, block_number)?
+        .execute_raw_transaction(raw_l2tx, &block_info, block_number_opt)?
         .into();
     Ok(run_result)
 }
@@ -302,7 +423,13 @@ async fn execute_raw_l2transaction(
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
-) -> Result<JsonH256> {
+) -> Result<JsonH256, RpcError> {
+    let mem_pool = match &*mem_pool {
+        Some(mem_pool) => mem_pool,
+        None => {
+            return Err(mem_pool_is_disabled_err());
+        }
+    };
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
     let tx_hash = to_jsonh256(tx.hash().into());
@@ -313,7 +440,13 @@ async fn submit_l2transaction(
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
-) -> Result<()> {
+) -> Result<(), RpcError> {
+    let mem_pool = match &*mem_pool {
+        Some(mem_pool) => mem_pool,
+        None => {
+            return Err(mem_pool_is_disabled_err());
+        }
+    };
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequest::from_slice(&withdrawal_bytes)?;
 
@@ -331,6 +464,7 @@ enum GetBalanceParams {
 
 async fn get_balance(
     Params(params): Params<GetBalanceParams>,
+    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<Uint128, RpcError> {
     let (short_address, sudt_id, block_number) = match params {
@@ -339,24 +473,8 @@ async fn get_balance(
     };
 
     let db = store.begin_transaction();
-    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
-    let block_number = match block_number {
-        Some(num) => num.value(),
-        None => tip_block_number,
-    };
-    if block_number > tip_block_number {
-        return Err(RpcError::Provided {
-            code: HEADER_NOT_FOUND_ERR_CODE,
-            message: "header not found",
-        });
-    }
-    let state_db = StateDBTransaction::from_checkpoint(
-        &db,
-        CheckPoint::new(block_number, SubState::Block),
-        StateDBMode::ReadOnly,
-    )?;
-
-    let tree = state_db.account_state_tree()?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, block_number)?;
+    let tree = state_db.state_tree()?;
     let balance = tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?;
     Ok(balance.into())
 }
@@ -371,6 +489,7 @@ enum GetStorageAtParams {
 
 async fn get_storage_at(
     Params(params): Params<GetStorageAtParams>,
+    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<JsonH256, RpcError> {
     let (account_id, key, block_number) = match params {
@@ -379,24 +498,9 @@ async fn get_storage_at(
     };
 
     let db = store.begin_transaction();
-    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
-    let block_number = match block_number {
-        Some(num) => num.value(),
-        None => tip_block_number,
-    };
-    if block_number > tip_block_number {
-        return Err(RpcError::Provided {
-            code: HEADER_NOT_FOUND_ERR_CODE,
-            message: "header not found",
-        });
-    }
-    let state_db = StateDBTransaction::from_checkpoint(
-        &db,
-        CheckPoint::new(block_number, SubState::Block),
-        StateDBMode::ReadOnly,
-    )?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, block_number)?;
 
-    let tree = state_db.account_state_tree()?;
+    let tree = state_db.state_tree()?;
     let key: H256 = to_h256(key);
     let value = tree.get_value(account_id.into(), &key)?;
 
@@ -406,16 +510,12 @@ async fn get_storage_at(
 
 async fn get_account_id_by_script_hash(
     Params((script_hash,)): Params<(JsonH256,)>,
+    mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<Option<AccountID>> {
+) -> Result<Option<AccountID>, RpcError> {
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_checkpoint(
-        &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
-        StateDBMode::ReadOnly,
-    )?;
-    let tree = state_db.account_state_tree()?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, None)?;
+    let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
 
@@ -436,6 +536,7 @@ enum GetNonceParams {
 
 async fn get_nonce(
     Params(params): Params<GetNonceParams>,
+    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<Uint32, RpcError> {
     let (account_id, block_number) = match params {
@@ -444,23 +545,8 @@ async fn get_nonce(
     };
 
     let db = store.begin_transaction();
-    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
-    let block_number = match block_number {
-        Some(num) => num.value(),
-        None => tip_block_number,
-    };
-    if block_number > tip_block_number {
-        return Err(RpcError::Provided {
-            code: HEADER_NOT_FOUND_ERR_CODE,
-            message: "header not found",
-        });
-    }
-    let state_db = StateDBTransaction::from_checkpoint(
-        &db,
-        CheckPoint::new(block_number, SubState::Block),
-        StateDBMode::ReadOnly,
-    )?;
-    let tree = state_db.account_state_tree()?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, block_number)?;
+    let tree = state_db.state_tree()?;
 
     let nonce = tree.get_nonce(account_id.into())?;
 
@@ -469,16 +555,12 @@ async fn get_nonce(
 
 async fn get_script(
     Params((script_hash,)): Params<(JsonH256,)>,
+    mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<Option<Script>> {
+) -> Result<Option<Script>, RpcError> {
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_checkpoint(
-        &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
-        StateDBMode::ReadOnly,
-    )?;
-    let tree = state_db.account_state_tree()?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, None)?;
+    let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
     let script_opt = tree.get_script(&script_hash).map(Into::into);
@@ -488,16 +570,12 @@ async fn get_script(
 
 async fn get_script_hash(
     Params((account_id,)): Params<(AccountID,)>,
+    mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<JsonH256> {
+) -> Result<JsonH256, RpcError> {
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_checkpoint(
-        &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
-        StateDBMode::ReadOnly,
-    )?;
-    let tree = state_db.account_state_tree()?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, None)?;
+    let tree = state_db.state_tree()?;
 
     let script_hash = tree.get_script_hash(account_id.into())?;
     Ok(to_jsonh256(script_hash))
@@ -505,16 +583,12 @@ async fn get_script_hash(
 
 async fn get_script_hash_by_short_address(
     Params((short_address,)): Params<(JsonBytes,)>,
+    mem_pool: Data<MemPool>,
     store: Data<Store>,
-) -> Result<Option<JsonH256>> {
+) -> Result<Option<JsonH256>, RpcError> {
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_checkpoint(
-        &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
-        StateDBMode::ReadOnly,
-    )?;
-    let tree = state_db.account_state_tree()?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, None)?;
+    let tree = state_db.state_tree()?;
     let script_hash_opt = tree.get_script_hash_by_short_address(&short_address.into_bytes());
     Ok(script_hash_opt.map(to_jsonh256))
 }
@@ -529,6 +603,7 @@ enum GetDataParams {
 
 async fn get_data(
     Params(params): Params<GetDataParams>,
+    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<Option<JsonBytes>, RpcError> {
     let (data_hash, block_number) = match params {
@@ -537,23 +612,8 @@ async fn get_data(
     };
 
     let db = store.begin_transaction();
-    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
-    let block_number = match block_number {
-        Some(num) => num.value(),
-        None => tip_block_number,
-    };
-    if block_number > tip_block_number {
-        return Err(RpcError::Provided {
-            code: HEADER_NOT_FOUND_ERR_CODE,
-            message: "header not found",
-        });
-    }
-    let state_db = StateDBTransaction::from_checkpoint(
-        &db,
-        CheckPoint::new(block_number, SubState::Block),
-        StateDBMode::ReadOnly,
-    )?;
-    let tree = state_db.account_state_tree()?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, block_number)?;
+    let tree = state_db.state_tree()?;
 
     let data_opt = tree
         .get_data(&to_h256(data_hash))

@@ -147,7 +147,7 @@ pub struct Chain {
     last_sync_event: SyncEvent,
     local_state: LocalState,
     generator: Arc<Generator>,
-    mem_pool: Arc<Mutex<MemPool>>,
+    mem_pool: Option<Arc<Mutex<MemPool>>>,
 }
 
 impl Chain {
@@ -156,7 +156,7 @@ impl Chain {
         rollup_type_script: &Script,
         store: Store,
         generator: Arc<Generator>,
-        mem_pool: Arc<Mutex<MemPool>>,
+        mem_pool: Option<Arc<Mutex<MemPool>>>,
     ) -> Result<Self> {
         // convert serde types to gw-types
         assert_eq!(
@@ -204,7 +204,7 @@ impl Chain {
         &self.store
     }
 
-    pub fn mem_pool(&self) -> &Mutex<MemPool> {
+    pub fn mem_pool(&self) -> &Option<Arc<Mutex<MemPool>>> {
         &self.mem_pool
     }
 
@@ -494,10 +494,6 @@ impl Chain {
                         let prev_account_smt = first_reverted_block.prev_account();
                         let global_account_smt = global_state.account();
                         assert_eq!(prev_account_smt.as_slice(), global_account_smt.as_slice());
-
-                        let prev_account_root: H256 = prev_account_smt.merkle_root().unpack();
-                        db.set_account_smt_root(prev_account_root)?;
-                        db.set_account_count(prev_account_smt.count().unpack())?;
                     }
 
                     // If our bad block isn't reverted, just challenge it
@@ -627,7 +623,7 @@ impl Chain {
                         CheckPoint::from_block_hash(&db, parent_block_hash, SubState::Block)?,
                         StateDBMode::ReadOnly,
                     )?;
-                    let tree = state_db.account_state_tree()?;
+                    let tree = state_db.state_tree()?;
                     let expected_root: H256 = expected_state.merkle_root().unpack();
                     let expected_count: u32 = expected_state.count().unpack();
                     assert_eq!(tree.calculate_root()?, expected_root);
@@ -752,8 +748,10 @@ impl Chain {
 
         let tip_block_hash: H256 = self.local_state.tip.hash().into();
         if let SyncEvent::Success = self.last_sync_event {
-            // update mem pool state
-            self.mem_pool.lock().notify_new_tip(tip_block_hash)?;
+            if let Some(mem_pool) = &self.mem_pool {
+                // update mem pool state
+                mem_pool.lock().notify_new_tip(tip_block_hash)?;
+            }
         }
 
         // check consistency of account SMT
@@ -774,7 +772,7 @@ impl Chain {
             "account root consistent in DB"
         );
 
-        let tree = state_db.account_state_tree()?;
+        let tree = state_db.state_tree()?;
         let current_account_root = tree.calculate_root().unwrap();
 
         assert_eq!(
@@ -818,7 +816,7 @@ impl Chain {
             CheckPoint::new(block_number, SubState::Block),
             StateDBMode::Write(WriteContext::new(l2block.withdrawals().len() as u32)),
         )?;
-        let mut tree = state_db.account_state_tree()?;
+        let mut tree = state_db.state_tree()?;
 
         let prev_merkle_root: H256 = l2block.raw().prev_account().merkle_root().unpack();
         assert_eq!(
@@ -867,7 +865,6 @@ impl Chain {
 
         let rollup_config = &self.generator.rollup_context().rollup_config;
         db.attach_block(l2block.clone(), rollup_config)?;
-        tree.submit_tree()?;
         let post_merkle_root: H256 = l2block.raw().post_account().merkle_root().unpack();
         assert_eq!(
             tree.calculate_root()?,

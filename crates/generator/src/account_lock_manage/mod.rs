@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use gw_common::H256;
 use gw_types::{
     bytes::Bytes,
+    offchain::RollupContext,
     packed::{L2Transaction, Script},
 };
 
@@ -10,7 +11,7 @@ use gw_types::{
 pub mod always_success;
 pub mod secp256k1;
 
-use crate::{error::LockAlgorithmError, RollupContext};
+use crate::error::LockAlgorithmError;
 
 pub trait LockAlgorithm {
     fn recover(&self, message: H256, signature: &[u8]) -> Result<Bytes, LockAlgorithmError>;

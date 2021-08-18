@@ -1,16 +1,18 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
-use crate::types::{CellInfo, TxStatus};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{HttpClient, Output, Params as ClientParams, Transport};
 use ckb_types::prelude::Entity;
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
-use gw_generator::RollupContext;
 use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Uint32};
+use gw_types::offchain::{
+    CollectedCustodianCells, DepositInfo, RollupContext, TxStatus, WithdrawalsAmount,
+};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
+    offchain::CellInfo,
     packed::{
         Block, CellOutput, CustodianLockArgs, CustodianLockArgsReader, DepositLockArgs,
         DepositLockArgsReader, DepositRequest, NumberHash, OutPoint, Script, StakeLockArgs,
@@ -21,10 +23,7 @@ use gw_types::{
 use serde::de::DeserializeOwned;
 use serde_json::{from_value, json};
 
-use std::{
-    collections::{HashMap, HashSet},
-    time::Duration,
-};
+use std::{collections::HashSet, time::Duration};
 
 const DEFAULT_QUERY_LIMIT: usize = 1000;
 
@@ -36,12 +35,6 @@ lazy_static::lazy_static! {
         faster_hex::hex_decode(hexed_type_id_code_hash.as_bytes(), &mut code_hash).expect("dehex type id code_hash");
         code_hash
     };
-}
-
-#[derive(Debug, Clone)]
-pub struct DepositInfo {
-    pub request: DepositRequest,
-    pub cell: CellInfo,
 }
 
 type JsonH256 = ckb_fixed_hash::H256;
@@ -112,34 +105,30 @@ fn parse_deposit_request(
     Some(request)
 }
 
-#[derive(Debug)]
-pub struct WithdrawalsAmount {
-    pub capacity: u128,
-    pub sudt: HashMap<[u8; 32], u128>,
+pub enum QueryResult<T> {
+    Full(T),
+    NotEnough(T),
 }
 
-impl Default for WithdrawalsAmount {
-    fn default() -> Self {
-        WithdrawalsAmount {
-            capacity: 0,
-            sudt: Default::default(),
+impl<T> QueryResult<T> {
+    pub fn expect_full(self, msg: &str) -> Result<T> {
+        match self {
+            Self::Full(r) => Ok(r),
+            Self::NotEnough(_r) => Err(anyhow!(msg.to_string())),
         }
     }
-}
 
-#[derive(Debug)]
-pub struct CollectedCustodianCells {
-    pub cells_info: Vec<CellInfo>,
-    pub capacity: u128,
-    pub sudt: HashMap<[u8; 32], (u128, Script)>,
-}
+    pub fn expect_any(self) -> T {
+        match self {
+            Self::Full(r) => r,
+            Self::NotEnough(r) => r,
+        }
+    }
 
-impl Default for CollectedCustodianCells {
-    fn default() -> Self {
-        CollectedCustodianCells {
-            cells_info: Default::default(),
-            capacity: 0,
-            sudt: Default::default(),
+    pub fn map<R, F: FnOnce(T) -> R>(self, f: F) -> QueryResult<R> {
+        match self {
+            Self::Full(r) => QueryResult::Full(f(r)),
+            Self::NotEnough(r) => QueryResult::NotEnough(f(r)),
         }
     }
 }
@@ -490,9 +479,8 @@ impl RPCClient {
 
     /// return all lived deposit requests
     /// NOTICE the returned cells may contains invalid cells.
-    pub async fn query_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
+    pub async fn query_deposit_cells(&self, count: usize) -> Result<Vec<DepositInfo>> {
         const BLOCKS_TO_SEARCH: u64 = 100;
-        const LIMIT: u32 = 100;
 
         let tip_number = self.get_tip().await?.number().unpack();
         let mut deposit_infos = Vec::new();
@@ -529,7 +517,7 @@ impl RPCClient {
             }),
         };
         let order = Order::Asc;
-        let limit = Uint32::from(LIMIT);
+        let limit = Uint32::from((count - deposit_infos.len()) as u32);
 
         let cells: Pagination<Cell> = to_result(
             self.indexer_client
@@ -819,7 +807,7 @@ impl RPCClient {
         withdrawals_amount: &WithdrawalsAmount,
         min_refund_cell_capacity: u64,
         last_finalized_block_number: u64,
-    ) -> Result<CollectedCustodianCells> {
+    ) -> Result<QueryResult<CollectedCustodianCells>> {
         let rollup_context = &self.rollup_context;
 
         let parse_sudt_amount = |cell: &Cell| -> Result<u128> {
@@ -877,7 +865,7 @@ impl RPCClient {
             )?;
 
             if cells.last_cursor.is_empty() {
-                return Err(anyhow!("no enough finalized custodians"));
+                return Ok(QueryResult::NotEnough(collected));
             }
             cursor = Some(cells.last_cursor);
 
@@ -969,7 +957,7 @@ impl RPCClient {
             }
         }
 
-        Ok(collected)
+        Ok(QueryResult::Full(collected))
     }
 
     pub async fn query_verified_custodian_type_script(

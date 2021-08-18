@@ -47,20 +47,6 @@ impl_hash!(RawTransactionReader);
 impl_witness_hash!(TransactionReader);
 impl_hash!(HeaderReader);
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "std")] {
-        impl packed::TransactionKey {
-            pub fn build_transaction_key(block_hash: crate::packed::Byte32, index: u32) -> Self {
-                let mut key = [0u8; 36];
-                key[..32].copy_from_slice(block_hash.as_slice());
-                // use BE, so we have a sorted bytes representation
-                key[32..].copy_from_slice(&index.to_be_bytes());
-                key.pack()
-            }
-        }
-    }
-}
-
 impl packed::RawL2Transaction {
     pub fn hash(&self) -> [u8; 32] {
         self.as_reader().hash()

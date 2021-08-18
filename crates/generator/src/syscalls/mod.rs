@@ -1,7 +1,4 @@
-use crate::{
-    account_lock_manage::AccountLockManage, syscalls::error_codes::GW_FATAL_UNKNOWN_ARGS,
-    RollupContext,
-};
+use crate::{account_lock_manage::AccountLockManage, syscalls::error_codes::GW_FATAL_UNKNOWN_ARGS};
 use ckb_vm::{
     memory::Memory,
     registers::{A0, A1, A2, A3, A4, A5, A7},
@@ -21,7 +18,7 @@ use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::RunResult,
+    offchain::{RollupContext, RunResult},
     packed::{BlockInfo, LogItem, RawL2Transaction, Script},
     prelude::*,
 };

@@ -1,5 +1,6 @@
 //! State DB
 
+use crate::constant::MEMORY_BLOCK_NUMBER;
 use crate::{smt_store_impl::SMTStore, traits::KVStore, transaction::StoreTransaction};
 use anyhow::{anyhow, Result};
 use gw_common::merkle_utils::calculate_state_checkpoint;
@@ -49,6 +50,7 @@ pub enum SubState {
     PrevTxs,
     Tx(u32),
     Block, // Block post state
+    MemBlock(u32),
 }
 
 impl SubState {
@@ -87,6 +89,15 @@ impl SubState {
             SubState::PrevTxs => CheckPointIdx::PrevTxs,
             SubState::Tx(index) => CheckPointIdx::Idx(block.withdrawals().len() + index as usize),
             SubState::Block => return Ok(block.raw().post_account()),
+            SubState::MemBlock(_) => {
+                let root = db.get_mem_block_account_smt_root()?;
+                let count = db.get_mem_block_account_count()?;
+                let merkle_state = AccountMerkleState::new_builder()
+                    .merkle_root(root.pack())
+                    .count(count.pack())
+                    .build();
+                return Ok(merkle_state);
+            }
         };
 
         let checkpoint = match checkpoint_idx {
@@ -213,6 +224,7 @@ impl CheckPoint {
                 StateDBMode::Write(ctx) => Ok((self.block_number, ctx.tx_offset + 1 + index)), // Plus one for PrevTxs
             },
             SubState::Block => Ok((self.block_number, 0)),
+            SubState::MemBlock(offset) => Ok((MEMORY_BLOCK_NUMBER, offset)),
         }
     }
 }
@@ -303,7 +315,7 @@ impl<'db> StateDBTransaction<'db> {
         Ok(SMT::new(merkle_state.merkle_root().unpack(), smt_store))
     }
 
-    fn account_state_tree_with_merkle_state(
+    pub fn state_tree_with_merkle_state(
         &self,
         merkle_state: AccountMerkleState,
     ) -> Result<StateTree<'_, 'db>, Error> {
@@ -323,9 +335,9 @@ impl<'db> StateDBTransaction<'db> {
         self.account_smt_with_merkle_state(merkle_state)
     }
 
-    pub fn account_state_tree(&self) -> Result<StateTree<'_, 'db>, Error> {
+    pub fn state_tree(&self) -> Result<StateTree<'_, 'db>, Error> {
         let merkle_state = self.get_checkpoint_merkle_state()?;
-        self.account_state_tree_with_merkle_state(merkle_state)
+        self.state_tree_with_merkle_state(merkle_state)
     }
 
     fn get_checkpoint_merkle_state(&self) -> Result<AccountMerkleState, Error> {
@@ -454,7 +466,6 @@ impl<'db> StateDBTransaction<'db> {
 
 /// Tracker state changes
 pub struct StateTracker {
-    enabled: bool,
     touched_keys: Option<RefCell<HashSet<H256>>>,
 }
 
@@ -466,22 +477,14 @@ impl Default for StateTracker {
 
 impl StateTracker {
     pub fn new() -> Self {
-        StateTracker {
-            enabled: false,
-            touched_keys: None,
-        }
+        StateTracker { touched_keys: None }
     }
 
     /// Enable state tracking
     pub fn enable(&mut self) {
-        if !self.enabled && self.touched_keys.is_none() {
+        if self.touched_keys.is_none() {
             self.touched_keys = Some(Default::default())
         }
-        self.enabled = true;
-    }
-
-    pub fn disable(&mut self) {
-        self.enabled = false;
     }
 
     /// Return touched keys
@@ -491,10 +494,6 @@ impl StateTracker {
 
     /// Record a key in the tracker
     pub fn touch_key(&self, key: &H256) {
-        if !self.enabled {
-            return;
-        }
-
         if let Some(touched_keys) = self.touched_keys.as_ref() {
             touched_keys.borrow_mut().insert(*key);
         }
@@ -526,16 +525,23 @@ impl<'a, 'db> StateTree<'a, 'db> {
         &mut self.tracker
     }
 
-    /// submit tree changes into transaction
+    pub fn get_merkle_state(&self) -> AccountMerkleState {
+        AccountMerkleState::new_builder()
+            .merkle_root(self.tree.root().pack())
+            .count(self.account_count.pack())
+            .build()
+    }
+
+    /// submit tree changes into memory block
     /// notice, this function do not commit the DBTransaction
-    pub fn submit_tree(&self) -> Result<(), Error> {
+    pub fn submit_tree_to_mem_block(&self) -> Result<(), Error> {
         self.db
             .inner
-            .set_account_smt_root(*self.tree.root())
+            .set_mem_block_account_smt_root(*self.tree.root())
             .expect("set smt root");
         self.db
             .inner
-            .set_account_count(self.account_count)
+            .set_mem_block_account_count(self.account_count)
             .expect("set smt root");
         Ok(())
     }

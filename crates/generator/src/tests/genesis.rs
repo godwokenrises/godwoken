@@ -39,11 +39,10 @@ fn test_init_genesis() {
     let db = store.begin_transaction();
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());
-    assert_ne!(db.get_account_smt_root().unwrap(), H256::zero());
     let state_db =
         StateDBTransaction::from_checkpoint(&db, CheckPoint::from_genesis(), StateDBMode::Genesis)
             .unwrap();
-    let tree = state_db.account_state_tree().unwrap();
+    let tree = state_db.state_tree().unwrap();
     assert!(tree.get_account_count().unwrap() > 0);
 
     // check prev txs state

@@ -1,13 +1,10 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
 use crate::{
-    poa::{PoA, ShouldIssueBlock},
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
-    rpc_client::{DepositInfo, RPCClient},
     test_mode_control::TestModeControl,
     transaction_skeleton::TransactionSkeleton,
     types::ChainEvent,
-    types::{CellInfo, InputCellInfo},
     utils::{self, fill_tx_fee, CKBGenesisInfo},
     wallet::Wallet,
 };
@@ -15,19 +12,21 @@ use anyhow::{anyhow, Context, Result};
 use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
 use gw_chain::chain::{Chain, SyncEvent};
-use gw_common::{h256_ext::H256Ext, CKB_SUDT_SCRIPT_ARGS, H256};
+use gw_common::{h256_ext::H256Ext, H256};
 use gw_config::{BlockProducerConfig, DebugConfig};
-use gw_generator::{Generator, RollupContext};
+use gw_generator::Generator;
 use gw_jsonrpc_types::test_mode::TestModePayload;
-use gw_mem_pool::pool::MemPool;
+use gw_mem_pool::{custodian::to_custodian_cell, pool::MemPool};
+use gw_poa::{PoA, ShouldIssueBlock};
+use gw_rpc_client::RPCClient;
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     core::{DepType, ScriptHashType, Status},
+    offchain::{CellInfo, DepositInfo, InputCellInfo, RollupContext},
     packed::{
-        CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, GlobalState, L2Block,
-        OutPoint, OutPointVec, RollupAction, RollupActionUnion, RollupSubmitBlock, Script,
-        Transaction, WitnessArgs,
+        CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, OutPointVec, RollupAction,
+        RollupActionUnion, RollupSubmitBlock, Transaction, WitnessArgs,
     },
     prelude::*,
 };
@@ -36,63 +35,10 @@ use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 
 const TRANSACTION_SRIPT_ERROR: &str = "TransactionScriptError";
-
-fn to_custodian_cell(
-    rollup_context: &RollupContext,
-    block_hash: &H256,
-    block_number: u64,
-    deposit_info: &DepositInfo,
-) -> Result<(CellOutput, Bytes), u128> {
-    let lock_args: Bytes = {
-        let deposit_lock_args = {
-            let lock_args: Bytes = deposit_info.cell.output.lock().args().unpack();
-            DepositLockArgs::new_unchecked(lock_args.slice(32..))
-        };
-
-        let custodian_lock_args = CustodianLockArgs::new_builder()
-            .deposit_block_hash(Into::<[u8; 32]>::into(*block_hash).pack())
-            .deposit_block_number(block_number.pack())
-            .deposit_lock_args(deposit_lock_args)
-            .build();
-
-        let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
-        rollup_type_hash
-            .chain(custodian_lock_args.as_slice().iter())
-            .cloned()
-            .collect()
-    };
-    let lock = Script::new_builder()
-        .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
-        .hash_type(ScriptHashType::Type.into())
-        .args(lock_args.pack())
-        .build();
-
-    // Use custodian lock
-    let output = {
-        let builder = deposit_info.cell.output.clone().as_builder();
-        builder.lock(lock).build()
-    };
-    let data = deposit_info.cell.data.clone();
-
-    // Check capacity
-    match output.occupied_capacity(data.len()) {
-        Ok(capacity) if capacity > deposit_info.cell.output.capacity().unpack() => {
-            return Err(capacity as u128);
-        }
-        // Overflow
-        Err(err) => {
-            log::debug!("calculate occupied capacity {}", err);
-            return Err(u64::MAX as u128 + 1);
-        }
-        _ => (),
-    }
-
-    Ok((output, data))
-}
 
 fn generate_custodian_cells(
     rollup_context: &RollupContext,
@@ -167,11 +113,6 @@ async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Ve
         cells.push(cell);
     }
     Ok(cells)
-}
-
-enum CommittedTxResult {
-    Ok(Transaction),
-    FailedToGenWithdrawal(anyhow::Error),
 }
 
 pub struct BlockProducer {
@@ -300,90 +241,12 @@ impl BlockProducer {
             }
         }
 
-        let block_producer_id = self.config.account_id;
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("timestamp")
-            .as_millis() as u64;
-
-        // get deposit cells
-        // check deposit cells again to prevent upstream components errors.
-        let deposit_cells =
-            self.sanitize_deposit_cells(self.rpc_client.query_deposit_cells().await?);
-
         // get txs & withdrawal requests from mem pool
-        let mut txs = Vec::new();
-        let mut withdrawal_requests = Vec::new();
-        {
+        let block_param = {
             let mem_pool = self.mem_pool.lock();
-            for entry in mem_pool.pending().values() {
-                if let Some(withdrawal) = entry.withdrawals.first() {
-                    withdrawal_requests.push(withdrawal.clone());
-                } else {
-                    txs.extend(entry.txs.iter().cloned());
-                }
-            }
+            mem_pool.output_mem_block()?
         };
-        let parent_block = self.chain.lock().local_state().tip().clone();
-        let max_withdrawal_capacity = std::u128::MAX;
-
-        let available_custodians = if withdrawal_requests.is_empty() {
-            crate::withdrawal::AvailableCustodians::default()
-        } else {
-            let db = self.store.begin_transaction();
-            let mut sudt_scripts: HashMap<[u8; 32], Script> = HashMap::new();
-            let sudt_custodians = {
-                let reqs = withdrawal_requests.iter();
-                let sudt_reqs = reqs.filter(|req| {
-                    let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
-                    0 != req.raw().amount().unpack() && CKB_SUDT_SCRIPT_ARGS != sudt_script_hash
-                });
-
-                let to_hash = sudt_reqs.map(|req| req.raw().sudt_script_hash().unpack());
-                let has_script = to_hash.filter_map(|hash: [u8; 32]| {
-                    if let Some(script) = sudt_scripts.get(&hash).cloned() {
-                        return Some((hash, script));
-                    }
-
-                    match db.get_asset_script(&hash.into()) {
-                        Ok(opt_script) => opt_script.map(|script| {
-                            sudt_scripts.insert(hash, script.clone());
-                            (hash, script)
-                        }),
-                        Err(err) => {
-                            log::debug!("get custodian type script err {}", err);
-                            None
-                        }
-                    }
-                });
-
-                let to_custodian = has_script.filter_map(|(hash, script)| {
-                    match db.get_finalized_custodian_asset(hash.into()) {
-                        Ok(custodian_balance) => Some((hash, (custodian_balance, script))),
-                        Err(err) => {
-                            log::warn!("get custodian err {}", err);
-                            None
-                        }
-                    }
-                });
-                to_custodian.collect::<HashMap<[u8; 32], (u128, Script)>>()
-            };
-
-            let ckb_custodian = match db.get_finalized_custodian_asset(CKB_SUDT_SCRIPT_ARGS.into())
-            {
-                Ok(balance) => balance,
-                Err(err) => {
-                    log::warn!("get ckb custodian err {}", err);
-                    0
-                }
-            };
-
-            crate::withdrawal::AvailableCustodians {
-                capacity: ckb_custodian,
-                sudt: sudt_custodians,
-            }
-        };
-        log::debug!("available custodians {:?}", available_custodians);
+        let deposit_cells = block_param.deposits.clone();
 
         // produce block
         let reverted_block_root: H256 = {
@@ -392,38 +255,24 @@ impl BlockProducer {
             smt.root().to_owned()
         };
         let param = ProduceBlockParam {
-            db: self.store.begin_transaction(),
-            generator: &self.generator,
-            block_producer_id,
             stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
-            timestamp,
-            txs,
-            deposit_requests: deposit_cells.iter().map(|d| &d.request).cloned().collect(),
-            withdrawal_requests,
-            parent_block: &parent_block,
             reverted_block_root,
-            rollup_config_hash: &self.rollup_config_hash,
-            max_withdrawal_capacity,
-            available_custodians,
+            rollup_config_hash: self.rollup_config_hash,
+            block_param,
         };
-        let block_result = produce_block(param)?;
+        let db = self.store.begin_transaction();
+        let block_result = produce_block(&db, &self.generator, param)?;
         let ProduceBlockResult {
             mut block,
             mut global_state,
-            unused_transactions,
-            unused_withdrawal_requests,
-            l2tx_offchain_used_cycles,
         } = block_result;
         let number: u64 = block.raw().number().unpack();
         log::info!(
-            "produce new block #{} (txs: {}, deposits: {}, withdrawals: {}, staled txs: {}, staled withdrawals: {}, offchain cycles: {})",
+            "produce new block #{} (txs: {}, deposits: {}, withdrawals: {})",
             number,
             block.transactions().len(),
             deposit_cells.len(),
             block.withdrawals().len(),
-            unused_transactions.len(),
-            unused_withdrawal_requests.len(),
-            l2tx_offchain_used_cycles
         );
 
         if let Some(ref tests_control) = self.tests_control {
@@ -440,20 +289,15 @@ impl BlockProducer {
         // composite tx
         let tx = match self
             .complete_tx_skeleton(deposit_cells, block, global_state, median_time, rollup_cell)
-            .await?
+            .await
         {
-            CommittedTxResult::Ok(tx) => tx,
-            CommittedTxResult::FailedToGenWithdrawal(err) => {
+            Ok(tx) => tx,
+            Err(err) => {
                 log::error!(
-                    "[produce_next_block] Failed to generate withdrawal cells: {}",
+                    "[produce_next_block] Failed to composite submitting transaction: {}",
                     err
                 );
-                let mut mem_pool = self.mem_pool.lock();
-                let deleted_count = mem_pool.randomly_drop_withdrawals()?;
-                log::error!(
-                    "[produce_next_block] Try to recover by drop withdrawals, deleted {}",
-                    deleted_count
-                );
+                self.mem_pool.lock().reset_mem_block()?;
                 return Err(err);
             }
         };
@@ -507,6 +351,7 @@ impl BlockProducer {
                 } else {
                     log::debug!("Skip dumping non-script-error tx");
                 }
+                self.mem_pool.lock().reset_mem_block()?;
             }
         }
         Ok(())
@@ -519,7 +364,7 @@ impl BlockProducer {
         global_state: GlobalState,
         median_time: Duration,
         rollup_cell: CellInfo,
-    ) -> Result<CommittedTxResult> {
+    ) -> Result<Transaction> {
         let rollup_context = self.generator.rollup_context();
         let mut tx_skeleton = TransactionSkeleton::default();
         let rollup_cell_input_index = tx_skeleton.inputs().len();
@@ -683,10 +528,15 @@ impl BlockProducer {
         // custodian cells
         let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
         tx_skeleton.outputs_mut().extend(custodian_cells);
-        self.poa
-            .fill_poa(&mut tx_skeleton, rollup_cell_input_index, median_time)
-            .await?;
-
+        // fill PoA cells
+        {
+            let rollup_cell_input = &tx_skeleton.inputs()[rollup_cell_input_index];
+            let generated_poa = self
+                .poa
+                .generate(rollup_cell_input, tx_skeleton.inputs(), median_time)
+                .await?;
+            tx_skeleton.fill_poa(generated_poa, rollup_cell_input_index)?;
+        }
         // stake cell
         let generated_stake = crate::stake::generate(
             &rollup_cell,
@@ -704,32 +554,24 @@ impl BlockProducer {
             .push((generated_stake.output, generated_stake.output_data));
 
         // withdrawal cells
-        match crate::withdrawal::generate(
+        if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
             &rollup_cell,
             rollup_context,
             &block,
             &self.config,
             &self.rpc_client,
         )
-        .await
+        .await?
         {
-            Ok(Some(generated_withdrawal_cells)) => {
-                tx_skeleton
-                    .cell_deps_mut()
-                    .extend(generated_withdrawal_cells.deps);
-                tx_skeleton
-                    .inputs_mut()
-                    .extend(generated_withdrawal_cells.inputs);
-                tx_skeleton
-                    .outputs_mut()
-                    .extend(generated_withdrawal_cells.outputs);
-            }
-            Err(err) => {
-                return Ok(CommittedTxResult::FailedToGenWithdrawal(err));
-            }
-            _ => {
-                // do nothing
-            }
+            tx_skeleton
+                .cell_deps_mut()
+                .extend(generated_withdrawal_cells.deps);
+            tx_skeleton
+                .inputs_mut()
+                .extend(generated_withdrawal_cells.inputs);
+            tx_skeleton
+                .outputs_mut()
+                .extend(generated_withdrawal_cells.outputs);
         }
 
         if let Some(reverted_deposits) =
@@ -808,121 +650,6 @@ impl BlockProducer {
         // sign
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
         log::debug!("final tx size: {}", tx.as_slice().len());
-        Ok(CommittedTxResult::Ok(tx))
-    }
-
-    // check deposit cells again to prevent upstream components errors.
-    fn sanitize_deposit_cells(&self, unsanitize_deposits: Vec<DepositInfo>) -> Vec<DepositInfo> {
-        let mut deposit_cells = Vec::with_capacity(unsanitize_deposits.len());
-        for cell in unsanitize_deposits {
-            // check deposit lock
-            // the lock should be correct unless the upstream ckb-indexer has bugs
-            if let Err(err) = self.check_deposit_cell(&cell) {
-                log::debug!("[sanitize deposit cell] {}", err);
-                continue;
-            }
-            deposit_cells.push(cell);
-        }
-        deposit_cells
-    }
-
-    // check deposit cell
-    fn check_deposit_cell(&self, cell: &DepositInfo) -> Result<()> {
-        let ctx = self.generator.rollup_context();
-        let hash_type = ScriptHashType::Type.into();
-
-        // check deposit lock
-        // the lock should be correct unless the upstream ckb-indexer has bugs
-        {
-            let lock = cell.cell.output.lock();
-            if lock.code_hash() != ctx.rollup_config.deposit_script_type_hash()
-                || lock.hash_type() != hash_type
-            {
-                return Err(anyhow!(
-                    "Invalid deposit lock, expect code_hash: {}, hash_type: Type, got: {}, {}",
-                    ctx.rollup_config.deposit_script_type_hash(),
-                    lock.code_hash(),
-                    lock.hash_type()
-                ));
-            }
-            let args: Bytes = lock.args().unpack();
-            if args.len() < 32 {
-                return Err(anyhow!(
-                    "Invalid deposit args, expect len: 32, got: {}",
-                    args.len()
-                ));
-            }
-            if &args[..32] != ctx.rollup_script_hash.as_slice() {
-                return Err(anyhow!(
-                    "Invalid deposit args, expect rollup_script_hash: {}, got: {}",
-                    hex::encode(ctx.rollup_script_hash.as_slice()),
-                    hex::encode(&args[..32])
-                ));
-            }
-        }
-
-        // check sUDT
-        // sUDT may be invalid, this may caused by malicious user
-        if let Some(type_) = cell.cell.output.type_().to_opt() {
-            if type_.code_hash() != ctx.rollup_config.l1_sudt_script_type_hash()
-                || type_.hash_type() != hash_type
-            {
-                return Err(anyhow!(
-                    "Invalid deposit sUDT, expect code_hash: {}, hash_type: Type, got: {}, {}",
-                    ctx.rollup_config.l1_sudt_script_type_hash(),
-                    type_.code_hash(),
-                    type_.hash_type()
-                ));
-            }
-        }
-
-        // check request
-        // request deposit account maybe invalid, this may caused by malicious user
-        {
-            let script = cell.request.script();
-            if script.hash_type() != ScriptHashType::Type.into() {
-                return Err(anyhow!(
-                    "Invalid deposit account script: unexpected hash_type: Data"
-                ));
-            }
-            if ctx
-                .rollup_config
-                .allowed_eoa_type_hashes()
-                .into_iter()
-                .all(|type_hash| script.code_hash() != type_hash)
-            {
-                return Err(anyhow!(
-                    "Invalid deposit account script: unknown code_hash: {:?}",
-                    hex::encode(script.code_hash().as_slice())
-                ));
-            }
-            let args: Bytes = script.args().unpack();
-            if args.len() < 32 {
-                return Err(anyhow!(
-                    "Invalid deposit account args, expect len: 32, got: {}",
-                    args.len()
-                ));
-            }
-            if &args[..32] != ctx.rollup_script_hash.as_slice() {
-                return Err(anyhow!(
-                    "Invalid deposit account args, expect rollup_script_hash: {}, got: {}",
-                    hex::encode(ctx.rollup_script_hash.as_slice()),
-                    hex::encode(&args[..32])
-                ));
-            }
-        }
-
-        // check capacity (use dummy block hash and number)
-        let rollup_context = self.generator.rollup_context();
-        if let Err(minimal_capacity) = to_custodian_cell(rollup_context, &H256::one(), 1, cell) {
-            let deposit_capacity = cell.cell.output.capacity().unpack();
-            return Err(anyhow!(
-                "Invalid deposit capacity, unable to generate custodian, minimal required: {}, got: {}",
-                minimal_capacity,
-                deposit_capacity
-            ));
-        }
-
-        Ok(())
+        Ok(tx)
     }
 }
