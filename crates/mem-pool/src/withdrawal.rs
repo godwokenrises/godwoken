@@ -271,18 +271,15 @@ fn generate_finalized_custodian(
     type_: Script,
 ) -> (CellOutput, Bytes) {
     let lock = build_finalized_custodian_lock(rollup_context);
-    let data = amount.pack();
-
-    let capacity = {
-        let size = 8 + data.as_slice().len() + type_.as_slice().len() + lock.as_slice().len();
-        size as u64 * 100000000u64
-    };
-
+    let data = amount.pack().as_bytes();
+    let dummy_capacity = 1;
     let output = CellOutput::new_builder()
-        .capacity(capacity.pack())
+        .capacity(dummy_capacity.pack())
         .type_(Some(type_).pack())
         .lock(lock)
         .build();
+    let capacity = output.occupied_capacity(data.len()).expect("overflow");
+    let output = output.as_builder().capacity(capacity.pack()).build();
 
-    (output, data.as_bytes())
+    (output, data)
 }
