@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use gw_common::CKB_SUDT_SCRIPT_ARGS;
 use gw_config::BlockProducerConfig;
-use gw_mem_pool::withdrawal::Generator;
+use gw_mem_pool::{custodian::calc_ckb_custodian_min_capacity, withdrawal::Generator};
 use gw_rpc_client::RPCClient;
 use gw_types::{
     bytes::Bytes,
@@ -50,7 +50,7 @@ pub async fn generate(
     let custodian_cells = rpc_client
         .query_finalized_custodian_cells(
             &total_withdrawal_amount,
-            ckb_custodian_min_capacity(rollup_context),
+            calc_ckb_custodian_min_capacity(rollup_context),
             last_finalized_block_number,
         )
         .await?
@@ -223,25 +223,4 @@ fn sum<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmoun
             total_amount
         }
     )
-}
-
-fn build_finalized_custodian_lock(rollup_context: &RollupContext) -> Script {
-    let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
-    let custodian_lock_args = CustodianLockArgs::default();
-
-    let args: Bytes = rollup_type_hash
-        .chain(custodian_lock_args.as_slice().iter())
-        .cloned()
-        .collect();
-
-    Script::new_builder()
-        .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
-        .hash_type(ScriptHashType::Type.into())
-        .args(args.pack())
-        .build()
-}
-
-fn ckb_custodian_min_capacity(rollup_context: &RollupContext) -> u64 {
-    let lock = build_finalized_custodian_lock(rollup_context);
-    (8 + lock.as_slice().len() as u64).saturating_mul(100000000)
 }

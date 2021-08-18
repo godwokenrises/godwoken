@@ -5,7 +5,7 @@ use gw_types::{
 };
 use smol::Task;
 
-use crate::withdrawal::AvailableCustodians;
+use crate::custodian::AvailableCustodians;
 
 pub trait MemPoolProvider {
     fn estimate_next_blocktime(&self) -> Task<Result<u64>>;

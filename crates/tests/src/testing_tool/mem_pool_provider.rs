@@ -1,5 +1,5 @@
 use anyhow::Result;
-use gw_mem_pool::{traits::MemPoolProvider, withdrawal::AvailableCustodians};
+use gw_mem_pool::{custodian::AvailableCustodians, traits::MemPoolProvider};
 use gw_types::{
     offchain::{DepositInfo, RollupContext},
     packed::WithdrawalRequest,

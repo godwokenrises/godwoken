@@ -11,7 +11,7 @@ use gw_types::{
 use smol::{lock::Mutex, Task};
 
 use crate::{
-    constants::MAX_MEM_BLOCK_DEPOSITS, traits::MemPoolProvider, withdrawal::AvailableCustodians,
+    constants::MAX_MEM_BLOCK_DEPOSITS, custodian::AvailableCustodians, traits::MemPoolProvider,
 };
 
 pub struct DefaultMemPoolProvider {

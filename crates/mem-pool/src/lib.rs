@@ -4,6 +4,7 @@
 //! the block producer need to verify the fully verification itself.
 
 mod constants;
+pub mod custodian;
 pub mod default_provider;
 mod deposit;
 mod mem_block;

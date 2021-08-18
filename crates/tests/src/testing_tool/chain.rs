@@ -8,7 +8,7 @@ use gw_generator::{
     genesis::init_genesis,
     Generator,
 };
-use gw_mem_pool::{pool::MemPool, withdrawal::AvailableCustodians};
+use gw_mem_pool::{custodian::AvailableCustodians, pool::MemPool};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,

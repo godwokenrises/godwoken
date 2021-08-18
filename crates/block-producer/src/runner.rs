@@ -275,7 +275,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     rpc_client.clone(),
                     wallet.lock_script().to_owned(),
                     block_producer_config.poa_lock_dep.clone().into(),
-                    block_producer_config.poa_state_dep.clone().into(),
+                    block_producer_config.poa_state_dep.into(),
                 );
                 Arc::new(smol::lock::Mutex::new(poa))
             };
@@ -380,7 +380,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 store.clone(),
                 generator.clone(),
                 Arc::clone(&chain),
-                mem_pool.clone(),
+                mem_pool,
                 rpc_client.clone(),
                 ckb_genesis_info.clone(),
                 block_producer_config.clone(),

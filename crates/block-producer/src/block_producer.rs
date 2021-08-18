@@ -16,7 +16,7 @@ use gw_common::{h256_ext::H256Ext, H256};
 use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::Generator;
 use gw_jsonrpc_types::test_mode::TestModePayload;
-use gw_mem_pool::pool::MemPool;
+use gw_mem_pool::{custodian::to_custodian_cell, pool::MemPool};
 use gw_poa::{PoA, ShouldIssueBlock};
 use gw_rpc_client::RPCClient;
 use gw_store::Store;
@@ -25,9 +25,8 @@ use gw_types::{
     core::{DepType, ScriptHashType, Status},
     offchain::{CellInfo, DepositInfo, InputCellInfo, RollupContext},
     packed::{
-        CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, GlobalState, L2Block,
-        OutPoint, OutPointVec, RollupAction, RollupActionUnion, RollupSubmitBlock, Script,
-        Transaction, WitnessArgs,
+        CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, OutPointVec, RollupAction,
+        RollupActionUnion, RollupSubmitBlock, Transaction, WitnessArgs,
     },
     prelude::*,
 };
@@ -40,59 +39,6 @@ use std::{
 };
 
 const TRANSACTION_SRIPT_ERROR: &str = "TransactionScriptError";
-
-fn to_custodian_cell(
-    rollup_context: &RollupContext,
-    block_hash: &H256,
-    block_number: u64,
-    deposit_info: &DepositInfo,
-) -> Result<(CellOutput, Bytes), u128> {
-    let lock_args: Bytes = {
-        let deposit_lock_args = {
-            let lock_args: Bytes = deposit_info.cell.output.lock().args().unpack();
-            DepositLockArgs::new_unchecked(lock_args.slice(32..))
-        };
-
-        let custodian_lock_args = CustodianLockArgs::new_builder()
-            .deposit_block_hash(Into::<[u8; 32]>::into(*block_hash).pack())
-            .deposit_block_number(block_number.pack())
-            .deposit_lock_args(deposit_lock_args)
-            .build();
-
-        let rollup_type_hash = rollup_context.rollup_script_hash.as_slice().iter();
-        rollup_type_hash
-            .chain(custodian_lock_args.as_slice().iter())
-            .cloned()
-            .collect()
-    };
-    let lock = Script::new_builder()
-        .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
-        .hash_type(ScriptHashType::Type.into())
-        .args(lock_args.pack())
-        .build();
-
-    // Use custodian lock
-    let output = {
-        let builder = deposit_info.cell.output.clone().as_builder();
-        builder.lock(lock).build()
-    };
-    let data = deposit_info.cell.data.clone();
-
-    // Check capacity
-    match output.occupied_capacity(data.len()) {
-        Ok(capacity) if capacity > deposit_info.cell.output.capacity().unpack() => {
-            return Err(capacity as u128);
-        }
-        // Overflow
-        Err(err) => {
-            log::debug!("calculate occupied capacity {}", err);
-            return Err(u64::MAX as u128 + 1);
-        }
-        _ => (),
-    }
-
-    Ok((output, data))
-}
 
 fn generate_custodian_cells(
     rollup_context: &RollupContext,

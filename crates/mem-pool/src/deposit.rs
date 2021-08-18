@@ -1,10 +1,13 @@
 use anyhow::{anyhow, Result};
+use gw_common::{h256_ext::H256Ext, H256};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     offchain::{DepositInfo, RollupContext},
     prelude::*,
 };
+
+use crate::custodian::to_custodian_cell;
 
 /// check deposit cells again to prevent upstream components errors.
 pub fn sanitize_deposit_cells(
@@ -24,9 +27,10 @@ pub fn sanitize_deposit_cells(
     deposit_cells
 }
 
-/// check deposit cell
+// check deposit cell
 fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo) -> Result<()> {
     let hash_type = ScriptHashType::Type.into();
+
     // check deposit lock
     // the lock should be correct unless the upstream ckb-indexer has bugs
     {
@@ -106,6 +110,17 @@ fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo) -> Result<()> {
                 hex::encode(&args[..32])
             ));
         }
-        Ok(())
     }
+
+    // check capacity (use dummy block hash and number)
+    if let Err(minimal_capacity) = to_custodian_cell(ctx, &H256::one(), 1, cell) {
+        let deposit_capacity = cell.cell.output.capacity().unpack();
+        return Err(anyhow!(
+            "Invalid deposit capacity, unable to generate custodian, minimal required: {}, got: {}",
+            minimal_capacity,
+            deposit_capacity
+        ));
+    }
+
+    Ok(())
 }
