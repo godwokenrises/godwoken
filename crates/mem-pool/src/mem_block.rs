@@ -41,7 +41,7 @@ impl MemBlock {
     }
 
     pub fn reset(&mut self, tip: &L2Block, estimated_timestamp: u64) -> MemBlockContent {
-        dbg!("reset mem block");
+        log::debug!("[mem-block] reset");
         // update block info
         let tip_number: u64 = tip.raw().number().unpack();
         let number = tip_number + 1;
@@ -86,8 +86,8 @@ impl MemBlock {
             &post_state.merkle_root().unpack(),
             post_state.count().unpack(),
         );
-        dbg!(
-            "mem block push tx",
+        log::debug!(
+            "[mem-block] push tx {} state {}",
             hex::encode(tx_hash.as_slice()),
             hex::encode(state_checkpoint.as_slice())
         );
