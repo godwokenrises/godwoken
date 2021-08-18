@@ -6,13 +6,13 @@ use gw_common::{
 use gw_config::BackendConfig;
 use gw_generator::{
     account_lock_manage::AccountLockManage, backend_manage::BackendManage, dummy_state::DummyState,
-    error::TransactionError, traits::StateExt, types::RollupContext, Generator,
+    error::TransactionError, traits::StateExt, Generator,
 };
 use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::RunResult,
+    offchain::{RollupContext, RunResult},
     packed::BlockInfo,
     packed::{RawL2Transaction, RollupConfig, SUDTArgs, SUDTTransfer, Script},
     prelude::*,
