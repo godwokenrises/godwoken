@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 use crate::{
     helper::{
-        account_id_to_eth_address, hex, parse_log, GwLog, PolyjuiceArgs, GW_LOG_POLYJUICE_SYSTEM,
+        account_script_hash_to_eth_address, hex, parse_log, GwLog, PolyjuiceArgs,
+        GW_LOG_POLYJUICE_SYSTEM,
     },
     types::{
         Block as Web3Block, Log as Web3Log, Transaction as Web3Transaction,
@@ -265,7 +266,7 @@ impl Web3Indexer {
                 let (to_address, polyjuice_chain_id) = if polyjuice_args.is_create {
                     (None, to_id)
                 } else {
-                    let address = account_id_to_eth_address(to_script_hash, to_id);
+                    let address = account_script_hash_to_eth_address(to_script_hash);
                     let polyjuice_chain_id = {
                         let mut data = [0u8; 4];
                         data.copy_from_slice(&to_script.args().raw_data()[32..36]);
@@ -465,8 +466,7 @@ impl Web3Indexer {
         }
         let block_producer_id: u32 = l2_block.raw().block_producer_id().unpack();
         let block_producer_script_hash = get_script_hash(store.clone(), block_producer_id).await?;
-        let miner_address =
-            account_id_to_eth_address(block_producer_script_hash, block_producer_id);
+        let miner_address = account_script_hash_to_eth_address(block_producer_script_hash);
         let epoch_time_as_millis: u64 = l2_block.raw().timestamp().unpack();
         let timestamp =
             NaiveDateTime::from_timestamp((epoch_time_as_millis / MILLIS_PER_SEC) as i64, 0);
