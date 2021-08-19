@@ -306,7 +306,7 @@ impl Chain {
                         deposit_asset_scripts,
                     )? {
                         db.rollback()?;
-                        log::info!("bad block found, rollback db");
+                        log::warn!("bad block found, rollback db");
 
                         db.insert_bad_block(&l2block, &l2block_committed_info, &global_state)?;
                         log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
@@ -845,7 +845,7 @@ impl Chain {
                     (withdrawal_receipts, prev_txs_state, tx_receipts)
                 }
                 StateTransitionResult::Challenge { target, error } => {
-                    log::debug!("verify and apply state transition error {}", error);
+                    log::warn!("verify #{} state transition error {}", block_number, error);
                     return Ok(Some(target));
                 }
                 StateTransitionResult::Error(err) => return Err(err.into()),
