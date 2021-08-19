@@ -1997,6 +1997,7 @@ dependencies = [
  "gw-rpc-server",
  "gw-store",
  "gw-types",
+ "gw-version",
  "gw-web3-indexer",
  "hex",
  "lazy_static",
@@ -2311,6 +2312,13 @@ dependencies = [
  "gw-hash",
  "molecule",
  "sparse-merkle-tree",
+]
+
+[[package]]
+name = "gw-version"
+version = "0.6.1"
+dependencies = [
+ "anyhow",
 ]
 
 [[package]]

@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
-use clap::{crate_version, App, Arg, SubCommand};
+use clap::{App, Arg, SubCommand};
 use gw_block_producer::runner;
 use gw_config::Config;
+use gw_version::Version;
 use std::{fs, path::Path};
 
 const COMMAND_RUN: &str = "run";
@@ -27,9 +28,10 @@ fn generate_example_config<P: AsRef<Path>>(path: P) -> Result<()> {
 }
 
 fn run_cli() -> Result<()> {
+    let version = Version::current().to_string();
     let app = App::new("Godwoken")
         .about("The layer2 rollup built upon Nervos CKB.")
-        .version(crate_version!())
+        .version(version.as_ref())
         .subcommand(
             SubCommand::with_name(COMMAND_RUN)
                 .about("Run Godwoken node")

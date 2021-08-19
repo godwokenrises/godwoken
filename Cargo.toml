@@ -18,6 +18,7 @@ members = [
   "crates/tests",
   "crates/web3-indexer",
   "crates/benches",
+  "crates/version",
 ]
 
 [profile.release]

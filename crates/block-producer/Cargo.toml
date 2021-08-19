@@ -25,6 +25,7 @@ gw-rpc-server = { path = "../rpc-server" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-web3-indexer = { path = "../web3-indexer" }
 gw-poa = { path = "../poa" }
+gw-version = { path = "../version" }
 faster-hex = "0.4"
 ckb-crypto = "0.38.0"
 ckb-fixed-hash = "0.38.0"
