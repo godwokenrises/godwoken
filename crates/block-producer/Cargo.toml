@@ -12,6 +12,7 @@ name = "godwoken"
 path = "src/main.rs"
 
 [dependencies]
+gw-challenge = { path = "../challenge" }
 gw-common = { path = "../common" }
 gw-config = { path = "../config" }
 gw-chain = { path = "../chain" }

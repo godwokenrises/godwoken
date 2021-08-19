@@ -1,23 +1,21 @@
-use super::mock_poa::MockPoA;
-
-use crate::challenger::cancel_challenge::{build_output, CancelChallengeOutput};
-use crate::challenger::enter_challenge::EnterChallenge;
-use crate::challenger::{LoadData, VerifierContext};
-use crate::transaction_skeleton::TransactionSkeleton;
-use crate::types::InputCellInfo;
-use crate::utils::CKBGenesisInfo;
-use crate::{types::CellInfo, wallet::Wallet};
+use crate::cancel_challenge::{build_output, CancelChallengeOutput};
+use crate::enter_challenge::EnterChallenge;
+use crate::offchain::{mock_poa::MockPoA, CKBGenesisInfo};
+use crate::types::VerifyContext;
+use crate::utils::transaction_skeleton::TransactionSkeleton;
+use crate::utils::wallet::Wallet;
 
 use anyhow::Result;
-use gw_chain::challenge::VerifyContext;
 use gw_common::blake2b::new_blake2b;
 use gw_common::H256;
 use gw_config::BlockProducerConfig;
-use gw_generator::{ChallengeContext, RollupContext};
+use gw_generator::ChallengeContext;
 use gw_types::bytes::Bytes;
+use gw_types::core::DepType;
+use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
 use gw_types::packed::{
     Byte32, CellDep, CellInput, CellOutput, ChallengeTarget, ChallengeWitness, GlobalState,
-    OutPoint, Script, Transaction,
+    OutPoint, Script, Transaction, WitnessArgs,
 };
 use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
@@ -133,7 +131,7 @@ pub fn mock_cancel_challenge_tx(
     tx_skeleton.inputs_mut().push(mock_poa.data_input.clone());
     tx_skeleton.outputs_mut().push(mock_poa.output.clone());
 
-    let owner_dep = mock_rollup.ckb_genesis_info.sighash_dep();
+    let owner_dep = mock_rollup.ckb_genesis_info.sighash_dep.clone();
     tx_skeleton.cell_deps_mut().push(owner_dep);
     tx_skeleton.inputs_mut().push(owner_cell);
 
@@ -357,7 +355,7 @@ impl<'a> CancelByCellDeps<'a> {
             let input = cancel_output.verifier_input(verifier_tx_hash, 0);
             let witness = cancel_output.verifier_witness.clone();
             let load_data_context = load_data.map(|ld| ld.into_context(verifier_tx_hash, 0));
-            VerifierContext::new(cell_dep, input, witness, load_data_context, None)
+            VerifierContext::new(cell_dep, input, witness, load_data_context)
         };
 
         Ok(verifier_context)
@@ -371,4 +369,102 @@ fn random_hash() -> Byte32 {
     hasher.update(&rand::random::<u32>().to_le_bytes());
     hasher.finalize(&mut hash);
     hash.pack()
+}
+
+#[derive(Clone)]
+struct LoadData {
+    builtin: Vec<CellDep>,
+    cells: Vec<(CellOutput, Bytes)>,
+}
+
+#[derive(Clone)]
+struct LoadDataContext {
+    builtin_cell_deps: Vec<CellDep>,
+    cell_deps: Vec<CellDep>,
+    inputs: Vec<InputCellInfo>,
+}
+
+impl LoadData {
+    fn new(
+        load_data_cells: HashMap<H256, (CellOutput, Bytes)>,
+        builtin: &HashMap<H256, CellDep>,
+    ) -> Self {
+        let (load_builtin, load_data_cells): (HashMap<_, _>, HashMap<_, _>) = load_data_cells
+            .into_iter()
+            .partition(|(k, _v)| builtin.contains_key(k));
+
+        let cells = load_data_cells.values().map(|v| (*v).to_owned()).collect();
+        let builtin = {
+            let to_dep = |k| -> CellDep { builtin.get(k).cloned().expect("should exists") };
+            load_builtin.iter().map(|(k, _)| to_dep(k)).collect()
+        };
+
+        LoadData { builtin, cells }
+    }
+
+    fn into_context(self, verifier_tx_hash: H256, verifier_tx_index: u32) -> LoadDataContext {
+        assert_eq!(verifier_tx_index, 0, "verifier cell should be first one");
+
+        let to_context = |(idx, (output, data))| -> (CellDep, InputCellInfo) {
+            let out_point = OutPoint::new_builder()
+                .tx_hash(Into::<[u8; 32]>::into(verifier_tx_hash).pack())
+                .index((idx as u32).pack())
+                .build();
+
+            let cell_dep = CellDep::new_builder()
+                .out_point(out_point.clone())
+                .dep_type(DepType::Code.into())
+                .build();
+
+            let input = CellInput::new_builder()
+                .previous_output(out_point.clone())
+                .build();
+
+            let cell = CellInfo {
+                out_point,
+                output,
+                data,
+            };
+
+            let cell_info = InputCellInfo { input, cell };
+
+            (cell_dep, cell_info)
+        };
+
+        let (cell_deps, inputs) = {
+            let cells = self.cells.into_iter().enumerate();
+            let to_ctx = cells.map(|(idx, cell)| (idx + 1, cell)).map(to_context);
+            to_ctx.unzip()
+        };
+
+        LoadDataContext {
+            builtin_cell_deps: self.builtin,
+            cell_deps,
+            inputs,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct VerifierContext {
+    cell_dep: CellDep,
+    input: InputCellInfo,
+    witness: Option<WitnessArgs>,
+    load_data_context: Option<LoadDataContext>,
+}
+
+impl VerifierContext {
+    fn new(
+        cell_dep: CellDep,
+        input: InputCellInfo,
+        witness: Option<WitnessArgs>,
+        load_data_context: Option<LoadDataContext>,
+    ) -> Self {
+        VerifierContext {
+            cell_dep,
+            input,
+            witness,
+            load_data_context,
+        }
+    }
 }

@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
+use crate::types::{VerifyContext, VerifyWitness};
 
 use anyhow::{anyhow, Result};
-use gw_chain::challenge::{VerifyContext, VerifyWitness};
 use gw_common::blake2b::new_blake2b;
 use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::calculate_state_checkpoint;
@@ -14,12 +12,11 @@ use gw_common::state::{
 };
 use gw_common::{merkle_utils::calculate_merkle_root, H256};
 use gw_generator::traits::StateExt;
-use gw_generator::RollupContext;
 use gw_store::state_db::{StateDBTransaction, StateTree};
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::{ChallengeTargetType, Status};
-use gw_types::offchain::RunResult;
+use gw_types::offchain::{RollupContext, RunResult};
 use gw_types::packed::{
     AccountMerkleState, BlockMerkleState, Byte32, Bytes, ChallengeTarget, GlobalState, L2Block,
     L2Transaction, RawL2Block, Script, ScriptReader, ScriptVec, SubmitTransactions,
@@ -28,6 +25,9 @@ use gw_types::packed::{
     WithdrawalRequest,
 };
 use gw_types::prelude::*;
+
+use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct MockBlockParam {
     finality_blocks: u64,
@@ -140,7 +140,7 @@ impl MockBlockParam {
 
         let sender_script = {
             let req = self.withdrawals.inner.last().expect("should exists");
-            let state = state_db.account_state_tree()?;
+            let state = state_db.state_tree()?;
             let sender_script_hash = req.raw().account_script_hash().unpack();
             let get = state.get_script(&sender_script_hash);
             get.ok_or_else(|| anyhow!("withdrawal sender script not found"))?
@@ -336,7 +336,7 @@ impl MockBlockParam {
         let sender_id = tx.raw().from_id().unpack();
         let receiver_id = tx.raw().to_id().unpack();
 
-        let tree = state_db.account_state_tree()?;
+        let tree = state_db.state_tree()?;
         let sender_script = get_script(&tree, sender_id)?;
         let receiver_script = get_script(&tree, receiver_id)?;
 
@@ -403,7 +403,7 @@ impl MockBlockParam {
         let sender_id = tx.raw().from_id().unpack();
         let receiver_id = tx.raw().to_id().unpack();
 
-        let tree = state_db.account_state_tree()?;
+        let tree = state_db.state_tree()?;
         let sender_script = get_script(&tree, sender_id)?;
         let receiver_script = get_script(&tree, receiver_id)?;
 
@@ -623,7 +623,7 @@ fn build_post_account_and_rollback(
     run_result: &RunResult,
 ) -> Result<AccountMerkleState> {
     db.set_save_point();
-    let mut state = state_db.account_state_tree()?;
+    let mut state = state_db.state_tree()?;
 
     let mut apply = || -> Result<AccountMerkleState> {
         state.apply_run_result(run_result)?;

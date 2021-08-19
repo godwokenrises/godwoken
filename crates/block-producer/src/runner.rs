@@ -1,16 +1,11 @@
 use crate::{
-    block_producer::BlockProducer,
-    challenger::{offchain::OffChainContext, Challenger},
-    cleaner::Cleaner,
-    poller::ChainUpdater,
-    test_mode_control::TestModeControl,
-    types::ChainEvent,
-    utils::CKBGenesisInfo,
-    wallet::Wallet,
+    block_producer::BlockProducer, challenger::Challenger, cleaner::Cleaner, poller::ChainUpdater,
+    test_mode_control::TestModeControl, types::ChainEvent, utils::CKBGenesisInfo, wallet::Wallet,
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use gw_chain::chain::Chain;
+use gw_challenge::offchain::OffChainContext;
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
@@ -271,6 +266,25 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         ))
     };
 
+    let ckb_genesis_info = {
+        let ckb_genesis = smol::block_on(async { rpc_client.get_block_by_number(0).await })?
+            .ok_or_else(|| anyhow!("can't found CKB genesis block"))?;
+        CKBGenesisInfo::from_block(&ckb_genesis)?
+    };
+
+    let to_hash = |data| -> [u8; 32] {
+        let mut hasher = new_blake2b();
+        hasher.update(data);
+        let mut hash = [0u8; 32];
+        hasher.finalize(&mut hash);
+        hash
+    };
+    let mut builtin_load_data = HashMap::new();
+    builtin_load_data.insert(
+        to_hash(secp_data.as_ref()).into(),
+        config.genesis.secp_data_dep.clone().into(),
+    );
+
     let (mem_pool, wallet, poa) = match config.block_producer.clone() {
         Some(block_producer_config) => {
             let wallet = Wallet::from_config(&block_producer_config.wallet_config)
@@ -281,10 +295,37 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     rpc_client.clone(),
                     wallet.lock_script().to_owned(),
                     block_producer_config.poa_lock_dep.clone().into(),
-                    block_producer_config.poa_state_dep.into(),
+                    block_producer_config.poa_state_dep.clone().into(),
                 );
                 Arc::new(smol::lock::Mutex::new(poa))
             };
+
+            let offchain_context = {
+                let debug_config = config.debug.clone();
+                let wallet = {
+                    let config = &block_producer_config.wallet_config;
+                    gw_challenge::Wallet::from_config(config).with_context(|| "init wallet")?
+                };
+                let ckb_genesis_info = gw_challenge::offchain::CKBGenesisInfo {
+                    sighash_dep: ckb_genesis_info.sighash_dep(),
+                };
+
+                smol::block_on(async {
+                    let poa = poa.lock().await;
+                    OffChainContext::build(
+                        &rpc_client,
+                        &poa,
+                        rollup_context.clone(),
+                        wallet,
+                        block_producer_config.clone(),
+                        debug_config,
+                        ckb_genesis_info,
+                        builtin_load_data.clone(),
+                    )
+                    .await
+                })?
+            };
+
             let mem_pool_provider =
                 DefaultMemPoolProvider::new(rpc_client.clone(), Arc::clone(&poa));
             let mem_pool = Arc::new(Mutex::new(
@@ -292,6 +333,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     store.clone(),
                     generator.clone(),
                     Box::new(mem_pool_provider),
+                    offchain_context,
                 )
                 .with_context(|| "create mem-pool")?,
             ));
@@ -351,12 +393,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         web3_indexer,
     );
 
-    let ckb_genesis_info = {
-        let ckb_genesis = smol::block_on(async { rpc_client.get_block_by_number(0).await })?
-            .ok_or_else(|| anyhow!("can't found CKB genesis block"))?;
-        CKBGenesisInfo::from_block(&ckb_genesis)?
-    };
-
     let (block_producer, challenger, test_mode_control, cleaner) = match config.node_mode {
         NodeMode::ReadOnly => (None, None, None, None),
         mode => {
@@ -390,53 +426,19 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 .with_context(|| "init wallet")?;
 
             // Challenger
-            let to_hash = |data| -> [u8; 32] {
-                let mut hasher = new_blake2b();
-                hasher.update(data);
-                let mut hash = [0u8; 32];
-                hasher.finalize(&mut hash);
-                hash
-            };
-            let mut builtin_load_data = HashMap::new();
-            builtin_load_data.insert(
-                to_hash(secp_data.as_ref()).into(),
-                config.genesis.secp_data_dep.clone().into(),
-            );
-
             let challenger = Challenger::new(
                 rollup_context.clone(),
                 rpc_client.clone(),
                 wallet,
                 block_producer_config.clone(),
                 config.debug.clone(),
-                builtin_load_data.clone(),
+                builtin_load_data,
                 ckb_genesis_info.clone(),
                 Arc::clone(&chain),
                 Arc::clone(&poa),
                 tests_control.clone(),
                 Arc::clone(&cleaner),
             );
-
-            let wallet = Wallet::from_config(&block_producer_config.wallet_config)
-                .with_context(|| "init wallet")?;
-
-            let offchain_context = {
-                let debug_config = config.debug.clone();
-                smol::block_on(async {
-                    let poa = poa.lock().await;
-                    OffChainContext::build(
-                        &rpc_client,
-                        &poa,
-                        rollup_context,
-                        wallet,
-                        block_producer_config.clone(),
-                        debug_config,
-                        ckb_genesis_info.clone(),
-                        builtin_load_data,
-                    )
-                    .await
-                })?
-            };
 
             // Block Producer
             let block_producer = BlockProducer::create(
@@ -449,7 +451,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 ckb_genesis_info,
                 block_producer_config,
                 config.debug,
-                offchain_context,
                 tests_control.clone(),
             )
             .with_context(|| "init block producer")?;

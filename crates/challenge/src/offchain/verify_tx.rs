@@ -1,5 +1,3 @@
-use crate::types::InputCellInfo;
-
 use anyhow::{anyhow, Result};
 use ckb_script::TransactionScriptsVerifier;
 use ckb_traits::{CellDataProvider, HeaderProvider};
@@ -16,6 +14,7 @@ use gw_jsonrpc_types::{
     ckb_jsonrpc_types,
     debugger::{ReprMockCellDep, ReprMockInfo, ReprMockInput, ReprMockTransaction},
 };
+use gw_types::offchain::InputCellInfo;
 
 use std::{collections::HashMap, convert::TryFrom, sync::Arc};
 
@@ -30,7 +29,7 @@ pub struct TxWithContext {
 pub struct RollupCellDeps(Arc<HashMap<OutPoint, CellInfo>>);
 
 impl RollupCellDeps {
-    pub fn new(cells: Vec<crate::types::InputCellInfo>) -> Self {
+    pub fn new(cells: Vec<gw_types::offchain::InputCellInfo>) -> Self {
         RollupCellDeps(Arc::new(cells.into_iter().map(into_info).collect()))
     }
 }
@@ -128,11 +127,11 @@ impl TxDataLoader {
         }
     }
 
-    pub fn extend_inputs(&mut self, inputs: Vec<crate::types::InputCellInfo>) {
+    pub fn extend_inputs(&mut self, inputs: Vec<gw_types::offchain::InputCellInfo>) {
         self.inputs.extend(inputs.into_iter().map(into_info))
     }
 
-    pub fn extend_cell_deps(&mut self, deps: Vec<crate::types::InputCellInfo>) {
+    pub fn extend_cell_deps(&mut self, deps: Vec<gw_types::offchain::InputCellInfo>) {
         self.cell_deps.extend(deps.into_iter().map(into_info))
     }
 
@@ -224,7 +223,7 @@ struct CellInfo {
     data_hash: Byte32,
 }
 
-fn into_info(input_cell_info: crate::types::InputCellInfo) -> (OutPoint, CellInfo) {
+fn into_info(input_cell_info: gw_types::offchain::InputCellInfo) -> (OutPoint, CellInfo) {
     let out_point = OutPoint::new_unchecked(input_cell_info.cell.out_point.as_bytes());
     let cell_info = CellInfo {
         output: CellOutput::new_unchecked(input_cell_info.cell.output.as_bytes()),

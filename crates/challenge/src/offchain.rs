@@ -1,21 +1,15 @@
-use crate::{
-    challenger::offchain::verify_tx::dump_tx,
-    poa::PoA,
-    rpc_client::RPCClient,
-    types::{CellInfo, InputCellInfo},
-    utils::CKBGenesisInfo,
-    wallet::Wallet,
-};
+use crate::Wallet;
 
 use anyhow::{anyhow, bail, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_common::{state::State, H256};
 use gw_config::{BlockProducerConfig, DebugConfig};
-use gw_generator::RollupContext;
+use gw_poa::PoA;
+use gw_rpc_client::RPCClient;
 use gw_store::{state_db::StateDBTransaction, transaction::StoreTransaction};
 use gw_types::{
     core::DepType,
-    offchain::RunResult,
+    offchain::{CellInfo, InputCellInfo, RollupContext, RunResult},
     packed::{
         AccountMerkleState, CellDep, CellInput, L2Block, L2Transaction, OutPoint, OutPointVec,
         WithdrawalRequest,
@@ -34,14 +28,12 @@ pub mod mock_block;
 pub mod mock_poa;
 pub mod mock_tx;
 pub mod verify_tx;
-use mock_block::MockBlockParam;
-use mock_tx::MockRollup;
-use verify_tx::RollupCellDeps;
 
 use self::{
+    mock_block::MockBlockParam,
     mock_poa::MockPoA,
-    mock_tx::MockOutput,
-    verify_tx::{verify_tx, TxWithContext},
+    mock_tx::{MockOutput, MockRollup},
+    verify_tx::{dump_tx, verify_tx, RollupCellDeps, TxWithContext},
 };
 
 const MAX_TX_WITHDRAWAL_PROOF_SIZE: u64 = 32 * 33 + 1;
@@ -49,6 +41,11 @@ const MAX_TX_WITHDRAWAL_PROOF_SIZE: u64 = 32 * 33 + 1;
 const MARGIN_OF_MOCK_BLOCK_SAFITY_MAX_CYCLES: u64 = 65_000_000;
 const MARGIN_OF_MOCK_BLOCK_SAFITY_TX_SIZE_LIMIT: u64 =
     MAX_BLOCK_BYTES - MAX_TX_WITHDRAWAL_PROOF_SIZE;
+
+#[derive(Debug, Clone)]
+pub struct CKBGenesisInfo {
+    pub sighash_dep: CellDep,
+}
 
 #[derive(Clone)]
 pub struct OffChainContext {
@@ -93,7 +90,7 @@ impl OffChainContext {
                 mock_rollup.config.rollup_cell_type_dep.clone().into(),
                 mock_rollup.config.rollup_config_cell_dep.clone().into(),
                 mock_rollup.config.challenge_cell_lock_dep.clone().into(),
-                mock_rollup.ckb_genesis_info.sighash_dep().into(),
+                mock_rollup.ckb_genesis_info.sighash_dep.clone().into(),
             ];
             deps.extend({
                 let contract_deps = mock_rollup.config.allowed_contract_deps.values();
@@ -153,13 +150,26 @@ impl OffChainCancelChallengeValidator {
         }
     }
 
+    pub fn reset(&mut self, parent_block: &L2Block, reverted_block_root: H256) {
+        self.block_param = MockBlockParam::new(
+            &self.ctx.mock_rollup.rollup_context,
+            parent_block,
+            reverted_block_root,
+        );
+
+        self.safe_margin = MarginOfMockBlockSafity {
+            remain_package_size: u64::MAX,
+            prev_raw_block_size: 0,
+        };
+    }
+
     pub fn validate_withdrawal_request(
         &mut self,
         db: &StoreTransaction,
         state_db: &StateDBTransaction<'_>,
         req: WithdrawalRequest,
     ) -> Result<u64> {
-        let state = state_db.account_state_tree()?;
+        let state = state_db.state_tree()?;
         let post_account = AccountMerkleState::new_builder()
             .merkle_root(state.calculate_root()?.pack())
             .count(state.get_account_count()?.pack())

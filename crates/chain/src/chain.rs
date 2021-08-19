@@ -101,12 +101,12 @@ pub enum SyncEvent {
     // found a invalid challenge
     BadChallenge {
         cell: ChallengeCell,
-        context: crate::challenge::VerifyContext,
+        context: gw_challenge::types::VerifyContext,
     },
     // the rollup is in a challenge
     WaitChallenge {
         cell: ChallengeCell,
-        context: crate::challenge::RevertContext,
+        context: gw_challenge::types::RevertContext,
     },
 }
 

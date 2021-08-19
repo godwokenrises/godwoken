@@ -1,6 +1,7 @@
+use crate::types::{VerifyContext, VerifyWitness};
+
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
-use gw_chain::challenge::{VerifyContext, VerifyWitness};
 use gw_common::H256;
 use gw_config::BlockProducerConfig;
 use gw_types::core::Status;

@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use gw_challenge::types::{RevertContext, RevertWitness, VerifyContext, VerifyWitness};
 use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::calculate_state_checkpoint;
 use gw_common::smt::{Blake2bHasher, SMT};
@@ -48,23 +49,6 @@ pub fn build_challenge_context(
     Ok(ChallengeContext { target, witness })
 }
 
-#[derive(Debug, Clone)]
-pub enum VerifyWitness {
-    TxExecution {
-        load_data: HashMap<H256, Bytes>,
-        witness: VerifyTransactionWitness,
-    },
-    TxSignature(VerifyTransactionSignatureWitness),
-    Withdrawal(VerifyWithdrawalWitness),
-}
-
-#[derive(Debug, Clone)]
-pub struct VerifyContext {
-    pub sender_script: Script,
-    pub receiver_script: Option<Script>,
-    pub verify_witness: VerifyWitness,
-}
-
 pub fn build_verify_context(
     generator: Arc<Generator>,
     db: &StoreTransaction,
@@ -85,19 +69,6 @@ pub fn build_verify_context(
             build_verify_withdrawal_witness(db, block_hash.into(), target_index)
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct RevertWitness {
-    pub reverted_blocks: RawL2BlockVec, // sorted by block number
-    pub block_proof: CompiledMerkleProof,
-    pub reverted_block_proof: CompiledMerkleProof,
-}
-
-#[derive(Debug, Clone)]
-pub struct RevertContext {
-    pub post_reverted_block_root: H256,
-    pub revert_witness: RevertWitness,
 }
 
 /// NOTE: Caller should rollback db, only update reverted_block_smt in L1ActionContext::Revert

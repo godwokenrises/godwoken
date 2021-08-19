@@ -9,7 +9,10 @@ use crate::wallet::Wallet;
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::{Chain, ChallengeCell, SyncEvent};
-use gw_chain::challenge::{RevertContext, VerifyContext};
+use gw_challenge::cancel_challenge::CancelChallengeOutput;
+use gw_challenge::enter_challenge::EnterChallenge;
+use gw_challenge::revert::Revert;
+use gw_challenge::types::{RevertContext, VerifyContext};
 use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::ChallengeContext;
@@ -29,15 +32,6 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-
-mod cancel_challenge;
-mod enter_challenge;
-pub mod offchain;
-mod revert;
-
-use cancel_challenge::CancelChallengeOutput;
-use enter_challenge::EnterChallenge;
-use revert::Revert;
 
 pub struct Challenger {
     rollup_context: RollupContext,
@@ -266,7 +260,7 @@ impl Challenger {
         let prev_state = rollup_state.get_state().to_owned();
         let burn_lock = self.config.challenger_config.burn_lock.clone().into();
         let owner_lock = self.wallet.lock_script().to_owned();
-        let mut cancel_output = cancel_challenge::build_output(
+        let mut cancel_output = gw_challenge::cancel_challenge::build_output(
             &self.rollup_context,
             prev_state,
             &challenge_cell,

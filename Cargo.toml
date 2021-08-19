@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "crates/challenge",
   "crates/chain",
   "crates/config",
   "crates/common",

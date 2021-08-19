@@ -1,12 +1,9 @@
-use crate::poa::PoA;
-use crate::poa::PoAContext;
-use crate::rpc_client::RPCClient;
-use crate::types::CellInfo;
-use crate::types::InputCellInfo;
-
 use anyhow::Result;
 use gw_config::BlockProducerConfig;
+use gw_poa::{PoA, PoAContext};
+use gw_rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
+use gw_types::offchain::{CellInfo, InputCellInfo};
 use gw_types::packed::PoAData;
 use gw_types::packed::{CellDep, CellInput, CellOutput};
 use gw_types::prelude::*;

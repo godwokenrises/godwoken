@@ -87,7 +87,7 @@ impl PoASetup {
     }
 }
 
-pub(crate) struct PoAContext {
+pub struct PoAContext {
     pub poa_data: PoAData,
     pub poa_data_cell: CellInfo,
     pub poa_setup: PoASetup,
@@ -132,7 +132,7 @@ impl PoA {
         Ok(cell)
     }
 
-    pub(crate) async fn query_poa_context(&self, input_info: &InputCellInfo) -> Result<PoAContext> {
+    pub async fn query_poa_context(&self, input_info: &InputCellInfo) -> Result<PoAContext> {
         let args: Bytes = input_info.cell.output.lock().args().unpack();
         if args.len() != 64 {
             return Err(anyhow!("invalid poa cell lock args"));
