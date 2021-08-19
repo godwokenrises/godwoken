@@ -47,6 +47,7 @@ fn produce_a_block(
     let param = SyncParam {
         updates: vec![update],
         reverts: Default::default(),
+        known_l1_tip: None,
     };
     chain.sync(param.clone()).unwrap();
     assert_eq!(chain.last_sync_event().is_success(), true);
@@ -228,6 +229,7 @@ fn test_layer1_fork() {
     let param = SyncParam {
         updates: vec![action1.clone()],
         reverts: Default::default(),
+        known_l1_tip: None,
     };
     chain.sync(param).unwrap();
     assert_eq!(chain.last_sync_event().is_success(), true);
@@ -264,6 +266,7 @@ fn test_layer1_fork() {
     let param = SyncParam {
         updates: vec![action2.clone()],
         reverts: Default::default(),
+        known_l1_tip: None,
     };
     chain.sync(param).unwrap();
     assert_eq!(chain.last_sync_event().is_success(), true);
@@ -315,6 +318,7 @@ fn test_layer1_fork() {
     let param = SyncParam {
         updates: forks,
         reverts: vec![revert_action2, revert_action1],
+        known_l1_tip: None,
     };
     chain.sync(param).unwrap();
     assert_eq!(chain.last_sync_event().is_success(), true);
@@ -392,6 +396,7 @@ fn test_layer1_revert() {
     let param = SyncParam {
         updates: vec![action1.clone()],
         reverts: Default::default(),
+        known_l1_tip: None,
     };
     chain.sync(param).unwrap();
     assert_eq!(chain.last_sync_event().is_success(), true);
@@ -428,6 +433,7 @@ fn test_layer1_revert() {
     let param = SyncParam {
         updates: vec![action2.clone()],
         reverts: Default::default(),
+        known_l1_tip: None,
     };
     chain.sync(param).unwrap();
     assert_eq!(chain.last_sync_event().is_success(), true);
@@ -463,6 +469,7 @@ fn test_layer1_revert() {
     let param = SyncParam {
         updates: Default::default(),
         reverts,
+        known_l1_tip: None,
     };
     chain.sync(param).unwrap();
     assert_eq!(chain.last_sync_event().is_success(), true);
@@ -511,6 +518,7 @@ fn test_layer1_revert() {
     let param = SyncParam {
         updates,
         reverts: Default::default(),
+        known_l1_tip: None,
     };
     chain.sync(param).unwrap();
     assert_eq!(chain.last_sync_event().is_success(), true);

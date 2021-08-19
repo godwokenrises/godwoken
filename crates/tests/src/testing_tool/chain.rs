@@ -188,6 +188,7 @@ pub fn apply_block_result(
     let param = SyncParam {
         updates: vec![update],
         reverts: Default::default(),
+        known_l1_tip: None,
     };
     chain.sync(param).unwrap();
     assert_eq!(chain.last_sync_event().is_success(), true);

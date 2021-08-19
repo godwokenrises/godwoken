@@ -25,6 +25,9 @@ use gw_types::{
 use parking_lot::Mutex;
 use std::{collections::HashSet, convert::TryFrom, sync::Arc};
 
+/// how many blocks can we consider that we are near the tip
+const BLOCKS_CONSIDER_NEAR_TIP: u64 = 100;
+
 #[derive(Debug, Clone)]
 pub struct ChallengeCell {
     pub input: CellInput,
@@ -39,6 +42,8 @@ pub struct SyncParam {
     pub reverts: Vec<RevertedL1Action>,
     /// contains transitions from fork point to new tips
     pub updates: Vec<L1Action>,
+    /// known l1 tip
+    pub known_l1_tip: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -726,6 +731,7 @@ impl Chain {
     /// Sync chain from layer1
     pub fn sync(&mut self, param: SyncParam) -> Result<()> {
         let db = self.store.begin_transaction();
+        let is_revert_happend = !param.reverts.is_empty();
         // revert layer1 actions
         if !param.reverts.is_empty() {
             // revert
@@ -749,8 +755,32 @@ impl Chain {
         let tip_block_hash: H256 = self.local_state.tip.hash().into();
         if let SyncEvent::Success = self.last_sync_event {
             if let Some(mem_pool) = &self.mem_pool {
-                // update mem pool state
-                mem_pool.lock().notify_new_tip(tip_block_hash)?;
+                let should_notify =
+                    |is_revert_happen: bool,
+                     known_l1_tip: Option<u64>,
+                     last_synced_l1_number: u64| {
+                        if is_revert_happen {
+                            // notify if revert happend or we have no known l1 tip
+                            return true;
+                        }
+                        match known_l1_tip {
+                            Some(known_l1_tip) => {
+                                // otherwise, only notify mem-pool if we are near the tip
+                                last_synced_l1_number.saturating_add(BLOCKS_CONSIDER_NEAR_TIP)
+                                    > known_l1_tip
+                            }
+                            None => true,
+                        }
+                    };
+
+                if should_notify(
+                    is_revert_happend,
+                    param.known_l1_tip,
+                    self.local_state.last_synced.number().unpack(),
+                ) {
+                    // update mem pool state
+                    mem_pool.lock().notify_new_tip(tip_block_hash)?;
+                }
             }
         }
 
