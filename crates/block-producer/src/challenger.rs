@@ -45,7 +45,7 @@ pub struct Challenger {
     config: BlockProducerConfig,
     ckb_genesis_info: CKBGenesisInfo,
     builtin_load_data: HashMap<H256, CellDep>,
-    chain: Arc<parking_lot::Mutex<Chain>>,
+    chain: Arc<Mutex<Chain>>,
     poa: Arc<Mutex<PoA>>,
     tests_control: Option<TestModeControl>,
     cleaner: Arc<Cleaner>,
@@ -62,7 +62,7 @@ impl Challenger {
         debug_config: DebugConfig,
         builtin_load_data: HashMap<H256, CellDep>,
         ckb_genesis_info: CKBGenesisInfo,
-        chain: Arc<parking_lot::Mutex<Chain>>,
+        chain: Arc<Mutex<Chain>>,
         poa: Arc<Mutex<PoA>>,
         tests_control: Option<TestModeControl>,
         cleaner: Arc<Cleaner>,
@@ -118,7 +118,7 @@ impl Challenger {
             }
         }
 
-        let last_sync_event = { self.chain.lock().last_sync_event().to_owned() };
+        let last_sync_event = { self.chain.lock().await.last_sync_event().to_owned() };
         log::debug!("load chain last sync event {:?}", last_sync_event);
 
         match last_sync_event {
@@ -338,11 +338,11 @@ impl Challenger {
         );
         match self.rpc_client.send_transaction(tx).await {
             Ok(tx_hash) => {
-                self.cleaner.watch_verifier(verifier, Some(tx_hash));
+                self.cleaner.watch_verifier(verifier, Some(tx_hash)).await;
                 log::info!("Cancel challenge in tx {}", to_hex(&tx_hash));
             }
             Err(err) => {
-                self.cleaner.watch_verifier(verifier, None);
+                self.cleaner.watch_verifier(verifier, None).await;
                 log::warn!("Cancel challenge failed {}", err);
             }
         }

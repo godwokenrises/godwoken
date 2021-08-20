@@ -12,6 +12,7 @@ use gw_types::offchain::{CellInfo, InputCellInfo, TxStatus};
 use gw_types::packed::{CellDep, CellInput, GlobalState, Transaction, WitnessArgs};
 use gw_types::prelude::Unpack;
 
+use smol::lock::Mutex;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -46,7 +47,7 @@ impl Verifier {
     }
 }
 
-type ConsumedVerifiers = Arc<parking_lot::Mutex<Vec<(Verifier, Option<H256>)>>>;
+type ConsumedVerifiers = Arc<Mutex<Vec<(Verifier, Option<H256>)>>>;
 
 // TODO: verifier persistent, signature verifier needs witness to unlock, but verifier itself
 // doesn't provides context to restore this witness.
@@ -63,7 +64,7 @@ impl Cleaner {
             rpc_client,
             ckb_genesis_info,
             wallet,
-            consumed_verifiers: Arc::new(parking_lot::Mutex::new(Vec::new())),
+            consumed_verifiers: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -78,13 +79,16 @@ impl Cleaner {
         Ok(())
     }
 
-    pub fn watch_verifier(&self, verifier: Verifier, consumed_tx: Option<H256>) {
-        self.consumed_verifiers.lock().push((verifier, consumed_tx));
+    pub async fn watch_verifier(&self, verifier: Verifier, consumed_tx: Option<H256>) {
+        self.consumed_verifiers
+            .lock()
+            .await
+            .push((verifier, consumed_tx));
     }
 
     pub async fn prune(&self) -> Result<()> {
         let consumed_txs: Vec<H256> = {
-            let verifiers = self.consumed_verifiers.lock();
+            let verifiers = self.consumed_verifiers.lock().await;
             verifiers
                 .iter()
                 .filter_map(|(_, consumed_tx_hash)| *consumed_tx_hash)
@@ -110,6 +114,7 @@ impl Cleaner {
         {
             self.consumed_verifiers
                 .lock()
+                .await
                 .retain(|(_, consumed_tx_hash)| match consumed_tx_hash {
                     None => true,
                     Some(consumed_tx_hash) => !confirmed.contains(consumed_tx_hash),
@@ -121,7 +126,7 @@ impl Cleaner {
 
     async fn reclaim_uncomsumed_verifiers(&self) -> Result<()> {
         let consumed_txs: Vec<(usize, Option<H256>)> = {
-            let verifiers = self.consumed_verifiers.lock();
+            let verifiers = self.consumed_verifiers.lock().await;
             let to_iter = verifiers.iter().enumerate();
             to_iter
                 .map(|(idx, (_, consumed_tx_hash))| (idx, consumed_tx_hash.to_owned()))
@@ -139,7 +144,7 @@ impl Cleaner {
             }
 
             let verifier = {
-                let verifiers = self.consumed_verifiers.lock();
+                let verifiers = self.consumed_verifiers.lock().await;
                 verifiers.get(idx).expect("exists").to_owned().0
             };
             let verifier_status = rpc_client
@@ -154,7 +159,7 @@ impl Cleaner {
             let tx_hash = rpc_client.send_transaction(tx).await?;
 
             {
-                let mut verifiers = self.consumed_verifiers.lock();
+                let mut verifiers = self.consumed_verifiers.lock().await;
                 verifiers.get_mut(idx).expect("exists").1 = Some(tx_hash);
             }
 

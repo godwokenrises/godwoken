@@ -22,7 +22,7 @@ use gw_types::{
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
-use parking_lot::Mutex;
+use smol::lock::Mutex;
 use std::{collections::HashSet, convert::TryFrom, sync::Arc};
 
 /// how many blocks can we consider that we are near the tip
@@ -779,7 +779,7 @@ impl Chain {
                     self.local_state.last_synced.number().unpack(),
                 ) {
                     // update mem pool state
-                    mem_pool.lock().notify_new_tip(tip_block_hash)?;
+                    smol::block_on(async { mem_pool.lock().await.notify_new_tip(tip_block_hash) })?;
                 }
             }
         }

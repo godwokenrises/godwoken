@@ -14,5 +14,4 @@ gw-common = { path = "../common" }
 gw-traits = { path = "../traits" }
 anyhow = "1.0"
 thiserror = "1.0"
-parking_lot = "0.11"
 log = "0.4"

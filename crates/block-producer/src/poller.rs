@@ -25,8 +25,8 @@ use gw_types::{
     prelude::*,
 };
 use gw_web3_indexer::indexer::Web3Indexer;
-use parking_lot::Mutex;
 use serde_json::json;
+use smol::lock::Mutex;
 use std::{collections::HashSet, sync::Arc};
 
 pub struct ChainUpdater {
@@ -70,7 +70,14 @@ impl ChainUpdater {
         }
 
         // Check l1 fork
-        let local_tip_committed_info = { self.chain.lock().local_state().last_synced().to_owned() };
+        let local_tip_committed_info = {
+            self.chain
+                .lock()
+                .await
+                .local_state()
+                .last_synced()
+                .to_owned()
+        };
         if !self.find_l2block_on_l1(local_tip_committed_info).await? {
             self.revert_to_valid_tip_on_l1().await?;
         }
@@ -79,7 +86,7 @@ impl ChainUpdater {
         let tip_number = tip.number().unpack();
 
         let valid_tip_l1_block_number = {
-            let chain = self.chain.lock();
+            let chain = self.chain.lock().await;
             chain.local_state().last_synced().number().unpack()
         };
         let search_key = SearchKey {
@@ -219,12 +226,12 @@ impl ChainUpdater {
             updates: vec![update],
             known_l1_tip: Some(known_l1_tip),
         };
-        self.chain.lock().sync(sync_param)?;
+        self.chain.lock().await.sync(sync_param)?;
 
         // TODO sync missed block
         match &self.web3_indexer {
             Some(indexer) => {
-                let store = { self.chain.lock().store().to_owned() };
+                let store = { self.chain.lock().await.store().to_owned() };
                 indexer.store(store, &tx).await;
             }
             None => {}
@@ -248,7 +255,7 @@ impl ChainUpdater {
     }
 
     async fn revert_to_valid_tip_on_l1(&self) -> Result<()> {
-        let db = { self.chain.lock().store().begin_transaction() };
+        let db = { self.chain.lock().await.store().begin_transaction() };
         let mut revert_l1_actions = Vec::new();
 
         // First rewind to last valid tip
@@ -300,7 +307,7 @@ impl ChainUpdater {
                 .expect("valid block should exists");
         }
 
-        self.chain.lock().sync(SyncParam {
+        self.chain.lock().await.sync(SyncParam {
             reverts: revert_l1_actions,
             updates: vec![],
             known_l1_tip: None,

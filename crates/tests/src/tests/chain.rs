@@ -26,7 +26,7 @@ fn produce_a_block(
 ) -> SyncParam {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
         construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let l2block = block_result.block.clone();
@@ -181,7 +181,7 @@ fn test_layer1_fork() {
             .build();
         let chain = setup_chain(rollup_type_script.clone());
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
         let block_result = construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap();
 
         L1Action {
@@ -212,7 +212,7 @@ fn test_layer1_fork() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
         construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action1 = L1Action {
@@ -249,7 +249,7 @@ fn test_layer1_fork() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
         construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action2 = L1Action {
@@ -379,7 +379,7 @@ fn test_layer1_revert() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
         construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action1 = L1Action {
@@ -416,7 +416,7 @@ fn test_layer1_revert() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
         construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action2 = L1Action {
