@@ -23,7 +23,7 @@ use gw_chain::chain::Chain;
 fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) -> Result<()> {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
         construct_block(chain, &mut mem_pool, Default::default())?
     };
     let asset_scripts = HashSet::new();
@@ -56,7 +56,7 @@ fn deposite_to_chain(
         .build()];
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
         construct_block(chain, &mut mem_pool, deposit_requests.clone())?
     };
     let asset_scripts = if sudt_script_hash == H256::zero() {
@@ -95,7 +95,7 @@ fn withdrawal_from_chain(
     };
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = mem_pool.lock();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
         mem_pool.push_withdrawal_request(withdrawal)?;
         construct_block(chain, &mut mem_pool, Vec::default()).unwrap()
     };
@@ -177,7 +177,7 @@ fn test_deposit_and_withdrawal() {
     // check tx pool state
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mem_pool = mem_pool.lock();
+        let mem_pool = smol::block_on(mem_pool.lock());
         let db = chain.store().begin_transaction();
         let state_db = mem_pool.fetch_state_db(&db).unwrap();
         let state = state_db.state_tree().unwrap();
@@ -225,7 +225,7 @@ fn test_deposit_and_withdrawal() {
     // check tx pool state
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mem_pool = mem_pool.lock();
+        let mem_pool = smol::block_on(mem_pool.lock());
         let state_db = mem_pool.fetch_state_db(&db).unwrap();
         let state = state_db.state_tree().unwrap();
         assert_eq!(
@@ -290,7 +290,7 @@ fn test_overdraft() {
     {
         let db = chain.store().begin_transaction();
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mem_pool = mem_pool.lock();
+        let mem_pool = smol::block_on(mem_pool.lock());
         let state_db = mem_pool.fetch_state_db(&db).unwrap();
         let state = state_db.state_tree().unwrap();
         assert_eq!(

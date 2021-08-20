@@ -30,8 +30,8 @@ use gw_types::{
     prelude::*,
 };
 use gw_web3_indexer::Web3Indexer;
-use parking_lot::Mutex;
 use semver::Version;
+use smol::lock::Mutex;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     ConnectOptions,

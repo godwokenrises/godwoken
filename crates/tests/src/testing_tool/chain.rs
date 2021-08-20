@@ -21,7 +21,7 @@ use gw_types::{
     prelude::*,
 };
 use lazy_static::lazy_static;
-use parking_lot::Mutex;
+use smol::lock::Mutex;
 use std::{collections::HashSet, time::Duration};
 use std::{fs, io::Read, path::PathBuf, sync::Arc};
 

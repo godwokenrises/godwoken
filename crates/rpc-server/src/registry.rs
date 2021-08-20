@@ -23,7 +23,7 @@ use gw_types::{
     prelude::*,
 };
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
-use parking_lot::Mutex;
+use smol::lock::Mutex;
 use std::sync::Arc;
 
 // type alias
@@ -67,7 +67,8 @@ fn to_jsonh256(v: H256) -> JsonH256 {
     h.into()
 }
 
-fn get_state_db_at_block<'a>(
+#[allow(clippy::needless_lifetimes)]
+async fn get_state_db_at_block<'a>(
     db: &'a StoreTransaction,
     mem_pool: &MemPool,
     block_number: Option<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64>,
@@ -87,7 +88,7 @@ fn get_state_db_at_block<'a>(
         }
         None => match mem_pool {
             Some(mem_pool) => {
-                let mem_pool = mem_pool.lock();
+                let mem_pool = mem_pool.lock().await;
                 mem_pool.fetch_state_db(&db).map_err(Into::into)
             }
             None => {
@@ -215,7 +216,7 @@ async fn get_transaction(
         }
         None => match &*mem_pool {
             Some(mem_pool) => {
-                let mem_pool = mem_pool.lock();
+                let mem_pool = mem_pool.lock().await;
                 tx_opt = mem_pool.all_txs().get(&tx_hash).cloned();
                 status = L2TransactionStatus::Pending;
             }
@@ -316,15 +317,18 @@ async fn get_transaction_receipt(
         return Ok(Some(receipt));
     }
     // search from mem pool
-    let receipt_opt = mem_pool.as_deref().and_then(|mem_pool| {
-        mem_pool
+    let receipt_opt = match mem_pool.as_deref() {
+        Some(mem_pool) => mem_pool
             .lock()
+            .await
             .mem_block()
             .tx_receipts()
             .get(&tx_hash)
             .map(ToOwned::to_owned)
-            .map(Into::into)
-    });
+            .map(Into::into),
+        None => None,
+    };
+
     Ok(receipt_opt)
 }
 
@@ -356,7 +360,11 @@ async fn execute_l2transaction(
         .number(number.pack())
         .build();
 
-    let run_result: RunResult = mem_pool.lock().execute_transaction(tx, &block_info)?.into();
+    let run_result: RunResult = mem_pool
+        .lock()
+        .await
+        .execute_transaction(tx, &block_info)?
+        .into();
     Ok(run_result)
 }
 
@@ -410,13 +418,14 @@ async fn execute_raw_l2transaction(
                 .number(number.pack())
                 .build()
         }
-        None => mem_pool.lock().mem_block().block_info().to_owned(),
+        None => mem_pool.lock().await.mem_block().block_info().to_owned(),
     };
 
     // execute tx in task
     let run_result = smol::spawn(async move {
         mem_pool
             .lock()
+            .await
             .execute_raw_transaction(raw_l2tx, &block_info, block_number_opt)
     })
     .await?
@@ -439,7 +448,7 @@ async fn submit_l2transaction(
     let tx_hash = to_jsonh256(tx.hash().into());
     // run task in the background
     smol::spawn(async move {
-        if let Err(err) = mem_pool.lock().push_transaction(tx.clone()) {
+        if let Err(err) = mem_pool.lock().await.push_transaction(tx.clone()) {
             log::info!(
                 "[RPC] fail to push tx {:?} into mem-pool, err: {}",
                 faster_hex::hex_string(&tx.hash()),
@@ -464,7 +473,7 @@ async fn submit_withdrawal_request(
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequest::from_slice(&withdrawal_bytes)?;
 
-    mem_pool.lock().push_withdrawal_request(withdrawal)?;
+    mem_pool.lock().await.push_withdrawal_request(withdrawal)?;
     Ok(())
 }
 
@@ -487,7 +496,7 @@ async fn get_balance(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, block_number)?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, block_number).await?;
     let tree = state_db.state_tree()?;
     let balance = tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?;
     Ok(balance.into())
@@ -512,7 +521,7 @@ async fn get_storage_at(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, block_number)?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, block_number).await?;
 
     let tree = state_db.state_tree()?;
     let key: H256 = to_h256(key);
@@ -528,7 +537,7 @@ async fn get_account_id_by_script_hash(
     store: Data<Store>,
 ) -> Result<Option<AccountID>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, None)?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, None).await?;
     let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
@@ -559,7 +568,7 @@ async fn get_nonce(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, block_number)?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, block_number).await?;
     let tree = state_db.state_tree()?;
 
     let nonce = tree.get_nonce(account_id.into())?;
@@ -573,7 +582,7 @@ async fn get_script(
     store: Data<Store>,
 ) -> Result<Option<Script>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, None)?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, None).await?;
     let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
@@ -588,7 +597,7 @@ async fn get_script_hash(
     store: Data<Store>,
 ) -> Result<JsonH256, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, None)?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, None).await?;
     let tree = state_db.state_tree()?;
 
     let script_hash = tree.get_script_hash(account_id.into())?;
@@ -601,7 +610,7 @@ async fn get_script_hash_by_short_address(
     store: Data<Store>,
 ) -> Result<Option<JsonH256>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, None)?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, None).await?;
     let tree = state_db.state_tree()?;
     let script_hash_opt = tree.get_script_hash_by_short_address(&short_address.into_bytes());
     Ok(script_hash_opt.map(to_jsonh256))
@@ -626,7 +635,7 @@ async fn get_data(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, block_number)?;
+    let state_db = get_state_db_at_block(&db, &mem_pool, block_number).await?;
     let tree = state_db.state_tree()?;
 
     let data_opt = tree

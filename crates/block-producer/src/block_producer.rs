@@ -30,7 +30,7 @@ use gw_types::{
     },
     prelude::*,
 };
-use parking_lot::Mutex;
+use smol::lock::Mutex;
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
@@ -180,7 +180,7 @@ impl BlockProducer {
             }
         }
 
-        let last_sync_event = { self.chain.lock().last_sync_event().to_owned() };
+        let last_sync_event = { self.chain.lock().await.last_sync_event().to_owned() };
         match last_sync_event {
             SyncEvent::Success => (),
             _ => return Ok(()),
@@ -243,7 +243,7 @@ impl BlockProducer {
 
         // get txs & withdrawal requests from mem pool
         let block_param = {
-            let mem_pool = self.mem_pool.lock();
+            let mem_pool = self.mem_pool.lock().await;
             mem_pool.output_mem_block()?
         };
         let deposit_cells = block_param.deposits.clone();
@@ -297,7 +297,7 @@ impl BlockProducer {
                     "[produce_next_block] Failed to composite submitting transaction: {}",
                     err
                 );
-                self.mem_pool.lock().reset_mem_block()?;
+                self.mem_pool.lock().await.reset_mem_block()?;
                 return Err(err);
             }
         };
@@ -351,7 +351,7 @@ impl BlockProducer {
                 } else {
                     log::debug!("Skip dumping non-script-error tx");
                 }
-                self.mem_pool.lock().reset_mem_block()?;
+                self.mem_pool.lock().await.reset_mem_block()?;
             }
         }
         Ok(())
@@ -396,7 +396,7 @@ impl BlockProducer {
             .push(self.ckb_genesis_info.sighash_dep());
 
         // Package pending revert withdrawals and custodians
-        let db = { self.chain.lock().store().begin_transaction() };
+        let db = { self.chain.lock().await.store().begin_transaction() };
         let reverted_block_hashes = db.get_reverted_block_hashes()?;
 
         let rpc_client = &self.rpc_client;
