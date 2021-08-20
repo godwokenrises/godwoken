@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::Result;
 use gw_types::{
     offchain::{DepositInfo, RollupContext},
@@ -8,7 +10,7 @@ use smol::Task;
 use crate::custodian::AvailableCustodians;
 
 pub trait MemPoolProvider {
-    fn estimate_next_blocktime(&self) -> Task<Result<u64>>;
+    fn estimate_next_blocktime(&self) -> Task<Result<Duration>>;
     fn collect_deposit_cells(&self) -> Task<Result<Vec<DepositInfo>>>;
     fn query_available_custodians(
         &self,

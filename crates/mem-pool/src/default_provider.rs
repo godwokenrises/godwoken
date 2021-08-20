@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Result};
 use gw_poa::PoA;
@@ -28,7 +28,7 @@ impl DefaultMemPoolProvider {
 }
 
 impl MemPoolProvider for DefaultMemPoolProvider {
-    fn estimate_next_blocktime(&self) -> Task<Result<u64>> {
+    fn estimate_next_blocktime(&self) -> Task<Result<Duration>> {
         // estimate next l2block timestamp
         let poa = Arc::clone(&self.poa);
         let rpc_client = self.rpc_client.clone();

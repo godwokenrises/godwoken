@@ -22,7 +22,7 @@ use gw_types::{
 };
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 use std::{fs, io::Read, path::PathBuf, sync::Arc};
 
 use super::mem_pool_provider::DummyMemPoolProvider;
@@ -246,7 +246,7 @@ pub fn construct_block(
         .collect();
     let provider = DummyMemPoolProvider {
         deposit_cells,
-        fake_blocktime: 0,
+        fake_blocktime: Duration::from_millis(0),
         available_custodians,
     };
     mem_pool.set_provider(Box::new(provider));

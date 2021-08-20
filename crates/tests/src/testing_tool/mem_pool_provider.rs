@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::Result;
 use gw_mem_pool::{custodian::AvailableCustodians, traits::MemPoolProvider};
 use gw_types::{
@@ -8,13 +10,13 @@ use smol::Task;
 
 #[derive(Debug, Default)]
 pub struct DummyMemPoolProvider {
-    pub fake_blocktime: u64,
+    pub fake_blocktime: Duration,
     pub deposit_cells: Vec<DepositInfo>,
     pub available_custodians: AvailableCustodians,
 }
 
 impl MemPoolProvider for DummyMemPoolProvider {
-    fn estimate_next_blocktime(&self) -> Task<Result<u64>> {
+    fn estimate_next_blocktime(&self) -> Task<Result<Duration>> {
         let fake_blocktime = self.fake_blocktime;
         smol::spawn(async move { Ok(fake_blocktime) })
     }
