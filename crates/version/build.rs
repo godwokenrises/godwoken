@@ -1,6 +1,6 @@
 fn main() {
     // get commit id
-    let commit_id = std::process::Command::new("git")
+    if let Some(commit_id) = std::process::Command::new("git")
         .args(&[
             "describe",
             "--always",
@@ -11,6 +11,7 @@ fn main() {
         .output()
         .ok()
         .and_then(|r| String::from_utf8(r.stdout).ok())
-        .expect("commit id");
-    println!("cargo:rustc-env=COMMIT_ID={}", commit_id);
+    {
+        println!("cargo:rustc-env=COMMIT_ID={}", commit_id);
+    }
 }

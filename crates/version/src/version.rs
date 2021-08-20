@@ -76,7 +76,9 @@ impl Version {
             .parse::<u16>()
             .expect("CARGO_PKG_VERSION_PATCH parse success");
         let pre = env!("CARGO_PKG_VERSION_PRE").to_string();
-        let commit_id = env!("COMMIT_ID").to_string();
+        let commit_id = option_env!("COMMIT_ID")
+            .map(|s| s.to_string())
+            .unwrap_or_default();
         Self {
             major,
             minor,
