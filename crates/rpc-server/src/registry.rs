@@ -373,7 +373,7 @@ async fn execute_raw_l2transaction(
     mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<RunResult, RpcError> {
-    let mem_pool = match &*mem_pool {
+    let mem_pool = match mem_pool.clone() {
         Some(mem_pool) => mem_pool,
         None => {
             return Err(mem_pool_is_disabled_err());
@@ -413,10 +413,14 @@ async fn execute_raw_l2transaction(
         None => mem_pool.lock().mem_block().block_info().to_owned(),
     };
 
-    let run_result: RunResult = mem_pool
-        .lock()
-        .execute_raw_transaction(raw_l2tx, &block_info, block_number_opt)?
-        .into();
+    // execute tx in task
+    let run_result = smol::spawn(async move {
+        mem_pool
+            .lock()
+            .execute_raw_transaction(raw_l2tx, &block_info, block_number_opt)
+    })
+    .await?
+    .into();
     Ok(run_result)
 }
 
@@ -424,7 +428,7 @@ async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
 ) -> Result<JsonH256, RpcError> {
-    let mem_pool = match &*mem_pool {
+    let mem_pool = match mem_pool.clone() {
         Some(mem_pool) => mem_pool,
         None => {
             return Err(mem_pool_is_disabled_err());
@@ -433,7 +437,17 @@ async fn submit_l2transaction(
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
     let tx_hash = to_jsonh256(tx.hash().into());
-    mem_pool.lock().push_transaction(tx)?;
+    // run task in the background
+    smol::spawn(async move {
+        if let Err(err) = mem_pool.lock().push_transaction(tx.clone()) {
+            log::info!(
+                "[RPC] fail to push tx {:?} into mem-pool, err: {}",
+                faster_hex::hex_string(&tx.hash()),
+                err
+            );
+        }
+    })
+    .detach();
     Ok(tx_hash)
 }
 
