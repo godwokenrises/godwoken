@@ -197,7 +197,7 @@ impl PoA {
         self.owner_lock.hash().into()
     }
 
-    pub fn estimate_next_round_start_time(&self, ctx: PoAContext) -> u64 {
+    pub fn estimate_next_round_start_time(&self, ctx: PoAContext) -> Duration {
         let PoAContext {
             poa_data,
             poa_setup,
@@ -218,7 +218,8 @@ impl PoA {
         }
 
         let initial_time: u64 = poa_data.round_initial_subtime().unpack();
-        initial_time + poa_setup.round_intervals as u64 * steps
+        let seconds = initial_time + poa_setup.round_intervals as u64 * steps;
+        Duration::from_secs(seconds)
     }
 
     pub async fn should_issue_next_block(
@@ -244,7 +245,7 @@ impl PoA {
         let next_start_time = self.estimate_next_round_start_time(poa_ctx);
 
         // check next start time again
-        if next_start_time <= median_time.as_secs() {
+        if next_start_time <= median_time {
             self.round_start_subtime = Some(median_time);
             return Ok(ShouldIssueBlock::Yes);
         }

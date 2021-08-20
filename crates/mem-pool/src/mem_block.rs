@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use gw_common::{merkle_utils::calculate_state_checkpoint, H256};
 use gw_types::{
@@ -40,14 +40,14 @@ impl MemBlock {
         &self.block_info
     }
 
-    pub fn reset(&mut self, tip: &L2Block, estimated_timestamp: u64) -> MemBlockContent {
+    pub fn reset(&mut self, tip: &L2Block, estimated_timestamp: Duration) -> MemBlockContent {
         log::debug!("[mem-block] reset");
         // update block info
         let tip_number: u64 = tip.raw().number().unpack();
         let number = tip_number + 1;
         self.block_info = BlockInfo::new_builder()
             .block_producer_id(self.block_producer_id.pack())
-            .timestamp(estimated_timestamp.pack())
+            .timestamp((estimated_timestamp.as_millis() as u64).pack())
             .number(number.pack())
             .build();
         self.prev_merkle_state = tip.raw().post_account();
