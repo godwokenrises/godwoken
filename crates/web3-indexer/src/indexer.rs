@@ -84,7 +84,7 @@ impl Web3Indexer {
             sqlx::query_as("SELECT number FROM blocks ORDER BY number DESC LIMIT 1")
                 .fetch_optional(&self.pool)
                 .await?;
-        if row.is_none() || Decimal::from(number) == row.unwrap().0 + Decimal::from(1) {
+        if row.is_none() || Decimal::from(number) > row.unwrap().0 {
             let web3_tx_with_logs_vec = self
                 .filter_web3_transactions(store.clone(), l2_block.clone())
                 .await?;
