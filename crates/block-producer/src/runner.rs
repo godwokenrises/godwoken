@@ -300,7 +300,8 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 Arc::new(smol::lock::Mutex::new(poa))
             };
 
-            let offchain_context = {
+            let mut offchain_validator_context = None;
+            if config.offchain_validator.enable {
                 let debug_config = config.debug.clone();
                 let wallet = {
                     let config = &block_producer_config.wallet_config;
@@ -310,7 +311,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     sighash_dep: ckb_genesis_info.sighash_dep(),
                 };
 
-                smol::block_on(async {
+                let context = smol::block_on(async {
                     let poa = poa.lock().await;
                     OffChainValidatorContext::build(
                         &rpc_client,
@@ -323,8 +324,10 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         builtin_load_data.clone(),
                     )
                     .await
-                })?
-            };
+                })?;
+
+                offchain_validator_context = Some(context);
+            }
 
             let mem_pool_provider =
                 DefaultMemPoolProvider::new(rpc_client.clone(), Arc::clone(&poa));
@@ -333,7 +336,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     store.clone(),
                     generator.clone(),
                     Box::new(mem_pool_provider),
-                    offchain_context,
+                    offchain_validator_context,
                 )
                 .with_context(|| "create mem-pool")?,
             ));

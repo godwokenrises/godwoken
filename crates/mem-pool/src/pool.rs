@@ -65,7 +65,7 @@ pub struct MemPool {
     /// Mem pool provider
     provider: Box<dyn MemPoolProvider + Send>,
     /// Offchain cancel challenge validator
-    offchain_validator: OffChainCancelChallengeValidator,
+    offchain_validator: Option<OffChainCancelChallengeValidator>,
 }
 
 impl MemPool {
@@ -73,7 +73,7 @@ impl MemPool {
         store: Store,
         generator: Arc<Generator>,
         provider: Box<dyn MemPoolProvider + Send>,
-        offchain_validator_context: OffChainValidatorContext,
+        offchain_validator_context: Option<OffChainValidatorContext>,
     ) -> Result<Self> {
         let pending = Default::default();
         let all_txs = Default::default();
@@ -88,12 +88,14 @@ impl MemPool {
             let smt = db.reverted_block_smt()?;
             smt.root().to_owned()
         };
-        let offchain_validator = OffChainCancelChallengeValidator::new(
-            offchain_validator_context,
-            mem_block.block_producer_id().pack(),
-            &tip_block,
-            reverted_block_root,
-        );
+        let offchain_validator = offchain_validator_context.map(|offchain_validator_context| {
+            OffChainCancelChallengeValidator::new(
+                offchain_validator_context,
+                mem_block.block_producer_id().pack(),
+                &tip_block,
+                reverted_block_root,
+            )
+        });
 
         let mut mem_pool = MemPool {
             store,
@@ -518,8 +520,9 @@ impl MemPool {
             let smt = db.reverted_block_smt()?;
             smt.root().to_owned()
         };
-        self.offchain_validator
-            .reset(&new_tip_block, reverted_block_root);
+        if let Some(ref mut offchain_validator) = self.offchain_validator {
+            offchain_validator.reset(&new_tip_block, reverted_block_root);
+        }
 
         // set tip
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
@@ -653,8 +656,9 @@ impl MemPool {
         self.mem_block
             .push_deposits(deposit_cells, prev_state_checkpoint);
         state.submit_tree_to_mem_block()?;
-        self.offchain_validator
-            .set_prev_txs_checkpoint(prev_state_checkpoint);
+        if let Some(ref mut offchain_validator) = self.offchain_validator {
+            offchain_validator.set_prev_txs_checkpoint(prev_state_checkpoint);
+        }
         let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
         self.mem_block
             .append_touched_keys(touched_keys.borrow().iter().cloned());
@@ -761,16 +765,17 @@ impl MemPool {
                 continue;
             }
 
-            if let Err(err) =
-                self.offchain_validator
-                    .verify_withdrawal_request(db, &state_db, withdrawal.clone())
-            {
-                log::info!(
-                    "[mem-pool] withdrawal contextual verification failed : {}",
-                    err
-                );
-                unused_withdrawals.push(withdrawal_hash);
-                continue;
+            if let Some(ref mut offchain_validator) = self.offchain_validator {
+                if let Err(err) =
+                    offchain_validator.verify_withdrawal_request(db, &state_db, withdrawal.clone())
+                {
+                    log::info!(
+                        "[mem-pool] withdrawal contextual verification failed : {}",
+                        err
+                    );
+                    unused_withdrawals.push(withdrawal_hash);
+                    continue;
+                }
             }
 
             // update the state
@@ -819,8 +824,9 @@ impl MemPool {
             self.generator
                 .execute_transaction(&chain_view, &state, &block_info, &raw_tx)?;
 
-        self.offchain_validator
-            .verify_transaction(db, &state_db, tx.clone(), &run_result)?;
+        if let Some(ref mut offchain_validator) = self.offchain_validator {
+            offchain_validator.verify_transaction(db, &state_db, tx.clone(), &run_result)?;
+        }
 
         // apply run result
         state.apply_run_result(&run_result)?;

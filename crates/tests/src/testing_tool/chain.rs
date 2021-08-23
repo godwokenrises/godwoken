@@ -126,8 +126,13 @@ pub fn setup_chain_with_account_lock_manage(
     )
     .unwrap();
     let provider = DummyMemPoolProvider::default();
-    let mem_pool =
-        MemPool::create(store.clone(), Arc::clone(&generator), Box::new(provider)).unwrap();
+    let mem_pool = MemPool::create(
+        store.clone(),
+        Arc::clone(&generator),
+        Box::new(provider),
+        None,
+    )
+    .unwrap();
     Chain::create(
         &rollup_config,
         &rollup_type_script,
