@@ -176,6 +176,8 @@ impl OffChainCancelChallengeValidator {
         let validator_ctx = &self.validator_context;
 
         let withdrawal_hash: ckb_types::H256 = req.hash().into();
+        let dump_prefix = "withdrawal-signature";
+
         block_param.push_withdrawal_request(db, state_db, req)?;
 
         let mut tx_with_context = None;
@@ -211,7 +213,7 @@ impl OffChainCancelChallengeValidator {
             block_param.pop_withdrawal_request();
 
             if let Some(tx_with_context) = tx_with_context {
-                self.dump_tx_to_file(&withdrawal_hash.to_string(), tx_with_context);
+                self.dump_tx_to_file(dump_prefix, &withdrawal_hash.to_string(), tx_with_context);
             }
         }
 
@@ -231,9 +233,11 @@ impl OffChainCancelChallengeValidator {
     ) -> Result<ValidateTxCycles> {
         let block_param = &mut self.block_param;
         let safe_margin = &mut self.safe_margin;
+        let validator_ctx = &self.validator_context;
 
         let tx_hash: ckb_types::H256 = tx.hash().into();
-        let validator_ctx = &self.validator_context;
+        let mut dump_prefix = "tx-signature";
+
         block_param.push_transaction(db, state_db, tx, run_result)?;
 
         let mut tx_with_context = None;
@@ -266,6 +270,8 @@ impl OffChainCancelChallengeValidator {
                 MARGIN_OF_MOCK_BLOCK_SAFITY_MAX_CYCLES,
             )?;
 
+            dump_prefix = "tx-execution";
+
             let challenge = block_param.challenge_last_tx_execution(db, state_db, run_result)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
                 &validator_ctx.mock_rollup,
@@ -297,14 +303,14 @@ impl OffChainCancelChallengeValidator {
             block_param.pop_transaction();
 
             if let Some(tx_with_context) = tx_with_context {
-                self.dump_tx_to_file(&tx_hash.to_string(), tx_with_context);
+                self.dump_tx_to_file(dump_prefix, &tx_hash.to_string(), tx_with_context);
             }
         }
 
         result
     }
 
-    fn dump_tx_to_file(&self, origin_hash: &str, tx_with_context: TxWithContext) {
+    fn dump_tx_to_file(&self, prefix: &str, origin_hash: &str, tx_with_context: TxWithContext) {
         let dump = || -> Result<_> {
             let debug_config = &self.validator_context.debug_config;
             let dir = debug_config.debug_tx_dump_path.as_path();
@@ -314,7 +320,8 @@ impl OffChainCancelChallengeValidator {
             dump_path.push(dir);
 
             let tx = dump_tx(&self.validator_context.rollup_cell_deps, tx_with_context)?;
-            dump_path.push(format!("{}-offchain-cancel-tx.json", origin_hash));
+            let dump_filename = format!("{}-{}-offchain-cancel-tx.json", prefix, origin_hash);
+            dump_path.push(dump_filename);
 
             let json_tx = serde_json::to_string_pretty(&tx)?;
             log::info!("dump cancel tx from {} to {:?}", origin_hash, dump_path);
