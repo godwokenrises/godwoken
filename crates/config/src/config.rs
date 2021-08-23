@@ -145,7 +145,7 @@ impl Default for OffChainValidatorConfig {
             verify_withdrawal_signature: true,
             verify_tx_signature: true,
             verify_tx_execution: true,
-            verify_max_cycles: 65_000_000,
+            verify_max_cycles: 70_000_000,
             dump_tx_on_failure: false,
         }
     }
