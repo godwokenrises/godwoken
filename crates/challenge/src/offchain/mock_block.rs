@@ -1,6 +1,6 @@
 use crate::types::{VerifyContext, VerifyWitness};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use gw_common::blake2b::new_blake2b;
 use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::calculate_state_checkpoint;
@@ -105,6 +105,10 @@ impl MockBlockParam {
         state_db: &StateDBTransaction<'_>,
         req: WithdrawalRequest,
     ) -> Result<()> {
+        if self.withdrawals.contains(&req) {
+            bail!("duplicate withdrawal {}", req.hash().pack());
+        }
+
         let apply = |state: &mut StateTree<'_, '_>| -> Result<AccountMerkleState> {
             state.apply_withdrawal_request(
                 &self.rollup_context,
@@ -140,6 +144,10 @@ impl MockBlockParam {
         tx: L2Transaction,
         run_result: &RunResult,
     ) -> Result<()> {
+        if self.transactions.contains(&tx) {
+            bail!("duplicate transaction {}", tx.hash().pack());
+        }
+
         let apply = |state: &mut StateTree<'_, '_>| -> Result<AccountMerkleState> {
             state.apply_run_result(run_result)?;
             let post_account = state.merkle_state()?;
@@ -584,6 +592,10 @@ impl RawBlockWithdrawalRequests {
         }
     }
 
+    fn contains(&self, req: &WithdrawalRequest) -> bool {
+        self.witness_hashes.contains(&req.witness_hash().into())
+    }
+
     fn push(&mut self, req: WithdrawalRequest, post_account: AccountMerkleState) {
         self.witness_hashes.push(req.witness_hash().into());
         self.inner.push(req);
@@ -627,6 +639,10 @@ impl RawBlockTransactions {
 
     fn set_prev_txs_checkpoint(&mut self, checkpoint: H256) {
         self.prev_txs_state_checkpoint = checkpoint.pack();
+    }
+
+    fn contains(&self, tx: &L2Transaction) -> bool {
+        self.witness_hashes.contains(&tx.witness_hash().into())
     }
 
     fn push(&mut self, tx: L2Transaction, post_account: AccountMerkleState) {
