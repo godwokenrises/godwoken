@@ -72,10 +72,10 @@ impl OffChainValidatorContext {
         };
         let mock_poa = Arc::new(MockPoA::build(rpc_client, poa, &rollup_cell).await?);
 
-        let rollup_output = rollup_cell.cell.output;
+        let rollup_type_script = rollup_cell.cell.output.type_();
         let mock_rollup = {
             let mock = MockRollup {
-                rollup_output,
+                rollup_type_script,
                 rollup_context,
                 wallet,
                 config,

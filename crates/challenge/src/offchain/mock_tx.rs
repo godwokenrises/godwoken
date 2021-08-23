@@ -15,14 +15,14 @@ use gw_types::core::DepType;
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
 use gw_types::packed::{
     Byte32, CellDep, CellInput, CellOutput, ChallengeTarget, ChallengeWitness, GlobalState,
-    OutPoint, Script, Transaction, WitnessArgs,
+    OutPoint, Script, ScriptOpt, Transaction, WitnessArgs,
 };
 use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
 use std::collections::HashMap;
 
 pub struct MockRollup {
-    pub rollup_output: CellOutput,
+    pub rollup_type_script: ScriptOpt,
     pub rollup_context: RollupContext,
     pub wallet: Wallet,
     pub config: BlockProducerConfig,
@@ -70,7 +70,7 @@ pub fn mock_cancel_challenge_tx(
     let mut inputs = Vec::new();
 
     // Rollup
-    let mut rollup_input = mock_rollup.mock_rollup_cell(global_state);
+    let mut rollup_input = mock_rollup.mock_rollup_cell(global_state, mock_poa.lock.clone());
     rollup_input.input = {
         let builder = rollup_input.input.as_builder();
         builder.since(mock_poa.input_since.pack()).build()
@@ -151,7 +151,7 @@ pub fn mock_cancel_challenge_tx(
 
 impl MockRollup {
     pub fn new(
-        rollup_output: CellOutput,
+        rollup_type_script: ScriptOpt,
         rollup_context: RollupContext,
         wallet: Wallet,
         ckb_genesis_info: CKBGenesisInfo,
@@ -159,7 +159,7 @@ impl MockRollup {
         builtin_load_data: HashMap<H256, CellDep>,
     ) -> Self {
         MockRollup {
-            rollup_output,
+            rollup_type_script,
             rollup_context,
             wallet,
             config,
@@ -192,7 +192,7 @@ impl MockRollup {
         InputCellInfo { input, cell }
     }
 
-    fn mock_rollup_cell(&self, global_state: GlobalState) -> InputCellInfo {
+    fn mock_rollup_cell(&self, global_state: GlobalState, lock: Script) -> InputCellInfo {
         let out_point = OutPoint::new_builder()
             .tx_hash(random_hash())
             .index(0u32.pack())
@@ -203,7 +203,12 @@ impl MockRollup {
             .build();
 
         let output = {
-            let rollup_output = self.rollup_output.clone();
+            let rollup_output = CellOutput::new_builder()
+                .capacity(100_000_000u64.pack())
+                .type_(self.rollup_type_script.clone())
+                .lock(lock)
+                .build();
+
             let capacity = rollup_output
                 .occupied_capacity(global_state.as_bytes().len())
                 .expect("rollup capacity overflow");

@@ -3,7 +3,7 @@ use gw_poa::{PoA, PoAContext};
 use gw_rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
 use gw_types::offchain::{CellInfo, InputCellInfo};
-use gw_types::packed::{CellDep, CellOutput};
+use gw_types::packed::{CellDep, CellOutput, Script};
 use gw_types::prelude::*;
 
 use std::time::Duration;
@@ -13,6 +13,7 @@ pub struct MockPoA {
     pub input_since: u64,
     pub inputs: Vec<InputCellInfo>,
     pub outputs: Vec<(CellOutput, Bytes)>,
+    pub lock: Script,
 }
 
 impl MockPoA {
@@ -37,6 +38,7 @@ impl MockPoA {
             input_since: generated_poa.poa_input_cell_since,
             inputs: generated_poa.input_cells,
             outputs: generated_poa.output_cells,
+            lock: rollup_cell.cell.output.lock(),
         };
 
         Ok(mock_poa)
