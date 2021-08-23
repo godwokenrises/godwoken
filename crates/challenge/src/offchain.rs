@@ -2,7 +2,7 @@ use crate::Wallet;
 
 use anyhow::{anyhow, bail, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
-use gw_common::{state::State, H256};
+use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_poa::PoA;
 use gw_rpc_client::RPCClient;
@@ -11,7 +11,7 @@ use gw_types::{
     core::DepType,
     offchain::{CellInfo, InputCellInfo, RollupContext, RunResult},
     packed::{
-        AccountMerkleState, CellDep, CellInput, L2Block, L2Transaction, OutPoint, OutPointVec,
+        CellDep, CellInput, L2Block, L2Transaction, OutPoint, OutPointVec, Uint32,
         WithdrawalRequest,
     },
     prelude::*,
@@ -105,10 +105,10 @@ impl OffChainValidatorContext {
 
             deps
         };
-
-        let debug_config = Arc::new(debug_config);
         let resolved_rollup_deps = resolve_cell_deps(rpc_client, rollup_deps).await?;
         let rollup_cell_deps = RollupCellDeps::new(resolved_rollup_deps);
+
+        let debug_config = Arc::new(debug_config);
 
         Ok(OffChainValidatorContext {
             debug_config,
@@ -133,11 +133,13 @@ pub struct OffChainCancelChallengeValidator {
 impl OffChainCancelChallengeValidator {
     pub fn new(
         ctx: OffChainValidatorContext,
+        block_producer_id: Uint32,
         parent_block: &L2Block,
         reverted_block_root: H256,
     ) -> Self {
         let block_param = MockBlockParam::new(
-            &ctx.mock_rollup.rollup_context,
+            ctx.mock_rollup.rollup_context.to_owned(),
+            block_producer_id,
             parent_block,
             reverted_block_root,
         );
@@ -155,11 +157,7 @@ impl OffChainCancelChallengeValidator {
     }
 
     pub fn reset(&mut self, parent_block: &L2Block, reverted_block_root: H256) {
-        self.block_param = MockBlockParam::new(
-            &self.validator_context.mock_rollup.rollup_context,
-            parent_block,
-            reverted_block_root,
-        );
+        self.block_param.reset(parent_block, reverted_block_root);
 
         self.safe_margin = MarginOfMockBlockSafity {
             remain_package_size: u64::MAX,
@@ -173,16 +171,10 @@ impl OffChainCancelChallengeValidator {
         state_db: &StateDBTransaction<'_>,
         req: WithdrawalRequest,
     ) -> Result<u64> {
-        let state = state_db.state_tree()?;
-        let post_account = AccountMerkleState::new_builder()
-            .merkle_root(state.calculate_root()?.pack())
-            .count(state.get_account_count()?.pack())
-            .build();
-
         let block_param = &mut self.block_param;
         let safe_margin = &mut self.safe_margin;
         let validator_ctx = &self.validator_context;
-        block_param.push_withdrawal_request(req, post_account);
+        block_param.push_withdrawal_request(db, state_db, req)?;
 
         let mut tx_with_context = None;
         let mut verify = || -> Result<_> {

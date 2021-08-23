@@ -28,7 +28,7 @@ use gw_types::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, RawL2Transaction, Script, TxReceipt,
         WithdrawalRequest,
     },
-    prelude::{Entity, Unpack},
+    prelude::{Entity, Pack, Unpack},
 };
 use std::{
     cmp::{max, min},
@@ -82,6 +82,7 @@ impl MemPool {
         let tip_block = store.get_tip_block()?;
         let tip = (tip_block.hash().into(), tip_block.raw().number().unpack());
 
+        let mem_block: MemBlock = Default::default();
         let reverted_block_root = {
             let db = store.begin_transaction();
             let smt = db.reverted_block_smt()?;
@@ -89,6 +90,7 @@ impl MemPool {
         };
         let offchain_validator = OffChainCancelChallengeValidator::new(
             offchain_validator_context,
+            mem_block.block_producer_id().pack(),
             &tip_block,
             reverted_block_root,
         );
@@ -100,7 +102,7 @@ impl MemPool {
             pending,
             all_txs,
             all_withdrawals,
-            mem_block: Default::default(),
+            mem_block,
             provider,
             offchain_validator,
         };
@@ -759,11 +761,10 @@ impl MemPool {
                 continue;
             }
 
-            if let Err(err) = self.offchain_validator.verify_withdrawal_request(
-                db,
-                &state_db,
-                withdrawal.clone(),
-            ) {
+            if let Err(err) =
+                self.offchain_validator
+                    .verify_withdrawal_request(db, &state_db, withdrawal.clone())
+            {
                 log::info!(
                     "[mem-pool] withdrawal contextual verification failed : {}",
                     err

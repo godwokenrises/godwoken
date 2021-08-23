@@ -30,6 +30,7 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct MockBlockParam {
+    rollup_context: RollupContext,
     finality_blocks: u64,
     number: u64,
     rollup_config_hash: Byte32,
@@ -53,7 +54,8 @@ pub struct MockChallengeOutput {
 
 impl MockBlockParam {
     pub fn new(
-        rollup_context: &RollupContext,
+        rollup_context: RollupContext,
+        block_producer_id: Uint32,
         parent_block: &L2Block,
         reverted_block_root: H256,
     ) -> Self {
@@ -64,10 +66,13 @@ impl MockBlockParam {
 
         MockBlockParam {
             finality_blocks: rollup_context.rollup_config.finality_blocks().unpack(),
-            number: parent_block.raw().number().unpack() + 1,
             rollup_config_hash: rollup_context.rollup_config.hash().pack(),
-            block_producer_id: parent_block.raw().block_producer_id(),
+            rollup_context,
+            block_producer_id,
+            number: parent_block.raw().number().unpack() + 1,
             parent_block_hash: parent_block.hash().pack(),
+            // NOTE: cancel challenge don't check stake cell owner lock hash, so we can
+            // use one from parent block.
             stake_cell_owner_lock_hash: parent_block.raw().stake_cell_owner_lock_hash(),
             timestamp: timestamp.pack(),
             reverted_block_root: reverted_block_root.pack(),
@@ -78,11 +83,40 @@ impl MockBlockParam {
         }
     }
 
+    pub fn reset(&mut self, parent_block: &L2Block, reverted_block_root: H256) {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("timestamp")
+            .as_millis() as u64;
+
+        self.number = parent_block.raw().number().unpack() + 1;
+        self.parent_block_hash = parent_block.hash().pack();
+        self.timestamp = timestamp.pack();
+        self.reverted_block_root = reverted_block_root.pack();
+        self.prev_account = parent_block.raw().post_account();
+        self.state_checkpoint_list.clear();
+        self.transactions = RawBlockTransactions::new();
+        self.withdrawals = RawBlockWithdrawalRequests::new();
+    }
+
     pub fn push_withdrawal_request(
         &mut self,
+        db: &StoreTransaction,
+        state_db: &StateDBTransaction<'_>,
         req: WithdrawalRequest,
-        post_account: AccountMerkleState,
-    ) {
+    ) -> Result<()> {
+        let apply = |state: &mut StateTree<'_, '_>| -> Result<AccountMerkleState> {
+            state.apply_withdrawal_request(
+                &self.rollup_context,
+                self.block_producer_id.unpack(),
+                &req,
+            )?;
+            let post_account = state.merkle_state()?;
+
+            Ok(post_account)
+        };
+
+        let post_account = build_post_account_and_rollback(db, state_db, apply)?;
         let checkpoint = calculate_state_checkpoint(
             &post_account.merkle_root().unpack(),
             post_account.count().unpack(),
@@ -90,6 +124,8 @@ impl MockBlockParam {
 
         self.state_checkpoint_list.push(checkpoint.pack());
         self.withdrawals.push(req, post_account);
+
+        Ok(())
     }
 
     pub fn pop_withdrawal_request(&mut self) {
@@ -104,7 +140,14 @@ impl MockBlockParam {
         tx: L2Transaction,
         run_result: &RunResult,
     ) -> Result<()> {
-        let post_account = build_post_account_and_rollback(db, state_db, run_result)?;
+        let apply = |state: &mut StateTree<'_, '_>| -> Result<AccountMerkleState> {
+            state.apply_run_result(run_result)?;
+            let post_account = state.merkle_state()?;
+
+            Ok(post_account)
+        };
+
+        let post_account = build_post_account_and_rollback(db, state_db, apply)?;
         let checkpoint = calculate_state_checkpoint(
             &post_account.merkle_root().unpack(),
             post_account.count().unpack(),
@@ -617,29 +660,18 @@ fn get_script(state: &StateTree<'_, '_>, account_id: u32) -> Result<Script> {
         .ok_or_else(|| anyhow!("tx script not found"))
 }
 
+/// #panic: fail to rollback to save point
 fn build_post_account_and_rollback(
     db: &StoreTransaction,
     state_db: &StateDBTransaction<'_>,
-    run_result: &RunResult,
+    mut apply_fn: impl FnMut(&mut StateTree<'_, '_>) -> Result<AccountMerkleState>,
 ) -> Result<AccountMerkleState> {
     db.set_save_point();
     let mut state = state_db.state_tree()?;
 
-    let mut apply = || -> Result<AccountMerkleState> {
-        state.apply_run_result(run_result)?;
-        let account_root = state.calculate_root()?;
-        let account_count = state.get_account_count()?;
-        Ok(AccountMerkleState::new_builder()
-            .merkle_root(account_root.pack())
-            .count(account_count.pack())
-            .build())
-    };
-
-    let apply_result = apply();
-    if let Err(_err) = db.rollback_to_save_point() {
-        // FIXME: should abounded this block generation
-        // bail!("unable to rollback to save point, broken db state {}", err);
-        panic!("unable to rollback to save point");
+    let apply_result = apply_fn(&mut state);
+    if let Err(err) = db.rollback_to_save_point() {
+        panic!("unable to rollback to save point {}", err);
     }
     apply_result
 }
