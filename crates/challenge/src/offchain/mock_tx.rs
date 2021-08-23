@@ -70,7 +70,11 @@ pub fn mock_cancel_challenge_tx(
     let mut inputs = Vec::new();
 
     // Rollup
-    let rollup_input = mock_rollup.mock_rollup_cell(global_state);
+    let mut rollup_input = mock_rollup.mock_rollup_cell(global_state);
+    rollup_input.input = {
+        let builder = rollup_input.input.as_builder();
+        builder.since(mock_poa.input_since.pack()).build()
+    };
     inputs.push(rollup_input.clone());
 
     let rollup_deps = vec![
@@ -123,13 +127,12 @@ pub fn mock_cancel_challenge_tx(
     inputs.push(owner_cell.clone());
 
     // Poa
-    cell_deps.push(mock_poa.setup_dep.clone());
-    inputs.push(mock_poa.data_input.clone());
+    inputs.extend(mock_poa.inputs.clone());
 
-    let poa_cell_deps = vec![mock_poa.lock_dep.clone(), mock_poa.state_dep.clone()];
+    let poa_cell_deps = mock_poa.cell_deps.clone();
     tx_skeleton.cell_deps_mut().extend(poa_cell_deps);
-    tx_skeleton.inputs_mut().push(mock_poa.data_input.clone());
-    tx_skeleton.outputs_mut().push(mock_poa.output.clone());
+    tx_skeleton.inputs_mut().extend(mock_poa.inputs.clone());
+    tx_skeleton.outputs_mut().extend(mock_poa.outputs.clone());
 
     let owner_dep = mock_rollup.ckb_genesis_info.sighash_dep.clone();
     tx_skeleton.cell_deps_mut().push(owner_dep);

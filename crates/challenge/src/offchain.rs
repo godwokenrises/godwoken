@@ -70,7 +70,7 @@ impl OffChainContext {
             let query = rpc_client.query_rollup_cell().await?;
             into_input_cell_info(query.ok_or_else(|| anyhow!("can't found rollup cell"))?)
         };
-        let mock_poa = Arc::new(MockPoA::build(rpc_client, poa, &rollup_cell, &config).await?);
+        let mock_poa = Arc::new(MockPoA::build(rpc_client, poa, &rollup_cell).await?);
 
         let rollup_output = rollup_cell.cell.output;
         let mock_rollup = {
@@ -101,7 +101,7 @@ impl OffChainContext {
                 eoa_deps.cloned().map(CellDep::from)
             });
             deps.extend(mock_rollup.builtin_load_data.values().cloned());
-            deps.extend(vec![mock_poa.lock_dep.clone(), mock_poa.state_dep.clone()]);
+            deps.extend(mock_poa.cell_deps.clone());
 
             deps
         };
