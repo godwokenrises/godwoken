@@ -167,7 +167,7 @@ impl OffChainCancelChallengeValidator {
         };
     }
 
-    pub fn validate_withdrawal_request(
+    pub fn verify_withdrawal_request(
         &mut self,
         db: &StoreTransaction,
         state_db: &StateDBTransaction<'_>,
@@ -181,15 +181,15 @@ impl OffChainCancelChallengeValidator {
 
         let block_param = &mut self.block_param;
         let safe_margin = &mut self.safe_margin;
-        let offchain_ctx = &self.validator_context;
+        let validator_ctx = &self.validator_context;
         block_param.push_withdrawal_request(req, post_account);
 
         let mut tx_with_context = None;
         let mut verify = || -> Result<_> {
             let challenge = block_param.challenge_last_withdrawal(db, state_db)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
-                &offchain_ctx.mock_rollup,
-                &offchain_ctx.mock_poa,
+                &validator_ctx.mock_rollup,
+                &validator_ctx.mock_poa,
                 challenge.global_state,
                 challenge.challenge_target,
                 challenge.verify_context,
@@ -204,7 +204,7 @@ impl OffChainCancelChallengeValidator {
             )?;
 
             let cycles = verify_tx(
-                &offchain_ctx.rollup_cell_deps,
+                &validator_ctx.rollup_cell_deps,
                 TxWithContext::from(mock_output),
                 MARGIN_OF_MOCK_BLOCK_SAFITY_MAX_CYCLES,
             )?;
@@ -227,7 +227,7 @@ impl OffChainCancelChallengeValidator {
         self.block_param.set_prev_txs_checkpoint(checkpoint)
     }
 
-    pub fn validate_tx(
+    pub fn verify_transaction(
         &mut self,
         db: &StoreTransaction,
         state_db: &StateDBTransaction<'_>,
@@ -237,7 +237,7 @@ impl OffChainCancelChallengeValidator {
         let block_param = &mut self.block_param;
         let safe_margin = &mut self.safe_margin;
 
-        let offchain_ctx = &self.validator_context;
+        let validator_ctx = &self.validator_context;
         block_param.push_transaction(db, state_db, tx, run_result)?;
 
         let mut tx_with_context = None;
@@ -249,8 +249,8 @@ impl OffChainCancelChallengeValidator {
 
             let challenge = block_param.challenge_last_tx_signature(db, state_db)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
-                &offchain_ctx.mock_rollup,
-                &offchain_ctx.mock_poa,
+                &validator_ctx.mock_rollup,
+                &validator_ctx.mock_poa,
                 challenge.global_state,
                 challenge.challenge_target,
                 challenge.verify_context,
@@ -265,15 +265,15 @@ impl OffChainCancelChallengeValidator {
             )?;
 
             cycles.signature = verify_tx(
-                &offchain_ctx.rollup_cell_deps,
+                &validator_ctx.rollup_cell_deps,
                 TxWithContext::from(mock_output),
                 MARGIN_OF_MOCK_BLOCK_SAFITY_MAX_CYCLES,
             )?;
 
             let challenge = block_param.challenge_last_tx_execution(db, state_db, run_result)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
-                &offchain_ctx.mock_rollup,
-                &offchain_ctx.mock_poa,
+                &validator_ctx.mock_rollup,
+                &validator_ctx.mock_poa,
                 challenge.global_state,
                 challenge.challenge_target,
                 challenge.verify_context,
@@ -288,7 +288,7 @@ impl OffChainCancelChallengeValidator {
             )?;
 
             cycles.execution = verify_tx(
-                &offchain_ctx.rollup_cell_deps,
+                &validator_ctx.rollup_cell_deps,
                 TxWithContext::from(mock_output),
                 MARGIN_OF_MOCK_BLOCK_SAFITY_MAX_CYCLES,
             )?;

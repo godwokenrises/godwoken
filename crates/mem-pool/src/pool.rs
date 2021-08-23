@@ -759,7 +759,7 @@ impl MemPool {
                 continue;
             }
 
-            if let Err(err) = self.offchain_validator.validate_withdrawal_request(
+            if let Err(err) = self.offchain_validator.verify_withdrawal_request(
                 db,
                 &state_db,
                 withdrawal.clone(),
@@ -819,7 +819,7 @@ impl MemPool {
                 .execute_transaction(&chain_view, &state, &block_info, &raw_tx)?;
 
         self.offchain_validator
-            .validate_tx(db, &state_db, tx.clone(), &run_result)?;
+            .verify_transaction(db, &state_db, tx.clone(), &run_result)?;
 
         // apply run result
         state.apply_run_result(&run_result)?;
