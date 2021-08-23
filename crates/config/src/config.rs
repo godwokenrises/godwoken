@@ -131,11 +131,21 @@ pub struct Web3IndexerConfig {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct OffChainValidatorConfig {
     pub enable: bool,
+    pub verify_withdrawal_signature: bool,
+    pub verify_tx_signature: bool,
+    pub verify_tx_execution: bool,
+    pub dump_tx_on_failure: bool,
 }
 
 impl Default for OffChainValidatorConfig {
     fn default() -> Self {
-        Self { enable: true }
+        Self {
+            enable: true,
+            verify_withdrawal_signature: true,
+            verify_tx_signature: true,
+            verify_tx_execution: true,
+            dump_tx_on_failure: false,
+        }
     }
 }
 

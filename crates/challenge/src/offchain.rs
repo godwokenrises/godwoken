@@ -3,7 +3,7 @@ use crate::Wallet;
 use anyhow::{anyhow, bail, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_common::H256;
-use gw_config::{BlockProducerConfig, DebugConfig};
+use gw_config::{BlockProducerConfig, DebugConfig, OffChainValidatorConfig};
 use gw_poa::PoA;
 use gw_rpc_client::RPCClient;
 use gw_store::{state_db::StateDBTransaction, transaction::StoreTransaction};
@@ -49,6 +49,7 @@ pub struct CKBGenesisInfo {
 
 #[derive(Clone)]
 pub struct OffChainValidatorContext {
+    pub validator_config: Arc<OffChainValidatorConfig>,
     pub debug_config: Arc<DebugConfig>,
     pub rollup_cell_deps: RollupCellDeps,
     pub mock_rollup: Arc<MockRollup>,
@@ -63,6 +64,7 @@ impl OffChainValidatorContext {
         wallet: Wallet,
         config: BlockProducerConfig,
         debug_config: DebugConfig,
+        validator_config: OffChainValidatorConfig,
         ckb_genesis_info: CKBGenesisInfo,
         builtin_load_data: HashMap<H256, CellDep>,
     ) -> Result<Self> {
@@ -109,8 +111,10 @@ impl OffChainValidatorContext {
         let rollup_cell_deps = RollupCellDeps::new(resolved_rollup_deps);
 
         let debug_config = Arc::new(debug_config);
+        let validator_config = Arc::new(validator_config);
 
         Ok(OffChainValidatorContext {
+            validator_config,
             debug_config,
             rollup_cell_deps,
             mock_rollup,
@@ -119,9 +123,10 @@ impl OffChainValidatorContext {
     }
 }
 
-pub struct ValidateTxCycles {
-    pub signature: u64,
-    pub execution: u64,
+#[derive(Debug)]
+pub struct VerifyTxCycles {
+    pub signature: Option<u64>,
+    pub execution: Option<u64>,
 }
 
 pub struct OffChainCancelChallengeValidator {
@@ -170,7 +175,7 @@ impl OffChainCancelChallengeValidator {
         db: &StoreTransaction,
         state_db: &StateDBTransaction<'_>,
         req: WithdrawalRequest,
-    ) -> Result<u64> {
+    ) -> Result<Option<u64>> {
         let block_param = &mut self.block_param;
         let safe_margin = &mut self.safe_margin;
         let validator_ctx = &self.validator_context;
@@ -205,12 +210,21 @@ impl OffChainCancelChallengeValidator {
                 MARGIN_OF_MOCK_BLOCK_SAFITY_MAX_CYCLES,
             )?;
 
-            Ok(cycles)
+            Ok(Some(cycles))
         };
+
+        let validator_config = &self.validator_context.validator_config;
+        if !validator_config.verify_withdrawal_signature {
+            return Ok(None);
+        }
 
         let result = verify();
         if matches!(result, Result::Err(_)) {
             block_param.pop_withdrawal_request();
+
+            if !validator_config.dump_tx_on_failure {
+                return result;
+            }
 
             if let Some(tx_with_context) = tx_with_context {
                 self.dump_tx_to_file(dump_prefix, &withdrawal_hash.to_string(), tx_with_context);
@@ -230,23 +244,17 @@ impl OffChainCancelChallengeValidator {
         state_db: &StateDBTransaction<'_>,
         tx: L2Transaction,
         run_result: &RunResult,
-    ) -> Result<ValidateTxCycles> {
+    ) -> Result<Option<VerifyTxCycles>> {
         let block_param = &mut self.block_param;
         let safe_margin = &mut self.safe_margin;
         let validator_ctx = &self.validator_context;
 
         let tx_hash: ckb_types::H256 = tx.hash().into();
-        let mut dump_prefix = "tx-signature";
-
         block_param.push_transaction(db, state_db, tx, run_result)?;
 
-        let mut tx_with_context = None;
-        let mut verify = || -> Result<_> {
-            let mut cycles = ValidateTxCycles {
-                signature: 0,
-                execution: 0,
-            };
-
+        let verify_signature = |tx_with_context: &mut Option<TxWithContext>,
+                                safe_margin: &mut MarginOfMockBlockSafity|
+         -> Result<_> {
             let challenge = block_param.challenge_last_tx_signature(db, state_db)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
                 &validator_ctx.mock_rollup,
@@ -256,7 +264,7 @@ impl OffChainCancelChallengeValidator {
                 challenge.verify_context,
             )?;
 
-            tx_with_context = Some(TxWithContext::from(mock_output.clone()));
+            *tx_with_context = Some(TxWithContext::from(mock_output.clone()));
 
             safe_margin.check_and_update(
                 challenge.raw_block_size,
@@ -264,14 +272,18 @@ impl OffChainCancelChallengeValidator {
                 RawBlock::New,
             )?;
 
-            cycles.signature = verify_tx(
+            let cycles = verify_tx(
                 &validator_ctx.rollup_cell_deps,
                 TxWithContext::from(mock_output),
                 MARGIN_OF_MOCK_BLOCK_SAFITY_MAX_CYCLES,
             )?;
 
-            dump_prefix = "tx-execution";
+            Ok(Some(cycles))
+        };
 
+        let verify_execution = |tx_with_context: &mut Option<TxWithContext>,
+                                safe_margin: &mut MarginOfMockBlockSafity|
+         -> Result<_> {
             let challenge = block_param.challenge_last_tx_execution(db, state_db, run_result)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
                 &validator_ctx.mock_rollup,
@@ -281,7 +293,7 @@ impl OffChainCancelChallengeValidator {
                 challenge.verify_context,
             )?;
 
-            tx_with_context = Some(TxWithContext::from(mock_output.clone()));
+            *tx_with_context = Some(TxWithContext::from(mock_output.clone()));
 
             safe_margin.check_and_update(
                 challenge.raw_block_size,
@@ -289,18 +301,47 @@ impl OffChainCancelChallengeValidator {
                 RawBlock::Prev,
             )?;
 
-            cycles.execution = verify_tx(
+            let cycles = verify_tx(
                 &validator_ctx.rollup_cell_deps,
                 TxWithContext::from(mock_output),
                 MARGIN_OF_MOCK_BLOCK_SAFITY_MAX_CYCLES,
             )?;
 
-            Ok(cycles)
+            Ok(Some(cycles))
+        };
+
+        let validator_config = &self.validator_context.validator_config;
+        if !validator_config.verify_tx_signature && !validator_config.verify_tx_execution {
+            return Ok(None);
+        }
+
+        let mut tx_with_context = None;
+        let mut dump_prefix = "tx-signature";
+        let mut cycles = VerifyTxCycles {
+            signature: None,
+            execution: None,
+        };
+
+        let verify = || -> Result<_> {
+            if validator_config.verify_tx_signature {
+                cycles.signature = verify_signature(&mut tx_with_context, safe_margin)?;
+            }
+
+            if validator_config.verify_tx_execution {
+                dump_prefix = "tx-execution";
+                cycles.execution = verify_execution(&mut tx_with_context, safe_margin)?;
+            }
+
+            Ok(Some(cycles))
         };
 
         let result = verify();
         if matches!(result, Result::Err(_)) {
             block_param.pop_transaction();
+
+            if !validator_config.dump_tx_on_failure {
+                return result;
+            }
 
             if let Some(tx_with_context) = tx_with_context {
                 self.dump_tx_to_file(dump_prefix, &tx_hash.to_string(), tx_with_context);

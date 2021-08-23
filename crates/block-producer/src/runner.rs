@@ -310,6 +310,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 let ckb_genesis_info = gw_challenge::offchain::CKBGenesisInfo {
                     sighash_dep: ckb_genesis_info.sighash_dep(),
                 };
+                let validator_config = config.offchain_validator.clone();
 
                 let context = smol::block_on(async {
                     let poa = poa.lock().await;
@@ -320,6 +321,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         wallet,
                         block_producer_config.clone(),
                         debug_config,
+                        validator_config,
                         ckb_genesis_info,
                         builtin_load_data.clone(),
                     )
