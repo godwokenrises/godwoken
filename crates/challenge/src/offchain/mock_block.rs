@@ -1,6 +1,6 @@
 use crate::types::{VerifyContext, VerifyWitness};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use gw_common::blake2b::new_blake2b;
 use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::calculate_state_checkpoint;
@@ -28,6 +28,10 @@ use gw_types::prelude::*;
 
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[derive(thiserror::Error, Debug)]
+#[error("{:?}", {0})]
+pub struct RollBackSavePointError(gw_db::error::Error);
 
 pub struct MockBlockParam {
     rollup_context: RollupContext,
@@ -676,7 +680,6 @@ fn get_script(state: &StateTree<'_, '_>, account_id: u32) -> Result<Script> {
         .ok_or_else(|| anyhow!("tx script not found"))
 }
 
-/// #panic: fail to rollback to save point
 fn build_post_account_and_rollback(
     db: &StoreTransaction,
     state_db: &StateDBTransaction<'_>,
@@ -686,8 +689,8 @@ fn build_post_account_and_rollback(
     let mut state = state_db.state_tree()?;
 
     let apply_result = apply_fn(&mut state);
-    if let Err(err) = db.rollback_to_save_point() {
-        panic!("unable to rollback to save point {}", err);
-    }
+    db.rollback_to_save_point()
+        .map_err(|err| RollBackSavePointError(err))?;
+
     apply_result
 }

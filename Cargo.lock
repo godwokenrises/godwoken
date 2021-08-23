@@ -2067,6 +2067,7 @@ dependencies = [
  "rand 0.8.2",
  "serde",
  "serde_json",
+ "thiserror",
  "toml",
 ]
 

@@ -28,6 +28,7 @@ pub mod mock_block;
 pub mod mock_poa;
 pub mod mock_tx;
 pub mod verify_tx;
+pub use mock_block::RollBackSavePointError;
 
 use self::{
     mock_block::MockBlockParam,

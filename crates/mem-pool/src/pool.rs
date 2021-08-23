@@ -8,8 +8,10 @@
 //! txs & withdrawals again.
 //!
 
-use anyhow::{anyhow, Result};
-use gw_challenge::offchain::{OffChainCancelChallengeValidator, OffChainValidatorContext};
+use anyhow::{anyhow, bail, Result};
+use gw_challenge::offchain::{
+    OffChainCancelChallengeValidator, OffChainValidatorContext, RollBackSavePointError,
+};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     state::{to_short_address, State},
@@ -766,15 +768,23 @@ impl MemPool {
             }
 
             if let Some(ref mut offchain_validator) = self.offchain_validator {
-                if let Err(err) =
-                    offchain_validator.verify_withdrawal_request(db, &state_db, withdrawal.clone())
-                {
-                    log::info!(
-                        "[mem-pool] withdrawal contextual verification failed : {}",
-                        err
-                    );
-                    unused_withdrawals.push(withdrawal_hash);
-                    continue;
+                match offchain_validator.verify_withdrawal_request(
+                    db,
+                    &state_db,
+                    withdrawal.clone(),
+                ) {
+                    Ok(cycles) => log::debug!("[mem-pool] offchain withdrawal cycles {:?}", cycles),
+                    Err(err) => match err.downcast_ref::<RollBackSavePointError>() {
+                        Some(err) => bail!("{}", err),
+                        None => {
+                            log::info!(
+                                "[mem-pool] withdrawal contextual verification failed : {}",
+                                err
+                            );
+                            unused_withdrawals.push(withdrawal_hash);
+                            continue;
+                        }
+                    },
                 }
             }
 
@@ -825,7 +835,9 @@ impl MemPool {
                 .execute_transaction(&chain_view, &state, &block_info, &raw_tx)?;
 
         if let Some(ref mut offchain_validator) = self.offchain_validator {
-            offchain_validator.verify_transaction(db, &state_db, tx.clone(), &run_result)?;
+            let cycles =
+                offchain_validator.verify_transaction(db, &state_db, tx.clone(), &run_result)?;
+            log::debug!("[mem-pool] offchain verify tx cycles {:?}", cycles);
         }
 
         // apply run result
