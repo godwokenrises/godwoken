@@ -39,7 +39,7 @@ use self::{
 
 const MAX_TX_WITHDRAWAL_PROOF_SIZE: u64 = 32 * 33 + 1;
 // TODO: Relax limit
-const MARGIN_OF_MOCK_BLOCK_SAFITY_MAX_CYCLES: u64 = 65_000_000;
+const MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES: u64 = 5_000_000;
 const MARGIN_OF_MOCK_BLOCK_SAFITY_TX_SIZE_LIMIT: u64 =
     MAX_BLOCK_BYTES - MAX_TX_WITHDRAWAL_PROOF_SIZE;
 
@@ -69,6 +69,13 @@ impl OffChainValidatorContext {
         ckb_genesis_info: CKBGenesisInfo,
         builtin_load_data: HashMap<H256, CellDep>,
     ) -> Result<Self> {
+        if validator_config.verify_max_cycles <= MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES {
+            bail!(
+                "invalid verify max cycles, should be bigger than {}",
+                MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES
+            );
+        }
+
         let rollup_cell = {
             let query = rpc_client.query_rollup_cell().await?;
             into_input_cell_info(query.ok_or_else(|| anyhow!("can't found rollup cell"))?)
@@ -186,6 +193,9 @@ impl OffChainCancelChallengeValidator {
 
         block_param.push_withdrawal_request(db, state_db, req)?;
 
+        let max_cycles = self.validator_context.validator_config.verify_max_cycles
+            - MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES;
+
         let mut tx_with_context = None;
         let mut verify = || -> Result<_> {
             let challenge = block_param.challenge_last_withdrawal(db, state_db)?;
@@ -208,7 +218,7 @@ impl OffChainCancelChallengeValidator {
             let cycles = verify_tx(
                 &validator_ctx.rollup_cell_deps,
                 TxWithContext::from(mock_output),
-                MARGIN_OF_MOCK_BLOCK_SAFITY_MAX_CYCLES,
+                max_cycles,
             )?;
 
             Ok(Some(cycles))
@@ -253,6 +263,9 @@ impl OffChainCancelChallengeValidator {
         let tx_hash: ckb_types::H256 = tx.hash().into();
         block_param.push_transaction(db, state_db, tx, run_result)?;
 
+        let max_cycles = self.validator_context.validator_config.verify_max_cycles
+            - MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES;
+
         let verify_signature = |tx_with_context: &mut Option<TxWithContext>,
                                 safe_margin: &mut MarginOfMockBlockSafity|
          -> Result<_> {
@@ -276,7 +289,7 @@ impl OffChainCancelChallengeValidator {
             let cycles = verify_tx(
                 &validator_ctx.rollup_cell_deps,
                 TxWithContext::from(mock_output),
-                MARGIN_OF_MOCK_BLOCK_SAFITY_MAX_CYCLES,
+                max_cycles,
             )?;
 
             Ok(Some(cycles))
@@ -305,7 +318,7 @@ impl OffChainCancelChallengeValidator {
             let cycles = verify_tx(
                 &validator_ctx.rollup_cell_deps,
                 TxWithContext::from(mock_output),
-                MARGIN_OF_MOCK_BLOCK_SAFITY_MAX_CYCLES,
+                max_cycles,
             )?;
 
             Ok(Some(cycles))
