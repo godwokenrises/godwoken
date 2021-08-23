@@ -1,6 +1,6 @@
 use crate::types::{VerifyContext, VerifyWitness};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Result};
 use gw_common::blake2b::new_blake2b;
 use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::calculate_state_checkpoint;
