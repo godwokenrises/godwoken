@@ -5,7 +5,7 @@ use crate::{
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use gw_chain::chain::Chain;
-use gw_challenge::offchain::OffChainContext;
+use gw_challenge::offchain::OffChainValidatorContext;
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
@@ -312,7 +312,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
                 smol::block_on(async {
                     let poa = poa.lock().await;
-                    OffChainContext::build(
+                    OffChainValidatorContext::build(
                         &rpc_client,
                         &poa,
                         rollup_context.clone(),

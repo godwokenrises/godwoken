@@ -9,7 +9,7 @@
 //!
 
 use anyhow::{anyhow, Result};
-use gw_challenge::offchain::{OffChainCancelChallengeValidator, OffChainContext};
+use gw_challenge::offchain::{OffChainCancelChallengeValidator, OffChainValidatorContext};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     state::{to_short_address, State},
@@ -73,7 +73,7 @@ impl MemPool {
         store: Store,
         generator: Arc<Generator>,
         provider: Box<dyn MemPoolProvider + Send>,
-        offchain_validator_context: OffChainContext,
+        offchain_validator_context: OffChainValidatorContext,
     ) -> Result<Self> {
         let pending = Default::default();
         let all_txs = Default::default();

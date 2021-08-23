@@ -48,14 +48,14 @@ pub struct CKBGenesisInfo {
 }
 
 #[derive(Clone)]
-pub struct OffChainContext {
-    debug_config: Arc<DebugConfig>,
-    rollup_cell_deps: RollupCellDeps,
-    mock_rollup: Arc<MockRollup>,
-    mock_poa: Arc<MockPoA>,
+pub struct OffChainValidatorContext {
+    pub debug_config: Arc<DebugConfig>,
+    pub rollup_cell_deps: RollupCellDeps,
+    pub mock_rollup: Arc<MockRollup>,
+    pub mock_poa: Arc<MockPoA>,
 }
 
-impl OffChainContext {
+impl OffChainValidatorContext {
     pub async fn build(
         rpc_client: &RPCClient,
         poa: &PoA,
@@ -110,7 +110,7 @@ impl OffChainContext {
         let resolved_rollup_deps = resolve_cell_deps(rpc_client, rollup_deps).await?;
         let rollup_cell_deps = RollupCellDeps::new(resolved_rollup_deps);
 
-        Ok(OffChainContext {
+        Ok(OffChainValidatorContext {
             debug_config,
             rollup_cell_deps,
             mock_rollup,
@@ -125,13 +125,17 @@ pub struct ValidateTxCycles {
 }
 
 pub struct OffChainCancelChallengeValidator {
-    ctx: OffChainContext,
+    validator_context: OffChainValidatorContext,
     safe_margin: MarginOfMockBlockSafity,
     block_param: MockBlockParam,
 }
 
 impl OffChainCancelChallengeValidator {
-    pub fn new(ctx: OffChainContext, parent_block: &L2Block, reverted_block_root: H256) -> Self {
+    pub fn new(
+        ctx: OffChainValidatorContext,
+        parent_block: &L2Block,
+        reverted_block_root: H256,
+    ) -> Self {
         let block_param = MockBlockParam::new(
             &ctx.mock_rollup.rollup_context,
             parent_block,
@@ -144,7 +148,7 @@ impl OffChainCancelChallengeValidator {
         };
 
         OffChainCancelChallengeValidator {
-            ctx,
+            validator_context: ctx,
             safe_margin,
             block_param,
         }
@@ -152,7 +156,7 @@ impl OffChainCancelChallengeValidator {
 
     pub fn reset(&mut self, parent_block: &L2Block, reverted_block_root: H256) {
         self.block_param = MockBlockParam::new(
-            &self.ctx.mock_rollup.rollup_context,
+            &self.validator_context.mock_rollup.rollup_context,
             parent_block,
             reverted_block_root,
         );
@@ -177,7 +181,7 @@ impl OffChainCancelChallengeValidator {
 
         let block_param = &mut self.block_param;
         let safe_margin = &mut self.safe_margin;
-        let offchain_ctx = &self.ctx;
+        let offchain_ctx = &self.validator_context;
         block_param.push_withdrawal_request(req, post_account);
 
         let mut tx_with_context = None;
@@ -233,7 +237,7 @@ impl OffChainCancelChallengeValidator {
         let block_param = &mut self.block_param;
         let safe_margin = &mut self.safe_margin;
 
-        let offchain_ctx = &self.ctx;
+        let offchain_ctx = &self.validator_context;
         block_param.push_transaction(db, state_db, tx, run_result)?;
 
         let mut tx_with_context = None;
@@ -305,14 +309,15 @@ impl OffChainCancelChallengeValidator {
 
     fn dump_tx_to_file(&self, tx_with_context: TxWithContext) {
         let dump = || -> Result<_> {
-            let dir = self.ctx.debug_config.debug_tx_dump_path.as_path();
+            let debug_config = &self.validator_context.debug_config;
+            let dir = debug_config.debug_tx_dump_path.as_path();
             create_dir_all(&dir)?;
 
             let mut dump_path = PathBuf::new();
             dump_path.push(dir);
 
             let tx_hash: ckb_types::H256 = tx_with_context.tx.hash().into();
-            let tx = dump_tx(&self.ctx.rollup_cell_deps, tx_with_context)?;
+            let tx = dump_tx(&self.validator_context.rollup_cell_deps, tx_with_context)?;
             dump_path.push(format!("{}-mock-tx.json", tx_hash));
 
             let json_tx = serde_json::to_string_pretty(&tx)?;
