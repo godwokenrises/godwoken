@@ -1,3 +1,5 @@
+#![allow(clippy::clippy::mutable_key_type)]
+
 use crate::Wallet;
 
 use anyhow::{anyhow, bail, Result};
@@ -58,6 +60,7 @@ pub struct OffChainValidatorContext {
 }
 
 impl OffChainValidatorContext {
+    #[allow(clippy::too_many_arguments)]
     pub async fn build(
         rpc_client: &RPCClient,
         poa: &PoA,
@@ -100,7 +103,7 @@ impl OffChainValidatorContext {
                 mock_rollup.config.rollup_cell_type_dep.clone().into(),
                 mock_rollup.config.rollup_config_cell_dep.clone().into(),
                 mock_rollup.config.challenge_cell_lock_dep.clone().into(),
-                mock_rollup.ckb_genesis_info.sighash_dep.clone().into(),
+                mock_rollup.ckb_genesis_info.sighash_dep.clone(),
             ];
             deps.extend({
                 let contract_deps = mock_rollup.config.allowed_contract_deps.values();

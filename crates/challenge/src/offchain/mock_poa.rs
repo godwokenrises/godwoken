@@ -30,7 +30,7 @@ impl MockPoA {
 
         let poa_context = MockPoA::ensure_unlockable(context, poa, median_time);
         let generated_poa = poa
-            .generate_by_context(poa_context, &vec![], median_time)
+            .generate_by_context(poa_context, &[], median_time)
             .await?;
 
         let mock_poa = MockPoA {

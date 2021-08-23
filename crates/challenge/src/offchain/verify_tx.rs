@@ -72,7 +72,7 @@ pub fn dump_tx(
         let data = meta
             .mem_cell_data
             .map(|(data, _)| data)
-            .unwrap_or_else(|| Bytes::new());
+            .unwrap_or_else(Bytes::new);
 
         ReprMockCellDep {
             cell_dep: cell_dep.into(),

@@ -268,7 +268,7 @@ impl MockBlockParam {
         let raw_block = self.build_block(post_account.clone())?;
         let raw_block_size = raw_block.as_slice().len() as u64;
 
-        let global_state = self.build_global_state(db, post_account.clone(), &raw_block)?;
+        let global_state = self.build_global_state(db, post_account, &raw_block)?;
         let challenge_target = ChallengeTarget::new_builder()
             .block_hash(raw_block.hash().pack())
             .target_index(target_index.pack())
@@ -690,7 +690,7 @@ fn build_post_account_and_rollback(
 
     let apply_result = apply_fn(&mut state);
     db.rollback_to_save_point()
-        .map_err(|err| RollBackSavePointError(err))?;
+        .map_err(RollBackSavePointError)?;
 
     apply_result
 }
