@@ -174,6 +174,8 @@ impl OffChainCancelChallengeValidator {
         let block_param = &mut self.block_param;
         let safe_margin = &mut self.safe_margin;
         let validator_ctx = &self.validator_context;
+
+        let withdrawal_hash: ckb_types::H256 = req.hash().into();
         block_param.push_withdrawal_request(db, state_db, req)?;
 
         let mut tx_with_context = None;
@@ -207,8 +209,9 @@ impl OffChainCancelChallengeValidator {
         let result = verify();
         if matches!(result, Result::Err(_)) {
             block_param.pop_withdrawal_request();
+
             if let Some(tx_with_context) = tx_with_context {
-                self.dump_tx_to_file(tx_with_context);
+                self.dump_tx_to_file(&withdrawal_hash.to_string(), tx_with_context);
             }
         }
 
@@ -229,6 +232,7 @@ impl OffChainCancelChallengeValidator {
         let block_param = &mut self.block_param;
         let safe_margin = &mut self.safe_margin;
 
+        let tx_hash: ckb_types::H256 = tx.hash().into();
         let validator_ctx = &self.validator_context;
         block_param.push_transaction(db, state_db, tx, run_result)?;
 
@@ -291,15 +295,16 @@ impl OffChainCancelChallengeValidator {
         let result = verify();
         if matches!(result, Result::Err(_)) {
             block_param.pop_transaction();
+
             if let Some(tx_with_context) = tx_with_context {
-                self.dump_tx_to_file(tx_with_context);
+                self.dump_tx_to_file(&tx_hash.to_string(), tx_with_context);
             }
         }
 
         result
     }
 
-    fn dump_tx_to_file(&self, tx_with_context: TxWithContext) {
+    fn dump_tx_to_file(&self, origin_hash: &str, tx_with_context: TxWithContext) {
         let dump = || -> Result<_> {
             let debug_config = &self.validator_context.debug_config;
             let dir = debug_config.debug_tx_dump_path.as_path();
@@ -308,12 +313,11 @@ impl OffChainCancelChallengeValidator {
             let mut dump_path = PathBuf::new();
             dump_path.push(dir);
 
-            let tx_hash: ckb_types::H256 = tx_with_context.tx.hash().into();
             let tx = dump_tx(&self.validator_context.rollup_cell_deps, tx_with_context)?;
-            dump_path.push(format!("{}-mock-tx.json", tx_hash));
+            dump_path.push(format!("{}-offchain-cancel-tx.json", origin_hash));
 
             let json_tx = serde_json::to_string_pretty(&tx)?;
-            log::info!("dump offchain cancel tx {} to {:?}", tx_hash, dump_path);
+            log::info!("dump cancel tx from {} to {:?}", origin_hash, dump_path);
             write(dump_path, json_tx)?;
 
             Ok(())
