@@ -90,7 +90,13 @@ pub fn setup_chain(rollup_type_script: Script) -> Chain {
         ALWAYS_SUCCESS_CODE_HASH.clone().into(),
         Box::new(AlwaysSuccess),
     );
-    setup_chain_with_account_lock_manage(rollup_type_script, rollup_config, account_lock_manage)
+    let mut chain = setup_chain_with_account_lock_manage(
+        rollup_type_script,
+        rollup_config,
+        account_lock_manage,
+    );
+    chain.complete_initial_syncing().unwrap();
+    chain
 }
 
 pub fn setup_chain_with_account_lock_manage(
