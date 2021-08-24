@@ -150,7 +150,7 @@ pub struct Chain {
     local_state: LocalState,
     generator: Arc<Generator>,
     mem_pool: Option<Arc<Mutex<MemPool>>>,
-    notify_mem_pool: bool,
+    complete_initial_syncing: bool,
 }
 
 impl Chain {
@@ -195,7 +195,7 @@ impl Chain {
             mem_pool,
             rollup_type_script_hash,
             rollup_config_hash,
-            notify_mem_pool: false,
+            complete_initial_syncing: false,
         })
     }
 
@@ -234,15 +234,15 @@ impl Chain {
             .map(|t| t.block_hash().unpack())
     }
 
-    pub fn notify_mem_pool(&mut self) -> Result<()> {
+    pub fn complete_initial_syncing(&mut self) -> Result<()> {
         if let Some(mem_pool) = &self.mem_pool {
-            if !self.notify_mem_pool {
+            if !self.complete_initial_syncing {
                 // Do first notify
                 let tip_block_hash: H256 = self.local_state.tip.hash().into();
                 smol::block_on(async { mem_pool.lock().await.notify_new_tip(tip_block_hash) })?;
             }
         }
-        self.notify_mem_pool = true;
+        self.complete_initial_syncing = true;
 
         Ok(())
     }
@@ -767,7 +767,7 @@ impl Chain {
         let tip_block_hash: H256 = self.local_state.tip.hash().into();
         if let Some(mem_pool) = &self.mem_pool {
             if matches!(self.last_sync_event, SyncEvent::Success)
-                && (is_revert_happend || self.notify_mem_pool)
+                && (is_revert_happend || self.complete_initial_syncing)
             {
                 // update mem pool state
                 smol::block_on(async { mem_pool.lock().await.notify_new_tip(tip_block_hash) })?;
