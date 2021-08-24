@@ -25,9 +25,6 @@ use gw_types::{
 use smol::lock::Mutex;
 use std::{collections::HashSet, convert::TryFrom, sync::Arc};
 
-/// how many blocks can we consider that we are near the tip
-const BLOCKS_CONSIDER_NEAR_TIP: u64 = 100;
-
 #[derive(Debug, Clone)]
 pub struct ChallengeCell {
     pub input: CellInput,
@@ -153,6 +150,7 @@ pub struct Chain {
     local_state: LocalState,
     generator: Arc<Generator>,
     mem_pool: Option<Arc<Mutex<MemPool>>>,
+    notify_mem_pool: bool,
 }
 
 impl Chain {
@@ -197,6 +195,7 @@ impl Chain {
             mem_pool,
             rollup_type_script_hash,
             rollup_config_hash,
+            notify_mem_pool: false,
         })
     }
 
@@ -233,6 +232,19 @@ impl Chain {
         self.challenge_target
             .as_ref()
             .map(|t| t.block_hash().unpack())
+    }
+
+    pub fn notify_mem_pool(&mut self) -> Result<()> {
+        if let Some(mem_pool) = &self.mem_pool {
+            if !self.notify_mem_pool {
+                // Do first notify
+                let tip_block_hash: H256 = self.local_state.tip.hash().into();
+                smol::block_on(async { mem_pool.lock().await.notify_new_tip(tip_block_hash) })?;
+            }
+        }
+        self.notify_mem_pool = true;
+
+        Ok(())
     }
 
     /// update a layer1 action
@@ -753,34 +765,12 @@ impl Chain {
         log::debug!("commit db after sync");
 
         let tip_block_hash: H256 = self.local_state.tip.hash().into();
-        if let SyncEvent::Success = self.last_sync_event {
-            if let Some(mem_pool) = &self.mem_pool {
-                let should_notify =
-                    |is_revert_happen: bool,
-                     known_l1_tip: Option<u64>,
-                     last_synced_l1_number: u64| {
-                        if is_revert_happen {
-                            // notify if revert happend or we have no known l1 tip
-                            return true;
-                        }
-                        match known_l1_tip {
-                            Some(known_l1_tip) => {
-                                // otherwise, only notify mem-pool if we are near the tip
-                                last_synced_l1_number.saturating_add(BLOCKS_CONSIDER_NEAR_TIP)
-                                    > known_l1_tip
-                            }
-                            None => true,
-                        }
-                    };
-
-                if should_notify(
-                    is_revert_happend,
-                    param.known_l1_tip,
-                    self.local_state.last_synced.number().unpack(),
-                ) {
-                    // update mem pool state
-                    smol::block_on(async { mem_pool.lock().await.notify_new_tip(tip_block_hash) })?;
-                }
+        if let Some(mem_pool) = &self.mem_pool {
+            if matches!(self.last_sync_event, SyncEvent::Success)
+                && (is_revert_happend || self.notify_mem_pool)
+            {
+                // update mem pool state
+                smol::block_on(async { mem_pool.lock().await.notify_new_tip(tip_block_hash) })?;
             }
         }
 
