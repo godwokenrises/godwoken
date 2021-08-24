@@ -83,9 +83,6 @@ impl ChainUpdater {
             self.revert_to_valid_tip_on_l1().await?;
         }
 
-        let tip = self.rpc_client.get_tip().await?;
-        let tip_number = tip.number().unpack();
-
         let valid_tip_l1_block_number = {
             let chain = self.chain.lock().await;
             chain.local_state().last_synced().number().unpack()
@@ -131,7 +128,7 @@ impl ChainUpdater {
             last_cursor = Some(txs.last_cursor);
 
             log::debug!("Poll transactions: {}", txs.objects.len());
-            self.update(&txs.objects, tip_number).await?;
+            self.update(&txs.objects).await?;
         }
 
         if initial_syncing {
@@ -142,15 +139,15 @@ impl ChainUpdater {
         Ok(())
     }
 
-    pub async fn update(&mut self, txs: &[Tx], known_l1_tip: u64) -> anyhow::Result<()> {
+    pub async fn update(&mut self, txs: &[Tx]) -> anyhow::Result<()> {
         for tx in txs.iter() {
-            self.update_single(&tx.tx_hash, known_l1_tip).await?;
+            self.update_single(&tx.tx_hash).await?;
         }
 
         Ok(())
     }
 
-    async fn update_single(&mut self, tx_hash: &H256, known_l1_tip: u64) -> anyhow::Result<()> {
+    async fn update_single(&mut self, tx_hash: &H256) -> anyhow::Result<()> {
         if let Some(last_tx_hash) = &self.last_tx_hash {
             if last_tx_hash == tx_hash {
                 return Ok(());
@@ -231,7 +228,6 @@ impl ChainUpdater {
         let sync_param = SyncParam {
             reverts: vec![],
             updates: vec![update],
-            known_l1_tip: Some(known_l1_tip),
         };
         self.chain.lock().await.sync(sync_param)?;
 
@@ -317,7 +313,6 @@ impl ChainUpdater {
         self.chain.lock().await.sync(SyncParam {
             reverts: revert_l1_actions,
             updates: vec![],
-            known_l1_tip: None,
         })?;
 
         Ok(())

@@ -39,8 +39,6 @@ pub struct SyncParam {
     pub reverts: Vec<RevertedL1Action>,
     /// contains transitions from fork point to new tips
     pub updates: Vec<L1Action>,
-    /// known l1 tip
-    pub known_l1_tip: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
