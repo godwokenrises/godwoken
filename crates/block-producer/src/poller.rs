@@ -132,6 +132,12 @@ impl ChainUpdater {
             log::debug!("Poll transactions: {}", txs.objects.len());
             self.update(&txs.objects, tip_number).await?;
         }
+
+        {
+            // Start notify mem pool after synced
+            self.chain.lock().await.notify_mem_pool();
+        }
+
         Ok(())
     }
 
