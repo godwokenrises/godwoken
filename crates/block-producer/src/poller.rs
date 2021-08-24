@@ -63,6 +63,7 @@ impl ChainUpdater {
 
     // Start syncing
     pub async fn handle_event(&mut self, _event: ChainEvent) -> Result<()> {
+        let initial_syncing = !self.initialized;
         // Always start from last valid tip on l1
         if !self.initialized {
             self.revert_to_valid_tip_on_l1().await?;
@@ -133,9 +134,9 @@ impl ChainUpdater {
             self.update(&txs.objects, tip_number).await?;
         }
 
-        {
+        if initial_syncing {
             // Start notify mem pool after synced
-            self.chain.lock().await.notify_mem_pool();
+            self.chain.lock().await.complete_initial_syncing()?;
         }
 
         Ok(())
