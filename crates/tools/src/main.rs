@@ -4,6 +4,7 @@ mod create_creator_account;
 mod deploy_genesis;
 mod deploy_scripts;
 mod deposit_ckb;
+mod dump_tx;
 mod generate_config;
 mod get_balance;
 pub mod godwoken_rpc;
@@ -16,7 +17,9 @@ mod utils;
 mod withdraw;
 
 use clap::{value_t, App, Arg, SubCommand};
-use std::path::Path;
+use dump_tx::ChallengeBlock;
+use gw_jsonrpc_types::godwoken::ChallengeTargetType;
+use std::{path::Path, str::FromStr};
 
 fn main() {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
@@ -619,6 +622,44 @@ fn main() {
                         .takes_value(true)
                         .help("godwoken short address"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("dump-tx")
+                .about("Dump offchain cancel challenge tx")
+                .arg(arg_godwoken_rpc_url.clone())
+                .arg(
+                    Arg::with_name("block")
+                        .short("b")
+                        .long("block")
+                        .takes_value(true)
+                        .required(true)
+                        .help("challenge block"),
+                )
+                .arg(
+                    Arg::with_name("index")
+                        .short("i")
+                        .long("index")
+                        .takes_value(true)
+                        .required(true)
+                        .help("challenge target index"),
+                )
+                .arg(
+                    Arg::with_name("type")
+                        .short("t")
+                        .long("type")
+                        .takes_value(true)
+                        .required(true)
+                        .possible_values(&["tx_execution", "tx_signature", "withdrawal"])
+                        .help("challenge target type"),
+                )
+                .arg(
+                    Arg::with_name("output")
+                        .short("o")
+                        .long("output")
+                        .takes_value(true)
+                        .required(true)
+                        .help("output file"),
+                ),
         );
 
     let matches = app.clone().get_matches();
@@ -987,6 +1028,23 @@ fn main() {
 
             if let Err(err) = address::to_eth_eoa_address(godwoken_rpc_url, short_address) {
                 log::error!("To eth address error: {}", err);
+                std::process::exit(-1);
+            };
+        }
+        ("dump-tx", Some(m)) => {
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+            let block = ChallengeBlock::from_str(m.value_of("block").unwrap()).unwrap();
+            let index = u32::from_str(m.value_of("index").unwrap()).unwrap();
+            let type_ = match m.value_of("type").unwrap() {
+                "tx_execution" => ChallengeTargetType::TxExecution,
+                "tx_signature" => ChallengeTargetType::TxSignature,
+                "withdrawal" => ChallengeTargetType::Withdrawal,
+                _ => panic!("invalid challenge target type"),
+            };
+            let output = Path::new(m.value_of("output").unwrap());
+
+            if let Err(err) = dump_tx::dump_tx(godwoken_rpc_url, block, index, type_, output) {
+                log::error!("Dump offchain cancel challenge tx: {}", err);
                 std::process::exit(-1);
             };
         }

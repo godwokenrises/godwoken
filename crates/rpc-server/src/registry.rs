@@ -10,8 +10,8 @@ use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
     debugger::{DumpCancelChallengeTx, ReprMockTransaction},
     godwoken::{
-        ChallengeTargetType, GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus,
-        L2TransactionStatus, L2TransactionWithStatus, RunResult, TxReceipt,
+        GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus, L2TransactionStatus,
+        L2TransactionWithStatus, RunResult, TxReceipt,
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
