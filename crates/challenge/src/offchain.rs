@@ -31,12 +31,14 @@ pub mod mock_poa;
 pub mod mock_tx;
 pub mod verify_tx;
 pub use mock_block::RollBackSavePointError;
+pub use mock_tx::mock_cancel_challenge_tx;
+pub use verify_tx::dump_tx;
 
 use self::{
     mock_block::MockBlockParam,
     mock_poa::MockPoA,
     mock_tx::{MockOutput, MockRollup},
-    verify_tx::{dump_tx, verify_tx, RollupCellDeps, TxWithContext},
+    verify_tx::{verify_tx, RollupCellDeps, TxWithContext},
 };
 
 // TODO: More propery value

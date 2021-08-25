@@ -2022,6 +2022,7 @@ dependencies = [
  "gw-common",
  "gw-config",
  "gw-generator",
+ "gw-jsonrpc-types",
  "gw-mem-pool",
  "gw-store",
  "gw-traits",

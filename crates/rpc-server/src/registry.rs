@@ -1,14 +1,17 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
+use gw_chain::chain::Chain;
 use gw_common::{state::State, H256};
+use gw_config::DebugConfig;
 use gw_generator::{sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
+    debugger::{DumpCancelChallengeTx, ReprMockTransaction},
     godwoken::{
-        GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus, L2TransactionStatus,
-        L2TransactionWithStatus, RunResult, TxReceipt,
+        ChallengeTargetType, GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus,
+        L2TransactionStatus, L2TransactionWithStatus, RunResult, TxReceipt,
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
@@ -110,6 +113,8 @@ pub struct Registry {
     store: Store,
     tests_rpc_impl: Option<Arc<BoxedTestsRPCImpl>>,
     rollup_config: RollupConfig,
+    debug_config: DebugConfig,
+    chain: Arc<Mutex<Chain>>,
 }
 
 impl Registry {
@@ -119,6 +124,8 @@ impl Registry {
         generator: Arc<Generator>,
         tests_rpc_impl: Option<Box<T>>,
         rollup_config: RollupConfig,
+        debug_config: DebugConfig,
+        chain: Arc<Mutex<Chain>>,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -130,6 +137,8 @@ impl Registry {
             tests_rpc_impl: tests_rpc_impl
                 .map(|r| Arc::new(r as Box<dyn TestModeRPC + Sync + Send + 'static>)),
             rollup_config,
+            debug_config,
+            chain,
         }
     }
 
@@ -178,6 +187,14 @@ impl Registry {
                 .with_method("tests_produce_block", tests_produce_block)
                 .with_method("tests_should_produce_block", tests_should_produce_block)
                 .with_method("tests_get_global_state", tests_get_global_state);
+        }
+
+        // Debug
+        if self.debug_config.enable_debug_rpc {
+            server = server.with_data(Data::new(self.chain)).with_method(
+                "debug_dump_cancel_challenge_tx",
+                debug_dump_cancel_challenge_tx,
+            );
         }
 
         Ok(server.finish())
@@ -669,4 +686,38 @@ async fn tests_should_produce_block(
     tests_rpc_impl: Data<BoxedTestsRPCImpl>,
 ) -> Result<ShouldProduceBlock> {
     tests_rpc_impl.should_produce_block().await
+}
+
+async fn debug_dump_cancel_challenge_tx(
+    Params((target,)): Params<(DumpCancelChallengeTx,)>,
+    chain: Data<Arc<Mutex<Chain>>>,
+) -> Result<ReprMockTransaction> {
+    let chain = chain.lock().await;
+    let (block_hash, target_index, target_type) = match target {
+        DumpCancelChallengeTx::ByBlockHash {
+            block_hash,
+            target_index,
+            target_type,
+        } => (to_h256(block_hash), target_index, target_type),
+        DumpCancelChallengeTx::ByBlockNumber {
+            block_number,
+            target_index,
+            target_type,
+        } => {
+            let block_hash = {
+                let db = chain.store().begin_transaction();
+                db.get_block_hash_by_number(block_number.into())?
+                    .ok_or_else(|| anyhow!("block {} hash not found", block_number))?
+            };
+            (block_hash, target_index, target_type)
+        }
+    };
+
+    let target = gw_types::packed::ChallengeTarget::new_builder()
+        .block_hash(Into::<[u8; 32]>::into(block_hash).pack())
+        .target_index(target_index.value().pack())
+        .target_type(target_type.into())
+        .build();
+
+    chain.dump_cancel_challenge_tx(target)
 }

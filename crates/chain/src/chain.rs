@@ -1,11 +1,13 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Context, Result};
+use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainValidatorContext};
 use gw_common::{sparse_merkle_tree, state::State, H256};
 use gw_generator::{
     generator::{StateTransitionArgs, StateTransitionResult},
     ChallengeContext, Generator,
 };
+use gw_jsonrpc_types::debugger::ReprMockTransaction;
 use gw_mem_pool::pool::MemPool;
 use gw_store::{
     chain_view::ChainView,
@@ -149,6 +151,7 @@ pub struct Chain {
     generator: Arc<Generator>,
     mem_pool: Option<Arc<Mutex<MemPool>>>,
     complete_initial_syncing: bool,
+    offchain_validator_context: Option<OffChainValidatorContext>,
 }
 
 impl Chain {
@@ -158,6 +161,7 @@ impl Chain {
         store: Store,
         generator: Arc<Generator>,
         mem_pool: Option<Arc<Mutex<MemPool>>>,
+        offchain_validator_context: Option<OffChainValidatorContext>,
     ) -> Result<Self> {
         // convert serde types to gw-types
         assert_eq!(
@@ -194,6 +198,7 @@ impl Chain {
             rollup_type_script_hash,
             rollup_config_hash,
             complete_initial_syncing: false,
+            offchain_validator_context,
         })
     }
 
@@ -243,6 +248,40 @@ impl Chain {
         self.complete_initial_syncing = true;
 
         Ok(())
+    }
+
+    pub fn dump_cancel_challenge_tx(&self, target: ChallengeTarget) -> Result<ReprMockTransaction> {
+        let offchain_validator_context = match self.offchain_validator_context {
+            Some(ref ctx) => ctx,
+            None => bail!("unable to dump cancel challenge tx, no offchain validator context"),
+        };
+        let db = self.store().begin_transaction();
+
+        let verify_context =
+            gw_challenge::context::build_verify_context(Arc::clone(&self.generator), &db, &target)
+                .with_context(|| "dump cancel challenge tx from chain")?;
+
+        let global_state = {
+            let get_state = db.get_block_post_global_state(&target.block_hash().unpack())?;
+            let state = get_state
+                .ok_or_else(|| anyhow!("post global state for challenge target {:?}", target))?;
+            let to_builder = state.as_builder().status((Status::Halting as u8).into());
+            to_builder.build()
+        };
+
+        let mock_output = gw_challenge::offchain::mock_cancel_challenge_tx(
+            &offchain_validator_context.mock_rollup,
+            &offchain_validator_context.mock_poa,
+            global_state,
+            target,
+            verify_context,
+        )
+        .with_context(|| "dump cancel challenge tx from chain")?;
+
+        gw_challenge::offchain::dump_tx(
+            &offchain_validator_context.rollup_cell_deps,
+            TxWithContext::from(mock_output),
+        )
     }
 
     /// update a layer1 action
