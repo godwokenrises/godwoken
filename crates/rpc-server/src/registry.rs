@@ -8,7 +8,7 @@ use gw_generator::{sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
-    debugger::{DumpCancelChallengeTx, ReprMockTransaction},
+    debugger::{DumpChallengeTarget, ReprMockTransaction},
     godwoken::{
         GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus, L2TransactionStatus,
         L2TransactionWithStatus, RunResult, TxReceipt,
@@ -689,17 +689,17 @@ async fn tests_should_produce_block(
 }
 
 async fn debug_dump_cancel_challenge_tx(
-    Params((target,)): Params<(DumpCancelChallengeTx,)>,
+    Params((target,)): Params<(DumpChallengeTarget,)>,
     chain: Data<Arc<Mutex<Chain>>>,
 ) -> Result<ReprMockTransaction> {
     let chain = chain.lock().await;
     let (block_hash, target_index, target_type) = match target {
-        DumpCancelChallengeTx::ByBlockHash {
+        DumpChallengeTarget::ByBlockHash {
             block_hash,
             target_index,
             target_type,
         } => (to_h256(block_hash), target_index, target_type),
-        DumpCancelChallengeTx::ByBlockNumber {
+        DumpChallengeTarget::ByBlockNumber {
             block_number,
             target_index,
             target_type,

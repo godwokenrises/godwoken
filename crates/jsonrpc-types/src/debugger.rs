@@ -32,7 +32,7 @@ pub struct ReprMockTransaction {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum DumpCancelChallengeTx {
+pub enum DumpChallengeTarget {
     ByBlockHash {
         block_hash: JsonH256,
         target_index: json_types::Uint32,

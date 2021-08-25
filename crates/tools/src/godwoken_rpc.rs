@@ -2,7 +2,7 @@ use ckb_jsonrpc_types::Script;
 use ckb_types::H256;
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
-    debugger::{DumpCancelChallengeTx, ReprMockTransaction},
+    debugger::{DumpChallengeTarget, ReprMockTransaction},
     godwoken::{RunResult, TxReceipt},
 };
 use std::{u128, u32};
@@ -111,7 +111,7 @@ impl GodwokenRpcClient {
 
     pub fn debug_dump_cancel_challenge_tx(
         &mut self,
-        challenge_target: DumpCancelChallengeTx,
+        challenge_target: DumpChallengeTarget,
     ) -> Result<ReprMockTransaction, String> {
         let params = serde_json::to_value((challenge_target,)).map_err(|err| err.to_string())?;
         self.raw_rpc::<ReprMockTransaction>("debug_dump_cancel_challenge_tx", params)

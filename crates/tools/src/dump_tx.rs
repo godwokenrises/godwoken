@@ -1,7 +1,7 @@
 use crate::godwoken_rpc::GodwokenRpcClient;
 
 use ckb_fixed_hash::H256;
-use gw_jsonrpc_types::{debugger::DumpCancelChallengeTx, godwoken::ChallengeTargetType};
+use gw_jsonrpc_types::{debugger::DumpChallengeTarget, godwoken::ChallengeTargetType};
 
 use std::{fs::write, path::Path, str::FromStr};
 
@@ -33,12 +33,12 @@ pub fn dump_tx(
     output: &Path,
 ) -> Result<(), String> {
     let challenge_target = match block {
-        ChallengeBlock::Number(block_number) => DumpCancelChallengeTx::ByBlockNumber {
+        ChallengeBlock::Number(block_number) => DumpChallengeTarget::ByBlockNumber {
             block_number: block_number.into(),
             target_index: target_index.into(),
             target_type,
         },
-        ChallengeBlock::Hash(block_hash) => DumpCancelChallengeTx::ByBlockHash {
+        ChallengeBlock::Hash(block_hash) => DumpChallengeTarget::ByBlockHash {
             block_hash,
             target_index: target_index.into(),
             target_type,
