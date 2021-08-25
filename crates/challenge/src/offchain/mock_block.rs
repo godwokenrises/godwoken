@@ -152,6 +152,19 @@ impl MockBlockParam {
             bail!("duplicate transaction {}", tx.hash().pack());
         }
 
+        if self.transactions.inner.is_empty() {
+            let checkpoint = {
+                let tree = state_db.state_tree()?;
+                let prev_txs_state = tree.get_merkle_state();
+                calculate_state_checkpoint(
+                    &prev_txs_state.merkle_root().unpack(),
+                    prev_txs_state.count().unpack(),
+                )
+            };
+
+            self.transactions.set_prev_txs_checkpoint(checkpoint);
+        }
+
         let apply = |state: &mut StateTree<'_, '_>| -> Result<AccountMerkleState> {
             state.apply_run_result(run_result)?;
             let post_account = state.merkle_state()?;
