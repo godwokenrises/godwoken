@@ -7,4 +7,3 @@
 //! * Submit new blocks to layer1(as an block_producer)
 
 pub mod chain;
-pub mod challenge;

@@ -1,5 +1,6 @@
+use crate::types::{RevertContext, RevertWitness, VerifyContext, VerifyWitness};
+
 use anyhow::{anyhow, Result};
-use gw_challenge::types::{RevertContext, RevertWitness, VerifyContext, VerifyWitness};
 use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::calculate_state_checkpoint;
 use gw_common::smt::{Blake2bHasher, SMT};
