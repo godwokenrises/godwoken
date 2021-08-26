@@ -698,9 +698,9 @@ fn build_post_account_and_rollback(
     state_db: &StateDBTransaction<'_>,
     mut apply_fn: impl FnMut(&mut StateTree<'_, '_>) -> Result<AccountMerkleState>,
 ) -> Result<AccountMerkleState> {
-    db.set_save_point();
     let mut state = state_db.state_tree()?;
 
+    db.set_save_point();
     let apply_result = apply_fn(&mut state);
     db.rollback_to_save_point()
         .map_err(RollBackSavePointError)?;
