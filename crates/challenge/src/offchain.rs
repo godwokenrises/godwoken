@@ -215,7 +215,7 @@ impl OffChainCancelChallengeValidator {
             safe_margin.check_and_update(
                 challenge.raw_block_size,
                 mock_output.tx.as_slice().len() as u64,
-                RawBlock::New,
+                RawBlockFlag::New,
             )?;
 
             let cycles = verify_tx(
@@ -270,7 +270,8 @@ impl OffChainCancelChallengeValidator {
             - MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES;
 
         let verify_signature = |tx_with_context: &mut Option<TxWithContext>,
-                                safe_margin: &mut MarginOfMockBlockSafity|
+                                safe_margin: &mut MarginOfMockBlockSafity,
+                                raw_block_flag: &mut RawBlockFlag|
          -> Result<_> {
             let challenge = block_param.challenge_last_tx_signature(db, state_db)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
@@ -286,8 +287,11 @@ impl OffChainCancelChallengeValidator {
             safe_margin.check_and_update(
                 challenge.raw_block_size,
                 mock_output.tx.as_slice().len() as u64,
-                RawBlock::New,
+                *raw_block_flag,
             )?;
+            if *raw_block_flag == RawBlockFlag::New {
+                *raw_block_flag = RawBlockFlag::Prev;
+            }
 
             let cycles = verify_tx(
                 &validator_ctx.rollup_cell_deps,
@@ -299,7 +303,8 @@ impl OffChainCancelChallengeValidator {
         };
 
         let verify_execution = |tx_with_context: &mut Option<TxWithContext>,
-                                safe_margin: &mut MarginOfMockBlockSafity|
+                                safe_margin: &mut MarginOfMockBlockSafity,
+                                raw_block_flag: &mut RawBlockFlag|
          -> Result<_> {
             let challenge = block_param.challenge_last_tx_execution(db, state_db, run_result)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
@@ -315,8 +320,11 @@ impl OffChainCancelChallengeValidator {
             safe_margin.check_and_update(
                 challenge.raw_block_size,
                 mock_output.tx.as_slice().len() as u64,
-                RawBlock::Prev,
+                *raw_block_flag,
             )?;
+            if *raw_block_flag == RawBlockFlag::New {
+                *raw_block_flag = RawBlockFlag::Prev;
+            }
 
             let cycles = verify_tx(
                 &validator_ctx.rollup_cell_deps,
@@ -334,6 +342,7 @@ impl OffChainCancelChallengeValidator {
 
         let mut tx_with_context = None;
         let mut dump_prefix = "tx-signature";
+        let mut raw_block_flag = RawBlockFlag::New;
         let mut cycles = VerifyTxCycles {
             signature: None,
             execution: None,
@@ -341,12 +350,14 @@ impl OffChainCancelChallengeValidator {
 
         let verify = || -> Result<_> {
             if validator_config.verify_tx_signature {
-                cycles.signature = verify_signature(&mut tx_with_context, safe_margin)?;
+                cycles.signature =
+                    verify_signature(&mut tx_with_context, safe_margin, &mut raw_block_flag)?;
             }
 
             if validator_config.verify_tx_execution {
                 dump_prefix = "tx-execution";
-                cycles.execution = verify_execution(&mut tx_with_context, safe_margin)?;
+                cycles.execution =
+                    verify_execution(&mut tx_with_context, safe_margin, &mut raw_block_flag)?;
             }
 
             Ok(Some(cycles))
@@ -407,7 +418,8 @@ struct MarginOfMockBlockSafity {
     prev_raw_block_size: u64,
 }
 
-enum RawBlock {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RawBlockFlag {
     New,
     Prev,
 }
@@ -417,7 +429,7 @@ impl MarginOfMockBlockSafity {
         &mut self,
         raw_block_size: u64,
         tx_size: u64,
-        raw_block: RawBlock,
+        raw_block: RawBlockFlag,
     ) -> Result<()> {
         if tx_size > MARGIN_OF_MOCK_BLOCK_SAFITY_TX_SIZE_LIMIT {
             bail!(
@@ -436,7 +448,7 @@ impl MarginOfMockBlockSafity {
 
         // Check size for packaged withdrawals and txs
         let new_remain_package_size = match raw_block {
-            RawBlock::New => {
+            RawBlockFlag::New => {
                 assert!(
                     raw_block_size > self.prev_raw_block_size,
                     "checkpoint should increase raw block size"
@@ -448,7 +460,7 @@ impl MarginOfMockBlockSafity {
                     None => bail!("reach max block size limit"),
                 }
             }
-            RawBlock::Prev => self.remain_package_size,
+            RawBlockFlag::Prev => self.remain_package_size,
         };
 
         // Update size
