@@ -482,6 +482,7 @@ impl Generator {
             used_cycles = machine.machine.cycles();
         }
         // record used cycles
+        log::debug!("used cycles of l2tx: {}", used_cycles);
         run_result.used_cycles = used_cycles;
 
         // check nonce is increased by backends

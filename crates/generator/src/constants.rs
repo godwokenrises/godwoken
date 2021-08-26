@@ -7,4 +7,4 @@ pub const MAX_WRITE_DATA_BYTES_LIMIT: usize = 25_000;
 // 2MB
 pub const MAX_READ_DATA_BYTES_LIMIT: usize = 1024 * 1024 * 2;
 // max cycles
-pub const L2TX_MAX_CYCLES: u64 = 5000_0000;
+pub const L2TX_MAX_CYCLES: u64 = 70_000_000;
