@@ -39,7 +39,8 @@ use self::{
     verify_tx::{dump_tx, verify_tx, RollupCellDeps, TxWithContext},
 };
 
-const MAX_TX_WITHDRAWAL_PROOF_SIZE: u64 = 32 * 33 + 1;
+// TODO: More propery value
+const MAX_TX_WITHDRAWAL_PROOF_SIZE: u64 = 100 * 1024;
 // TODO: Relax limit
 const MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES: u64 = 5_000_000;
 const MARGIN_OF_MOCK_BLOCK_SAFITY_TX_SIZE_LIMIT: u64 =
