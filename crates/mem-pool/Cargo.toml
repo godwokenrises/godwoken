@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 gw-types = { path = "../types" }
 gw-common = { path = "../common" }
+gw-challenge = { path = "../challenge" }
 gw-generator = { path = "../generator" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }

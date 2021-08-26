@@ -8,7 +8,10 @@
 //! txs & withdrawals again.
 //!
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
+use gw_challenge::offchain::{
+    OffChainCancelChallengeValidator, OffChainValidatorContext, RollBackSavePointError,
+};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     state::{to_short_address, State},
@@ -27,7 +30,7 @@ use gw_types::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, RawL2Transaction, Script, TxReceipt,
         WithdrawalRequest,
     },
-    prelude::{Entity, Unpack},
+    prelude::{Entity, Pack, Unpack},
 };
 use std::{
     cmp::{max, min},
@@ -63,6 +66,8 @@ pub struct MemPool {
     mem_block: MemBlock,
     /// Mem pool provider
     provider: Box<dyn MemPoolProvider + Send>,
+    /// Offchain cancel challenge validator
+    offchain_validator: Option<OffChainCancelChallengeValidator>,
 }
 
 impl MemPool {
@@ -70,6 +75,7 @@ impl MemPool {
         store: Store,
         generator: Arc<Generator>,
         provider: Box<dyn MemPoolProvider + Send>,
+        offchain_validator_context: Option<OffChainValidatorContext>,
     ) -> Result<Self> {
         let pending = Default::default();
         let all_txs = Default::default();
@@ -78,6 +84,21 @@ impl MemPool {
         let tip_block = store.get_tip_block()?;
         let tip = (tip_block.hash().into(), tip_block.raw().number().unpack());
 
+        let mem_block: MemBlock = Default::default();
+        let reverted_block_root = {
+            let db = store.begin_transaction();
+            let smt = db.reverted_block_smt()?;
+            smt.root().to_owned()
+        };
+        let offchain_validator = offchain_validator_context.map(|offchain_validator_context| {
+            OffChainCancelChallengeValidator::new(
+                offchain_validator_context,
+                mem_block.block_producer_id().pack(),
+                &tip_block,
+                reverted_block_root,
+            )
+        });
+
         let mut mem_pool = MemPool {
             store,
             current_tip: tip,
@@ -85,8 +106,9 @@ impl MemPool {
             pending,
             all_txs,
             all_withdrawals,
-            mem_block: Default::default(),
+            mem_block,
             provider,
+            offchain_validator,
         };
 
         // set tip
@@ -495,6 +517,14 @@ impl MemPool {
         // estimate next l2block timestamp
         let estimated_timestamp = smol::block_on(self.provider.estimate_next_blocktime())?;
         let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
+        let reverted_block_root: H256 = {
+            let db = self.store.begin_transaction();
+            let smt = db.reverted_block_smt()?;
+            smt.root().to_owned()
+        };
+        if let Some(ref mut offchain_validator) = self.offchain_validator {
+            offchain_validator.reset(&new_tip_block, reverted_block_root);
+        }
 
         // set tip
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
@@ -628,6 +658,9 @@ impl MemPool {
         self.mem_block
             .push_deposits(deposit_cells, prev_state_checkpoint);
         state.submit_tree_to_mem_block()?;
+        if let Some(ref mut offchain_validator) = self.offchain_validator {
+            offchain_validator.set_prev_txs_checkpoint(prev_state_checkpoint);
+        }
         let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
         self.mem_block
             .append_touched_keys(touched_keys.borrow().iter().cloned());
@@ -734,6 +767,27 @@ impl MemPool {
                 continue;
             }
 
+            if let Some(ref mut offchain_validator) = self.offchain_validator {
+                match offchain_validator.verify_withdrawal_request(
+                    db,
+                    &state_db,
+                    withdrawal.clone(),
+                ) {
+                    Ok(cycles) => log::debug!("[mem-pool] offchain withdrawal cycles {:?}", cycles),
+                    Err(err) => match err.downcast_ref::<RollBackSavePointError>() {
+                        Some(err) => bail!("{}", err),
+                        None => {
+                            log::info!(
+                                "[mem-pool] withdrawal contextual verification failed : {}",
+                                err
+                            );
+                            unused_withdrawals.push(withdrawal_hash);
+                            continue;
+                        }
+                    },
+                }
+            }
+
             // update the state
             match state.apply_withdrawal_request(
                 self.generator.rollup_context(),
@@ -779,6 +833,12 @@ impl MemPool {
         let run_result =
             self.generator
                 .execute_transaction(&chain_view, &state, &block_info, &raw_tx)?;
+
+        if let Some(ref mut offchain_validator) = self.offchain_validator {
+            let cycles =
+                offchain_validator.verify_transaction(db, &state_db, tx.clone(), &run_result)?;
+            log::debug!("[mem-pool] offchain verify tx cycles {:?}", cycles);
+        }
 
         // apply run result
         state.apply_run_result(&run_result)?;

@@ -18,6 +18,7 @@ use std::time::Duration;
 /// Transaction since flag
 const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
 
+#[derive(Clone)]
 struct PoASetup {
     identity_size: u8,
     round_interval_uses_seconds: bool,
@@ -87,9 +88,10 @@ impl PoASetup {
     }
 }
 
+#[derive(Clone)]
 pub struct PoAContext {
-    poa_data: PoAData,
-    poa_data_cell: CellInfo,
+    pub poa_data: PoAData,
+    pub poa_data_cell: CellInfo,
     poa_setup: PoASetup,
     poa_setup_cell: CellInfo,
     block_producer_index: u16,
@@ -262,14 +264,24 @@ impl PoA {
         inputs: &[InputCellInfo],
         median_time: Duration,
     ) -> Result<GeneratedPoA> {
+        let poa_context = self.query_poa_context(poa_cell_input).await?;
+        self.generate_by_context(poa_context, inputs, median_time)
+            .await
+    }
+
+    pub async fn generate_by_context(
+        &self,
+        poa_context: PoAContext,
+        inputs: &[InputCellInfo],
+        median_time: Duration,
+    ) -> Result<GeneratedPoA> {
         let PoAContext {
             poa_data,
             poa_data_cell,
             poa_setup,
             poa_setup_cell,
             block_producer_index,
-        } = self.query_poa_context(poa_cell_input).await?;
-
+        } = poa_context;
         let mut cell_deps = Vec::new();
 
         // put cell deps

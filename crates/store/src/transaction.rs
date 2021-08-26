@@ -66,6 +66,14 @@ impl StoreTransaction {
         self.inner.rollback()
     }
 
+    pub fn set_save_point(&self) {
+        self.inner.set_savepoint()
+    }
+
+    pub fn rollback_to_save_point(&self) -> Result<(), Error> {
+        self.inner.rollback_to_savepoint()
+    }
+
     pub fn setup_chain_id(&self, chain_id: H256) -> Result<(), Error> {
         self.insert_raw(COLUMN_META, META_CHAIN_ID_KEY, chain_id.as_slice())?;
         Ok(())

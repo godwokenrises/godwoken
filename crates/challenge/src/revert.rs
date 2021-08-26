@@ -1,8 +1,8 @@
+use crate::types::{RevertContext, RevertWitness};
+
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::Reader;
 use ckb_types::prelude::{Builder, Entity};
-use gw_chain::challenge::RevertContext;
-use gw_chain::challenge::RevertWitness;
 use gw_common::smt::Blake2bHasher;
 use gw_common::H256;
 use gw_types::core::Status;

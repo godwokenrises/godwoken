@@ -19,6 +19,7 @@ pub struct Config {
     pub debug: DebugConfig,
     pub block_producer: Option<BlockProducerConfig>,
     pub web3_indexer: Option<Web3IndexerConfig>,
+    pub offchain_validator: OffChainValidatorConfig,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -125,6 +126,29 @@ pub struct Web3IndexerConfig {
     pub polyjuice_script_type_hash: H256,
     pub eth_account_lock_hash: H256,
     pub tron_account_lock_hash: Option<H256>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct OffChainValidatorConfig {
+    pub enable: bool,
+    pub verify_withdrawal_signature: bool,
+    pub verify_tx_signature: bool,
+    pub verify_tx_execution: bool,
+    pub verify_max_cycles: u64,
+    pub dump_tx_on_failure: bool,
+}
+
+impl Default for OffChainValidatorConfig {
+    fn default() -> Self {
+        Self {
+            enable: true,
+            verify_withdrawal_signature: true,
+            verify_tx_signature: true,
+            verify_tx_execution: true,
+            verify_max_cycles: 70_000_000,
+            dump_tx_on_failure: false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

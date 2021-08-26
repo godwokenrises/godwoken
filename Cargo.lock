@@ -1986,6 +1986,7 @@ dependencies = [
  "faster-hex 0.4.1",
  "futures 0.3.13",
  "gw-chain",
+ "gw-challenge",
  "gw-common",
  "gw-config",
  "gw-db",
@@ -2017,6 +2018,7 @@ dependencies = [
  "anyhow",
  "ckb-fixed-hash",
  "crossbeam-channel 0.5.0",
+ "gw-challenge",
  "gw-common",
  "gw-config",
  "gw-generator",
@@ -2030,6 +2032,36 @@ dependencies = [
  "smol",
  "thiserror",
  "toml",
+]
+
+[[package]]
+name = "gw-challenge"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ckb-chain-spec",
+ "ckb-crypto",
+ "ckb-fixed-hash",
+ "ckb-script",
+ "ckb-traits",
+ "ckb-types",
+ "faster-hex 0.4.1",
+ "gw-common",
+ "gw-config",
+ "gw-db",
+ "gw-generator",
+ "gw-jsonrpc-types",
+ "gw-poa",
+ "gw-rpc-client",
+ "gw-store",
+ "gw-traits",
+ "gw-types",
+ "hex",
+ "log",
+ "rand 0.8.2",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -2108,6 +2140,7 @@ name = "gw-mem-pool"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "gw-challenge",
  "gw-common",
  "gw-generator",
  "gw-poa",
