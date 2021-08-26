@@ -19,13 +19,13 @@ use std::time::Duration;
 const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
 
 #[derive(Clone)]
-pub struct PoASetup {
-    pub identity_size: u8,
-    pub round_interval_uses_seconds: bool,
-    pub identities: Vec<Vec<u8>>,
-    pub block_producers_change_threshold: u8,
-    pub round_intervals: u32,
-    pub subblocks_per_round: u32,
+struct PoASetup {
+    identity_size: u8,
+    round_interval_uses_seconds: bool,
+    identities: Vec<Vec<u8>>,
+    block_producers_change_threshold: u8,
+    round_intervals: u32,
+    subblocks_per_round: u32,
 }
 
 impl PoASetup {
