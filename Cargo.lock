@@ -2220,6 +2220,7 @@ dependencies = [
  "faster-hex 0.4.1",
  "futures 0.3.13",
  "gw-chain",
+ "gw-challenge",
  "gw-common",
  "gw-config",
  "gw-generator",

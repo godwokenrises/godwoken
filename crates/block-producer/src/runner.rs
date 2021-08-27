@@ -360,7 +360,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             store.clone(),
             generator.clone(),
             mem_pool.clone(),
-            offchain_validator_context,
         )
         .with_context(|| "create chain")?,
     ));
@@ -485,6 +484,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         rollup_config,
         config.debug.clone(),
         Arc::clone(&chain),
+        offchain_validator_context,
     );
 
     let (s, ctrl_c) = async_channel::bounded(100);

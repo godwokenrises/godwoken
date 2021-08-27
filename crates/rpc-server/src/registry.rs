@@ -2,6 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
+use gw_challenge::offchain::OffChainValidatorContext;
 use gw_common::{state::State, H256};
 use gw_config::DebugConfig;
 use gw_generator::{sudt::build_l2_sudt_script, Generator};
@@ -118,6 +119,7 @@ pub struct Registry {
     rollup_config: RollupConfig,
     debug_config: DebugConfig,
     chain: Arc<Mutex<Chain>>,
+    offchain_validator_context: Option<OffChainValidatorContext>,
 }
 
 impl Registry {
@@ -129,6 +131,7 @@ impl Registry {
         rollup_config: RollupConfig,
         debug_config: DebugConfig,
         chain: Arc<Mutex<Chain>>,
+        offchain_validator_context: Option<OffChainValidatorContext>,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -142,6 +145,7 @@ impl Registry {
             rollup_config,
             debug_config,
             chain,
+            offchain_validator_context,
         }
     }
 
@@ -194,10 +198,13 @@ impl Registry {
 
         // Debug
         if self.debug_config.enable_debug_rpc {
-            server = server.with_data(Data::new(self.chain)).with_method(
-                "debug_dump_cancel_challenge_tx",
-                debug_dump_cancel_challenge_tx,
-            );
+            server = server
+                .with_data(Data::new(self.chain))
+                .with_data(Data::new(self.offchain_validator_context))
+                .with_method(
+                    "debug_dump_cancel_challenge_tx",
+                    debug_dump_cancel_challenge_tx,
+                );
         }
 
         Ok(server.finish())
@@ -694,7 +701,18 @@ async fn tests_should_produce_block(
 async fn debug_dump_cancel_challenge_tx(
     Params((target,)): Params<(DumpChallengeTarget,)>,
     chain: Data<Arc<Mutex<Chain>>>,
+    offchain_validator_context: Data<Option<OffChainValidatorContext>>,
 ) -> Result<ReprMockTransaction, RpcError> {
+    let offchain_validator_context = match *offchain_validator_context {
+        Some(ref ctx) => ctx,
+        None => {
+            return Err(RpcError::Provided {
+                code: INTERNAL_ERROR_ERR_CODE,
+                message: "offchain validator is not enable, unable to dump cancel challenge tx",
+            })
+        }
+    };
+
     let to_block_hash = |chain: &Chain, block_number: u64| -> Result<H256, RpcError> {
         let db = chain.store().begin_transaction();
         match db.get_block_hash_by_number(block_number) {
@@ -735,7 +753,7 @@ async fn debug_dump_cancel_challenge_tx(
         .target_type(target_type.into())
         .build();
 
-    let maybe_tx = chain.dump_cancel_challenge_tx(target);
+    let maybe_tx = chain.dump_cancel_challenge_tx(offchain_validator_context, target);
     maybe_tx.map_err(|err| RpcError::Full {
         code: INTERNAL_ERROR_ERR_CODE,
         message: err.to_string(),

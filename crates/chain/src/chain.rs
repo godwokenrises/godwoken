@@ -1,6 +1,6 @@
 #![allow(clippy::clippy::mutable_key_type)]
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainValidatorContext};
 use gw_common::{sparse_merkle_tree, state::State, H256};
 use gw_generator::{
@@ -151,7 +151,6 @@ pub struct Chain {
     generator: Arc<Generator>,
     mem_pool: Option<Arc<Mutex<MemPool>>>,
     complete_initial_syncing: bool,
-    offchain_validator_context: Option<OffChainValidatorContext>,
 }
 
 impl Chain {
@@ -161,7 +160,6 @@ impl Chain {
         store: Store,
         generator: Arc<Generator>,
         mem_pool: Option<Arc<Mutex<MemPool>>>,
-        offchain_validator_context: Option<OffChainValidatorContext>,
     ) -> Result<Self> {
         // convert serde types to gw-types
         assert_eq!(
@@ -198,7 +196,6 @@ impl Chain {
             rollup_type_script_hash,
             rollup_config_hash,
             complete_initial_syncing: false,
-            offchain_validator_context,
         })
     }
 
@@ -250,11 +247,11 @@ impl Chain {
         Ok(())
     }
 
-    pub fn dump_cancel_challenge_tx(&self, target: ChallengeTarget) -> Result<ReprMockTransaction> {
-        let offchain_validator_context = match self.offchain_validator_context {
-            Some(ref ctx) => ctx,
-            None => bail!("unable to dump cancel challenge tx, no offchain validator context"),
-        };
+    pub fn dump_cancel_challenge_tx(
+        &self,
+        offchain_validator_context: &OffChainValidatorContext,
+        target: ChallengeTarget,
+    ) -> Result<ReprMockTransaction> {
         let db = self.store().begin_transaction();
 
         let verify_context =
