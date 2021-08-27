@@ -19,6 +19,7 @@ pub struct Config {
     pub debug: DebugConfig,
     pub block_producer: Option<BlockProducerConfig>,
     pub web3_indexer: Option<Web3IndexerConfig>,
+    #[serde(default)]
     pub offchain_validator: OffChainValidatorConfig,
     #[serde(default)]
     pub mem_pool: MemPoolConfig,
