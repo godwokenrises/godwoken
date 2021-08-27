@@ -123,6 +123,7 @@ pub struct Registry {
 }
 
 impl Registry {
+    #[allow(clippy::too_many_arguments)]
     pub fn new<T>(
         store: Store,
         mem_pool: MemPool,
