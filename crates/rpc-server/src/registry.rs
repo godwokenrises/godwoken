@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
@@ -38,7 +38,9 @@ type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
 type GwUint64 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint64;
 
 const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
+const INTERNAL_ERROR_ERR_CODE: i64 = -32099;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
+const INVALID_PARAM_ERR_CODE: i64 = -32602;
 
 fn header_not_found_err() -> RpcError {
     RpcError::Provided {
@@ -46,6 +48,7 @@ fn header_not_found_err() -> RpcError {
         message: "header not found",
     }
 }
+
 fn mem_pool_is_disabled_err() -> RpcError {
     RpcError::Provided {
         code: METHOD_NOT_AVAILABLE_ERR_CODE,
@@ -691,7 +694,23 @@ async fn tests_should_produce_block(
 async fn debug_dump_cancel_challenge_tx(
     Params((target,)): Params<(DumpChallengeTarget,)>,
     chain: Data<Arc<Mutex<Chain>>>,
-) -> Result<ReprMockTransaction> {
+) -> Result<ReprMockTransaction, RpcError> {
+    let to_block_hash = |chain: &Chain, block_number: u64| -> Result<H256, RpcError> {
+        let db = chain.store().begin_transaction();
+        match db.get_block_hash_by_number(block_number.into()) {
+            Ok(Some(hash)) => Ok(hash),
+            Ok(None) => Err(RpcError::Provided {
+                code: INVALID_PARAM_ERR_CODE,
+                message: "block hash not found",
+            }),
+            Err(err) => Err(RpcError::Full {
+                code: INTERNAL_ERROR_ERR_CODE,
+                message: err.to_string(),
+                data: None,
+            }),
+        }
+    };
+
     let chain = chain.lock().await;
     let (block_hash, target_index, target_type) = match target {
         DumpChallengeTarget::ByBlockHash {
@@ -703,14 +722,11 @@ async fn debug_dump_cancel_challenge_tx(
             block_number,
             target_index,
             target_type,
-        } => {
-            let block_hash = {
-                let db = chain.store().begin_transaction();
-                db.get_block_hash_by_number(block_number.into())?
-                    .ok_or_else(|| anyhow!("block {} hash not found", block_number))?
-            };
-            (block_hash, target_index, target_type)
-        }
+        } => (
+            to_block_hash(&chain, block_number.into())?,
+            target_index,
+            target_type,
+        ),
     };
 
     let target = gw_types::packed::ChallengeTarget::new_builder()
@@ -719,5 +735,10 @@ async fn debug_dump_cancel_challenge_tx(
         .target_type(target_type.into())
         .build();
 
-    chain.dump_cancel_challenge_tx(target)
+    let maybe_tx = chain.dump_cancel_challenge_tx(target);
+    maybe_tx.map_err(|err| RpcError::Full {
+        code: INTERNAL_ERROR_ERR_CODE,
+        message: err.to_string(),
+        data: None,
+    })
 }
