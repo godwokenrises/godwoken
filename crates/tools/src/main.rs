@@ -624,7 +624,7 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("dump-tx")
+            SubCommand::with_name("dump-cancel-challenge-tx")
                 .about("Dump offchain cancel challenge tx")
                 .arg(arg_godwoken_rpc_url.clone())
                 .arg(
@@ -1031,7 +1031,7 @@ fn main() {
                 std::process::exit(-1);
             };
         }
-        ("dump-tx", Some(m)) => {
+        ("dump-cancel-challenge-tx", Some(m)) => {
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
             let block = ChallengeBlock::from_str(m.value_of("block").unwrap()).unwrap();
             let index = u32::from_str(m.value_of("index").unwrap()).unwrap();
