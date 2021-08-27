@@ -768,6 +768,7 @@ pub struct RawWithdrawalRequest {
     pub owner_lock_hash: H256,
     // layer1 lock to receive the payment, must exists on the chain
     pub payment_lock_hash: H256,
+    pub fee: Fee,
 }
 
 impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
@@ -782,6 +783,7 @@ impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
             account_script_hash,
             owner_lock_hash,
             payment_lock_hash,
+            fee,
         } = json;
         packed::RawWithdrawalRequest::new_builder()
             .nonce(u32::from(nonce).pack())
@@ -793,6 +795,7 @@ impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
             .account_script_hash(account_script_hash.pack())
             .owner_lock_hash(owner_lock_hash.pack())
             .payment_lock_hash(payment_lock_hash.pack())
+            .fee(fee.into())
             .build()
     }
 }
@@ -814,6 +817,35 @@ impl From<packed::RawWithdrawalRequest> for RawWithdrawalRequest {
             account_script_hash: raw_withdrawal_request.account_script_hash().unpack(),
             owner_lock_hash: raw_withdrawal_request.owner_lock_hash().unpack(),
             payment_lock_hash: raw_withdrawal_request.payment_lock_hash().unpack(),
+            fee: raw_withdrawal_request.fee().into(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct Fee {
+    pub sudt_id: Uint32,
+    pub amount: Uint128,
+}
+
+impl From<Fee> for packed::Fee {
+    fn from(json: Fee) -> packed::Fee {
+        let Fee { sudt_id, amount } = json;
+        packed::Fee::new_builder()
+            .sudt_id(u32::from(sudt_id).pack())
+            .amount(u128::from(amount).pack())
+            .build()
+    }
+}
+
+impl From<packed::Fee> for Fee {
+    fn from(fee: packed::Fee) -> Fee {
+        let sudt_id: u32 = fee.sudt_id().unpack();
+        let amount: u128 = fee.amount().unpack();
+        Self {
+            sudt_id: sudt_id.into(),
+            amount: amount.into(),
         }
     }
 }
