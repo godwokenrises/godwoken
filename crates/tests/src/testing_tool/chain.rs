@@ -146,6 +146,7 @@ pub fn setup_chain_with_account_lock_manage(
         store,
         generator,
         Some(Arc::new(Mutex::new(mem_pool))),
+        None,
     )
     .unwrap()
 }
