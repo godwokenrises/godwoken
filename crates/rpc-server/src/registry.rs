@@ -697,7 +697,7 @@ async fn debug_dump_cancel_challenge_tx(
 ) -> Result<ReprMockTransaction, RpcError> {
     let to_block_hash = |chain: &Chain, block_number: u64| -> Result<H256, RpcError> {
         let db = chain.store().begin_transaction();
-        match db.get_block_hash_by_number(block_number.into()) {
+        match db.get_block_hash_by_number(block_number) {
             Ok(Some(hash)) => Ok(hash),
             Ok(None) => Err(RpcError::Provided {
                 code: INVALID_PARAM_ERR_CODE,
