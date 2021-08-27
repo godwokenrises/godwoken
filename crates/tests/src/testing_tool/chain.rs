@@ -137,6 +137,7 @@ pub fn setup_chain_with_account_lock_manage(
         Arc::clone(&generator),
         Box::new(provider),
         None,
+        Default::default(),
     )
     .unwrap();
     Chain::create(
