@@ -2142,6 +2142,7 @@ dependencies = [
  "anyhow",
  "gw-challenge",
  "gw-common",
+ "gw-config",
  "gw-generator",
  "gw-poa",
  "gw-rpc-client",

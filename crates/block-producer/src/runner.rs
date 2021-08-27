@@ -339,6 +339,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     generator.clone(),
                     Box::new(mem_pool_provider),
                     offchain_validator_context,
+                    config.mem_pool.clone(),
                 )
                 .with_context(|| "create mem-pool")?,
             ));

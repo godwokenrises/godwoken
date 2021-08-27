@@ -375,21 +375,23 @@ impl Generator {
 
             // build call context
             // NOTICE users only allowed to send HandleMessage CallType txs
-            let run_result = match self.execute_transaction(chain, state, &block_info, &raw_tx) {
-                Ok(run_result) => run_result,
-                Err(err) => {
-                    let target = build_challenge_target(
-                        block_hash.into(),
-                        ChallengeTargetType::TxExecution,
-                        tx_index as u32,
-                    );
+            let run_result =
+                match self.execute_transaction(chain, state, &block_info, &raw_tx, L2TX_MAX_CYCLES)
+                {
+                    Ok(run_result) => run_result,
+                    Err(err) => {
+                        let target = build_challenge_target(
+                            block_hash.into(),
+                            ChallengeTargetType::TxExecution,
+                            tx_index as u32,
+                        );
 
-                    return StateTransitionResult::Challenge {
-                        target,
-                        error: Error::Transaction(err),
-                    };
-                }
-            };
+                        return StateTransitionResult::Challenge {
+                            target,
+                            error: Error::Transaction(err),
+                        };
+                    }
+                };
 
             let apply_result = || -> Result<(), Error> {
                 state.apply_run_result(&run_result)?;
@@ -448,6 +450,7 @@ impl Generator {
         state: &S,
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
+        max_cycles: u64,
     ) -> Result<RunResult, TransactionError> {
         let sender_id: u32 = raw_tx.from_id().unpack();
         let nonce_before_execution = state.get_nonce(sender_id)?;
@@ -455,7 +458,7 @@ impl Generator {
         let mut run_result = RunResult::default();
         let used_cycles;
         {
-            let core_machine = AsmCoreMachine::new_with_max_cycles(L2TX_MAX_CYCLES);
+            let core_machine = AsmCoreMachine::new_with_max_cycles(max_cycles);
             let machine_builder = DefaultMachineBuilder::new(core_machine)
                 .syscall(Box::new(L2Syscalls {
                     chain,

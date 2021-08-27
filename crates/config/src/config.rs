@@ -20,6 +20,8 @@ pub struct Config {
     pub block_producer: Option<BlockProducerConfig>,
     pub web3_indexer: Option<Web3IndexerConfig>,
     pub offchain_validator: OffChainValidatorConfig,
+    #[serde(default)]
+    pub mem_pool: MemPoolConfig,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -147,6 +149,19 @@ impl Default for OffChainValidatorConfig {
             verify_tx_execution: true,
             verify_max_cycles: 70_000_000,
             dump_tx_on_failure: false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MemPoolConfig {
+    pub execute_l2tx_max_cycles: u64,
+}
+
+impl Default for MemPoolConfig {
+    fn default() -> Self {
+        Self {
+            execute_l2tx_max_cycles: 100_000_000,
         }
     }
 }

@@ -17,7 +17,8 @@ use gw_common::{
     state::{to_short_address, State},
     H256,
 };
-use gw_generator::{traits::StateExt, Generator};
+use gw_config::MemPoolConfig;
+use gw_generator::{constants::L2TX_MAX_CYCLES, traits::StateExt, Generator};
 use gw_store::{
     chain_view::ChainView,
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
@@ -68,6 +69,8 @@ pub struct MemPool {
     provider: Box<dyn MemPoolProvider + Send>,
     /// Offchain cancel challenge validator
     offchain_validator: Option<OffChainCancelChallengeValidator>,
+    /// Mem pool config
+    config: MemPoolConfig,
 }
 
 impl MemPool {
@@ -76,6 +79,7 @@ impl MemPool {
         generator: Arc<Generator>,
         provider: Box<dyn MemPoolProvider + Send>,
         offchain_validator_context: Option<OffChainValidatorContext>,
+        config: MemPoolConfig,
     ) -> Result<Self> {
         let pending = Default::default();
         let all_txs = Default::default();
@@ -109,6 +113,7 @@ impl MemPool {
             mem_block,
             provider,
             offchain_validator,
+            config,
         };
 
         // set tip
@@ -222,9 +227,13 @@ impl MemPool {
         self.generator.verify_transaction(&state, &tx)?;
         // execute tx
         let raw_tx = tx.raw();
-        let run_result =
-            self.generator
-                .execute_transaction(&chain_view, &state, &block_info, &raw_tx)?;
+        let run_result = self.generator.execute_transaction(
+            &chain_view,
+            &state,
+            &block_info,
+            &raw_tx,
+            self.config.execute_l2tx_max_cycles,
+        )?;
         Ok(run_result)
     }
 
@@ -247,9 +256,13 @@ impl MemPool {
         let tip_block_hash = self.store.get_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
         // execute tx
-        let run_result =
-            self.generator
-                .execute_transaction(&chain_view, &state, &block_info, &raw_tx)?;
+        let run_result = self.generator.execute_transaction(
+            &chain_view,
+            &state,
+            &block_info,
+            &raw_tx,
+            self.config.execute_l2tx_max_cycles,
+        )?;
         Ok(run_result)
     }
 
@@ -830,9 +843,13 @@ impl MemPool {
 
         // execute tx
         let raw_tx = tx.raw();
-        let run_result =
-            self.generator
-                .execute_transaction(&chain_view, &state, &block_info, &raw_tx)?;
+        let run_result = self.generator.execute_transaction(
+            &chain_view,
+            &state,
+            &block_info,
+            &raw_tx,
+            L2TX_MAX_CYCLES,
+        )?;
 
         if let Some(ref mut offchain_validator) = self.offchain_validator {
             let cycles =

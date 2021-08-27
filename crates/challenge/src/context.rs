@@ -8,6 +8,7 @@ use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::sparse_merkle_tree::CompiledMerkleProof;
 use gw_common::state::State;
 use gw_common::{blake2b::new_blake2b, H256};
+use gw_generator::constants::L2TX_MAX_CYCLES;
 use gw_generator::traits::StateExt;
 use gw_generator::{ChallengeContext, Generator};
 use gw_store::chain_view::ChainView;
@@ -374,8 +375,13 @@ fn build_tx_kv_witness(
                 .block_producer_id(raw_block.block_producer_id().to_entity())
                 .build();
 
-            let run_result =
-                generator.execute_transaction(&chain_view, &tree, &block_info, raw_tx)?;
+            let run_result = generator.execute_transaction(
+                &chain_view,
+                &tree,
+                &block_info,
+                raw_tx,
+                L2TX_MAX_CYCLES,
+            )?;
             tree.apply_run_result(&run_result)?;
 
             Some(run_result)
