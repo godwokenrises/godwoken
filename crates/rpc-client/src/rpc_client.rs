@@ -1,4 +1,4 @@
-#![allow(clippy::clippy::mutable_key_type)]
+#![allow(clippy::mutable_key_type)]
 
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
 use anyhow::{anyhow, Result};
@@ -815,7 +815,7 @@ impl RPCClient {
                 return Err(anyhow!("no a sudt cell"));
             }
 
-            gw_types::packed::Uint128::from_slice(&cell.output_data.as_bytes())
+            gw_types::packed::Uint128::from_slice(cell.output_data.as_bytes())
                 .map(|a| a.unpack())
                 .map_err(|e| anyhow!("invalid sudt amount {}", e))
         };

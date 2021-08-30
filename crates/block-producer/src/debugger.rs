@@ -120,7 +120,7 @@ pub async fn build_mock_transaction(
                 ckb_output.into()
             },
             data: ckb_jsonrpc_types::JsonBytes::from_bytes(input_cell.data),
-            header: input_block_hash.clone().map(|h| h.into()),
+            header: input_block_hash.map(|h| h.into()),
         };
         inputs.push(mock_input);
         if let Some(input_block_hash) = input_block_hash {
@@ -168,7 +168,7 @@ pub async fn build_mock_transaction(
                 ckb_output.into()
             },
             data: { ckb_jsonrpc_types::JsonBytes::from_bytes(dep_cell.data) },
-            header: dep_cell_block_hash.clone().map(|h| h.into()),
+            header: dep_cell_block_hash.map(|h| h.into()),
         };
         cell_deps.push(mock_cell_dep);
         if let Some(dep_cell_block_hash) = dep_cell_block_hash {

@@ -43,7 +43,7 @@ pub fn transfer(
     let privkey = read_privkey(privkey_path)?;
 
     // get from_id
-    let from_address = privkey_to_short_address(&privkey, &rollup_type_hash, &deployment_result)?;
+    let from_address = privkey_to_short_address(&privkey, rollup_type_hash, &deployment_result)?;
     let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
     let from_id = from_id.expect("from id not found!");
 

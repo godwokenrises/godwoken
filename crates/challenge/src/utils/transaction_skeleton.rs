@@ -1,4 +1,4 @@
-#![allow(clippy::clippy::mutable_key_type)]
+#![allow(clippy::mutable_key_type)]
 
 use anyhow::{anyhow, Result};
 use gw_poa::GeneratedPoA;

@@ -158,7 +158,7 @@ impl TxDataLoader {
                     };
 
                     let out_points =
-                        OutPointVec::from_slice(&data).map_err(|_| anyhow!("invalid dep group"))?;
+                        OutPointVec::from_slice(data).map_err(|_| anyhow!("invalid dep group"))?;
                     let cell_deps = out_points.into_iter().map(to_meta);
 
                     resolved_cell_deps.extend(cell_deps.collect::<Result<Vec<_>>>()?);
@@ -196,7 +196,7 @@ impl TxDataLoader {
     }
 
     fn get_cell_meta(&self, out_point: &OutPoint) -> Option<CellMeta> {
-        self.get_cell_info(&out_point).map(|ci| {
+        self.get_cell_info(out_point).map(|ci| {
             CellMetaBuilder::from_cell_output(ci.output.to_owned(), ci.data.to_owned())
                 .out_point(out_point.clone())
                 .build()

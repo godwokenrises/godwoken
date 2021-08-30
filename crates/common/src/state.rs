@@ -94,7 +94,7 @@ pub fn build_short_script_hash_to_script_hash_key(short_script_hash: &[u8]) -> H
     hasher.update(&[GW_SHORT_SCRIPT_HASH_TO_SCRIPT_HASH_TYPE]);
     let len = short_script_hash.len() as u32;
     hasher.update(&len.to_le_bytes());
-    hasher.update(&short_script_hash);
+    hasher.update(short_script_hash);
     hasher.finalize(&mut key);
     key.into()
 }
@@ -140,7 +140,7 @@ pub trait State {
         )?;
         // script hash to id
         self.update_raw(
-            build_script_hash_to_account_id_key(&script_hash.as_slice()),
+            build_script_hash_to_account_id_key(script_hash.as_slice()),
             H256::from_u32(id),
         )?;
         // short script hash to script hash

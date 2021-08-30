@@ -413,7 +413,7 @@ impl<'db> StateDBTransaction<'db> {
     fn get_key_with_suffix(&self, key: &[u8]) -> Vec<u8> {
         let (block_number, index) = self
             .checkpoint
-            .extract_block_number_and_index_number(&self.inner, self.mode)
+            .extract_block_number_and_index_number(self.inner, self.mode)
             .expect("block number and index number");
 
         [key, &block_number.to_be_bytes(), &index.to_be_bytes()].concat()
@@ -422,7 +422,7 @@ impl<'db> StateDBTransaction<'db> {
     fn get_original_key<'a>(&self, raw_key: &'a [u8]) -> &'a [u8] {
         let (block_number, index) = self
             .checkpoint
-            .extract_block_number_and_index_number(&self.inner, self.mode)
+            .extract_block_number_and_index_number(self.inner, self.mode)
             .expect("block number and index number");
 
         &raw_key[..raw_key.len() - size_of_val(&block_number) - size_of_val(&index)]
@@ -456,7 +456,7 @@ impl<'db> StateDBTransaction<'db> {
 
         let (block_number, index) = self
             .checkpoint
-            .extract_block_number_and_index_number(&self.inner, self.mode)?;
+            .extract_block_number_and_index_number(self.inner, self.mode)?;
 
         self.inner
             .record_block_state(block_number, index, col, raw_key)?;
@@ -592,19 +592,16 @@ impl<'a, 'db> CodeStore for StateTree<'a, 'db> {
     }
 
     fn get_script(&self, script_hash: &H256) -> Option<packed::Script> {
-        match self.db.get(COLUMN_SCRIPT, script_hash.as_slice()) {
-            Some(slice) => {
-                Some(packed::ScriptReader::from_slice_should_be_ok(&slice.as_ref()).to_entity())
-            }
-            None => None,
-        }
+        self.db
+            .get(COLUMN_SCRIPT, script_hash.as_slice())
+            .map(|slice| packed::ScriptReader::from_slice_should_be_ok(slice.as_ref()).to_entity())
     }
 
     fn get_script_hash_by_short_address(&self, script_hash_prefix: &[u8]) -> Option<H256> {
         match self.db.get(COLUMN_SCRIPT_PREFIX, script_hash_prefix) {
             Some(slice) => {
                 let mut hash = [0u8; 32];
-                hash.copy_from_slice(&slice.as_ref());
+                hash.copy_from_slice(slice.as_ref());
                 Some(hash.into())
             }
             None => None,
@@ -618,9 +615,8 @@ impl<'a, 'db> CodeStore for StateTree<'a, 'db> {
     }
 
     fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
-        match self.db.get(COLUMN_DATA, data_hash.as_slice()) {
-            Some(slice) => Some(Bytes::from(slice.to_vec())),
-            None => None,
-        }
+        self.db
+            .get(COLUMN_DATA, data_hash.as_slice())
+            .map(|slice| Bytes::from(slice.to_vec()))
     }
 }
