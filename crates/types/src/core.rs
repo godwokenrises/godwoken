@@ -13,9 +13,10 @@ pub enum ScriptHashType {
     Type = 1,
 }
 
-impl Into<packed::Byte> for ScriptHashType {
-    fn into(self) -> packed::Byte {
-        (self as u8).into()
+impl From<ScriptHashType> for packed::Byte {
+    #[inline]
+    fn from(type_: ScriptHashType) -> Self {
+        (type_ as u8).into()
     }
 }
 
@@ -39,9 +40,10 @@ pub enum Status {
     Halting = 1,
 }
 
-impl Into<u8> for Status {
-    fn into(self: Status) -> u8 {
-        self as u8
+impl From<Status> for u8 {
+    #[inline]
+    fn from(s: Status) -> u8 {
+        s as u8
     }
 }
 
@@ -56,9 +58,10 @@ impl TryFrom<u8> for Status {
     }
 }
 
-impl Into<Byte> for Status {
-    fn into(self: Status) -> Byte {
-        (self as u8).into()
+impl From<Status> for Byte {
+    #[inline]
+    fn from(s: Status) -> Byte {
+        (s as u8).into()
     }
 }
 
@@ -79,9 +82,10 @@ pub enum ChallengeTargetType {
     Withdrawal = 2,
 }
 
-impl Into<u8> for ChallengeTargetType {
-    fn into(self: ChallengeTargetType) -> u8 {
-        self as u8
+impl From<ChallengeTargetType> for u8 {
+    #[inline]
+    fn from(type_: ChallengeTargetType) -> u8 {
+        type_ as u8
     }
 }
 
@@ -97,9 +101,10 @@ impl TryFrom<u8> for ChallengeTargetType {
     }
 }
 
-impl Into<Byte> for ChallengeTargetType {
-    fn into(self: ChallengeTargetType) -> Byte {
-        (self as u8).into()
+impl From<ChallengeTargetType> for Byte {
+    #[inline]
+    fn from(type_: ChallengeTargetType) -> Byte {
+        (type_ as u8).into()
     }
 }
 
@@ -135,16 +140,16 @@ impl TryFrom<packed::Byte> for DepType {
     }
 }
 
-impl Into<u8> for DepType {
+impl From<DepType> for u8 {
     #[inline]
-    fn into(self) -> u8 {
-        self as u8
+    fn from(type_: DepType) -> u8 {
+        type_ as u8
     }
 }
 
-impl Into<packed::Byte> for DepType {
+impl From<DepType> for packed::Byte {
     #[inline]
-    fn into(self) -> packed::Byte {
-        (self as u8).into()
+    fn from(type_: DepType) -> packed::Byte {
+        (type_ as u8).into()
     }
 }

@@ -1,6 +1,12 @@
-use std::{collections::HashSet, iter::FromIterator};
+#![allow(clippy::mutable_key_type)]
+
+use crate::testing_tool::chain::{
+    apply_block_result, construct_block, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
+    DEFAULT_FINALITY_BLOCKS,
+};
 
 use anyhow::Result;
+use gw_chain::chain::Chain;
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     state::{to_short_address, State},
@@ -14,11 +20,7 @@ use gw_types::{
     prelude::*,
 };
 
-use crate::testing_tool::chain::{
-    apply_block_result, construct_block, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
-    DEFAULT_FINALITY_BLOCKS,
-};
-use gw_chain::chain::Chain;
+use std::{collections::HashSet, iter::FromIterator};
 
 fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) -> Result<()> {
     let block_result = {
@@ -29,13 +31,7 @@ fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) -> Result<()>
     let asset_scripts = HashSet::new();
 
     // deposit
-    apply_block_result(
-        chain,
-        rollup_cell.clone(),
-        block_result,
-        vec![],
-        asset_scripts,
-    );
+    apply_block_result(chain, rollup_cell, block_result, vec![], asset_scripts);
     Ok(())
 }
 
@@ -68,7 +64,7 @@ fn deposite_to_chain(
     // deposit
     apply_block_result(
         chain,
-        rollup_cell.clone(),
+        rollup_cell,
         block_result,
         deposit_requests,
         asset_scripts,
@@ -101,13 +97,7 @@ fn withdrawal_from_chain(
     };
 
     // deposit
-    apply_block_result(
-        chain,
-        rollup_cell.clone(),
-        block_result,
-        Vec::new(),
-        HashSet::new(),
-    );
+    apply_block_result(chain, rollup_cell, block_result, Vec::new(), HashSet::new());
     Ok(())
 }
 
@@ -183,7 +173,7 @@ fn test_deposit_and_withdrawal() {
         let state = state_db.state_tree().unwrap();
         assert_eq!(
             state
-                .get_account_id_by_script_hash(&user_script_hash.into())
+                .get_account_id_by_script_hash(&user_script_hash)
                 .unwrap()
                 .unwrap(),
             user_id
@@ -200,7 +190,7 @@ fn test_deposit_and_withdrawal() {
     withdrawal_from_chain(
         &mut chain,
         rollup_cell,
-        user_script_hash.into(),
+        user_script_hash,
         withdraw_capacity,
         H256::zero(),
         0,
@@ -230,7 +220,7 @@ fn test_deposit_and_withdrawal() {
         let state = state_db.state_tree().unwrap();
         assert_eq!(
             state
-                .get_account_id_by_script_hash(&user_script_hash.into())
+                .get_account_id_by_script_hash(&user_script_hash)
                 .unwrap()
                 .unwrap(),
             user_id
@@ -326,7 +316,7 @@ fn test_deposit_faked_ckb() {
     // deposit
     let err = deposite_to_chain(
         &mut chain,
-        rollup_cell.clone(),
+        rollup_cell,
         user_script,
         capacity,
         H256::zero(),

@@ -510,7 +510,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             ckb_fixed_hash::H256::from_slice(&hash).unwrap()
         };
         let rollup_config_hash =
-            ckb_fixed_hash::H256::from_slice(&rollup_config_hash.as_slice()).unwrap();
+            ckb_fixed_hash::H256::from_slice(rollup_config_hash.as_slice()).unwrap();
         log::info!("Rollup type script hash: {}", rollup_type_script_hash);
         log::info!("Rollup config hash: {}", rollup_config_hash);
     }
@@ -546,7 +546,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 fn check_ckb_version(rpc_client: &RPCClient) -> Result<()> {
     let ckb_version = smol::block_on(rpc_client.get_ckb_version())?;
     let ckb_version = ckb_version.split('(').collect::<Vec<&str>>()[0].trim_end();
-    if Version::parse(&ckb_version)? < Version::parse(MIN_CKB_VERSION)? {
+    if Version::parse(ckb_version)? < Version::parse(MIN_CKB_VERSION)? {
         return Err(anyhow!(
             "The version of CKB node {} is lower than the minimum version {}",
             ckb_version,
@@ -583,12 +583,12 @@ fn check_rollup_config_cell(
     let unregistered_eoas = cell_data
         .allowed_eoa_type_hashes()
         .into_iter()
-        .filter(|item| !eoa_set.contains(&item))
+        .filter(|item| !eoa_set.contains(item))
         .collect::<Vec<_>>();
     let unregistered_contracts = cell_data
         .allowed_contract_type_hashes()
         .into_iter()
-        .filter(|item| !contract_set.contains(&item))
+        .filter(|item| !contract_set.contains(item))
         .collect::<Vec<_>>();
     if !unregistered_eoas.is_empty() || !unregistered_contracts.is_empty() {
         return Err(anyhow!(

@@ -368,7 +368,7 @@ fn build_tx_kv_witness(
             let parent_block_hash = db
                 .get_block_hash_by_number(raw_block.number().unpack())?
                 .ok_or_else(|| anyhow!("parent block not found"))?;
-            let chain_view = ChainView::new(&db, parent_block_hash);
+            let chain_view = ChainView::new(db, parent_block_hash);
             let block_info = BlockInfo::new_builder()
                 .number(raw_block.number().to_entity())
                 .timestamp(raw_block.timestamp().to_entity())
@@ -483,7 +483,7 @@ fn build_tx_kv_witness(
     let return_data_hash = opt_run_result.map(|result| {
         let return_data_hash: [u8; 32] = {
             let mut hasher = new_blake2b();
-            hasher.update(&result.return_data.as_slice());
+            hasher.update(result.return_data.as_slice());
             let mut hash = [0u8; 32];
             hasher.finalize(&mut hash);
             hash

@@ -42,7 +42,7 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    #[allow(clippy::clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         gw_tx_hash: H256,
         chain_id: Option<u64>,
@@ -147,7 +147,7 @@ pub struct Log {
 }
 
 impl Log {
-    #[allow(clippy::clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         transaction_hash: H256,
         transaction_index: u32,

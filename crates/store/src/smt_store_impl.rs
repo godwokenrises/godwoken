@@ -33,7 +33,7 @@ impl<'a, DB: KVStore> Store<H256> for SMTStore<'a, DB> {
         let branch_key: packed::SMTBranchKey = branch_key.pack();
         match self.store.get(self.branch_col, branch_key.as_slice()) {
             Some(slice) => {
-                let branch = packed::SMTBranchNodeReader::from_slice_should_be_ok(&slice.as_ref());
+                let branch = packed::SMTBranchNodeReader::from_slice_should_be_ok(slice.as_ref());
                 Ok(Some(branch.to_entity().unpack()))
             }
             None => Ok(None),
@@ -44,7 +44,7 @@ impl<'a, DB: KVStore> Store<H256> for SMTStore<'a, DB> {
         match self.store.get(self.leaf_col, leaf_key.as_slice()) {
             Some(slice) if 32 == slice.len() => {
                 let mut leaf = [0u8; 32];
-                leaf.copy_from_slice(&slice.as_ref());
+                leaf.copy_from_slice(slice.as_ref());
                 Ok(Some(H256::from(leaf)))
             }
             Some(_) => Err(SMTError::Store("get corrupted leaf".to_string())),

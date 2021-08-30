@@ -352,7 +352,7 @@ pub fn deploy_genesis(
         .build();
     let (secp_data, secp_data_dep) = get_secp_data(&mut rpc_client)?;
     let mut deploy_context = DeployContext {
-        privkey_path: &privkey_path,
+        privkey_path,
         owner_address: &owner_address,
         genesis_info: &genesis_info,
         deployment_result: &deployment_result,

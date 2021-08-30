@@ -98,7 +98,7 @@ impl<S: State + CodeStore> StateExt for S {
             self.set_account_count(id)?;
         }
         for (script_hash, script) in &run_result.new_scripts {
-            self.insert_script(*script_hash, Script::from_slice(&script).expect("script"));
+            self.insert_script(*script_hash, Script::from_slice(script).expect("script"));
         }
         for (data_hash, data) in &run_result.write_data {
             self.insert_data(*data_hash, Bytes::from(data.clone()));
@@ -152,7 +152,7 @@ impl<S: State + CodeStore> StateExt for S {
         let amount = request.amount().unpack();
         if sudt_script_hash != CKB_SUDT_SCRIPT_ARGS.into() {
             // find or create Simple UDT account
-            let l2_sudt_script = build_l2_sudt_script(&ctx, &sudt_script_hash);
+            let l2_sudt_script = build_l2_sudt_script(ctx, &sudt_script_hash);
             let l2_sudt_script_hash: [u8; 32] = l2_sudt_script.hash();
             let sudt_id = match self.get_account_id_by_script_hash(&l2_sudt_script_hash.into())? {
                 Some(id) => id,
@@ -183,7 +183,7 @@ impl<S: State + CodeStore> StateExt for S {
         let raw = request.raw();
         let account_script_hash: H256 = raw.account_script_hash().unpack();
         let l2_sudt_script_hash: [u8; 32] =
-            build_l2_sudt_script(&ctx, &raw.sudt_script_hash().unpack()).hash();
+            build_l2_sudt_script(ctx, &raw.sudt_script_hash().unpack()).hash();
         let amount: u128 = raw.amount().unpack();
         let withdrawal_short_address = to_short_address(&account_script_hash);
         // find user account
@@ -196,7 +196,7 @@ impl<S: State + CodeStore> StateExt for S {
             let sudt_id: u32 = raw.fee().sudt_id().unpack();
             let amount: u128 = raw.fee().amount().unpack();
             let block_producer_script_hash = self.get_script_hash(block_producer_id)?;
-            let block_producer_short_address = to_short_address(&&block_producer_script_hash);
+            let block_producer_short_address = to_short_address(&block_producer_script_hash);
             self.pay_fee(
                 withdrawal_short_address,
                 block_producer_short_address,

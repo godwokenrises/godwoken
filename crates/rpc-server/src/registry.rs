@@ -87,7 +87,7 @@ async fn get_state_db_at_block<'a>(
                 return Err(header_not_found_err());
             }
             StateDBTransaction::from_checkpoint(
-                &db,
+                db,
                 CheckPoint::new(block_number, SubState::Block),
                 StateDBMode::ReadOnly,
             )
@@ -96,12 +96,12 @@ async fn get_state_db_at_block<'a>(
         None => match mem_pool {
             Some(mem_pool) => {
                 let mem_pool = mem_pool.lock().await;
-                mem_pool.fetch_state_db(&db).map_err(Into::into)
+                mem_pool.fetch_state_db(db).map_err(Into::into)
             }
             None => {
                 // fallback to tip number
                 StateDBTransaction::from_checkpoint(
-                    &db,
+                    db,
                     CheckPoint::new(tip_block_number, SubState::Block),
                     StateDBMode::ReadOnly,
                 )

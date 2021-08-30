@@ -282,11 +282,10 @@ impl PoA {
             poa_setup_cell,
             block_producer_index,
         } = poa_context;
-        let mut cell_deps = Vec::new();
 
         // put cell deps
-        cell_deps.push(self.lock_cell_dep.clone());
-        cell_deps.push(self.state_cell_dep.clone());
+        let mut cell_deps = vec![self.lock_cell_dep.clone(), self.state_cell_dep.clone()];
+
         // push PoA setup cell to dep
         cell_deps.push(
             CellDep::new_builder()
@@ -295,15 +294,13 @@ impl PoA {
                 .build(),
         );
 
-        let mut input_cells = Vec::new();
-
         // push PoA data cell
-        input_cells.push(InputCellInfo {
+        let input_cells = vec![InputCellInfo {
             input: CellInput::new_builder()
                 .previous_output(poa_data_cell.out_point.clone())
                 .build(),
             cell: poa_data_cell.clone(),
-        });
+        }];
 
         // new PoA data
         let new_poa_data = {
@@ -335,8 +332,7 @@ impl PoA {
         let poa_input_cell_since =
             SINCE_BLOCK_TIMESTAMP_FLAG | new_poa_data.subblock_subtime().unpack();
 
-        let mut output_cells = Vec::new();
-        output_cells.push((poa_data_cell.output, new_poa_data.as_bytes()));
+        let output_cells = vec![(poa_data_cell.output, new_poa_data.as_bytes())];
 
         // Push owner cell if not exists
         let mut owner_input_cell = None;

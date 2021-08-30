@@ -70,7 +70,7 @@ pub fn deposit_ckb(
         .args(l2_lock_args)
         .build();
 
-    let l2_lock_hash = CkbHasher::new().update(&l2_lock.as_slice()).finalize();
+    let l2_lock_hash = CkbHasher::new().update(l2_lock.as_slice()).finalize();
 
     let l2_lock_hash_str = format!(
         "0x{}",

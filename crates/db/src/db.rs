@@ -45,7 +45,7 @@ impl RocksDB {
             let opts = Options::default();
             let cf_descriptors: Vec<_> = cf_names
                 .iter()
-                .map(|ref c| ColumnFamilyDescriptor::new(*c, Options::default()))
+                .map(|c| ColumnFamilyDescriptor::new(c, Options::default()))
                 .collect();
             (opts, cf_descriptors)
         };

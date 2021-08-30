@@ -408,19 +408,20 @@ impl MockBlockParam {
         let sender_script = get_script(&tree, sender_id)?;
         let receiver_script = get_script(&tree, receiver_id)?;
 
-        let mut kv_state: Vec<(H256, H256)> = Vec::new();
-        kv_state.push((
-            build_account_field_key(sender_id, GW_ACCOUNT_SCRIPT_HASH_TYPE),
-            sender_script.hash().into(),
-        ));
-        kv_state.push((
-            build_account_field_key(receiver_id, GW_ACCOUNT_SCRIPT_HASH_TYPE),
-            receiver_script.hash().into(),
-        ));
-        kv_state.push((
-            build_account_field_key(sender_id, GW_ACCOUNT_NONCE_TYPE),
-            H256::from_u32(tx.raw().nonce().unpack()),
-        ));
+        let kv_state: Vec<(H256, H256)> = vec![
+            (
+                build_account_field_key(sender_id, GW_ACCOUNT_SCRIPT_HASH_TYPE),
+                sender_script.hash().into(),
+            ),
+            (
+                build_account_field_key(receiver_id, GW_ACCOUNT_SCRIPT_HASH_TYPE),
+                receiver_script.hash().into(),
+            ),
+            (
+                build_account_field_key(sender_id, GW_ACCOUNT_NONCE_TYPE),
+                H256::from_u32(tx.raw().nonce().unpack()),
+            ),
+        ];
         assert_eq!(
             tree.get_nonce(sender_id)?,
             Unpack::<u32>::unpack(&tx.raw().nonce())
@@ -539,7 +540,7 @@ impl MockBlockParam {
         let return_data_hash = {
             let return_data_hash: [u8; 32] = {
                 let mut hasher = new_blake2b();
-                hasher.update(&run_result.return_data.as_slice());
+                hasher.update(run_result.return_data.as_slice());
                 let mut hash = [0u8; 32];
                 hasher.finalize(&mut hash);
                 hash

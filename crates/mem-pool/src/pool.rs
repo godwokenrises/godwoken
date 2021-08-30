@@ -204,8 +204,8 @@ impl MemPool {
         let state_db = self.fetch_state_db(&db)?;
         let state = state_db.state_tree()?;
         // verify signature
-        self.generator.check_transaction_signature(&state, &tx)?;
-        self.generator.verify_transaction(&state, &tx)?;
+        self.generator.check_transaction_signature(&state, tx)?;
+        self.generator.verify_transaction(&state, tx)?;
 
         Ok(())
     }
@@ -230,7 +230,7 @@ impl MemPool {
         let run_result = self.generator.execute_transaction(
             &chain_view,
             &state,
-            &block_info,
+            block_info,
             &raw_tx,
             self.config.execute_l2tx_max_cycles,
         )?;
@@ -259,7 +259,7 @@ impl MemPool {
         let run_result = self.generator.execute_transaction(
             &chain_view,
             &state,
-            &block_info,
+            block_info,
             &raw_tx,
             self.config.execute_l2tx_max_cycles,
         )?;
@@ -546,27 +546,26 @@ impl MemPool {
         let mem_block_withdrawals: Vec<_> = mem_block_content
             .withdrawals
             .into_iter()
-            .filter_map(|withdrawal_hash| self.all_withdrawals.get(&withdrawal_hash))
-            .cloned()
+            .filter_map(|withdrawal_hash| self.all_withdrawals.get(&withdrawal_hash).cloned())
             .collect();
+
         // re-inject withdrawals
         let withdrawals_iter = reinject_withdrawals
             .into_iter()
-            .chain(mem_block_withdrawals.into_iter());
+            .chain(mem_block_withdrawals);
 
         // Process txs
         let mem_block_txs: Vec<_> = mem_block_content
             .txs
             .into_iter()
-            .filter_map(|tx_hash| self.all_txs.get(&tx_hash))
-            .cloned()
+            .filter_map(|tx_hash| self.all_txs.get(&tx_hash).cloned())
             .collect();
 
         // remove from pending
         self.remove_unexecutables()?;
 
         // re-inject txs
-        let txs_iter = reinject_txs.into_iter().chain(mem_block_txs.into_iter());
+        let txs_iter = reinject_txs.into_iter().chain(mem_block_txs);
         self.prepare_next_mem_block(withdrawals_iter, txs_iter)?;
 
         Ok(())
@@ -834,10 +833,10 @@ impl MemPool {
 
     /// Execute tx & update local state
     fn finalize_tx(&mut self, db: &StoreTransaction, tx: L2Transaction) -> Result<TxReceipt> {
-        let state_db = self.fetch_state_db(&db)?;
+        let state_db = self.fetch_state_db(db)?;
         let mut state = state_db.state_tree()?;
         let tip_block_hash = db.get_tip_block_hash()?;
-        let chain_view = ChainView::new(&db, tip_block_hash);
+        let chain_view = ChainView::new(db, tip_block_hash);
 
         let block_info = self.mem_block.block_info();
 
@@ -846,7 +845,7 @@ impl MemPool {
         let run_result = self.generator.execute_transaction(
             &chain_view,
             &state,
-            &block_info,
+            block_info,
             &raw_tx,
             L2TX_MAX_CYCLES,
         )?;

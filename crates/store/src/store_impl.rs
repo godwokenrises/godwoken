@@ -82,7 +82,7 @@ impl<'a> Store {
             .get(COLUMN_META, META_TIP_BLOCK_HASH_KEY)
             .expect("get tip block hash");
         Ok(
-            packed::Byte32Reader::from_slice_should_be_ok(&slice.as_ref())
+            packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref())
                 .to_entity()
                 .unpack(),
         )
@@ -99,7 +99,7 @@ impl<'a> Store {
     ) -> Result<Option<GlobalState>, Error> {
         match self.get(COLUMN_BLOCK_GLOBAL_STATE, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::GlobalStateReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+                packed::GlobalStateReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
             )),
             None => Ok(None),
         }
@@ -108,7 +108,7 @@ impl<'a> Store {
     pub fn get_block(&self, block_hash: &H256) -> Result<Option<L2Block>, Error> {
         match self.get(COLUMN_BLOCK, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::L2BlockReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+                packed::L2BlockReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
             )),
             None => Ok(None),
         }
@@ -120,7 +120,7 @@ impl<'a> Store {
     ) -> Result<Option<packed::L2BlockCommittedInfo>, Error> {
         match self.get(COLUMN_L2BLOCK_COMMITTED_INFO, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::L2BlockCommittedInfoReader::from_slice_should_be_ok(&slice.as_ref())
+                packed::L2BlockCommittedInfoReader::from_slice_should_be_ok(slice.as_ref())
                     .to_entity(),
             )),
             None => Ok(None),
@@ -130,7 +130,7 @@ impl<'a> Store {
     pub fn get_transaction(&self, tx_hash: &H256) -> Result<Option<L2Transaction>, Error> {
         match self.get(COLUMN_TRANSACTION, tx_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::L2TransactionReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+                packed::L2TransactionReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
             )),
             None => Ok(None),
         }
@@ -142,7 +142,7 @@ impl<'a> Store {
     ) -> Result<Option<packed::TxReceipt>, Error> {
         match self.get(COLUMN_TRANSACTION_RECEIPT, tx_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::TxReceiptReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+                packed::TxReceiptReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
             )),
             None => Ok(None),
         }

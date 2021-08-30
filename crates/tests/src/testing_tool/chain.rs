@@ -1,3 +1,5 @@
+#![allow(clippy::mutable_key_type)]
+
 use gw_block_producer::produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult};
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
 use gw_common::{blake2b::new_blake2b, H256};
@@ -22,13 +24,14 @@ use gw_types::{
 };
 use lazy_static::lazy_static;
 use smol::lock::Mutex;
+
 use std::{collections::HashSet, time::Duration};
 use std::{fs, io::Read, path::PathBuf, sync::Arc};
 
 use super::mem_pool_provider::DummyMemPoolProvider;
 
-const SCRIPT_DIR: &'static str = "../../tests-deps/godwoken-scripts/build/debug";
-const ALWAYS_SUCCESS_PATH: &'static str = "always-success";
+const SCRIPT_DIR: &str = "../../tests-deps/godwoken-scripts/build/debug";
+const ALWAYS_SUCCESS_PATH: &str = "always-success";
 
 lazy_static! {
     pub static ref ALWAYS_SUCCESS_PROGRAM: Bytes = {
@@ -83,13 +86,11 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
 pub fn setup_chain(rollup_type_script: Script) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
     let rollup_config = RollupConfig::new_builder()
-        .allowed_eoa_type_hashes(vec![ALWAYS_SUCCESS_CODE_HASH.clone()].pack())
+        .allowed_eoa_type_hashes(vec![*ALWAYS_SUCCESS_CODE_HASH].pack())
         .finality_blocks(DEFAULT_FINALITY_BLOCKS.pack())
         .build();
-    account_lock_manage.register_lock_algorithm(
-        ALWAYS_SUCCESS_CODE_HASH.clone().into(),
-        Box::new(AlwaysSuccess),
-    );
+    account_lock_manage
+        .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
     let mut chain = setup_chain_with_account_lock_manage(
         rollup_type_script,
         rollup_config,
@@ -122,7 +123,7 @@ pub fn setup_chain_with_account_lock_manage(
     let generator = Arc::new(Generator::new(
         backend_manage,
         account_lock_manage,
-        rollup_context.clone(),
+        rollup_context,
     ));
     init_genesis(
         &store,
@@ -202,7 +203,7 @@ pub fn apply_block_result(
         reverts: Default::default(),
     };
     chain.sync(param).unwrap();
-    assert_eq!(chain.last_sync_event().is_success(), true);
+    assert!(chain.last_sync_event().is_success());
 }
 
 pub fn construct_block(
@@ -213,10 +214,12 @@ pub fn construct_block(
     let stake_cell_owner_lock_hash = H256::zero();
     let db = chain.store().begin_transaction();
     let generator = chain.generator();
-    let rollup_config_hash = chain.rollup_config_hash().clone().into();
+    let rollup_config_hash = (*chain.rollup_config_hash()).into();
 
-    let mut available_custodians = AvailableCustodians::default();
-    available_custodians.capacity = std::u128::MAX;
+    let mut available_custodians = AvailableCustodians {
+        capacity: u128::MAX,
+        ..Default::default()
+    };
     for withdrawal_hash in mem_pool.mem_block().withdrawals().iter() {
         let req = mem_pool.all_withdrawals().get(withdrawal_hash).unwrap();
         if 0 == req.raw().amount().unpack() {
@@ -271,5 +274,5 @@ pub fn construct_block(
         reverted_block_root: H256::default(),
         block_param,
     };
-    produce_block(&db, &generator, param)
+    produce_block(&db, generator, param)
 }

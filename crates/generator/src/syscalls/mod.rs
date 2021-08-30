@@ -90,7 +90,7 @@ fn load_data_h256<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<H
     Ok(H256::from(data))
 }
 
-#[allow(clippy::clippy::needless_range_loop)]
+#[allow(clippy::needless_range_loop)]
 fn load_bytes<Mac: SupportMachine>(
     machine: &mut Mac,
     addr: u64,
@@ -148,7 +148,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                 let value = self.get_raw(&key)?;
                 machine
                     .memory_mut()
-                    .store_bytes(value_addr, &value.as_slice())?;
+                    .store_bytes(value_addr, value.as_slice())?;
                 machine.set_register(A0, Mac::REG::from_u8(SUCCESS));
                 Ok(true)
             }
@@ -482,10 +482,10 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
 
 impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
     fn get_raw(&mut self, key: &H256) -> Result<H256, VMError> {
-        let value = match self.result.write_values.get(&key) {
+        let value = match self.result.write_values.get(key) {
             Some(value) => *value,
             None => {
-                let tree_value = self.state.get_raw(&key).map_err(|_| VMError::Unexpected)?;
+                let tree_value = self.state.get_raw(key).map_err(|_| VMError::Unexpected)?;
                 self.result.read_values.insert(*key, tree_value);
                 tree_value
             }
@@ -510,8 +510,8 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
             .result
             .new_scripts
             .get(script_hash)
-            .map(|data| Script::from_slice(&data).expect("Script"))
-            .or_else(|| self.code_store.get_script(&script_hash));
+            .map(|data| Script::from_slice(data).expect("Script"))
+            .or_else(|| self.code_store.get_script(script_hash));
 
         if let Some(ref script) = opt_script {
             self.result.get_scripts.insert(script.as_slice().to_vec());
@@ -524,7 +524,7 @@ impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
             .write_data
             .get(data_hash)
             .map(|data| Bytes::from(data.clone()))
-            .or_else(|| self.code_store.get_data(&data_hash))
+            .or_else(|| self.code_store.get_data(data_hash))
     }
     fn get_script_hash(&mut self, id: u32) -> Result<H256, VMError> {
         let value = self

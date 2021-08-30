@@ -1,4 +1,4 @@
-#![allow(clippy::clippy::mutable_key_type)]
+#![allow(clippy::mutable_key_type)]
 
 use crate::{
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
@@ -575,7 +575,7 @@ impl BlockProducer {
         }
 
         if let Some(reverted_deposits) =
-            crate::deposit::revert(&rollup_context, &self.config, revert_custodians)?
+            crate::deposit::revert(rollup_context, &self.config, revert_custodians)?
         {
             log::info!("reverted deposits {}", reverted_deposits.inputs.len());
 

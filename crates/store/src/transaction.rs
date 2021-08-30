@@ -1,4 +1,4 @@
-#![allow(clippy::clippy::mutable_key_type)]
+#![allow(clippy::mutable_key_type)]
 
 use crate::constant::MEMORY_BLOCK_NUMBER;
 use crate::{smt_store_impl::SMTStore, traits::KVStore};
@@ -163,7 +163,7 @@ impl StoreTransaction {
         let slice = self
             .get(COLUMN_META, META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY)
             .expect("account count");
-        let count = packed::Uint32Reader::from_slice_should_be_ok(&slice.as_ref()).to_entity();
+        let count = packed::Uint32Reader::from_slice_should_be_ok(slice.as_ref()).to_entity();
         Ok(count.unpack())
     }
 
@@ -181,14 +181,14 @@ impl StoreTransaction {
             .get(COLUMN_META, META_LAST_VALID_TIP_BLOCK_HASH_KEY)
             .expect("get last valid tip block hash");
 
-        let byte32 = packed::Byte32Reader::from_slice_should_be_ok(&slice.as_ref()).to_entity();
+        let byte32 = packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref()).to_entity();
         Ok(byte32.unpack())
     }
 
     pub fn set_last_valid_tip_block_hash(&self, block_hash: &H256) -> Result<(), Error> {
         self.insert_raw(
             COLUMN_META,
-            &META_LAST_VALID_TIP_BLOCK_HASH_KEY,
+            META_LAST_VALID_TIP_BLOCK_HASH_KEY,
             block_hash.as_slice(),
         )
     }
@@ -198,7 +198,7 @@ impl StoreTransaction {
             .get(COLUMN_META, META_TIP_BLOCK_HASH_KEY)
             .expect("get tip block hash");
         Ok(
-            packed::Byte32Reader::from_slice_should_be_ok(&slice.as_ref())
+            packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref())
                 .to_entity()
                 .unpack(),
         )
@@ -206,7 +206,7 @@ impl StoreTransaction {
 
     pub fn set_tip_block_hash(&self, block_hash: H256) -> Result<(), Error> {
         let block_hash: [u8; 32] = block_hash.into();
-        self.insert_raw(COLUMN_META, &META_TIP_BLOCK_HASH_KEY, &block_hash)
+        self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &block_hash)
     }
 
     pub fn get_tip_block(&self) -> Result<packed::L2Block, Error> {
@@ -218,7 +218,7 @@ impl StoreTransaction {
         let block_number: packed::Uint64 = number.pack();
         match self.get(COLUMN_INDEX, block_number.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::Byte32Reader::from_slice_should_be_ok(&slice.as_ref())
+                packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref())
                     .to_entity()
                     .unpack(),
             )),
@@ -229,7 +229,7 @@ impl StoreTransaction {
     pub fn get_block_number(&self, block_hash: &H256) -> Result<Option<u64>, Error> {
         match self.get(COLUMN_INDEX, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::Uint64Reader::from_slice_should_be_ok(&slice.as_ref())
+                packed::Uint64Reader::from_slice_should_be_ok(slice.as_ref())
                     .to_entity()
                     .unpack(),
             )),
@@ -240,7 +240,7 @@ impl StoreTransaction {
     pub fn get_block(&self, block_hash: &H256) -> Result<Option<packed::L2Block>, Error> {
         match self.get(COLUMN_BLOCK, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::L2BlockReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+                packed::L2BlockReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
             )),
             None => Ok(None),
         }
@@ -260,7 +260,7 @@ impl StoreTransaction {
         let tx_info_opt = self
             .get(COLUMN_TRANSACTION_INFO, tx_hash.as_slice())
             .map(|slice| {
-                packed::TransactionInfoReader::from_slice_should_be_ok(&slice.as_ref()).to_entity()
+                packed::TransactionInfoReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
             });
         Ok(tx_info_opt)
     }
@@ -270,9 +270,9 @@ impl StoreTransaction {
         tx_key: &TransactionKey,
     ) -> Result<Option<packed::L2Transaction>, Error> {
         Ok(self
-            .get(COLUMN_TRANSACTION, &tx_key.as_slice())
+            .get(COLUMN_TRANSACTION, tx_key.as_slice())
             .map(|slice| {
-                packed::L2TransactionReader::from_slice_should_be_ok(&slice.as_ref()).to_entity()
+                packed::L2TransactionReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
             }))
     }
 
@@ -282,7 +282,7 @@ impl StoreTransaction {
     ) -> Result<Option<packed::TxReceipt>, Error> {
         if let Some(slice) = self.get(COLUMN_TRANSACTION_INFO, tx_hash.as_slice()) {
             let info =
-                packed::TransactionInfoReader::from_slice_should_be_ok(&slice.as_ref()).to_entity();
+                packed::TransactionInfoReader::from_slice_should_be_ok(slice.as_ref()).to_entity();
             let tx_key = info.key();
             self.get_transaction_receipt_by_key(&tx_key)
         } else {
@@ -295,9 +295,9 @@ impl StoreTransaction {
         key: &TransactionKey,
     ) -> Result<Option<packed::TxReceipt>, Error> {
         Ok(self
-            .get(COLUMN_TRANSACTION_RECEIPT, &key.as_slice())
+            .get(COLUMN_TRANSACTION_RECEIPT, key.as_slice())
             .map(|slice| {
-                packed::TxReceiptReader::from_slice_should_be_ok(&slice.as_ref()).to_entity()
+                packed::TxReceiptReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
             }))
     }
 
@@ -308,7 +308,7 @@ impl StoreTransaction {
         Ok(self
             .get(COLUMN_CHECKPOINT, checkpoint.as_slice())
             .map(|slice| {
-                packed::AccountMerkleStateReader::from_slice_should_be_ok(&slice.as_ref())
+                packed::AccountMerkleStateReader::from_slice_should_be_ok(slice.as_ref())
                     .to_entity()
             }))
     }
@@ -319,7 +319,7 @@ impl StoreTransaction {
     ) -> Result<Option<packed::L2BlockCommittedInfo>, Error> {
         match self.get(COLUMN_L2BLOCK_COMMITTED_INFO, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::L2BlockCommittedInfoReader::from_slice_should_be_ok(&slice.as_ref())
+                packed::L2BlockCommittedInfoReader::from_slice_should_be_ok(slice.as_ref())
                     .to_entity(),
             )),
             None => Ok(None),
@@ -332,7 +332,7 @@ impl StoreTransaction {
     ) -> Result<Option<Vec<packed::DepositRequest>>, Error> {
         match self.get(COLUMN_BLOCK_DEPOSIT_REQUESTS, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::DepositRequestVecReader::from_slice_should_be_ok(&slice.as_ref())
+                packed::DepositRequestVecReader::from_slice_should_be_ok(slice.as_ref())
                     .to_entity()
                     .into_iter()
                     .collect(),
@@ -347,7 +347,7 @@ impl StoreTransaction {
     ) -> Result<Option<packed::GlobalState>, Error> {
         match self.get(COLUMN_BLOCK_GLOBAL_STATE, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::GlobalStateReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+                packed::GlobalStateReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
             )),
             None => Ok(None),
         }
@@ -357,10 +357,9 @@ impl StoreTransaction {
         &self,
         block_hash: &H256,
     ) -> Result<Option<ChallengeTarget>, Error> {
-        match self.get(COLUMN_BAD_BLOCK_CHALLENGE_TARGET, &block_hash.as_slice()) {
+        match self.get(COLUMN_BAD_BLOCK_CHALLENGE_TARGET, block_hash.as_slice()) {
             Some(slice) => {
-                let target =
-                    packed::ChallengeTargetReader::from_slice_should_be_ok(&slice.as_ref());
+                let target = packed::ChallengeTargetReader::from_slice_should_be_ok(slice.as_ref());
                 Ok(Some(target.to_entity()))
             }
             None => Ok(None),
@@ -399,7 +398,7 @@ impl StoreTransaction {
             reverted_block_smt_root.as_slice(),
         ) {
             Some(slice) => {
-                let block_hash = packed::Byte32VecReader::from_slice_should_be_ok(&slice.as_ref());
+                let block_hash = packed::Byte32VecReader::from_slice_should_be_ok(slice.as_ref());
                 Ok(Some(block_hash.to_entity().unpack()))
             }
             None => Ok(None),
@@ -469,7 +468,7 @@ impl StoreTransaction {
         self.set_block_smt_root(*block_smt.root())?;
 
         // Update tip block
-        self.insert_raw(COLUMN_META, &META_TIP_BLOCK_HASH_KEY, &block_hash)?;
+        self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &block_hash)?;
 
         Ok(())
     }
@@ -508,10 +507,10 @@ impl StoreTransaction {
             let first_bad_block = bad_blocks.first().expect("exists");
             first_bad_block.raw().parent_block_hash().unpack()
         };
-        self.insert_raw(COLUMN_META, &META_TIP_BLOCK_HASH_KEY, &parent_block_hash)
+        self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &parent_block_hash)
     }
 
-    #[allow(clippy::clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn insert_block(
         &self,
         block: packed::L2Block,
@@ -578,10 +577,10 @@ impl StoreTransaction {
             .enumerate()
         {
             let key = TransactionKey::build_transaction_key(block_hash.pack(), index as u32);
-            self.insert_raw(COLUMN_TRANSACTION, &key.as_slice(), tx.as_slice())?;
+            self.insert_raw(COLUMN_TRANSACTION, key.as_slice(), tx.as_slice())?;
             self.insert_raw(
                 COLUMN_TRANSACTION_RECEIPT,
-                &key.as_slice(),
+                key.as_slice(),
                 tx_receipt.as_slice(),
             )?;
         }
@@ -629,7 +628,7 @@ impl StoreTransaction {
     pub fn get_asset_script(&self, script_hash: &H256) -> Result<Option<Script>, Error> {
         match self.get(COLUMN_ASSET_SCRIPT, script_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::ScriptReader::from_slice_should_be_ok(&slice.as_ref()).to_entity(),
+                packed::ScriptReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
             )),
             None => Ok(None),
         }
@@ -669,7 +668,7 @@ impl StoreTransaction {
         self.set_block_smt_root(*root)?;
 
         // update tip
-        self.insert_raw(COLUMN_META, &META_TIP_BLOCK_HASH_KEY, &block_hash)?;
+        self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &block_hash)?;
         self.prune_finalized_block_state_record(raw_number.unpack())?;
         self.set_last_valid_tip_block_hash(&block_hash.into())?;
 
@@ -710,7 +709,7 @@ impl StoreTransaction {
             .expect("parent block hash");
         self.insert_raw(
             COLUMN_META,
-            &META_TIP_BLOCK_HASH_KEY,
+            META_TIP_BLOCK_HASH_KEY,
             parent_block_hash.as_slice(),
         )?;
         self.set_last_valid_tip_block_hash(&parent_block_hash)?;

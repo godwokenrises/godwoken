@@ -68,7 +68,7 @@ fn construct_state_db_from_block_hash() {
     let db = store.begin_transaction();
     let state_db = StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::Genesis);
     assert!(state_db.is_ok());
-    assert_eq!(true, state_db.unwrap().mode() == StateDBMode::Genesis);
+    assert!(state_db.unwrap().mode() == StateDBMode::Genesis);
 
     let state_checkpoint =
         CheckPoint::from_block_hash(&db, block_hash.into(), SubState::Block).unwrap();
@@ -76,7 +76,7 @@ fn construct_state_db_from_block_hash() {
     let state_db =
         StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::ReadOnly);
     assert!(state_db.is_ok());
-    assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
+    assert!(state_db.unwrap().mode() != StateDBMode::Genesis);
 
     let state_checkpoint = CheckPoint::from_block_hash(&db, H256::zero(), SubState::Block);
     assert_eq!(
@@ -84,7 +84,7 @@ fn construct_state_db_from_block_hash() {
         "block isn't exist".to_string()
     );
 
-    let state_checkpoint = CheckPoint::new(block_number.into(), SubState::Tx(0u32));
+    let state_checkpoint = CheckPoint::new(block_number, SubState::Tx(0u32));
     let db = store.begin_transaction();
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
@@ -92,7 +92,7 @@ fn construct_state_db_from_block_hash() {
         StateDBMode::Write(WriteContext::new(0)),
     );
     assert!(state_db.is_ok());
-    assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
+    assert!(state_db.unwrap().mode() != StateDBMode::Genesis);
 
     let state_checkpoint = CheckPoint::from_block_hash(&db, block_hash.into(), SubState::Tx(1u32));
     assert_eq!(
@@ -164,7 +164,7 @@ fn construct_state_db_from_sub_state() {
     let block_hash = raw.hash();
     assert_eq!(0u64, block_number);
 
-    let state_checkpoint = CheckPoint::new(block_number.into(), SubState::Tx(0u32));
+    let state_checkpoint = CheckPoint::new(block_number, SubState::Tx(0u32));
     let db = store.begin_transaction();
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
@@ -172,9 +172,9 @@ fn construct_state_db_from_sub_state() {
         StateDBMode::Write(WriteContext::new(3)),
     );
     assert!(state_db.is_ok());
-    assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
+    assert!(state_db.unwrap().mode() != StateDBMode::Genesis);
 
-    let state_checkpoint = CheckPoint::new(block_number.into(), SubState::Tx(1u32));
+    let state_checkpoint = CheckPoint::new(block_number, SubState::Tx(1u32));
     let db = store.begin_transaction();
     let state_db = StateDBTransaction::from_checkpoint(
         &db,
@@ -182,21 +182,21 @@ fn construct_state_db_from_sub_state() {
         StateDBMode::Write(WriteContext::new(3)),
     );
     assert!(state_db.is_ok());
-    assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
+    assert!(state_db.unwrap().mode() != StateDBMode::Genesis);
 
-    let state_checkpoint = CheckPoint::new(block_number.into(), SubState::PrevTxs);
+    let state_checkpoint = CheckPoint::new(block_number, SubState::PrevTxs);
     let db = store.begin_transaction();
     let state_db =
         StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::ReadOnly);
     assert!(state_db.is_ok());
-    assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
+    assert!(state_db.unwrap().mode() != StateDBMode::Genesis);
 
-    let state_checkpoint = CheckPoint::new(block_number.into(), SubState::Withdrawal(1u32));
+    let state_checkpoint = CheckPoint::new(block_number, SubState::Withdrawal(1u32));
     let db = store.begin_transaction();
     let state_db =
         StateDBTransaction::from_checkpoint(&db, state_checkpoint, StateDBMode::ReadOnly);
     assert!(state_db.is_ok());
-    assert_eq!(false, state_db.unwrap().mode() == StateDBMode::Genesis);
+    assert!(state_db.unwrap().mode() != StateDBMode::Genesis);
 
     let state_checkpoint =
         CheckPoint::from_block_hash(&db, block_hash.into(), SubState::Withdrawal(3u32));

@@ -307,7 +307,7 @@ fn seek_for_prev_with_suffix() {
     assert_ne!(key_1, raw_iter.key().unwrap()[..n - 12]);
 
     raw_iter.seek_for_prev(key_1_with_ver_1_4);
-    assert_eq!(false, raw_iter.valid());
+    assert!(!raw_iter.valid());
     assert!(raw_iter.key().is_none());
 }
 
