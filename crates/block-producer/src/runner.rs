@@ -285,7 +285,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         config.genesis.secp_data_dep.clone().into(),
     );
 
-    let (mem_pool, wallet, poa) = match config.block_producer.clone() {
+    let (mem_pool, wallet, poa, offchain_validator_context) = match config.block_producer.clone() {
         Some(block_producer_config) => {
             let wallet = Wallet::from_config(&block_producer_config.wallet_config)
                 .with_context(|| "init wallet")?;
@@ -338,14 +338,19 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     store.clone(),
                     generator.clone(),
                     Box::new(mem_pool_provider),
-                    offchain_validator_context,
+                    offchain_validator_context.clone(),
                     config.mem_pool.clone(),
                 )
                 .with_context(|| "create mem-pool")?,
             ));
-            (Some(mem_pool), Some(wallet), Some(poa))
+            (
+                Some(mem_pool),
+                Some(wallet),
+                Some(poa),
+                offchain_validator_context,
+            )
         }
-        None => (None, None, None),
+        None => (None, None, None, None),
     };
 
     let chain = Arc::new(Mutex::new(
@@ -456,7 +461,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 rpc_client.clone(),
                 ckb_genesis_info,
                 block_producer_config,
-                config.debug,
+                config.debug.clone(),
                 tests_control.clone(),
             )
             .with_context(|| "init block producer")?;
@@ -477,6 +482,9 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         generator,
         test_mode_control.map(Box::new),
         rollup_config,
+        config.debug.clone(),
+        Arc::clone(&chain),
+        offchain_validator_context,
     );
 
     let (s, ctrl_c) = async_channel::bounded(100);

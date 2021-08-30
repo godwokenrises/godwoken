@@ -15,6 +15,7 @@ gw-generator = { path = "../generator" }
 gw-mem-pool = { path = "../mem-pool" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
+gw-jsonrpc-types = { path = "../jsonrpc-types" }
 ckb-fixed-hash = "0.38.0"
 anyhow = "1.0"
 thiserror = "1.0"

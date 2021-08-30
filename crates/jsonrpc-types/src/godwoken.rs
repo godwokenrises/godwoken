@@ -187,31 +187,35 @@ impl From<packed::TxReceipt> for TxReceipt {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum ChallengeTargetType {
-    Transaction,
+    TxExecution,
+    TxSignature,
     Withdrawal,
 }
 
 impl Default for ChallengeTargetType {
     fn default() -> Self {
-        Self::Transaction
+        Self::TxExecution
     }
 }
 
 impl From<ChallengeTargetType> for packed::Byte {
     fn from(json: ChallengeTargetType) -> packed::Byte {
         match json {
-            ChallengeTargetType::Transaction => packed::Byte::new(0),
-            ChallengeTargetType::Withdrawal => packed::Byte::new(1),
+            ChallengeTargetType::TxExecution => packed::Byte::new(0),
+            ChallengeTargetType::TxSignature => packed::Byte::new(1),
+            ChallengeTargetType::Withdrawal => packed::Byte::new(2),
         }
     }
 }
+
 impl TryFrom<packed::Byte> for ChallengeTargetType {
     type Error = JsonError;
 
     fn try_from(v: packed::Byte) -> Result<ChallengeTargetType, Self::Error> {
         match u8::from(v) {
-            0 => Ok(ChallengeTargetType::Transaction),
-            1 => Ok(ChallengeTargetType::Withdrawal),
+            0 => Ok(ChallengeTargetType::TxExecution),
+            1 => Ok(ChallengeTargetType::TxSignature),
+            2 => Ok(ChallengeTargetType::Withdrawal),
             _ => Err(anyhow!("Invalid challenge target type {}", v)),
         }
     }

@@ -1,11 +1,15 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
+use gw_chain::chain::Chain;
+use gw_challenge::offchain::OffChainValidatorContext;
 use gw_common::{state::State, H256};
+use gw_config::DebugConfig;
 use gw_generator::{sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
+    debugger::{DumpChallengeTarget, ReprMockTransaction},
     godwoken::{
         GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus, L2TransactionStatus,
         L2TransactionWithStatus, RunResult, TxReceipt,
@@ -35,7 +39,9 @@ type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
 type GwUint64 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint64;
 
 const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
+const INTERNAL_ERROR_ERR_CODE: i64 = -32099;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
+const INVALID_PARAM_ERR_CODE: i64 = -32602;
 
 fn header_not_found_err() -> RpcError {
     RpcError::Provided {
@@ -43,6 +49,7 @@ fn header_not_found_err() -> RpcError {
         message: "header not found",
     }
 }
+
 fn mem_pool_is_disabled_err() -> RpcError {
     RpcError::Provided {
         code: METHOD_NOT_AVAILABLE_ERR_CODE,
@@ -110,15 +117,22 @@ pub struct Registry {
     store: Store,
     tests_rpc_impl: Option<Arc<BoxedTestsRPCImpl>>,
     rollup_config: RollupConfig,
+    debug_config: DebugConfig,
+    chain: Arc<Mutex<Chain>>,
+    offchain_validator_context: Option<OffChainValidatorContext>,
 }
 
 impl Registry {
+    #[allow(clippy::too_many_arguments)]
     pub fn new<T>(
         store: Store,
         mem_pool: MemPool,
         generator: Arc<Generator>,
         tests_rpc_impl: Option<Box<T>>,
         rollup_config: RollupConfig,
+        debug_config: DebugConfig,
+        chain: Arc<Mutex<Chain>>,
+        offchain_validator_context: Option<OffChainValidatorContext>,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -130,6 +144,9 @@ impl Registry {
             tests_rpc_impl: tests_rpc_impl
                 .map(|r| Arc::new(r as Box<dyn TestModeRPC + Sync + Send + 'static>)),
             rollup_config,
+            debug_config,
+            chain,
+            offchain_validator_context,
         }
     }
 
@@ -178,6 +195,17 @@ impl Registry {
                 .with_method("tests_produce_block", tests_produce_block)
                 .with_method("tests_should_produce_block", tests_should_produce_block)
                 .with_method("tests_get_global_state", tests_get_global_state);
+        }
+
+        // Debug
+        if self.debug_config.enable_debug_rpc {
+            server = server
+                .with_data(Data::new(self.chain))
+                .with_data(Data::new(self.offchain_validator_context))
+                .with_method(
+                    "debug_dump_cancel_challenge_tx",
+                    debug_dump_cancel_challenge_tx,
+                );
         }
 
         Ok(server.finish())
@@ -669,4 +697,67 @@ async fn tests_should_produce_block(
     tests_rpc_impl: Data<BoxedTestsRPCImpl>,
 ) -> Result<ShouldProduceBlock> {
     tests_rpc_impl.should_produce_block().await
+}
+
+async fn debug_dump_cancel_challenge_tx(
+    Params((target,)): Params<(DumpChallengeTarget,)>,
+    chain: Data<Arc<Mutex<Chain>>>,
+    offchain_validator_context: Data<Option<OffChainValidatorContext>>,
+) -> Result<ReprMockTransaction, RpcError> {
+    let offchain_validator_context = match *offchain_validator_context {
+        Some(ref ctx) => ctx,
+        None => {
+            return Err(RpcError::Provided {
+                code: INTERNAL_ERROR_ERR_CODE,
+                message: "offchain validator is not enable, unable to dump cancel challenge tx",
+            })
+        }
+    };
+
+    let to_block_hash = |chain: &Chain, block_number: u64| -> Result<H256, RpcError> {
+        let db = chain.store().begin_transaction();
+        match db.get_block_hash_by_number(block_number) {
+            Ok(Some(hash)) => Ok(hash),
+            Ok(None) => Err(RpcError::Provided {
+                code: INVALID_PARAM_ERR_CODE,
+                message: "block hash not found",
+            }),
+            Err(err) => Err(RpcError::Full {
+                code: INTERNAL_ERROR_ERR_CODE,
+                message: err.to_string(),
+                data: None,
+            }),
+        }
+    };
+
+    let chain = chain.lock().await;
+    let (block_hash, target_index, target_type) = match target {
+        DumpChallengeTarget::ByBlockHash {
+            block_hash,
+            target_index,
+            target_type,
+        } => (to_h256(block_hash), target_index, target_type),
+        DumpChallengeTarget::ByBlockNumber {
+            block_number,
+            target_index,
+            target_type,
+        } => (
+            to_block_hash(&chain, block_number.into())?,
+            target_index,
+            target_type,
+        ),
+    };
+
+    let target = gw_types::packed::ChallengeTarget::new_builder()
+        .block_hash(Into::<[u8; 32]>::into(block_hash).pack())
+        .target_index(target_index.value().pack())
+        .target_type(target_type.into())
+        .build();
+
+    let maybe_tx = chain.dump_cancel_challenge_tx(offchain_validator_context, target);
+    maybe_tx.map_err(|err| RpcError::Full {
+        code: INTERNAL_ERROR_ERR_CODE,
+        message: err.to_string(),
+        data: None,
+    })
 }

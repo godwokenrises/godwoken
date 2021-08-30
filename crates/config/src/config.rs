@@ -108,6 +108,13 @@ pub struct DebugConfig {
     pub expected_l1_tx_upper_bound_cycles: u64,
     /// Directory to save debugging info of l1 transactions
     pub debug_tx_dump_path: PathBuf,
+    #[serde(default = "default_enable_debug_rpc")]
+    pub enable_debug_rpc: bool,
+}
+
+// Field default value for backward config file compitability
+fn default_enable_debug_rpc() -> bool {
+    false
 }
 
 impl Default for DebugConfig {
@@ -119,6 +126,7 @@ impl Default for DebugConfig {
             debug_tx_dump_path: DEFAULT_DEBUG_TX_DUMP_PATH.into(),
             output_l1_tx_cycles: true,
             expected_l1_tx_upper_bound_cycles: EXPECTED_TX_UPPER_BOUND_CYCLES,
+            enable_debug_rpc: false,
         }
     }
 }
