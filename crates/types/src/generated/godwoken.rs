@@ -14512,6 +14512,7 @@ impl ::core::fmt::Display for RollupRevert {
             "reverted_block_proof",
             self.reverted_block_proof()
         )?;
+        write!(f, ", {}: {}", "new_tip_block", self.new_tip_block())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -14522,13 +14523,25 @@ impl ::core::fmt::Display for RollupRevert {
 impl ::core::default::Default for RollupRevert {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            28, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            100, 1, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 68, 1, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0,
+            0, 0, 128, 0, 0, 0, 164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 84, 0, 0, 0, 16, 0, 0, 0, 48, 0,
+            0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RollupRevert::new_unchecked(v.into())
     }
 }
 impl RollupRevert {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -14560,11 +14573,17 @@ impl RollupRevert {
     pub fn reverted_block_proof(&self) -> Bytes {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Bytes::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn new_tip_block(&self) -> RawL2Block {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            Bytes::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[20..]) as usize;
+            RawL2Block::new_unchecked(self.0.slice(start..end))
         } else {
-            Bytes::new_unchecked(self.0.slice(start..))
+            RawL2Block::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> RollupRevertReader<'r> {
@@ -14597,6 +14616,7 @@ impl molecule::prelude::Entity for RollupRevert {
             .reverted_blocks(self.reverted_blocks())
             .block_proof(self.block_proof())
             .reverted_block_proof(self.reverted_block_proof())
+            .new_tip_block(self.new_tip_block())
     }
 }
 #[derive(Clone, Copy)]
@@ -14626,6 +14646,7 @@ impl<'r> ::core::fmt::Display for RollupRevertReader<'r> {
             "reverted_block_proof",
             self.reverted_block_proof()
         )?;
+        write!(f, ", {}: {}", "new_tip_block", self.new_tip_block())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -14634,7 +14655,7 @@ impl<'r> ::core::fmt::Display for RollupRevertReader<'r> {
     }
 }
 impl<'r> RollupRevertReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -14666,11 +14687,17 @@ impl<'r> RollupRevertReader<'r> {
     pub fn reverted_block_proof(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        BytesReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn new_tip_block(&self) -> RawL2BlockReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            BytesReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[20..]) as usize;
+            RawL2BlockReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            BytesReader::new_unchecked(&self.as_slice()[start..])
+            RawL2BlockReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -14726,6 +14753,7 @@ impl<'r> molecule::prelude::Reader<'r> for RollupRevertReader<'r> {
         RawL2BlockVecReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         BytesReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         BytesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        RawL2BlockReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         Ok(())
     }
 }
@@ -14734,9 +14762,10 @@ pub struct RollupRevertBuilder {
     pub(crate) reverted_blocks: RawL2BlockVec,
     pub(crate) block_proof: Bytes,
     pub(crate) reverted_block_proof: Bytes,
+    pub(crate) new_tip_block: RawL2Block,
 }
 impl RollupRevertBuilder {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn reverted_blocks(mut self, v: RawL2BlockVec) -> Self {
         self.reverted_blocks = v;
         self
@@ -14749,6 +14778,10 @@ impl RollupRevertBuilder {
         self.reverted_block_proof = v;
         self
     }
+    pub fn new_tip_block(mut self, v: RawL2Block) -> Self {
+        self.new_tip_block = v;
+        self
+    }
 }
 impl molecule::prelude::Builder for RollupRevertBuilder {
     type Entity = RollupRevert;
@@ -14758,6 +14791,7 @@ impl molecule::prelude::Builder for RollupRevertBuilder {
             + self.reverted_blocks.as_slice().len()
             + self.block_proof.as_slice().len()
             + self.reverted_block_proof.as_slice().len()
+            + self.new_tip_block.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -14768,6 +14802,8 @@ impl molecule::prelude::Builder for RollupRevertBuilder {
         total_size += self.block_proof.as_slice().len();
         offsets.push(total_size);
         total_size += self.reverted_block_proof.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.new_tip_block.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -14775,6 +14811,7 @@ impl molecule::prelude::Builder for RollupRevertBuilder {
         writer.write_all(self.reverted_blocks.as_slice())?;
         writer.write_all(self.block_proof.as_slice())?;
         writer.write_all(self.reverted_block_proof.as_slice())?;
+        writer.write_all(self.new_tip_block.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

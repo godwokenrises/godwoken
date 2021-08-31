@@ -337,6 +337,7 @@ table RollupRevert {
     reverted_blocks: RawL2BlockVec, // sorted by block number
     block_proof: Bytes,
     reverted_block_proof: Bytes,
+    new_tip_block: RawL2Block,
 }
 union RollupAction {
     // submit layer2 block
