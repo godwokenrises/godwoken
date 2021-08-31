@@ -18,6 +18,7 @@ struct GlobalState {
     block: BlockMerkleState,
     reverted_block_root: Byte32,
     tip_block_hash: Byte32,
+    tip_block_timestamp: Uint64,
     last_finalized_block_number: Uint64,
     // 0: running, 1: halting
     status: byte,
