@@ -28,7 +28,7 @@ use gw_types::{
     packed::{SUDTArgs, SUDTArgsUnion, Script},
     prelude::*,
 };
-use rust_decimal::Decimal;
+use rust_decimal::{prelude::ToPrimitive, Decimal};
 use sqlx::types::chrono::{DateTime, NaiveDateTime, Utc};
 use sqlx::PgPool;
 
@@ -64,35 +64,58 @@ impl Web3Indexer {
         }
     }
 
-    pub async fn store(&self, store: Store, l1_transaction: &Transaction) {
-        match self.insert_to_sql(store, l1_transaction).await {
-            Err(err) => {
-                log::error!("Web3 indexer store failed: {:?}", err);
-            }
-            Ok(()) => {}
+    pub async fn store_genesis(&self, store: Store) -> Result<()> {
+        let row: Option<(Decimal,)> =
+            sqlx::query_as("SELECT number FROM blocks WHERE number=0 LIMIT 1")
+                .fetch_optional(&self.pool)
+                .await?;
+        if row.is_none() {
+            // find genesis
+            let db = store.begin_transaction();
+            let block_hash = db
+                .get_block_hash_by_number(0)?
+                .ok_or_else(|| anyhow!("no genesis block in the db"))?;
+            let genesis = db
+                .get_block(&block_hash)?
+                .ok_or_else(|| anyhow!("can't find genesis by hash"))?;
+            // insert
+            self.insert_l2block(store, genesis).await?;
+            log::debug!("web3 indexer: sync genesis block #0");
         }
+        Ok(())
     }
 
-    pub async fn insert_to_sql(&self, store: Store, l1_transaction: &Transaction) -> Result<()> {
+    pub async fn store(&self, store: Store, l1_transaction: &Transaction) -> Result<()> {
         let l2_block = match self.extract_l2_block(l1_transaction)? {
             Some(block) => block,
-            None => return Ok(()),
+            None => return Err(anyhow!("can't find l2 block from l1 transaction")),
         };
-
         let number: u64 = l2_block.raw().number().unpack();
+        let local_tip_number = self.tip_number().await?;
+        if local_tip_number.is_none() || number > local_tip_number.unwrap() {
+            self.insert_l2block(store, l2_block).await?;
+            log::debug!("web3 indexer: sync new block #{}", number);
+        }
+        Ok(())
+    }
+
+    async fn tip_number(&self) -> Result<Option<u64>> {
         let row: Option<(Decimal,)> =
             sqlx::query_as("SELECT number FROM blocks ORDER BY number DESC LIMIT 1")
                 .fetch_optional(&self.pool)
                 .await?;
-        if row.is_none() || Decimal::from(number) > row.unwrap().0 {
-            let web3_tx_with_logs_vec = self
-                .filter_web3_transactions(store.clone(), l2_block.clone())
-                .await?;
-            let web3_block = self
-                .build_web3_block(store.clone(), &l2_block, &web3_tx_with_logs_vec)
-                .await?;
-            let mut tx = self.pool.begin().await?;
-            sqlx::query("INSERT INTO blocks (number, hash, parent_hash, logs_bloom, gas_limit, gas_used, timestamp, miner, size) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+        Ok(row.and_then(|(n,)| n.to_u64()))
+    }
+
+    async fn insert_l2block(&self, store: Store, l2_block: L2Block) -> Result<()> {
+        let web3_tx_with_logs_vec = self
+            .filter_web3_transactions(store.clone(), l2_block.clone())
+            .await?;
+        let web3_block = self
+            .build_web3_block(store.clone(), &l2_block, &web3_tx_with_logs_vec)
+            .await?;
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("INSERT INTO blocks (number, hash, parent_hash, logs_bloom, gas_limit, gas_used, timestamp, miner, size) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
             .bind(Decimal::from(web3_block.number))
             .bind(hex(web3_block.hash.as_slice())?)
             .bind(hex(web3_block.parent_hash.as_slice())?)
@@ -103,17 +126,17 @@ impl Web3Indexer {
             .bind(hex(&web3_block.miner)?)
             .bind(Decimal::from(web3_block.size))
             .execute(&mut tx).await?;
-            for web3_tx_with_logs in web3_tx_with_logs_vec {
-                let web3_tx = web3_tx_with_logs.tx;
-                let web3_to_address_hex = match web3_tx.to_address {
-                    Some(addr) => Some(hex(&addr)?),
-                    None => None,
-                };
-                let web3_contract_address_hex = match web3_tx.contract_address {
-                    Some(addr) => Some(hex(&addr)?),
-                    None => None,
-                };
-                let  (transaction_id,): (i64,) =
+        for web3_tx_with_logs in web3_tx_with_logs_vec {
+            let web3_tx = web3_tx_with_logs.tx;
+            let web3_to_address_hex = match web3_tx.to_address {
+                Some(addr) => Some(hex(&addr)?),
+                None => None,
+            };
+            let web3_contract_address_hex = match web3_tx.contract_address {
+                Some(addr) => Some(hex(&addr)?),
+                None => None,
+            };
+            let  (transaction_id,): (i64,) =
             sqlx::query_as("INSERT INTO transactions
             (hash, eth_tx_hash, block_number, block_hash, transaction_index, from_address, to_address, value, nonce, gas_limit, gas_price, input, v, r, s, cumulative_gas_used, gas_used, logs_bloom, contract_address, status) 
             VALUES 
@@ -141,14 +164,14 @@ impl Web3Indexer {
             .fetch_one(&mut tx)
             .await?;
 
-                let web3_logs = web3_tx_with_logs.logs;
-                for log in web3_logs {
-                    let mut topics_hex = vec![];
-                    for topic in log.topics {
-                        let topic_hex = hex(topic.as_slice())?;
-                        topics_hex.push(topic_hex);
-                    }
-                    sqlx::query("INSERT INTO logs
+            let web3_logs = web3_tx_with_logs.logs;
+            for log in web3_logs {
+                let mut topics_hex = vec![];
+                for topic in log.topics {
+                    let topic_hex = hex(topic.as_slice())?;
+                    topics_hex.push(topic_hex);
+                }
+                sqlx::query("INSERT INTO logs
                 (transaction_id, transaction_hash, transaction_index, block_number, block_hash, address, data, log_index, topics)
                 VALUES
                 ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
@@ -163,11 +186,9 @@ impl Web3Indexer {
                 .bind(topics_hex)
                 .execute(&mut tx)
                 .await?;
-                }
             }
-            tx.commit().await?;
-            log::debug!("web3 indexer: sync new block #{}", web3_block.number);
         }
+        tx.commit().await?;
         Ok(())
     }
 
