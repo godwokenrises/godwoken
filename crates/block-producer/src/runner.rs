@@ -390,6 +390,8 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 eth_account_lock_hash,
                 tron_account_lock_hash,
             );
+            // fix missing genesis block
+            smol::block_on(web3_indexer.store_genesis(store.clone()))?;
             Some(web3_indexer)
         }
         None => None,
