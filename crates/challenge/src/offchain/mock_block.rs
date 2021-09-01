@@ -503,6 +503,15 @@ impl MockBlockParam {
             kv_state.insert(key.to_owned(), value);
         }
 
+        for key in run_result.write_values.keys() {
+            if kv_state.contains_key(key) {
+                continue;
+            }
+
+            let value = tree.get_raw(key)?;
+            kv_state.insert(key.to_owned(), value);
+        }
+
         let touched_keys = kv_state.iter().map(|(key, _)| key.to_owned()).collect();
         let kv_state: Vec<(H256, H256)> = kv_state.into_iter().collect();
         let kv_state_proof = {
