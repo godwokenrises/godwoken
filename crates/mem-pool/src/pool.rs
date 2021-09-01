@@ -312,6 +312,26 @@ impl MemPool {
         Ok(())
     }
 
+    /// FIXME
+    /// This function is a temporary mechanism
+    /// Try to recovery from invalid state by drop txs & deposit
+    pub fn try_to_recovery_from_invalid_state(&mut self) -> Result<()> {
+        log::info!("[mem-pool] try recovery from invalid state by drop txs & deposits");
+        log::info!("[mem-pool] drop mem-block");
+        self.mem_block.clear();
+        log::info!("[mem-pool] drop pending: {}", self.pending.len());
+        self.pending.clear();
+        log::info!(
+            "[mem-pool] drop withdrawals: {}",
+            self.all_withdrawals.len()
+        );
+        self.all_withdrawals.clear();
+        log::info!("[mem-pool] drop txs: {}", self.all_txs.len());
+        self.all_txs.clear();
+        log::info!("[mem-pool] try_to_recovery - done");
+        Ok(())
+    }
+
     /// output mem block
     pub fn output_mem_block(&self) -> Result<BlockParam> {
         let db = self.store.begin_transaction();

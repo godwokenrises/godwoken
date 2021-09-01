@@ -57,6 +57,11 @@ impl MemBlock {
             withdrawals: self.withdrawals.clone(),
         };
         // reset status
+        self.clear();
+        content
+    }
+
+    pub fn clear(&mut self) {
         self.tx_receipts.clear();
         self.txs.clear();
         self.withdrawals.clear();
@@ -64,7 +69,6 @@ impl MemBlock {
         self.state_checkpoints.clear();
         self.txs_prev_state_checkpoint = None;
         self.touched_keys.clear();
-        content
     }
 
     pub fn push_withdrawal(&mut self, withdrawal_hash: H256, state_checkpoint: H256) {
