@@ -1,4 +1,7 @@
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 use gw_common::{merkle_utils::calculate_state_checkpoint, H256};
 use gw_types::{
@@ -32,7 +35,7 @@ pub struct MemBlock {
     /// Mem block prev merkle state
     prev_merkle_state: AccountMerkleState,
     /// touched keys
-    touched_keys: Vec<H256>,
+    touched_keys: HashSet<H256>,
 }
 
 impl MemBlock {
@@ -128,7 +131,7 @@ impl MemBlock {
         self.block_producer_id
     }
 
-    pub fn touched_keys(&self) -> &[H256] {
+    pub fn touched_keys(&self) -> &HashSet<H256> {
         &self.touched_keys
     }
 
