@@ -99,6 +99,7 @@ impl MemPool {
                 offchain_validator_context,
                 mem_block.block_producer_id().pack(),
                 &tip_block,
+                mem_block.block_info().timestamp().unpack(),
                 reverted_block_root,
             )
         });
@@ -556,7 +557,8 @@ impl MemPool {
             smt.root().to_owned()
         };
         if let Some(ref mut offchain_validator) = self.offchain_validator {
-            offchain_validator.reset(&new_tip_block, reverted_block_root);
+            let timestamp = self.mem_block.block_info().timestamp().unpack();
+            offchain_validator.reset(&new_tip_block, timestamp, reverted_block_root);
         }
 
         // set tip

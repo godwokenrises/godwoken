@@ -27,7 +27,6 @@ use gw_types::packed::{
 use gw_types::prelude::*;
 
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(thiserror::Error, Debug)]
 #[error("{:?}", {0})]
@@ -61,13 +60,9 @@ impl MockBlockParam {
         rollup_context: RollupContext,
         block_producer_id: Uint32,
         parent_block: &L2Block,
+        timestamp: u64,
         reverted_block_root: H256,
     ) -> Self {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("timestamp")
-            .as_millis() as u64;
-
         MockBlockParam {
             finality_blocks: rollup_context.rollup_config.finality_blocks().unpack(),
             rollup_config_hash: rollup_context.rollup_config.hash().pack(),
@@ -87,12 +82,7 @@ impl MockBlockParam {
         }
     }
 
-    pub fn reset(&mut self, parent_block: &L2Block, reverted_block_root: H256) {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("timestamp")
-            .as_millis() as u64;
-
+    pub fn reset(&mut self, parent_block: &L2Block, timestamp: u64, reverted_block_root: H256) {
         self.number = parent_block.raw().number().unpack() + 1;
         self.parent_block_hash = parent_block.hash().pack();
         self.timestamp = timestamp.pack();

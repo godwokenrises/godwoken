@@ -154,12 +154,14 @@ impl OffChainCancelChallengeValidator {
         ctx: OffChainValidatorContext,
         block_producer_id: Uint32,
         parent_block: &L2Block,
+        timestamp: u64,
         reverted_block_root: H256,
     ) -> Self {
         let block_param = MockBlockParam::new(
             ctx.mock_rollup.rollup_context.to_owned(),
             block_producer_id,
             parent_block,
+            timestamp,
             reverted_block_root,
         );
 
@@ -175,8 +177,9 @@ impl OffChainCancelChallengeValidator {
         }
     }
 
-    pub fn reset(&mut self, parent_block: &L2Block, reverted_block_root: H256) {
-        self.block_param.reset(parent_block, reverted_block_root);
+    pub fn reset(&mut self, parent_block: &L2Block, timestamp: u64, reverted_block_root: H256) {
+        self.block_param
+            .reset(parent_block, timestamp, reverted_block_root);
 
         self.safe_margin = MarginOfMockBlockSafity {
             remain_package_size: u64::MAX,
