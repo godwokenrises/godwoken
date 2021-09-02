@@ -104,11 +104,20 @@ pub fn build_revert_context(
     };
     log::debug!("build reverted block proof");
 
+    let new_tip_block = {
+        let first_reverted_block = reverted_raw_blocks.first();
+        let tip_block_hash = first_reverted_block.map(|b| b.parent_block_hash().unpack());
+        let to_block = tip_block_hash.map(|h| db.get_block(&h)).transpose()?;
+        let to_raw = to_block.flatten().map(|b| b.raw());
+        to_raw.ok_or_else(|| anyhow!("block not found"))?
+    };
+
     let reverted_blocks = RawL2BlockVec::new_builder()
         .extend(reverted_raw_blocks)
         .build();
 
     let revert_witness = RevertWitness {
+        new_tip_block,
         reverted_blocks,
         block_proof,
         reverted_block_proof,
