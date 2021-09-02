@@ -147,6 +147,7 @@ pub fn produce_block(
         .account(post_merkle_state)
         .block(post_block)
         .tip_block_hash(block.hash().pack())
+        .tip_block_timestamp(block.raw().timestamp())
         .last_finalized_block_number(last_finalized_block_number.pack())
         .reverted_block_root(Into::<[u8; 32]>::into(reverted_block_root).pack())
         .rollup_config_hash(rollup_config_hash.pack())
