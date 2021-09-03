@@ -6,11 +6,15 @@ use crate::transaction_skeleton::TransactionSkeleton;
 use crate::types::ChainEvent;
 use crate::utils::{self, fill_tx_fee, CKBGenesisInfo};
 use crate::wallet::Wallet;
-use anyhow::{anyhow, Result};
-use ckb_types::prelude::{Builder, Entity};
+use anyhow::{anyhow, bail, Result};
+use ckb_types::prelude::{Builder, Entity, Reader};
 use gw_chain::chain::{Chain, ChallengeCell, SyncEvent};
-use gw_challenge::cancel_challenge::{CancelChallengeOutput, LoadData, LoadDataContext};
+use gw_challenge::cancel_challenge::{
+    CancelChallengeOutput, LoadData, LoadDataContext, LoadDataStrategy,
+};
 use gw_challenge::enter_challenge::EnterChallenge;
+use gw_challenge::offchain::verify_tx::{verify_tx, TxWithContext};
+use gw_challenge::offchain::{mock_cancel_challenge_tx, OffChainMockContext};
 use gw_challenge::revert::Revert;
 use gw_challenge::types::{RevertContext, VerifyContext};
 use gw_common::H256;
@@ -23,7 +27,8 @@ use gw_types::bytes::Bytes;
 use gw_types::core::{ChallengeTargetType, Status};
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, TxStatus};
 use gw_types::packed::{
-    CellDep, CellInput, CellOutput, GlobalState, OutPoint, Script, Transaction, WitnessArgs,
+    CellDep, CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, ChallengeTarget,
+    GlobalState, OutPoint, Script, Transaction, WitnessArgs,
 };
 use gw_types::prelude::{Pack, Unpack};
 use smol::lock::Mutex;
@@ -32,6 +37,9 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+const MAX_CANCEL_CYCLES: u64 = 7000_0000;
+const MAX_CANCEL_TX_BYTES: u64 = ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 
 pub struct Challenger {
     rollup_context: RollupContext,
@@ -45,6 +53,7 @@ pub struct Challenger {
     tests_control: Option<TestModeControl>,
     cleaner: Arc<Cleaner>,
     debug_config: DebugConfig,
+    offchain_mock_context: OffChainMockContext,
 }
 
 impl Challenger {
@@ -61,6 +70,7 @@ impl Challenger {
         poa: Arc<Mutex<PoA>>,
         tests_control: Option<TestModeControl>,
         cleaner: Arc<Cleaner>,
+        offchain_mock_context: OffChainMockContext,
     ) -> Self {
         Self {
             rollup_context,
@@ -74,6 +84,7 @@ impl Challenger {
             chain,
             tests_control,
             cleaner,
+            offchain_mock_context,
         }
     }
 
@@ -256,8 +267,15 @@ impl Challenger {
             return Ok(());
         }
 
-        let challenge_cell = to_cell_info(challenge_cell);
         let prev_state = rollup_state.get_state().to_owned();
+        let load_data_strategy = validate_load_data_strategy_offchain(
+            &self.offchain_mock_context,
+            prev_state.clone(),
+            &challenge_cell,
+            context.clone(),
+        )?;
+
+        let challenge_cell = to_cell_info(challenge_cell);
         let burn_lock = self.config.challenger_config.burn_lock.clone().into();
         let owner_lock = self.wallet.lock_script().to_owned();
         let mut cancel_output = gw_challenge::cancel_challenge::build_output(
@@ -268,7 +286,7 @@ impl Challenger {
             owner_lock,
             context,
             &self.builtin_load_data,
-            None,
+            Some(load_data_strategy),
         )?;
 
         // Build verifier transaction
@@ -777,4 +795,57 @@ fn to_cell_info(cell: ChallengeCell) -> CellInfo {
 fn extract_inputs(tx: &Transaction) -> HashSet<OutPoint> {
     let inputs = tx.raw().inputs().into_iter();
     inputs.map(|i| i.previous_output()).collect()
+}
+
+fn extract_challenge_target(cell: &ChallengeCell) -> Result<ChallengeTarget> {
+    let lock_args = {
+        let args: Bytes = cell.output.lock().args().unpack();
+        match ChallengeLockArgsReader::verify(&args.slice(32..), false) {
+            Ok(_) => ChallengeLockArgs::new_unchecked(args.slice(32..)),
+            Err(err) => return Err(anyhow!("invalid challenge lock args {}", err)),
+        }
+    };
+
+    Ok(lock_args.target())
+}
+
+fn validate_load_data_strategy_offchain(
+    mock_context: &OffChainMockContext,
+    global_state: GlobalState,
+    challenge_cell: &ChallengeCell,
+    context: VerifyContext,
+) -> Result<LoadDataStrategy> {
+    let challenge_target = extract_challenge_target(challenge_cell)?;
+
+    let verify = |strategy: LoadDataStrategy| -> Result<_> {
+        log::info!("validate cancel challenge with strategy {:?}", strategy);
+
+        let mock_output = mock_cancel_challenge_tx(
+            &mock_context.mock_rollup,
+            &mock_context.mock_poa,
+            global_state.clone(),
+            challenge_target.clone(),
+            context.clone(),
+            Some(strategy),
+        )?;
+
+        if mock_output.tx.as_slice().len() as u64 > MAX_CANCEL_TX_BYTES {
+            bail!("cancel tx exceeded");
+        }
+
+        verify_tx(
+            &mock_context.rollup_cell_deps,
+            TxWithContext::from(mock_output),
+            MAX_CANCEL_CYCLES,
+        )?;
+
+        Ok(strategy)
+    };
+
+    match verify(LoadDataStrategy::Witness) {
+        Err(err) => log::info!("cancel challenge by witness {}, try cell dep", err),
+        Ok(_) => return Ok(LoadDataStrategy::Witness),
+    }
+
+    verify(LoadDataStrategy::CellDep)
 }
