@@ -1,4 +1,4 @@
-#![allow(clippy::clippy::mutable_key_type)]
+#![allow(clippy::mutable_key_type)]
 
 use crate::constant::MEMORY_BLOCK_NUMBER;
 use crate::{smt_store_impl::SMTStore, traits::KVStore};

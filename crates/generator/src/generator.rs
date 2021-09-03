@@ -455,7 +455,9 @@ impl Generator {
         let mut run_result = RunResult::default();
         let used_cycles;
         {
-            let core_machine = AsmCoreMachine::new_with_max_cycles(L2TX_MAX_CYCLES);
+            // let core_machine = AsmCoreMachine::new_with_max_cycles(L2TX_MAX_CYCLES);
+            let core_machine =
+                AsmCoreMachine::new(ckb_vm::ISA_IMC, ckb_vm::machine::VERSION0, L2TX_MAX_CYCLES);
             let machine_builder = DefaultMachineBuilder::new(core_machine)
                 .syscall(Box::new(L2Syscalls {
                     chain,

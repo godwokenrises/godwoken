@@ -1,4 +1,4 @@
-#![allow(clippy::clippy::mutable_key_type)]
+#![allow(clippy::mutable_key_type)]
 
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
 use anyhow::{anyhow, Result};
@@ -1275,7 +1275,7 @@ impl RPCClient {
             self.ckb_client
                 .request(
                     "send_transaction",
-                    Some(ClientParams::Array(vec![json!(tx)])),
+                    Some(ClientParams::Array(vec![json!(tx), json!("passthrough")])),
                 )
                 .await?,
         )?;
