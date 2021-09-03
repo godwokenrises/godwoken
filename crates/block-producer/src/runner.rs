@@ -301,7 +301,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             };
 
             let mut offchain_validator_context = None;
-            if config.offchain_validator.enable {
+            if let Some(validator_config) = config.offchain_validator {
                 let debug_config = config.debug.clone();
                 let wallet = {
                     let config = &block_producer_config.wallet_config;
@@ -310,7 +310,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 let ckb_genesis_info = gw_challenge::offchain::CKBGenesisInfo {
                     sighash_dep: ckb_genesis_info.sighash_dep(),
                 };
-                let validator_config = config.offchain_validator.clone();
 
                 let context = smol::block_on(async {
                     let poa = poa.lock().await;

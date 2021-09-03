@@ -20,7 +20,7 @@ pub struct Config {
     pub block_producer: Option<BlockProducerConfig>,
     pub web3_indexer: Option<Web3IndexerConfig>,
     #[serde(default)]
-    pub offchain_validator: OffChainValidatorConfig,
+    pub offchain_validator: Option<OffChainValidatorConfig>,
     #[serde(default)]
     pub mem_pool: MemPoolConfig,
 }
@@ -141,7 +141,6 @@ pub struct Web3IndexerConfig {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct OffChainValidatorConfig {
-    pub enable: bool,
     pub verify_withdrawal_signature: bool,
     pub verify_tx_signature: bool,
     pub verify_tx_execution: bool,
@@ -152,12 +151,11 @@ pub struct OffChainValidatorConfig {
 impl Default for OffChainValidatorConfig {
     fn default() -> Self {
         Self {
-            enable: true,
             verify_withdrawal_signature: true,
             verify_tx_signature: true,
             verify_tx_execution: true,
             verify_max_cycles: 70_000_000,
-            dump_tx_on_failure: false,
+            dump_tx_on_failure: true,
         }
     }
 }
