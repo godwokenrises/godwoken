@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
 use gw_config::BlockProducerConfig;
-use gw_types::core::Status;
+use gw_types::core::{DepType, Status};
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, GlobalState, OutPoint, RollupAction, RollupActionUnion,
@@ -26,10 +26,23 @@ pub struct CancelChallenge<'a, W: Entity> {
     verify_witness: W,
 }
 
+#[derive(Clone)]
+pub struct LoadData {
+    pub builtin: Vec<CellDep>,
+    pub cells: Vec<(CellOutput, Bytes)>,
+}
+
+#[derive(Clone)]
+pub struct LoadDataContext {
+    pub builtin_cell_deps: Vec<CellDep>,
+    pub cell_deps: Vec<CellDep>,
+    pub inputs: Vec<InputCellInfo>,
+}
+
 pub struct CancelChallengeOutput {
     pub post_global_state: GlobalState,
+    pub load_data: Option<LoadData>, // Some for transaction execution verification, sys_load_data
     pub verifier_cell: (CellOutput, Bytes),
-    pub load_data_cells: Option<HashMap<H256, (CellOutput, Bytes)>>, // Some for transaction execution verifiction, sys_load_data
     pub burn_cells: Vec<(CellOutput, Bytes)>,
     pub verifier_witness: Option<WitnessArgs>, // Some for signature verification
     pub challenge_witness: WitnessArgs,
@@ -71,6 +84,19 @@ impl CancelChallengeOutput {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum LoadDataStrategy {
+    Witness,
+    CellDep,
+}
+
+impl Default for LoadDataStrategy {
+    fn default() -> Self {
+        LoadDataStrategy::Witness
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn build_output(
     rollup_context: &RollupContext,
     prev_global_state: GlobalState,
@@ -78,6 +104,8 @@ pub fn build_output(
     burn_lock: Script,
     owner_lock: Script,
     context: VerifyContext,
+    builtin_load_data: &HashMap<H256, CellDep>,
+    load_data_strategy: Option<LoadDataStrategy>,
 ) -> Result<CancelChallengeOutput> {
     match context.verify_witness {
         VerifyWitness::Withdrawal(witness) => {
@@ -134,6 +162,34 @@ pub fn build_output(
                 .receiver_script
                 .ok_or_else(|| anyhow!("receiver script not found"))?;
 
+            let (load_builtin, load_data): (HashMap<_, _>, HashMap<_, _>) = load_data
+                .into_iter()
+                .partition(|(k, _v)| builtin_load_data.contains_key(k));
+
+            let builtin_deps = {
+                let to_dep = |(k, _)| -> CellDep {
+                    builtin_load_data.get(k).cloned().expect("should exists")
+                };
+                load_builtin.iter().map(to_dep).collect()
+            };
+
+            let load_data: Vec<Bytes> = load_data.into_iter().map(|(_, v)| v.unpack()).collect();
+            let (witness, load_data_cells) = match load_data_strategy.unwrap_or_default() {
+                LoadDataStrategy::Witness => {
+                    let context = {
+                        let builder = witness.context().as_builder();
+                        builder.load_data(load_data.pack()).build()
+                    };
+                    let witness = witness.as_builder().context(context).build();
+                    (witness, vec![])
+                }
+                LoadDataStrategy::CellDep => {
+                    let to_cell = |v| build_cell(v, owner_lock.clone());
+                    let cells = load_data.into_iter().map(to_cell).collect();
+                    (witness, cells)
+                }
+            };
+
             let cancel: CancelChallenge<VerifyTransactionWitness> = CancelChallenge::new(
                 prev_global_state,
                 rollup_context,
@@ -145,8 +201,56 @@ pub fn build_output(
             );
 
             let data = cancel.build_verifier_data();
-            let load_data = load_data.into_iter().map(|(k, v)| (k, v.unpack()));
-            Ok(cancel.build_output(data, None, Some(load_data.collect())))
+            let load_data = LoadData {
+                builtin: builtin_deps,
+                cells: load_data_cells,
+            };
+
+            Ok(cancel.build_output(data, None, Some(load_data)))
+        }
+    }
+}
+
+impl LoadData {
+    pub fn into_context(self, verifier_tx_hash: H256, verifier_tx_index: u32) -> LoadDataContext {
+        assert_eq!(verifier_tx_index, 0, "verifier cell should be first one");
+
+        let to_context = |(idx, (output, data))| -> (CellDep, InputCellInfo) {
+            let out_point = OutPoint::new_builder()
+                .tx_hash(Into::<[u8; 32]>::into(verifier_tx_hash).pack())
+                .index((idx as u32).pack())
+                .build();
+
+            let cell_dep = CellDep::new_builder()
+                .out_point(out_point.clone())
+                .dep_type(DepType::Code.into())
+                .build();
+
+            let input = CellInput::new_builder()
+                .previous_output(out_point.clone())
+                .build();
+
+            let cell = CellInfo {
+                out_point,
+                output,
+                data,
+            };
+
+            let cell_info = InputCellInfo { input, cell };
+
+            (cell_dep, cell_info)
+        };
+
+        let (cell_deps, inputs) = {
+            let cells = self.cells.into_iter().enumerate();
+            let to_ctx = cells.map(|(idx, cell)| (idx + 1, cell)).map(to_context);
+            to_ctx.unzip()
+        };
+
+        LoadDataContext {
+            builtin_cell_deps: self.builtin,
+            cell_deps,
+            inputs,
         }
     }
 }
@@ -180,31 +284,9 @@ impl<'a, W: Entity> CancelChallenge<'a, W> {
         self,
         verifier_data: Bytes,
         verifier_witness: Option<WitnessArgs>,
-        load_data: Option<HashMap<H256, Bytes>>,
+        load_data: Option<LoadData>,
     ) -> CancelChallengeOutput {
-        let build_cell = |data: Bytes, lock: Script| -> (CellOutput, Bytes) {
-            let dummy_output = CellOutput::new_builder()
-                .capacity(100_000_000u64.pack())
-                .lock(lock)
-                .build();
-
-            let capacity = dummy_output
-                .occupied_capacity(data.len())
-                .expect("impossible cancel challenge verify cell overflow");
-
-            let output = dummy_output.as_builder().capacity(capacity.pack()).build();
-
-            (output, data)
-        };
-
         let verifier_cell = build_cell(verifier_data, self.verifier_lock);
-
-        let owner_lock = self.owner_lock;
-        let load_data_cells = load_data.map(|data| {
-            data.into_iter()
-                .map(|(k, v)| (k, build_cell(v, owner_lock.clone())))
-                .collect()
-        });
 
         let burn = Burn::new(self.challenge_cell, self.reward_burn_rate);
         let burn_output = burn.build_output(self.burn_lock);
@@ -217,7 +299,7 @@ impl<'a, W: Entity> CancelChallenge<'a, W> {
         CancelChallengeOutput {
             post_global_state,
             verifier_cell,
-            load_data_cells,
+            load_data,
             burn_cells: burn_output.burn_cells,
             verifier_witness,
             challenge_witness,
@@ -361,4 +443,19 @@ fn build_rollup_witness() -> WitnessArgs {
     WitnessArgs::new_builder()
         .output_type(Some(rollup_action.as_bytes()).pack())
         .build()
+}
+
+fn build_cell(data: Bytes, lock: Script) -> (CellOutput, Bytes) {
+    let dummy_output = CellOutput::new_builder()
+        .capacity(100_000_000u64.pack())
+        .lock(lock)
+        .build();
+
+    let capacity = dummy_output
+        .occupied_capacity(data.len())
+        .expect("impossible cancel challenge verify cell overflow");
+
+    let output = dummy_output.as_builder().capacity(capacity.pack()).build();
+
+    (output, data)
 }

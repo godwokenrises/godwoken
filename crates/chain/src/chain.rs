@@ -272,6 +272,7 @@ impl Chain {
             global_state,
             target,
             verify_context,
+            None,
         )
         .with_context(|| "dump cancel challenge tx from chain")?;
 

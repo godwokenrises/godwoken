@@ -1,6 +1,6 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::Wallet;
+use crate::{cancel_challenge::LoadDataStrategy, Wallet};
 
 use anyhow::{anyhow, bail, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
@@ -140,7 +140,8 @@ impl OffChainValidatorContext {
 #[derive(Debug)]
 pub struct VerifyTxCycles {
     pub signature: Option<u64>,
-    pub execution: Option<u64>,
+    pub execution_by_witness: Option<u64>,
+    pub execution_by_celldep: Option<u64>,
 }
 
 pub struct OffChainCancelChallengeValidator {
@@ -214,6 +215,7 @@ impl OffChainCancelChallengeValidator {
                 challenge.global_state,
                 challenge.challenge_target,
                 challenge.verify_context,
+                None,
             )?;
 
             tx_with_context = Some(TxWithContext::from(mock_output.clone()));
@@ -247,7 +249,12 @@ impl OffChainCancelChallengeValidator {
             }
 
             if let Some(tx_with_context) = tx_with_context {
-                self.dump_tx_to_file(dump_prefix, &withdrawal_hash.to_string(), tx_with_context);
+                dump_tx_to_file(
+                    validator_ctx,
+                    dump_prefix,
+                    &withdrawal_hash.to_string(),
+                    tx_with_context,
+                );
             }
         }
 
@@ -286,6 +293,7 @@ impl OffChainCancelChallengeValidator {
                 challenge.global_state,
                 challenge.challenge_target,
                 challenge.verify_context,
+                None,
             )?;
 
             *tx_with_context = Some(TxWithContext::from(mock_output.clone()));
@@ -310,7 +318,8 @@ impl OffChainCancelChallengeValidator {
 
         let verify_execution = |tx_with_context: &mut Option<TxWithContext>,
                                 safe_margin: &mut MarginOfMockBlockSafity,
-                                raw_block_flag: &mut RawBlockFlag|
+                                raw_block_flag: &mut RawBlockFlag,
+                                load_data_strategy: LoadDataStrategy|
          -> Result<_> {
             let challenge = block_param.challenge_last_tx_execution(db, state_db, run_result)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
@@ -319,6 +328,7 @@ impl OffChainCancelChallengeValidator {
                 challenge.global_state,
                 challenge.challenge_target,
                 challenge.verify_context,
+                Some(load_data_strategy),
             )?;
 
             *tx_with_context = Some(TxWithContext::from(mock_output.clone()));
@@ -351,7 +361,8 @@ impl OffChainCancelChallengeValidator {
         let mut raw_block_flag = RawBlockFlag::New;
         let mut cycles = VerifyTxCycles {
             signature: None,
-            execution: None,
+            execution_by_witness: None,
+            execution_by_celldep: None,
         };
 
         let verify = || -> Result<_> {
@@ -361,9 +372,41 @@ impl OffChainCancelChallengeValidator {
             }
 
             if validator_config.verify_tx_execution {
-                dump_prefix = "tx-execution";
-                cycles.execution =
-                    verify_execution(&mut tx_with_context, safe_margin, &mut raw_block_flag)?;
+                let mut by_witness = || -> Result<_> {
+                    dump_prefix = "tx-execution-by-witness";
+                    cycles.execution_by_witness = verify_execution(
+                        &mut tx_with_context,
+                        safe_margin,
+                        &mut raw_block_flag,
+                        LoadDataStrategy::Witness,
+                    )?;
+
+                    Ok(())
+                };
+
+                match by_witness() {
+                    Ok(_) => return Ok(Some(cycles)),
+                    Err(_) if validator_config.dump_tx_on_failure => {
+                        if let Some(tx_with_context) = tx_with_context.take() {
+                            dump_tx_to_file(
+                                validator_ctx,
+                                dump_prefix,
+                                &tx_hash.to_string(),
+                                tx_with_context,
+                            );
+                        }
+                    }
+                    Err(err) => log::warn!("offchain validator: verify tx execution {}", err),
+                }
+
+                // Try again use cell dep
+                dump_prefix = "tx-execution-by-celldep";
+                cycles.execution_by_witness = verify_execution(
+                    &mut tx_with_context,
+                    safe_margin,
+                    &mut raw_block_flag,
+                    LoadDataStrategy::CellDep,
+                )?;
             }
 
             Ok(Some(cycles))
@@ -378,36 +421,16 @@ impl OffChainCancelChallengeValidator {
             }
 
             if let Some(tx_with_context) = tx_with_context {
-                self.dump_tx_to_file(dump_prefix, &tx_hash.to_string(), tx_with_context);
+                dump_tx_to_file(
+                    validator_ctx,
+                    dump_prefix,
+                    &tx_hash.to_string(),
+                    tx_with_context,
+                );
             }
         }
 
         result
-    }
-
-    fn dump_tx_to_file(&self, prefix: &str, origin_hash: &str, tx_with_context: TxWithContext) {
-        let dump = || -> Result<_> {
-            let debug_config = &self.validator_context.debug_config;
-            let dir = debug_config.debug_tx_dump_path.as_path();
-            create_dir_all(&dir)?;
-
-            let mut dump_path = PathBuf::new();
-            dump_path.push(dir);
-
-            let tx = dump_tx(&self.validator_context.rollup_cell_deps, tx_with_context)?;
-            let dump_filename = format!("{}-{}-offchain-cancel-tx.json", prefix, origin_hash);
-            dump_path.push(dump_filename);
-
-            let json_tx = serde_json::to_string_pretty(&tx)?;
-            log::info!("dump cancel tx from {} to {:?}", origin_hash, dump_path);
-            write(dump_path, json_tx)?;
-
-            Ok(())
-        };
-
-        if let Err(err) = dump() {
-            log::error!("unable to dump offchain cancel challenge tx {}", err);
-        }
     }
 }
 
@@ -542,5 +565,35 @@ impl From<MockOutput> for TxWithContext {
             inputs: output.inputs,
             tx: output.tx,
         }
+    }
+}
+
+fn dump_tx_to_file(
+    validator_context: &OffChainValidatorContext,
+    prefix: &str,
+    origin_hash: &str,
+    tx_with_context: TxWithContext,
+) {
+    let dump = || -> Result<_> {
+        let debug_config = &validator_context.debug_config;
+        let dir = debug_config.debug_tx_dump_path.as_path();
+        create_dir_all(&dir)?;
+
+        let mut dump_path = PathBuf::new();
+        dump_path.push(dir);
+
+        let tx = dump_tx(&validator_context.rollup_cell_deps, tx_with_context)?;
+        let dump_filename = format!("{}-{}-offchain-cancel-tx.json", prefix, origin_hash);
+        dump_path.push(dump_filename);
+
+        let json_tx = serde_json::to_string_pretty(&tx)?;
+        log::info!("dump cancel tx from {} to {:?}", origin_hash, dump_path);
+        write(dump_path, json_tx)?;
+
+        Ok(())
+    };
+
+    if let Err(err) = dump() {
+        log::error!("unable to dump offchain cancel challenge tx {}", err);
     }
 }
