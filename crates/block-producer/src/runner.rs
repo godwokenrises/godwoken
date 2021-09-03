@@ -5,7 +5,7 @@ use crate::{
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use gw_chain::chain::Chain;
-use gw_challenge::offchain::OffChainValidatorContext;
+use gw_challenge::offchain::{OffChainMockContext, OffChainValidatorContext};
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
@@ -285,7 +285,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         config.genesis.secp_data_dep.clone().into(),
     );
 
-    let (mem_pool, wallet, poa, offchain_validator_context) = match config.block_producer.clone() {
+    let (mem_pool, wallet, poa, offchain_mock_context) = match config.block_producer.clone() {
         Some(block_producer_config) => {
             let wallet = Wallet::from_config(&block_producer_config.wallet_config)
                 .with_context(|| "init wallet")?;
@@ -300,32 +300,37 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 Arc::new(smol::lock::Mutex::new(poa))
             };
 
-            let mut offchain_validator_context = None;
-            if let Some(validator_config) = config.offchain_validator {
-                let debug_config = config.debug.clone();
+            let ckb_genesis_info = gw_challenge::offchain::CKBGenesisInfo {
+                sighash_dep: ckb_genesis_info.sighash_dep(),
+            };
+            let offchain_mock_context = smol::block_on(async {
                 let wallet = {
                     let config = &block_producer_config.wallet_config;
                     gw_challenge::Wallet::from_config(config).with_context(|| "init wallet")?
                 };
-                let ckb_genesis_info = gw_challenge::offchain::CKBGenesisInfo {
-                    sighash_dep: ckb_genesis_info.sighash_dep(),
-                };
+                let poa = poa.lock().await;
 
-                let context = smol::block_on(async {
-                    let poa = poa.lock().await;
-                    OffChainValidatorContext::build(
-                        &rpc_client,
-                        &poa,
-                        rollup_context.clone(),
-                        wallet,
-                        block_producer_config.clone(),
-                        debug_config,
-                        validator_config,
-                        ckb_genesis_info,
-                        builtin_load_data.clone(),
-                    )
-                    .await
-                })?;
+                OffChainMockContext::build(
+                    &rpc_client,
+                    &poa,
+                    rollup_context.clone(),
+                    wallet,
+                    block_producer_config.clone(),
+                    ckb_genesis_info,
+                    builtin_load_data.clone(),
+                )
+                .await
+            })?;
+
+            let mut offchain_validator_context = None;
+            if let Some(validator_config) = config.offchain_validator {
+                let debug_config = config.debug.clone();
+
+                let context = OffChainValidatorContext::build(
+                    &offchain_mock_context,
+                    debug_config,
+                    validator_config,
+                )?;
 
                 offchain_validator_context = Some(context);
             }
@@ -337,7 +342,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     store.clone(),
                     generator.clone(),
                     Box::new(mem_pool_provider),
-                    offchain_validator_context.clone(),
+                    offchain_validator_context,
                     config.mem_pool.clone(),
                 )
                 .with_context(|| "create mem-pool")?,
@@ -346,7 +351,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 Some(mem_pool),
                 Some(wallet),
                 Some(poa),
-                offchain_validator_context,
+                Some(offchain_mock_context),
             )
         }
         None => (None, None, None, None),
@@ -485,7 +490,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         rollup_config,
         config.debug.clone(),
         Arc::clone(&chain),
-        offchain_validator_context,
+        offchain_mock_context,
     );
 
     let (s, ctrl_c) = async_channel::bounded(100);

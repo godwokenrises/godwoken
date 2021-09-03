@@ -54,34 +54,22 @@ pub struct CKBGenesisInfo {
 }
 
 #[derive(Clone)]
-pub struct OffChainValidatorContext {
-    pub validator_config: Arc<OffChainValidatorConfig>,
-    pub debug_config: Arc<DebugConfig>,
+pub struct OffChainMockContext {
     pub rollup_cell_deps: RollupCellDeps,
     pub mock_rollup: Arc<MockRollup>,
     pub mock_poa: Arc<MockPoA>,
 }
 
-impl OffChainValidatorContext {
-    #[allow(clippy::too_many_arguments)]
+impl OffChainMockContext {
     pub async fn build(
         rpc_client: &RPCClient,
         poa: &PoA,
         rollup_context: RollupContext,
         wallet: Wallet,
         config: BlockProducerConfig,
-        debug_config: DebugConfig,
-        validator_config: OffChainValidatorConfig,
         ckb_genesis_info: CKBGenesisInfo,
         builtin_load_data: HashMap<H256, CellDep>,
     ) -> Result<Self> {
-        if validator_config.verify_max_cycles <= MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES {
-            bail!(
-                "invalid verify max cycles, should be bigger than {}",
-                MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES
-            );
-        }
-
         let rollup_cell = {
             let query = rpc_client.query_rollup_cell().await?;
             into_input_cell_info(query.ok_or_else(|| anyhow!("can't found rollup cell"))?)
@@ -123,6 +111,42 @@ impl OffChainValidatorContext {
         };
         let resolved_rollup_deps = resolve_cell_deps(rpc_client, rollup_deps).await?;
         let rollup_cell_deps = RollupCellDeps::new(resolved_rollup_deps);
+
+        let mock_context = OffChainMockContext {
+            rollup_cell_deps,
+            mock_rollup,
+            mock_poa,
+        };
+
+        Ok(mock_context)
+    }
+}
+
+#[derive(Clone)]
+pub struct OffChainValidatorContext {
+    pub validator_config: Arc<OffChainValidatorConfig>,
+    pub debug_config: Arc<DebugConfig>,
+    pub rollup_cell_deps: RollupCellDeps,
+    pub mock_rollup: Arc<MockRollup>,
+    pub mock_poa: Arc<MockPoA>,
+}
+
+impl OffChainValidatorContext {
+    pub fn build(
+        mock_context: &OffChainMockContext,
+        debug_config: DebugConfig,
+        validator_config: OffChainValidatorConfig,
+    ) -> Result<Self> {
+        if validator_config.verify_max_cycles <= MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES {
+            bail!(
+                "invalid verify max cycles, should be bigger than {}",
+                MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES
+            );
+        }
+
+        let rollup_cell_deps = mock_context.rollup_cell_deps.clone();
+        let mock_rollup = mock_context.mock_rollup.clone();
+        let mock_poa = mock_context.mock_poa.clone();
 
         let debug_config = Arc::new(debug_config);
         let validator_config = Arc::new(validator_config);

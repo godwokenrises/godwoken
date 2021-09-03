@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
-use gw_challenge::offchain::OffChainValidatorContext;
+use gw_challenge::offchain::OffChainMockContext;
 use gw_common::{state::State, H256};
 use gw_config::DebugConfig;
 use gw_generator::{sudt::build_l2_sudt_script, Generator};
@@ -119,7 +119,7 @@ pub struct Registry {
     rollup_config: RollupConfig,
     debug_config: DebugConfig,
     chain: Arc<Mutex<Chain>>,
-    offchain_validator_context: Option<OffChainValidatorContext>,
+    offchain_mock_context: Option<OffChainMockContext>,
 }
 
 impl Registry {
@@ -132,7 +132,7 @@ impl Registry {
         rollup_config: RollupConfig,
         debug_config: DebugConfig,
         chain: Arc<Mutex<Chain>>,
-        offchain_validator_context: Option<OffChainValidatorContext>,
+        offchain_mock_context: Option<OffChainMockContext>,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -146,7 +146,7 @@ impl Registry {
             rollup_config,
             debug_config,
             chain,
-            offchain_validator_context,
+            offchain_mock_context,
         }
     }
 
@@ -201,7 +201,7 @@ impl Registry {
         if self.debug_config.enable_debug_rpc {
             server = server
                 .with_data(Data::new(self.chain))
-                .with_data(Data::new(self.offchain_validator_context))
+                .with_data(Data::new(self.offchain_mock_context))
                 .with_method(
                     "debug_dump_cancel_challenge_tx",
                     debug_dump_cancel_challenge_tx,
@@ -702,9 +702,9 @@ async fn tests_should_produce_block(
 async fn debug_dump_cancel_challenge_tx(
     Params((target,)): Params<(DumpChallengeTarget,)>,
     chain: Data<Arc<Mutex<Chain>>>,
-    offchain_validator_context: Data<Option<OffChainValidatorContext>>,
+    offchain_mock_context: Data<Option<OffChainMockContext>>,
 ) -> Result<ReprMockTransaction, RpcError> {
-    let offchain_validator_context = match *offchain_validator_context {
+    let offchain_mock_context = match *offchain_mock_context {
         Some(ref ctx) => ctx,
         None => {
             return Err(RpcError::Provided {
@@ -754,7 +754,7 @@ async fn debug_dump_cancel_challenge_tx(
         .target_type(target_type.into())
         .build();
 
-    let maybe_tx = chain.dump_cancel_challenge_tx(offchain_validator_context, target);
+    let maybe_tx = chain.dump_cancel_challenge_tx(offchain_mock_context, target);
     maybe_tx.map_err(|err| RpcError::Full {
         code: INTERNAL_ERROR_ERR_CODE,
         message: err.to_string(),
