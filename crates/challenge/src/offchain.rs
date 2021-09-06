@@ -397,7 +397,7 @@ impl OffChainCancelChallengeValidator {
 
             if validator_config.verify_tx_execution {
                 let mut by_witness = || -> Result<_> {
-                    dump_prefix = "tx-execution-by-witness";
+                    dump_prefix = "tx-execution-with-witness-data-loader";
                     cycles.execution_by_witness = verify_execution(
                         &mut tx_with_context,
                         safe_margin,
