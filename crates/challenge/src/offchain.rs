@@ -424,7 +424,7 @@ impl OffChainCancelChallengeValidator {
                 }
 
                 // Try again use cell dep
-                dump_prefix = "tx-execution-by-celldep";
+                dump_prefix = "tx-execution-with-celldep-data-loader";
                 cycles.execution_by_witness = verify_execution(
                     &mut tx_with_context,
                     safe_margin,
