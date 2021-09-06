@@ -1,7 +1,7 @@
 #![allow(clippy::mutable_key_type)]
 
 use anyhow::{anyhow, Context, Result};
-use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainValidatorContext};
+use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
 use gw_common::{sparse_merkle_tree, state::State, H256};
 use gw_generator::{
     generator::{StateTransitionArgs, StateTransitionResult},
@@ -249,7 +249,7 @@ impl Chain {
 
     pub fn dump_cancel_challenge_tx(
         &self,
-        offchain_validator_context: &OffChainValidatorContext,
+        offchain_mock_context: &OffChainMockContext,
         target: ChallengeTarget,
     ) -> Result<ReprMockTransaction> {
         let db = self.store().begin_transaction();
@@ -267,16 +267,17 @@ impl Chain {
         };
 
         let mock_output = gw_challenge::offchain::mock_cancel_challenge_tx(
-            &offchain_validator_context.mock_rollup,
-            &offchain_validator_context.mock_poa,
+            &offchain_mock_context.mock_rollup,
+            &offchain_mock_context.mock_poa,
             global_state,
             target,
             verify_context,
+            None,
         )
         .with_context(|| "dump cancel challenge tx from chain")?;
 
         gw_challenge::offchain::dump_tx(
-            &offchain_validator_context.rollup_cell_deps,
+            &offchain_mock_context.rollup_cell_deps,
             TxWithContext::from(mock_output),
         )
     }

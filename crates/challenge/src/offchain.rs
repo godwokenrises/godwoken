@@ -1,6 +1,6 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::Wallet;
+use crate::{cancel_challenge::LoadDataStrategy, Wallet};
 
 use anyhow::{anyhow, bail, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
@@ -54,34 +54,22 @@ pub struct CKBGenesisInfo {
 }
 
 #[derive(Clone)]
-pub struct OffChainValidatorContext {
-    pub validator_config: Arc<OffChainValidatorConfig>,
-    pub debug_config: Arc<DebugConfig>,
+pub struct OffChainMockContext {
     pub rollup_cell_deps: RollupCellDeps,
     pub mock_rollup: Arc<MockRollup>,
     pub mock_poa: Arc<MockPoA>,
 }
 
-impl OffChainValidatorContext {
-    #[allow(clippy::too_many_arguments)]
+impl OffChainMockContext {
     pub async fn build(
         rpc_client: &RPCClient,
         poa: &PoA,
         rollup_context: RollupContext,
         wallet: Wallet,
         config: BlockProducerConfig,
-        debug_config: DebugConfig,
-        validator_config: OffChainValidatorConfig,
         ckb_genesis_info: CKBGenesisInfo,
         builtin_load_data: HashMap<H256, CellDep>,
     ) -> Result<Self> {
-        if validator_config.verify_max_cycles <= MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES {
-            bail!(
-                "invalid verify max cycles, should be bigger than {}",
-                MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES
-            );
-        }
-
         let rollup_cell = {
             let query = rpc_client.query_rollup_cell().await?;
             into_input_cell_info(query.ok_or_else(|| anyhow!("can't found rollup cell"))?)
@@ -124,6 +112,42 @@ impl OffChainValidatorContext {
         let resolved_rollup_deps = resolve_cell_deps(rpc_client, rollup_deps).await?;
         let rollup_cell_deps = RollupCellDeps::new(resolved_rollup_deps);
 
+        let mock_context = OffChainMockContext {
+            rollup_cell_deps,
+            mock_rollup,
+            mock_poa,
+        };
+
+        Ok(mock_context)
+    }
+}
+
+#[derive(Clone)]
+pub struct OffChainValidatorContext {
+    pub validator_config: Arc<OffChainValidatorConfig>,
+    pub debug_config: Arc<DebugConfig>,
+    pub rollup_cell_deps: RollupCellDeps,
+    pub mock_rollup: Arc<MockRollup>,
+    pub mock_poa: Arc<MockPoA>,
+}
+
+impl OffChainValidatorContext {
+    pub fn build(
+        mock_context: &OffChainMockContext,
+        debug_config: DebugConfig,
+        validator_config: OffChainValidatorConfig,
+    ) -> Result<Self> {
+        if validator_config.verify_max_cycles <= MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES {
+            bail!(
+                "invalid verify max cycles, should be bigger than {}",
+                MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES
+            );
+        }
+
+        let rollup_cell_deps = mock_context.rollup_cell_deps.clone();
+        let mock_rollup = mock_context.mock_rollup.clone();
+        let mock_poa = mock_context.mock_poa.clone();
+
         let debug_config = Arc::new(debug_config);
         let validator_config = Arc::new(validator_config);
 
@@ -140,7 +164,8 @@ impl OffChainValidatorContext {
 #[derive(Debug)]
 pub struct VerifyTxCycles {
     pub signature: Option<u64>,
-    pub execution: Option<u64>,
+    pub execution_by_witness: Option<u64>,
+    pub execution_by_celldep: Option<u64>,
 }
 
 pub struct OffChainCancelChallengeValidator {
@@ -214,6 +239,7 @@ impl OffChainCancelChallengeValidator {
                 challenge.global_state,
                 challenge.challenge_target,
                 challenge.verify_context,
+                None,
             )?;
 
             tx_with_context = Some(TxWithContext::from(mock_output.clone()));
@@ -247,7 +273,12 @@ impl OffChainCancelChallengeValidator {
             }
 
             if let Some(tx_with_context) = tx_with_context {
-                self.dump_tx_to_file(dump_prefix, &withdrawal_hash.to_string(), tx_with_context);
+                dump_tx_to_file(
+                    validator_ctx,
+                    dump_prefix,
+                    &withdrawal_hash.to_string(),
+                    tx_with_context,
+                );
             }
         }
 
@@ -286,6 +317,7 @@ impl OffChainCancelChallengeValidator {
                 challenge.global_state,
                 challenge.challenge_target,
                 challenge.verify_context,
+                None,
             )?;
 
             *tx_with_context = Some(TxWithContext::from(mock_output.clone()));
@@ -310,7 +342,8 @@ impl OffChainCancelChallengeValidator {
 
         let verify_execution = |tx_with_context: &mut Option<TxWithContext>,
                                 safe_margin: &mut MarginOfMockBlockSafity,
-                                raw_block_flag: &mut RawBlockFlag|
+                                raw_block_flag: &mut RawBlockFlag,
+                                load_data_strategy: LoadDataStrategy|
          -> Result<_> {
             let challenge = block_param.challenge_last_tx_execution(db, state_db, run_result)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
@@ -319,6 +352,7 @@ impl OffChainCancelChallengeValidator {
                 challenge.global_state,
                 challenge.challenge_target,
                 challenge.verify_context,
+                Some(load_data_strategy),
             )?;
 
             *tx_with_context = Some(TxWithContext::from(mock_output.clone()));
@@ -351,7 +385,8 @@ impl OffChainCancelChallengeValidator {
         let mut raw_block_flag = RawBlockFlag::New;
         let mut cycles = VerifyTxCycles {
             signature: None,
-            execution: None,
+            execution_by_witness: None,
+            execution_by_celldep: None,
         };
 
         let verify = || -> Result<_> {
@@ -361,9 +396,41 @@ impl OffChainCancelChallengeValidator {
             }
 
             if validator_config.verify_tx_execution {
-                dump_prefix = "tx-execution";
-                cycles.execution =
-                    verify_execution(&mut tx_with_context, safe_margin, &mut raw_block_flag)?;
+                let mut by_witness = || -> Result<_> {
+                    dump_prefix = "tx-execution-with-witness-data-loader";
+                    cycles.execution_by_witness = verify_execution(
+                        &mut tx_with_context,
+                        safe_margin,
+                        &mut raw_block_flag,
+                        LoadDataStrategy::Witness,
+                    )?;
+
+                    Ok(())
+                };
+
+                match by_witness() {
+                    Ok(_) => return Ok(Some(cycles)),
+                    Err(_) if validator_config.dump_tx_on_failure => {
+                        if let Some(tx_with_context) = tx_with_context.take() {
+                            dump_tx_to_file(
+                                validator_ctx,
+                                dump_prefix,
+                                &tx_hash.to_string(),
+                                tx_with_context,
+                            );
+                        }
+                    }
+                    Err(err) => log::warn!("offchain validator: verify tx execution {}", err),
+                }
+
+                // Try again use cell dep
+                dump_prefix = "tx-execution-with-celldep-data-loader";
+                cycles.execution_by_witness = verify_execution(
+                    &mut tx_with_context,
+                    safe_margin,
+                    &mut raw_block_flag,
+                    LoadDataStrategy::CellDep,
+                )?;
             }
 
             Ok(Some(cycles))
@@ -378,36 +445,16 @@ impl OffChainCancelChallengeValidator {
             }
 
             if let Some(tx_with_context) = tx_with_context {
-                self.dump_tx_to_file(dump_prefix, &tx_hash.to_string(), tx_with_context);
+                dump_tx_to_file(
+                    validator_ctx,
+                    dump_prefix,
+                    &tx_hash.to_string(),
+                    tx_with_context,
+                );
             }
         }
 
         result
-    }
-
-    fn dump_tx_to_file(&self, prefix: &str, origin_hash: &str, tx_with_context: TxWithContext) {
-        let dump = || -> Result<_> {
-            let debug_config = &self.validator_context.debug_config;
-            let dir = debug_config.debug_tx_dump_path.as_path();
-            create_dir_all(&dir)?;
-
-            let mut dump_path = PathBuf::new();
-            dump_path.push(dir);
-
-            let tx = dump_tx(&self.validator_context.rollup_cell_deps, tx_with_context)?;
-            let dump_filename = format!("{}-{}-offchain-cancel-tx.json", prefix, origin_hash);
-            dump_path.push(dump_filename);
-
-            let json_tx = serde_json::to_string_pretty(&tx)?;
-            log::info!("dump cancel tx from {} to {:?}", origin_hash, dump_path);
-            write(dump_path, json_tx)?;
-
-            Ok(())
-        };
-
-        if let Err(err) = dump() {
-            log::error!("unable to dump offchain cancel challenge tx {}", err);
-        }
     }
 }
 
@@ -542,5 +589,35 @@ impl From<MockOutput> for TxWithContext {
             inputs: output.inputs,
             tx: output.tx,
         }
+    }
+}
+
+fn dump_tx_to_file(
+    validator_context: &OffChainValidatorContext,
+    prefix: &str,
+    origin_hash: &str,
+    tx_with_context: TxWithContext,
+) {
+    let dump = || -> Result<_> {
+        let debug_config = &validator_context.debug_config;
+        let dir = debug_config.debug_tx_dump_path.as_path();
+        create_dir_all(&dir)?;
+
+        let mut dump_path = PathBuf::new();
+        dump_path.push(dir);
+
+        let tx = dump_tx(&validator_context.rollup_cell_deps, tx_with_context)?;
+        let dump_filename = format!("{}-{}-offchain-cancel-tx.json", prefix, origin_hash);
+        dump_path.push(dump_filename);
+
+        let json_tx = serde_json::to_string_pretty(&tx)?;
+        log::info!("dump cancel tx from {} to {:?}", origin_hash, dump_path);
+        write(dump_path, json_tx)?;
+
+        Ok(())
+    };
+
+    if let Err(err) = dump() {
+        log::error!("unable to dump offchain cancel challenge tx {}", err);
     }
 }

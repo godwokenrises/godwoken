@@ -1,4 +1,6 @@
-use crate::cancel_challenge::{build_output, CancelChallengeOutput};
+use crate::cancel_challenge::{
+    build_output, CancelChallengeOutput, LoadData, LoadDataContext, LoadDataStrategy,
+};
 use crate::enter_challenge::EnterChallenge;
 use crate::offchain::{mock_poa::MockPoA, CKBGenesisInfo};
 use crate::types::VerifyContext;
@@ -11,7 +13,6 @@ use gw_common::H256;
 use gw_config::BlockProducerConfig;
 use gw_generator::ChallengeContext;
 use gw_types::bytes::Bytes;
-use gw_types::core::DepType;
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
 use gw_types::packed::{
     Byte32, CellDep, CellInput, CellOutput, ChallengeTarget, ChallengeWitness, GlobalState,
@@ -44,6 +45,7 @@ pub fn mock_cancel_challenge_tx(
     global_state: GlobalState,
     challenge_target: ChallengeTarget,
     context: VerifyContext,
+    load_data_strategy: Option<LoadDataStrategy>,
 ) -> Result<MockOutput> {
     let burn_lock = {
         let challenger_config = &mock_rollup.config.challenger_config;
@@ -59,11 +61,11 @@ pub fn mock_cancel_challenge_tx(
         burn_lock,
         owner_lock,
         context,
+        &mock_rollup.builtin_load_data,
+        load_data_strategy,
     )?;
 
-    let cancel_by_cell_deps =
-        CancelByCellDeps::new(&mock_rollup.builtin_load_data, &mock_rollup.config);
-    let verifier_context = cancel_by_cell_deps.mock_verifier(&mut cancel_output)?;
+    let verifier_context = VerifierContext::mock_from(&mut cancel_output, &mock_rollup.config)?;
 
     let mut tx_skeleton = TransactionSkeleton::default();
     let mut cell_deps = Vec::new();
@@ -114,7 +116,7 @@ pub fn mock_cancel_challenge_tx(
         cell_deps.extend(load_data_context.inputs);
     }
     tx_skeleton.inputs_mut().push(verifier_context.input);
-    if let Some(verifier_witness) = cancel_output.verifier_witness {
+    if let Some(verifier_witness) = verifier_context.witness {
         tx_skeleton.witnesses_mut().push(verifier_witness);
     }
 
@@ -339,37 +341,6 @@ impl MockRollup {
     }
 }
 
-struct CancelByCellDeps<'a> {
-    builtin_load_data: &'a HashMap<H256, CellDep>,
-    config: &'a BlockProducerConfig,
-}
-
-impl<'a> CancelByCellDeps<'a> {
-    fn new(builtin_load_data: &'a HashMap<H256, CellDep>, config: &'a BlockProducerConfig) -> Self {
-        CancelByCellDeps {
-            builtin_load_data,
-            config,
-        }
-    }
-
-    fn mock_verifier(&self, cancel_output: &mut CancelChallengeOutput) -> Result<VerifierContext> {
-        let load_data = {
-            let load = cancel_output.load_data_cells.take();
-            load.map(|ld| LoadData::new(ld, self.builtin_load_data))
-        };
-        let verifier_tx_hash = random_hash().unpack();
-        let verifier_context = {
-            let cell_dep = cancel_output.verifier_dep(self.config)?;
-            let input = cancel_output.verifier_input(verifier_tx_hash, 0);
-            let witness = cancel_output.verifier_witness.clone();
-            let load_data_context = load_data.map(|ld| ld.into_context(verifier_tx_hash, 0));
-            VerifierContext::new(cell_dep, input, witness, load_data_context)
-        };
-
-        Ok(verifier_context)
-    }
-}
-
 fn random_hash() -> Byte32 {
     let mut hash = [0u8; 32];
 
@@ -379,81 +350,6 @@ fn random_hash() -> Byte32 {
     hash.pack()
 }
 
-#[derive(Clone)]
-struct LoadData {
-    builtin: Vec<CellDep>,
-    cells: Vec<(CellOutput, Bytes)>,
-}
-
-#[derive(Clone)]
-struct LoadDataContext {
-    builtin_cell_deps: Vec<CellDep>,
-    cell_deps: Vec<CellDep>,
-    inputs: Vec<InputCellInfo>,
-}
-
-impl LoadData {
-    fn new(
-        load_data_cells: HashMap<H256, (CellOutput, Bytes)>,
-        builtin: &HashMap<H256, CellDep>,
-    ) -> Self {
-        let (load_builtin, load_data_cells): (HashMap<_, _>, HashMap<_, _>) = load_data_cells
-            .into_iter()
-            .partition(|(k, _v)| builtin.contains_key(k));
-
-        let cells = load_data_cells.values().map(|v| (*v).to_owned()).collect();
-        let builtin = {
-            let to_dep = |k| -> CellDep { builtin.get(k).cloned().expect("should exists") };
-            load_builtin.iter().map(|(k, _)| to_dep(k)).collect()
-        };
-
-        LoadData { builtin, cells }
-    }
-
-    fn into_context(self, verifier_tx_hash: H256, verifier_tx_index: u32) -> LoadDataContext {
-        assert_eq!(verifier_tx_index, 0, "verifier cell should be first one");
-
-        let to_context = |(idx, (output, data))| -> (CellDep, InputCellInfo) {
-            let out_point = OutPoint::new_builder()
-                .tx_hash(Into::<[u8; 32]>::into(verifier_tx_hash).pack())
-                .index((idx as u32).pack())
-                .build();
-
-            let cell_dep = CellDep::new_builder()
-                .out_point(out_point.clone())
-                .dep_type(DepType::Code.into())
-                .build();
-
-            let input = CellInput::new_builder()
-                .previous_output(out_point.clone())
-                .build();
-
-            let cell = CellInfo {
-                out_point,
-                output,
-                data,
-            };
-
-            let cell_info = InputCellInfo { input, cell };
-
-            (cell_dep, cell_info)
-        };
-
-        let (cell_deps, inputs) = {
-            let cells = self.cells.into_iter().enumerate();
-            let to_ctx = cells.map(|(idx, cell)| (idx + 1, cell)).map(to_context);
-            to_ctx.unzip()
-        };
-
-        LoadDataContext {
-            builtin_cell_deps: self.builtin,
-            cell_deps,
-            inputs,
-        }
-    }
-}
-
-#[derive(Clone)]
 struct VerifierContext {
     cell_dep: CellDep,
     input: InputCellInfo,
@@ -462,17 +358,19 @@ struct VerifierContext {
 }
 
 impl VerifierContext {
-    fn new(
-        cell_dep: CellDep,
-        input: InputCellInfo,
-        witness: Option<WitnessArgs>,
-        load_data_context: Option<LoadDataContext>,
-    ) -> Self {
-        VerifierContext {
-            cell_dep,
-            input,
-            witness,
-            load_data_context,
-        }
+    fn mock_from(
+        cancel_output: &mut CancelChallengeOutput,
+        config: &BlockProducerConfig,
+    ) -> Result<VerifierContext> {
+        let verifier_tx_hash = random_hash().unpack();
+        let to_ctx = |load_data: LoadData| load_data.into_context(verifier_tx_hash, 0);
+        let verifier_context = VerifierContext {
+            cell_dep: cancel_output.verifier_dep(config)?,
+            input: cancel_output.verifier_input(verifier_tx_hash, 0),
+            witness: cancel_output.verifier_witness.clone(),
+            load_data_context: cancel_output.load_data.take().map(to_ctx),
+        };
+
+        Ok(verifier_context)
     }
 }

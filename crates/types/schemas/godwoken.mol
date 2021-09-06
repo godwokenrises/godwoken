@@ -276,6 +276,7 @@ vector BlockHashEntryVec <BlockHashEntry>;
 table VerifyTransactionContext {
     account_count: Uint32,
     kv_state: KVPairVec,
+    load_data: BytesVec,
     scripts: ScriptVec,
     return_data_hash: Byte32,
     block_hashes: BlockHashEntryVec,
