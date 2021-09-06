@@ -4,13 +4,13 @@ use gw_challenge::{
     cancel_challenge::LoadDataStrategy,
     context::build_verify_context,
     offchain::{
-        mock_cancel_challenge_tx,
+        dump_tx, mock_cancel_challenge_tx,
         verify_tx::{verify_tx, TxWithContext},
         OffChainMockContext,
     },
 };
 use gw_common::{blake2b::new_blake2b, H256};
-use gw_config::Config;
+use gw_config::{Config, DebugConfig};
 use gw_db::{schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{
@@ -31,7 +31,12 @@ use gw_types::{
     prelude::{Builder, Entity, Pack, Unpack},
 };
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs::{create_dir_all, write},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use crate::{utils::CKBGenesisInfo, wallet::Wallet};
 
@@ -173,7 +178,9 @@ fn build_validator(config: Config) -> Result<HistoryCancelChallengeValidator> {
         .await
     })?;
 
-    let validator = HistoryCancelChallengeValidator::new(generator, store, offchain_mock_context);
+    let validator =
+        HistoryCancelChallengeValidator::new(generator, store, offchain_mock_context, config.debug);
+
     Ok(validator)
 }
 
@@ -181,14 +188,21 @@ struct HistoryCancelChallengeValidator {
     generator: Arc<Generator>,
     store: Store,
     mock_ctx: OffChainMockContext,
+    debug_config: DebugConfig,
 }
 
 impl HistoryCancelChallengeValidator {
-    fn new(generator: Arc<Generator>, store: Store, mock_ctx: OffChainMockContext) -> Self {
+    fn new(
+        generator: Arc<Generator>,
+        store: Store,
+        mock_ctx: OffChainMockContext,
+        debug_config: DebugConfig,
+    ) -> Self {
         HistoryCancelChallengeValidator {
             generator,
             store,
             mock_ctx,
+            debug_config,
         }
     }
 
@@ -276,11 +290,20 @@ impl HistoryCancelChallengeValidator {
                 Some(load_data_strategy),
             )?;
 
-            verify_tx(
+            let result = verify_tx(
                 &self.mock_ctx.rollup_cell_deps,
-                TxWithContext::from(mock_output),
+                TxWithContext::from(mock_output.clone()),
                 MAX_CYCLES,
-            )?;
+            );
+
+            if result.is_err() {
+                self.dump_tx_to_file(
+                    load_data_strategy,
+                    &challenge_target,
+                    TxWithContext::from(mock_output),
+                );
+                result?;
+            }
 
             Ok(())
         };
@@ -290,6 +313,36 @@ impl HistoryCancelChallengeValidator {
         }
 
         Ok(())
+    }
+
+    fn dump_tx_to_file(
+        &self,
+        strategy: LoadDataStrategy,
+        target: &ChallengeTarget,
+        tx_with_context: TxWithContext,
+    ) {
+        let dump = || -> Result<_> {
+            let debug_config = &self.debug_config;
+            let dir = debug_config.debug_tx_dump_path.as_path();
+            create_dir_all(&dir)?;
+
+            let mut dump_path = PathBuf::new();
+            dump_path.push(dir);
+
+            let tx = dump_tx(&self.mock_ctx.rollup_cell_deps, tx_with_context)?;
+            let dump_filename = format!("{:?}-{:?}-offchain-cancel-tx.json", target, strategy);
+            dump_path.push(dump_filename);
+
+            let json_tx = serde_json::to_string_pretty(&tx)?;
+            log::info!("dump cancel tx from {:?} to {:?}", target, dump_path);
+            write(dump_path, json_tx)?;
+
+            Ok(())
+        };
+
+        if let Err(err) = dump() {
+            log::error!("unable to dump offchain cancel challenge tx {}", err);
+        }
     }
 }
 
