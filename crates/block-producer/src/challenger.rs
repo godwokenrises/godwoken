@@ -818,7 +818,7 @@ fn validate_load_data_strategy_offchain(
     let challenge_target = extract_challenge_target(challenge_cell)?;
 
     let verify = |strategy: LoadDataStrategy| -> Result<_> {
-        log::info!("validate cancel challenge with strategy {:?}", strategy);
+        log::debug!("validate cancel challenge with strategy {:?}", strategy);
 
         let mock_output = mock_cancel_challenge_tx(
             &mock_context.mock_rollup,
@@ -843,7 +843,7 @@ fn validate_load_data_strategy_offchain(
     };
 
     match verify(LoadDataStrategy::Witness) {
-        Err(err) => log::info!("cancel challenge by witness {}, try cell dep", err),
+        Err(err) => log::warn!("cancel challenge by witness {}, try cell dep", err),
         Ok(_) => return Ok(LoadDataStrategy::Witness),
     }
 
