@@ -830,7 +830,7 @@ fn validate_load_data_strategy_offchain(
         )?;
 
         if mock_output.tx.as_slice().len() as u64 > MAX_CANCEL_TX_BYTES {
-            bail!("cancel tx exceeded");
+            bail!("cancel tx max bytes exceeded");
         }
 
         verify_tx(
