@@ -25,7 +25,7 @@ use gw_rpc_client::RPCClient;
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
-    core::ChallengeTargetType,
+    core::{ChallengeTargetType, Status},
     offchain::RollupContext,
     packed::{ChallengeTarget, GlobalState, RollupConfig, Script},
     prelude::{Builder, Entity, Pack, Unpack},
@@ -217,7 +217,10 @@ impl HistoryCancelChallengeValidator {
         };
         let global_state = {
             let maybe = db.get_block_post_global_state(&block_hash)?;
-            maybe.ok_or_else(|| anyhow!("block #{} global state not found", block_number))?
+            let state =
+                maybe.ok_or_else(|| anyhow!("block #{} global state not found", block_number))?;
+            let to_builder = state.as_builder().status((Status::Halting as u8).into());
+            to_builder.build()
         };
         let block = {
             let maybe = db.get_block(&block_hash)?;
