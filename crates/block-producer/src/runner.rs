@@ -423,9 +423,11 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             let wallet =
                 wallet.ok_or_else(|| anyhow!("wallet must be enabled in mode: {:?}", mode))?;
             let poa = poa.ok_or_else(|| anyhow!("poa must be enabled in mode: {:?}", mode))?;
-            let offchain_mock_context = offchain_mock_context.clone().ok_or_else(|| {
-                anyhow!("offchain mock context must be enabled in mode: {:?}", mode)
-            })?;
+            let offchain_mock_context = {
+                let ctx = offchain_mock_context.clone();
+                let msg = "offchain mock require block producer config, wallet and poa in mode: ";
+                ctx.ok_or_else(|| anyhow!("{} {:?}", msg, mode))?
+            };
             let tests_control = if let NodeMode::Test = config.node_mode {
                 Some(TestModeControl::new(
                     rpc_client.clone(),
