@@ -3,7 +3,12 @@
 //! A block producer can act without the ability of produce block.
 
 use anyhow::{anyhow, Result};
-use gw_common::{h256_ext::H256Ext, merkle_utils::calculate_merkle_root, smt::Blake2bHasher, H256};
+use gw_common::{
+    h256_ext::H256Ext,
+    merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash},
+    smt::Blake2bHasher,
+    H256,
+};
 use gw_generator::Generator;
 use gw_store::transaction::StoreTransaction;
 use gw_types::{
@@ -63,9 +68,13 @@ pub fn produce_block(
 
     // assemble block
     let submit_txs = {
-        let tx_witness_root =
-            calculate_merkle_root(txs.iter().map(|tx| tx.witness_hash().into()).collect())
-                .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
+        let tx_witness_root = calculate_ckb_merkle_root(
+            txs.iter()
+                .enumerate()
+                .map(|(id, tx)| ckb_merkle_leaf_hash(id as u32, &tx.witness_hash().into()))
+                .collect(),
+        )
+        .map_err(|err| anyhow!("merkle root error: {:?}", err))?;
         let tx_count = txs.len() as u32;
         SubmitTransactions::new_builder()
             .tx_witness_root(tx_witness_root.pack())
@@ -74,10 +83,13 @@ pub fn produce_block(
             .build()
     };
     let submit_withdrawals = {
-        let withdrawal_witness_root = calculate_merkle_root(
+        let withdrawal_witness_root = calculate_ckb_merkle_root(
             withdrawals
                 .iter()
-                .map(|request| request.witness_hash().into())
+                .enumerate()
+                .map(|(id, request)| {
+                    ckb_merkle_leaf_hash(id as u32, &request.witness_hash().into())
+                })
                 .collect(),
         )
         .map_err(|err| anyhow!("merkle root error: {:?}", err))?;

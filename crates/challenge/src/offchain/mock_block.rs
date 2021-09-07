@@ -3,10 +3,9 @@ use crate::types::{VerifyContext, VerifyWitness};
 use anyhow::{anyhow, bail, Result};
 use gw_common::blake2b::new_blake2b;
 use gw_common::h256_ext::H256Ext;
-use gw_common::merkle_utils::calculate_state_checkpoint;
+use gw_common::merkle_utils::{calculate_state_checkpoint, ckb_merkle_leaf_hash, CBMT};
 use gw_common::smt::{Blake2bHasher, SMT};
 use gw_common::sparse_merkle_tree::default_store::DefaultStore;
-use gw_common::sparse_merkle_tree::CompiledMerkleProof;
 use gw_common::state::{
     build_account_field_key, State, GW_ACCOUNT_NONCE_TYPE, GW_ACCOUNT_SCRIPT_HASH_TYPE,
 };
@@ -18,11 +17,11 @@ use gw_traits::CodeStore;
 use gw_types::core::{ChallengeTargetType, Status};
 use gw_types::offchain::{RollupContext, RunResult};
 use gw_types::packed::{
-    AccountMerkleState, BlockMerkleState, Byte32, Bytes, ChallengeTarget, GlobalState, L2Block,
-    L2Transaction, RawL2Block, Script, ScriptReader, ScriptVec, SubmitTransactions,
-    SubmitWithdrawals, Uint32, Uint64, VerifyTransactionContext, VerifyTransactionSignatureContext,
-    VerifyTransactionSignatureWitness, VerifyTransactionWitness, VerifyWithdrawalWitness,
-    WithdrawalRequest,
+    AccountMerkleState, BlockMerkleState, Byte32, Bytes, CKBMerkleProof, ChallengeTarget,
+    GlobalState, L2Block, L2Transaction, RawL2Block, Script, ScriptReader, ScriptVec,
+    SubmitTransactions, SubmitWithdrawals, Uint32, Uint64, VerifyTransactionContext,
+    VerifyTransactionSignatureContext, VerifyTransactionSignatureWitness, VerifyTransactionWitness,
+    VerifyWithdrawalWitness, WithdrawalRequest,
 };
 use gw_types::prelude::*;
 
@@ -367,15 +366,16 @@ impl MockBlockParam {
             last_hash.cloned().expect("should exists")
         };
 
-        let leaves = vec![(H256::from_u32(withdrawal_index), witness_hash)];
-        let withdrawal_proof = tree
-            .merkle_proof(vec![H256::from_u32(withdrawal_index)])?
-            .compile(leaves)?;
-
+        let withdrawal_proof =
+            CBMT::build_merkle_proof(&[witness_hash], &[withdrawal_index]).unwrap();
+        let merkle_proof = CKBMerkleProof::new_builder()
+            .lemmas(withdrawal_proof.lemmas().pack())
+            .indices(withdrawal_proof.indices().pack())
+            .build();
         let verify_witness = VerifyWithdrawalWitness::new_builder()
             .raw_l2block(raw_block)
             .withdrawal_request(withdrawal)
-            .withdrawal_proof(withdrawal_proof.0.pack())
+            .withdrawal_proof(merkle_proof)
             .build();
 
         Ok(VerifyContext {
@@ -440,7 +440,7 @@ impl MockBlockParam {
         let verify_witness = VerifyTransactionSignatureWitness::new_builder()
             .raw_l2block(raw_block)
             .l2tx(tx)
-            .tx_proof(tx_proof.0.pack())
+            .tx_proof(tx_proof)
             .kv_state_proof(kv_state_proof.0.pack())
             .context(context)
             .build();
@@ -561,7 +561,7 @@ impl MockBlockParam {
         let verify_witness = VerifyTransactionWitness::new_builder()
             .l2tx(tx)
             .raw_l2block(raw_block)
-            .tx_proof(tx_proof.0.pack())
+            .tx_proof(tx_proof)
             .kv_state_proof(kv_state_proof.0.pack())
             .context(context)
             .build();
@@ -576,20 +576,20 @@ impl MockBlockParam {
         })
     }
 
-    fn build_tx_proof(&self, tx_index: u32) -> Result<CompiledMerkleProof> {
-        let witness_hashes = &self.transactions.witness_hashes;
-        let mut tree: SMT<DefaultStore<H256>> = Default::default();
-        for (index, hash) in witness_hashes.iter().enumerate() {
-            tree.update(H256::from_u32(index as u32), hash.to_owned())?;
-        }
-
-        let witness_hash = witness_hashes.get(tx_index as usize).expect("exists");
-        let leaves = vec![(H256::from_u32(tx_index), witness_hash.to_owned())];
-
-        let proof = tree
-            .merkle_proof(vec![H256::from_u32(tx_index)])?
-            .compile(leaves)?;
-
+    fn build_tx_proof(&self, tx_index: u32) -> Result<CKBMerkleProof> {
+        let leaves = &self
+            .transactions
+            .witness_hashes
+            .iter()
+            .enumerate()
+            .map(|(id, hash)| ckb_merkle_leaf_hash(id as u32, hash))
+            .collect::<Vec<_>>();
+        let proof = CBMT::build_merkle_proof(leaves, &[tx_index])
+            .ok_or_else(|| anyhow!("Build merkle proof failed."))?;
+        let proof = CKBMerkleProof::new_builder()
+            .lemmas(proof.lemmas().pack())
+            .indices(proof.indices().pack())
+            .build();
         Ok(proof)
     }
 }
