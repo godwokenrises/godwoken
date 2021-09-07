@@ -180,7 +180,9 @@ impl TestModeControl {
                     *withdrawals.get_mut(target_index as usize).expect("exists") = bad_withdrawal;
 
                     let withdrawal_witness_root = {
-                        let witnesses = withdrawals.iter().map(|t| t.witness_hash().into());
+                        let witnesses = withdrawals.iter().enumerate().map(|(idx, t)| {
+                            ckb_merkle_leaf_hash(idx as u32, &t.witness_hash().into())
+                        });
                         calculate_ckb_merkle_root(witnesses.collect())?
                     };
 
