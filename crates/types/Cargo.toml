@@ -11,7 +11,7 @@ default = ["std"]
 std = ["molecule/std", "sparse-merkle-tree/std", "ckb-fixed-hash", "ckb-types"]
 
 [dependencies]
-molecule = { version = "0.7.1", default-features = false }
+molecule = { version = "0.7.2", default-features = false }
 cfg-if = "0.1"
 gw-hash = { path = "../hash", default-features = false }
 ckb-fixed-hash = { version = "0.100.0-rc5", optional = true }
