@@ -1,4 +1,4 @@
-#![allow(clippy::clippy::mutable_key_type)]
+#![allow(clippy::mutable_key_type)]
 
 use anyhow::{anyhow, Result};
 use gw_common::{sparse_merkle_tree, state::State, H256};

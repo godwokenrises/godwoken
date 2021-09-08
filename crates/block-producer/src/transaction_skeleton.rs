@@ -1,4 +1,4 @@
-#![allow(clippy::clippy::mutable_key_type)]
+#![allow(clippy::mutable_key_type)]
 
 use crate::types::SignatureEntry;
 use anyhow::{anyhow, Result};

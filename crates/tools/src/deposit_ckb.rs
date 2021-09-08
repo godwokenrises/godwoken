@@ -44,9 +44,8 @@ pub fn deposit_ckb(
     // Using private key to calculate eth address when eth_address not provided.
     let eth_address_bytes = match eth_address {
         Some(addr) => {
-            let mut b: [u8; 20] = [0u8; 20];
-            b.copy_from_slice(&addr.as_bytes()[2..]);
-            CKBBytes::from(b.to_vec())
+            let addr_vec = hex::decode(&addr[2..].as_bytes()).map_err(|err| err.to_string())?;
+            CKBBytes::from(addr_vec)
         }
         None => privkey_to_eth_address(&privkey)?,
     };
