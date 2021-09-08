@@ -1845,6 +1845,8 @@ version = "0.1.0"
 dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
+ "lazy_static",
+ "smol",
  "sparse-merkle-tree",
  "thiserror",
 ]
@@ -1887,6 +1889,7 @@ dependencies = [
  "rlp",
  "secp256k1 0.20.0",
  "sha3",
+ "smol",
  "thiserror",
 ]
 

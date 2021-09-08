@@ -17,7 +17,7 @@ use gw_common::{
     error::Error as StateError,
     h256_ext::H256Ext,
     state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE_TYPE},
-    H256,
+    GLOBAL_VM_VERSION, H256,
 };
 use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
@@ -37,16 +37,23 @@ use ckb_vm::{
     DefaultMachineBuilder, SupportMachine,
 };
 
-enum VmIsa {
-    V0,
-    V1,
+struct AsmCoreMachineParams {
+    pub vm_isa: u8,
+    pub vm_version: u32,
 }
 
-impl VmIsa {
-    fn value(&self) -> u8 {
-        match *self {
-            VmIsa::V0 => ckb_vm::ISA_IMC,
-            VmIsa::V1 => ckb_vm::ISA_IMC | ckb_vm::ISA_B | ckb_vm::ISA_MOP,
+impl AsmCoreMachineParams {
+    pub fn new(vm_version: u32) -> AsmCoreMachineParams {
+        if vm_version == 0 {
+            AsmCoreMachineParams {
+                vm_isa: ckb_vm::ISA_IMC,
+                vm_version: ckb_vm::machine::VERSION0,
+            }
+        } else {
+            AsmCoreMachineParams {
+                vm_isa: ckb_vm::ISA_IMC | ckb_vm::ISA_B | ckb_vm::ISA_MOP,
+                vm_version: ckb_vm::machine::VERSION1,
+            }
         }
     }
 }
@@ -470,11 +477,10 @@ impl Generator {
         let used_cycles;
         {
             // let core_machine = AsmCoreMachine::new_with_max_cycles(L2TX_MAX_CYCLES);
-            let core_machine = AsmCoreMachine::new(
-                VmIsa::V1.value(),
-                ckb_vm::machine::VERSION1,
-                L2TX_MAX_CYCLES,
-            );
+            let global_vm_version = smol::block_on(async { *GLOBAL_VM_VERSION.lock().await });
+            let params = AsmCoreMachineParams::new(global_vm_version);
+            let core_machine =
+                AsmCoreMachine::new(params.vm_isa, params.vm_version, L2TX_MAX_CYCLES);
             let machine_builder = DefaultMachineBuilder::new(core_machine)
                 .syscall(Box::new(L2Syscalls {
                     chain,
