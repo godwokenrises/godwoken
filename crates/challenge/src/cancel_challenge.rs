@@ -80,6 +80,10 @@ impl CancelChallengeOutput {
         };
         let has_dep = allowed_script_deps.find(|(code_hash, _)| code_hash.0 == lock_code_hash);
         let to_dep = has_dep.map(|(_, dep)| dep.clone().into());
+        if to_dep.is_none() {
+            let lock_code_hash = ckb_types::H256::from(lock_code_hash);
+            log::error!("lock code {} not found", lock_code_hash);
+        }
         to_dep.ok_or_else(|| anyhow!("verifier lock dep not found"))
     }
 }
