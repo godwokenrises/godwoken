@@ -169,21 +169,14 @@ impl CheckPoint {
         db_mode: StateDBMode,
     ) -> Result<(u64, u32), Error> {
         let block_offset = |withdrawal_count: u32, tx_count: u32| -> u32 {
-            if 0 == withdrawal_count {
-                tx_count // 0 is prev txs
-            } else {
-                // For example: 2 withdrawals + 2 txs, we should have 5 checkpoint, a.k.a 0..=4
-                withdrawal_count + 1 + tx_count.saturating_sub(1)
-            }
+            // If withdrawal_count is 0, then 0 place is prev txs
+            // For example: 2 withdrawals + 2 txs, we should have 5 checkpoint, a.k.a 0..=4
+            (withdrawal_count + 1 + tx_count).saturating_sub(1)
         };
         let tx_offset = |withdrawal_count: u32, tx_index: u32| -> u32 {
-            if 0 == withdrawal_count {
-                1 + tx_index
-            } else {
-                // For example: 0 withdrawal, then first tx should write to 1th place
-                // 1 withdrawal, then first tx should write to 2th place
-                withdrawal_count + 1 + tx_index
-            }
+            // For example: 0 withdrawal, then first tx should write to 1th place
+            // 1 withdrawal, then first tx should write to 2th place
+            withdrawal_count + 1 + tx_index
         };
 
         match self.sub_state {
