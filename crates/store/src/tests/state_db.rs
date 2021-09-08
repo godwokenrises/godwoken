@@ -262,6 +262,17 @@ fn checkpoint_extract_block_number_and_index_number() {
     let store = Store::open_tmp().unwrap();
     let block_store = store.begin_transaction();
 
+    let prev_txs_state = AccountMerkleState::default()
+        .as_builder()
+        .count(1u32.pack())
+        .build();
+    let prev_state_checkpoint = {
+        let root: [u8; 32] = prev_txs_state.merkle_root().unpack();
+        let checkpoint: [u8; 32] =
+            calculate_state_checkpoint(&root.into(), prev_txs_state.count().unpack()).into();
+        checkpoint.pack()
+    };
+
     let default_state_checkpoint: Byte32 = {
         let post_state = AccountMerkleState::default();
         let root: [u8; 32] = post_state.merkle_root().unpack();
@@ -271,7 +282,7 @@ fn checkpoint_extract_block_number_and_index_number() {
     };
 
     let submit_txs = SubmitTransactions::new_builder()
-        .prev_state_checkpoint(default_state_checkpoint.clone())
+        .prev_state_checkpoint(prev_state_checkpoint)
         .build();
 
     let raw_block = RawL2Block::new_builder()
@@ -295,7 +306,7 @@ fn checkpoint_extract_block_number_and_index_number() {
             L2BlockCommittedInfo::default(),
             GlobalState::default(),
             vec![WithdrawalReceipt::default(); 3],
-            AccountMerkleState::default(),
+            prev_txs_state,
             vec![TxReceipt::default(); 2],
             Vec::new(),
         )
@@ -330,13 +341,15 @@ fn checkpoint_extract_block_number_and_index_number() {
     let maybe_block_idx =
         checkpoint.do_extract_block_number_and_index_number(&db, StateDBMode::ReadOnly);
     assert!(maybe_block_idx.is_ok());
-    assert_eq!(maybe_block_idx.unwrap(), (0, 0));
+    assert_eq!(maybe_block_idx.unwrap(), (0, 3));
 
     let checkpoint = CheckPoint::new(1, SubState::Block);
     let maybe_block_idx =
         checkpoint.do_extract_block_number_and_index_number(&db, StateDBMode::ReadOnly);
-    assert!(maybe_block_idx.is_ok());
-    assert_eq!(maybe_block_idx.unwrap(), (1, 0));
+    assert_eq!(
+        maybe_block_idx.unwrap_err().to_string(),
+        "DB error can't find block hash"
+    );
 
     let checkpoint = CheckPoint::new(1, SubState::Tx(1));
     let maybe_block_idx =
