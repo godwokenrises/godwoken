@@ -37,6 +37,20 @@ use ckb_vm::{
     DefaultMachineBuilder, SupportMachine,
 };
 
+enum VmIsa {
+    V0,
+    V1,
+}
+
+impl VmIsa {
+    fn value(&self) -> u8 {
+        match *self {
+            VmIsa::V0 => ckb_vm::ISA_IMC,
+            VmIsa::V1 => ckb_vm::ISA_IMC | ckb_vm::ISA_B | ckb_vm::ISA_MOP,
+        }
+    }
+}
+
 pub struct StateTransitionArgs {
     pub l2block: L2Block,
     pub deposit_requests: Vec<DepositRequest>,
@@ -456,8 +470,11 @@ impl Generator {
         let used_cycles;
         {
             // let core_machine = AsmCoreMachine::new_with_max_cycles(L2TX_MAX_CYCLES);
-            let core_machine =
-                AsmCoreMachine::new(ckb_vm::ISA_IMC, ckb_vm::machine::VERSION0, L2TX_MAX_CYCLES);
+            let core_machine = AsmCoreMachine::new(
+                VmIsa::V1.value(),
+                ckb_vm::machine::VERSION1,
+                L2TX_MAX_CYCLES,
+            );
             let machine_builder = DefaultMachineBuilder::new(core_machine)
                 .syscall(Box::new(L2Syscalls {
                     chain,
