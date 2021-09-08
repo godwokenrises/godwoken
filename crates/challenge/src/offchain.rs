@@ -9,20 +9,17 @@ use gw_config::{BlockProducerConfig, DebugConfig, OffChainValidatorConfig};
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{state_db::StateDBTransaction, transaction::StoreTransaction};
-use gw_types::{
-    core::DepType,
-    offchain::{CellInfo, InputCellInfo, RollupContext, RunResult},
-    packed::{
-        CellDep, CellInput, L2Block, L2Transaction, OutPoint, OutPointVec, Uint32,
-        WithdrawalRequest,
-    },
-    prelude::*,
+use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, RunResult};
+use gw_types::packed::{
+    CellDep, CellInput, L2Block, L2Transaction, OutPoint, OutPointVec, Uint32, WithdrawalRequest,
 };
+use gw_types::prelude::*;
+use gw_types::{bytes::Bytes, core::DepType};
 use gw_utils::wallet::Wallet;
 
 use std::{
     collections::{HashMap, HashSet},
-    fs::{create_dir_all, write},
+    fs::{create_dir_all, read, write},
     path::PathBuf,
     sync::Arc,
 };
@@ -42,7 +39,7 @@ use self::{
     verify_tx::{verify_tx, RollupCellDeps, TxWithContext},
 };
 
-// TODO: More propery value
+// TODO: More properly value
 const MAX_TX_WITHDRAWAL_PROOF_SIZE: u64 = 100 * 1024;
 // TODO: Relax limit
 const MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES: u64 = 5_000_000;
@@ -62,6 +59,7 @@ pub struct OffChainMockContext {
 }
 
 impl OffChainMockContext {
+    #[allow(clippy::too_many_arguments)]
     pub async fn build(
         rpc_client: &RPCClient,
         poa: &PoA,
@@ -70,6 +68,7 @@ impl OffChainMockContext {
         config: BlockProducerConfig,
         ckb_genesis_info: CKBGenesisInfo,
         builtin_load_data: HashMap<H256, CellDep>,
+        replaced_scripts: Option<HashMap<H256, PathBuf>>,
     ) -> Result<Self> {
         let rollup_cell = {
             let query = rpc_client.query_rollup_cell().await?;
@@ -110,7 +109,10 @@ impl OffChainMockContext {
 
             deps
         };
-        let resolved_rollup_deps = resolve_cell_deps(rpc_client, rollup_deps).await?;
+        let mut resolved_rollup_deps = resolve_cell_deps(rpc_client, rollup_deps).await?;
+        if let Some(replaced_scripts) = replaced_scripts {
+            replace_scripts(&mut resolved_rollup_deps, replaced_scripts)?;
+        }
         let rollup_cell_deps = RollupCellDeps::new(resolved_rollup_deps);
 
         let mock_context = OffChainMockContext {
@@ -572,6 +574,28 @@ async fn resolve_dep_group(rpc_client: &RPCClient, dep: &CellDep) -> Result<Vec<
     };
 
     Ok(out_points.into_iter().map(into_dep).collect())
+}
+
+fn replace_scripts(
+    dep_cells: &mut Vec<InputCellInfo>,
+    replaced_scripts: HashMap<H256, PathBuf>,
+) -> Result<()> {
+    for info in dep_cells.iter_mut() {
+        let type_script = match info.cell.output.type_().to_opt() {
+            Some(script) => script,
+            None => continue,
+        };
+
+        let replaced_script_path = match replaced_scripts.get(&type_script.hash().into()) {
+            Some(path) => path,
+            None => continue,
+        };
+
+        let replaced_script = read(replaced_script_path)?;
+        info.cell.data = Bytes::from(replaced_script);
+    }
+
+    Ok(())
 }
 
 fn into_input_cell_info(cell_info: CellInfo) -> InputCellInfo {

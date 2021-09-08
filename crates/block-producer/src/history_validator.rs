@@ -159,6 +159,13 @@ fn build_validator(config: Config) -> Result<HistoryCancelChallengeValidator> {
         sighash_dep: ckb_genesis_info.sighash_dep(),
     };
 
+    let replaced_scripts = {
+        let config = config.history_validator.clone().unwrap_or_default();
+        let convert_hash = |(hash, path): (ckb_types::H256, PathBuf)| (H256::from(hash.0), path);
+        let to_scripts = config.replaced_scripts;
+        to_scripts.map(|scripts| scripts.into_iter().map(convert_hash).collect())
+    };
+
     let offchain_mock_context = smol::block_on(async {
         let wallet = {
             let config = &block_producer_config.wallet_config;
@@ -174,6 +181,7 @@ fn build_validator(config: Config) -> Result<HistoryCancelChallengeValidator> {
             block_producer_config.clone(),
             ckb_genesis_info,
             builtin_load_data.clone(),
+            replaced_scripts,
         )
         .await
     })?;

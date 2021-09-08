@@ -23,6 +23,7 @@ pub struct Config {
     pub offchain_validator: Option<OffChainValidatorConfig>,
     #[serde(default)]
     pub mem_pool: MemPoolConfig,
+    pub history_validator: Option<HistoryValidatorConfig>,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -184,5 +185,20 @@ pub enum NodeMode {
 impl Default for NodeMode {
     fn default() -> Self {
         NodeMode::ReadOnly
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HistoryValidatorConfig {
+    pub verify_max_cycles: u64,
+    pub replaced_scripts: Option<HashMap<H256, PathBuf>>,
+}
+
+impl Default for HistoryValidatorConfig {
+    fn default() -> Self {
+        Self {
+            verify_max_cycles: 70_000_000,
+            replaced_scripts: None,
+        }
     }
 }
