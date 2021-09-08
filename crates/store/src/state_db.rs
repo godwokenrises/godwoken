@@ -168,6 +168,24 @@ impl CheckPoint {
         db: &StoreTransaction,
         db_mode: StateDBMode,
     ) -> Result<(u64, u32), Error> {
+        let block_offset = |withdrawal_count: u32, tx_count: u32| -> u32 {
+            if 0 == withdrawal_count {
+                tx_count // 0 is prev txs
+            } else {
+                // For example: 2 withdrawals + 2 txs, we should have 5 checkpoint, a.k.a 0..=4
+                withdrawal_count + 1 + tx_count.saturating_sub(1)
+            }
+        };
+        let tx_offset = |withdrawal_count: u32, tx_index: u32| -> u32 {
+            if 0 == withdrawal_count {
+                1 + tx_index
+            } else {
+                // For example: 0 withdrawal, then first tx should write to 1th place
+                // 1 withdrawal, then first tx should write to 2th place
+                withdrawal_count + 1 + tx_index
+            }
+        };
+
         match self.sub_state {
             SubState::Withdrawal(index) => Ok((self.block_number, index)),
             SubState::PrevTxs => match db_mode {
@@ -197,12 +215,25 @@ impl CheckPoint {
                     if prev_txs_state_checkpoint == prev_account_checkpoint {
                         // No deposit, no withdrawal, state across block, should use
                         // previous block.
-                        Ok((self.block_number.saturating_sub(1), 0))
+                        let prev_block = {
+                            let block_hash = db
+                                .get_block_hash_by_number(self.block_number.saturating_sub(1))?
+                                .ok_or_else(|| "can't find block hash".to_string())?;
+
+                            db.get_block(&block_hash)?
+                                .ok_or_else(|| "can't find block".to_string())?
+                        };
+                        let offset = block_offset(
+                            prev_block.withdrawals().len() as u32,
+                            prev_block.transactions().len() as u32,
+                        );
+
+                        Ok((self.block_number.saturating_sub(1), offset))
                     } else {
-                        Ok((self.block_number, block.withdrawals().len() as u32 + 1))
+                        Ok((self.block_number, block.withdrawals().len() as u32))
                     }
                 }
-                StateDBMode::Write(ctx) => Ok((self.block_number, ctx.tx_offset + 1)),
+                StateDBMode::Write(ctx) => Ok((self.block_number, ctx.tx_offset)),
             },
             SubState::Tx(index) => match db_mode {
                 StateDBMode::Genesis => Ok((self.block_number, 0)),
@@ -216,14 +247,34 @@ impl CheckPoint {
                             .ok_or_else(|| "can't find block".to_string())?
                     };
 
-                    Ok((
-                        self.block_number,
-                        block.withdrawals().len() as u32 + 1 + index,
-                    ))
+                    let offset = tx_offset(block.withdrawals().len() as u32, index);
+                    Ok((self.block_number, offset))
                 }
-                StateDBMode::Write(ctx) => Ok((self.block_number, ctx.tx_offset + 1 + index)), // Plus one for PrevTxs
+                StateDBMode::Write(ctx) => {
+                    let offset = tx_offset(ctx.tx_offset, index);
+                    Ok((self.block_number, offset as u32))
+                }
             },
-            SubState::Block => Ok((self.block_number, 0)),
+            SubState::Block => match db_mode {
+                StateDBMode::Genesis => Ok((self.block_number, 0)),
+                StateDBMode::ReadOnly => {
+                    let block = {
+                        let block_hash = db
+                            .get_block_hash_by_number(self.block_number)?
+                            .ok_or_else(|| "can't find block hash".to_string())?;
+
+                        db.get_block(&block_hash)?
+                            .ok_or_else(|| "can't find block".to_string())?
+                    };
+
+                    let offset = block_offset(
+                        block.withdrawals().len() as u32,
+                        block.transactions().len() as u32,
+                    );
+                    Ok((self.block_number, offset as u32))
+                }
+                StateDBMode::Write(_ctx) => Ok((self.block_number, 0)),
+            },
             SubState::MemBlock(offset) => Ok((MEMORY_BLOCK_NUMBER, offset)),
         }
     }
@@ -327,7 +378,7 @@ impl<'db> StateDBTransaction<'db> {
     }
 
     // FIXME: This method may running into inconsistent state if current state is dirty.
-    // We should seperate the StateDB into ReadOnly & WriteOnly,
+    // We should separate the StateDB into ReadOnly & WriteOnly,
     // The ReadOnly is for fetching history state, and the write only is for writing new state.
     // This function should only be added on the ReadOnly state.
     pub fn account_smt(&self) -> Result<SMT<SMTStore<'_, Self>>, Error> {
