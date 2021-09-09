@@ -11,7 +11,7 @@
 // raw_key: blake2b(id(4 bytes) | type(1 byte) | key(32 bytes))
 //
 // - `id` represents account's id, id must be set to 0 if the key isn't belong to an account
-// - `type` is a domain seperator, different type of keys must use a different `type`
+// - `type` is a domain separator, different type of keys must use a different `type`
 // - `key` the original key
 //
 // Thus, the first 5 bytes keeps uniqueness for different type of keys.

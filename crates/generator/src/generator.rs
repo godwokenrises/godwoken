@@ -19,6 +19,10 @@ use gw_common::{
     state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE_TYPE},
     H256,
 };
+use gw_store::{
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
+    transaction::StoreTransaction,
+};
 use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     bytes::Bytes,
@@ -160,7 +164,7 @@ impl Generator {
             return Err(WithdrawalError::WithdrawFakedCKB.into());
         }
 
-        // check fees if it isn't been cheked yet
+        // check fees if it isn't been checked yet
         if fee_sudt_id != CKB_SUDT_ACCOUNT_ID && fee_sudt_id != sudt_id && fee_amount > 0 {
             let balance = state.get_sudt_balance(fee_sudt_id, account_short_address)?;
             if fee_amount > balance {
@@ -283,14 +287,56 @@ impl Generator {
     }
 
     /// Apply l2 state transition
-    pub fn verify_and_apply_state_transition<S: State + CodeStore, C: ChainStore>(
+    pub fn verify_and_apply_state_transition<C: ChainStore>(
         &self,
+        db: &StoreTransaction,
         chain: &C,
-        state: &mut S,
         args: StateTransitionArgs,
     ) -> StateTransitionResult {
         let raw_block = args.l2block.raw();
         let block_info = get_block_info(&raw_block);
+
+        let tx_offset = args.l2block.withdrawals().len() as u32;
+        let block_number = raw_block.number().unpack();
+        macro_rules! state_db {
+            ($sub_state:expr) => {
+                match StateDBTransaction::from_checkpoint(
+                    db,
+                    CheckPoint::new(block_number, $sub_state),
+                    StateDBMode::Write(WriteContext::new(tx_offset)),
+                ) {
+                    Ok(state_db) => state_db,
+                    Err(err) => {
+                        log::error!("next state {}", err);
+                        return StateTransitionResult::Error(Error::State(StateError::Store));
+                    }
+                }
+            };
+        }
+        macro_rules! get_state {
+            ($state_db:expr) => {
+                match $state_db.state_tree() {
+                    Ok(state) => state,
+                    Err(err) => {
+                        log::error!("next state {}", err);
+                        return StateTransitionResult::Error(Error::State(StateError::Store));
+                    }
+                }
+            };
+            ($state_db:expr, $merkle_state:expr) => {
+                match $state_db.state_tree_with_merkle_state($merkle_state) {
+                    Ok(state) => state,
+                    Err(err) => {
+                        log::error!("next state {}", err);
+                        return StateTransitionResult::Error(Error::State(StateError::Store));
+                    }
+                }
+            };
+        }
+
+        let state_db = state_db!(SubState::Block);
+        let state = &mut get_state!(state_db);
+        let mut account_state = state.get_merkle_state();
 
         // apply withdrawal to state
         let withdrawal_requests: Vec<_> = args.l2block.withdrawals().into_iter().collect();
@@ -299,6 +345,9 @@ impl Generator {
 
         let mut withdrawal_receipts = Vec::with_capacity(withdrawal_requests.len());
         for (wth_idx, request) in withdrawal_requests.into_iter().enumerate() {
+            let state_db = state_db!(SubState::Withdrawal(wth_idx as u32));
+            let state = &mut get_state!(state_db, account_state.clone());
+
             if let Err(error) = self.check_withdrawal_request_signature(state, &request) {
                 let target = build_challenge_target(
                     block_hash.into(),
@@ -311,34 +360,32 @@ impl Generator {
 
             match state.apply_withdrawal_request(&self.rollup_context, block_producer_id, &request)
             {
-                Ok(withdrawal_receipt) => withdrawal_receipts.push(withdrawal_receipt),
+                Ok(withdrawal_receipt) => {
+                    account_state = state.get_merkle_state();
+                    withdrawal_receipts.push(withdrawal_receipt)
+                }
                 Err(err) => return StateTransitionResult::Error(err),
             }
         }
 
         // apply deposition to state
+        let state_db = state_db!(SubState::PrevTxs);
+        let state = &mut get_state!(state_db, account_state.clone());
         if let Err(err) = state.apply_deposit_requests(&self.rollup_context, &args.deposit_requests)
         {
             return StateTransitionResult::Error(err);
         }
 
-        let prev_txs_state = {
-            let (account_root, account_count) =
-                match (|| Ok((state.calculate_root()?, state.get_account_count()?)))() {
-                    Err(err) => return StateTransitionResult::Error(err),
-                    Ok((root, count)) => (root, count),
-                };
-
-            AccountMerkleState::new_builder()
-                .merkle_root(account_root.pack())
-                .count(account_count.pack())
-                .build()
-        };
+        let prev_txs_state = state.get_merkle_state();
+        account_state = prev_txs_state.clone();
 
         // handle transactions
         let mut offchain_used_cycles: u64 = 0;
         let mut tx_receipts = Vec::with_capacity(args.l2block.transactions().len());
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
+            let state_db = state_db!(SubState::Tx(tx_index as u32));
+            let state = &mut get_state!(state_db, account_state.clone());
+
             if let Err(err) = self.check_transaction_signature(state, &tx) {
                 let target = build_challenge_target(
                     block_hash.into(),
@@ -395,6 +442,7 @@ impl Generator {
 
             let apply_result = || -> Result<(), Error> {
                 state.apply_run_result(&run_result)?;
+                account_state = state.get_merkle_state();
 
                 let used_cycles = run_result.used_cycles;
                 let post_state = state.merkle_state()?;

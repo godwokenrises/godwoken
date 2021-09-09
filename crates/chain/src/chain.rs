@@ -11,7 +11,7 @@ use gw_jsonrpc_types::debugger::ReprMockTransaction;
 use gw_mem_pool::pool::MemPool;
 use gw_store::{
     chain_view::ChainView,
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
     transaction::StoreTransaction,
     Store,
 };
@@ -870,12 +870,13 @@ impl Chain {
         };
         let tip_block_hash = self.local_state.tip().hash().into();
         let chain_view = ChainView::new(db, tip_block_hash);
+
         let state_db = StateDBTransaction::from_checkpoint(
             db,
-            CheckPoint::new(block_number, SubState::Block),
-            StateDBMode::Write(WriteContext::new(l2block.withdrawals().len() as u32)),
+            CheckPoint::new(block_number.saturating_sub(1), SubState::Block),
+            StateDBMode::ReadOnly,
         )?;
-        let mut tree = state_db.state_tree()?;
+        let tree = state_db.state_tree()?;
 
         let prev_merkle_root: H256 = l2block.raw().prev_account().merkle_root().unpack();
         assert_eq!(
@@ -888,7 +889,7 @@ impl Chain {
         // TODO: run offchain validator before send challenge, to make sure the block is bad
         let generator = &self.generator;
         let (withdrawal_receipts, prev_txs_state, tx_receipts) =
-            match generator.verify_and_apply_state_transition(&chain_view, &mut tree, args) {
+            match generator.verify_and_apply_state_transition(db, &chain_view, args) {
                 StateTransitionResult::Success {
                     tx_receipts,
                     prev_txs_state,
@@ -924,6 +925,14 @@ impl Chain {
 
         let rollup_config = &self.generator.rollup_context().rollup_config;
         db.attach_block(l2block.clone(), rollup_config)?;
+
+        let state_db = StateDBTransaction::from_checkpoint(
+            db,
+            CheckPoint::new(block_number, SubState::Block),
+            StateDBMode::ReadOnly,
+        )?;
+        let tree = state_db.state_tree()?;
+
         let post_merkle_root: H256 = l2block.raw().post_account().merkle_root().unpack();
         assert_eq!(
             tree.calculate_root()?,
