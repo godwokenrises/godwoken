@@ -301,19 +301,27 @@ impl HistoryCancelChallengeValidator {
             let result = verify_tx(
                 &self.mock_ctx.rollup_cell_deps,
                 TxWithContext::from(mock_output.clone()),
-                MAX_CYCLES,
+                u64::MAX,
             );
 
-            if result.is_err() {
-                self.dump_tx_to_file(
-                    load_data_strategy,
-                    &challenge_target,
-                    TxWithContext::from(mock_output),
-                );
-                result?;
+            match result {
+                Ok(used_cycles) if used_cycles > MAX_CYCLES => {
+                    return Err(anyhow!(
+                        "exceeded max cycles, used {} expect <= {}",
+                        used_cycles,
+                        MAX_CYCLES
+                    ));
+                }
+                Err(err) => {
+                    self.dump_tx_to_file(
+                        load_data_strategy,
+                        &challenge_target,
+                        TxWithContext::from(mock_output),
+                    );
+                    Err(err)
+                }
+                Ok(_) => Ok(()),
             }
-
-            Ok(())
         };
 
         if verify_with_strategy(LoadDataStrategy::Witness).is_err() {
