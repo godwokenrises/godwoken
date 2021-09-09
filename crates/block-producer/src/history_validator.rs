@@ -306,11 +306,17 @@ impl HistoryCancelChallengeValidator {
 
             match result {
                 Ok(used_cycles) if used_cycles > MAX_CYCLES => {
-                    return Err(anyhow!(
+                    self.dump_tx_to_file(
+                        load_data_strategy,
+                        &challenge_target,
+                        TxWithContext::from(mock_output),
+                    );
+
+                    Err(anyhow!(
                         "exceeded max cycles, used {} expect <= {}",
                         used_cycles,
                         MAX_CYCLES
-                    ));
+                    ))
                 }
                 Err(err) => {
                     self.dump_tx_to_file(
