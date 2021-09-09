@@ -75,6 +75,18 @@ fn run_cli() -> Result<()> {
                         .default_value("./config.toml")
                         .help("The config file path"),
                 )
+                .arg(
+                    Arg::with_name("from-block")
+                        .short("f")
+                        .takes_value(true)
+                        .help("From block number"),
+                )
+                .arg(
+                    Arg::with_name("to-block")
+                        .short("t")
+                        .takes_value(true)
+                        .help("To block number"),
+                )
                 .display_order(2),
         );
 
@@ -93,7 +105,9 @@ fn run_cli() -> Result<()> {
         (COMMAND_VERIFY_DB_HISTORY, Some(m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
-            history_validator::verify(config, None, None)?;
+            let from_block: Option<u64> = m.value_of("from-block").map(str::parse).transpose()?;
+            let to_block: Option<u64> = m.value_of("to-block").map(str::parse).transpose()?;
+            history_validator::verify(config, from_block, to_block)?;
         }
         _ => {
             // default command: start a Godwoken node
