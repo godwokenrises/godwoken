@@ -32,8 +32,9 @@ use gw_types::{
 };
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::{create_dir_all, write},
+    hash::Hash,
     path::PathBuf,
     sync::Arc,
 };
@@ -186,8 +187,18 @@ fn build_validator(config: Config) -> Result<HistoryCancelChallengeValidator> {
         .await
     })?;
 
-    let validator =
-        HistoryCancelChallengeValidator::new(generator, store, offchain_mock_context, config.debug);
+    let skips = {
+        let config = config.history_validator.clone().unwrap_or_default();
+        config.skips.into_iter().collect()
+    };
+
+    let validator = HistoryCancelChallengeValidator::new(
+        generator,
+        store,
+        offchain_mock_context,
+        config.debug,
+        skips,
+    );
 
     Ok(validator)
 }
@@ -197,6 +208,7 @@ struct HistoryCancelChallengeValidator {
     store: Store,
     mock_ctx: OffChainMockContext,
     debug_config: DebugConfig,
+    skips: HashSet<(u64, u32)>,
 }
 
 impl HistoryCancelChallengeValidator {
@@ -205,12 +217,14 @@ impl HistoryCancelChallengeValidator {
         store: Store,
         mock_ctx: OffChainMockContext,
         debug_config: DebugConfig,
+        skips: HashSet<(u64, u32)>,
     ) -> Self {
         HistoryCancelChallengeValidator {
             generator,
             store,
             mock_ctx,
             debug_config,
+            skips,
         }
     }
 
@@ -289,6 +303,9 @@ impl HistoryCancelChallengeValidator {
                 target_index: idx,
                 target_hash: tx.hash().into(),
             };
+            if self.skips.contains(&(verify_context.block_number, idx)) {
+                continue;
+            }
             let target = build_challenge_target(block_hash, idx, ChallengeTargetType::TxSignature);
             self.verify(verify_context.clone(), global_state.clone(), target)?;
 

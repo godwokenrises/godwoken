@@ -192,6 +192,7 @@ impl Default for NodeMode {
 pub struct HistoryValidatorConfig {
     pub verify_max_cycles: u64,
     pub replaced_scripts: Option<HashMap<H256, PathBuf>>,
+    pub skips: Vec<(u64, u32)>,
 }
 
 impl Default for HistoryValidatorConfig {
@@ -199,6 +200,7 @@ impl Default for HistoryValidatorConfig {
         Self {
             verify_max_cycles: 70_000_000,
             replaced_scripts: None,
+            skips: vec![],
         }
     }
 }
