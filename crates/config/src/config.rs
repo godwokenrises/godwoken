@@ -1,10 +1,13 @@
 use ckb_fixed_hash::H256;
 use gw_jsonrpc_types::{
     blockchain::{CellDep, Script},
-    godwoken::{L2BlockCommittedInfo, RollupConfig},
+    godwoken::{ChallengeTargetType, L2BlockCommittedInfo, RollupConfig},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
@@ -23,7 +26,7 @@ pub struct Config {
     pub offchain_validator: Option<OffChainValidatorConfig>,
     #[serde(default)]
     pub mem_pool: MemPoolConfig,
-    pub history_validator: Option<HistoryValidatorConfig>,
+    pub db_block_validator: Option<DBBlockValidatorConfig>,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -189,18 +192,18 @@ impl Default for NodeMode {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct HistoryValidatorConfig {
+pub struct DBBlockValidatorConfig {
     pub verify_max_cycles: u64,
-    pub replaced_scripts: Option<HashMap<H256, PathBuf>>,
-    pub skips: Vec<(u64, u32)>,
+    pub replace_scripts: Option<HashMap<H256, PathBuf>>,
+    pub skip_targets: Option<HashSet<(u64, ChallengeTargetType, u32)>>,
 }
 
-impl Default for HistoryValidatorConfig {
+impl Default for DBBlockValidatorConfig {
     fn default() -> Self {
         Self {
-            verify_max_cycles: 70_000_000,
-            replaced_scripts: None,
-            skips: vec![],
+            verify_max_cycles: 7000_0000,
+            replace_scripts: None,
+            skip_targets: None,
         }
     }
 }

@@ -319,7 +319,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     block_producer_config.clone(),
                     ckb_genesis_info,
                     builtin_load_data.clone(),
-                    None,
                 )
                 .await
             })?;

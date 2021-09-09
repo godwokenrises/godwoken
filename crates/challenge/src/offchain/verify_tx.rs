@@ -1,4 +1,5 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
+use ckb_fixed_hash::H256;
 use ckb_script::TransactionScriptsVerifier;
 use ckb_traits::{CellDataProvider, HeaderProvider};
 use ckb_types::{
@@ -8,7 +9,7 @@ use ckb_types::{
         DepType, HeaderView,
     },
     packed::{Byte32, CellDep, CellInput, CellOutput, OutPoint, OutPointVec, Transaction},
-    prelude::{Builder, Entity},
+    prelude::{Builder, Entity, Unpack},
 };
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types,
@@ -16,7 +17,8 @@ use gw_jsonrpc_types::{
 };
 use gw_types::offchain::InputCellInfo;
 
-use std::{collections::HashMap, convert::TryFrom, sync::Arc};
+use std::collections::{HashMap, HashSet};
+use std::{convert::TryFrom, fs::read, path::PathBuf, sync::Arc};
 
 pub struct TxWithContext {
     pub cell_deps: Vec<InputCellInfo>,
@@ -31,6 +33,44 @@ pub struct RollupCellDeps(Arc<HashMap<OutPoint, CellInfo>>);
 impl RollupCellDeps {
     pub fn new(cells: Vec<gw_types::offchain::InputCellInfo>) -> Self {
         RollupCellDeps(Arc::new(cells.into_iter().map(into_info).collect()))
+    }
+
+    pub fn replace_scripts(&self, scripts: &HashMap<H256, PathBuf>) -> Result<Self> {
+        let mut rollup_cell_deps = (*self.0).clone();
+        let mut replaced_scripts = HashSet::with_capacity(scripts.len());
+
+        for info in rollup_cell_deps.values_mut() {
+            let type_script = match info.output.type_().to_opt() {
+                Some(script) => script,
+                None => continue,
+            };
+
+            let script_hash: H256 = type_script.calc_script_hash().unpack();
+            let script_path = match scripts.get(&script_hash) {
+                Some(path) => path,
+                None => continue,
+            };
+
+            log::info!(
+                "replace code hash {} with binary from {:?}",
+                script_hash,
+                script_path
+            );
+
+            let script = read(script_path)?;
+            info.data = Bytes::from(script);
+            info.data_hash = CellOutput::calc_data_hash(&info.data);
+
+            replaced_scripts.insert(script_hash);
+        }
+
+        let scripts = scripts.keys().cloned().collect::<HashSet<H256>>();
+        let missing: Vec<_> = scripts.symmetric_difference(&replaced_scripts).collect();
+        if !missing.is_empty() {
+            bail!("{:?} scripts not found in rollup cell deps", missing);
+        }
+
+        Ok(RollupCellDeps(Arc::new(rollup_cell_deps)))
     }
 }
 
@@ -217,6 +257,7 @@ impl HeaderProvider for TxDataLoader {
     }
 }
 
+#[derive(Clone)]
 struct CellInfo {
     output: CellOutput,
     data: Bytes,

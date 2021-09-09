@@ -1,9 +1,9 @@
 pub mod block_producer;
 pub mod challenger;
 pub mod cleaner;
+pub mod db_block_validator;
 pub mod debugger;
 pub mod deposit;
-pub mod history_validator;
 pub mod poller;
 pub mod produce_block;
 pub mod runner;

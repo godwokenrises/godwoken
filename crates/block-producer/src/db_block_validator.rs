@@ -10,7 +10,7 @@ use gw_challenge::{
     },
 };
 use gw_common::{blake2b::new_blake2b, H256};
-use gw_config::{Config, DebugConfig};
+use gw_config::{Config, DBBlockValidatorConfig, DebugConfig};
 use gw_db::{schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{
@@ -20,6 +20,7 @@ use gw_generator::{
     backend_manage::BackendManage,
     Generator,
 };
+use gw_jsonrpc_types::godwoken::ChallengeTargetType as JsonChallengeTargetType;
 use gw_poa::PoA;
 use gw_rpc_client::RPCClient;
 use gw_store::Store;
@@ -32,32 +33,30 @@ use gw_types::{
 };
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs::{create_dir_all, write},
-    hash::Hash,
     path::PathBuf,
     sync::Arc,
 };
 
 use crate::{utils::CKBGenesisInfo, wallet::Wallet};
 
-const MAX_CYCLES: u64 = 7000_0000;
-
 pub fn verify(config: Config, from_block: Option<u64>, to_block: Option<u64>) -> Result<()> {
     if config.store.path.as_os_str().is_empty() {
         bail!("empty store path, no history to verify");
     }
     if config.block_producer.is_none() {
-        bail!("history validator require block producer config");
+        bail!("db block validator require block producer config");
     }
 
     let validator = build_validator(config)?;
-    validator.verify_history(from_block, to_block)?;
+    validator.verify_db(from_block, to_block)?;
 
     Ok(())
 }
 
-fn build_validator(config: Config) -> Result<HistoryCancelChallengeValidator> {
+fn build_validator(config: Config) -> Result<DBBlockCancelChallengeValidator> {
+    // TODO: Refactor
     let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
     let rollup_context = RollupContext {
         rollup_config: rollup_config.clone(),
@@ -160,14 +159,7 @@ fn build_validator(config: Config) -> Result<HistoryCancelChallengeValidator> {
         sighash_dep: ckb_genesis_info.sighash_dep(),
     };
 
-    let replaced_scripts = {
-        let config = config.history_validator.clone().unwrap_or_default();
-        let convert_hash = |(hash, path): (ckb_types::H256, PathBuf)| (H256::from(hash.0), path);
-        let to_scripts = config.replaced_scripts;
-        to_scripts.map(|scripts| scripts.into_iter().map(convert_hash).collect())
-    };
-
-    let offchain_mock_context = smol::block_on(async {
+    let mut offchain_mock_context = smol::block_on(async {
         let wallet = {
             let config = &block_producer_config.wallet_config;
             gw_challenge::Wallet::from_config(config).with_context(|| "init wallet")?
@@ -182,53 +174,51 @@ fn build_validator(config: Config) -> Result<HistoryCancelChallengeValidator> {
             block_producer_config.clone(),
             ckb_genesis_info,
             builtin_load_data.clone(),
-            replaced_scripts,
         )
         .await
     })?;
 
-    let skips = {
-        let config = config.history_validator.clone().unwrap_or_default();
-        config.skips.into_iter().collect()
-    };
-
-    let validator = HistoryCancelChallengeValidator::new(
+    let validator_config = config.db_block_validator.as_ref();
+    if let Some(Some(scripts)) = validator_config.map(|c| c.replace_scripts.as_ref()) {
+        offchain_mock_context = offchain_mock_context.replace_scripts(scripts)?;
+    }
+    let validator = DBBlockCancelChallengeValidator::new(
         generator,
         store,
         offchain_mock_context,
         config.debug,
-        skips,
+        config.db_block_validator.unwrap_or_default(),
     );
 
     Ok(validator)
 }
 
-struct HistoryCancelChallengeValidator {
+struct DBBlockCancelChallengeValidator {
     generator: Arc<Generator>,
     store: Store,
     mock_ctx: OffChainMockContext,
     debug_config: DebugConfig,
-    skips: HashSet<(u64, u32)>,
+    config: DBBlockValidatorConfig,
 }
 
-impl HistoryCancelChallengeValidator {
+impl DBBlockCancelChallengeValidator {
     fn new(
         generator: Arc<Generator>,
         store: Store,
         mock_ctx: OffChainMockContext,
         debug_config: DebugConfig,
-        skips: HashSet<(u64, u32)>,
+        config: DBBlockValidatorConfig,
     ) -> Self {
-        HistoryCancelChallengeValidator {
+        DBBlockCancelChallengeValidator {
             generator,
             store,
             mock_ctx,
             debug_config,
-            skips,
+            config,
         }
     }
 
-    fn verify_history(&self, from_block: Option<u64>, to_block: Option<u64>) -> Result<()> {
+    fn verify_db(&self, from_block: Option<u64>, to_block: Option<u64>) -> Result<()> {
         let db = self.store.begin_transaction();
         let from_block = from_block.unwrap_or_else(|| 0);
         let to_block = match to_block {
@@ -263,55 +253,87 @@ impl HistoryCancelChallengeValidator {
             maybe.ok_or_else(|| anyhow!("block #{} not found", block_number))?
         };
 
-        self.verify_withdrawals(global_state.clone(), &block, block.withdrawals().len())?;
-        self.verify_txs(global_state.clone(), &block, block.transactions().len())?;
+        self.verify_withdrawals(global_state.clone(), &block)?;
+        self.verify_txs(global_state, &block)?;
 
         Ok(())
     }
 
-    fn verify_withdrawals(
-        &self,
-        global_state: GlobalState,
-        block: &L2Block,
-        count: usize,
-    ) -> Result<()> {
+    fn verify_withdrawals(&self, global_state: GlobalState, block: &L2Block) -> Result<()> {
         let block_hash: H256 = block.hash().into();
-        for idx in 0..(count as u32) {
+        let block_number: u64 = block.raw().number().unpack();
+
+        for idx in 0..(block.withdrawals().len() as u32) {
             log::info!("verify withdrawal #{}", idx);
+
+            if let Some(ref skip_targets) = self.config.skip_targets {
+                let key = (block_number, JsonChallengeTargetType::Withdrawal, idx);
+                if skip_targets.contains(&key) {
+                    log::info!(
+                        "skip block #{} withdrawal #{} type: {:?}",
+                        block_number,
+                        idx,
+                        ChallengeTargetType::Withdrawal,
+                    );
+                    continue;
+                }
+            }
+
             let withdrawal = block.withdrawals().get(idx as usize).unwrap();
-            let verify_context = VerifyContext {
-                block_number: block.raw().number().unpack(),
+            let dump_context = DumpContext {
+                block_number,
                 target_type: ChallengeTargetType::Withdrawal,
                 target_index: idx,
                 target_hash: withdrawal.hash().into(),
             };
+
             let target = build_challenge_target(block_hash, idx, ChallengeTargetType::Withdrawal);
-            self.verify(verify_context, global_state.clone(), target)?;
+            self.verify(dump_context, global_state.clone(), target)?;
         }
 
         Ok(())
     }
 
-    fn verify_txs(&self, global_state: GlobalState, block: &L2Block, count: usize) -> Result<()> {
+    fn verify_txs(&self, global_state: GlobalState, block: &L2Block) -> Result<()> {
         let block_hash: H256 = block.hash().into();
-        for idx in 0..(count as u32) {
-            log::info!("verify tx #{}", idx);
-            let tx = block.transactions().get(idx as usize).unwrap();
-            let mut verify_context = VerifyContext {
-                block_number: block.raw().number().unpack(),
-                target_type: ChallengeTargetType::TxSignature,
-                target_index: idx,
-                target_hash: tx.hash().into(),
-            };
-            if self.skips.contains(&(verify_context.block_number, idx)) {
-                continue;
-            }
-            let target = build_challenge_target(block_hash, idx, ChallengeTargetType::TxSignature);
-            self.verify(verify_context.clone(), global_state.clone(), target)?;
+        let block_number: u64 = block.raw().number().unpack();
 
-            verify_context.target_type = ChallengeTargetType::TxExecution;
-            let target = build_challenge_target(block_hash, idx, ChallengeTargetType::TxExecution);
-            self.verify(verify_context, global_state.clone(), target)?;
+        let verify =
+            |idx: u32, target_hash: H256, target_type: ChallengeTargetType| -> Result<()> {
+                if let Some(ref skip_targets) = self.config.skip_targets {
+                    let key = (block_number, target_type.into(), idx);
+                    if skip_targets.contains(&key) {
+                        log::info!(
+                            "skip block #{} tx #{} type: {:?}",
+                            block_number,
+                            idx,
+                            target_type
+                        );
+                        return Ok(());
+                    }
+                }
+
+                let dump_context = DumpContext {
+                    block_number,
+                    target_type,
+                    target_index: idx,
+                    target_hash,
+                };
+
+                let target = build_challenge_target(block_hash, idx, target_type);
+                self.verify(dump_context, global_state.clone(), target)?;
+
+                Ok(())
+            };
+
+        for idx in 0..(block.transactions().len() as u32) {
+            log::info!("verify tx #{}", idx);
+
+            let tx = block.transactions().get(idx as usize).unwrap();
+            let tx_hash = tx.hash().into();
+
+            verify(idx, tx_hash, ChallengeTargetType::TxSignature)?;
+            verify(idx, tx_hash, ChallengeTargetType::TxExecution)?;
         }
 
         Ok(())
@@ -319,7 +341,7 @@ impl HistoryCancelChallengeValidator {
 
     fn verify(
         &self,
-        context: VerifyContext,
+        dump_context: DumpContext,
         global_state: GlobalState,
         challenge_target: ChallengeTarget,
     ) -> Result<()> {
@@ -344,9 +366,9 @@ impl HistoryCancelChallengeValidator {
             );
 
             match result {
-                Ok(used_cycles) if used_cycles > MAX_CYCLES => {
+                Ok(used_cycles) if used_cycles > self.config.verify_max_cycles => {
                     self.dump_tx_to_file(
-                        &context,
+                        &dump_context,
                         load_data_strategy,
                         &format!("used-cycles-{}", used_cycles),
                         TxWithContext::from(mock_output),
@@ -355,12 +377,12 @@ impl HistoryCancelChallengeValidator {
                     Err(anyhow!(
                         "exceeded max cycles, used {} expect <= {}",
                         used_cycles,
-                        MAX_CYCLES
+                        self.config.verify_max_cycles
                     ))
                 }
                 Err(err) => {
                     self.dump_tx_to_file(
-                        &context,
+                        &dump_context,
                         load_data_strategy,
                         "",
                         TxWithContext::from(mock_output),
@@ -384,7 +406,7 @@ impl HistoryCancelChallengeValidator {
 
     fn dump_tx_to_file(
         &self,
-        verify_context: &VerifyContext,
+        dump_context: &DumpContext,
         load_data_strategy: LoadDataStrategy,
         addition_text: &str,
         tx_with_context: TxWithContext,
@@ -398,12 +420,12 @@ impl HistoryCancelChallengeValidator {
             dump_path.push(dir);
 
             let tx = dump_tx(&self.mock_ctx.rollup_cell_deps, tx_with_context)?;
-            let context = verify_context.with_load_data_strategy(load_data_strategy);
-            let dump_filename = format!("{}-{}-offchain-cancel-tx.json", context, addition_text);
+            let dump_info = dump_context.info_with_load_data_strategy(load_data_strategy);
+            let dump_filename = format!("{}-{}-offchain-cancel-tx.json", dump_info, addition_text);
             dump_path.push(dump_filename);
 
             let json_tx = serde_json::to_string_pretty(&tx)?;
-            log::info!("dump cancel tx from {:?} to {:?}", context, dump_path);
+            log::info!("dump cancel tx from {:?} to {:?}", dump_info, dump_path);
             write(dump_path, json_tx)?;
 
             Ok(())
@@ -416,15 +438,15 @@ impl HistoryCancelChallengeValidator {
 }
 
 #[derive(Clone)]
-struct VerifyContext {
+struct DumpContext {
     block_number: u64,
     target_type: ChallengeTargetType,
     target_index: u32,
     target_hash: H256,
 }
 
-impl VerifyContext {
-    fn with_load_data_strategy(&self, load_data_strategy: LoadDataStrategy) -> String {
+impl DumpContext {
+    fn info_with_load_data_strategy(&self, load_data_strategy: LoadDataStrategy) -> String {
         let type_ = match self.target_type {
             ChallengeTargetType::TxSignature => "tx-signature",
             ChallengeTargetType::TxExecution => "tx-execution",
