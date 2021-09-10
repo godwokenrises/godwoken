@@ -536,6 +536,8 @@ impl MockBlockParam {
             data.map(|(k, v)| (*k, v.pack())).collect()
         };
 
+        let recover_accounts = run_result.recover_accounts.iter().cloned().collect();
+
         let return_data_hash = {
             let return_data_hash: [u8; 32] = {
                 let mut hasher = new_blake2b();
@@ -571,6 +573,7 @@ impl MockBlockParam {
             receiver_script: Some(receiver_script),
             verify_witness: VerifyWitness::TxExecution {
                 load_data,
+                recover_accounts,
                 witness: verify_witness,
             },
         })

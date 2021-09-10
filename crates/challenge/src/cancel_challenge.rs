@@ -5,7 +5,7 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
 use gw_config::BlockProducerConfig;
 use gw_types::core::{DepType, Status};
-use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
+use gw_types::offchain::{CellInfo, InputCellInfo, RecoverAccount, RollupContext};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, GlobalState, OutPoint, RollupAction, RollupActionUnion,
     RollupCancelChallenge, Script, VerifyTransactionSignatureWitness, VerifyTransactionWitness,
@@ -13,7 +13,7 @@ use gw_types::packed::{
 };
 use gw_types::prelude::Unpack;
 use gw_types::{bytes::Bytes, prelude::Pack as GWPack};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct CancelChallenge<'a, W: Entity> {
     rollup_type_hash: H256,
@@ -39,9 +39,23 @@ pub struct LoadDataContext {
     pub inputs: Vec<InputCellInfo>,
 }
 
+#[derive(Clone)]
+pub struct RecoverAccounts {
+    pub cells: Vec<(CellOutput, Bytes)>,
+    pub witnesses: Vec<WitnessArgs>,
+}
+
+#[derive(Clone)]
+pub struct RecoverAccountsContext {
+    pub cell_deps: Vec<CellDep>,
+    pub inputs: Vec<InputCellInfo>,
+    pub witnesses: Vec<WitnessArgs>,
+}
+
 pub struct CancelChallengeOutput {
     pub post_global_state: GlobalState,
     pub load_data: Option<LoadData>, // Some for transaction execution verification, sys_load_data
+    pub recover_accounts: Option<RecoverAccounts>,
     pub verifier_cell: (CellOutput, Bytes),
     pub burn_cells: Vec<(CellOutput, Bytes)>,
     pub verifier_witness: Option<WitnessArgs>, // Some for signature verification
@@ -133,7 +147,7 @@ pub fn build_output(
             );
 
             let data = cancel.build_verifier_data();
-            Ok(cancel.build_output(data, Some(verifier_witness), None))
+            Ok(cancel.build_output(data, Some(verifier_witness), None, None))
         }
         VerifyWitness::TxSignature(witness) => {
             let verifier_lock = context.sender_script;
@@ -159,9 +173,13 @@ pub fn build_output(
             );
 
             let data = cancel.build_verifier_data(receiver_script.hash().into());
-            Ok(cancel.build_output(data, Some(verifier_witness), None))
+            Ok(cancel.build_output(data, Some(verifier_witness), None, None))
         }
-        VerifyWitness::TxExecution { witness, load_data } => {
+        VerifyWitness::TxExecution {
+            witness,
+            load_data,
+            recover_accounts,
+        } => {
             let verifier_lock = context
                 .receiver_script
                 .ok_or_else(|| anyhow!("receiver script not found"))?;
@@ -199,7 +217,7 @@ pub fn build_output(
                 rollup_context,
                 challenge_cell,
                 burn_lock,
-                owner_lock,
+                owner_lock.clone(),
                 verifier_lock,
                 witness,
             );
@@ -210,12 +228,24 @@ pub fn build_output(
                 cells: load_data_cells,
             };
 
-            Ok(cancel.build_output(data, None, Some(load_data)))
+            let recover_accounts = {
+                let owner_lock_hash = owner_lock.hash().into();
+                let accounts = recover_accounts.into_iter();
+                let to_cell = accounts.map(|a| build_recover_account_cell(owner_lock_hash, a));
+                let (cells, witnesses) = to_cell.unzip();
+                RecoverAccounts { cells, witnesses }
+            };
+
+            Ok(cancel.build_output(data, None, Some(load_data), Some(recover_accounts)))
         }
     }
 }
 
 impl LoadData {
+    pub fn cell_len(&self) -> usize {
+        self.cells.len()
+    }
+
     pub fn into_context(self, verifier_tx_hash: H256, verifier_tx_index: u32) -> LoadDataContext {
         assert_eq!(verifier_tx_index, 0, "verifier cell should be first one");
 
@@ -259,6 +289,65 @@ impl LoadData {
     }
 }
 
+impl RecoverAccounts {
+    pub fn into_context(
+        self,
+        verifier_tx_hash: H256,
+        index_offset: usize,
+        block_producer_config: &BlockProducerConfig,
+    ) -> Result<RecoverAccountsContext> {
+        assert!(index_offset != 0, "verifier cell should be first one");
+        let RecoverAccounts { cells, witnesses } = self;
+
+        let cell_deps = {
+            let allowed_eoa_deps = &block_producer_config.allowed_eoa_deps;
+            let accounts = cells.iter();
+            let to_code_hash: HashSet<_> = accounts
+                .map(|(output, _)| output.lock().code_hash().unpack())
+                .collect();
+
+            let to_dep = to_code_hash.into_iter().map(|hash| {
+                let maybe_dep = allowed_eoa_deps.get(&hash).cloned();
+                let to_packed = maybe_dep.map(|d| d.into());
+                to_packed.ok_or_else(|| anyhow!("recover account lock {} dep not found", hash))
+            });
+
+            to_dep.collect::<Result<Vec<CellDep>>>()?
+        };
+
+        let to_context = |(idx, (output, data))| -> InputCellInfo {
+            let out_point = OutPoint::new_builder()
+                .tx_hash(Into::<[u8; 32]>::into(verifier_tx_hash).pack())
+                .index((idx as u32).pack())
+                .build();
+
+            let input = CellInput::new_builder()
+                .previous_output(out_point.clone())
+                .build();
+
+            let cell = CellInfo {
+                out_point,
+                output,
+                data,
+            };
+
+            InputCellInfo { input, cell }
+        };
+
+        let inputs = {
+            let accounts = cells.into_iter().enumerate();
+            let add_offset = accounts.map(|(idx, cell)| (idx + index_offset, cell));
+            add_offset.map(to_context).collect()
+        };
+
+        Ok(RecoverAccountsContext {
+            cell_deps,
+            inputs,
+            witnesses,
+        })
+    }
+}
+
 impl<'a, W: Entity> CancelChallenge<'a, W> {
     pub fn new(
         prev_global_state: GlobalState,
@@ -289,6 +378,7 @@ impl<'a, W: Entity> CancelChallenge<'a, W> {
         verifier_data: Bytes,
         verifier_witness: Option<WitnessArgs>,
         load_data: Option<LoadData>,
+        recover_accounts: Option<RecoverAccounts>,
     ) -> CancelChallengeOutput {
         let verifier_cell = build_cell(verifier_data, self.verifier_lock);
 
@@ -304,6 +394,7 @@ impl<'a, W: Entity> CancelChallenge<'a, W> {
             post_global_state,
             verifier_cell,
             load_data,
+            recover_accounts,
             burn_cells: burn_output.burn_cells,
             verifier_witness,
             challenge_witness,
@@ -462,4 +553,20 @@ fn build_cell(data: Bytes, lock: Script) -> (CellOutput, Bytes) {
     let output = dummy_output.as_builder().capacity(capacity.pack()).build();
 
     (output, data)
+}
+
+fn build_recover_account_cell(
+    owner_lock_hash: H256,
+    account: RecoverAccount,
+) -> ((CellOutput, Bytes), WitnessArgs) {
+    let mut data = [0u8; 64];
+    data[0..32].copy_from_slice(&owner_lock_hash.as_slice()[..32]);
+    data[32..64].copy_from_slice(&account.message.as_slice()[..32]);
+
+    let (output, data) = build_cell(data.to_vec().into(), account.lock_script);
+    let witness = WitnessArgs::new_builder()
+        .lock(Some(Into::<Bytes>::into(account.signature)).pack())
+        .build();
+
+    ((output, data), witness)
 }

@@ -3,12 +3,20 @@ use crate::prelude::*;
 use sparse_merkle_tree::H256;
 use std::collections::{HashMap, HashSet};
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct RecoverAccount {
+    pub message: H256,
+    pub signature: Vec<u8>,
+    pub lock_script: Script,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct RunResult {
     pub read_values: HashMap<H256, H256>,
     pub write_values: HashMap<H256, H256>,
     pub return_data: Vec<u8>,
     pub account_count: Option<u32>,
+    pub recover_accounts: HashSet<RecoverAccount>,
     pub new_scripts: HashMap<H256, Vec<u8>>,
     pub get_scripts: HashSet<Vec<u8>>,
     pub write_data: HashMap<H256, Vec<u8>>,

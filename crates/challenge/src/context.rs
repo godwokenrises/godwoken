@@ -15,6 +15,7 @@ use gw_store::state_db::{CheckPoint, StateDBMode, StateDBTransaction, StateTree,
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::ChallengeTargetType;
+use gw_types::offchain::RecoverAccount;
 use gw_types::packed::{
     BlockHashEntry, BlockHashEntryVec, BlockInfo, Byte32, Bytes, CKBMerkleProof, ChallengeTarget,
     ChallengeWitness, KVPairVec, L2Block, L2Transaction, RawL2Block, RawL2BlockVec,
@@ -261,6 +262,7 @@ fn build_verify_transaction_witness(
         receiver_script: Some(kv_witness.receiver_script),
         verify_witness: VerifyWitness::TxExecution {
             load_data: kv_witness.load_data.unwrap_or_else(HashMap::default),
+            recover_accounts: kv_witness.recover_accounts.unwrap_or_else(Vec::default),
             witness: verify_witness,
         },
     })
@@ -295,6 +297,7 @@ struct TxKvWitness {
     account_count: Uint32,
     scripts: ScriptVec,
     load_data: Option<HashMap<H256, Bytes>>,
+    recover_accounts: Option<Vec<RecoverAccount>>,
     sender_script: Script,
     receiver_script: Script,
     kv_state: KVPairVec,
@@ -485,7 +488,7 @@ fn build_tx_kv_witness(
         to_read_data.map(|d| d.map(|(k, v)| (*k, v.pack())).collect())
     };
 
-    let return_data_hash = opt_run_result.map(|result| {
+    let return_data_hash = opt_run_result.as_ref().map(|result| {
         let return_data_hash: [u8; 32] = {
             let mut hasher = new_blake2b();
             hasher.update(result.return_data.as_slice());
@@ -498,10 +501,13 @@ fn build_tx_kv_witness(
     });
     log::debug!("return data hash {:?}", return_data_hash);
 
+    let recover_accounts = opt_run_result.map(|r| r.recover_accounts.into_iter().collect());
+
     let witness = TxKvWitness {
         account_count: prev_tx_account_count.pack(),
         scripts,
         load_data,
+        recover_accounts,
         sender_script,
         receiver_script,
         kv_state: prev_kv_state.pack(),
