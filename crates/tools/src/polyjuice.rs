@@ -12,7 +12,7 @@ use crate::{
     deploy_scripts::ScriptsDeploymentResult,
     godwoken_rpc::GodwokenRpcClient,
     transfer::generate_transaction_message_to_sign,
-    utils::{read_config, wait_for_l2_tx},
+    utils::transaction::{read_config, wait_for_l2_tx},
 };
 use gw_types::{bytes::Bytes as GwBytes, prelude::Pack as GwPack};
 

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use gw_poa::{PoA, PoAContext};
-use gw_rpc_client::RPCClient;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
 use gw_types::offchain::{CellInfo, InputCellInfo};
 use gw_types::packed::{CellDep, CellOutput, Script};

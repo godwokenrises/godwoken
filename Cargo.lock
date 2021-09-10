@@ -1980,13 +1980,11 @@ dependencies = [
  "async-std",
  "async-trait",
  "ckb-chain-spec",
- "ckb-crypto",
  "ckb-fixed-hash",
  "ckb-types",
  "clap",
  "ctrlc",
  "env_logger",
- "faster-hex 0.4.1",
  "futures 0.3.13",
  "gw-chain",
  "gw-challenge",
@@ -2001,6 +1999,7 @@ dependencies = [
  "gw-rpc-server",
  "gw-store",
  "gw-types",
+ "gw-utils",
  "gw-version",
  "gw-web3-indexer",
  "hex",
@@ -2044,12 +2043,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ckb-chain-spec",
- "ckb-crypto",
  "ckb-fixed-hash",
  "ckb-script",
  "ckb-traits",
  "ckb-types",
- "faster-hex 0.4.1",
  "gw-common",
  "gw-config",
  "gw-db",
@@ -2060,6 +2057,7 @@ dependencies = [
  "gw-store",
  "gw-traits",
  "gw-types",
+ "gw-utils",
  "hex",
  "log",
  "rand 0.8.2",
@@ -2312,7 +2310,9 @@ dependencies = [
  "gw-db",
  "gw-generator",
  "gw-jsonrpc-types",
+ "gw-rpc-client",
  "gw-types",
+ "gw-utils",
  "hex",
  "lazy_static",
  "log",
@@ -2322,6 +2322,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
+ "smol",
  "tempfile",
  "toml",
  "url 2.2.1",
@@ -2346,6 +2347,20 @@ dependencies = [
  "gw-hash",
  "molecule",
  "sparse-merkle-tree",
+]
+
+[[package]]
+name = "gw-utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ckb-crypto",
+ "faster-hex 0.4.1",
+ "gw-common",
+ "gw-config",
+ "gw-poa",
+ "gw-rpc-client",
+ "gw-types",
 ]
 
 [[package]]

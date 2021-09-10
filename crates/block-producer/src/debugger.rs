@@ -10,7 +10,7 @@ use gw_jsonrpc_types::{
     ckb_jsonrpc_types,
     debugger::{ReprMockCellDep, ReprMockInfo, ReprMockInput, ReprMockTransaction},
 };
-use gw_rpc_client::RPCClient;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::{
     core::DepType,
     offchain::TxStatus,

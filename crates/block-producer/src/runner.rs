@@ -1,6 +1,6 @@
 use crate::{
     block_producer::BlockProducer, challenger::Challenger, cleaner::Cleaner, poller::ChainUpdater,
-    test_mode_control::TestModeControl, types::ChainEvent, utils::CKBGenesisInfo, wallet::Wallet,
+    test_mode_control::TestModeControl, types::ChainEvent,
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
@@ -20,7 +20,7 @@ use gw_generator::{
 };
 use gw_mem_pool::{default_provider::DefaultMemPoolProvider, pool::MemPool};
 use gw_poa::PoA;
-use gw_rpc_client::RPCClient;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
 use gw_types::prelude::{Pack, Unpack};
@@ -30,6 +30,7 @@ use gw_types::{
     packed::{NumberHash, RollupConfig, Script},
     prelude::*,
 };
+use gw_utils::{genesis_info::CKBGenesisInfo, wallet::Wallet};
 use gw_web3_indexer::Web3Indexer;
 use semver::Version;
 use smol::lock::Mutex;
@@ -190,12 +191,12 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         let ckb_client = HttpClient::new(config.rpc_client.ckb_url)?;
         let rollup_type_script =
             ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
-        RPCClient {
-            indexer_client,
-            ckb_client,
-            rollup_context: rollup_context.clone(),
+        RPCClient::new(
             rollup_type_script,
-        }
+            rollup_context.clone(),
+            ckb_client,
+            indexer_client,
+        )
     };
 
     if !skip_config_check {
@@ -306,7 +307,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             let offchain_mock_context = smol::block_on(async {
                 let wallet = {
                     let config = &block_producer_config.wallet_config;
-                    gw_challenge::Wallet::from_config(config).with_context(|| "init wallet")?
+                    Wallet::from_config(config).with_context(|| "init wallet")?
                 };
                 let poa = poa.lock().await;
 

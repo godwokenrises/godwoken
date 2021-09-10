@@ -4,8 +4,8 @@ use crate::cancel_challenge::{
 use crate::enter_challenge::EnterChallenge;
 use crate::offchain::{mock_poa::MockPoA, CKBGenesisInfo};
 use crate::types::VerifyContext;
-use crate::utils::transaction_skeleton::TransactionSkeleton;
-use crate::utils::wallet::Wallet;
+use gw_utils::transaction_skeleton::TransactionSkeleton;
+use gw_utils::wallet::Wallet;
 
 use anyhow::Result;
 use gw_common::blake2b::new_blake2b;

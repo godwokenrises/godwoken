@@ -20,6 +20,7 @@ members = [
   "crates/web3-indexer",
   "crates/benches",
   "crates/version",
+  "crates/utils",
 ]
 
 [profile.release]

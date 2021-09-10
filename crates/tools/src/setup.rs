@@ -3,6 +3,8 @@ use crate::deploy_scripts::deploy_scripts;
 use crate::generate_config::generate_config;
 use crate::prepare_scripts::{self, prepare_scripts, ScriptsBuildMode};
 use crate::utils;
+use crate::utils::transaction::{make_path, run_in_output_mode};
+use ckb_sdk::Address;
 use ckb_types::{
     core::ScriptHashType, packed as ckb_packed, prelude::Builder as CKBBuilder,
     prelude::Pack as CKBPack, prelude::Unpack as CKBUnpack,
@@ -12,6 +14,7 @@ use rand::Rng;
 use serde::Serialize;
 use serde_json::json;
 use std::fs;
+use std::str::FromStr;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -36,11 +39,12 @@ pub fn setup(
     mode: ScriptsBuildMode,
     scripts_path: &Path,
     privkey_path: &Path,
+    cells_lock_address: &str,
     nodes_count: u8,
     server_url: &str,
     output_dir: &Path,
 ) {
-    let prepare_scripts_result = utils::make_path(output_dir, vec!["scripts-deploy.json"]);
+    let prepare_scripts_result = make_path(output_dir, vec!["scripts-deploy.json"]);
     prepare_scripts(
         mode,
         scripts_path,
@@ -50,18 +54,22 @@ pub fn setup(
     )
     .expect("prepare scripts");
 
-    let scripts_deployment_result =
-        utils::make_path(output_dir, vec!["scripts-deploy-result.json"]);
+    let scripts_deployment_result = make_path(output_dir, vec!["scripts-deploy-result.json"]);
+    let cells_lock: ckb_types::packed::Script = Address::from_str(cells_lock_address)
+        .unwrap()
+        .payload()
+        .into();
     deploy_scripts(
         privkey_path,
         ckb_rpc_url,
         &prepare_scripts_result,
         &scripts_deployment_result,
+        Some(cells_lock.into()),
     )
     .expect("deploy scripts");
 
-    let poa_config_path = utils::make_path(output_dir, vec!["poa-config.json"]);
-    let rollup_config_path = utils::make_path(output_dir, vec!["rollup-config.json"]);
+    let poa_config_path = make_path(output_dir, vec!["poa-config.json"]);
+    let rollup_config_path = make_path(output_dir, vec!["rollup-config.json"]);
     let capacity = TRANSFER_CAPACITY.parse().expect("get capacity");
     prepare_nodes_configs(
         privkey_path,
@@ -72,7 +80,7 @@ pub fn setup(
         &rollup_config_path,
     );
 
-    let genesis_deploy_result = utils::make_path(output_dir, vec!["genesis-deploy-result.json"]);
+    let genesis_deploy_result = make_path(output_dir, vec!["genesis-deploy-result.json"]);
     deploy_genesis(
         privkey_path,
         ckb_rpc_url,
@@ -87,9 +95,8 @@ pub fn setup(
 
     (0..nodes_count).for_each(|index| {
         let node_name = format!("node{}", index + 1);
-        let privkey_path = utils::make_path(output_dir, vec![&node_name, &"pk".to_owned()]);
-        let output_file_path =
-            utils::make_path(output_dir, vec![node_name, "config.toml".to_owned()]);
+        let privkey_path = make_path(output_dir, vec![&node_name, &"pk".to_owned()]);
+        let output_file_path = make_path(output_dir, vec![node_name, "config.toml".to_owned()]);
         generate_config(
             &genesis_deploy_result,
             &scripts_deployment_result,
@@ -125,9 +132,9 @@ fn prepare_privkeys(output_dir: &Path, nodes_count: u8) -> HashMap<String, PathB
     (0..nodes_count)
         .map(|index| {
             let node_name = format!("node{}", (index + 1).to_string());
-            let node_dir = utils::make_path(output_dir, vec![&node_name]);
+            let node_dir = make_path(output_dir, vec![&node_name]);
             fs::create_dir_all(&node_dir).expect("create node dir");
-            let privkey_file = utils::make_path(&node_dir, vec!["pk"]);
+            let privkey_file = make_path(&node_dir, vec!["pk"]);
             let privkey = fs::read_to_string(&privkey_file)
                 .map(|s| s.trim().into())
                 .unwrap_or_else(|_| Vec::new());
@@ -215,7 +222,7 @@ fn generate_privkey_file(privkey_file_path: &Path) {
 }
 
 pub fn get_wallet_info(privkey_path: &Path) -> NodeWalletInfo {
-    let (stdout, stderr) = utils::run_in_output_mode(
+    let (stdout, stderr) = run_in_output_mode(
         "ckb-cli",
         vec![
             "util",
@@ -234,7 +241,7 @@ pub fn get_wallet_info(privkey_path: &Path) -> NodeWalletInfo {
 }
 
 fn query_wallet_capacity(address: &str) -> f64 {
-    let (stdout, _) = utils::run_in_output_mode(
+    let (stdout, _) = run_in_output_mode(
         "ckb-cli",
         vec!["wallet", "get-capacity", "--address", address],
     )
@@ -247,7 +254,7 @@ fn query_wallet_capacity(address: &str) -> f64 {
 }
 
 fn transfer_ckb(node_wallet: &NodeWalletInfo, payer_privkey_path: &Path, capacity: u32) {
-    utils::run(
+    utils::transaction::run(
         "ckb-cli",
         vec![
             "wallet",

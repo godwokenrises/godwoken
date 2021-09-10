@@ -4,7 +4,7 @@ use ckb_types::{
     prelude::{Builder, Entity},
 };
 use gw_config::BlockProducerConfig;
-use gw_rpc_client::RPCClient;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::{
     core::{DepType, ScriptHashType},
     offchain::{CellInfo, InputCellInfo, RollupContext},

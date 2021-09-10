@@ -1,3 +1,6 @@
+//! Transaction related utils
+//! NOTICE: Some functions should be moved to a more proper module than this.
+
 use anyhow::Result;
 use ckb_fixed_hash::{h256, H256};
 use ckb_jsonrpc_types::Status;

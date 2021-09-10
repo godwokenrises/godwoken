@@ -5,7 +5,7 @@ use crate::account::{
 use crate::deploy_scripts::ScriptsDeploymentResult;
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::hasher::{CkbHasher, EthHasher};
-use crate::utils::{read_config, wait_for_l2_tx};
+use crate::utils::transaction::{read_config, wait_for_l2_tx};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};

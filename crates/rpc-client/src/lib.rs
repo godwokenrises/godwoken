@@ -1,4 +1,4 @@
+pub mod indexer_client;
 pub mod indexer_types;
-mod rpc_client;
-
-pub use rpc_client::*;
+pub mod rpc_client;
+mod utils;

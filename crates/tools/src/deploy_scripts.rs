@@ -1,4 +1,4 @@
-use crate::utils::{get_network_type, run_cmd, wait_for_tx, TYPE_ID_CODE_HASH};
+use crate::utils::transaction::{get_network_type, run_cmd, wait_for_tx, TYPE_ID_CODE_HASH};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{CellDep, DepType, OutPoint, Script};
 use ckb_sdk::{Address, AddressPayload, HttpRpcClient, HumanCapacity};
@@ -166,6 +166,7 @@ pub fn deploy_scripts(
     ckb_rpc_url: &str,
     input_path: &Path,
     output_path: &Path,
+    cell_lock_opt: Option<Script>,
 ) -> Result<(), String> {
     if let Err(err) = run_cmd(vec!["--version"]) {
         return Err(format!(
@@ -180,7 +181,8 @@ pub fn deploy_scripts(
 
     let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
     let network_type = get_network_type(&mut rpc_client)?;
-    let target_lock = packed::Script::from(deployment_index.lock);
+    let target_lock =
+        packed::Script::from(cell_lock_opt.unwrap_or_else(|| deployment_index.lock.clone()));
     let address_payload = AddressPayload::from(target_lock.clone());
     let target_address = Address::new(network_type, address_payload);
 

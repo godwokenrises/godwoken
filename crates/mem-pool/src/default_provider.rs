@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Result};
 use gw_poa::PoA;
-use gw_rpc_client::RPCClient;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::{
     offchain::{DepositInfo, InputCellInfo, RollupContext},
     packed::{CellInput, WithdrawalRequest},

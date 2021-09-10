@@ -33,7 +33,7 @@ use gw_types::{
 };
 
 use super::deploy_scripts::ScriptsDeploymentResult;
-use crate::utils::{get_network_type, run_cmd, wait_for_tx, TYPE_ID_CODE_HASH};
+use crate::utils::transaction::{get_network_type, run_cmd, wait_for_tx, TYPE_ID_CODE_HASH};
 
 use std::time::{SystemTime, UNIX_EPOCH};
 

@@ -13,17 +13,26 @@ mod polyjuice;
 mod prepare_scripts;
 mod setup;
 mod transfer;
+mod update_cell;
 mod utils;
 mod withdraw;
 
+use anyhow::Result;
 use clap::{value_t, App, Arg, SubCommand};
 use dump_tx::ChallengeBlock;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
-use std::{path::Path, str::FromStr};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+use utils::cli_args;
 
 fn main() {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+    run_cli().unwrap();
+}
 
+fn run_cli() -> Result<()> {
     let arg_privkey_path = Arg::with_name("privkey-path")
         .short("k")
         .takes_value(true)
@@ -34,6 +43,12 @@ fn main() {
         .takes_value(true)
         .default_value("http://127.0.0.1:8114")
         .help("CKB jsonrpc rpc sever URL");
+    let arg_indexer_rpc = Arg::with_name("indexer-rpc-url")
+        .short("i")
+        .takes_value(true)
+        .default_value("http://127.0.0.1:8116")
+        .required(true)
+        .help("The URL of ckb indexer");
     let arg_deployment_results_path = Arg::with_name("deployment-results-path")
         .short("d")
         .long("deployment-results-path")
@@ -220,6 +235,17 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("update-cell")
+            .about("Update an existed cell")
+            .arg(arg_ckb_rpc.clone())
+            .arg(arg_indexer_rpc.clone())
+                .arg(Arg::with_name("tx-hash").long("tx-hash").takes_value(true).required(true).help("The tx-hash of the exist cell"))
+                .arg(Arg::with_name("index").long("index").takes_value(true).required(true).help("The index of the exist cell"))
+                .arg(Arg::with_name("type-id").long("type-id").takes_value(true).required(true).help("The type-id of the exist cell"))
+                .arg(Arg::with_name("cell-data-path").long("cell-data-path").takes_value(true).required(true).help("The path of new data"))
+                .arg(arg_privkey_path.clone())
+        )
+        .subcommand(
             SubCommand::with_name("deposit-ckb")
                 .about("Deposit CKB to godwoken")
                 .arg(arg_ckb_rpc.clone())
@@ -301,12 +327,7 @@ fn main() {
                 .about("Prepare scripts, deploy scripts, setup nodes, deploy genesis and generate configs")
                 .arg(arg_ckb_rpc.clone())
                 .arg(
-                    Arg::with_name("indexer-rpc-url")
-                        .short("i")
-                        .takes_value(true)
-                        .default_value("http://127.0.0.1:8116")
-                        .required(true)
-                        .help("The URL of ckb indexer"),
+                    arg_indexer_rpc.clone()
                 )
                 .arg(
                     Arg::with_name("mode")
@@ -324,6 +345,13 @@ fn main() {
                         .help("The scripts build json file path"),
                 )
                 .arg(arg_privkey_path.clone())
+                .arg(
+                    Arg::with_name("cells-lock-address")
+                        .long("cells-lock-address")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Lock of cells"),
+                )
                 .arg(
                     Arg::with_name("nodes-count")
                         .short("n")
@@ -669,9 +697,13 @@ fn main() {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
             let input_path = Path::new(m.value_of("input-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
-            if let Err(err) =
-                deploy_scripts::deploy_scripts(privkey_path, ckb_rpc_url, input_path, output_path)
-            {
+            if let Err(err) = deploy_scripts::deploy_scripts(
+                privkey_path,
+                ckb_rpc_url,
+                input_path,
+                output_path,
+                None,
+            ) {
                 log::error!("Deploy scripts error: {}", err);
                 std::process::exit(-1);
             };
@@ -745,6 +777,29 @@ fn main() {
                 std::process::exit(-1);
             };
         }
+        ("update-cell", Some(m)) => {
+            let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
+            let indexer_rpc_url = m.value_of("indexer-rpc-url").unwrap();
+            let tx_hash = cli_args::to_h256(m.value_of("tx-hash").unwrap())?;
+            let index: u32 = m.value_of("index").unwrap().parse()?;
+            let type_id = cli_args::to_h256(m.value_of("type-id").unwrap())?;
+            let cell_data_path = Path::new(m.value_of("cell-data-path").unwrap());
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let pk_path = {
+                let mut buf = PathBuf::new();
+                buf.push(privkey_path);
+                buf
+            };
+            update_cell::update_cell(
+                ckb_rpc_url,
+                indexer_rpc_url,
+                tx_hash,
+                index,
+                type_id,
+                cell_data_path,
+                pk_path,
+            )?;
+        }
         ("deposit-ckb", Some(m)) => {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap().to_string();
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
@@ -799,6 +854,7 @@ fn main() {
             let mode = value_t!(m, "mode", prepare_scripts::ScriptsBuildMode).unwrap();
             let scripts_path = Path::new(m.value_of("scripts-build-file-path").unwrap());
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let cells_lock_address = m.value_of("cells-lock-address").unwrap();
             let nodes_count = m
                 .value_of("nodes-count")
                 .map(|c| c.parse().expect("nodes count"))
@@ -811,6 +867,7 @@ fn main() {
                 mode,
                 scripts_path,
                 privkey_path,
+                cells_lock_address,
                 nodes_count,
                 server_url,
                 output_dir,
@@ -1049,4 +1106,5 @@ fn main() {
             app.print_help().expect("print help");
         }
     }
+    Ok(())
 }
