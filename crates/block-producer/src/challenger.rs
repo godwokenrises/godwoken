@@ -643,6 +643,12 @@ impl Challenger {
             tx_skeleton.fill_poa(generated_poa, 0)?;
         }
 
+        // ensure no cell dep duplicate
+        {
+            let deps: HashSet<_> = tx_skeleton.cell_deps_mut().iter().collect();
+            *tx_skeleton.cell_deps_mut() = deps.into_iter().cloned().collect();
+        }
+
         let owner_lock = self.wallet.lock_script().to_owned();
         fill_tx_fee(&mut tx_skeleton, &self.rpc_client.indexer, owner_lock).await?;
         self.wallet.sign_tx_skeleton(tx_skeleton)

@@ -21,7 +21,7 @@ use gw_types::packed::{
 };
 use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct MockRollup {
     pub rollup_type_script: ScriptOpt,
@@ -167,6 +167,12 @@ pub fn mock_cancel_challenge_tx(
     let owner_dep = mock_rollup.ckb_genesis_info.sighash_dep.clone();
     tx_skeleton.cell_deps_mut().push(owner_dep);
     tx_skeleton.inputs_mut().push(owner_cell);
+
+    // ensure no cell dep duplicate
+    {
+        let deps: HashSet<_> = tx_skeleton.cell_deps_mut().iter().collect();
+        *tx_skeleton.cell_deps_mut() = deps.into_iter().cloned().collect();
+    }
 
     let owner_lock = mock_rollup.wallet.lock_script().to_owned();
     mock_rollup.fill_tx_fee(&mut tx_skeleton, owner_lock)?;
