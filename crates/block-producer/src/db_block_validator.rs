@@ -220,7 +220,7 @@ impl DBBlockCancelChallengeValidator {
 
     fn verify_db(&self, from_block: Option<u64>, to_block: Option<u64>) -> Result<()> {
         let db = self.store.begin_transaction();
-        let from_block = from_block.unwrap_or_else(|| 0);
+        let from_block = from_block.unwrap_or(0);
         let to_block = match to_block {
             Some(to) => to,
             None => db.get_tip_block()?.raw().number().unpack(),
