@@ -1,5 +1,4 @@
 use anyhow::{anyhow, bail, Context, Result};
-use async_jsonrpc_client::HttpClient;
 use gw_challenge::{
     cancel_challenge::LoadDataStrategy,
     context::build_verify_context,
@@ -9,37 +8,24 @@ use gw_challenge::{
         OffChainMockContext,
     },
 };
-use gw_common::{blake2b::new_blake2b, H256};
+use gw_common::H256;
 use gw_config::{Config, DBBlockValidatorConfig, DebugConfig};
-use gw_db::{schema::COLUMNS, RocksDB};
-use gw_generator::{
-    account_lock_manage::{
-        secp256k1::{Secp256k1Eth, Secp256k1Tron},
-        AccountLockManage,
-    },
-    backend_manage::BackendManage,
-    Generator,
-};
+use gw_generator::Generator;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType as JsonChallengeTargetType;
-use gw_poa::PoA;
-use gw_rpc_client::RPCClient;
 use gw_store::Store;
 use gw_types::{
-    bytes::Bytes,
     core::{ChallengeTargetType, Status},
-    offchain::RollupContext,
-    packed::{ChallengeTarget, GlobalState, L2Block, RollupConfig, Script},
+    packed::{ChallengeTarget, GlobalState, L2Block},
     prelude::{Builder, Entity, Pack, Unpack},
 };
 
 use std::{
-    collections::HashMap,
     fs::{create_dir_all, write},
     path::PathBuf,
     sync::Arc,
 };
 
-use crate::{utils::CKBGenesisInfo, wallet::Wallet};
+use crate::{runner::BaseInitComponents, wallet::Wallet};
 
 pub fn verify(config: Config, from_block: Option<u64>, to_block: Option<u64>) -> Result<()> {
     if config.store.path.as_os_str().is_empty() {
@@ -56,126 +42,16 @@ pub fn verify(config: Config, from_block: Option<u64>, to_block: Option<u64>) ->
 }
 
 fn build_validator(config: Config) -> Result<DBBlockCancelChallengeValidator> {
-    // TODO: Refactor
-    let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
-    let rollup_context = RollupContext {
-        rollup_config: rollup_config.clone(),
-        rollup_script_hash: {
-            let rollup_script_hash: [u8; 32] = config.genesis.rollup_type_hash.clone().into();
-            rollup_script_hash.into()
-        },
-    };
-    let rollup_type_script: Script = config.chain.rollup_type_script.clone().into();
-
-    let rpc_client = {
-        let indexer_client = HttpClient::new(config.rpc_client.indexer_url)?;
-        let ckb_client = HttpClient::new(config.rpc_client.ckb_url)?;
-        let rollup_type_script =
-            ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
-        RPCClient {
-            indexer_client,
-            ckb_client,
-            rollup_context: rollup_context.clone(),
-            rollup_type_script,
-        }
-    };
-
-    let generator = {
-        let backend_manage = BackendManage::from_config(config.backends.clone())
-            .with_context(|| "config backends")?;
-        let mut account_lock_manage = AccountLockManage::default();
-        let eth_lock_script_type_hash = rollup_config
-            .allowed_eoa_type_hashes()
-            .get(0)
-            .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
-        account_lock_manage.register_lock_algorithm(
-            eth_lock_script_type_hash.unpack(),
-            Box::new(Secp256k1Eth::default()),
-        );
-        let tron_lock_script_type_hash = rollup_config.allowed_eoa_type_hashes().get(1);
-        if let Some(code_hash) = tron_lock_script_type_hash {
-            account_lock_manage
-                .register_lock_algorithm(code_hash.unpack(), Box::new(Secp256k1Tron::default()))
-        }
-        Arc::new(Generator::new(
-            backend_manage,
-            account_lock_manage,
-            rollup_context.clone(),
-        ))
-    };
-
-    let db_config = gw_db::config::Config {
-        path: config.store.path,
-        options: Default::default(),
-        options_file: Default::default(),
-    };
-    let store = Store::new(RocksDB::open(&db_config, COLUMNS));
-
-    let block_producer_config = config.block_producer.expect("should exists");
-    let ckb_genesis_info = {
-        let ckb_genesis = smol::block_on(async { rpc_client.get_block_by_number(0).await })?
-            .ok_or_else(|| anyhow!("can't found CKB genesis block"))?;
-        CKBGenesisInfo::from_block(&ckb_genesis)?
-    };
-
-    let secp_data: Bytes = {
-        let out_point = config.genesis.secp_data_dep.out_point.clone();
-        smol::block_on(rpc_client.get_transaction(out_point.tx_hash.0.into()))?
-            .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?
-            .raw()
-            .outputs_data()
-            .get(out_point.index.value() as usize)
-            .expect("get secp output data")
-            .raw_data()
-    };
-
-    let to_hash = |data| -> [u8; 32] {
-        let mut hasher = new_blake2b();
-        hasher.update(data);
-        let mut hash = [0u8; 32];
-        hasher.finalize(&mut hash);
-        hash
-    };
-    let mut builtin_load_data = HashMap::new();
-    builtin_load_data.insert(
-        to_hash(secp_data.as_ref()).into(),
-        config.genesis.secp_data_dep.clone().into(),
-    );
+    let base = BaseInitComponents::init(&config, true)?;
+    let block_producer_config = config.block_producer.expect("block producer config");
 
     let wallet =
         Wallet::from_config(&block_producer_config.wallet_config).with_context(|| "init wallet")?;
-
-    let poa = {
-        let poa = PoA::new(
-            rpc_client.clone(),
-            wallet.lock_script().to_owned(),
-            block_producer_config.poa_lock_dep.clone().into(),
-            block_producer_config.poa_state_dep.clone().into(),
-        );
-        Arc::new(smol::lock::Mutex::new(poa))
-    };
-
-    let ckb_genesis_info = gw_challenge::offchain::CKBGenesisInfo {
-        sighash_dep: ckb_genesis_info.sighash_dep(),
-    };
-
+    let poa = base.init_poa(&wallet, &block_producer_config);
     let mut offchain_mock_context = smol::block_on(async {
-        let wallet = {
-            let config = &block_producer_config.wallet_config;
-            gw_challenge::Wallet::from_config(config).with_context(|| "init wallet")?
-        };
         let poa = poa.lock().await;
-
-        OffChainMockContext::build(
-            &rpc_client,
-            &poa,
-            rollup_context.clone(),
-            wallet,
-            block_producer_config.clone(),
-            ckb_genesis_info,
-            builtin_load_data.clone(),
-        )
-        .await
+        base.init_offchain_mock_context(&poa, &block_producer_config)
+            .await
     })?;
 
     let validator_config = config.db_block_validator.as_ref();
@@ -183,8 +59,8 @@ fn build_validator(config: Config) -> Result<DBBlockCancelChallengeValidator> {
         offchain_mock_context = offchain_mock_context.replace_scripts(scripts)?;
     }
     let validator = DBBlockCancelChallengeValidator::new(
-        generator,
-        store,
+        base.generator,
+        base.store,
         offchain_mock_context,
         config.debug,
         config.db_block_validator.unwrap_or_default(),
