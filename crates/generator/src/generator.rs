@@ -235,6 +235,7 @@ impl Generator {
             return Err(TransactionError::Nonce {
                 expected: account_nonce,
                 actual: nonce,
+                account_id: sender_id,
             }
             .into());
         }
@@ -416,6 +417,7 @@ impl Generator {
                     error: Error::Transaction(TransactionError::Nonce {
                         expected: expected_nonce,
                         actual: actual_nonce,
+                        account_id: raw_tx.from_id().unpack(),
                     }),
                 };
             }
