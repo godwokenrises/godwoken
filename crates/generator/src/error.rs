@@ -108,8 +108,12 @@ pub enum TransactionError {
     VM(VMError),
     #[error("SMT error {0}")]
     SMT(SMTError),
-    #[error("invalid nonce expected {expected}, actual {actual}")]
-    Nonce { expected: u32, actual: u32 },
+    #[error("invalid nonce of account {account_id} expected {expected}, actual {actual}")]
+    Nonce {
+        account_id: u32,
+        expected: u32,
+        actual: u32,
+    },
     #[error("State error {0:?}")]
     State(StateError),
     #[error("can't find backend for script_hash {script_hash:?}")]
