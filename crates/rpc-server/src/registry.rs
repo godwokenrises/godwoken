@@ -77,8 +77,8 @@ fn to_jsonh256(v: H256) -> JsonH256 {
 #[allow(clippy::needless_lifetimes)]
 async fn get_state_db_at_block<'a>(
     db: &'a StoreTransaction,
-    mem_pool: &MemPool,
     block_number: Option<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64>,
+    is_mem_pool_enabled: bool,
 ) -> Result<StateDBTransaction<'a>, RpcError> {
     let tip_block_number = db.get_tip_block()?.raw().number().unpack();
     match block_number.map(|n| n.value()) {
@@ -93,21 +93,16 @@ async fn get_state_db_at_block<'a>(
             )
             .map_err(Into::into)
         }
-        None => match mem_pool {
-            Some(mem_pool) => {
-                let mem_pool = mem_pool.lock().await;
-                mem_pool.fetch_state_db(db).map_err(Into::into)
-            }
-            None => {
-                // fallback to tip number
-                StateDBTransaction::from_checkpoint(
-                    db,
-                    CheckPoint::new(tip_block_number, SubState::Block),
-                    StateDBMode::ReadOnly,
-                )
+        None => {
+            let checkpoint = if is_mem_pool_enabled {
+                CheckPoint::new(tip_block_number, SubState::MemBlock(u32::MAX))
+            } else {
+                // fallback to db
+                CheckPoint::new(tip_block_number, SubState::Block)
+            };
+            StateDBTransaction::from_checkpoint(db, checkpoint, StateDBMode::ReadOnly)
                 .map_err(Into::into)
-            }
-        },
+        }
     }
 }
 
@@ -524,7 +519,7 @@ async fn get_balance(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, block_number).await?;
+    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some()).await?;
     let tree = state_db.state_tree()?;
     let balance = tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?;
     Ok(balance.into())
@@ -549,7 +544,7 @@ async fn get_storage_at(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, block_number).await?;
+    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some()).await?;
 
     let tree = state_db.state_tree()?;
     let key: H256 = to_h256(key);
@@ -565,7 +560,7 @@ async fn get_account_id_by_script_hash(
     store: Data<Store>,
 ) -> Result<Option<AccountID>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, None).await?;
+    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some()).await?;
     let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
@@ -596,7 +591,7 @@ async fn get_nonce(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, block_number).await?;
+    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some()).await?;
     let tree = state_db.state_tree()?;
 
     let nonce = tree.get_nonce(account_id.into())?;
@@ -610,7 +605,7 @@ async fn get_script(
     store: Data<Store>,
 ) -> Result<Option<Script>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, None).await?;
+    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some()).await?;
     let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
@@ -625,7 +620,7 @@ async fn get_script_hash(
     store: Data<Store>,
 ) -> Result<JsonH256, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, None).await?;
+    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some()).await?;
     let tree = state_db.state_tree()?;
 
     let script_hash = tree.get_script_hash(account_id.into())?;
@@ -638,7 +633,7 @@ async fn get_script_hash_by_short_address(
     store: Data<Store>,
 ) -> Result<Option<JsonH256>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, None).await?;
+    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some()).await?;
     let tree = state_db.state_tree()?;
     let script_hash_opt = tree.get_script_hash_by_short_address(&short_address.into_bytes());
     Ok(script_hash_opt.map(to_jsonh256))
@@ -663,7 +658,7 @@ async fn get_data(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, block_number).await?;
+    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some()).await?;
     let tree = state_db.state_tree()?;
 
     let data_opt = tree
