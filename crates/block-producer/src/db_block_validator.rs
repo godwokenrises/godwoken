@@ -29,7 +29,7 @@ use crate::{runner::BaseInitComponents, wallet::Wallet};
 
 pub fn verify(config: Config, from_block: Option<u64>, to_block: Option<u64>) -> Result<()> {
     if config.store.path.as_os_str().is_empty() {
-        bail!("empty store path, no history to verify");
+        bail!("empty store path, no db block to verify");
     }
     if config.block_producer.is_none() {
         bail!("db block validator require block producer config");
