@@ -99,7 +99,7 @@ pub enum SyncEvent {
     // found a invalid challenge
     BadChallenge {
         cell: ChallengeCell,
-        context: gw_challenge::types::VerifyContext,
+        context: Box<gw_challenge::types::VerifyContext>,
     },
     // the rollup is in a challenge
     WaitChallenge {
@@ -432,8 +432,9 @@ impl Chain {
                         log::info!("challenge cancelable, build verify context");
 
                         let generator = Arc::clone(&self.generator);
-                        let context =
-                            gw_challenge::context::build_verify_context(generator, db, &target)?;
+                        let context = Box::new(gw_challenge::context::build_verify_context(
+                            generator, db, &target,
+                        )?);
 
                         return Ok(SyncEvent::BadChallenge { cell, context });
                     }

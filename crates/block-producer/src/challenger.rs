@@ -157,7 +157,7 @@ impl Challenger {
                         _ => unreachable!(),
                     }
                 }
-                self.cancel_challenge(rollup, cell, context, median_time)
+                self.cancel_challenge(rollup, cell, *context, median_time)
                     .await
             }
             SyncEvent::WaitChallenge { cell, context } => {
