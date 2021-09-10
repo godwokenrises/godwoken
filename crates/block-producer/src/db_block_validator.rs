@@ -18,6 +18,7 @@ use gw_types::{
     packed::{ChallengeTarget, GlobalState, L2Block},
     prelude::{Builder, Entity, Pack, Unpack},
 };
+use rayon::prelude::*;
 
 use std::{
     fs::{create_dir_all, write},
@@ -102,8 +103,14 @@ impl DBBlockCancelChallengeValidator {
             None => db.get_tip_block()?.raw().number().unpack(),
         };
 
-        for block_number in from_block..=to_block {
-            self.verify_block(block_number)?;
+        if self.config.parallel_verify_blocks {
+            (from_block..=to_block)
+                .into_par_iter()
+                .try_for_each(|block_number| self.verify_block(block_number))?;
+        } else {
+            (from_block..=to_block)
+                .into_iter()
+                .try_for_each(|block_number| self.verify_block(block_number))?;
         }
 
         Ok(())
@@ -139,8 +146,12 @@ impl DBBlockCancelChallengeValidator {
         let block_hash: H256 = block.hash().into();
         let block_number: u64 = block.raw().number().unpack();
 
-        for idx in 0..(block.withdrawals().len() as u32) {
-            log::info!("verify withdrawal #{}", idx);
+        let verify_withdrawal = |idx| -> Result<()> {
+            if self.config.parallel_verify_blocks {
+                log::info!("verify block #{} withdrawal #{}", block_number, idx);
+            } else {
+                log::info!("verify withdrawal #{}", idx);
+            }
 
             if let Some(ref skip_targets) = self.config.skip_targets {
                 let key = (block_number, JsonChallengeTargetType::Withdrawal, idx);
@@ -151,7 +162,7 @@ impl DBBlockCancelChallengeValidator {
                         idx,
                         ChallengeTargetType::Withdrawal,
                     );
-                    continue;
+                    return Ok(());
                 }
             }
 
@@ -165,7 +176,13 @@ impl DBBlockCancelChallengeValidator {
 
             let target = build_challenge_target(block_hash, idx, ChallengeTargetType::Withdrawal);
             self.verify(dump_context, global_state.clone(), target)?;
-        }
+
+            Ok(())
+        };
+
+        (0..(block.withdrawals().len() as u32))
+            .into_par_iter()
+            .try_for_each(verify_withdrawal)?;
 
         Ok(())
     }
@@ -174,7 +191,7 @@ impl DBBlockCancelChallengeValidator {
         let block_hash: H256 = block.hash().into();
         let block_number: u64 = block.raw().number().unpack();
 
-        let verify =
+        let verify_tx =
             |idx: u32, target_hash: H256, target_type: ChallengeTargetType| -> Result<()> {
                 if let Some(ref skip_targets) = self.config.skip_targets {
                     let key = (block_number, target_type.into(), idx);
@@ -202,15 +219,23 @@ impl DBBlockCancelChallengeValidator {
                 Ok(())
             };
 
-        for idx in 0..(block.transactions().len() as u32) {
-            log::info!("verify tx #{}", idx);
+        (0..(block.transactions().len() as u32))
+            .into_par_iter()
+            .try_for_each(|idx| {
+                if self.config.parallel_verify_blocks {
+                    log::info!("verify block #{} tx #{}", block_number, idx);
+                } else {
+                    log::info!("verify tx #{}", idx);
+                }
 
-            let tx = block.transactions().get(idx as usize).unwrap();
-            let tx_hash = tx.hash().into();
+                let tx = block.transactions().get(idx as usize).unwrap();
+                let tx_hash = tx.hash().into();
 
-            verify(idx, tx_hash, ChallengeTargetType::TxSignature)?;
-            verify(idx, tx_hash, ChallengeTargetType::TxExecution)?;
-        }
+                verify_tx(idx, tx_hash, ChallengeTargetType::TxSignature)?;
+                verify_tx(idx, tx_hash, ChallengeTargetType::TxExecution)?;
+
+                Ok::<_, anyhow::Error>(())
+            })?;
 
         Ok(())
     }

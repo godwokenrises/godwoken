@@ -196,6 +196,7 @@ pub struct DBBlockValidatorConfig {
     pub verify_max_cycles: u64,
     pub replace_scripts: Option<HashMap<H256, PathBuf>>,
     pub skip_targets: Option<HashSet<(u64, ChallengeTargetType, u32)>>,
+    pub parallel_verify_blocks: bool,
 }
 
 impl Default for DBBlockValidatorConfig {
@@ -204,6 +205,7 @@ impl Default for DBBlockValidatorConfig {
             verify_max_cycles: 7000_0000,
             replace_scripts: None,
             skip_targets: None,
+            parallel_verify_blocks: true,
         }
     }
 }
