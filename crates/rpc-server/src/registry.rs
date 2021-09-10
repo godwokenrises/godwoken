@@ -5,7 +5,7 @@ use gw_chain::chain::Chain;
 use gw_challenge::offchain::OffChainMockContext;
 use gw_common::{state::State, H256};
 use gw_config::DebugConfig;
-use gw_generator::{sudt::build_l2_sudt_script, Generator};
+use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
@@ -39,6 +39,7 @@ type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
 type GwUint64 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint64;
 
 const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
+const INVALID_NONCE_ERR_CODE: i64 = -32001;
 const INTERNAL_ERROR_ERR_CODE: i64 = -32099;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
 const INVALID_PARAM_ERR_CODE: i64 = -32602;
@@ -459,6 +460,7 @@ async fn execute_raw_l2transaction(
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
+    store: Data<Store>,
 ) -> Result<JsonH256, RpcError> {
     let mem_pool = match mem_pool.clone() {
         Some(mem_pool) => mem_pool,
@@ -469,6 +471,34 @@ async fn submit_l2transaction(
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
     let tx_hash = to_jsonh256(tx.hash().into());
+    // check sender's nonce
+    {
+        // fetch mem-pool state
+        let db = store.begin_transaction();
+        let state_db = get_state_db_at_block(&db, None, true).await?;
+        let tree = state_db.state_tree()?;
+        // sender_id
+        let sender_id = tx.raw().from_id().unpack();
+        let sender_nonce: u32 = tree.get_nonce(sender_id)?;
+        let tx_nonce: u32 = tx.raw().nonce().unpack();
+        if sender_nonce != tx_nonce {
+            let err = TransactionError::Nonce {
+                account_id: sender_id,
+                expected: sender_nonce,
+                actual: tx_nonce,
+            };
+            log::info!(
+                "[RPC] reject to submit tx {:?}, err: {}",
+                faster_hex::hex_string(&tx.hash()),
+                err
+            );
+            return Err(RpcError::Full {
+                code: INVALID_NONCE_ERR_CODE,
+                message: err.to_string(),
+                data: None,
+            });
+        }
+    }
     // run task in the background
     smol::spawn(async move {
         if let Err(err) = mem_pool.lock().await.push_transaction(tx.clone()) {
