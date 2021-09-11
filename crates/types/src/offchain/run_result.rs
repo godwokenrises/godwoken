@@ -18,6 +18,7 @@ pub struct RunResult {
     pub logs: Vec<LogItem>,
     // used cycles
     pub used_cycles: u64,
+    pub exit_code: i8,
 }
 
 impl CellOutput {

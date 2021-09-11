@@ -502,11 +502,30 @@ impl Generator {
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
     ) -> Result<RunResult, TransactionError> {
+        let run_result =
+            self.unchecked_execute_transaction(chain, state, block_info, raw_tx, max_cycles)?;
+        if 0 != run_result.exit_code {
+            return Err(TransactionError::InvalidExitCode(run_result.exit_code));
+        }
+
+        Ok(run_result)
+    }
+
+    /// execute a layer2 tx, doesn't check exit code
+    pub fn unchecked_execute_transaction<S: State + CodeStore, C: ChainStore>(
+        &self,
+        chain: &C,
+        state: &S,
+        block_info: &BlockInfo,
+        raw_tx: &RawL2Transaction,
+        max_cycles: u64,
+    ) -> Result<RunResult, TransactionError> {
         let sender_id: u32 = raw_tx.from_id().unpack();
         let nonce_before_execution = state.get_nonce(sender_id)?;
 
         let mut run_result = RunResult::default();
         let used_cycles;
+        let exit_code;
         {
             let core_machine = AsmCoreMachine::new_with_max_cycles(max_cycles);
             let machine_builder = DefaultMachineBuilder::new(core_machine)
@@ -528,14 +547,12 @@ impl Generator {
                 .load_backend(state, &script_hash)
                 .ok_or(TransactionError::BackendNotFound { script_hash })?;
             machine.load_program(&backend.generator, &[])?;
-            let code = machine.run()?;
-            if code != 0 {
-                return Err(TransactionError::InvalidExitCode(code));
-            }
+            exit_code = machine.run()?;
             used_cycles = machine.machine.cycles();
         }
         // record used cycles
         run_result.used_cycles = used_cycles;
+        run_result.exit_code = exit_code;
 
         // check nonce is increased by backends
         let nonce_after_execution = {
@@ -546,10 +563,12 @@ impl Generator {
                 .expect("Backend must update nonce");
             value.to_u32()
         };
-        assert!(
-            nonce_after_execution > nonce_before_execution,
-            "nonce should increased by backends"
-        );
+        if 0 == exit_code {
+            assert!(
+                nonce_after_execution > nonce_before_execution,
+                "nonce should increased by backends"
+            );
+        }
 
         // check write data bytes
         let write_data_bytes: usize = run_result.write_data.values().map(|data| data.len()).sum();
