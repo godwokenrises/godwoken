@@ -126,7 +126,7 @@ pub fn update_cell<P: AsRef<Path>>(
         .send_transaction(ckb_types::packed::Transaction::new_unchecked(tx.as_bytes()))
         .map_err(|err| anyhow!("{}", err))?;
     println!("Send tx...");
-    wait_for_tx(&mut rpc_client, &tx_hash, 30).map_err(|err| anyhow!("{}", err))?;
+    wait_for_tx(&mut rpc_client, &tx_hash, 180).map_err(|err| anyhow!("{}", err))?;
     println!("{}", update_message);
     println!("Cell is updated!");
     Ok(())
