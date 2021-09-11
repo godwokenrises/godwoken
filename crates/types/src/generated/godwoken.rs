@@ -3,6 +3,272 @@
 use super::blockchain::*;
 use molecule::prelude::*;
 #[derive(Clone)]
+pub struct Uint32Vec(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for Uint32Vec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for Uint32Vec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for Uint32Vec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl ::core::default::Default for Uint32Vec {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![0, 0, 0, 0];
+        Uint32Vec::new_unchecked(v.into())
+    }
+}
+impl Uint32Vec {
+    pub const ITEM_SIZE: usize = 4;
+    pub fn total_size(&self) -> usize {
+        molecule::NUMBER_SIZE * (self.item_count() + 1)
+    }
+    pub fn item_count(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<Uint32> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> Uint32 {
+        let start = molecule::NUMBER_SIZE + Self::ITEM_SIZE * idx;
+        let end = start + Self::ITEM_SIZE;
+        Uint32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn as_reader<'r>(&'r self) -> Uint32VecReader<'r> {
+        Uint32VecReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for Uint32Vec {
+    type Builder = Uint32VecBuilder;
+    const NAME: &'static str = "Uint32Vec";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        Uint32Vec(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        Uint32VecReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        Uint32VecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().extend(self.into_iter())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct Uint32VecReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for Uint32VecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for Uint32VecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for Uint32VecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl<'r> Uint32VecReader<'r> {
+    pub const ITEM_SIZE: usize = 4;
+    pub fn total_size(&self) -> usize {
+        molecule::NUMBER_SIZE * (self.item_count() + 1)
+    }
+    pub fn item_count(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<Uint32Reader<'r>> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> Uint32Reader<'r> {
+        let start = molecule::NUMBER_SIZE + Self::ITEM_SIZE * idx;
+        let end = start + Self::ITEM_SIZE;
+        Uint32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for Uint32VecReader<'r> {
+    type Entity = Uint32Vec;
+    const NAME: &'static str = "Uint32VecReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        Uint32VecReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let item_count = molecule::unpack_number(slice) as usize;
+        if item_count == 0 {
+            if slice_len != molecule::NUMBER_SIZE {
+                return ve!(Self, TotalSizeNotMatch, molecule::NUMBER_SIZE, slice_len);
+            }
+            return Ok(());
+        }
+        let total_size = molecule::NUMBER_SIZE + Self::ITEM_SIZE * item_count;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct Uint32VecBuilder(pub(crate) Vec<Uint32>);
+impl Uint32VecBuilder {
+    pub const ITEM_SIZE: usize = 4;
+    pub fn set(mut self, v: Vec<Uint32>) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn push(mut self, v: Uint32) -> Self {
+        self.0.push(v);
+        self
+    }
+    pub fn extend<T: ::core::iter::IntoIterator<Item = Uint32>>(mut self, iter: T) -> Self {
+        for elem in iter {
+            self.0.push(elem);
+        }
+        self
+    }
+}
+impl molecule::prelude::Builder for Uint32VecBuilder {
+    type Entity = Uint32Vec;
+    const NAME: &'static str = "Uint32VecBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE + Self::ITEM_SIZE * self.0.len()
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        writer.write_all(&molecule::pack_number(self.0.len() as molecule::Number))?;
+        for inner in &self.0[..] {
+            writer.write_all(inner.as_slice())?;
+        }
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        Uint32Vec::new_unchecked(inner.into())
+    }
+}
+pub struct Uint32VecIterator(Uint32Vec, usize, usize);
+impl ::core::iter::Iterator for Uint32VecIterator {
+    type Item = Uint32;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl ::core::iter::ExactSizeIterator for Uint32VecIterator {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+impl ::core::iter::IntoIterator for Uint32Vec {
+    type Item = Uint32;
+    type IntoIter = Uint32VecIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        let len = self.len();
+        Uint32VecIterator(self, 0, len)
+    }
+}
+impl<'r> Uint32VecReader<'r> {
+    pub fn iter<'t>(&'t self) -> Uint32VecReaderIterator<'t, 'r> {
+        Uint32VecReaderIterator(&self, 0, self.len())
+    }
+}
+pub struct Uint32VecReaderIterator<'t, 'r>(&'t Uint32VecReader<'r>, usize, usize);
+impl<'t: 'r, 'r> ::core::iter::Iterator for Uint32VecReaderIterator<'t, 'r> {
+    type Item = Uint32Reader<'t>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for Uint32VecReaderIterator<'t, 'r> {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+#[derive(Clone)]
 pub struct BlockMerkleState(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for BlockMerkleState {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -11876,6 +12142,272 @@ impl molecule::prelude::Builder for VerifyTransactionContextBuilder {
     }
 }
 #[derive(Clone)]
+pub struct CKBMerkleProof(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for CKBMerkleProof {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for CKBMerkleProof {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for CKBMerkleProof {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "indices", self.indices())?;
+        write!(f, ", {}: {}", "lemmas", self.lemmas())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for CKBMerkleProof {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        CKBMerkleProof::new_unchecked(v.into())
+    }
+}
+impl CKBMerkleProof {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn indices(&self) -> Uint32Vec {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Uint32Vec::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn lemmas(&self) -> Byte32Vec {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            Byte32Vec::new_unchecked(self.0.slice(start..end))
+        } else {
+            Byte32Vec::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> CKBMerkleProofReader<'r> {
+        CKBMerkleProofReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for CKBMerkleProof {
+    type Builder = CKBMerkleProofBuilder;
+    const NAME: &'static str = "CKBMerkleProof";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        CKBMerkleProof(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        CKBMerkleProofReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        CKBMerkleProofReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .indices(self.indices())
+            .lemmas(self.lemmas())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct CKBMerkleProofReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for CKBMerkleProofReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for CKBMerkleProofReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for CKBMerkleProofReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "indices", self.indices())?;
+        write!(f, ", {}: {}", "lemmas", self.lemmas())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> CKBMerkleProofReader<'r> {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn indices(&self) -> Uint32VecReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Uint32VecReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn lemmas(&self) -> Byte32VecReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            Byte32VecReader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for CKBMerkleProofReader<'r> {
+    type Entity = CKBMerkleProof;
+    const NAME: &'static str = "CKBMerkleProofReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        CKBMerkleProofReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % 4 != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        let field_count = offset_first / 4 - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let header_size = molecule::NUMBER_SIZE * (field_count + 1);
+        if slice_len < header_size {
+            return ve!(Self, HeaderIsBroken, header_size, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..]
+            .chunks(molecule::NUMBER_SIZE)
+            .take(field_count)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        Uint32VecReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        Byte32VecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct CKBMerkleProofBuilder {
+    pub(crate) indices: Uint32Vec,
+    pub(crate) lemmas: Byte32Vec,
+}
+impl CKBMerkleProofBuilder {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn indices(mut self, v: Uint32Vec) -> Self {
+        self.indices = v;
+        self
+    }
+    pub fn lemmas(mut self, v: Byte32Vec) -> Self {
+        self.lemmas = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for CKBMerkleProofBuilder {
+    type Entity = CKBMerkleProof;
+    const NAME: &'static str = "CKBMerkleProofBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.indices.as_slice().len()
+            + self.lemmas.as_slice().len()
+    }
+    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.indices.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.lemmas.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.indices.as_slice())?;
+        writer.write_all(self.lemmas.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        CKBMerkleProof::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
 pub struct VerifyTransactionWitness(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for VerifyTransactionWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -11915,24 +12447,25 @@ impl ::core::fmt::Display for VerifyTransactionWitness {
 impl ::core::default::Default for VerifyTransactionWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            240, 1, 0, 0, 28, 0, 0, 0, 80, 0, 0, 0, 148, 1, 0, 0, 152, 1, 0, 0, 156, 1, 0, 0, 160,
-            1, 0, 0, 52, 0, 0, 0, 12, 0, 0, 0, 48, 0, 0, 0, 36, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0,
-            28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            68, 1, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0, 0, 0, 128, 0,
-            0, 0, 164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 2, 0, 0, 28, 0, 0, 0, 80, 0, 0, 0, 148, 1, 0, 0, 168, 1, 0, 0, 172, 1, 0, 0, 176, 1,
+            0, 0, 52, 0, 0, 0, 12, 0, 0, 0, 48, 0, 0, 0, 36, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28,
+            0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 68,
+            1, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0, 0, 0, 128, 0, 0,
+            0, 164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 84, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 52, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 84, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 80, 0, 0, 0,
-            28, 0, 0, 0, 32, 0, 0, 0, 36, 0, 0, 0, 40, 0, 0, 0, 44, 0, 0, 0, 76, 0, 0, 0, 0, 0, 0,
-            0, 4, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 80, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 36, 0, 0, 0,
+            40, 0, 0, 0, 44, 0, 0, 0, 76, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
         ];
         VerifyTransactionWitness::new_unchecked(v.into())
     }
@@ -11967,11 +12500,11 @@ impl VerifyTransactionWitness {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         RawL2Block::new_unchecked(self.0.slice(start..end))
     }
-    pub fn tx_proof(&self) -> Bytes {
+    pub fn tx_proof(&self) -> CKBMerkleProof {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         let end = molecule::unpack_number(&slice[16..]) as usize;
-        Bytes::new_unchecked(self.0.slice(start..end))
+        CKBMerkleProof::new_unchecked(self.0.slice(start..end))
     }
     pub fn kv_state_proof(&self) -> Bytes {
         let slice = self.as_slice();
@@ -12098,11 +12631,11 @@ impl<'r> VerifyTransactionWitnessReader<'r> {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         RawL2BlockReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn tx_proof(&self) -> BytesReader<'r> {
+    pub fn tx_proof(&self) -> CKBMerkleProofReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         let end = molecule::unpack_number(&slice[16..]) as usize;
-        BytesReader::new_unchecked(&self.as_slice()[start..end])
+        CKBMerkleProofReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn kv_state_proof(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
@@ -12180,7 +12713,7 @@ impl<'r> molecule::prelude::Reader<'r> for VerifyTransactionWitnessReader<'r> {
         }
         L2TransactionReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         RawL2BlockReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        BytesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        CKBMerkleProofReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         BytesReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         BytesReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
         VerifyTransactionContextReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
@@ -12191,7 +12724,7 @@ impl<'r> molecule::prelude::Reader<'r> for VerifyTransactionWitnessReader<'r> {
 pub struct VerifyTransactionWitnessBuilder {
     pub(crate) l2tx: L2Transaction,
     pub(crate) raw_l2block: RawL2Block,
-    pub(crate) tx_proof: Bytes,
+    pub(crate) tx_proof: CKBMerkleProof,
     pub(crate) kv_state_proof: Bytes,
     pub(crate) block_hashes_proof: Bytes,
     pub(crate) context: VerifyTransactionContext,
@@ -12206,7 +12739,7 @@ impl VerifyTransactionWitnessBuilder {
         self.raw_l2block = v;
         self
     }
-    pub fn tx_proof(mut self, v: Bytes) -> Self {
+    pub fn tx_proof(mut self, v: CKBMerkleProof) -> Self {
         self.tx_proof = v;
         self
     }
@@ -12595,7 +13128,7 @@ impl ::core::fmt::Display for VerifyTransactionSignatureWitness {
 impl ::core::default::Default for VerifyTransactionSignatureWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            180, 1, 0, 0, 24, 0, 0, 0, 92, 1, 0, 0, 144, 1, 0, 0, 148, 1, 0, 0, 152, 1, 0, 0, 68,
+            196, 1, 0, 0, 24, 0, 0, 0, 92, 1, 0, 0, 144, 1, 0, 0, 164, 1, 0, 0, 168, 1, 0, 0, 68,
             1, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0, 0, 0, 128, 0, 0,
             0, 164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -12609,8 +13142,9 @@ impl ::core::default::Default for VerifyTransactionSignatureWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 52, 0, 0, 0, 12, 0, 0, 0, 48, 0, 0, 0, 36, 0, 0, 0,
             20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 28, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0,
-            24, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 28, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0,
+            4, 0, 0, 0,
         ];
         VerifyTransactionSignatureWitness::new_unchecked(v.into())
     }
@@ -12645,11 +13179,11 @@ impl VerifyTransactionSignatureWitness {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         L2Transaction::new_unchecked(self.0.slice(start..end))
     }
-    pub fn tx_proof(&self) -> Bytes {
+    pub fn tx_proof(&self) -> CKBMerkleProof {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         let end = molecule::unpack_number(&slice[16..]) as usize;
-        Bytes::new_unchecked(self.0.slice(start..end))
+        CKBMerkleProof::new_unchecked(self.0.slice(start..end))
     }
     pub fn kv_state_proof(&self) -> Bytes {
         let slice = self.as_slice();
@@ -12763,11 +13297,11 @@ impl<'r> VerifyTransactionSignatureWitnessReader<'r> {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         L2TransactionReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn tx_proof(&self) -> BytesReader<'r> {
+    pub fn tx_proof(&self) -> CKBMerkleProofReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         let end = molecule::unpack_number(&slice[16..]) as usize;
-        BytesReader::new_unchecked(&self.as_slice()[start..end])
+        CKBMerkleProofReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn kv_state_proof(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
@@ -12839,7 +13373,7 @@ impl<'r> molecule::prelude::Reader<'r> for VerifyTransactionSignatureWitnessRead
         }
         RawL2BlockReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         L2TransactionReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        BytesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        CKBMerkleProofReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         BytesReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         VerifyTransactionSignatureContextReader::verify(
             &slice[offsets[4]..offsets[5]],
@@ -12852,7 +13386,7 @@ impl<'r> molecule::prelude::Reader<'r> for VerifyTransactionSignatureWitnessRead
 pub struct VerifyTransactionSignatureWitnessBuilder {
     pub(crate) raw_l2block: RawL2Block,
     pub(crate) l2tx: L2Transaction,
-    pub(crate) tx_proof: Bytes,
+    pub(crate) tx_proof: CKBMerkleProof,
     pub(crate) kv_state_proof: Bytes,
     pub(crate) context: VerifyTransactionSignatureContext,
 }
@@ -12866,7 +13400,7 @@ impl VerifyTransactionSignatureWitnessBuilder {
         self.l2tx = v;
         self
     }
-    pub fn tx_proof(mut self, v: Bytes) -> Self {
+    pub fn tx_proof(mut self, v: CKBMerkleProof) -> Self {
         self.tx_proof = v;
         self
     }
@@ -12958,7 +13492,7 @@ impl ::core::fmt::Display for VerifyWithdrawalWitness {
 impl ::core::default::Default for VerifyWithdrawalWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            48, 2, 0, 0, 16, 0, 0, 0, 84, 1, 0, 0, 44, 2, 0, 0, 68, 1, 0, 0, 44, 0, 0, 0, 52, 0, 0,
+            64, 2, 0, 0, 16, 0, 0, 0, 84, 1, 0, 0, 44, 2, 0, 0, 68, 1, 0, 0, 44, 0, 0, 0, 52, 0, 0,
             0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0, 0, 0, 128, 0, 0, 0, 164, 0, 0, 0, 200, 0, 0, 0,
             204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -12977,7 +13511,8 @@ impl ::core::default::Default for VerifyWithdrawalWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
         ];
         VerifyWithdrawalWitness::new_unchecked(v.into())
     }
@@ -13012,14 +13547,14 @@ impl VerifyWithdrawalWitness {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         WithdrawalRequest::new_unchecked(self.0.slice(start..end))
     }
-    pub fn withdrawal_proof(&self) -> Bytes {
+    pub fn withdrawal_proof(&self) -> CKBMerkleProof {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[16..]) as usize;
-            Bytes::new_unchecked(self.0.slice(start..end))
+            CKBMerkleProof::new_unchecked(self.0.slice(start..end))
         } else {
-            Bytes::new_unchecked(self.0.slice(start..))
+            CKBMerkleProof::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> VerifyWithdrawalWitnessReader<'r> {
@@ -13118,14 +13653,14 @@ impl<'r> VerifyWithdrawalWitnessReader<'r> {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         WithdrawalRequestReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn withdrawal_proof(&self) -> BytesReader<'r> {
+    pub fn withdrawal_proof(&self) -> CKBMerkleProofReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[16..]) as usize;
-            BytesReader::new_unchecked(&self.as_slice()[start..end])
+            CKBMerkleProofReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            BytesReader::new_unchecked(&self.as_slice()[start..])
+            CKBMerkleProofReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -13182,7 +13717,7 @@ impl<'r> molecule::prelude::Reader<'r> for VerifyWithdrawalWitnessReader<'r> {
         }
         RawL2BlockReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         WithdrawalRequestReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        BytesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        CKBMerkleProofReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
@@ -13190,7 +13725,7 @@ impl<'r> molecule::prelude::Reader<'r> for VerifyWithdrawalWitnessReader<'r> {
 pub struct VerifyWithdrawalWitnessBuilder {
     pub(crate) raw_l2block: RawL2Block,
     pub(crate) withdrawal_request: WithdrawalRequest,
-    pub(crate) withdrawal_proof: Bytes,
+    pub(crate) withdrawal_proof: CKBMerkleProof,
 }
 impl VerifyWithdrawalWitnessBuilder {
     pub const FIELD_COUNT: usize = 3;
@@ -13202,7 +13737,7 @@ impl VerifyWithdrawalWitnessBuilder {
         self.withdrawal_request = v;
         self
     }
-    pub fn withdrawal_proof(mut self, v: Bytes) -> Self {
+    pub fn withdrawal_proof(mut self, v: CKBMerkleProof) -> Self {
         self.withdrawal_proof = v;
         self
     }

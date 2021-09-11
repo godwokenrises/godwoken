@@ -17,6 +17,7 @@ impl<'r> Unpack<(H256, H256)> for packed::KVPairReader<'r> {
     }
 }
 
+impl_conversion_for_vector!(u32, Uint32Vec, Uint32VecReader);
 impl_conversion_for_vector!((H256, H256), KVPairVec, KVPairVecReader);
 impl_conversion_for_packed_iterator_pack!(KVPair, KVPairVec);
 impl_conversion_for_packed_iterator_pack!(DepositRequest, DepositRequestVec);

@@ -1,5 +1,6 @@
 import blockchain;
 
+vector Uint32Vec <Uint32>;
 
 struct BlockMerkleState {
     merkle_root: Byte32,
@@ -282,11 +283,17 @@ table VerifyTransactionContext {
     block_hashes: BlockHashEntryVec,
 }
 
+// CKB merkle proof
+table CKBMerkleProof {
+    indices:                Uint32Vec,
+    lemmas:                 Byte32Vec,
+}
+
 // cancel challenge by execute the transaction
 table VerifyTransactionWitness {
     l2tx: L2Transaction,
     raw_l2block: RawL2Block,
-    tx_proof: Bytes,
+    tx_proof: CKBMerkleProof,
     kv_state_proof: Bytes,
     block_hashes_proof: Bytes,
     context: VerifyTransactionContext,
@@ -302,7 +309,7 @@ table VerifyTransactionSignatureContext {
 table VerifyTransactionSignatureWitness {
     raw_l2block: RawL2Block,
     l2tx: L2Transaction,
-    tx_proof: Bytes,
+    tx_proof: CKBMerkleProof,
     kv_state_proof: Bytes,
     context: VerifyTransactionSignatureContext,
 }
@@ -310,7 +317,7 @@ table VerifyTransactionSignatureWitness {
 table VerifyWithdrawalWitness {
     raw_l2block: RawL2Block,
     withdrawal_request: WithdrawalRequest,
-    withdrawal_proof: Bytes,
+    withdrawal_proof: CKBMerkleProof,
 }
 
 // --- end of challenge ---
