@@ -352,22 +352,22 @@ impl MemPool {
     /// This function is a temporary mechanism
     /// Try to recovery from invalid state by drop txs & deposit
     pub fn try_to_recovery_from_invalid_state(&mut self) -> Result<()> {
-        log::info!("[mem-pool] try to recovery from invalid state by drop txs & deposits");
-        log::info!("[mem-pool] drop mem-block");
+        log::warn!("[mem-pool] try to recovery from invalid state by drop txs & deposits");
+        log::warn!("[mem-pool] drop mem-block");
         for tx_hash in self.mem_block.txs() {
-            log::info!("[mem-pool] drop tx: {}", hex::encode(tx_hash.as_slice()));
+            log::warn!("[mem-pool] drop tx: {}", hex::encode(tx_hash.as_slice()));
         }
         self.mem_block.clear();
-        log::info!("[mem-pool] drop pending: {}", self.pending.len());
+        log::warn!("[mem-pool] drop pending: {}", self.pending.len());
         self.pending.clear();
-        log::info!(
+        log::warn!(
             "[mem-pool] drop withdrawals: {}",
             self.all_withdrawals.len()
         );
         self.all_withdrawals.clear();
-        log::info!("[mem-pool] drop txs: {}", self.all_txs.len());
+        log::warn!("[mem-pool] drop txs: {}", self.all_txs.len());
         self.all_txs.clear();
-        log::info!("[mem-pool] try_to_recovery - done");
+        log::warn!("[mem-pool] try_to_recovery - done");
         Ok(())
     }
 
@@ -557,14 +557,14 @@ impl MemPool {
             }
         }
 
-        // reset mem block state
-        let merkle_state = new_tip_block.raw().post_account();
-        self.reset_mem_block_state_db(merkle_state)?;
         // estimate next l2block timestamp
         let estimated_timestamp = smol::block_on(self.provider.estimate_next_blocktime())?;
+        // reset mem block state
+        let merkle_state = new_tip_block.raw().post_account();
+        let db = self.store.begin_transaction();
+        self.reset_mem_block_state_db(&db, merkle_state)?;
         let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
         let reverted_block_root: H256 = {
-            let db = self.store.begin_transaction();
             let smt = db.reverted_block_smt()?;
             smt.root().to_owned()
         };
@@ -591,7 +591,7 @@ impl MemPool {
             .collect();
 
         // remove from pending
-        self.remove_unexecutables()?;
+        self.remove_unexecutables(&db)?;
 
         log::info!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
         // re-inject withdrawals
@@ -600,15 +600,15 @@ impl MemPool {
             .chain(mem_block_withdrawals);
         // re-inject txs
         let txs_iter = reinject_txs.into_iter().chain(mem_block_txs);
-        self.prepare_next_mem_block(withdrawals_iter, txs_iter)?;
+        self.prepare_next_mem_block(&db, withdrawals_iter, txs_iter)?;
+        db.commit()?;
 
         Ok(())
     }
 
     /// Discard unexecutables from pending.
-    fn remove_unexecutables(&mut self) -> Result<()> {
-        let db = self.store.begin_transaction();
-        let state_db = self.fetch_state_db(&db)?;
+    fn remove_unexecutables(&mut self, db: &StoreTransaction) -> Result<()> {
+        let state_db = self.fetch_state_db(db)?;
         let state = state_db.state_tree()?;
         let mut remove_list = Vec::default();
         // iter pending accounts and demote any non-executable objects
@@ -641,12 +641,14 @@ impl MemPool {
         Ok(())
     }
 
-    fn reset_mem_block_state_db(&self, merkle_state: AccountMerkleState) -> Result<()> {
-        let db = self.store.begin_transaction();
+    fn reset_mem_block_state_db(
+        &self,
+        db: &StoreTransaction,
+        merkle_state: AccountMerkleState,
+    ) -> Result<()> {
         db.clear_mem_block_state()?;
         db.set_mem_block_account_count(merkle_state.count().unpack())?;
         db.set_mem_block_account_smt_root(merkle_state.merkle_root().unpack())?;
-        db.commit()?;
         Ok(())
     }
 
@@ -656,6 +658,7 @@ impl MemPool {
         TxIter: Iterator<Item = L2Transaction> + Clone,
     >(
         &mut self,
+        db: &StoreTransaction,
         withdrawals: WithdrawalIter,
         txs: TxIter,
     ) -> Result<()> {
@@ -680,17 +683,14 @@ impl MemPool {
         // query deposit cells
         let task = self.provider.collect_deposit_cells();
         // Handle state before txs
-        let db = self.store.begin_transaction();
         // withdrawal
-        self.finalize_withdrawals(&db, withdrawals.collect())?;
+        self.finalize_withdrawals(db, withdrawals.collect())?;
         // deposits
         let deposit_cells = {
             let cells = smol::block_on(task)?;
             crate::deposit::sanitize_deposit_cells(self.generator.rollup_context(), cells)
         };
-        self.finalize_deposits(&db, deposit_cells)?;
-        // save mem block state
-        db.commit()?;
+        self.finalize_deposits(db, deposit_cells)?;
         // re-inject txs
         for tx in txs {
             if let Err(err) = self.push_transaction(tx.clone()) {

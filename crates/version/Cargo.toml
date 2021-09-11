@@ -1,6 +1,6 @@
 [package]
 name = "gw-version"
-version = "0.6.2"
+version = "0.6.4"
 authors = ["Nervos Network"]
 edition = "2018"
 
