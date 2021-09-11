@@ -110,7 +110,7 @@ async fn poll_loop(
             let mut inner = inner.lock().await;
             if let Err(err) = inner.chain_updater.handle_event(event.clone()).await {
                 log::error!(
-                    "Error occured when polling chain_updater, event: {:?}, error: {}",
+                    "Error occured when polling chain_updater, event: {}, error: {}",
                     event,
                     err
                 );
@@ -119,7 +119,7 @@ async fn poll_loop(
             if let Some(ref mut challenger) = inner.challenger {
                 if let Err(err) = challenger.handle_event(event.clone()).await {
                     log::error!(
-                        "Error occured when polling challenger, event: {:?}, error: {}",
+                        "Error occured when polling challenger, event: {}, error: {}",
                         event,
                         err
                     );
@@ -129,7 +129,7 @@ async fn poll_loop(
             if let Some(ref mut block_producer) = inner.block_producer {
                 if let Err(err) = block_producer.handle_event(event.clone()).await {
                     log::error!(
-                        "Error occured when polling block_producer, event: {:?}, error: {}",
+                        "Error occured when polling block_producer, event: {}, error: {}",
                         event,
                         err
                     );
@@ -139,7 +139,7 @@ async fn poll_loop(
             if let Some(ref cleaner) = inner.cleaner {
                 if let Err(err) = cleaner.handle_event(event.clone()).await {
                     log::error!(
-                        "Error occured when polling block_producer, event: {:?}, error: {}",
+                        "Error occured when polling block_producer, event: {}, error: {}",
                         event,
                         err
                     );
