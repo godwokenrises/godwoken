@@ -352,8 +352,11 @@ impl MemPool {
     /// This function is a temporary mechanism
     /// Try to recovery from invalid state by drop txs & deposit
     pub fn try_to_recovery_from_invalid_state(&mut self) -> Result<()> {
-        log::info!("[mem-pool] try recovery from invalid state by drop txs & deposits");
+        log::info!("[mem-pool] try to recovery from invalid state by drop txs & deposits");
         log::info!("[mem-pool] drop mem-block");
+        for tx_hash in self.mem_block.txs() {
+            log::info!("[mem-pool] drop tx: {}", hex::encode(tx_hash.as_slice()));
+        }
         self.mem_block.clear();
         log::info!("[mem-pool] drop pending: {}", self.pending.len());
         self.pending.clear();
@@ -580,11 +583,6 @@ impl MemPool {
             .filter_map(|withdrawal_hash| self.all_withdrawals.get(&withdrawal_hash).cloned())
             .collect();
 
-        // re-inject withdrawals
-        let withdrawals_iter = reinject_withdrawals
-            .into_iter()
-            .chain(mem_block_withdrawals);
-
         // Process txs
         let mem_block_txs: Vec<_> = mem_block_content
             .txs
@@ -595,6 +593,11 @@ impl MemPool {
         // remove from pending
         self.remove_unexecutables()?;
 
+        log::info!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
+        // re-inject withdrawals
+        let withdrawals_iter = reinject_withdrawals
+            .into_iter()
+            .chain(mem_block_withdrawals);
         // re-inject txs
         let txs_iter = reinject_txs.into_iter().chain(mem_block_txs);
         self.prepare_next_mem_block(withdrawals_iter, txs_iter)?;
