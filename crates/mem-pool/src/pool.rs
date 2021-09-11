@@ -35,7 +35,7 @@ use gw_types::{
 };
 use std::{
     cmp::{max, min},
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     sync::Arc,
 };
 
@@ -477,8 +477,8 @@ impl MemPool {
     /// this method reset the current state of the mem pool
     /// discarded txs & withdrawals will be reinject to pool
     fn reset(&mut self, old_tip: Option<H256>, new_tip: Option<H256>) -> Result<()> {
-        let mut reinject_txs: Vec<L2Transaction> = Default::default();
-        let mut reinject_withdrawals: Vec<WithdrawalRequest> = Default::default();
+        let mut reinject_txs = Default::default();
+        let mut reinject_withdrawals = Default::default();
         // read block from db
         let new_tip = match new_tip {
             Some(block_hash) => block_hash,
@@ -498,13 +498,19 @@ impl MemPool {
             } else {
                 let mut rem = old_tip_block;
                 let mut add = new_tip_block.clone();
-                let mut discarded_txs: HashSet<L2Transaction> = Default::default();
+                let mut discarded_txs: VecDeque<L2Transaction> = Default::default();
                 let mut included_txs: HashSet<L2Transaction> = Default::default();
-                let mut discarded_withdrawals: HashSet<WithdrawalRequest> = Default::default();
+                let mut discarded_withdrawals: VecDeque<WithdrawalRequest> = Default::default();
                 let mut included_withdrawals: HashSet<WithdrawalRequest> = Default::default();
                 while rem.raw().number().unpack() > add.raw().number().unpack() {
-                    discarded_txs.extend(rem.transactions().into_iter());
-                    discarded_withdrawals.extend(rem.withdrawals().into_iter());
+                    // reverse push, so we can keep txs in block's order
+                    for index in (0..rem.transactions().len()).rev() {
+                        discarded_txs.push_front(rem.transactions().get(index).unwrap());
+                    }
+                    // reverse push, so we can keep withdrawals in block's order
+                    for index in (0..rem.withdrawals().len()).rev() {
+                        discarded_withdrawals.push_front(rem.withdrawals().get(index).unwrap());
+                    }
                     rem = self
                         .store
                         .get_block(&rem.raw().parent_block_hash().unpack())?
@@ -519,8 +525,14 @@ impl MemPool {
                         .expect("get block");
                 }
                 while rem.hash() != add.hash() {
-                    discarded_txs.extend(rem.transactions().into_iter());
-                    discarded_withdrawals.extend(rem.withdrawals().into_iter());
+                    // reverse push, so we can keep txs in block's order
+                    for index in (0..rem.transactions().len()).rev() {
+                        discarded_txs.push_front(rem.transactions().get(index).unwrap());
+                    }
+                    // reverse push, so we can keep withdrawals in block's order
+                    for index in (0..rem.withdrawals().len()).rev() {
+                        discarded_withdrawals.push_front(rem.withdrawals().get(index).unwrap());
+                    }
                     rem = self
                         .store
                         .get_block(&rem.raw().parent_block_hash().unpack())?
@@ -532,16 +544,13 @@ impl MemPool {
                         .get_block(&add.raw().parent_block_hash().unpack())?
                         .expect("get block");
                 }
-                reinject_txs = discarded_txs
-                    .difference(&included_txs)
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                reinject_withdrawals = discarded_withdrawals
-                    .difference(&included_withdrawals)
-                    .into_iter()
-                    .cloned()
-                    .collect();
+                // remove included txs
+                discarded_txs.retain(|tx| !included_txs.contains(tx));
+                reinject_txs = discarded_txs;
+                // remove included withdrawals
+                discarded_withdrawals
+                    .retain(|withdrawal| !included_withdrawals.contains(withdrawal));
+                reinject_withdrawals = discarded_withdrawals;
             }
         }
 
@@ -641,12 +650,30 @@ impl MemPool {
     /// Prepare for next mem block
     fn prepare_next_mem_block<
         WithdrawalIter: Iterator<Item = WithdrawalRequest>,
-        TxIter: Iterator<Item = L2Transaction>,
+        TxIter: Iterator<Item = L2Transaction> + Clone,
     >(
         &mut self,
         withdrawals: WithdrawalIter,
         txs: TxIter,
     ) -> Result<()> {
+        // check order of inputs
+        {
+            let mut id_to_nonce: HashMap<u32, u32> = HashMap::default();
+            for tx in txs.clone() {
+                let id: u32 = tx.raw().from_id().unpack();
+                let nonce: u32 = tx.raw().nonce().unpack();
+                if let Some(&prev_nonce) = id_to_nonce.get(&id) {
+                    assert!(
+                        nonce > prev_nonce,
+                        "id: {} nonce({}) > prev_nonce({})",
+                        id,
+                        nonce,
+                        prev_nonce
+                    );
+                }
+                id_to_nonce.entry(id).or_insert(nonce);
+            }
+        }
         // query deposit cells
         let task = self.provider.collect_deposit_cells();
         // Handle state before txs
