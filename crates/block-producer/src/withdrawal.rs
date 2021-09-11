@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use gw_common::CKB_SUDT_SCRIPT_ARGS;
 use gw_config::BlockProducerConfig;
 use gw_mem_pool::{custodian::calc_ckb_custodian_min_capacity, withdrawal::Generator};
-use gw_rpc_client::RPCClient;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,

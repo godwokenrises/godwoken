@@ -17,8 +17,7 @@ gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-poa = { path = "../poa" }
 gw-traits = { path = "../traits" }
-faster-hex = "0.4"
-ckb-crypto = "0.38.0"
+gw-utils = { path = "../utils" }
 ckb-fixed-hash = "0.38.0"
 ckb-types = "0.38.0"
 ckb-script = "0.38.0"

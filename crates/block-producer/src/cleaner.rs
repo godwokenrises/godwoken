@@ -1,12 +1,12 @@
-use crate::transaction_skeleton::TransactionSkeleton;
 use crate::types::ChainEvent;
-use crate::utils::{fill_tx_fee, CKBGenesisInfo};
-use crate::wallet::Wallet;
+use gw_utils::genesis_info::CKBGenesisInfo;
+use gw_utils::transaction_skeleton::TransactionSkeleton;
+use gw_utils::{fee::fill_tx_fee, wallet::Wallet};
 
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
-use gw_rpc_client::RPCClient;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::core::Status;
 use gw_types::offchain::{CellInfo, InputCellInfo, TxStatus};
 use gw_types::packed::{CellDep, CellInput, GlobalState, Transaction, WitnessArgs};
@@ -207,7 +207,7 @@ impl Cleaner {
             .push(to_input_cell_info(owner_input));
 
         let owner_lock = self.wallet.lock_script().to_owned();
-        fill_tx_fee(&mut tx_skeleton, &self.rpc_client, owner_lock).await?;
+        fill_tx_fee(&mut tx_skeleton, &self.rpc_client.indexer, owner_lock).await?;
         self.wallet.sign_tx_skeleton(tx_skeleton)
     }
 }

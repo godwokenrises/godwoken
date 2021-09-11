@@ -1,13 +1,13 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::{cancel_challenge::LoadDataStrategy, Wallet};
+use crate::cancel_challenge::LoadDataStrategy;
 
 use anyhow::{anyhow, bail, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig, OffChainValidatorConfig};
 use gw_poa::PoA;
-use gw_rpc_client::RPCClient;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{state_db::StateDBTransaction, transaction::StoreTransaction};
 use gw_types::{
     core::DepType,
@@ -18,6 +18,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use gw_utils::wallet::Wallet;
 
 use std::{
     collections::{HashMap, HashSet},

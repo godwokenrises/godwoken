@@ -1,5 +1,5 @@
-use crate::deploy_scripts::Programs;
 use crate::utils;
+use crate::{deploy_scripts::Programs, utils::transaction::make_path};
 use anyhow::Result;
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Script, ScriptHashType};
@@ -146,7 +146,7 @@ struct ScriptsInfo {
 
 impl ScriptsInfo {
     fn source_script_path(&self, repos_dir: &Path) -> PathBuf {
-        utils::make_path(repos_dir, vec![self.source.as_path()])
+        make_path(repos_dir, vec![self.source.as_path()])
     }
 
     fn target_script_path(&self, target_root_dir: &Path) -> PathBuf {
@@ -157,7 +157,7 @@ impl ScriptsInfo {
             .next()
             .expect("get repo name")
             .as_os_str();
-        utils::make_path(target_root_dir, vec![repo_name, script_name])
+        make_path(target_root_dir, vec![repo_name, script_name])
     }
 }
 
@@ -241,7 +241,7 @@ fn prepare_scripts_in_build_mode(
 fn prepare_scripts_in_copy_mode(prebuild_image: PathBuf, scripts_dir: &Path) {
     log::info!("Copy scritps from prebuild image...");
     let dummy = "dummy";
-    utils::run(
+    utils::transaction::run(
         "docker",
         vec![
             "create",
@@ -254,7 +254,7 @@ fn prepare_scripts_in_copy_mode(prebuild_image: PathBuf, scripts_dir: &Path) {
     )
     .expect("docker create container");
     let src_path_container = format!("{}:/scripts/.", dummy);
-    utils::run(
+    utils::transaction::run(
         "docker",
         vec![
             "cp",
@@ -263,7 +263,7 @@ fn prepare_scripts_in_copy_mode(prebuild_image: PathBuf, scripts_dir: &Path) {
         ],
     )
     .expect("docker cp files");
-    utils::run("docker", vec!["rm", "-f", dummy]).expect("docker rm container");
+    utils::transaction::run("docker", vec!["rm", "-f", dummy]).expect("docker rm container");
 }
 
 fn check_scripts(target_dir: &Path, scripts_info: &HashMap<String, ScriptsInfo>) {
@@ -332,12 +332,10 @@ fn generate_script_deploy_config(
 }
 
 fn build_godwoken_scripts(repos_dir: &Path, repo_name: &str) {
-    let repo_dir = utils::make_path(repos_dir, vec![repo_name])
-        .display()
-        .to_string();
+    let repo_dir = make_path(repos_dir, vec![repo_name]).display().to_string();
     let target_dir = format!("{}/c", repo_dir);
-    utils::run("make", vec!["-C", &target_dir]).expect("run make");
-    utils::run_in_dir(
+    utils::transaction::run("make", vec!["-C", &target_dir]).expect("run make");
+    utils::transaction::run_in_dir(
         "capsule",
         vec!["build", "--release", "--debug-output"],
         &repo_dir,
@@ -346,18 +344,14 @@ fn build_godwoken_scripts(repos_dir: &Path, repo_name: &str) {
 }
 
 fn build_godwoken_polyjuice(repos_dir: &Path, repo_name: &str) {
-    let target_dir = utils::make_path(repos_dir, vec![repo_name])
-        .display()
-        .to_string();
-    utils::run("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
+    let target_dir = make_path(repos_dir, vec![repo_name]).display().to_string();
+    utils::transaction::run("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
 }
 
 fn build_clerkb(repos_dir: &Path, repo_name: &str) {
-    let target_dir = utils::make_path(repos_dir, vec![repo_name])
-        .display()
-        .to_string();
-    utils::run("yarn", vec!["--cwd", &target_dir]).expect("run yarn");
-    utils::run("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
+    let target_dir = make_path(repos_dir, vec![repo_name]).display().to_string();
+    utils::transaction::run("yarn", vec!["--cwd", &target_dir]).expect("run yarn");
+    utils::transaction::run("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
 }
 
 fn collect_scripts_to_target(
@@ -380,7 +374,7 @@ fn run_pull_code(mut repo_url: Url, is_recursive: bool, repos_dir: &Path, repo_n
         .expect("valid branch, tag, or commit")
         .to_owned();
     repo_url.set_fragment(None);
-    let target_dir = utils::make_path(repos_dir, vec![repo_name]);
+    let target_dir = make_path(repos_dir, vec![repo_name]);
     if target_dir.exists() {
         if run_git_checkout(&target_dir.display().to_string(), &commit).is_ok() {
             return;
@@ -399,13 +393,13 @@ fn run_git_clone(repo_url: Url, is_recursive: bool, path: &str) -> Result<()> {
     if is_recursive {
         args.push("--recursive");
     }
-    utils::run("git", args)
+    utils::transaction::run("git", args)
 }
 
 fn run_git_checkout(repo_dir: &str, commit: &str) -> Result<()> {
-    utils::run("git", vec!["-C", repo_dir, "fetch"])?;
-    utils::run("git", vec!["-C", repo_dir, "checkout", commit])?;
-    utils::run(
+    utils::transaction::run("git", vec!["-C", repo_dir, "fetch"])?;
+    utils::transaction::run("git", vec!["-C", repo_dir, "checkout", commit])?;
+    utils::transaction::run(
         "git",
         vec!["-C", repo_dir, "submodule", "update", "--recursive"],
     )

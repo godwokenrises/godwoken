@@ -2,10 +2,8 @@
 
 use crate::cleaner::{Cleaner, Verifier};
 use crate::test_mode_control::TestModeControl;
-use crate::transaction_skeleton::TransactionSkeleton;
 use crate::types::ChainEvent;
-use crate::utils::{self, fill_tx_fee, CKBGenesisInfo};
-use crate::wallet::Wallet;
+use crate::utils;
 use anyhow::{anyhow, bail, Result};
 use ckb_types::prelude::{Builder, Entity, Reader};
 use gw_chain::chain::{Chain, ChallengeCell, SyncEvent};
@@ -22,7 +20,7 @@ use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::ChallengeContext;
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_poa::{PoA, ShouldIssueBlock};
-use gw_rpc_client::RPCClient;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
 use gw_types::core::{ChallengeTargetType, Status};
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, TxStatus};
@@ -31,6 +29,10 @@ use gw_types::packed::{
     GlobalState, OutPoint, Script, Transaction, WitnessArgs,
 };
 use gw_types::prelude::{Pack, Unpack};
+use gw_utils::fee::fill_tx_fee;
+use gw_utils::genesis_info::CKBGenesisInfo;
+use gw_utils::transaction_skeleton::TransactionSkeleton;
+use gw_utils::wallet::Wallet;
 use smol::lock::Mutex;
 
 use std::collections::{HashMap, HashSet};
@@ -232,7 +234,7 @@ impl Challenger {
         let challenger_lock_dep = self.ckb_genesis_info.sighash_dep();
         let challenger_lock = self.wallet.lock_script().to_owned();
         tx_skeleton.cell_deps_mut().push(challenger_lock_dep);
-        fill_tx_fee(&mut tx_skeleton, &self.rpc_client, challenger_lock).await?;
+        fill_tx_fee(&mut tx_skeleton, &self.rpc_client.indexer, challenger_lock).await?;
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
@@ -481,7 +483,7 @@ impl Challenger {
         let challenger_lock_dep = self.ckb_genesis_info.sighash_dep();
         let challenger_lock = self.wallet.lock_script().to_owned();
         tx_skeleton.cell_deps_mut().push(challenger_lock_dep);
-        fill_tx_fee(&mut tx_skeleton, &self.rpc_client, challenger_lock).await?;
+        fill_tx_fee(&mut tx_skeleton, &self.rpc_client.indexer, challenger_lock).await?;
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
@@ -520,7 +522,7 @@ impl Challenger {
         let challenger_lock_dep = self.ckb_genesis_info.sighash_dep();
         let challenger_lock = self.wallet.lock_script().to_owned();
         tx_skeleton.cell_deps_mut().push(challenger_lock_dep);
-        fill_tx_fee(&mut tx_skeleton, &self.rpc_client, challenger_lock).await?;
+        fill_tx_fee(&mut tx_skeleton, &self.rpc_client.indexer, challenger_lock).await?;
 
         self.wallet.sign_tx_skeleton(tx_skeleton)
     }
@@ -599,7 +601,7 @@ impl Challenger {
         }
 
         let owner_lock = self.wallet.lock_script().to_owned();
-        fill_tx_fee(&mut tx_skeleton, &self.rpc_client, owner_lock).await?;
+        fill_tx_fee(&mut tx_skeleton, &self.rpc_client.indexer, owner_lock).await?;
         self.wallet.sign_tx_skeleton(tx_skeleton)
     }
 

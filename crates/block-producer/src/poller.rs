@@ -11,7 +11,7 @@ use gw_chain::chain::{
 use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, TransactionWithStatus, Uint32};
 use gw_rpc_client::{
     indexer_types::{Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx},
-    RPCClient,
+    rpc_client::RPCClient,
 };
 use gw_types::{
     bytes::Bytes,
@@ -110,7 +110,8 @@ impl ChainUpdater {
         loop {
             let txs: Pagination<Tx> = to_result(
                 self.rpc_client
-                    .indexer_client
+                    .indexer
+                    .client()
                     .request(
                         "get_transactions",
                         Some(ClientParams::Array(vec![
@@ -157,7 +158,7 @@ impl ChainUpdater {
 
         let tx: Option<TransactionWithStatus> = to_result(
             self.rpc_client
-                .ckb_client
+                .ckb
                 .request(
                     "get_transaction",
                     Some(ClientParams::Array(vec![json!(tx_hash)])),
@@ -175,7 +176,7 @@ impl ChainUpdater {
         })?;
         let header_view: Option<HeaderView> = to_result(
             self.rpc_client
-                .ckb_client
+                .ckb
                 .request(
                     "get_header",
                     Some(ClientParams::Array(vec![json!(block_hash)])),
@@ -413,7 +414,7 @@ impl ChainUpdater {
             let index = input.previous_output().index().unpack();
             let tx: Option<TransactionWithStatus> = to_result(
                 self.rpc_client
-                    .ckb_client
+                    .ckb
                     .request(
                         "get_transaction",
                         Some(ClientParams::Array(vec![json!(tx_hash)])),

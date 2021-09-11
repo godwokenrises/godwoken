@@ -3,10 +3,8 @@
 use crate::{
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
     test_mode_control::TestModeControl,
-    transaction_skeleton::TransactionSkeleton,
     types::ChainEvent,
-    utils::{self, fill_tx_fee, CKBGenesisInfo},
-    wallet::Wallet,
+    utils,
 };
 use anyhow::{anyhow, Context, Result};
 use ckb_types::prelude::Unpack as CKBUnpack;
@@ -18,7 +16,7 @@ use gw_generator::Generator;
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_mem_pool::{custodian::to_custodian_cell, pool::MemPool};
 use gw_poa::{PoA, ShouldIssueBlock};
-use gw_rpc_client::RPCClient;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
@@ -29,6 +27,10 @@ use gw_types::{
         RollupActionUnion, RollupSubmitBlock, Transaction, WitnessArgs,
     },
     prelude::*,
+};
+use gw_utils::{
+    fee::fill_tx_fee, genesis_info::CKBGenesisInfo, transaction_skeleton::TransactionSkeleton,
+    wallet::Wallet,
 };
 use smol::lock::Mutex;
 use std::{
@@ -642,7 +644,7 @@ impl BlockProducer {
         // tx fee cell
         fill_tx_fee(
             &mut tx_skeleton,
-            &self.rpc_client,
+            &self.rpc_client.indexer,
             self.wallet.lock_script().to_owned(),
         )
         .await?;

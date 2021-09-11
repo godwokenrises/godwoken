@@ -4,7 +4,7 @@
 // use crate::transaction_skeleton::TransactionSkeleton;
 use anyhow::{anyhow, Result};
 use gw_common::H256;
-use gw_rpc_client::RPCClient;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::{
     bytes::Bytes,
     core::DepType,

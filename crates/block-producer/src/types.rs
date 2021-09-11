@@ -5,12 +5,6 @@ use gw_types::{
     prelude::Unpack,
 };
 
-#[derive(Clone)]
-pub struct SignatureEntry {
-    pub indexes: Vec<usize>,
-    pub lock_hash: [u8; 32],
-}
-
 #[derive(Debug, Clone)]
 pub enum ChainEvent {
     NewBlock {

@@ -12,7 +12,7 @@ use gw_jsonrpc_types::{
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
 use gw_poa::{PoA, ShouldIssueBlock};
-use gw_rpc_client::RPCClient;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::registry::TestModeRPC;
 use gw_store::Store;
 use gw_types::core::{ChallengeTargetType, Status};
