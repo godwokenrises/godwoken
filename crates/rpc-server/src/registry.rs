@@ -1,11 +1,11 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::OffChainMockContext;
 use gw_common::{state::State, H256};
-use gw_config::DebugConfig;
-use gw_generator::{sudt::build_l2_sudt_script, Generator};
+use gw_config::{DebugConfig, MemPoolConfig};
+use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
@@ -17,6 +17,7 @@ use gw_jsonrpc_types::{
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
 use gw_store::{
+    chain_view::ChainView,
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
     transaction::StoreTransaction,
     Store,
@@ -39,6 +40,7 @@ type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
 type GwUint64 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint64;
 
 const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
+const INVALID_NONCE_ERR_CODE: i64 = -32001;
 const INTERNAL_ERROR_ERR_CODE: i64 = -32099;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
 const INVALID_PARAM_ERR_CODE: i64 = -32602;
@@ -75,10 +77,10 @@ fn to_jsonh256(v: H256) -> JsonH256 {
 }
 
 #[allow(clippy::needless_lifetimes)]
-async fn get_state_db_at_block<'a>(
+fn get_state_db_at_block<'a>(
     db: &'a StoreTransaction,
-    mem_pool: &MemPool,
     block_number: Option<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64>,
+    is_mem_pool_enabled: bool,
 ) -> Result<StateDBTransaction<'a>, RpcError> {
     let tip_block_number = db.get_tip_block()?.raw().number().unpack();
     match block_number.map(|n| n.value()) {
@@ -93,21 +95,16 @@ async fn get_state_db_at_block<'a>(
             )
             .map_err(Into::into)
         }
-        None => match mem_pool {
-            Some(mem_pool) => {
-                let mem_pool = mem_pool.lock().await;
-                mem_pool.fetch_state_db(db).map_err(Into::into)
-            }
-            None => {
-                // fallback to tip number
-                StateDBTransaction::from_checkpoint(
-                    db,
-                    CheckPoint::new(tip_block_number, SubState::Block),
-                    StateDBMode::ReadOnly,
-                )
+        None => {
+            let checkpoint = if is_mem_pool_enabled {
+                CheckPoint::new(tip_block_number, SubState::MemBlock(u32::MAX))
+            } else {
+                // fallback to db
+                CheckPoint::new(tip_block_number, SubState::Block)
+            };
+            StateDBTransaction::from_checkpoint(db, checkpoint, StateDBMode::ReadOnly)
                 .map_err(Into::into)
-            }
-        },
+        }
     }
 }
 
@@ -116,10 +113,11 @@ pub struct Registry {
     mem_pool: MemPool,
     store: Store,
     tests_rpc_impl: Option<Arc<BoxedTestsRPCImpl>>,
-    rollup_config: RollupConfig,
-    debug_config: DebugConfig,
     chain: Arc<Mutex<Chain>>,
     offchain_mock_context: Option<OffChainMockContext>,
+    rollup_config: RollupConfig,
+    debug_config: DebugConfig,
+    mem_pool_config: MemPoolConfig,
 }
 
 impl Registry {
@@ -133,6 +131,7 @@ impl Registry {
         debug_config: DebugConfig,
         chain: Arc<Mutex<Chain>>,
         offchain_mock_context: Option<OffChainMockContext>,
+        mem_pool_config: MemPoolConfig,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -147,6 +146,7 @@ impl Registry {
             debug_config,
             chain,
             offchain_mock_context,
+            mem_pool_config,
         }
     }
 
@@ -158,6 +158,7 @@ impl Registry {
             .with_data(Data(self.generator.clone()))
             .with_data(Data::new(self.store))
             .with_data(Data::new(self.rollup_config))
+            .with_data(Data::new(self.mem_pool_config))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -407,7 +408,9 @@ enum ExecuteRawL2TransactionParams {
 async fn execute_raw_l2transaction(
     Params(params): Params<ExecuteRawL2TransactionParams>,
     mem_pool: Data<MemPool>,
+    mem_pool_config: Data<MemPoolConfig>,
     store: Data<Store>,
+    generator: Data<Generator>,
 ) -> Result<RunResult, RpcError> {
     let mem_pool = match mem_pool.clone() {
         Some(mem_pool) => mem_pool,
@@ -449,21 +452,34 @@ async fn execute_raw_l2transaction(
         None => mem_pool.lock().await.mem_block().block_info().to_owned(),
     };
 
+    let execute_l2tx_max_cycles = mem_pool_config.execute_l2tx_max_cycles;
     // execute tx in task
-    let run_result = smol::spawn(async move {
-        mem_pool
-            .lock()
-            .await
-            .execute_raw_transaction(raw_l2tx, &block_info, block_number_opt)
-    })
-    .await?
-    .into();
+    let task: smol::Task<Result<_>> = smol::spawn(async move {
+        let state_db = get_state_db_at_block(&db, block_number_opt.map(Into::into), true)
+            .map_err(|_err| anyhow!("get state db error"))?;
+        let state = state_db.state_tree()?;
+        let chain_view = {
+            let tip_block_hash = db.get_tip_block_hash()?;
+            ChainView::new(&db, tip_block_hash)
+        };
+        // execute tx
+        let run_result = generator.execute_transaction(
+            &chain_view,
+            &state,
+            &block_info,
+            &raw_l2tx,
+            execute_l2tx_max_cycles,
+        )?;
+        Ok(run_result)
+    });
+    let run_result = task.await?.into();
     Ok(run_result)
 }
 
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
+    store: Data<Store>,
 ) -> Result<JsonH256, RpcError> {
     let mem_pool = match mem_pool.clone() {
         Some(mem_pool) => mem_pool,
@@ -474,6 +490,34 @@ async fn submit_l2transaction(
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
     let tx_hash = to_jsonh256(tx.hash().into());
+    // check sender's nonce
+    {
+        // fetch mem-pool state
+        let db = store.begin_transaction();
+        let state_db = get_state_db_at_block(&db, None, true)?;
+        let tree = state_db.state_tree()?;
+        // sender_id
+        let sender_id = tx.raw().from_id().unpack();
+        let sender_nonce: u32 = tree.get_nonce(sender_id)?;
+        let tx_nonce: u32 = tx.raw().nonce().unpack();
+        if sender_nonce != tx_nonce {
+            let err = TransactionError::Nonce {
+                account_id: sender_id,
+                expected: sender_nonce,
+                actual: tx_nonce,
+            };
+            log::info!(
+                "[RPC] reject to submit tx {:?}, err: {}",
+                faster_hex::hex_string(&tx.hash()),
+                err
+            );
+            return Err(RpcError::Full {
+                code: INVALID_NONCE_ERR_CODE,
+                message: err.to_string(),
+                data: None,
+            });
+        }
+    }
     // run task in the background
     smol::spawn(async move {
         if let Err(err) = mem_pool.lock().await.push_transaction(tx.clone()) {
@@ -524,7 +568,7 @@ async fn get_balance(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, block_number).await?;
+    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some())?;
     let tree = state_db.state_tree()?;
     let balance = tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?;
     Ok(balance.into())
@@ -549,7 +593,7 @@ async fn get_storage_at(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, block_number).await?;
+    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some())?;
 
     let tree = state_db.state_tree()?;
     let key: H256 = to_h256(key);
@@ -565,7 +609,7 @@ async fn get_account_id_by_script_hash(
     store: Data<Store>,
 ) -> Result<Option<AccountID>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, None).await?;
+    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some())?;
     let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
@@ -596,7 +640,7 @@ async fn get_nonce(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, block_number).await?;
+    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some())?;
     let tree = state_db.state_tree()?;
 
     let nonce = tree.get_nonce(account_id.into())?;
@@ -610,7 +654,7 @@ async fn get_script(
     store: Data<Store>,
 ) -> Result<Option<Script>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, None).await?;
+    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some())?;
     let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
@@ -625,7 +669,7 @@ async fn get_script_hash(
     store: Data<Store>,
 ) -> Result<JsonH256, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, None).await?;
+    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some())?;
     let tree = state_db.state_tree()?;
 
     let script_hash = tree.get_script_hash(account_id.into())?;
@@ -638,7 +682,7 @@ async fn get_script_hash_by_short_address(
     store: Data<Store>,
 ) -> Result<Option<JsonH256>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, None).await?;
+    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some())?;
     let tree = state_db.state_tree()?;
     let script_hash_opt = tree.get_script_hash_by_short_address(&short_address.into_bytes());
     Ok(script_hash_opt.map(to_jsonh256))
@@ -663,7 +707,7 @@ async fn get_data(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, &mem_pool, block_number).await?;
+    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some())?;
     let tree = state_db.state_tree()?;
 
     let data_opt = tree
