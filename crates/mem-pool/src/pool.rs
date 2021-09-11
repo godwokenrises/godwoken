@@ -608,7 +608,7 @@ impl MemPool {
 
     /// Discard unexecutables from pending.
     fn remove_unexecutables(&mut self, db: &StoreTransaction) -> Result<()> {
-        let state_db = self.fetch_state_db(&db)?;
+        let state_db = self.fetch_state_db(db)?;
         let state = state_db.state_tree()?;
         let mut remove_list = Vec::default();
         // iter pending accounts and demote any non-executable objects
@@ -684,13 +684,13 @@ impl MemPool {
         let task = self.provider.collect_deposit_cells();
         // Handle state before txs
         // withdrawal
-        self.finalize_withdrawals(&db, withdrawals.collect())?;
+        self.finalize_withdrawals(db, withdrawals.collect())?;
         // deposits
         let deposit_cells = {
             let cells = smol::block_on(task)?;
             crate::deposit::sanitize_deposit_cells(self.generator.rollup_context(), cells)
         };
-        self.finalize_deposits(&db, deposit_cells)?;
+        self.finalize_deposits(db, deposit_cells)?;
         // re-inject txs
         for tx in txs {
             if let Err(err) = self.push_transaction(tx.clone()) {
