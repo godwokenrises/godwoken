@@ -23,7 +23,6 @@ use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
-use gw_types::packed::CellDep;
 use gw_types::{
     bytes::Bytes,
     offchain::RollupContext,
@@ -189,12 +188,12 @@ impl BaseInitComponents {
             let ckb_client = HttpClient::new(config.rpc_client.ckb_url.to_owned())?;
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
-            RPCClient {
+            RPCClient::new(
                 rollup_type_script,
-                rollup_context: rollup_context.clone(),
-                indexer_client,
+                rollup_context.clone(),
                 ckb_client,
-            }
+                indexer_client,
+            )
         };
 
         if !skip_config_check {

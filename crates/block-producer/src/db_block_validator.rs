@@ -8,6 +8,7 @@ use gw_challenge::{
         OffChainMockContext,
     },
 };
+use gw_utils::wallet::Wallet;
 use gw_common::H256;
 use gw_config::{Config, DBBlockValidatorConfig, DebugConfig};
 use gw_generator::Generator;
@@ -26,7 +27,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{runner::BaseInitComponents, wallet::Wallet};
+use crate::runner::BaseInitComponents;
 
 pub fn verify(config: Config, from_block: Option<u64>, to_block: Option<u64>) -> Result<()> {
     if config.store.path.as_os_str().is_empty() {
