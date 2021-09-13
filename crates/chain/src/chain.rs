@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
 use gw_common::{sparse_merkle_tree, state::State, H256};
 use gw_generator::{
-    generator::{StateTransitionArgs, StateTransitionResult},
+    generator::{ApplyBlockArgs, ApplyBlockResult},
     ChallengeContext, Generator,
 };
 use gw_jsonrpc_types::debugger::ReprMockTransaction;
@@ -864,7 +864,7 @@ impl Chain {
         );
 
         // process l2block
-        let args = StateTransitionArgs {
+        let args = ApplyBlockArgs {
             l2block: l2block.clone(),
             deposit_requests: deposit_requests.clone(),
         };
@@ -889,8 +889,8 @@ impl Chain {
         // TODO: run offchain validator before send challenge, to make sure the block is bad
         let generator = &self.generator;
         let (withdrawal_receipts, prev_txs_state, tx_receipts) =
-            match generator.verify_and_apply_state_transition(db, &chain_view, args) {
-                StateTransitionResult::Success {
+            match generator.verify_and_apply_block(db, &chain_view, args) {
+                ApplyBlockResult::Success {
                     tx_receipts,
                     prev_txs_state,
                     withdrawal_receipts,
@@ -904,11 +904,11 @@ impl Chain {
                     );
                     (withdrawal_receipts, prev_txs_state, tx_receipts)
                 }
-                StateTransitionResult::Challenge { target, error } => {
+                ApplyBlockResult::Challenge { target, error } => {
                     log::warn!("verify #{} state transition error {}", block_number, error);
                     return Ok(Some(target));
                 }
-                StateTransitionResult::Error(err) => return Err(err.into()),
+                ApplyBlockResult::Error(err) => return Err(err.into()),
             };
 
         // update chain

@@ -17,6 +17,8 @@ pub enum Error {
     Deposit(DepositError),
     #[error("Withdrawal error {0}")]
     Withdrawal(WithdrawalError),
+    #[error("Block error {0}")]
+    Block(BlockError),
 }
 
 impl From<StateError> for Error {
@@ -187,5 +189,23 @@ impl From<TransactionValidateError> for Error {
             TransactionValidateError::Account(err) => Error::Account(err),
             TransactionValidateError::Unlock(err) => Error::Unlock(err),
         }
+    }
+}
+
+#[derive(Error, Debug, PartialEq, Clone, Eq)]
+pub enum BlockError {
+    #[error("Invalid checkpoint at {index}, expected: {expected_checkpoint:?}, block: {block_checkpoint:?}")]
+    InvalidCheckpoint {
+        expected_checkpoint: H256,
+        block_checkpoint: H256,
+        index: usize,
+    },
+    #[error("Can't find checkpoint at index {index}")]
+    CheckpointNotFound { index: usize },
+}
+
+impl From<BlockError> for Error {
+    fn from(err: BlockError) -> Self {
+        Error::Block(err)
     }
 }
