@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
 use gw_config::BlockProducerConfig;
-use gw_types::core::{DepType, Status};
+use gw_types::core::{DepType, SignatureMessageType, Status};
 use gw_types::offchain::{CellInfo, InputCellInfo, RecoverAccount, RollupContext};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, GlobalState, OutPoint, RollupAction, RollupActionUnion,
@@ -415,9 +415,10 @@ impl<'a> CancelChallenge<'a, VerifyTransactionSignatureWitness> {
         let owner_lock_hash = self.owner_lock.hash();
         let message = self.calc_tx_message(&receiver_script_hash);
 
-        let mut data = [0u8; 64];
+        let mut data = [0u8; 65];
         data[0..32].copy_from_slice(&owner_lock_hash);
-        data[32..64].copy_from_slice(&message);
+        data[32] = SignatureMessageType::Raw.into();
+        data[33..65].copy_from_slice(&message);
 
         data.to_vec().into()
     }
@@ -440,9 +441,10 @@ impl<'a> CancelChallenge<'a, VerifyWithdrawalWitness> {
         let owner_lock_hash = self.owner_lock.hash();
         let message = self.calc_withdrawal_message();
 
-        let mut data = [0u8; 64];
+        let mut data = [0u8; 65];
         data[0..32].copy_from_slice(&owner_lock_hash);
-        data[32..64].copy_from_slice(&message);
+        data[32] = SignatureMessageType::Raw.into();
+        data[33..65].copy_from_slice(&message);
 
         data.to_vec().into()
     }
@@ -559,9 +561,10 @@ fn build_recover_account_cell(
     owner_lock_hash: H256,
     account: RecoverAccount,
 ) -> ((CellOutput, Bytes), WitnessArgs) {
-    let mut data = [0u8; 64];
+    let mut data = [0u8; 65];
     data[0..32].copy_from_slice(&owner_lock_hash.as_slice()[..32]);
-    data[32..64].copy_from_slice(&account.message.as_slice()[..32]);
+    data[32] = SignatureMessageType::Signing.into();
+    data[33..65].copy_from_slice(&account.message.as_slice()[..32]);
 
     let (output, data) = build_cell(data.to_vec().into(), account.lock_script);
     let witness = WitnessArgs::new_builder()
