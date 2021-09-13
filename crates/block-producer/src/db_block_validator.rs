@@ -8,7 +8,6 @@ use gw_challenge::{
         OffChainMockContext,
     },
 };
-use gw_utils::wallet::Wallet;
 use gw_common::H256;
 use gw_config::{Config, DBBlockValidatorConfig, DebugConfig};
 use gw_generator::Generator;
@@ -19,6 +18,7 @@ use gw_types::{
     packed::{ChallengeTarget, GlobalState, L2Block},
     prelude::{Builder, Entity, Pack, Unpack},
 };
+use gw_utils::wallet::Wallet;
 use rayon::prelude::*;
 
 use std::{
