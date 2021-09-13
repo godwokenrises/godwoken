@@ -415,10 +415,9 @@ impl<'a> CancelChallenge<'a, VerifyTransactionSignatureWitness> {
         let owner_lock_hash = self.owner_lock.hash();
         let message = self.calc_tx_message(&receiver_script_hash);
 
-        let mut data = [0u8; 65];
+        let mut data = [0u8; 64];
         data[0..32].copy_from_slice(&owner_lock_hash);
-        data[32] = SignatureMessageType::Raw.into();
-        data[33..65].copy_from_slice(&message);
+        data[32..64].copy_from_slice(&message);
 
         data.to_vec().into()
     }
@@ -441,10 +440,9 @@ impl<'a> CancelChallenge<'a, VerifyWithdrawalWitness> {
         let owner_lock_hash = self.owner_lock.hash();
         let message = self.calc_withdrawal_message();
 
-        let mut data = [0u8; 65];
+        let mut data = [0u8; 64];
         data[0..32].copy_from_slice(&owner_lock_hash);
-        data[32] = SignatureMessageType::Raw.into();
-        data[33..65].copy_from_slice(&message);
+        data[32..64].copy_from_slice(&message);
 
         data.to_vec().into()
     }
