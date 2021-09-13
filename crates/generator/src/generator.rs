@@ -344,6 +344,7 @@ impl Generator {
         let withdrawal_requests: Vec<_> = args.l2block.withdrawals().into_iter().collect();
         let block_hash = raw_block.hash();
         let block_producer_id: u32 = block_info.block_producer_id().unpack();
+        let state_checkpoint_list: Vec<H256> = raw_block.state_checkpoint_list().unpack();
 
         let mut withdrawal_receipts = Vec::with_capacity(withdrawal_requests.len());
         for (wth_idx, request) in withdrawal_requests.into_iter().enumerate() {
@@ -373,29 +374,19 @@ impl Generator {
                 &account_state.merkle_root().unpack(),
                 account_state.count().unpack(),
             );
-            let block_checkpoint: H256 = match raw_block.state_checkpoint_list().get(wth_idx) {
-                Some(checkpoint) => checkpoint.unpack(),
+            let block_checkpoint: H256 = match state_checkpoint_list.get(wth_idx) {
+                Some(checkpoint) => *checkpoint,
                 None => {
                     return ApplyBlockResult::Error(
                         BlockError::CheckpointNotFound { index: wth_idx }.into(),
                     );
                 }
             };
-            if block_checkpoint != expected_checkpoint {
-                let target = build_challenge_target(
-                    block_hash.into(),
-                    ChallengeTargetType::Withdrawal,
-                    wth_idx as u32,
-                );
-                return ApplyBlockResult::Challenge {
-                    target,
-                    error: Error::Block(BlockError::InvalidCheckpoint {
-                        expected_checkpoint,
-                        block_checkpoint,
-                        index: wth_idx,
-                    }),
-                };
-            }
+            // since the state-validator script will verify withdrawals, we should always pass this check
+            assert_eq!(
+                block_checkpoint, expected_checkpoint,
+                "check withdrawal checkpoint"
+            );
             withdrawal_receipts.push(withdrawal_receipt)
         }
 
@@ -483,18 +474,17 @@ impl Generator {
                     account_state.count().unpack(),
                 );
                 let checkpoint_index = withdrawal_receipts.len() + tx_index;
-                let block_checkpoint: H256 =
-                    match raw_block.state_checkpoint_list().get(checkpoint_index) {
-                        Some(checkpoint) => checkpoint.unpack(),
-                        None => {
-                            return ApplyBlockResult::Error(
-                                BlockError::CheckpointNotFound {
-                                    index: checkpoint_index,
-                                }
-                                .into(),
-                            );
-                        }
-                    };
+                let block_checkpoint: H256 = match state_checkpoint_list.get(checkpoint_index) {
+                    Some(checkpoint) => *checkpoint,
+                    None => {
+                        return ApplyBlockResult::Error(
+                            BlockError::CheckpointNotFound {
+                                index: checkpoint_index,
+                            }
+                            .into(),
+                        );
+                    }
+                };
                 if block_checkpoint != expected_checkpoint {
                     let target = build_challenge_target(
                         block_hash.into(),
