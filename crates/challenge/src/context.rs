@@ -610,7 +610,7 @@ mod tests {
             assert!(root.is_ok());
 
             // verify
-            assert_eq!(proof.verify(&root.unwrap(), &proof_leaves), true);
+            assert!(proof.verify(&root.unwrap(), &proof_leaves));
         }
     }
 }
