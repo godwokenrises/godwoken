@@ -607,16 +607,16 @@ impl Generator {
         run_result.used_cycles = used_cycles;
         run_result.exit_code = exit_code;
 
-        // check nonce is increased by backends
-        let nonce_after_execution = {
-            let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE_TYPE);
-            let value = run_result
-                .write_values
-                .get(&nonce_raw_key)
-                .expect("Backend must update nonce");
-            value.to_u32()
-        };
         if 0 == exit_code {
+            // check nonce is increased by backends
+            let nonce_after_execution = {
+                let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE_TYPE);
+                let value = run_result
+                    .write_values
+                    .get(&nonce_raw_key)
+                    .expect("Backend must update nonce");
+                value.to_u32()
+            };
             assert!(
                 nonce_after_execution > nonce_before_execution,
                 "nonce should increased by backends"
