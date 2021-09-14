@@ -150,6 +150,14 @@ impl MemPool {
 
     /// Push a layer2 tx into pool
     pub fn push_transaction(&mut self, tx: L2Transaction) -> Result<()> {
+        let db = self.store.begin_transaction();
+        self.push_transaction_with_db(&db, tx)?;
+        db.commit()?;
+        Ok(())
+    }
+
+    /// Push a layer2 tx into pool
+    fn push_transaction_with_db(&mut self, db: &StoreTransaction, tx: L2Transaction) -> Result<()> {
         // check duplication
         let tx_hash: H256 = tx.raw().hash().into();
         if self.mem_block.tx_receipts().contains_key(&tx_hash) {
@@ -175,12 +183,10 @@ impl MemPool {
         }
 
         // verification
-        self.verify_tx(&tx)?;
+        self.verify_tx(db, &tx)?;
 
         // instantly run tx in background & update local state
-        let db = self.store.begin_transaction();
-        let tx_receipt = self.finalize_tx(&db, tx.clone())?;
-        db.commit()?;
+        let tx_receipt = self.finalize_tx(db, tx.clone())?;
 
         // save tx receipt in mem pool
         self.mem_block.push_tx(tx_hash, tx_receipt);
@@ -195,14 +201,13 @@ impl MemPool {
     }
 
     /// verify tx
-    fn verify_tx(&self, tx: &L2Transaction) -> Result<()> {
+    fn verify_tx(&self, db: &StoreTransaction, tx: &L2Transaction) -> Result<()> {
         // check tx size
         if tx.as_slice().len() > MAX_TX_SIZE {
             return Err(anyhow!("tx over size"));
         }
 
-        let db = self.store.begin_transaction();
-        let state_db = self.fetch_state_db(&db)?;
+        let state_db = self.fetch_state_db(db)?;
         let state = state_db.state_tree()?;
         // verify signature
         self.generator.check_transaction_signature(&state, tx)?;
@@ -693,7 +698,7 @@ impl MemPool {
         self.finalize_deposits(db, deposit_cells)?;
         // re-inject txs
         for tx in txs {
-            if let Err(err) = self.push_transaction(tx.clone()) {
+            if let Err(err) = self.push_transaction_with_db(db, tx.clone()) {
                 let tx_hash = tx.hash();
                 log::info!(
                     "[mem pool] fail to re-inject tx {}, error: {}",
