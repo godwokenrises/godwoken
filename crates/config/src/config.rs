@@ -46,6 +46,9 @@ pub struct RPCClientConfig {
 pub struct ChainConfig {
     pub genesis_committed_info: L2BlockCommittedInfo,
     pub rollup_type_script: Script,
+    /// Ignore invalid state caused by blocks
+    #[serde(default)]
+    pub skipped_invalid_block_list: Vec<H256>,
 }
 
 /// Genesis config

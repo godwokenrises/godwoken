@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
@@ -294,6 +296,7 @@ impl Generator {
         db: &StoreTransaction,
         chain: &C,
         args: ApplyBlockArgs,
+        skipped_invalid_block_list: &HashSet<H256>,
     ) -> ApplyBlockResult {
         let raw_block = args.l2block.raw();
         let block_info = get_block_info(&raw_block);
@@ -485,7 +488,14 @@ impl Generator {
                         );
                     }
                 };
-                if block_checkpoint != expected_checkpoint {
+
+                if skipped_invalid_block_list.contains(&block_hash.into()) {
+                    log::warn!(
+                        "skip the checkpoint check of block: #{} {}",
+                        block_number,
+                        hex::encode(&block_hash)
+                    );
+                } else if block_checkpoint != expected_checkpoint {
                     let target = build_challenge_target(
                         block_hash.into(),
                         ChallengeTargetType::TxExecution,

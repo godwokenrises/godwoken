@@ -429,6 +429,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         Chain::create(
             &rollup_config,
             &config.chain.rollup_type_script.clone().into(),
+            &config.chain,
             store.clone(),
             generator.clone(),
             mem_pool.clone(),
