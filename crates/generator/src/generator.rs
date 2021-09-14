@@ -2,7 +2,7 @@ use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
     constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
-    error::{TransactionValidateError, WithdrawalError},
+    error::{BlockError, TransactionValidateError, WithdrawalError},
     vm_cost_model::instruction_cycles,
 };
 use crate::{
@@ -16,6 +16,7 @@ use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     error::Error as StateError,
     h256_ext::H256Ext,
+    merkle_utils::calculate_state_checkpoint,
     state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE_TYPE},
     H256,
 };
@@ -41,12 +42,12 @@ use ckb_vm::{
     DefaultMachineBuilder, SupportMachine,
 };
 
-pub struct StateTransitionArgs {
+pub struct ApplyBlockArgs {
     pub l2block: L2Block,
     pub deposit_requests: Vec<DepositRequest>,
 }
 
-pub enum StateTransitionResult {
+pub enum ApplyBlockResult {
     Success {
         withdrawal_receipts: Vec<WithdrawalReceipt>,
         prev_txs_state: AccountMerkleState,
@@ -288,12 +289,12 @@ impl Generator {
     }
 
     /// Apply l2 state transition
-    pub fn verify_and_apply_state_transition<C: ChainStore>(
+    pub fn verify_and_apply_block<C: ChainStore>(
         &self,
         db: &StoreTransaction,
         chain: &C,
-        args: StateTransitionArgs,
-    ) -> StateTransitionResult {
+        args: ApplyBlockArgs,
+    ) -> ApplyBlockResult {
         let raw_block = args.l2block.raw();
         let block_info = get_block_info(&raw_block);
 
@@ -309,7 +310,7 @@ impl Generator {
                     Ok(state_db) => state_db,
                     Err(err) => {
                         log::error!("next state {}", err);
-                        return StateTransitionResult::Error(Error::State(StateError::Store));
+                        return ApplyBlockResult::Error(Error::State(StateError::Store));
                     }
                 }
             };
@@ -320,7 +321,7 @@ impl Generator {
                     Ok(state) => state,
                     Err(err) => {
                         log::error!("next state {}", err);
-                        return StateTransitionResult::Error(Error::State(StateError::Store));
+                        return ApplyBlockResult::Error(Error::State(StateError::Store));
                     }
                 }
             };
@@ -329,7 +330,7 @@ impl Generator {
                     Ok(state) => state,
                     Err(err) => {
                         log::error!("next state {}", err);
-                        return StateTransitionResult::Error(Error::State(StateError::Store));
+                        return ApplyBlockResult::Error(Error::State(StateError::Store));
                     }
                 }
             };
@@ -343,6 +344,7 @@ impl Generator {
         let withdrawal_requests: Vec<_> = args.l2block.withdrawals().into_iter().collect();
         let block_hash = raw_block.hash();
         let block_producer_id: u32 = block_info.block_producer_id().unpack();
+        let state_checkpoint_list: Vec<H256> = raw_block.state_checkpoint_list().unpack();
 
         let mut withdrawal_receipts = Vec::with_capacity(withdrawal_requests.len());
         for (wth_idx, request) in withdrawal_requests.into_iter().enumerate() {
@@ -356,17 +358,36 @@ impl Generator {
                     wth_idx as u32,
                 );
 
-                return StateTransitionResult::Challenge { target, error };
+                return ApplyBlockResult::Challenge { target, error };
             }
 
-            match state.apply_withdrawal_request(&self.rollup_context, block_producer_id, &request)
-            {
-                Ok(withdrawal_receipt) => {
-                    account_state = state.get_merkle_state();
-                    withdrawal_receipts.push(withdrawal_receipt)
+            let withdrawal_receipt = match state.apply_withdrawal_request(
+                &self.rollup_context,
+                block_producer_id,
+                &request,
+            ) {
+                Ok(receipt) => receipt,
+                Err(err) => return ApplyBlockResult::Error(err),
+            };
+            account_state = state.get_merkle_state();
+            let expected_checkpoint = calculate_state_checkpoint(
+                &account_state.merkle_root().unpack(),
+                account_state.count().unpack(),
+            );
+            let block_checkpoint: H256 = match state_checkpoint_list.get(wth_idx) {
+                Some(checkpoint) => *checkpoint,
+                None => {
+                    return ApplyBlockResult::Error(
+                        BlockError::CheckpointNotFound { index: wth_idx }.into(),
+                    );
                 }
-                Err(err) => return StateTransitionResult::Error(err),
-            }
+            };
+            // since the state-validator script will verify withdrawals, we should always pass this check
+            assert_eq!(
+                block_checkpoint, expected_checkpoint,
+                "check withdrawal checkpoint"
+            );
+            withdrawal_receipts.push(withdrawal_receipt)
         }
 
         // apply deposition to state
@@ -374,7 +395,7 @@ impl Generator {
         let state = &mut get_state!(state_db, account_state.clone());
         if let Err(err) = state.apply_deposit_requests(&self.rollup_context, &args.deposit_requests)
         {
-            return StateTransitionResult::Error(err);
+            return ApplyBlockResult::Error(err);
         }
 
         let prev_txs_state = state.get_merkle_state();
@@ -394,7 +415,7 @@ impl Generator {
                     tx_index as u32,
                 );
 
-                return StateTransitionResult::Challenge {
+                return ApplyBlockResult::Challenge {
                     target,
                     error: err.into(),
                 };
@@ -403,12 +424,12 @@ impl Generator {
             // check nonce
             let raw_tx = tx.raw();
             let expected_nonce = match state.get_nonce(raw_tx.from_id().unpack()) {
-                Err(err) => return StateTransitionResult::Error(Error::from(err)),
+                Err(err) => return ApplyBlockResult::Error(Error::from(err)),
                 Ok(nonce) => nonce,
             };
             let actual_nonce: u32 = raw_tx.nonce().unpack();
             if actual_nonce != expected_nonce {
-                return StateTransitionResult::Challenge {
+                return ApplyBlockResult::Challenge {
                     target: build_challenge_target(
                         block_hash.into(),
                         ChallengeTargetType::TxExecution,
@@ -435,33 +456,65 @@ impl Generator {
                             tx_index as u32,
                         );
 
-                        return StateTransitionResult::Challenge {
+                        return ApplyBlockResult::Challenge {
                             target,
                             error: Error::Transaction(err),
                         };
                     }
                 };
 
-            let apply_result = || -> Result<(), Error> {
-                state.apply_run_result(&run_result)?;
+            {
+                if let Err(err) = state.apply_run_result(&run_result) {
+                    return ApplyBlockResult::Error(err);
+                }
                 account_state = state.get_merkle_state();
 
+                let expected_checkpoint = calculate_state_checkpoint(
+                    &account_state.merkle_root().unpack(),
+                    account_state.count().unpack(),
+                );
+                let checkpoint_index = withdrawal_receipts.len() + tx_index;
+                let block_checkpoint: H256 = match state_checkpoint_list.get(checkpoint_index) {
+                    Some(checkpoint) => *checkpoint,
+                    None => {
+                        return ApplyBlockResult::Error(
+                            BlockError::CheckpointNotFound {
+                                index: checkpoint_index,
+                            }
+                            .into(),
+                        );
+                    }
+                };
+                if block_checkpoint != expected_checkpoint {
+                    let target = build_challenge_target(
+                        block_hash.into(),
+                        ChallengeTargetType::TxExecution,
+                        tx_index as u32,
+                    );
+                    return ApplyBlockResult::Challenge {
+                        target,
+                        error: Error::Block(BlockError::InvalidCheckpoint {
+                            expected_checkpoint,
+                            block_checkpoint,
+                            index: checkpoint_index,
+                        }),
+                    };
+                }
+
                 let used_cycles = run_result.used_cycles;
-                let post_state = state.merkle_state()?;
+                let post_state = match state.merkle_state() {
+                    Ok(merkle_state) => merkle_state,
+                    Err(err) => return ApplyBlockResult::Error(err),
+                };
                 let tx_receipt =
                     TxReceipt::build_receipt(tx.witness_hash().into(), run_result, post_state);
 
                 tx_receipts.push(tx_receipt);
                 offchain_used_cycles = offchain_used_cycles.saturating_add(used_cycles);
-                Ok(())
-            };
-
-            if let Err(err) = apply_result() {
-                return StateTransitionResult::Error(err);
             }
         }
 
-        StateTransitionResult::Success {
+        ApplyBlockResult::Success {
             withdrawal_receipts,
             prev_txs_state,
             tx_receipts,
