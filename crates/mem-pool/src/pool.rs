@@ -18,7 +18,9 @@ use gw_common::{
     H256,
 };
 use gw_config::MemPoolConfig;
-use gw_generator::{constants::L2TX_MAX_CYCLES, traits::StateExt, Generator};
+use gw_generator::{
+    constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
+};
 use gw_store::{
     chain_view::ChainView,
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
@@ -894,7 +896,7 @@ impl MemPool {
 
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = self.generator.execute_transaction(
+        let run_result = self.generator.unchecked_execute_transaction(
             &chain_view,
             &state,
             block_info,
@@ -903,9 +905,17 @@ impl MemPool {
         )?;
 
         if let Some(ref mut offchain_validator) = self.offchain_validator {
-            let cycles =
-                offchain_validator.verify_transaction(db, &state_db, tx.clone(), &run_result)?;
-            log::debug!("[mem-pool] offchain verify tx cycles {:?}", cycles);
+            let maybe_cycles =
+                offchain_validator.verify_transaction(db, &state_db, tx.clone(), &run_result);
+
+            if 0 == run_result.exit_code {
+                let cycles = maybe_cycles?;
+                log::debug!("[mem-pool] offchain verify tx cycles {:?}", cycles);
+            }
+        }
+
+        if run_result.exit_code != 0 {
+            return Err(TransactionError::InvalidExitCode(run_result.exit_code).into());
         }
 
         // apply run result
