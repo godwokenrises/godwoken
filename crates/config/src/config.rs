@@ -26,6 +26,7 @@ pub struct Config {
     pub offchain_validator: Option<OffChainValidatorConfig>,
     #[serde(default)]
     pub mem_pool: MemPoolConfig,
+    #[serde(default)]
     pub db_block_validator: Option<DBBlockValidatorConfig>,
 }
 
