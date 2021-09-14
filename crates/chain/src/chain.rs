@@ -3,6 +3,7 @@
 use anyhow::{anyhow, Context, Result};
 use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
 use gw_common::{sparse_merkle_tree, state::State, H256};
+use gw_config::ChainConfig;
 use gw_generator::{
     generator::{ApplyBlockArgs, ApplyBlockResult},
     ChallengeContext, Generator,
@@ -151,12 +152,14 @@ pub struct Chain {
     generator: Arc<Generator>,
     mem_pool: Option<Arc<Mutex<MemPool>>>,
     complete_initial_syncing: bool,
+    skipped_invalid_block_list: HashSet<H256>,
 }
 
 impl Chain {
     pub fn create(
         rollup_config: &RollupConfig,
         rollup_type_script: &Script,
+        config: &ChainConfig,
         store: Store,
         generator: Arc<Generator>,
         mem_pool: Option<Arc<Mutex<MemPool>>>,
@@ -186,6 +189,15 @@ impl Chain {
             last_global_state,
         };
         let rollup_config_hash = rollup_config.hash();
+        let skipped_invalid_block_list = config
+            .skipped_invalid_block_list
+            .iter()
+            .cloned()
+            .map(|ckb_h256| {
+                let h: [u8; 32] = ckb_h256.into();
+                h.into()
+            })
+            .collect();
         Ok(Chain {
             store,
             challenge_target: None,
@@ -196,6 +208,7 @@ impl Chain {
             rollup_type_script_hash,
             rollup_config_hash,
             complete_initial_syncing: false,
+            skipped_invalid_block_list,
         })
     }
 
@@ -888,28 +901,29 @@ impl Chain {
         // process transactions
         // TODO: run offchain validator before send challenge, to make sure the block is bad
         let generator = &self.generator;
-        let (withdrawal_receipts, prev_txs_state, tx_receipts) =
-            match generator.verify_and_apply_block(db, &chain_view, args) {
-                ApplyBlockResult::Success {
-                    tx_receipts,
-                    prev_txs_state,
-                    withdrawal_receipts,
-                    offchain_used_cycles,
-                } => {
-                    log::debug!(
-                        "Process #{} txs: {} offchain used cycles {}",
-                        block_number,
-                        tx_receipts.len(),
-                        offchain_used_cycles
-                    );
-                    (withdrawal_receipts, prev_txs_state, tx_receipts)
-                }
-                ApplyBlockResult::Challenge { target, error } => {
-                    log::warn!("verify #{} state transition error {}", block_number, error);
-                    return Ok(Some(target));
-                }
-                ApplyBlockResult::Error(err) => return Err(err.into()),
-            };
+        let (withdrawal_receipts, prev_txs_state, tx_receipts) = match generator
+            .verify_and_apply_block(db, &chain_view, args, &self.skipped_invalid_block_list)
+        {
+            ApplyBlockResult::Success {
+                tx_receipts,
+                prev_txs_state,
+                withdrawal_receipts,
+                offchain_used_cycles,
+            } => {
+                log::debug!(
+                    "Process #{} txs: {} offchain used cycles {}",
+                    block_number,
+                    tx_receipts.len(),
+                    offchain_used_cycles
+                );
+                (withdrawal_receipts, prev_txs_state, tx_receipts)
+            }
+            ApplyBlockResult::Challenge { target, error } => {
+                log::warn!("verify #{} state transition error {}", block_number, error);
+                return Ok(Some(target));
+            }
+            ApplyBlockResult::Error(err) => return Err(err.into()),
+        };
 
         // update chain
         db.insert_block(

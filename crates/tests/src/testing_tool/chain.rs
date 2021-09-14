@@ -3,7 +3,7 @@
 use gw_block_producer::produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult};
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
 use gw_common::{blake2b::new_blake2b, H256};
-use gw_config::{BackendConfig, GenesisConfig};
+use gw_config::{BackendConfig, ChainConfig, GenesisConfig};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
@@ -144,6 +144,7 @@ pub fn setup_chain_with_account_lock_manage(
     Chain::create(
         &rollup_config,
         &rollup_type_script,
+        &ChainConfig::default(),
         store,
         generator,
         Some(Arc::new(Mutex::new(mem_pool))),

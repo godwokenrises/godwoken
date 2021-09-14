@@ -249,6 +249,7 @@ pub fn generate_config(
     let chain: ChainConfig = ChainConfig {
         genesis_committed_info,
         rollup_type_script,
+        skipped_invalid_block_list: Default::default(),
     };
     let rpc_client: RPCClientConfig = RPCClientConfig {
         indexer_url,
