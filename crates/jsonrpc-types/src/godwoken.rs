@@ -208,6 +208,16 @@ impl From<ChallengeTargetType> for packed::Byte {
     }
 }
 
+impl From<gw_types::core::ChallengeTargetType> for ChallengeTargetType {
+    fn from(core: gw_types::core::ChallengeTargetType) -> ChallengeTargetType {
+        match core {
+            gw_types::core::ChallengeTargetType::Withdrawal => ChallengeTargetType::Withdrawal,
+            gw_types::core::ChallengeTargetType::TxSignature => ChallengeTargetType::TxSignature,
+            gw_types::core::ChallengeTargetType::TxExecution => ChallengeTargetType::TxExecution,
+        }
+    }
+}
+
 impl TryFrom<packed::Byte> for ChallengeTargetType {
     type Error = JsonError;
 

@@ -99,9 +99,9 @@ mod tests {
             .map(|(i, hash)| crate::merkle_utils::ckb_merkle_leaf_hash(i, &hash))
             .collect::<Vec<_>>();
 
-        assert_eq!(proof.verify(&root, &proof_leaves), true);
+        assert!(proof.verify(&root, &proof_leaves));
 
         let proof_leaves = vec![[1u8; 32].into(), [3u8; 32].into()];
-        assert_eq!(proof.verify(&root, &proof_leaves), false);
+        assert!(!proof.verify(&root, &proof_leaves));
     }
 }

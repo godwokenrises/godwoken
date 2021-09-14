@@ -9,15 +9,12 @@ use gw_config::{BlockProducerConfig, DebugConfig, OffChainValidatorConfig};
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{state_db::StateDBTransaction, transaction::StoreTransaction};
-use gw_types::{
-    core::DepType,
-    offchain::{CellInfo, InputCellInfo, RollupContext, RunResult},
-    packed::{
-        CellDep, CellInput, L2Block, L2Transaction, OutPoint, OutPointVec, Uint32,
-        WithdrawalRequest,
-    },
-    prelude::*,
+use gw_types::core::DepType;
+use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, RunResult};
+use gw_types::packed::{
+    CellDep, CellInput, L2Block, L2Transaction, OutPoint, OutPointVec, Uint32, WithdrawalRequest,
 };
+use gw_types::prelude::{Builder, Entity};
 use gw_utils::wallet::Wallet;
 
 use std::{
@@ -42,7 +39,7 @@ use self::{
     verify_tx::{verify_tx, RollupCellDeps, TxWithContext},
 };
 
-// TODO: More propery value
+// TODO: More properly value
 const MAX_TX_WITHDRAWAL_PROOF_SIZE: u64 = 100 * 1024;
 // TODO: Relax limit
 const MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES: u64 = 5_000_000;
@@ -117,6 +114,16 @@ impl OffChainMockContext {
             rollup_cell_deps,
             mock_rollup,
             mock_poa,
+        };
+
+        Ok(mock_context)
+    }
+
+    pub fn replace_scripts(&self, scripts: &HashMap<ckb_types::H256, PathBuf>) -> Result<Self> {
+        let mock_context = OffChainMockContext {
+            rollup_cell_deps: self.rollup_cell_deps.replace_scripts(scripts)?,
+            mock_rollup: Arc::clone(&self.mock_rollup),
+            mock_poa: Arc::clone(&self.mock_poa),
         };
 
         Ok(mock_context)

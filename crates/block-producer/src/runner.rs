@@ -23,11 +23,10 @@ use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
 use gw_store::Store;
-use gw_types::prelude::{Pack, Unpack};
 use gw_types::{
     bytes::Bytes,
     offchain::RollupContext,
-    packed::{NumberHash, RollupConfig, Script},
+    packed::{CellDep, NumberHash, RollupConfig, Script},
     prelude::*,
 };
 use gw_utils::{genesis_info::CKBGenesisInfo, wallet::Wallet};
@@ -171,6 +170,186 @@ async fn poll_loop(
     }
 }
 
+pub struct BaseInitComponents {
+    pub rollup_config: RollupConfig,
+    pub rollup_config_hash: H256,
+    pub rollup_context: RollupContext,
+    pub rollup_type_script: Script,
+    pub builtin_load_data: HashMap<H256, CellDep>,
+    pub ckb_genesis_info: CKBGenesisInfo,
+    pub rpc_client: RPCClient,
+    pub store: Store,
+    pub generator: Arc<Generator>,
+}
+
+impl BaseInitComponents {
+    pub fn init(config: &Config, skip_config_check: bool) -> Result<Self> {
+        let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
+        let rollup_context = RollupContext {
+            rollup_config: rollup_config.clone(),
+            rollup_script_hash: {
+                let rollup_script_hash: [u8; 32] = config.genesis.rollup_type_hash.clone().into();
+                rollup_script_hash.into()
+            },
+        };
+        let rollup_type_script: Script = config.chain.rollup_type_script.clone().into();
+        let rpc_client = {
+            let indexer_client = HttpClient::new(config.rpc_client.indexer_url.to_owned())?;
+            let ckb_client = HttpClient::new(config.rpc_client.ckb_url.to_owned())?;
+            let rollup_type_script =
+                ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
+            RPCClient::new(
+                rollup_type_script,
+                rollup_context.clone(),
+                ckb_client,
+                indexer_client,
+            )
+        };
+
+        if !skip_config_check {
+            check_ckb_version(&rpc_client)?;
+            // TODO: check ckb indexer version
+            if NodeMode::ReadOnly != config.node_mode {
+                let block_producer_config = config
+                    .block_producer
+                    .clone()
+                    .ok_or_else(|| anyhow!("not set block producer"))?;
+                check_rollup_config_cell(&block_producer_config, &rollup_config, &rpc_client)?;
+                check_locks(&block_producer_config, &rollup_config)?;
+            }
+        }
+
+        // Open store
+        let store = if config.store.path.as_os_str().is_empty() {
+            log::warn!("config.store.path is blank, using temporary store");
+            Store::open_tmp().with_context(|| "init store")?
+        } else {
+            let db_config = DBConfig {
+                path: config.store.path.to_owned(),
+                options: Default::default(),
+                options_file: Default::default(),
+            };
+            Store::new(RocksDB::open(&db_config, COLUMNS))
+        };
+
+        let secp_data: Bytes = {
+            let out_point = config.genesis.secp_data_dep.out_point.clone();
+            smol::block_on(rpc_client.get_transaction(out_point.tx_hash.0.into()))?
+                .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?
+                .raw()
+                .outputs_data()
+                .get(out_point.index.value() as usize)
+                .expect("get secp output data")
+                .raw_data()
+        };
+
+        init_genesis(
+            &store,
+            &config.genesis,
+            config.chain.genesis_committed_info.clone().into(),
+            secp_data.clone(),
+        )
+        .with_context(|| "init genesis")?;
+
+        let rollup_config_hash: H256 = rollup_config.hash().into();
+        let generator = {
+            let backend_manage = BackendManage::from_config(config.backends.clone())
+                .with_context(|| "config backends")?;
+            let mut account_lock_manage = AccountLockManage::default();
+            let eth_lock_script_type_hash = rollup_config
+                .allowed_eoa_type_hashes()
+                .get(0)
+                .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
+            account_lock_manage.register_lock_algorithm(
+                eth_lock_script_type_hash.unpack(),
+                Box::new(Secp256k1Eth::default()),
+            );
+            let tron_lock_script_type_hash = rollup_config.allowed_eoa_type_hashes().get(1);
+            if let Some(code_hash) = tron_lock_script_type_hash {
+                account_lock_manage
+                    .register_lock_algorithm(code_hash.unpack(), Box::new(Secp256k1Tron::default()))
+            }
+            Arc::new(Generator::new(
+                backend_manage,
+                account_lock_manage,
+                rollup_context.clone(),
+            ))
+        };
+
+        let ckb_genesis_info = {
+            let ckb_genesis = smol::block_on(async { rpc_client.get_block_by_number(0).await })?
+                .ok_or_else(|| anyhow!("can't found CKB genesis block"))?;
+            CKBGenesisInfo::from_block(&ckb_genesis)?
+        };
+
+        let to_hash = |data| -> [u8; 32] {
+            let mut hasher = new_blake2b();
+            hasher.update(data);
+            let mut hash = [0u8; 32];
+            hasher.finalize(&mut hash);
+            hash
+        };
+        let mut builtin_load_data = HashMap::new();
+        builtin_load_data.insert(
+            to_hash(secp_data.as_ref()).into(),
+            config.genesis.secp_data_dep.clone().into(),
+        );
+
+        let base = BaseInitComponents {
+            rollup_config,
+            rollup_config_hash,
+            rollup_context,
+            rollup_type_script,
+            builtin_load_data,
+            ckb_genesis_info,
+            rpc_client,
+            store,
+            generator,
+        };
+
+        Ok(base)
+    }
+
+    pub fn init_poa(
+        &self,
+        wallet: &Wallet,
+        block_producer_config: &BlockProducerConfig,
+    ) -> Arc<Mutex<PoA>> {
+        let poa = PoA::new(
+            self.rpc_client.clone(),
+            wallet.lock_script().to_owned(),
+            block_producer_config.poa_lock_dep.clone().into(),
+            block_producer_config.poa_state_dep.clone().into(),
+        );
+        Arc::new(smol::lock::Mutex::new(poa))
+    }
+
+    pub async fn init_offchain_mock_context(
+        &self,
+        poa: &PoA,
+        block_producer_config: &BlockProducerConfig,
+    ) -> Result<OffChainMockContext> {
+        let ckb_genesis_info = gw_challenge::offchain::CKBGenesisInfo {
+            sighash_dep: self.ckb_genesis_info.sighash_dep(),
+        };
+        let wallet = {
+            let config = &block_producer_config.wallet_config;
+            Wallet::from_config(config).with_context(|| "init wallet")?
+        };
+
+        OffChainMockContext::build(
+            &self.rpc_client,
+            poa,
+            self.rollup_context.clone(),
+            wallet,
+            block_producer_config.clone(),
+            ckb_genesis_info,
+            self.builtin_load_data.clone(),
+        )
+        .await
+    }
+}
+
 pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     // Enable smol threads before smol::spawn
     let runtime_threads = match std::env::var(SMOL_THREADS_ENV_VAR) {
@@ -187,150 +366,16 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         SMOL_THREADS_ENV_VAR
     );
 
-    let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
-    let rollup_context = RollupContext {
-        rollup_config: rollup_config.clone(),
-        rollup_script_hash: {
-            let rollup_script_hash: [u8; 32] = config.genesis.rollup_type_hash.clone().into();
-            rollup_script_hash.into()
-        },
-    };
-    let rollup_type_script: Script = config.chain.rollup_type_script.clone().into();
-    let rpc_client = {
-        let indexer_client = HttpClient::new(config.rpc_client.indexer_url)?;
-        let ckb_client = HttpClient::new(config.rpc_client.ckb_url)?;
-        let rollup_type_script =
-            ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
-        RPCClient::new(
-            rollup_type_script,
-            rollup_context.clone(),
-            ckb_client,
-            indexer_client,
-        )
-    };
-
-    if !skip_config_check {
-        check_ckb_version(&rpc_client)?;
-        // TODO: check ckb indexer version
-        if NodeMode::ReadOnly != config.node_mode {
-            let block_producer_config = config
-                .block_producer
-                .clone()
-                .ok_or_else(|| anyhow!("not set block producer"))?;
-            check_rollup_config_cell(&block_producer_config, &rollup_config, &rpc_client)?;
-            check_locks(&block_producer_config, &rollup_config)?;
-        }
-    }
-
-    // Open store
-    let store = if config.store.path.as_os_str().is_empty() {
-        log::warn!("config.store.path is blank, using temporary store");
-        Store::open_tmp().with_context(|| "init store")?
-    } else {
-        let db_config = DBConfig {
-            path: config.store.path,
-            options: Default::default(),
-            options_file: Default::default(),
-        };
-        Store::new(RocksDB::open(&db_config, COLUMNS))
-    };
-    let secp_data: Bytes = {
-        let out_point = config.genesis.secp_data_dep.out_point.clone();
-        smol::block_on(rpc_client.get_transaction(out_point.tx_hash.0.into()))?
-            .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?
-            .raw()
-            .outputs_data()
-            .get(out_point.index.value() as usize)
-            .expect("get secp output data")
-            .raw_data()
-    };
-    init_genesis(
-        &store,
-        &config.genesis,
-        config.chain.genesis_committed_info.clone().into(),
-        secp_data.clone(),
-    )
-    .with_context(|| "init genesis")?;
-
-    let rollup_config_hash: H256 = rollup_config.hash().into();
-    let generator = {
-        let backend_manage = BackendManage::from_config(config.backends.clone())
-            .with_context(|| "config backends")?;
-        let mut account_lock_manage = AccountLockManage::default();
-        let eth_lock_script_type_hash = rollup_config
-            .allowed_eoa_type_hashes()
-            .get(0)
-            .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
-        account_lock_manage.register_lock_algorithm(
-            eth_lock_script_type_hash.unpack(),
-            Box::new(Secp256k1Eth::default()),
-        );
-        let tron_lock_script_type_hash = rollup_config.allowed_eoa_type_hashes().get(1);
-        if let Some(code_hash) = tron_lock_script_type_hash {
-            account_lock_manage
-                .register_lock_algorithm(code_hash.unpack(), Box::new(Secp256k1Tron::default()))
-        }
-        Arc::new(Generator::new(
-            backend_manage,
-            account_lock_manage,
-            rollup_context.clone(),
-        ))
-    };
-
-    let ckb_genesis_info = {
-        let ckb_genesis = smol::block_on(async { rpc_client.get_block_by_number(0).await })?
-            .ok_or_else(|| anyhow!("can't found CKB genesis block"))?;
-        CKBGenesisInfo::from_block(&ckb_genesis)?
-    };
-
-    let to_hash = |data| -> [u8; 32] {
-        let mut hasher = new_blake2b();
-        hasher.update(data);
-        let mut hash = [0u8; 32];
-        hasher.finalize(&mut hash);
-        hash
-    };
-    let mut builtin_load_data = HashMap::new();
-    builtin_load_data.insert(
-        to_hash(secp_data.as_ref()).into(),
-        config.genesis.secp_data_dep.clone().into(),
-    );
-
+    let base = BaseInitComponents::init(&config, skip_config_check)?;
     let (mem_pool, wallet, poa, offchain_mock_context) = match config.block_producer.clone() {
         Some(block_producer_config) => {
             let wallet = Wallet::from_config(&block_producer_config.wallet_config)
                 .with_context(|| "init wallet")?;
-
-            let poa = {
-                let poa = PoA::new(
-                    rpc_client.clone(),
-                    wallet.lock_script().to_owned(),
-                    block_producer_config.poa_lock_dep.clone().into(),
-                    block_producer_config.poa_state_dep.clone().into(),
-                );
-                Arc::new(smol::lock::Mutex::new(poa))
-            };
-
-            let ckb_genesis_info = gw_challenge::offchain::CKBGenesisInfo {
-                sighash_dep: ckb_genesis_info.sighash_dep(),
-            };
+            let poa = base.init_poa(&wallet, &block_producer_config);
             let offchain_mock_context = smol::block_on(async {
-                let wallet = {
-                    let config = &block_producer_config.wallet_config;
-                    Wallet::from_config(config).with_context(|| "init wallet")?
-                };
                 let poa = poa.lock().await;
-
-                OffChainMockContext::build(
-                    &rpc_client,
-                    &poa,
-                    rollup_context.clone(),
-                    wallet,
-                    block_producer_config.clone(),
-                    ckb_genesis_info,
-                    builtin_load_data.clone(),
-                )
-                .await
+                base.init_offchain_mock_context(&poa, &block_producer_config)
+                    .await
             })?;
 
             let mut offchain_validator_context = None;
@@ -347,11 +392,11 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             }
 
             let mem_pool_provider =
-                DefaultMemPoolProvider::new(rpc_client.clone(), Arc::clone(&poa));
+                DefaultMemPoolProvider::new(base.rpc_client.clone(), Arc::clone(&poa));
             let mem_pool = Arc::new(Mutex::new(
                 MemPool::create(
-                    store.clone(),
-                    generator.clone(),
+                    base.store.clone(),
+                    base.generator.clone(),
                     Box::new(mem_pool_provider),
                     offchain_validator_context,
                     config.mem_pool.clone(),
@@ -367,6 +412,18 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
         None => (None, None, None, None),
     };
+
+    let BaseInitComponents {
+        rollup_config,
+        rollup_config_hash,
+        rollup_context,
+        rollup_type_script,
+        builtin_load_data,
+        ckb_genesis_info,
+        rpc_client,
+        store,
+        generator,
+    } = base;
 
     let chain = Arc::new(Mutex::new(
         Chain::create(

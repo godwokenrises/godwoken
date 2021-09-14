@@ -50,3 +50,4 @@ sqlx = { version = "0.5", features = [ "runtime-async-std-native-tls", "postgres
 hex = "0.4"
 async-trait = "0.1"
 semver = "1.0"
+rayon = "1.5"

@@ -1,15 +1,18 @@
 use anyhow::{Context, Result};
 use clap::{App, Arg, SubCommand};
-use gw_block_producer::runner;
+use gw_block_producer::{db_block_validator, runner};
 use gw_config::Config;
 use gw_version::Version;
 use std::{fs, path::Path};
 
 const COMMAND_RUN: &str = "run";
 const COMMAND_EXAMPLE_CONFIG: &str = "generate-example-config";
+const COMMAND_VERIFY_DB_BLOCK: &str = "verify-db-block";
 const ARG_OUTPUT_PATH: &str = "output-path";
 const ARG_CONFIG: &str = "config";
 const ARG_SKIP_CONFIG_CHECK: &str = "skip-config-check";
+const ARG_FROM_BLOCK: &str = "from-block";
+const ARG_TO_BLOCK: &str = "to-block";
 
 fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
     let content = fs::read(&path)
@@ -62,6 +65,31 @@ fn run_cli() -> Result<()> {
                         .help("The path of the example config file"),
                 )
                 .display_order(1),
+        )
+        .subcommand(
+            SubCommand::with_name(COMMAND_VERIFY_DB_BLOCK)
+                .about("Verify history blocks in db")
+                .arg(
+                    Arg::with_name(ARG_CONFIG)
+                        .short("c")
+                        .takes_value(true)
+                        .required(true)
+                        .default_value("./config.toml")
+                        .help("The config file path"),
+                )
+                .arg(
+                    Arg::with_name(ARG_FROM_BLOCK)
+                        .short("f")
+                        .takes_value(true)
+                        .help("From block number"),
+                )
+                .arg(
+                    Arg::with_name(ARG_TO_BLOCK)
+                        .short("t")
+                        .takes_value(true)
+                        .help("To block number"),
+                )
+                .display_order(2),
         );
 
     // handle subcommands
@@ -75,6 +103,13 @@ fn run_cli() -> Result<()> {
         (COMMAND_EXAMPLE_CONFIG, Some(m)) => {
             let path = m.value_of(ARG_OUTPUT_PATH).unwrap();
             generate_example_config(path)?;
+        }
+        (COMMAND_VERIFY_DB_BLOCK, Some(m)) => {
+            let config_path = m.value_of(ARG_CONFIG).unwrap();
+            let config = read_config(&config_path)?;
+            let from_block: Option<u64> = m.value_of(ARG_FROM_BLOCK).map(str::parse).transpose()?;
+            let to_block: Option<u64> = m.value_of(ARG_TO_BLOCK).map(str::parse).transpose()?;
+            db_block_validator::verify(config, from_block, to_block)?;
         }
         _ => {
             // default command: start a Godwoken node
