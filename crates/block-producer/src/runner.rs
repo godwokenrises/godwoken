@@ -109,42 +109,52 @@ async fn poll_loop(
             let event = event.clone();
             let inner = inner.clone();
             let mut inner = inner.lock().await;
-            if let Err(err) = inner.chain_updater.handle_event(event.clone()).await {
-                log::error!(
-                    "Error occured when polling chain_updater, event: {}, error: {}",
-                    event,
-                    err
-                );
-            }
-
-            if let Some(ref mut challenger) = inner.challenger {
-                if let Err(err) = challenger.handle_event(event.clone()).await {
-                    log::error!(
-                        "Error occured when polling challenger, event: {}, error: {}",
+            inner
+                .chain_updater
+                .handle_event(event.clone())
+                .await
+                .map_err(|err| {
+                    anyhow!(
+                        "Error occured when polling chain_updater, event: {}, error: {}",
                         event,
                         err
-                    );
-                }
+                    )
+                })?;
+
+            if let Some(ref mut challenger) = inner.challenger {
+                challenger
+                    .handle_event(event.clone())
+                    .await
+                    .map_err(|err| {
+                        anyhow!(
+                            "Error occured when polling challenger, event: {}, error: {}",
+                            event,
+                            err
+                        )
+                    })?;
             }
 
             if let Some(ref mut block_producer) = inner.block_producer {
-                if let Err(err) = block_producer.handle_event(event.clone()).await {
-                    log::error!(
-                        "Error occured when polling block_producer, event: {}, error: {}",
-                        event,
-                        err
-                    );
-                }
+                block_producer
+                    .handle_event(event.clone())
+                    .await
+                    .map_err(|err| {
+                        anyhow!(
+                            "Error occured when polling block_producer, event: {}, error: {}",
+                            event,
+                            err
+                        )
+                    })?;
             }
 
             if let Some(ref cleaner) = inner.cleaner {
-                if let Err(err) = cleaner.handle_event(event.clone()).await {
-                    log::error!(
+                cleaner.handle_event(event.clone()).await.map_err(|err| {
+                    anyhow!(
                         "Error occured when polling block_producer, event: {}, error: {}",
                         event,
                         err
-                    );
-                }
+                    )
+                })?;
             }
 
             // update tip
@@ -501,9 +511,12 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         config.mem_pool.clone(),
     );
 
-    let (s, ctrl_c) = async_channel::bounded(100);
-    let handle = move || {
-        s.try_send(()).ok();
+    let (exit_sender, exit_recv) = async_channel::bounded(100);
+    let handle = {
+        let exit_sender = exit_sender.clone();
+        move || {
+            exit_sender.try_send(()).ok();
+        }
     };
     ctrlc::set_handler(handle).unwrap();
 
@@ -531,27 +544,41 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     log::info!("{:?} mode", config.node_mode);
 
-    let chain_task = smol::spawn(poll_loop(
-        rpc_client,
-        chain_updater,
-        block_producer,
-        challenger,
-        cleaner,
-        Duration::from_secs(3),
-    ));
-    let rpc_task = smol::spawn(start_jsonrpc_server(rpc_address, rpc_registry));
-
-    smol::block_on(async {
-        let _ = ctrl_c.recv().await;
-        log::info!("Exiting...");
-
-        if let Some(Err(err)) = rpc_task.cancel().await {
+    let chain_task = smol::spawn({
+        let exit_sender = exit_sender.clone();
+        async move {
+            if let Err(err) = poll_loop(
+                rpc_client,
+                chain_updater,
+                block_producer,
+                challenger,
+                cleaner,
+                Duration::from_secs(3),
+            )
+            .await
+            {
+                log::error!("chain polling loop exit unexpected, error: {}", err);
+            }
+            if let Err(err) = exit_sender.send(()).await {
+                log::error!("send exit signal error: {}", err)
+            }
+        }
+    });
+    let rpc_task = smol::spawn(async move {
+        if let Err(err) = start_jsonrpc_server(rpc_address, rpc_registry).await {
             log::error!("Error running JSONRPC server: {:?}", err);
         }
-
-        if let Some(Err(err)) = chain_task.cancel().await {
-            log::error!("Error in chain poll loop: {:?}", err);
+        if let Err(err) = exit_sender.send(()).await {
+            log::error!("send exit signal error: {}", err)
         }
+    });
+
+    smol::block_on(async {
+        let _ = exit_recv.recv().await;
+        log::info!("Exiting...");
+
+        rpc_task.cancel().await;
+        chain_task.cancel().await;
     });
 
     Ok(())
