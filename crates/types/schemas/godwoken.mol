@@ -12,6 +12,17 @@ struct AccountMerkleState {
     count: Uint32,
 }
 
+struct GlobalStateV0 {
+    rollup_config_hash: Byte32,
+    account: AccountMerkleState,
+    block: BlockMerkleState,
+    reverted_block_root: Byte32,
+    tip_block_hash: Byte32,
+    last_finalized_block_number: Uint64,
+    // 0: running, 1: halting
+    status: byte,
+}
+
 struct GlobalState {
     rollup_config_hash: Byte32,
     account: AccountMerkleState,
@@ -22,6 +33,7 @@ struct GlobalState {
     last_finalized_block_number: Uint64,
     // 0: running, 1: halting
     status: byte,
+    version: byte,
 }
 
 table RollupConfig {
