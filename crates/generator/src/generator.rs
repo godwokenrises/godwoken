@@ -407,6 +407,14 @@ impl Generator {
         // handle transactions
         let mut offchain_used_cycles: u64 = 0;
         let mut tx_receipts = Vec::with_capacity(args.l2block.transactions().len());
+        let skip_checkpoint_check = skipped_invalid_block_list.contains(&block_hash.into());
+        if skip_checkpoint_check {
+            log::warn!(
+                "skip the checkpoint check of block: #{} {}",
+                block_number,
+                hex::encode(&block_hash)
+            );
+        }
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
             let state_db = state_db!(SubState::Tx(tx_index as u32));
             let state = &mut get_state!(state_db, account_state.clone());
@@ -489,13 +497,7 @@ impl Generator {
                     }
                 };
 
-                if skipped_invalid_block_list.contains(&block_hash.into()) {
-                    log::warn!(
-                        "skip the checkpoint check of block: #{} {}",
-                        block_number,
-                        hex::encode(&block_hash)
-                    );
-                } else if block_checkpoint != expected_checkpoint {
+                if !skip_checkpoint_check && block_checkpoint != expected_checkpoint {
                     let target = build_challenge_target(
                         block_hash.into(),
                         ChallengeTargetType::TxExecution,
