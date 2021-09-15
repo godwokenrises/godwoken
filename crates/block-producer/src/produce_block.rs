@@ -1,5 +1,5 @@
 //! Block producer
-//! Block producer assemble serveral Godwoken components into a single executor.
+//! Block producer assemble several Godwoken components into a single executor.
 //! A block producer can act without the ability of produce block.
 
 use anyhow::{anyhow, Result};
@@ -152,6 +152,7 @@ pub fn produce_block(
         .reverted_block_root(Into::<[u8; 32]>::into(reverted_block_root).pack())
         .rollup_config_hash(rollup_config_hash.pack())
         .status((Status::Running as u8).into())
+        .version(1u8.into())
         .build();
     Ok(ProduceBlockResult {
         block,
