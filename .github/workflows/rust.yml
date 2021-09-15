@@ -46,9 +46,11 @@ jobs:
       if: steps.fetch-capsule-cache.outputs.cache-hit == 'true'
       run: cd tests-deps/godwoken-scripts && tools/restore-capsule-cache.sh
     - name: Build Rust contracts
-      run: cd tests-deps/godwoken-scripts && capsule build
+      run: sed -i 's/0.4.6/0.6.0/' tests-deps/godwoken-scripts/capsule.toml && cd tests-deps/godwoken-scripts && capsule build
     - name: Backup capsule cache
       if: steps.fetch-capsule-cache.outputs.cache-hit != 'true'
       run: cd tests-deps/godwoken-scripts && tools/backup-capsule-cache.sh
+    - name: Install moleculec v0.7.2 again
+      run: CARGO_TARGET_DIR=target/ cargo install moleculec --version 0.7.2
     - name: Tests
       run: cargo test --all-targets
