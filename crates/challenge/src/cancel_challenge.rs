@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
 use gw_config::BlockProducerConfig;
-use gw_types::core::{DepType, SignatureMessageType, Status};
+use gw_types::core::{DepType, SigningType, Status};
 use gw_types::offchain::{CellInfo, InputCellInfo, RecoverAccount, RollupContext};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, GlobalState, OutPoint, RollupAction, RollupActionUnion,
@@ -561,7 +561,7 @@ fn build_recover_account_cell(
 ) -> ((CellOutput, Bytes), WitnessArgs) {
     let mut data = [0u8; 65];
     data[0..32].copy_from_slice(&owner_lock_hash.as_slice()[..32]);
-    data[32] = SignatureMessageType::Signing.into();
+    data[32] = SigningType::WithPrefix.into();
     data[33..65].copy_from_slice(&account.message.as_slice()[..32]);
 
     let (output, data) = build_cell(data.to_vec().into(), account.lock_script);

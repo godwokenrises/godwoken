@@ -156,24 +156,24 @@ impl From<DepType> for packed::Byte {
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[repr(u8)]
-pub enum SignatureMessageType {
+pub enum SigningType {
     Raw,
-    Signing,
+    WithPrefix,
 }
 
-impl From<SignatureMessageType> for u8 {
+impl From<SigningType> for u8 {
     #[inline]
-    fn from(type_: SignatureMessageType) -> u8 {
+    fn from(type_: SigningType) -> u8 {
         type_ as u8
     }
 }
 
-impl TryFrom<u8> for SignatureMessageType {
+impl TryFrom<u8> for SigningType {
     type Error = u8;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(SignatureMessageType::Raw),
-            1 => Ok(SignatureMessageType::Signing),
+            0 => Ok(SigningType::Raw),
+            1 => Ok(SigningType::WithPrefix),
             n => Err(n),
         }
     }
