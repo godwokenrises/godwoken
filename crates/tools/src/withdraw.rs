@@ -62,7 +62,7 @@ pub fn withdraw(
 
     let privkey = read_privkey(privkey_path)?;
 
-    let from_address = privkey_to_short_address(&privkey, &rollup_type_hash, &deployment_result)?;
+    let from_address = privkey_to_short_address(&privkey, rollup_type_hash, &deployment_result)?;
 
     // get from_id
     let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;

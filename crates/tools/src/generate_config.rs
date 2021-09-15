@@ -216,25 +216,30 @@ pub fn generate_config(
         lock,
     };
 
-    let mut backends: Vec<BackendConfig> = Vec::new();
-    backends.push(BackendConfig {
-        validator_path: scripts_built.get_path("meta_contract_validator"),
-        generator_path: scripts_built.get_path("meta_contract_generator"),
-        validator_script_type_hash: scripts_results
-            .meta_contract_validator
-            .script_type_hash
-            .clone(),
-    });
-    backends.push(BackendConfig {
-        validator_path: scripts_built.get_path("l2_sudt_validator"),
-        generator_path: scripts_built.get_path("l2_sudt_generator"),
-        validator_script_type_hash: scripts_results.l2_sudt_validator.script_type_hash.clone(),
-    });
-    backends.push(BackendConfig {
-        validator_path: scripts_built.get_path("polyjuice_validator"),
-        generator_path: scripts_built.get_path("polyjuice_generator"),
-        validator_script_type_hash: scripts_results.polyjuice_validator.script_type_hash.clone(),
-    });
+    let backends: Vec<BackendConfig> = vec![
+        BackendConfig {
+            validator_path: scripts_built.get_path("meta_contract_validator"),
+            generator_path: scripts_built.get_path("meta_contract_generator"),
+            validator_script_type_hash: scripts_results
+                .meta_contract_validator
+                .script_type_hash
+                .clone(),
+        },
+        BackendConfig {
+            validator_path: scripts_built.get_path("l2_sudt_validator"),
+            generator_path: scripts_built.get_path("l2_sudt_generator"),
+            validator_script_type_hash: scripts_results.l2_sudt_validator.script_type_hash.clone(),
+        },
+        BackendConfig {
+            validator_path: scripts_built.get_path("polyjuice_validator"),
+            generator_path: scripts_built.get_path("polyjuice_generator"),
+            validator_script_type_hash: scripts_results
+                .polyjuice_validator
+                .script_type_hash
+                .clone(),
+        },
+    ];
+
     // FIXME change to a directory path after we tested the persist storage
     let store: StoreConfig = StoreConfig { path: "".into() };
     let genesis_committed_info = L2BlockCommittedInfo {
@@ -282,10 +287,7 @@ pub fn generate_config(
         .get(0)
         .ok_or_else(|| anyhow!("No allowed EoA type hashes in the rollup config"))?;
     let tron_allowed_eoa_hash = genesis.rollup_config.allowed_eoa_type_hashes.get(1);
-    let tron_account_lock_hash = match tron_allowed_eoa_hash {
-        Some(code_hash) => Some(code_hash.to_owned()),
-        None => None,
-    };
+    let tron_account_lock_hash = tron_allowed_eoa_hash.map(|code_hash| code_hash.to_owned());
     let web3_indexer = match database_url {
         Some(database_url) => Some(Web3IndexerConfig {
             database_url: database_url.to_owned(),

@@ -815,7 +815,7 @@ impl RPCClient {
                 return Err(anyhow!("no a sudt cell"));
             }
 
-            gw_types::packed::Uint128::from_slice(&cell.output_data.as_bytes())
+            gw_types::packed::Uint128::from_slice(cell.output_data.as_bytes())
                 .map(|a| a.unpack())
                 .map_err(|e| anyhow!("invalid sudt amount {}", e))
         };

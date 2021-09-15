@@ -628,12 +628,9 @@ fn main() {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
             let input_path = Path::new(m.value_of("input-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
-            if let Err(err) = deploy_scripts::deploy_scripts(
-                &privkey_path,
-                ckb_rpc_url,
-                &input_path,
-                &output_path,
-            ) {
+            if let Err(err) =
+                deploy_scripts::deploy_scripts(privkey_path, ckb_rpc_url, input_path, output_path)
+            {
                 log::error!("Deploy scripts error: {}", err);
                 std::process::exit(-1);
             };
@@ -649,13 +646,13 @@ fn main() {
                 .value_of("genesis-timestamp")
                 .map(|s| s.parse().expect("timestamp in milliseconds"));
             if let Err(err) = deploy_genesis::deploy_genesis(
-                &privkey_path,
+                privkey_path,
                 ckb_rpc_url,
-                &deployment_results_path,
-                &user_rollup_path,
-                &poa_config_path,
+                deployment_results_path,
+                user_rollup_path,
+                poa_config_path,
                 timestamp,
-                &output_path,
+                output_path,
                 m.is_present("skip-config-check"),
             ) {
                 log::error!("Deploy genesis error: {}", err);

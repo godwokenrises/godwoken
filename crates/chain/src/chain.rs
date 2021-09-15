@@ -634,8 +634,8 @@ impl Chain {
                     // Check current state
                     let expected_state = l2block.raw().prev_account();
                     let state_db = StateDBTransaction::from_checkpoint(
-                        &db,
-                        CheckPoint::from_block_hash(&db, parent_block_hash, SubState::Block)?,
+                        db,
+                        CheckPoint::from_block_hash(db, parent_block_hash, SubState::Block)?,
                         StateDBMode::ReadOnly,
                     )?;
                     let tree = state_db.state_tree()?;
@@ -923,10 +923,10 @@ fn package_bad_blocks(db: &StoreTransaction, start_block_hash: &H256) -> Result<
 
     let tip_block_number = tip_block.raw().number().unpack();
     let start_block_number = {
-        let number = db.get_block_number(&start_block_hash)?;
+        let number = db.get_block_number(start_block_hash)?;
         number.ok_or_else(|| anyhow!("challenge block number not found"))?
     };
-    assert_eq!(start_block_number < tip_block_number, true);
+    assert!(start_block_number < tip_block_number);
 
     let to_block = |number: u64| {
         let hash = db.get_block_hash_by_number(number)?;

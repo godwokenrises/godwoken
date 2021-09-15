@@ -124,7 +124,7 @@ pub fn polyjuice_call(
     let to_address =
         GwBytes::from(hex::decode(to_address_str[2..].as_bytes()).map_err(|err| err.to_string())?);
 
-    let from_address = parse_account_short_address(&mut godwoken_rpc_client, &from)?;
+    let from_address = parse_account_short_address(&mut godwoken_rpc_client, from)?;
     let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
     let from_id = from_id.expect("from account not found!");
     let nonce = godwoken_rpc_client.get_nonce(from_id)?;
@@ -178,7 +178,7 @@ fn send(
     rollup_type_hash: &H256,
     deployment_result: &ScriptsDeploymentResult,
 ) -> Result<(), String> {
-    let to_address = if to_address == GwBytes::from(&[0u8; 20][..]) || to_address.is_empty() {
+    let to_address = if to_address == [0u8; 20][..] || to_address.is_empty() {
         None
     } else {
         Some(to_address)

@@ -161,7 +161,7 @@ impl LockAlgorithm for Secp256k1Eth {
             &ctx.rollup_script_hash,
             &sender_script,
             &receiver_script,
-            &tx,
+            tx,
         );
         self.verify_message(
             sender_script.args().unpack(),
@@ -237,7 +237,7 @@ impl LockAlgorithm for Secp256k1Tron {
             &ctx.rollup_script_hash,
             &sender_script,
             &receiver_script,
-            &tx,
+            tx,
         );
 
         self.verify_message(
@@ -280,7 +280,7 @@ fn calc_godwoken_signing_message(
     tx: &L2Transaction,
 ) -> H256 {
     tx.raw().calc_message(
-        &rollup_type_hash,
+        rollup_type_hash,
         &sender_script.hash().into(),
         &receiver_script.hash().into(),
     )

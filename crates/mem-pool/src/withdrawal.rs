@@ -100,7 +100,7 @@ impl<'a> Generator<'a> {
         let block_hash: H256 = block.hash().into();
         let block_number = block.raw().number().unpack();
         let output = gw_generator::Generator::build_withdrawal_cell_output(
-            &self.rollup_context,
+            self.rollup_context,
             req,
             &block_hash,
             block_number,

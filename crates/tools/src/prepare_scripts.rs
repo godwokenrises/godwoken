@@ -177,7 +177,7 @@ pub fn prepare_scripts(
             prepare_scripts_in_copy_mode(&scripts_build_config.prebuild_image, scripts_dir);
         }
     }
-    check_scripts(&scripts_dir, &scripts_build_config.scripts);
+    check_scripts(scripts_dir, &scripts_build_config.scripts);
     generate_script_deploy_config(scripts_dir, &scripts_build_config.scripts, output_path)
 }
 
@@ -238,7 +238,7 @@ fn prepare_scripts_in_build_mode(
     collect_scripts_to_target(repos_dir, target_dir, &scripts_build_config.scripts);
 }
 
-fn prepare_scripts_in_copy_mode(prebuild_image: &PathBuf, scripts_dir: &Path) {
+fn prepare_scripts_in_copy_mode(prebuild_image: &Path, scripts_dir: &Path) {
     log::info!("Copy scritps from prebuild image...");
     let dummy = "dummy";
     utils::run(
@@ -407,6 +407,6 @@ fn run_git_checkout(repo_dir: &str, commit: &str) -> Result<()> {
     utils::run("git", vec!["-C", repo_dir, "checkout", commit])?;
     utils::run(
         "git",
-        vec!["-C", &repo_dir, "submodule", "update", "--recursive"],
+        vec!["-C", repo_dir, "submodule", "update", "--recursive"],
     )
 }

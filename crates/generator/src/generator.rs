@@ -296,7 +296,7 @@ impl Generator {
             .get_lock_algorithm(&lock_code_hash.into())
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
         let valid_signature =
-            lock_algo.verify_tx(&self.rollup_context, script, receiver_script, &tx)?;
+            lock_algo.verify_tx(&self.rollup_context, script, receiver_script, tx)?;
         if !valid_signature {
             return Err(LockAlgorithmError::InvalidSignature.into());
         }
@@ -444,7 +444,7 @@ impl Generator {
             hex::encode(script_hash.as_slice())
         );
         state
-            .get_script(&script_hash)
+            .get_script(script_hash)
             .and_then(|script| {
                 // only accept type script hash type for now
                 if script.hash_type() == ScriptHashType::Type.into() {

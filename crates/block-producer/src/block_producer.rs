@@ -579,7 +579,7 @@ impl BlockProducer {
         }
 
         if let Some(reverted_deposits) =
-            crate::deposit::revert(&rollup_context, &self.config, revert_custodians)?
+            crate::deposit::revert(rollup_context, &self.config, revert_custodians)?
         {
             log::info!("reverted deposits {}", reverted_deposits.inputs.len());
 

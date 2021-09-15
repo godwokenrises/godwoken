@@ -13,6 +13,7 @@ pub enum ScriptHashType {
     Type = 1,
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<packed::Byte> for ScriptHashType {
     fn into(self) -> packed::Byte {
         (self as u8).into()
@@ -39,6 +40,7 @@ pub enum Status {
     Halting = 1,
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<u8> for Status {
     fn into(self: Status) -> u8 {
         self as u8
@@ -56,6 +58,7 @@ impl TryFrom<u8> for Status {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<Byte> for Status {
     fn into(self: Status) -> Byte {
         (self as u8).into()
@@ -79,6 +82,7 @@ pub enum ChallengeTargetType {
     Withdrawal = 2,
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<u8> for ChallengeTargetType {
     fn into(self: ChallengeTargetType) -> u8 {
         self as u8
@@ -97,6 +101,7 @@ impl TryFrom<u8> for ChallengeTargetType {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<Byte> for ChallengeTargetType {
     fn into(self: ChallengeTargetType) -> Byte {
         (self as u8).into()
@@ -135,6 +140,7 @@ impl TryFrom<packed::Byte> for DepType {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<u8> for DepType {
     #[inline]
     fn into(self) -> u8 {
@@ -142,6 +148,7 @@ impl Into<u8> for DepType {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<packed::Byte> for DepType {
     #[inline]
     fn into(self) -> packed::Byte {

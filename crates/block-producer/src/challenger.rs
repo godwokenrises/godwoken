@@ -563,7 +563,7 @@ impl Challenger {
         tx_skeleton.outputs_mut().extend(cancel_output.burn_cells);
 
         // Signature verification needs an owner cell
-        if !has_lock_cell(&tx_skeleton, &self.wallet.lock_script()) {
+        if !has_lock_cell(&tx_skeleton, self.wallet.lock_script()) {
             let spent_inputs = verifier_context.spent_inputs;
 
             let owner_input = self
