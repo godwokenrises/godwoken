@@ -140,7 +140,12 @@ impl<S: State + CodeStore> StateExt for S {
             .is_none()
         {
             self.insert_script(account_script_hash, request.script());
-            let _new_id = self.create_account(account_script_hash)?;
+            let new_id = self.create_account(account_script_hash)?;
+            log::info!(
+                "[generator] create new account: {} id: {}",
+                hex::encode(account_script_hash.as_slice()),
+                new_id
+            );
         }
         // NOTE: the length `20` is a hard-coded value, may be `16` for some LockAlgorithm.
         self.mint_sudt(
@@ -148,6 +153,11 @@ impl<S: State + CodeStore> StateExt for S {
             to_short_address(&account_script_hash),
             capacity.into(),
         )?;
+        log::info!(
+            "[generator] mint {} shannons CKB to account {}",
+            capacity,
+            hex::encode(account_script_hash.as_slice()),
+        );
         let sudt_script_hash = request.sudt_script_hash().unpack();
         let amount = request.amount().unpack();
         if sudt_script_hash != CKB_SUDT_SCRIPT_ARGS.into() {
@@ -167,6 +177,12 @@ impl<S: State + CodeStore> StateExt for S {
             }
             // mint SUDT
             self.mint_sudt(sudt_id, to_short_address(&account_script_hash), amount)?;
+            log::info!(
+                "[generator] mint {} amount sUDT {} to account {}",
+                amount,
+                sudt_id,
+                hex::encode(account_script_hash.as_slice()),
+            );
         } else if amount != 0 {
             return Err(DepositError::DepositFakedCKB.into());
         }

@@ -44,11 +44,11 @@ pub struct RPCClientConfig {
 /// Onchain rollup cell config
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ChainConfig {
-    pub genesis_committed_info: L2BlockCommittedInfo,
-    pub rollup_type_script: Script,
     /// Ignore invalid state caused by blocks
     #[serde(default)]
     pub skipped_invalid_block_list: Vec<H256>,
+    pub genesis_committed_info: L2BlockCommittedInfo,
+    pub rollup_type_script: Script,
 }
 
 /// Genesis config
@@ -198,9 +198,9 @@ impl Default for NodeMode {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DBBlockValidatorConfig {
     pub verify_max_cycles: u64,
+    pub parallel_verify_blocks: bool,
     pub replace_scripts: Option<HashMap<H256, PathBuf>>,
     pub skip_targets: Option<HashSet<(u64, ChallengeTargetType, u32)>>,
-    pub parallel_verify_blocks: bool,
 }
 
 impl Default for DBBlockValidatorConfig {
