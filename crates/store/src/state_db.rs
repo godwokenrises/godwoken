@@ -50,7 +50,7 @@ pub enum SubState {
     PrevTxs,
     Tx(u32),
     Block, // Block post state
-    MemBlock(u32),
+    MemBlock,
 }
 
 impl SubState {
@@ -89,7 +89,7 @@ impl SubState {
             SubState::PrevTxs => CheckPointIdx::PrevTxs,
             SubState::Tx(index) => CheckPointIdx::Idx(block.withdrawals().len() + index as usize),
             SubState::Block => return Ok(block.raw().post_account()),
-            SubState::MemBlock(_) => {
+            SubState::MemBlock => {
                 let root = db.get_mem_block_account_smt_root()?;
                 let count = db.get_mem_block_account_count()?;
                 let merkle_state = AccountMerkleState::new_builder()
@@ -266,9 +266,12 @@ impl CheckPoint {
                     );
                     Ok((self.block_number, offset as u32))
                 }
-                StateDBMode::Write(_ctx) => Ok((self.block_number, 0)),
+                StateDBMode::Write(_ctx) => {
+                    // can't write into block
+                    unreachable!()
+                }
             },
-            SubState::MemBlock(offset) => Ok((MEMORY_BLOCK_NUMBER, offset)),
+            SubState::MemBlock => Ok((MEMORY_BLOCK_NUMBER, 0)),
         }
     }
 }

@@ -97,7 +97,7 @@ fn get_state_db_at_block<'a>(
         }
         None => {
             let checkpoint = if is_mem_pool_enabled {
-                CheckPoint::new(tip_block_number, SubState::MemBlock(u32::MAX))
+                CheckPoint::new(tip_block_number, SubState::MemBlock)
             } else {
                 // fallback to db
                 CheckPoint::new(tip_block_number, SubState::Block)

@@ -339,9 +339,22 @@ impl Generator {
             };
         }
 
-        let state_db = state_db!(SubState::Block);
-        let state = &mut get_state!(state_db);
-        let mut account_state = state.get_merkle_state();
+        let mut account_state = {
+            let parent_number = block_number.saturating_sub(1);
+            let state_db = match StateDBTransaction::from_checkpoint(
+                db,
+                CheckPoint::new(parent_number, SubState::Block),
+                StateDBMode::ReadOnly,
+            ) {
+                Ok(state_db) => state_db,
+                Err(err) => {
+                    log::error!("failed to get state {}", err);
+                    return ApplyBlockResult::Error(Error::State(StateError::Store));
+                }
+            };
+            let state = &mut get_state!(state_db);
+            state.get_merkle_state()
+        };
 
         // apply withdrawal to state
         let withdrawal_requests: Vec<_> = args.l2block.withdrawals().into_iter().collect();

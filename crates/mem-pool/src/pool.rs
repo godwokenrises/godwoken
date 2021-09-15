@@ -141,10 +141,9 @@ impl MemPool {
     }
 
     pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
-        let offset = (self.mem_block.withdrawals().len() + self.mem_block.txs().len()) as u32;
         StateDBTransaction::from_checkpoint(
             db,
-            CheckPoint::new(self.current_tip.1, SubState::MemBlock(offset)),
+            CheckPoint::new(self.current_tip.1, SubState::MemBlock),
             StateDBMode::Write(WriteContext::default()),
         )
         .map_err(|err| anyhow!("err: {}", err))
