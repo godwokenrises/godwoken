@@ -595,18 +595,7 @@ impl StoreTransaction {
         if post_states.len() != state_checkpoint_list.len() {
             return Err(Error::from("unexpected block post state length".to_owned()));
         }
-        for (index, (checkpoint, post_state)) in state_checkpoint_list.zip(post_states).enumerate()
-        {
-            let root: [u8; 32] = post_state.merkle_root().unpack();
-            let state_checkpoint: Byte32 = {
-                let checkpoint: [u8; 32] =
-                    calculate_state_checkpoint(&root.into(), post_state.count().unpack()).into();
-                checkpoint.pack()
-            };
-            if state_checkpoint != checkpoint {
-                return Err(Error::from(format!("unexpected post state {}", index)));
-            }
-
+        for (checkpoint, post_state) in state_checkpoint_list.zip(post_states) {
             self.insert_raw(
                 COLUMN_CHECKPOINT,
                 checkpoint.as_slice(),
