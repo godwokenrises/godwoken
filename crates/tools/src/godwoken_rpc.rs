@@ -146,13 +146,13 @@ impl GodwokenRpcClient {
             .send()
             .map_err(|err| err.to_string())?;
         let output = resp
-            .json::<ckb_jsonrpc_types::response::Output>()
+            .json::<jsonrpc_core::response::Output>()
             .map_err(|err| err.to_string())?;
         match output {
-            ckb_jsonrpc_types::response::Output::Success(success) => {
+            jsonrpc_core::response::Output::Success(success) => {
                 serde_json::from_value(success.result).map_err(|err| err.to_string())
             }
-            ckb_jsonrpc_types::response::Output::Failure(failure) => Err(failure.error.to_string()),
+            jsonrpc_core::response::Output::Failure(failure) => Err(failure.error.to_string()),
         }
     }
 }

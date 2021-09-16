@@ -20,7 +20,7 @@ use gw_common::{
     h256_ext::H256Ext,
     merkle_utils::calculate_state_checkpoint,
     state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE_TYPE},
-    H256,
+    GLOBAL_VM_VERSION, H256,
 };
 use gw_store::{
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
@@ -43,6 +43,27 @@ use ckb_vm::{
     machine::asm::{AsmCoreMachine, AsmMachine},
     DefaultMachineBuilder, SupportMachine,
 };
+
+struct AsmCoreMachineParams {
+    pub vm_isa: u8,
+    pub vm_version: u32,
+}
+
+impl AsmCoreMachineParams {
+    pub fn new(vm_version: u32) -> AsmCoreMachineParams {
+        if vm_version == 0 {
+            AsmCoreMachineParams {
+                vm_isa: ckb_vm::ISA_IMC,
+                vm_version: ckb_vm::machine::VERSION0,
+            }
+        } else {
+            AsmCoreMachineParams {
+                vm_isa: ckb_vm::ISA_IMC | ckb_vm::ISA_B | ckb_vm::ISA_MOP,
+                vm_version: ckb_vm::machine::VERSION1,
+            }
+        }
+    }
+}
 
 pub struct ApplyBlockArgs {
     pub l2block: L2Block,
@@ -605,7 +626,10 @@ impl Generator {
         let used_cycles;
         let exit_code;
         {
-            let core_machine = AsmCoreMachine::new_with_max_cycles(max_cycles);
+            // let core_machine = AsmCoreMachine::new_with_max_cycles(L2TX_MAX_CYCLES);
+            let global_vm_version = smol::block_on(async { *GLOBAL_VM_VERSION.lock().await });
+            let params = AsmCoreMachineParams::new(global_vm_version);
+            let core_machine = AsmCoreMachine::new(params.vm_isa, params.vm_version, max_cycles);
             let machine_builder = DefaultMachineBuilder::new(core_machine)
                 .syscall(Box::new(L2Syscalls {
                     chain,

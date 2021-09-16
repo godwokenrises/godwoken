@@ -583,6 +583,7 @@ impl MemPool {
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
 
         // mem block withdrawals
+        #[allow(clippy::needless_collect)]
         let mem_block_withdrawals: Vec<_> = mem_block_content
             .withdrawals
             .into_iter()
@@ -590,6 +591,7 @@ impl MemPool {
             .collect();
 
         // Process txs
+        #[allow(clippy::needless_collect)]
         let mem_block_txs: Vec<_> = mem_block_content
             .txs
             .into_iter()

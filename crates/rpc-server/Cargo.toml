@@ -18,9 +18,9 @@ gw-generator = { path = "../generator" }
 gw-mem-pool = { path = "../mem-pool" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 faster-hex = "0.4"
-ckb-crypto = "0.38.0"
-ckb-fixed-hash = "0.38.0"
-ckb-types = "0.38.0"
+ckb-crypto = "0.100.0-rc5"
+ckb-fixed-hash = "0.100.0-rc5"
+ckb-types = "0.100.0-rc5"
 toml = "0.5"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }

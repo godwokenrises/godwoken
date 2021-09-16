@@ -6,7 +6,7 @@ use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainValidatorContext};
-use gw_common::{blake2b::new_blake2b, H256};
+use gw_common::{blake2b::new_blake2b, GLOBAL_VM_VERSION, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
 use gw_generator::{
@@ -159,6 +159,11 @@ async fn poll_loop(
             // update tip
             tip_number = raw_header.number().unpack();
             tip_hash = block.header().hash().into();
+
+            // update vm version
+            let vm_version = rpc_client.get_vm_version().await?;
+            *GLOBAL_VM_VERSION.lock().await = vm_version;
+            log::debug!("Current global vm version: {}", vm_version);
         } else {
             log::debug!(
                 "Not found layer1 block #{} sleep {}s then retry",

@@ -24,3 +24,7 @@ cfg_if::cfg_if! {
         use alloc::vec;
     }
 }
+
+lazy_static::lazy_static! {
+    pub static ref GLOBAL_VM_VERSION: smol::lock::Mutex<u32> = smol::lock::Mutex::new(0);
+}

@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use ckb_jsonrpc_types::OutputsValidator;
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Entity, Unpack as CKBUnpack};
 use gw_config::WalletConfig;
@@ -123,7 +124,10 @@ pub fn update_cell<P: AsRef<Path>>(
     // send transaction
     println!("Unlock cell {}", existed_cell.lock());
     let tx_hash = rpc_client
-        .send_transaction(ckb_types::packed::Transaction::new_unchecked(tx.as_bytes()))
+        .send_transaction(
+            ckb_types::packed::Transaction::new_unchecked(tx.as_bytes()),
+            Some(OutputsValidator::Passthrough),
+        )
         .map_err(|err| anyhow!("{}", err))?;
     println!("Send tx...");
     wait_for_tx(&mut rpc_client, &tx_hash, 180).map_err(|err| anyhow!("{}", err))?;

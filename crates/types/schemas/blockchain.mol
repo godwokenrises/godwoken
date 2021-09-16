@@ -1,6 +1,8 @@
-/* ckb 27a86a61d940defec4a95e30a3a47936505d6cfd */
+/* ckb v0.100.0-rc2 */
 /* Basic Types */
 
+// The `UintN` is used to store a `N` bits unsigned integer
+// as a byte array in little endian.
 array Uint16 [byte; 2];
 array Uint32 [byte; 4];
 array Uint64 [byte; 8];
@@ -77,7 +79,7 @@ struct RawHeader {
     parent_hash:            Byte32,
     transactions_root:      Byte32,
     proposals_hash:         Byte32,
-    uncles_hash:            Byte32,
+    extra_hash:             Byte32,
     dao:                    Byte32,
 }
 
@@ -98,6 +100,14 @@ table Block {
     proposals:              ProposalShortIdVec,
 }
 
+table BlockV1 {
+    header:                 Header,
+    uncles:                 UncleBlockVec,
+    transactions:           TransactionVec,
+    proposals:              ProposalShortIdVec,
+    extension:              Bytes,
+}
+
 table CellbaseWitness {
     lock:    Script,
     message: Bytes,
@@ -108,4 +118,3 @@ table WitnessArgs {
     input_type:             BytesOpt,          // Type args for input
     output_type:            BytesOpt,          // Type args for output
 }
-

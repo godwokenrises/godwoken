@@ -1,15 +1,17 @@
 use anyhow::{anyhow, bail, Result};
+use ckb_chain_spec::consensus::ConsensusBuilder;
 use ckb_fixed_hash::H256;
-use ckb_script::TransactionScriptsVerifier;
+use ckb_script::{TransactionScriptsVerifier, TxVerifyEnv};
 use ckb_traits::{CellDataProvider, HeaderProvider};
 use ckb_types::{
     bytes::Bytes,
     core::{
         cell::{CellMeta, CellMetaBuilder, ResolvedTransaction},
+        hardfork::HardForkSwitch,
         DepType, HeaderView,
     },
     packed::{Byte32, CellDep, CellInput, CellOutput, OutPoint, OutPointVec, Transaction},
-    prelude::{Builder, Entity, Unpack},
+    prelude::{Builder, Entity, Pack, Unpack},
 };
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types,
@@ -84,9 +86,25 @@ pub fn verify_tx(
     data_loader.extend_inputs(tx_with_context.inputs);
 
     let resolved_tx = data_loader.resolve_tx(&tx_with_context.tx)?;
-    let cycles = TransactionScriptsVerifier::new(&resolved_tx, &data_loader)
-        .verify(max_cycles)
-        .map_err(|err| anyhow!("verify tx failed: {}", err))?;
+
+    // TODO: !!! update hardfork_switch & tx_verify_env !!!
+    let hardfork_switch = HardForkSwitch::new_without_any_enabled()
+        .as_builder()
+        .rfc_0032(0)
+        .build()
+        .unwrap();
+    let consensus = ConsensusBuilder::default()
+        .hardfork_switch(hardfork_switch)
+        .build();
+    let tx_verify_env = TxVerifyEnv::new_submit(
+        &HeaderView::new_advanced_builder()
+            .epoch(0u64.pack())
+            .build(),
+    );
+    let cycles =
+        TransactionScriptsVerifier::new(&resolved_tx, &consensus, &data_loader, &tx_verify_env)
+            .verify(max_cycles)
+            .map_err(|err| anyhow!("verify tx failed: {}", err))?;
 
     Ok(cycles)
 }
@@ -109,10 +127,7 @@ pub fn dump_tx(
             .out_point(meta.out_point)
             .dep_type(dep_type.into())
             .build();
-        let data = meta
-            .mem_cell_data
-            .map(|(data, _)| data)
-            .unwrap_or_else(Bytes::new);
+        let data = meta.mem_cell_data.unwrap_or_else(Bytes::new);
 
         ReprMockCellDep {
             cell_dep: cell_dep.into(),
@@ -193,7 +208,7 @@ impl TxDataLoader {
             {
                 DepType::DepGroup => {
                     let data = {
-                        let to_data = cell_meta.mem_cell_data.as_ref().map(|(d, _)| d);
+                        let to_data = cell_meta.mem_cell_data.as_ref();
                         to_data.ok_or_else(|| anyhow!("invalid dep group"))?
                     };
 
@@ -245,9 +260,13 @@ impl TxDataLoader {
 }
 
 impl CellDataProvider for TxDataLoader {
-    fn get_cell_data(&self, out_point: &OutPoint) -> Option<(Bytes, Byte32)> {
+    fn get_cell_data(&self, out_point: &OutPoint) -> Option<Bytes> {
+        self.get_cell_info(out_point).map(|ci| ci.data.to_owned())
+    }
+
+    fn get_cell_data_hash(&self, out_point: &OutPoint) -> Option<Byte32> {
         self.get_cell_info(out_point)
-            .map(|ci| (ci.data.to_owned(), ci.data_hash.to_owned()))
+            .map(|ci| ci.data_hash.to_owned())
     }
 }
 

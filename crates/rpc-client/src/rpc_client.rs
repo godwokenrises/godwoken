@@ -1191,7 +1191,7 @@ impl RPCClient {
             self.ckb
                 .request(
                     "send_transaction",
-                    Some(ClientParams::Array(vec![json!(tx)])),
+                    Some(ClientParams::Array(vec![json!(tx), json!("passthrough")])),
                 )
                 .await?,
         )?;
@@ -1218,5 +1218,45 @@ impl RPCClient {
                 .await?,
         )?;
         Ok(dry_run_result.cycles.into())
+    }
+
+    pub async fn get_current_epoch_number(&self) -> Result<u64> {
+        let epoch_view: ckb_jsonrpc_types::EpochView =
+            to_result(self.ckb.request("get_current_epoch", None).await?)?;
+        let epoch_number: u64 = epoch_view.number.into();
+        Ok(epoch_number)
+    }
+
+    async fn get_consensus_rfc32_epoch_number(&self) -> Result<u64> {
+        let consensus: ckb_jsonrpc_types::Consensus =
+            to_result(self.ckb.request("get_consensus", None).await?)?;
+        let rfc32 = consensus
+            .hardfork_features
+            .into_iter()
+            .find(|f| f.rfc == "0032")
+            .ok_or_else(|| anyhow!("rfc32 hardfork feature not found!"))?;
+        // .expect("rfc32 hardfork feature not found!");
+
+        let epoch_number: u64 = rfc32
+            .epoch_number
+            .ok_or_else(|| anyhow!("rfc32 epoch_number not found!"))?
+            .into();
+        Ok(epoch_number)
+    }
+
+    pub async fn get_vm_version(&self) -> Result<u32> {
+        let (current_epoch_number_result, rfc32_epoch_number_result) = futures::future::join(
+            self.get_current_epoch_number(),
+            self.get_consensus_rfc32_epoch_number(),
+        )
+        .await;
+        let current_epoch_number = current_epoch_number_result?;
+        let rfc32_epoch_number = rfc32_epoch_number_result?;
+
+        if current_epoch_number >= rfc32_epoch_number {
+            return Ok(1);
+        }
+
+        Ok(0)
     }
 }
