@@ -1,15 +1,17 @@
 use crate::types::{VerifyContext, VerifyWitness};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use gw_common::blake2b::new_blake2b;
 use gw_common::h256_ext::H256Ext;
-use gw_common::merkle_utils::{calculate_state_checkpoint, ckb_merkle_leaf_hash, CBMT};
+use gw_common::merkle_utils::{
+    calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash, CBMT,
+};
 use gw_common::smt::{Blake2bHasher, SMT};
 use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::state::{
     build_account_field_key, State, GW_ACCOUNT_NONCE_TYPE, GW_ACCOUNT_SCRIPT_HASH_TYPE,
 };
-use gw_common::{merkle_utils::calculate_merkle_root, H256};
+use gw_common::H256;
 use gw_generator::traits::StateExt;
 use gw_store::state_db::{StateDBTransaction, StateTree};
 use gw_store::transaction::StoreTransaction;
@@ -361,21 +363,17 @@ impl MockBlockParam {
             let last_withdrawal = &self.withdrawals.inner.last();
             last_withdrawal.cloned().expect("should exists")
         };
-        let witness_hash = {
-            let last_hash = self.withdrawals.witness_hashes.last();
-            last_hash.cloned().expect("should exists")
+
+        let withdrawal_proof = {
+            let indices = &[withdrawal_index];
+            let leaves = &self.withdrawals.merkle_leaf_hashes;
+            build_cbmt_merkle_proof(leaves, indices).with_context(|| "withdrawal proof")?
         };
 
-        let withdrawal_proof =
-            CBMT::build_merkle_proof(&[witness_hash], &[withdrawal_index]).unwrap();
-        let merkle_proof = CKBMerkleProof::new_builder()
-            .lemmas(withdrawal_proof.lemmas().pack())
-            .indices(withdrawal_proof.indices().pack())
-            .build();
         let verify_witness = VerifyWithdrawalWitness::new_builder()
             .raw_l2block(raw_block)
             .withdrawal_request(withdrawal)
-            .withdrawal_proof(merkle_proof)
+            .withdrawal_proof(withdrawal_proof)
             .build();
 
         Ok(VerifyContext {
@@ -435,8 +433,12 @@ impl MockBlockParam {
             .scripts(scripts)
             .build();
 
-        let tx_proof =
-            self.build_tx_proof(self.transactions.inner.len().saturating_sub(1) as u32)?;
+        let tx_proof = {
+            let indices = &[self.transactions.inner.len().saturating_sub(1) as u32];
+            let leaves = &self.transactions.merkle_leaf_hashes;
+            build_cbmt_merkle_proof(leaves, indices).with_context(|| "tx proof")?
+        };
+
         let verify_witness = VerifyTransactionSignatureWitness::new_builder()
             .raw_l2block(raw_block)
             .l2tx(tx)
@@ -558,8 +560,12 @@ impl MockBlockParam {
             .return_data_hash(return_data_hash)
             .build();
 
-        let tx_proof =
-            self.build_tx_proof(self.transactions.inner.len().saturating_sub(1) as u32)?;
+        let tx_proof = {
+            let indices = &[self.transactions.inner.len().saturating_sub(1) as u32];
+            let leaves = &self.transactions.merkle_leaf_hashes;
+            build_cbmt_merkle_proof(leaves, indices).with_context(|| "tx proof")?
+        };
+
         let verify_witness = VerifyTransactionWitness::new_builder()
             .l2tx(tx)
             .raw_l2block(raw_block)
@@ -578,28 +584,12 @@ impl MockBlockParam {
             },
         })
     }
-
-    fn build_tx_proof(&self, tx_index: u32) -> Result<CKBMerkleProof> {
-        let leaves = &self
-            .transactions
-            .witness_hashes
-            .iter()
-            .enumerate()
-            .map(|(id, hash)| ckb_merkle_leaf_hash(id as u32, hash))
-            .collect::<Vec<_>>();
-        let proof = CBMT::build_merkle_proof(leaves, &[tx_index])
-            .ok_or_else(|| anyhow!("Build merkle proof failed."))?;
-        let proof = CKBMerkleProof::new_builder()
-            .lemmas(proof.lemmas().pack())
-            .indices(proof.indices().pack())
-            .build();
-        Ok(proof)
-    }
 }
 
 struct RawBlockWithdrawalRequests {
     inner: Vec<WithdrawalRequest>,
     witness_hashes: Vec<H256>,
+    merkle_leaf_hashes: Vec<H256>,
     post_accounts: Vec<AccountMerkleState>,
 }
 
@@ -608,6 +598,7 @@ impl RawBlockWithdrawalRequests {
         RawBlockWithdrawalRequests {
             inner: Vec::new(),
             witness_hashes: Vec::new(),
+            merkle_leaf_hashes: Vec::new(),
             post_accounts: Vec::new(),
         }
     }
@@ -617,13 +608,18 @@ impl RawBlockWithdrawalRequests {
     }
 
     fn push(&mut self, req: WithdrawalRequest, post_account: AccountMerkleState) {
-        self.witness_hashes.push(req.witness_hash().into());
+        let wth_index = self.witness_hashes.len() as u32;
+        let witness_hash: H256 = req.witness_hash().into();
+        let merkle_leaf_hash = ckb_merkle_leaf_hash(wth_index, &witness_hash);
+
+        self.witness_hashes.push(witness_hash);
+        self.merkle_leaf_hashes.push(merkle_leaf_hash);
         self.inner.push(req);
         self.post_accounts.push(post_account);
     }
 
     fn submit_withdrawals(&self) -> Result<SubmitWithdrawals> {
-        let root = calculate_merkle_root(self.witness_hashes.clone())
+        let root = calculate_ckb_merkle_root(self.merkle_leaf_hashes.clone())
             .map_err(|err| anyhow!("mock submit withdrawal error: {}", err))?;
         let count = self.inner.len() as u32;
 
@@ -636,6 +632,7 @@ impl RawBlockWithdrawalRequests {
     fn pop(&mut self) {
         self.inner.pop();
         self.witness_hashes.pop();
+        self.merkle_leaf_hashes.pop();
         self.post_accounts.pop();
     }
 }
@@ -645,6 +642,7 @@ struct RawBlockTransactions {
     inner: Vec<L2Transaction>,
     post_accounts: Vec<AccountMerkleState>,
     witness_hashes: Vec<H256>,
+    merkle_leaf_hashes: Vec<H256>,
 }
 
 impl RawBlockTransactions {
@@ -654,6 +652,7 @@ impl RawBlockTransactions {
             inner: Vec::new(),
             post_accounts: Vec::new(),
             witness_hashes: Vec::new(),
+            merkle_leaf_hashes: Vec::new(),
         }
     }
 
@@ -666,13 +665,18 @@ impl RawBlockTransactions {
     }
 
     fn push(&mut self, tx: L2Transaction, post_account: AccountMerkleState) {
-        self.witness_hashes.push(tx.witness_hash().into());
+        let tx_index = self.merkle_leaf_hashes.len() as u32;
+        let witness_hash: H256 = tx.witness_hash().into();
+        let merkle_leaf_hash = ckb_merkle_leaf_hash(tx_index, &witness_hash);
+
+        self.witness_hashes.push(witness_hash);
+        self.merkle_leaf_hashes.push(merkle_leaf_hash);
         self.post_accounts.push(post_account);
         self.inner.push(tx);
     }
 
     fn submit_transactions(&self) -> Result<SubmitTransactions> {
-        let root = calculate_merkle_root(self.witness_hashes.clone())
+        let root = calculate_ckb_merkle_root(self.merkle_leaf_hashes.clone())
             .map_err(|err| anyhow!("mock submit transaction error: {}", err))?;
         let count = self.inner.len() as u32;
 
@@ -685,7 +689,9 @@ impl RawBlockTransactions {
 
     fn pop(&mut self) {
         self.inner.pop();
+        self.post_accounts.pop();
         self.witness_hashes.pop();
+        self.merkle_leaf_hashes.pop();
     }
 }
 
@@ -709,4 +715,14 @@ fn build_post_account_and_rollback(
         .map_err(RollBackSavePointError)?;
 
     apply_result
+}
+
+fn build_cbmt_merkle_proof(leaves: &[H256], leaf_indices: &[u32]) -> Result<CKBMerkleProof> {
+    let proof = CBMT::build_merkle_proof(&leaves, leaf_indices)
+        .ok_or_else(|| anyhow!("build cbmt proof fail"))?;
+
+    Ok(CKBMerkleProof::new_builder()
+        .lemmas(proof.lemmas().pack())
+        .indices(proof.indices().pack())
+        .build())
 }
