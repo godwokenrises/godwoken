@@ -561,7 +561,7 @@ fn build_recover_account_cell(
 ) -> ((CellOutput, Bytes), WitnessArgs) {
     let mut data = [0u8; 65];
     data[0..32].copy_from_slice(&owner_lock_hash.as_slice()[..32]);
-    data[32] = SigningType::WithPrefix.into();
+    data[32] = SigningType::Raw.into();
     data[33..65].copy_from_slice(&account.message.as_slice()[..32]);
 
     let (output, data) = build_cell(data.to_vec().into(), account.lock_script);
