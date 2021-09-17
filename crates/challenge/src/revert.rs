@@ -108,6 +108,7 @@ impl<'a> Revert<'a> {
             .account(first_reverted_block.prev_account())
             .block(block_merkle_state)
             .tip_block_hash(first_reverted_block.parent_block_hash())
+            .tip_block_timestamp(self.revert_witness.new_tip_block.timestamp())
             .last_finalized_block_number(last_finalized_block_number.pack())
             .reverted_block_root(self.post_reverted_block_root.pack())
             .status(running_status.into())
@@ -115,6 +116,7 @@ impl<'a> Revert<'a> {
 
         // Witness
         let revert = RollupRevert::new_builder()
+            .new_tip_block(self.revert_witness.new_tip_block)
             .reverted_blocks(self.revert_witness.reverted_blocks)
             .block_proof(self.revert_witness.block_proof.0.pack())
             .reverted_block_proof(self.revert_witness.reverted_block_proof.0.pack())
