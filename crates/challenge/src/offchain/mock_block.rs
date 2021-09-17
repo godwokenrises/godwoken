@@ -718,7 +718,7 @@ fn build_post_account_and_rollback(
 }
 
 fn build_cbmt_merkle_proof(leaves: &[H256], leaf_indices: &[u32]) -> Result<CKBMerkleProof> {
-    let proof = CBMT::build_merkle_proof(&leaves, leaf_indices)
+    let proof = CBMT::build_merkle_proof(leaves, leaf_indices)
         .ok_or_else(|| anyhow!("build cbmt proof fail"))?;
 
     Ok(CKBMerkleProof::new_builder()
