@@ -6,7 +6,10 @@ use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainValidatorContext};
-use gw_common::{blake2b::new_blake2b, GLOBAL_VM_VERSION, H256};
+use gw_common::{
+    blake2b::new_blake2b, GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION,
+    H256,
+};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
 use gw_generator::{
@@ -160,10 +163,22 @@ async fn poll_loop(
             tip_number = raw_header.number().unpack();
             tip_hash = block.header().hash().into();
 
-            // update vm version
-            let vm_version = rpc_client.get_vm_version().await?;
+            // update global hardfork info
+            let hardfork_switch = rpc_client.get_hardfork_switch().await?;
+            let rpc32_epoch_number = hardfork_switch.rfc_0032();
+            *GLOBAL_HARDFORK_SWITCH.lock().await = hardfork_switch;
+
+            // update global current epoch number
+            let current_epoch_number = rpc_client.get_current_epoch_number().await?;
+            *GLOBAL_CURRENT_EPOCH_NUMBER.lock().await = current_epoch_number;
+
+            // update global vm version
+            let vm_version: u32 = if current_epoch_number >= rpc32_epoch_number {
+                1
+            } else {
+                0
+            };
             *GLOBAL_VM_VERSION.lock().await = vm_version;
-            log::debug!("Current global vm version: {}", vm_version);
         } else {
             log::debug!(
                 "Not found layer1 block #{} sleep {}s then retry",

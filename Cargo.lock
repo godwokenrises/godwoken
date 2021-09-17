@@ -1918,6 +1918,7 @@ dependencies = [
  "rand 0.8.2",
  "serde",
  "serde_json",
+ "smol",
  "thiserror",
 ]
 
@@ -1926,6 +1927,7 @@ name = "gw-common"
 version = "0.1.0"
 dependencies = [
  "cfg-if 0.1.10",
+ "ckb-types",
  "gw-hash",
  "lazy_static",
  "merkle-cbt",
