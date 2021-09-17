@@ -2,6 +2,7 @@
 //! and generate new status that can be committed to layer1
 
 pub mod account_lock_manage;
+pub mod account_whitelist;
 pub mod backend_manage;
 pub mod constants;
 pub mod dummy_state;

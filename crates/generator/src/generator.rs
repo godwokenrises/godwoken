@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use crate::{
     account_lock_manage::AccountLockManage,
+    account_whitelist::SUDTProxyAccountWhitelist,
     backend_manage::BackendManage,
     constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
     error::{BlockError, TransactionValidateError, WithdrawalError},
@@ -22,6 +23,7 @@ use gw_common::{
     state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE_TYPE},
     H256,
 };
+use gw_config::RPCConfig;
 use gw_store::{
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
     transaction::StoreTransaction,
@@ -67,6 +69,7 @@ pub struct Generator {
     backend_manage: BackendManage,
     account_lock_manage: AccountLockManage,
     rollup_context: RollupContext,
+    sudt_proxy_account_whitelist: SUDTProxyAccountWhitelist,
 }
 
 impl Generator {
@@ -74,11 +77,21 @@ impl Generator {
         backend_manage: BackendManage,
         account_lock_manage: AccountLockManage,
         rollup_context: RollupContext,
+        rpc_config: RPCConfig,
     ) -> Self {
+        let sudt_proxy_account_whitelist = SUDTProxyAccountWhitelist::new(
+            rpc_config.allowed_sudt_proxy_creator_account_id,
+            rpc_config
+                .sudt_proxy_code_hashes
+                .into_iter()
+                .map(|hash| hash.0.into())
+                .collect(),
+        );
         Generator {
             backend_manage,
             account_lock_manage,
             rollup_context,
+            sudt_proxy_account_whitelist,
         }
     }
 
@@ -664,8 +677,18 @@ impl Generator {
                 used_bytes: read_data_bytes,
             });
         }
-
-        Ok(run_result)
+        // check account id of sudt proxy contract creator is from whitelist
+        let from_id = raw_tx.from_id().unpack();
+        if self
+            .sudt_proxy_account_whitelist
+            .validate(&run_result, from_id)
+        {
+            Ok(run_result)
+        } else {
+            Err(TransactionError::InvalidSUDTProxyCreatorAccount {
+                account_id: from_id,
+            })
+        }
     }
 
     pub fn build_withdrawal_cell_output(
