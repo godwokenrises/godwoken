@@ -1838,7 +1838,6 @@ dependencies = [
  "clap",
  "ctrlc",
  "env_logger",
- "faster-hex 0.4.1",
  "futures",
  "gw-chain",
  "gw-challenge",
