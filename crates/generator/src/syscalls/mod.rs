@@ -18,7 +18,7 @@ use gw_traits::{ChainStore, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{RollupContext, RunResult},
+    offchain::{RecoverAccount, RollupContext, RunResult},
     packed::{BlockInfo, LogItem, RawL2Transaction, Script},
     prelude::*,
 };
@@ -396,6 +396,13 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
                             .hash_type(ScriptHashType::Type.into())
                             .args(Bytes::from(script_args).pack())
                             .build();
+
+                        let recover_account = RecoverAccount {
+                            message: msg,
+                            signature,
+                            lock_script: account_script.clone(),
+                        };
+                        self.result.recover_accounts.insert(recover_account);
 
                         machine.memory_mut().store64(
                             &script_len_addr,

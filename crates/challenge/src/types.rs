@@ -1,4 +1,5 @@
 use gw_common::{sparse_merkle_tree::CompiledMerkleProof, H256};
+use gw_types::offchain::RecoverAccount;
 use gw_types::packed::{
     Bytes, RawL2BlockVec, Script, VerifyTransactionSignatureWitness, VerifyTransactionWitness,
     VerifyWithdrawalWitness,
@@ -10,6 +11,7 @@ use std::collections::HashMap;
 pub enum VerifyWitness {
     TxExecution {
         load_data: HashMap<H256, Bytes>,
+        recover_accounts: Vec<RecoverAccount>,
         witness: VerifyTransactionWitness,
     },
     TxSignature(VerifyTransactionSignatureWitness),

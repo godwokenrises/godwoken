@@ -1,5 +1,6 @@
 use crate::cancel_challenge::{
     build_output, CancelChallengeOutput, LoadData, LoadDataContext, LoadDataStrategy,
+    RecoverAccounts, RecoverAccountsContext,
 };
 use crate::enter_challenge::EnterChallenge;
 use crate::offchain::{mock_poa::MockPoA, CKBGenesisInfo};
@@ -20,7 +21,7 @@ use gw_types::packed::{
 };
 use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct MockRollup {
     pub rollup_type_script: ScriptOpt,
@@ -120,6 +121,33 @@ pub fn mock_cancel_challenge_tx(
         tx_skeleton.witnesses_mut().push(verifier_witness);
     }
 
+    // Recover Accounts
+    if let Some(recover_accounts_context) = verifier_context.recover_accounts_context {
+        inputs.extend(recover_accounts_context.inputs.clone());
+
+        let RecoverAccountsContext {
+            cell_deps,
+            inputs,
+            witnesses,
+        } = recover_accounts_context;
+
+        // append dummy witness to align recover account witness (verifier may not have witness)
+        let input_len = tx_skeleton.inputs().len();
+        let witness_len = tx_skeleton.witnesses_mut().len();
+        if input_len != witness_len {
+            // append dummy witness args to align our reverted deposit witness args
+            let dummy_witness_argses = (0..input_len - witness_len)
+                .into_iter()
+                .map(|_| WitnessArgs::default())
+                .collect::<Vec<_>>();
+            tx_skeleton.witnesses_mut().extend(dummy_witness_argses);
+        }
+
+        tx_skeleton.cell_deps_mut().extend(cell_deps);
+        tx_skeleton.inputs_mut().extend(inputs);
+        tx_skeleton.witnesses_mut().extend(witnesses);
+    }
+
     // Burn
     let burn_cells = cancel_output.burn_cells;
     tx_skeleton.outputs_mut().extend(burn_cells);
@@ -139,6 +167,12 @@ pub fn mock_cancel_challenge_tx(
     let owner_dep = mock_rollup.ckb_genesis_info.sighash_dep.clone();
     tx_skeleton.cell_deps_mut().push(owner_dep);
     tx_skeleton.inputs_mut().push(owner_cell);
+
+    // ensure no cell dep duplicate
+    {
+        let deps: HashSet<_> = tx_skeleton.cell_deps_mut().iter().collect();
+        *tx_skeleton.cell_deps_mut() = deps.into_iter().cloned().collect();
+    }
 
     let owner_lock = mock_rollup.wallet.lock_script().to_owned();
     mock_rollup.fill_tx_fee(&mut tx_skeleton, owner_lock)?;
@@ -355,6 +389,7 @@ struct VerifierContext {
     input: InputCellInfo,
     witness: Option<WitnessArgs>,
     load_data_context: Option<LoadDataContext>,
+    recover_accounts_context: Option<RecoverAccountsContext>,
 }
 
 impl VerifierContext {
@@ -363,12 +398,25 @@ impl VerifierContext {
         config: &BlockProducerConfig,
     ) -> Result<VerifierContext> {
         let verifier_tx_hash = random_hash().unpack();
+        let load_data_len = {
+            let load_data = cancel_output.load_data.as_ref();
+            load_data.map(|l| l.cell_len()).unwrap_or(0)
+        };
+
         let to_ctx = |load_data: LoadData| load_data.into_context(verifier_tx_hash, 0);
+        let to_recv_ctx = |recover_accounts: RecoverAccounts| -> Result<_> {
+            recover_accounts.into_context(verifier_tx_hash, load_data_len + 1, config)
+        };
+
         let verifier_context = VerifierContext {
             cell_dep: cancel_output.verifier_dep(config)?,
             input: cancel_output.verifier_input(verifier_tx_hash, 0),
             witness: cancel_output.verifier_witness.clone(),
             load_data_context: cancel_output.load_data.take().map(to_ctx),
+            recover_accounts_context: {
+                let accounts = cancel_output.recover_accounts.take();
+                accounts.map(to_recv_ctx).transpose()?
+            },
         };
 
         Ok(verifier_context)

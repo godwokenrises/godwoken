@@ -153,3 +153,28 @@ impl From<DepType> for packed::Byte {
         (type_ as u8).into()
     }
 }
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[repr(u8)]
+pub enum SigningType {
+    Raw,
+    WithPrefix,
+}
+
+impl From<SigningType> for u8 {
+    #[inline]
+    fn from(type_: SigningType) -> u8 {
+        type_ as u8
+    }
+}
+
+impl TryFrom<u8> for SigningType {
+    type Error = u8;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(SigningType::Raw),
+            1 => Ok(SigningType::WithPrefix),
+            n => Err(n),
+        }
+    }
+}

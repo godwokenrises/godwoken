@@ -5,6 +5,7 @@ use gw_utils::{fee::fill_tx_fee, wallet::Wallet};
 
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
+use gw_challenge::cancel_challenge::RecoverAccountsContext;
 use gw_common::H256;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::core::Status;
@@ -22,6 +23,7 @@ const L1_FINALITY_BLOCKS: u64 = 100;
 #[derive(Clone)]
 pub struct Verifier {
     load_data_inputs: Vec<InputCellInfo>,
+    recover_accounts_context: Option<RecoverAccountsContext>,
     cell_dep: CellDep,
     input: InputCellInfo,
     witness: Option<WitnessArgs>,
@@ -30,12 +32,14 @@ pub struct Verifier {
 impl Verifier {
     pub fn new(
         load_data_inputs: Vec<InputCellInfo>,
+        recover_accounts_context: Option<RecoverAccountsContext>,
         cell_dep: CellDep,
         input: InputCellInfo,
         witness: Option<WitnessArgs>,
     ) -> Self {
         Verifier {
             load_data_inputs,
+            recover_accounts_context,
             cell_dep,
             input,
             witness,
@@ -184,6 +188,18 @@ impl Cleaner {
 
     async fn build_reclaim_verifier_tx(&self, verifier: Verifier) -> Result<Transaction> {
         let mut tx_skeleton = TransactionSkeleton::default();
+
+        if let Some(recover_accounts_context) = verifier.recover_accounts_context {
+            let RecoverAccountsContext {
+                cell_deps,
+                inputs,
+                witnesses,
+            } = recover_accounts_context;
+
+            tx_skeleton.cell_deps_mut().extend(cell_deps);
+            tx_skeleton.inputs_mut().extend(inputs);
+            tx_skeleton.witnesses_mut().extend(witnesses);
+        }
 
         tx_skeleton.cell_deps_mut().push(verifier.cell_dep);
         tx_skeleton.inputs_mut().push(verifier.input);

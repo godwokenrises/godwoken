@@ -8,7 +8,8 @@ use anyhow::{anyhow, bail, Result};
 use ckb_types::prelude::{Builder, Entity, Reader};
 use gw_chain::chain::{Chain, ChallengeCell, SyncEvent};
 use gw_challenge::cancel_challenge::{
-    CancelChallengeOutput, LoadData, LoadDataContext, LoadDataStrategy,
+    CancelChallengeOutput, LoadData, LoadDataContext, LoadDataStrategy, RecoverAccounts,
+    RecoverAccountsContext,
 };
 use gw_challenge::enter_challenge::EnterChallenge;
 use gw_challenge::offchain::verify_tx::{verify_tx, TxWithContext};
@@ -156,7 +157,7 @@ impl Challenger {
                         _ => unreachable!(),
                     }
                 }
-                self.cancel_challenge(rollup, cell, context, median_time)
+                self.cancel_challenge(rollup, cell, *context, median_time)
                     .await
             }
             SyncEvent::WaitChallenge { cell, context } => {
@@ -293,9 +294,14 @@ impl Challenger {
 
         // Build verifier transaction
         let verifier_cell = cancel_output.verifier_cell.clone();
-        let tx = self
-            .build_verifier_tx(verifier_cell, cancel_output.load_data.clone())
-            .await?;
+        let tx = {
+            let (load_data, recover_accounts) = (
+                cancel_output.load_data.clone(),
+                cancel_output.recover_accounts.clone(),
+            );
+            self.build_verifier_tx(verifier_cell, load_data, recover_accounts)
+                .await?
+        };
         let verifier_spent_inputs = extract_inputs(&tx);
         let verifier_tx_hash = self.rpc_client.send_transaction(tx).await?;
         log::info!("Create verifier in tx {}", to_hex(&verifier_tx_hash));
@@ -309,13 +315,19 @@ impl Challenger {
             let input = cancel_output.verifier_input(verifier_tx_hash, 0);
             let witness = cancel_output.verifier_witness.clone();
             let load_data = cancel_output.load_data.take();
+            let load_data_len = load_data.as_ref().map(|l| l.cell_len()).unwrap_or(0);
             let load_data_context = load_data.map(|ld| ld.into_context(verifier_tx_hash, 0));
+            let recover_accounts = cancel_output.recover_accounts.take();
+            let recover_accounts_context = recover_accounts
+                .map(|ra| ra.into_context(verifier_tx_hash, load_data_len + 1, &self.config))
+                .transpose()?;
 
             VerifierContext::new(
                 cell_dep,
                 input,
                 witness,
                 load_data_context,
+                recover_accounts_context,
                 Some(verifier_spent_inputs),
             )
         };
@@ -347,6 +359,7 @@ impl Challenger {
         let load_data_inputs = verifier_context.load_data_context.map(|d| d.inputs);
         let verifier = Verifier::new(
             load_data_inputs.unwrap_or_default(),
+            verifier_context.recover_accounts_context,
             verifier_context.cell_dep,
             verifier_context.input,
             verifier_context.witness,
@@ -511,12 +524,17 @@ impl Challenger {
         &self,
         verifier: (CellOutput, Bytes),
         load_data: Option<LoadData>,
+        recover_accounts: Option<RecoverAccounts>,
     ) -> Result<Transaction> {
         let mut tx_skeleton = TransactionSkeleton::default();
         tx_skeleton.outputs_mut().push(verifier);
 
         if let Some(load_data) = load_data {
             tx_skeleton.outputs_mut().extend(load_data.cells);
+        }
+
+        if let Some(recover_accounts) = recover_accounts {
+            tx_skeleton.outputs_mut().extend(recover_accounts.cells);
         }
 
         let challenger_lock_dep = self.ckb_genesis_info.sighash_dep();
@@ -574,6 +592,31 @@ impl Challenger {
             tx_skeleton.witnesses_mut().push(verifier_witness);
         }
 
+        // Recover Accounts
+        if let Some(recover_accounts_context) = verifier_context.recover_accounts_context {
+            let RecoverAccountsContext {
+                cell_deps,
+                inputs,
+                witnesses,
+            } = recover_accounts_context;
+
+            // append dummy witness to align recover account witness (verifier may not have witness)
+            let input_len = tx_skeleton.inputs().len();
+            let witness_len = tx_skeleton.witnesses_mut().len();
+            if input_len != witness_len {
+                // append dummy witness args to align our reverted deposit witness args
+                let dummy_witness_argses = (0..input_len - witness_len)
+                    .into_iter()
+                    .map(|_| WitnessArgs::default())
+                    .collect::<Vec<_>>();
+                tx_skeleton.witnesses_mut().extend(dummy_witness_argses);
+            }
+
+            tx_skeleton.cell_deps_mut().extend(cell_deps);
+            tx_skeleton.inputs_mut().extend(inputs);
+            tx_skeleton.witnesses_mut().extend(witnesses);
+        }
+
         // Burn
         tx_skeleton.outputs_mut().extend(cancel_output.burn_cells);
 
@@ -598,6 +641,12 @@ impl Challenger {
                 .generate(&tx_skeleton.inputs()[0], tx_skeleton.inputs(), median_time)
                 .await?;
             tx_skeleton.fill_poa(generated_poa, 0)?;
+        }
+
+        // ensure no cell dep duplicate
+        {
+            let deps: HashSet<_> = tx_skeleton.cell_deps_mut().iter().collect();
+            *tx_skeleton.cell_deps_mut() = deps.into_iter().cloned().collect();
         }
 
         let owner_lock = self.wallet.lock_script().to_owned();
@@ -710,6 +759,7 @@ struct VerifierContext {
     input: InputCellInfo,
     witness: Option<WitnessArgs>,
     load_data_context: Option<LoadDataContext>,
+    recover_accounts_context: Option<RecoverAccountsContext>,
     spent_inputs: Option<HashSet<OutPoint>>,
 }
 
@@ -719,6 +769,7 @@ impl VerifierContext {
         input: InputCellInfo,
         witness: Option<WitnessArgs>,
         load_data_context: Option<LoadDataContext>,
+        recover_accounts_context: Option<RecoverAccountsContext>,
         spent_inputs: Option<HashSet<OutPoint>>,
     ) -> Self {
         VerifierContext {
@@ -726,6 +777,7 @@ impl VerifierContext {
             input,
             witness,
             load_data_context,
+            recover_accounts_context,
             spent_inputs,
         }
     }
