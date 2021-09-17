@@ -2,9 +2,9 @@ use std::collections::HashSet;
 
 use crate::{
     account_lock_manage::AccountLockManage,
-    account_whitelist::SUDTProxyAccountWhitelist,
     backend_manage::BackendManage,
     constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
+    erc20_creator_whitelist::SUDTProxyAccountWhitelist,
     error::{BlockError, TransactionValidateError, WithdrawalError},
     vm_cost_model::instruction_cycles,
 };

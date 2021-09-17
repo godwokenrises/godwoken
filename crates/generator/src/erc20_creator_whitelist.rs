@@ -20,6 +20,22 @@ impl SUDTProxyAccountWhitelist {
 
     /// Only accounts in white list could create sUDT proxy contract.
     pub fn validate(&self, run_result: &RunResult, from_id: u32) -> bool {
+        if self.allowed_sudt_proxy_creator_account_id.is_empty()
+            || self.sudt_proxy_code_hashes.is_empty()
+        {
+            return true;
+        }
+        if self
+            .allowed_sudt_proxy_creator_account_id
+            .contains(&from_id)
+        {
+            return true;
+        }
+
+        if run_result.new_scripts.is_empty() {
+            return true;
+        }
+
         for k in run_result.write_data.keys() {
             debug!(
                 "whiltelist: from_id: {:?}, code_hash: {:?}",
@@ -30,13 +46,7 @@ impl SUDTProxyAccountWhitelist {
             // Contract create syscall stores code in write_data.
             // check code hash is sudt proxy contract
             if self.sudt_proxy_code_hashes.contains(k) {
-                // check account id from whitelist
-                if !self
-                    .allowed_sudt_proxy_creator_account_id
-                    .contains(&from_id)
-                {
-                    return false;
-                }
+                return false;
             }
         }
         true
