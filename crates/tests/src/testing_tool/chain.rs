@@ -124,6 +124,7 @@ pub fn setup_chain_with_account_lock_manage(
         backend_manage,
         account_lock_manage,
         rollup_context,
+        Default::default(),
     ));
     init_genesis(
         &store,

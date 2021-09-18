@@ -305,6 +305,7 @@ pub fn generate_config(
         chain,
         rpc_client,
         rpc_server,
+        rpc: Default::default(),
         block_producer,
         web3_indexer,
         node_mode: NodeMode::ReadOnly,

@@ -18,6 +18,7 @@ pub struct Config {
     pub chain: ChainConfig,
     pub rpc_client: RPCClientConfig,
     pub rpc_server: RPCServerConfig,
+    pub rpc: RPCConfig,
     #[serde(default)]
     pub debug: DebugConfig,
     pub block_producer: Option<BlockProducerConfig>,
@@ -39,6 +40,12 @@ pub struct RPCServerConfig {
 pub struct RPCClientConfig {
     pub indexer_url: String,
     pub ckb_url: String,
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RPCConfig {
+    pub allowed_sudt_proxy_creator_account_id: Vec<u32>,
+    pub sudt_proxy_code_hashes: Vec<H256>,
 }
 
 /// Onchain rollup cell config

@@ -124,6 +124,8 @@ pub enum TransactionError {
     ExceededMaxReadData { max_bytes: usize, used_bytes: usize },
     #[error("Exceeded maximum write data: max bytes {max_bytes}, writen bytes {used_bytes}")]
     ExceededMaxWriteData { max_bytes: usize, used_bytes: usize },
+    #[error("Cannot create sUDT proxy contract from account id: {account_id}.")]
+    InvalidSUDTProxyCreatorAccount { account_id: u32 },
 }
 
 impl From<VMError> for TransactionError {
