@@ -18,6 +18,7 @@ pub struct Config {
     pub chain: ChainConfig,
     pub rpc_client: RPCClientConfig,
     pub rpc_server: RPCServerConfig,
+    #[serde(default)]
     pub rpc: RPCConfig,
     #[serde(default)]
     pub debug: DebugConfig,
