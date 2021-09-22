@@ -42,7 +42,7 @@ use gw_types::{
 
 use ckb_vm::{
     machine::asm::{AsmCoreMachine, AsmMachine},
-    DefaultMachineBuilder, SupportMachine,
+    DefaultMachineBuilder, Error as VMError, SupportMachine,
 };
 
 struct AsmCoreMachineParams {
@@ -51,17 +51,19 @@ struct AsmCoreMachineParams {
 }
 
 impl AsmCoreMachineParams {
-    pub fn new(vm_version: u32) -> AsmCoreMachineParams {
+    pub fn with_version(vm_version: u32) -> Result<AsmCoreMachineParams, VMError> {
         if vm_version == 0 {
-            AsmCoreMachineParams {
+            Ok(AsmCoreMachineParams {
                 vm_isa: ckb_vm::ISA_IMC,
                 vm_version: ckb_vm::machine::VERSION0,
-            }
-        } else {
-            AsmCoreMachineParams {
+            })
+        } else if vm_version == 1 {
+            Ok(AsmCoreMachineParams {
                 vm_isa: ckb_vm::ISA_IMC | ckb_vm::ISA_B | ckb_vm::ISA_MOP,
                 vm_version: ckb_vm::machine::VERSION1,
-            }
+            })
+        } else {
+            Err(VMError::InvalidVersion)
         }
     }
 }
@@ -629,7 +631,7 @@ impl Generator {
         {
             // let core_machine = AsmCoreMachine::new_with_max_cycles(L2TX_MAX_CYCLES);
             let global_vm_version = smol::block_on(async { *GLOBAL_VM_VERSION.lock().await });
-            let params = AsmCoreMachineParams::new(global_vm_version);
+            let params = AsmCoreMachineParams::with_version(global_vm_version)?;
             let core_machine = AsmCoreMachine::new(params.vm_isa, params.vm_version, max_cycles);
             let machine_builder = DefaultMachineBuilder::new(core_machine)
                 .syscall(Box::new(L2Syscalls {
