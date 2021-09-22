@@ -18,6 +18,7 @@ gw-rpc-client = { path = "../rpc-client" }
 gw-poa = { path = "../poa" }
 gw-traits = { path = "../traits" }
 gw-utils = { path = "../utils" }
+gw-ckb-hardfork = { path = "../ckb-hardfork" }
 ckb-fixed-hash = "0.100.0"
 ckb-types = "0.100.0"
 ckb-script = "0.100.0"

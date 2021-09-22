@@ -1841,6 +1841,7 @@ dependencies = [
  "futures",
  "gw-chain",
  "gw-challenge",
+ "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
  "gw-db",
@@ -1901,6 +1902,7 @@ dependencies = [
  "ckb-script",
  "ckb-traits",
  "ckb-types",
+ "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
  "gw-db",
@@ -1922,15 +1924,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gw-ckb-hardfork"
+version = "0.1.0"
+dependencies = [
+ "ckb-types",
+ "lazy_static",
+ "smol",
+]
+
+[[package]]
 name = "gw-common"
 version = "0.1.0"
 dependencies = [
  "cfg-if 0.1.10",
- "ckb-types",
  "gw-hash",
- "lazy_static",
  "merkle-cbt",
- "smol",
  "sparse-merkle-tree",
  "thiserror",
 ]
@@ -1962,6 +1970,7 @@ dependencies = [
  "anyhow",
  "blake2b-rs 0.2.0",
  "ckb-vm",
+ "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
  "gw-store",

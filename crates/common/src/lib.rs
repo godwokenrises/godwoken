@@ -24,11 +24,3 @@ cfg_if::cfg_if! {
         use alloc::vec;
     }
 }
-
-lazy_static::lazy_static! {
-    pub static ref GLOBAL_VM_VERSION: smol::lock::Mutex<u32> = smol::lock::Mutex::new(0);
-    pub static ref GLOBAL_HARDFORK_SWITCH: smol::lock::Mutex<ckb_types::core::hardfork::HardForkSwitch> = smol::lock::Mutex::new(
-        ckb_types::core::hardfork::HardForkSwitch::new_without_any_enabled()
-    );
-    pub static ref GLOBAL_CURRENT_EPOCH_NUMBER: smol::lock::Mutex<u64> = smol::lock::Mutex::new(0u64);
-}

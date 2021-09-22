@@ -14,13 +14,14 @@ use crate::{
 };
 use crate::{error::AccountError, syscalls::L2Syscalls};
 use crate::{error::LockAlgorithmError, traits::StateExt};
+use gw_ckb_hardfork::GLOBAL_VM_VERSION;
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     error::Error as StateError,
     h256_ext::H256Ext,
     merkle_utils::calculate_state_checkpoint,
     state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE_TYPE},
-    GLOBAL_VM_VERSION, H256,
+    H256,
 };
 use gw_store::{
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},

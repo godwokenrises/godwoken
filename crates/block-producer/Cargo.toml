@@ -28,6 +28,7 @@ gw-web3-indexer = { path = "../web3-indexer" }
 gw-poa = { path = "../poa" }
 gw-utils = { path = "../utils" }
 gw-version = { path = "../version" }
+gw-ckb-hardfork = { path = "../ckb-hardfork" }
 ckb-crypto = "0.100.0"
 ckb-fixed-hash = "0.100.0"
 ckb-types = "0.100.0"

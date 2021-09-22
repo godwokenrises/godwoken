@@ -21,6 +21,7 @@ members = [
   "crates/benches",
   "crates/version",
   "crates/utils",
+  "crates/ckb-hardfork",
 ]
 
 [profile.release]
