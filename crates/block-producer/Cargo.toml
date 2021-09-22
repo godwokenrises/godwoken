@@ -28,10 +28,10 @@ gw-web3-indexer = { path = "../web3-indexer" }
 gw-poa = { path = "../poa" }
 gw-utils = { path = "../utils" }
 gw-version = { path = "../version" }
-ckb-crypto = "0.100.0-rc5"
-ckb-fixed-hash = "0.100.0-rc5"
-ckb-types = "0.100.0-rc5"
-ckb-chain-spec = "0.100.0-rc5"
+ckb-crypto = "0.100.0"
+ckb-fixed-hash = "0.100.0"
+ckb-types = "0.100.0"
+ckb-chain-spec = "0.100.0"
 toml = "0.5"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }

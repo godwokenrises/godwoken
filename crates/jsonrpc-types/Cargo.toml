@@ -11,6 +11,6 @@ serde = { version = "1.0", features = ["derive"] }
 faster-hex = "0.4"
 gw-types = { path = "../types" }
 gw-common = { path = "../common" }
-ckb-jsonrpc-types = "0.100.0-rc5"
-ckb-fixed-hash = "0.100.0-rc5"
+ckb-jsonrpc-types = "0.100.0"
+ckb-fixed-hash = "0.100.0"
 anyhow = "1.0"
