@@ -849,7 +849,7 @@ impl molecule::prelude::Builder for GlobalStateV0Builder {
     fn expected_length(&self) -> usize {
         Self::TOTAL_SIZE
     }
-    fn write<W: ::molecule::io::Write>(&self, writer: &mut W) -> ::molecule::io::Result<()> {
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         writer.write_all(self.rollup_config_hash.as_slice())?;
         writer.write_all(self.account.as_slice())?;
         writer.write_all(self.block.as_slice())?;
