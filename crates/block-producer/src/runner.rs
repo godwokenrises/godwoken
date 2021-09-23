@@ -420,8 +420,11 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 offchain_validator_context = Some(context);
             }
 
-            let mem_pool_provider =
-                DefaultMemPoolProvider::new(base.rpc_client.clone(), Arc::clone(&poa));
+            let mem_pool_provider = DefaultMemPoolProvider::new(
+                base.rpc_client.clone(),
+                Arc::clone(&poa),
+                base.store.clone(),
+            );
             let mem_pool = Arc::new(Mutex::new(
                 MemPool::create(
                     base.store.clone(),

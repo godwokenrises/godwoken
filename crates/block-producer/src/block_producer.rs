@@ -566,6 +566,7 @@ impl BlockProducer {
             &block,
             &self.config,
             &self.rpc_client,
+            &self.store.begin_transaction(),
         )
         .await?
         {

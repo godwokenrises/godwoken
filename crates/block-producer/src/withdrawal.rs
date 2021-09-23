@@ -1,16 +1,19 @@
 use anyhow::{anyhow, Result};
-use gw_common::CKB_SUDT_SCRIPT_ARGS;
 use gw_config::BlockProducerConfig;
-use gw_mem_pool::{custodian::calc_ckb_custodian_min_capacity, withdrawal::Generator};
+use gw_mem_pool::{
+    custodian::{sum_change_capacity, sum_withdrawals},
+    withdrawal::Generator,
+};
 use gw_rpc_client::rpc_client::RPCClient;
+use gw_store::transaction::StoreTransaction;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{CellInfo, InputCellInfo, RollupContext, WithdrawalsAmount},
+    offchain::{CellInfo, InputCellInfo, RollupContext},
     packed::{
         CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, GlobalState, L2Block,
         Script, UnlockWithdrawalViaRevert, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
-        WithdrawalRequest, WitnessArgs,
+        WitnessArgs,
     },
     prelude::*,
 };
@@ -37,6 +40,7 @@ pub async fn generate(
     block: &L2Block,
     block_producer_config: &BlockProducerConfig,
     rpc_client: &RPCClient,
+    db: &StoreTransaction,
 ) -> Result<Option<GeneratedWithdrawals>> {
     if block.withdrawals().is_empty() {
         return Ok(None);
@@ -46,11 +50,12 @@ pub async fn generate(
         .map_err(|_| anyhow!("parse rollup cell global state"))?;
     let last_finalized_block_number = global_state.last_finalized_block_number().unpack();
 
-    let total_withdrawal_amount = sum(block.withdrawals().into_iter());
+    let total_withdrawal_amount = sum_withdrawals(block.withdrawals().into_iter());
+    let total_change_capacity = sum_change_capacity(db, rollup_context, &total_withdrawal_amount);
     let custodian_cells = rpc_client
         .query_finalized_custodian_cells(
             &total_withdrawal_amount,
-            calc_ckb_custodian_min_capacity(rollup_context),
+            total_change_capacity,
             last_finalized_block_number,
         )
         .await?
@@ -195,32 +200,4 @@ pub fn revert(
         outputs: custodian_outputs,
         witness_args: withdrawal_witness,
     }))
-}
-
-fn sum<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmount {
-    reqs.fold(
-        WithdrawalsAmount::default(),
-        |mut total_amount, withdrawal| {
-            total_amount.capacity = total_amount
-                .capacity
-                .saturating_add(withdrawal.raw().capacity().unpack() as u128);
-
-            let sudt_script_hash = withdrawal.raw().sudt_script_hash().unpack();
-            let sudt_amount = withdrawal.raw().amount().unpack();
-            if sudt_amount != 0 {
-                match sudt_script_hash {
-                    CKB_SUDT_SCRIPT_ARGS => {
-                        let account = withdrawal.raw().account_script_hash();
-                        log::warn!("{} withdrawal request non-zero sudt amount but it's type hash ckb, ignore this amount", account);
-                    }
-                    _ => {
-                        let total_sudt_amount = total_amount.sudt.entry(sudt_script_hash).or_insert(0u128);
-                        *total_sudt_amount = total_sudt_amount.saturating_add(sudt_amount);
-                    }
-                }
-            }
-
-            total_amount
-        }
-    )
 }

@@ -10,7 +10,8 @@ use gw_types::{
 use std::collections::HashMap;
 
 use crate::custodian::{
-    build_finalized_custodian_lock, calc_ckb_custodian_min_capacity, AvailableCustodians,
+    build_finalized_custodian_lock, calc_ckb_custodian_min_capacity, generate_finalized_custodian,
+    AvailableCustodians,
 };
 
 #[derive(Clone)]
@@ -263,23 +264,4 @@ impl<'a> Generator<'a> {
 
         outputs
     }
-}
-
-fn generate_finalized_custodian(
-    rollup_context: &RollupContext,
-    amount: u128,
-    type_: Script,
-) -> (CellOutput, Bytes) {
-    let lock = build_finalized_custodian_lock(rollup_context);
-    let data = amount.pack().as_bytes();
-    let dummy_capacity = 1;
-    let output = CellOutput::new_builder()
-        .capacity(dummy_capacity.pack())
-        .type_(Some(type_).pack())
-        .lock(lock)
-        .build();
-    let capacity = output.occupied_capacity(data.len()).expect("overflow");
-    let output = output.as_builder().capacity(capacity.pack()).build();
-
-    (output, data)
 }

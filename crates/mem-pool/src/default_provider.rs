@@ -3,6 +3,7 @@ use std::{sync::Arc, time::Duration};
 use anyhow::{anyhow, Result};
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
+use gw_store::Store;
 use gw_types::{
     offchain::{DepositInfo, InputCellInfo, RollupContext},
     packed::{CellInput, WithdrawalRequest},
@@ -19,11 +20,16 @@ pub struct DefaultMemPoolProvider {
     rpc_client: RPCClient,
     /// POA Context
     poa: Arc<Mutex<PoA>>,
+    store: Store,
 }
 
 impl DefaultMemPoolProvider {
-    pub fn new(rpc_client: RPCClient, poa: Arc<Mutex<PoA>>) -> Self {
-        DefaultMemPoolProvider { rpc_client, poa }
+    pub fn new(rpc_client: RPCClient, poa: Arc<Mutex<PoA>>, store: Store) -> Self {
+        DefaultMemPoolProvider {
+            rpc_client,
+            poa,
+            store,
+        }
     }
 }
 
@@ -63,9 +69,11 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         rollup_context: RollupContext,
     ) -> Task<Result<AvailableCustodians>> {
         let rpc_client = self.rpc_client.clone();
+        let db = self.store.begin_transaction();
         smol::spawn(async move {
             let r = AvailableCustodians::build_from_withdrawals(
                 &rpc_client,
+                &db,
                 withdrawals.clone().into_iter(),
                 &rollup_context,
                 last_finalized_block_number,
