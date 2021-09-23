@@ -17,6 +17,7 @@ gw-traits = { path = "../traits" }
 gw-generator = { path = "../generator" }
 gw-mem-pool = { path = "../mem-pool" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
+gw-version = { path = "../version" }
 faster-hex = "0.4"
 ckb-crypto = "0.100.0"
 ckb-fixed-hash = "0.100.0"

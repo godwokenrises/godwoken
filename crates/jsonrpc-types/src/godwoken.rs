@@ -1011,3 +1011,29 @@ impl From<offchain::RunResult> for RunResult {
         }
     }
 }
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct NodeInfo {
+    // godwoken current version
+    pub version: String,
+    pub backends: Vec<BackendInfo>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct BackendInfo {
+    pub validator_code_hash: H256,
+    pub generator_code_hash: H256,
+    pub validator_script_type_hash: H256,
+}
+
+impl From<gw_common::backend::BackendInfo> for BackendInfo {
+    fn from(from: gw_common::backend::BackendInfo) -> Self {
+        Self {
+            validator_code_hash: H256(from.validator_code_hash.into()),
+            generator_code_hash: H256(from.generator_code_hash.into()),
+            validator_script_type_hash: H256(from.validator_script_type_hash.into()),
+        }
+    }
+}

@@ -2099,6 +2099,7 @@ dependencies = [
  "gw-store",
  "gw-traits",
  "gw-types",
+ "gw-version",
  "hyper",
  "jsonrpc-v2",
  "log",

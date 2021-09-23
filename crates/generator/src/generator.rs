@@ -775,6 +775,10 @@ impl Generator {
 
         Ok((output, data))
     }
+
+    pub fn get_backend_info(&self) -> Vec<gw_common::backend::BackendInfo> {
+        self.backend_manage.get_backend_info()
+    }
 }
 
 fn get_block_info(l2block: &RawL2Block) -> BlockInfo {

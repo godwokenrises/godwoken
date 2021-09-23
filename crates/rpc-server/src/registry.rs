@@ -12,7 +12,7 @@ use gw_jsonrpc_types::{
     debugger::{DumpChallengeTarget, ReprMockTransaction},
     godwoken::{
         GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus, L2TransactionStatus,
-        L2TransactionWithStatus, RunResult, TxReceipt,
+        L2TransactionWithStatus, NodeInfo, RunResult, TxReceipt,
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
@@ -27,6 +27,7 @@ use gw_types::{
     packed::{self, BlockInfo, RawL2Block, RollupConfig},
     prelude::*,
 };
+use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
 use smol::lock::Mutex;
 use std::sync::Arc;
@@ -187,7 +188,8 @@ impl Registry {
             .with_method(
                 "gw_compute_l2_sudt_script_hash",
                 compute_l2_sudt_script_hash,
-            );
+            )
+            .with_method("gw_get_node_info", get_node_info);
 
         // Tests
         if let Some(tests_rpc_impl) = self.tests_rpc_impl {
@@ -701,6 +703,18 @@ async fn compute_l2_sudt_script_hash(
     let l2_sudt_script =
         build_l2_sudt_script(generator.rollup_context(), &to_h256(l1_sudt_script_hash));
     Ok(to_jsonh256(l2_sudt_script.hash().into()))
+}
+
+async fn get_node_info(generator: Data<Generator>) -> Result<NodeInfo> {
+    let backend = generator
+        .get_backend_info()
+        .into_iter()
+        .map(|backend_info| backend_info.into())
+        .collect();
+    Ok(NodeInfo {
+        version: Version::current().to_string(),
+        backends: backend,
+    })
 }
 
 async fn tests_produce_block(
