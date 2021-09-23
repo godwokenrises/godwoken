@@ -12,9 +12,9 @@ gw-config = { path = "../config" }
 gw-types = { path = "../types" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 faster-hex = "0.4"
-ckb-crypto = "0.38.0"
-ckb-fixed-hash = "0.38.0"
-ckb-types = "0.38.0"
+ckb-crypto = "0.100.0"
+ckb-fixed-hash = "0.100.0"
+ckb-types = "0.100.0"
 toml = "0.5"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }

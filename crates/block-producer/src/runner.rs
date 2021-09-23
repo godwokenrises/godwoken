@@ -4,8 +4,10 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
+use ckb_types::core::hardfork::HardForkSwitch;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainValidatorContext};
+use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION};
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
@@ -159,6 +161,32 @@ async fn poll_loop(
             // update tip
             tip_number = raw_header.number().unpack();
             tip_hash = block.header().hash().into();
+
+            // update global hardfork info
+            let hardfork_switch = rpc_client.get_hardfork_switch().await?;
+            let rpc32_epoch_number = hardfork_switch.rfc_0032();
+            let mut global_hardfork_switch = GLOBAL_HARDFORK_SWITCH.lock().await;
+            if !is_hardfork_switch_eq(&*global_hardfork_switch, &hardfork_switch) {
+                *global_hardfork_switch = hardfork_switch
+            }
+
+            // update global current epoch number
+            let current_epoch_number = rpc_client.get_current_epoch_number().await?;
+            let mut global_epoch_number = GLOBAL_CURRENT_EPOCH_NUMBER.lock().await;
+            if *global_epoch_number != current_epoch_number {
+                *global_epoch_number = current_epoch_number;
+            }
+
+            // update global vm version
+            let vm_version: u32 = if current_epoch_number >= rpc32_epoch_number {
+                1
+            } else {
+                0
+            };
+            let mut global_vm_version = GLOBAL_VM_VERSION.lock().await;
+            if *global_vm_version != vm_version {
+                *global_vm_version = vm_version;
+            }
         } else {
             log::debug!(
                 "Not found layer1 block #{} sleep {}s then retry",
@@ -754,4 +782,14 @@ fn check_locks(
         ));
     }
     Ok(())
+}
+
+fn is_hardfork_switch_eq(l: &HardForkSwitch, r: &HardForkSwitch) -> bool {
+    l.rfc_0028() == r.rfc_0028()
+        && l.rfc_0029() == r.rfc_0029()
+        && l.rfc_0030() == r.rfc_0030()
+        && l.rfc_0031() == r.rfc_0031()
+        && l.rfc_0032() == r.rfc_0032()
+        && l.rfc_0036() == r.rfc_0036()
+        && l.rfc_0038() == r.rfc_0038()
 }

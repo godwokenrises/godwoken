@@ -12,9 +12,10 @@ gw-common = { path = "../common" }
 gw-config = { path = "../config" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
+gw-ckb-hardfork = { path = "../ckb-hardfork" }
 anyhow = "1.0"
 blake2b-rs = "0.2"
-ckb-vm = { git = "https://github.com/nervosnetwork/ckb-vm.git", tag = "0.19.1", features = ["detect-asm"] }
+ckb-vm = { version = "=0.20.0-rc5", features = ["detect-asm"] }
 thiserror = "1.0"
 lazy_static = "1.4"
 rlp = "0.5.0"
@@ -22,3 +23,4 @@ secp256k1 = { version = "0.20", features = ["recovery"] }
 sha3 = "0.9.1"
 log = "0.4"
 hex = "0.4"
+smol = "1.2.5"

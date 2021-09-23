@@ -239,6 +239,7 @@ pub fn generate_config(
                 .clone(),
         },
     ];
+
     // FIXME change to a directory path after we tested the persist storage
     let store: StoreConfig = StoreConfig { path: "".into() };
     let genesis_committed_info = L2BlockCommittedInfo {
@@ -288,6 +289,7 @@ pub fn generate_config(
         .ok_or_else(|| anyhow!("No allowed EoA type hashes in the rollup config"))?;
     let tron_allowed_eoa_hash = genesis.rollup_config.allowed_eoa_type_hashes.get(1);
     let tron_account_lock_hash = tron_allowed_eoa_hash.map(ToOwned::to_owned);
+
     let web3_indexer = match database_url {
         Some(database_url) => Some(Web3IndexerConfig {
             database_url: database_url.to_owned(),

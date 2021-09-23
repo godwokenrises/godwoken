@@ -1,5 +1,5 @@
 [package]
-name = "gw-config"
+name = "gw-ckb-hardfork"
 version = "0.1.0"
 authors = ["Nervos Network"]
 edition = "2018"
@@ -7,6 +7,6 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-gw-jsonrpc-types = { path = "../jsonrpc-types" }
-ckb-fixed-hash = "0.100.0"
-serde = { version = "1.0", features = ["derive"] }
+lazy_static = "1.4"
+smol = "1.2.5"
+ckb-types = "0.100.0"

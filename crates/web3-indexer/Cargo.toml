@@ -15,8 +15,8 @@ gw-config = { path = "../config" }
 gw-common = { path = "../common" }
 gw-generator = { path = "../generator" }
 gw-traits = { path = "../traits" }
-ckb-hash = "0.38.0"
-ckb-types = "0.38.0"
+ckb-hash = "0.100.0"
+ckb-types = "0.100.0"
 anyhow = "1.0"
 thiserror = "1.0"
 sqlx = { version = "0.5", features = [ "runtime-async-std-native-tls", "postgres", "sqlite", "chrono", "decimal" ] }

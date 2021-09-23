@@ -5,9 +5,10 @@ use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, Searc
 use crate::utils::{to_h256, to_jsonh256, to_result, DEFAULT_QUERY_LIMIT, TYPE_ID_CODE_HASH};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
+use ckb_types::core::hardfork::HardForkSwitch;
 use ckb_types::prelude::Entity;
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
-use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Uint32};
+use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Consensus, Uint32};
 use gw_types::offchain::{
     CollectedCustodianCells, DepositInfo, RollupContext, TxStatus, WithdrawalsAmount,
 };
@@ -1191,7 +1192,7 @@ impl RPCClient {
             self.ckb
                 .request(
                     "send_transaction",
-                    Some(ClientParams::Array(vec![json!(tx)])),
+                    Some(ClientParams::Array(vec![json!(tx), json!("passthrough")])),
                 )
                 .await?,
         )?;
@@ -1218,5 +1219,51 @@ impl RPCClient {
                 .await?,
         )?;
         Ok(dry_run_result.cycles.into())
+    }
+
+    pub async fn get_current_epoch_number(&self) -> Result<u64> {
+        let epoch_view: ckb_jsonrpc_types::EpochView =
+            to_result(self.ckb.request("get_current_epoch", None).await?)?;
+        let epoch_number: u64 = epoch_view.number.into();
+        Ok(epoch_number)
+    }
+
+    pub async fn get_hardfork_switch(&self) -> Result<HardForkSwitch> {
+        let consensus: Consensus = to_result(self.ckb.request("get_consensus", None).await?)?;
+        let rfc_0028 = self.get_hardfork_feature_epoch_number(&consensus, "0028")?;
+        let rfc_0029 = self.get_hardfork_feature_epoch_number(&consensus, "0029")?;
+        let rfc_0030 = self.get_hardfork_feature_epoch_number(&consensus, "0030")?;
+        let rfc_0031 = self.get_hardfork_feature_epoch_number(&consensus, "0031")?;
+        let rfc_0032 = self.get_hardfork_feature_epoch_number(&consensus, "0032")?;
+        let rfc_0036 = self.get_hardfork_feature_epoch_number(&consensus, "0036")?;
+        let rfc_0038 = self.get_hardfork_feature_epoch_number(&consensus, "0038")?;
+        let hardfork_switch = HardForkSwitch::new_without_any_enabled()
+            .as_builder()
+            .rfc_0028(rfc_0028)
+            .rfc_0029(rfc_0029)
+            .rfc_0030(rfc_0030)
+            .rfc_0031(rfc_0031)
+            .rfc_0032(rfc_0032)
+            .rfc_0036(rfc_0036)
+            .rfc_0038(rfc_0038)
+            .build()
+            .map_err(|err| anyhow!(err))?;
+
+        Ok(hardfork_switch)
+    }
+
+    fn get_hardfork_feature_epoch_number(&self, consensus: &Consensus, rfc: &str) -> Result<u64> {
+        let rfc_info = consensus
+            .hardfork_features
+            .iter()
+            .find(|f| f.rfc == rfc)
+            .ok_or_else(|| anyhow!("rfc {} hardfork feature not found!", rfc))?;
+
+        let epoch_number: u64 = rfc_info
+            .epoch_number
+            .ok_or_else(|| anyhow!("rfc {} epoch_number not found!", rfc))?
+            .into();
+
+        Ok(epoch_number)
     }
 }
