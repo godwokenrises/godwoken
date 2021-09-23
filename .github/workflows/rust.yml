@@ -32,8 +32,6 @@ jobs:
       run: cargo clippy
     - name: Init submodules
       run: git submodule init && git submodule update -r && cd tests-deps/godwoken-scripts && git submodule init && git submodule update -r
-    - name: Install moleculec v0.6.1
-      run: CARGO_TARGET_DIR=target/ cargo install moleculec --version 0.6.1
     - name: Compile C contracts
       run: cd tests-deps/godwoken-scripts/c && make
     - uses: actions/cache@v2
@@ -50,7 +48,5 @@ jobs:
     - name: Backup capsule cache
       if: steps.fetch-capsule-cache.outputs.cache-hit != 'true'
       run: cd tests-deps/godwoken-scripts && tools/backup-capsule-cache.sh
-    - name: Install moleculec v0.7.2 again
-      run: CARGO_TARGET_DIR=target/ cargo install moleculec --version 0.7.2
     - name: Tests
       run: cargo test --all-targets
