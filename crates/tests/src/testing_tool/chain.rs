@@ -10,12 +10,12 @@ use gw_generator::{
     genesis::init_genesis,
     Generator,
 };
-use gw_mem_pool::{custodian::AvailableCustodians, pool::MemPool};
+use gw_mem_pool::pool::MemPool;
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{CellInfo, DepositInfo, RollupContext},
+    offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext},
     packed::{
         CellOutput, DepositRequest, L2BlockCommittedInfo, RawTransaction, RollupAction,
         RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, Transaction, WitnessArgs,
@@ -218,7 +218,7 @@ pub fn construct_block(
     let generator = chain.generator();
     let rollup_config_hash = (*chain.rollup_config_hash()).into();
 
-    let mut available_custodians = AvailableCustodians {
+    let mut collected_custodians = CollectedCustodianCells {
         capacity: u128::MAX,
         ..Default::default()
     };
@@ -229,7 +229,7 @@ pub fn construct_block(
         }
 
         let sudt_script_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
-        available_custodians
+        collected_custodians
             .sudt
             .insert(sudt_script_hash, (std::u128::MAX, Script::default()));
     }
@@ -263,13 +263,13 @@ pub fn construct_block(
     let provider = DummyMemPoolProvider {
         deposit_cells,
         fake_blocktime: Duration::from_millis(0),
-        available_custodians,
+        collected_custodians,
     };
     mem_pool.set_provider(Box::new(provider));
     // refresh mem block
     mem_pool.reset_mem_block()?;
 
-    let block_param = mem_pool.output_mem_block().unwrap();
+    let (_custodians, block_param) = mem_pool.output_mem_block().unwrap();
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash,
         rollup_config_hash,

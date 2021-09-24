@@ -718,7 +718,7 @@ impl RPCClient {
     pub async fn query_finalized_custodian_cells(
         &self,
         withdrawals_amount: &WithdrawalsAmount,
-        min_refund_cell_capacity: u64,
+        custodian_change_capacity: u128,
         last_finalized_block_number: u64,
     ) -> Result<QueryResult<CollectedCustodianCells>> {
         let rollup_context = &self.rollup_context;
@@ -751,16 +751,13 @@ impl RPCClient {
         let mut collected_fullfilled_sudt = HashSet::new();
         let mut cursor = None;
 
-        // required ckb + refund capacity
-        let required_capacity = withdrawals_amount
-            .capacity
-            .saturating_add(min_refund_cell_capacity.into());
-        let is_ckb_satisfied = |collected_capacity: u128| {
-            collected_capacity == withdrawals_amount.capacity
-                || collected_capacity >= required_capacity
+        // withdrawal ckb + change custodian capacity
+        let required_capacity = {
+            let withdrawal_capacity = withdrawals_amount.capacity;
+            withdrawal_capacity.saturating_add(custodian_change_capacity)
         };
 
-        while !is_ckb_satisfied(collected.capacity)
+        while collected.capacity < required_capacity
             || collected_fullfilled_sudt.len() < withdrawals_amount.sudt.len()
         {
             let cells: Pagination<Cell> = to_result(
@@ -819,7 +816,7 @@ impl RPCClient {
                             continue;
                         }
 
-                        // Not targed withdrawal sudt
+                        // Not target withdrawal sudt
                         let withdrawal_amount = match withdrawals_amount.sudt.get(&sudt_type_hash) {
                             Some(amount) => amount,
                             None => continue,

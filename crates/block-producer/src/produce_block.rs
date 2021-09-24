@@ -1,5 +1,5 @@
 //! Block producer
-//! Block producer assemble serveral Godwoken components into a single executor.
+//! Block producer assemble several Godwoken components into a single executor.
 //! A block producer can act without the ability of produce block.
 
 use anyhow::{anyhow, Result};

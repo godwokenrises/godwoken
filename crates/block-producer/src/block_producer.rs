@@ -6,7 +6,7 @@ use crate::{
     types::ChainEvent,
     utils,
 };
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
 use gw_chain::chain::{Chain, SyncEvent};
@@ -21,7 +21,7 @@ use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     core::{DepType, ScriptHashType, Status},
-    offchain::{CellInfo, DepositInfo, InputCellInfo, RollupContext},
+    offchain::{CellInfo, CollectedCustodianCells, DepositInfo, InputCellInfo, RollupContext},
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, OutPointVec, RollupAction,
         RollupActionUnion, RollupSubmitBlock, Transaction, WitnessArgs,
@@ -244,7 +244,7 @@ impl BlockProducer {
         }
 
         // get txs & withdrawal requests from mem pool
-        let block_param = {
+        let (opt_finalized_custodians, block_param) = {
             let mem_pool = self.mem_pool.lock().await;
             mem_pool.output_mem_block()?
         };
@@ -276,6 +276,10 @@ impl BlockProducer {
             deposit_cells.len(),
             block.withdrawals().len(),
         );
+        if !block.withdrawals().is_empty() && opt_finalized_custodians.is_none() {
+            bail!("unexpected none custodians for withdrawals ",);
+        }
+        let finalized_custodians = opt_finalized_custodians.unwrap_or_default();
 
         if let Some(ref tests_control) = self.tests_control {
             if let Some(TestModePayload::BadBlock { .. }) = tests_control.payload().await {
@@ -290,7 +294,14 @@ impl BlockProducer {
 
         // composite tx
         let tx = match self
-            .complete_tx_skeleton(deposit_cells, block, global_state, median_time, rollup_cell)
+            .complete_tx_skeleton(
+                deposit_cells,
+                finalized_custodians,
+                block,
+                global_state,
+                median_time,
+                rollup_cell,
+            )
             .await
         {
             Ok(tx) => tx,
@@ -366,6 +377,7 @@ impl BlockProducer {
     async fn complete_tx_skeleton(
         &self,
         deposit_cells: Vec<DepositInfo>,
+        finalized_custodians: CollectedCustodianCells,
         block: L2Block,
         global_state: GlobalState,
         median_time: Duration,
@@ -560,14 +572,8 @@ impl BlockProducer {
             .push((generated_stake.output, generated_stake.output_data));
 
         // withdrawal cells
-        if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
-            &rollup_cell,
-            rollup_context,
-            &block,
-            &self.config,
-            &self.rpc_client,
-        )
-        .await?
+        if let Some(generated_withdrawal_cells) =
+            crate::withdrawal::generate(rollup_context, finalized_custodians, &block, &self.config)?
         {
             tx_skeleton
                 .cell_deps_mut()

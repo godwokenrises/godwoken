@@ -1,16 +1,14 @@
 use anyhow::{anyhow, Result};
-use gw_common::CKB_SUDT_SCRIPT_ARGS;
 use gw_config::BlockProducerConfig;
-use gw_mem_pool::{custodian::calc_ckb_custodian_min_capacity, withdrawal::Generator};
-use gw_rpc_client::rpc_client::RPCClient;
+use gw_mem_pool::{custodian::sum_withdrawals, withdrawal::Generator};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{CellInfo, InputCellInfo, RollupContext, WithdrawalsAmount},
+    offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext},
     packed::{
-        CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, GlobalState, L2Block,
-        Script, UnlockWithdrawalViaRevert, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
-        WithdrawalRequest, WitnessArgs,
+        CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, L2Block, Script,
+        UnlockWithdrawalViaRevert, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
+        WitnessArgs,
     },
     prelude::*,
 };
@@ -31,33 +29,19 @@ pub struct GeneratedWithdrawals {
 }
 
 // Note: custodian lock search rollup cell in inputs
-pub async fn generate(
-    input_rollup_cell: &CellInfo,
+pub fn generate(
     rollup_context: &RollupContext,
+    finalized_custodians: CollectedCustodianCells,
     block: &L2Block,
     block_producer_config: &BlockProducerConfig,
-    rpc_client: &RPCClient,
 ) -> Result<Option<GeneratedWithdrawals>> {
     if block.withdrawals().is_empty() {
         return Ok(None);
     }
+    log::debug!("custodian inputs {:?}", finalized_custodians);
 
-    let global_state = GlobalState::from_slice(&input_rollup_cell.data)
-        .map_err(|_| anyhow!("parse rollup cell global state"))?;
-    let last_finalized_block_number = global_state.last_finalized_block_number().unpack();
-
-    let total_withdrawal_amount = sum(block.withdrawals().into_iter());
-    let custodian_cells = rpc_client
-        .query_finalized_custodian_cells(
-            &total_withdrawal_amount,
-            calc_ckb_custodian_min_capacity(rollup_context),
-            last_finalized_block_number,
-        )
-        .await?
-        .expect_full("collect custodian cells")?;
-    log::debug!("custodian inputs {:?}", custodian_cells);
-
-    let mut generator = Generator::new(rollup_context, (&custodian_cells).into());
+    let total_withdrawal_amount = sum_withdrawals(block.withdrawals().into_iter());
+    let mut generator = Generator::new(rollup_context, (&finalized_custodians).into());
     for req in block.withdrawals().into_iter() {
         generator
             .include_and_verify(&req, block)
@@ -72,7 +56,7 @@ pub async fn generate(
         cell_deps.push(sudt_type_dep.into());
     }
 
-    let custodian_inputs = custodian_cells.cells_info.into_iter().map(|cell| {
+    let custodian_inputs = finalized_custodians.cells_info.into_iter().map(|cell| {
         let input = CellInput::new_builder()
             .previous_output(cell.out_point.clone())
             .build();
@@ -195,32 +179,4 @@ pub fn revert(
         outputs: custodian_outputs,
         witness_args: withdrawal_witness,
     }))
-}
-
-fn sum<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmount {
-    reqs.fold(
-        WithdrawalsAmount::default(),
-        |mut total_amount, withdrawal| {
-            total_amount.capacity = total_amount
-                .capacity
-                .saturating_add(withdrawal.raw().capacity().unpack() as u128);
-
-            let sudt_script_hash = withdrawal.raw().sudt_script_hash().unpack();
-            let sudt_amount = withdrawal.raw().amount().unpack();
-            if sudt_amount != 0 {
-                match sudt_script_hash {
-                    CKB_SUDT_SCRIPT_ARGS => {
-                        let account = withdrawal.raw().account_script_hash();
-                        log::warn!("{} withdrawal request non-zero sudt amount but it's type hash ckb, ignore this amount", account);
-                    }
-                    _ => {
-                        let total_sudt_amount = total_amount.sudt.entry(sudt_script_hash).or_insert(0u128);
-                        *total_sudt_amount = total_sudt_amount.saturating_add(sudt_amount);
-                    }
-                }
-            }
-
-            total_amount
-        }
-    )
 }

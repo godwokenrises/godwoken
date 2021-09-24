@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_rpc_client::rpc_client::{QueryResult, RPCClient};
+use gw_store::transaction::StoreTransaction;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -88,27 +89,7 @@ impl<'a> From<&'a CollectedCustodianCells> for AvailableCustodians {
     }
 }
 
-impl AvailableCustodians {
-    pub async fn build_from_withdrawals<WithdrawalIter: Iterator<Item = WithdrawalRequest>>(
-        rpc_client: &RPCClient,
-        withdrawals: WithdrawalIter,
-        rollup_context: &RollupContext,
-        last_finalized_block_number: u64,
-    ) -> Result<QueryResult<Self>> {
-        let total_withdrawal_amount = sum(withdrawals);
-        let available_custodians = rpc_client
-            .query_finalized_custodian_cells(
-                &total_withdrawal_amount,
-                calc_ckb_custodian_min_capacity(rollup_context),
-                last_finalized_block_number,
-            )
-            .await?
-            .map(|custodian_cells| (&custodian_cells).into());
-        Ok(available_custodians)
-    }
-}
-
-fn sum<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmount {
+pub fn sum_withdrawals<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmount {
     reqs.fold(
         WithdrawalsAmount::default(),
         |mut total_amount, withdrawal| {
@@ -135,9 +116,32 @@ fn sum<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmoun
     )
 }
 
+pub async fn query_finalized_custodians<WithdrawalIter: Iterator<Item = WithdrawalRequest>>(
+    rpc_client: &RPCClient,
+    db: &StoreTransaction,
+    withdrawals: WithdrawalIter,
+    rollup_context: &RollupContext,
+    last_finalized_block_number: u64,
+) -> Result<QueryResult<CollectedCustodianCells>> {
+    let total_withdrawal_amount = sum_withdrawals(withdrawals);
+    let total_change_capacity = sum_change_capacity(db, rollup_context, &total_withdrawal_amount);
+
+    rpc_client
+        .query_finalized_custodian_cells(
+            &total_withdrawal_amount,
+            total_change_capacity,
+            last_finalized_block_number,
+        )
+        .await
+}
+
 pub fn calc_ckb_custodian_min_capacity(rollup_context: &RollupContext) -> u64 {
     let lock = build_finalized_custodian_lock(rollup_context);
-    (8 + lock.as_slice().len() as u64).saturating_mul(100000000)
+    let dummy = CellOutput::new_builder()
+        .capacity(1u64.pack())
+        .lock(lock)
+        .build();
+    dummy.occupied_capacity(0).expect("overflow")
 }
 
 pub fn build_finalized_custodian_lock(rollup_context: &RollupContext) -> Script {
@@ -154,4 +158,51 @@ pub fn build_finalized_custodian_lock(rollup_context: &RollupContext) -> Script 
         .hash_type(ScriptHashType::Type.into())
         .args(args.pack())
         .build()
+}
+
+pub fn generate_finalized_custodian(
+    rollup_context: &RollupContext,
+    amount: u128,
+    type_: Script,
+) -> (CellOutput, Bytes) {
+    let lock = build_finalized_custodian_lock(rollup_context);
+    let data = amount.pack().as_bytes();
+    let dummy_capacity = 1;
+    let output = CellOutput::new_builder()
+        .capacity(dummy_capacity.pack())
+        .type_(Some(type_).pack())
+        .lock(lock)
+        .build();
+    let capacity = output.occupied_capacity(data.len()).expect("overflow");
+    let output = output.as_builder().capacity(capacity.pack()).build();
+
+    (output, data)
+}
+
+fn sum_change_capacity(
+    db: &StoreTransaction,
+    rollup_context: &RollupContext,
+    withdrawals_amount: &WithdrawalsAmount,
+) -> u128 {
+    let to_change_capacity = |sudt_script_hash: &[u8; 32]| -> u128 {
+        match db.get_asset_script(&H256::from(*sudt_script_hash)) {
+            Ok(Some(script)) => {
+                let (change, _data) = generate_finalized_custodian(rollup_context, 1, script);
+                change.capacity().unpack() as u128
+            }
+            _ => {
+                let hex = hex::encode(&sudt_script_hash);
+                log::warn!("unknown sudt script hash {:?}", hex);
+                0
+            }
+        }
+    };
+
+    let ckb_change_capacity = calc_ckb_custodian_min_capacity(rollup_context) as u128;
+    let sudt_change_capacity: u128 = {
+        let sudt_script_hashes = withdrawals_amount.sudt.keys();
+        sudt_script_hashes.map(to_change_capacity).sum()
+    };
+
+    ckb_change_capacity + sudt_change_capacity
 }
