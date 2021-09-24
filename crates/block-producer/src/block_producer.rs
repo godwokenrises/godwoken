@@ -24,7 +24,7 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
-    core::{DepType, ScriptHashType, Status},
+    core::{global_state_from_slice, DepType, ScriptHashType, Status},
     offchain::{CellInfo, CollectedCustodianCells, DepositInfo, InputCellInfo, RollupContext},
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, OutPointVec, RollupAction,
@@ -209,7 +209,7 @@ impl BlockProducer {
         let rollup_cell_opt = self.rpc_client.query_rollup_cell().await?;
         let rollup_cell = rollup_cell_opt.ok_or_else(|| anyhow!("can't found rollup cell"))?;
         let rollup_state = {
-            let global_state = GlobalState::from_slice(&rollup_cell.data)?;
+            let global_state = global_state_from_slice(&rollup_cell.data)?;
             let status: u8 = global_state.status().into();
             Status::try_from(status).map_err(|n| anyhow!("invalid status {}", n))?
         };

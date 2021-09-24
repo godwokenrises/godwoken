@@ -1,6 +1,9 @@
+use ckb_types::error::VerificationError;
 use molecule::prelude::Byte;
 
 use crate::packed;
+use crate::packed::{GlobalState, GlobalStateV0};
+use crate::prelude::{Builder, Entity, Pack};
 use core::convert::TryFrom;
 use core::convert::TryInto;
 
@@ -176,5 +179,28 @@ impl TryFrom<u8> for SigningType {
             1 => Ok(SigningType::WithPrefix),
             n => Err(n),
         }
+    }
+}
+
+impl From<GlobalStateV0> for GlobalState {
+    fn from(global_state_v0: GlobalStateV0) -> GlobalState {
+        GlobalState::new_builder()
+            .rollup_config_hash(global_state_v0.rollup_config_hash())
+            .account(global_state_v0.account())
+            .block(global_state_v0.block())
+            .reverted_block_root(global_state_v0.reverted_block_root())
+            .tip_block_hash(global_state_v0.tip_block_hash())
+            .last_finalized_block_number(global_state_v0.last_finalized_block_number())
+            .status(global_state_v0.status())
+            .tip_block_timestamp(0u64.pack())
+            .version(0.into())
+            .build()
+    }
+}
+
+pub fn global_state_from_slice(slice: &[u8]) -> Result<GlobalState, VerificationError> {
+    match GlobalState::from_slice(slice) {
+        Ok(state) => Ok(state),
+        Err(_) => GlobalStateV0::from_slice(slice).map(Into::into),
     }
 }

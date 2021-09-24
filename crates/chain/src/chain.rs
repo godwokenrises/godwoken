@@ -18,7 +18,7 @@ use gw_store::{
 };
 use gw_types::{
     bytes::Bytes,
-    core::Status,
+    core::{global_state_from_slice, Status},
     packed::{
         BlockMerkleState, CellInput, CellOutput, ChallengeTarget, ChallengeWitness, DepositRequest,
         GlobalState, L2Block, L2BlockCommittedInfo, RawL2Block, RollupConfig, Script, Transaction,
@@ -977,7 +977,8 @@ fn parse_global_state(tx: &Transaction, rollup_id: &[u8; 32]) -> Result<GlobalSt
         .get(i)
         .ok_or_else(|| anyhow!("no output data"))?
         .unpack();
-    GlobalState::from_slice(&output_data).map_err(|_| anyhow!("global state unpacking error"))
+
+    global_state_from_slice(&output_data).map_err(|_| anyhow!("global state unpacking error"))
 }
 
 fn package_bad_blocks(db: &StoreTransaction, start_block_hash: &H256) -> Result<Vec<L2Block>> {
