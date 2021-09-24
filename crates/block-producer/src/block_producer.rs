@@ -24,8 +24,11 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
-    core::{global_state_from_slice, DepType, ScriptHashType, Status},
-    offchain::{CellInfo, CollectedCustodianCells, DepositInfo, InputCellInfo, RollupContext},
+    core::{DepType, ScriptHashType, Status},
+    offchain::{
+        global_state_from_slice, CellInfo, CollectedCustodianCells, DepositInfo, InputCellInfo,
+        RollupContext,
+    },
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, OutPointVec, RollupAction,
         RollupActionUnion, RollupSubmitBlock, Transaction, WitnessArgs,

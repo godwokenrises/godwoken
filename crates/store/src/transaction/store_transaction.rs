@@ -16,7 +16,7 @@ use gw_db::schema::{
 use gw_db::{
     error::Error, iter::DBIter, DBIterator, Direction::Forward, IteratorMode, RocksDBTransaction,
 };
-use gw_types::core::global_state_from_slice;
+use gw_types::offchain::global_state_from_slice;
 use gw_types::packed::Script;
 use gw_types::{
     packed::{

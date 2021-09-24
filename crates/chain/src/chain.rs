@@ -18,7 +18,8 @@ use gw_store::{
 };
 use gw_types::{
     bytes::Bytes,
-    core::{global_state_from_slice, Status},
+    core::Status,
+    offchain::global_state_from_slice,
     packed::{
         BlockMerkleState, CellInput, CellOutput, ChallengeTarget, ChallengeWitness, DepositRequest,
         GlobalState, L2Block, L2BlockCommittedInfo, RawL2Block, RollupConfig, Script, Transaction,

@@ -13,7 +13,7 @@ use gw_db::{
     DBPinnableSlice, RocksDB,
 };
 use gw_types::{
-    core::global_state_from_slice,
+    offchain::global_state_from_slice,
     packed::{self, GlobalState, L2Block, L2Transaction},
     prelude::*,
 };

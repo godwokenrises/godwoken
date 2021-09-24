@@ -15,8 +15,8 @@ use gw_poa::{PoA, ShouldIssueBlock};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::registry::TestModeRPC;
 use gw_store::Store;
-use gw_types::core::{global_state_from_slice, ChallengeTargetType, Status};
-use gw_types::offchain::InputCellInfo;
+use gw_types::core::{ChallengeTargetType, Status};
+use gw_types::offchain::{global_state_from_slice, InputCellInfo};
 use gw_types::packed::{
     BlockMerkleState, ChallengeTarget, ChallengeWitness, GlobalState, L2Block, L2Transaction,
     SubmitWithdrawals, WithdrawalRequest,

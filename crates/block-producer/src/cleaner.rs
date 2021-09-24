@@ -8,8 +8,8 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_challenge::cancel_challenge::RecoverAccountsContext;
 use gw_common::H256;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_types::core::{global_state_from_slice, Status};
-use gw_types::offchain::{CellInfo, InputCellInfo, TxStatus};
+use gw_types::core::Status;
+use gw_types::offchain::{global_state_from_slice, CellInfo, InputCellInfo, TxStatus};
 use gw_types::packed::{CellDep, CellInput, Transaction, WitnessArgs};
 use gw_types::prelude::Unpack;
 

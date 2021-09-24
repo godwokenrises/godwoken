@@ -1,4 +1,3 @@
-use ckb_types::error::VerificationError;
 use molecule::prelude::Byte;
 
 use crate::packed;
@@ -195,12 +194,5 @@ impl From<GlobalStateV0> for GlobalState {
             .tip_block_timestamp(0u64.pack())
             .version(0.into())
             .build()
-    }
-}
-
-pub fn global_state_from_slice(slice: &[u8]) -> Result<GlobalState, VerificationError> {
-    match GlobalState::from_slice(slice) {
-        Ok(state) => Ok(state),
-        Err(_) => GlobalStateV0::from_slice(slice).map(Into::into),
     }
 }
