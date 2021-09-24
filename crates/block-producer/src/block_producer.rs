@@ -493,8 +493,14 @@ impl BlockProducer {
         );
 
         // output
-        let output = rollup_cell.output.clone();
         let output_data = global_state.as_bytes();
+        let output = {
+            let dummy = rollup_cell.output.clone();
+            let capacity = dummy
+                .occupied_capacity(output_data.len())
+                .expect("capacity overflow");
+            dummy.as_builder().capacity(capacity.pack()).build()
+        };
         tx_skeleton.outputs_mut().push((output, output_data));
 
         // deposit cells
