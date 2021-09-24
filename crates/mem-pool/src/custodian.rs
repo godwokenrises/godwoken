@@ -89,29 +89,6 @@ impl<'a> From<&'a CollectedCustodianCells> for AvailableCustodians {
     }
 }
 
-impl AvailableCustodians {
-    pub async fn build_from_withdrawals<WithdrawalIter: Iterator<Item = WithdrawalRequest>>(
-        rpc_client: &RPCClient,
-        db: &StoreTransaction,
-        withdrawals: WithdrawalIter,
-        rollup_context: &RollupContext,
-        last_finalized_block_number: u64,
-    ) -> Result<QueryResult<Self>> {
-        let total_withdrawal_amount = sum_withdrawals(withdrawals);
-        let total_change_capacity =
-            sum_change_capacity(db, rollup_context, &total_withdrawal_amount);
-        let available_custodians = rpc_client
-            .query_finalized_custodian_cells(
-                &total_withdrawal_amount,
-                total_change_capacity,
-                last_finalized_block_number,
-            )
-            .await?
-            .map(|custodian_cells| (&custodian_cells).into());
-        Ok(available_custodians)
-    }
-}
-
 pub fn sum_withdrawals<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> WithdrawalsAmount {
     reqs.fold(
         WithdrawalsAmount::default(),
@@ -139,32 +116,23 @@ pub fn sum_withdrawals<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> 
     )
 }
 
-pub fn sum_change_capacity(
+pub async fn query_finalized_custodians<WithdrawalIter: Iterator<Item = WithdrawalRequest>>(
+    rpc_client: &RPCClient,
     db: &StoreTransaction,
+    withdrawals: WithdrawalIter,
     rollup_context: &RollupContext,
-    withdrawals_amount: &WithdrawalsAmount,
-) -> u128 {
-    let to_change_capacity = |sudt_script_hash: &[u8; 32]| -> u128 {
-        match db.get_asset_script(&H256::from(*sudt_script_hash)) {
-            Ok(Some(script)) => {
-                let (change, _data) = generate_finalized_custodian(rollup_context, 1, script);
-                change.capacity().unpack() as u128
-            }
-            _ => {
-                let hex = hex::encode(&sudt_script_hash);
-                log::warn!("unknown sudt script hash {:?}", hex);
-                0
-            }
-        }
-    };
+    last_finalized_block_number: u64,
+) -> Result<QueryResult<CollectedCustodianCells>> {
+    let total_withdrawal_amount = sum_withdrawals(withdrawals);
+    let total_change_capacity = sum_change_capacity(db, rollup_context, &total_withdrawal_amount);
 
-    let ckb_change_capacity = calc_ckb_custodian_min_capacity(rollup_context) as u128;
-    let sudt_change_capacity: u128 = {
-        let sudt_script_hashes = withdrawals_amount.sudt.keys();
-        sudt_script_hashes.map(to_change_capacity).sum()
-    };
-
-    ckb_change_capacity + sudt_change_capacity
+    rpc_client
+        .query_finalized_custodian_cells(
+            &total_withdrawal_amount,
+            total_change_capacity,
+            last_finalized_block_number,
+        )
+        .await
 }
 
 pub fn calc_ckb_custodian_min_capacity(rollup_context: &RollupContext) -> u64 {
@@ -209,4 +177,32 @@ pub fn generate_finalized_custodian(
     let output = output.as_builder().capacity(capacity.pack()).build();
 
     (output, data)
+}
+
+fn sum_change_capacity(
+    db: &StoreTransaction,
+    rollup_context: &RollupContext,
+    withdrawals_amount: &WithdrawalsAmount,
+) -> u128 {
+    let to_change_capacity = |sudt_script_hash: &[u8; 32]| -> u128 {
+        match db.get_asset_script(&H256::from(*sudt_script_hash)) {
+            Ok(Some(script)) => {
+                let (change, _data) = generate_finalized_custodian(rollup_context, 1, script);
+                change.capacity().unpack() as u128
+            }
+            _ => {
+                let hex = hex::encode(&sudt_script_hash);
+                log::warn!("unknown sudt script hash {:?}", hex);
+                0
+            }
+        }
+    };
+
+    let ckb_change_capacity = calc_ckb_custodian_min_capacity(rollup_context) as u128;
+    let sudt_change_capacity: u128 = {
+        let sudt_script_hashes = withdrawals_amount.sudt.keys();
+        sudt_script_hashes.map(to_change_capacity).sum()
+    };
+
+    ckb_change_capacity + sudt_change_capacity
 }

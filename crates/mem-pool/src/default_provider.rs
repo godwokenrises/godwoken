@@ -5,14 +5,15 @@ use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::Store;
 use gw_types::{
-    offchain::{DepositInfo, InputCellInfo, RollupContext},
+    offchain::{CollectedCustodianCells, DepositInfo, InputCellInfo, RollupContext},
     packed::{CellInput, WithdrawalRequest},
     prelude::*,
 };
 use smol::{lock::Mutex, Task};
 
 use crate::{
-    constants::MAX_MEM_BLOCK_DEPOSITS, custodian::AvailableCustodians, traits::MemPoolProvider,
+    constants::MAX_MEM_BLOCK_DEPOSITS, custodian::query_finalized_custodians,
+    traits::MemPoolProvider,
 };
 
 pub struct DefaultMemPoolProvider {
@@ -67,11 +68,11 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         withdrawals: Vec<WithdrawalRequest>,
         last_finalized_block_number: u64,
         rollup_context: RollupContext,
-    ) -> Task<Result<AvailableCustodians>> {
+    ) -> Task<Result<CollectedCustodianCells>> {
         let rpc_client = self.rpc_client.clone();
         let db = self.store.begin_transaction();
         smol::spawn(async move {
-            let r = AvailableCustodians::build_from_withdrawals(
+            let r = query_finalized_custodians(
                 &rpc_client,
                 &db,
                 withdrawals.clone().into_iter(),

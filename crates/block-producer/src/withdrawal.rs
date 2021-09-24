@@ -1,18 +1,13 @@
 use anyhow::{anyhow, Result};
 use gw_config::BlockProducerConfig;
-use gw_mem_pool::{
-    custodian::{sum_change_capacity, sum_withdrawals},
-    withdrawal::Generator,
-};
-use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::transaction::StoreTransaction;
+use gw_mem_pool::{custodian::sum_withdrawals, withdrawal::Generator};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{CellInfo, InputCellInfo, RollupContext},
+    offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext},
     packed::{
-        CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, GlobalState, L2Block,
-        Script, UnlockWithdrawalViaRevert, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
+        CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, L2Block, Script,
+        UnlockWithdrawalViaRevert, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
         WitnessArgs,
     },
     prelude::*,
@@ -34,34 +29,18 @@ pub struct GeneratedWithdrawals {
 }
 
 // Note: custodian lock search rollup cell in inputs
-pub async fn generate(
-    input_rollup_cell: &CellInfo,
+pub fn generate(
     rollup_context: &RollupContext,
+    custodian_cells: CollectedCustodianCells,
     block: &L2Block,
     block_producer_config: &BlockProducerConfig,
-    rpc_client: &RPCClient,
-    db: &StoreTransaction,
 ) -> Result<Option<GeneratedWithdrawals>> {
     if block.withdrawals().is_empty() {
         return Ok(None);
     }
-
-    let global_state = GlobalState::from_slice(&input_rollup_cell.data)
-        .map_err(|_| anyhow!("parse rollup cell global state"))?;
-    let last_finalized_block_number = global_state.last_finalized_block_number().unpack();
-
-    let total_withdrawal_amount = sum_withdrawals(block.withdrawals().into_iter());
-    let total_change_capacity = sum_change_capacity(db, rollup_context, &total_withdrawal_amount);
-    let custodian_cells = rpc_client
-        .query_finalized_custodian_cells(
-            &total_withdrawal_amount,
-            total_change_capacity,
-            last_finalized_block_number,
-        )
-        .await?
-        .expect_full("collect custodian cells")?;
     log::debug!("custodian inputs {:?}", custodian_cells);
 
+    let total_withdrawal_amount = sum_withdrawals(block.withdrawals().into_iter());
     let mut generator = Generator::new(rollup_context, (&custodian_cells).into());
     for req in block.withdrawals().into_iter() {
         generator

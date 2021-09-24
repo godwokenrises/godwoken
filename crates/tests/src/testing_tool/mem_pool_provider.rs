@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use gw_mem_pool::{custodian::AvailableCustodians, traits::MemPoolProvider};
+use gw_mem_pool::traits::MemPoolProvider;
 use gw_types::{
-    offchain::{DepositInfo, RollupContext},
+    offchain::{CollectedCustodianCells, DepositInfo, RollupContext},
     packed::WithdrawalRequest,
 };
 use smol::Task;
@@ -12,7 +12,7 @@ use smol::Task;
 pub struct DummyMemPoolProvider {
     pub fake_blocktime: Duration,
     pub deposit_cells: Vec<DepositInfo>,
-    pub available_custodians: AvailableCustodians,
+    pub collected_custodians: CollectedCustodianCells,
 }
 
 impl MemPoolProvider for DummyMemPoolProvider {
@@ -29,8 +29,8 @@ impl MemPoolProvider for DummyMemPoolProvider {
         _withdrawals: Vec<WithdrawalRequest>,
         _last_finalized_block_number: u64,
         _rollup_context: RollupContext,
-    ) -> Task<Result<AvailableCustodians>> {
-        let available_custodians = self.available_custodians.clone();
-        smol::spawn(async move { Ok(available_custodians) })
+    ) -> Task<Result<CollectedCustodianCells>> {
+        let collected_custodians = self.collected_custodians.clone();
+        smol::spawn(async move { Ok(collected_custodians) })
     }
 }

@@ -5,7 +5,7 @@ use std::{
 
 use gw_common::{merkle_utils::calculate_state_checkpoint, H256};
 use gw_types::{
-    offchain::DepositInfo,
+    offchain::{CollectedCustodianCells, DepositInfo},
     packed::{AccountMerkleState, BlockInfo, L2Block, TxReceipt},
     prelude::*,
 };
@@ -24,6 +24,8 @@ pub struct MemBlock {
     txs: Vec<H256>,
     /// Finalized withdrawals
     withdrawals: Vec<H256>,
+    /// Collected custodians to produce finalized withdrawals
+    collected_custodians: Option<CollectedCustodianCells>,
     /// Finalized withdrawals
     deposits: Vec<DepositInfo>,
     /// State check points
@@ -68,6 +70,7 @@ impl MemBlock {
         self.tx_receipts.clear();
         self.txs.clear();
         self.withdrawals.clear();
+        self.collected_custodians = None;
         self.deposits.clear();
         self.state_checkpoints.clear();
         self.txs_prev_state_checkpoint = None;
@@ -79,6 +82,11 @@ impl MemBlock {
         assert!(self.deposits.is_empty());
         self.withdrawals.push(withdrawal_hash);
         self.state_checkpoints.push(state_checkpoint);
+    }
+
+    pub fn set_collected_custodians(&mut self, collected_custodians: CollectedCustodianCells) {
+        assert!(self.collected_custodians.is_none());
+        self.collected_custodians = Some(collected_custodians);
     }
 
     pub fn push_deposits(&mut self, deposit_cells: Vec<DepositInfo>, prev_state_checkpoint: H256) {
@@ -109,6 +117,10 @@ impl MemBlock {
 
     pub fn withdrawals(&self) -> &[H256] {
         &self.withdrawals
+    }
+
+    pub fn collected_custodians(&self) -> Option<&CollectedCustodianCells> {
+        self.collected_custodians.as_ref()
     }
 
     pub fn deposits(&self) -> &[DepositInfo] {

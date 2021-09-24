@@ -2,12 +2,10 @@ use std::time::Duration;
 
 use anyhow::Result;
 use gw_types::{
-    offchain::{DepositInfo, RollupContext},
+    offchain::{CollectedCustodianCells, DepositInfo, RollupContext},
     packed::WithdrawalRequest,
 };
 use smol::Task;
-
-use crate::custodian::AvailableCustodians;
 
 pub trait MemPoolProvider {
     fn estimate_next_blocktime(&self) -> Task<Result<Duration>>;
@@ -17,5 +15,5 @@ pub trait MemPoolProvider {
         withdrawals: Vec<WithdrawalRequest>,
         last_finalized_block_number: u64,
         rollup_context: RollupContext,
-    ) -> Task<Result<AvailableCustodians>>;
+    ) -> Task<Result<CollectedCustodianCells>>;
 }

@@ -28,7 +28,7 @@ use gw_store::{
     Store,
 };
 use gw_types::{
-    offchain::{BlockParam, DepositInfo, RunResult},
+    offchain::{BlockParam, CollectedCustodianCells, DepositInfo, RunResult},
     packed::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, RawL2Transaction, Script, TxReceipt,
         WithdrawalRequest,
@@ -46,6 +46,7 @@ use crate::{
         MAX_IN_POOL_TXS, MAX_IN_POOL_WITHDRAWAL, MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS,
         MAX_TX_SIZE, MAX_WITHDRAWAL_SIZE,
     },
+    custodian::AvailableCustodians,
     mem_block::MemBlock,
     traits::MemPoolProvider,
     types::EntryList,
@@ -378,7 +379,7 @@ impl MemPool {
     }
 
     /// output mem block
-    pub fn output_mem_block(&self) -> Result<BlockParam> {
+    pub fn output_mem_block(&self) -> Result<(Option<CollectedCustodianCells>, BlockParam)> {
         let db = self.store.begin_transaction();
         let state_db = StateDBTransaction::from_checkpoint(
             &db,
@@ -471,6 +472,7 @@ impl MemPool {
             kv_state,
             kv_state_proof,
         };
+        let collected_custodians = self.mem_block.collected_custodians().cloned();
 
         log::debug!(
             "output mem block, txs: {} tx receipts: {} state_checkpoints: {}",
@@ -479,7 +481,7 @@ impl MemPool {
             self.mem_block.state_checkpoints().len(),
         );
 
-        Ok(param)
+        Ok((collected_custodians, param))
     }
 
     /// Reset
@@ -750,6 +752,7 @@ impl MemPool {
         assert!(self.mem_block.state_checkpoints().is_empty());
         assert!(self.mem_block.deposits().is_empty());
         assert!(self.mem_block.tx_receipts().is_empty());
+        assert!(self.mem_block.collected_custodians().is_none());
 
         // find withdrawals from pending
         if withdrawals.is_empty() {
@@ -761,7 +764,7 @@ impl MemPool {
         }
 
         let max_withdrawal_capacity = std::u128::MAX;
-        let available_custodians = {
+        let collected_custodians = {
             // query withdrawals from ckb-indexer
             let last_finalized_block_number = self
                 .generator
@@ -774,6 +777,8 @@ impl MemPool {
             );
             smol::block_on(task)?
         };
+
+        let available_custodians = AvailableCustodians::from(&collected_custodians);
         let asset_scripts: HashMap<H256, Script> = {
             let sudt_value = available_custodians.sudt.values();
             sudt_value.map(|(_, script)| (script.hash().into(), script.to_owned()))
@@ -882,6 +887,9 @@ impl MemPool {
         let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
         self.mem_block
             .append_touched_keys(touched_keys.borrow().iter().cloned());
+        self.mem_block
+            .set_collected_custodians(collected_custodians);
+
         // remove unused withdrawals
         log::info!(
             "[mem-pool] finalize withdrawals: {} staled withdrawals: {}",

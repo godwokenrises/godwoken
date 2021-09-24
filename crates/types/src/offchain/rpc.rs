@@ -18,7 +18,7 @@ pub struct InputCellInfo {
     pub cell: CellInfo,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CollectedCustodianCells {
     pub cells_info: Vec<CellInfo>,
     pub capacity: u128,
