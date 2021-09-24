@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    time::Duration,
-};
+use std::{collections::HashSet, time::Duration};
 
 use gw_common::{merkle_utils::calculate_state_checkpoint, H256};
 use gw_types::{
@@ -18,14 +15,16 @@ pub struct MemBlockContent {
 #[derive(Debug, Default)]
 pub struct MemBlock {
     block_producer_id: u32,
-    /// Tx receipts
-    tx_receipts: HashMap<H256, TxReceipt>,
     /// Finalized txs
     txs: Vec<H256>,
+    /// Txs set
+    txs_set: HashSet<H256>,
     /// Finalized withdrawals
     withdrawals: Vec<H256>,
     /// Finalized custodians to produce finalized withdrawals
     finalized_custodians: Option<CollectedCustodianCells>,
+    /// Withdrawals set
+    withdrawals_set: HashSet<H256>,
     /// Finalized withdrawals
     deposits: Vec<DepositInfo>,
     /// State check points
@@ -67,9 +66,10 @@ impl MemBlock {
     }
 
     pub fn clear(&mut self) {
-        self.tx_receipts.clear();
         self.txs.clear();
+        self.txs_set.clear();
         self.withdrawals.clear();
+        self.withdrawals_set.clear();
         self.finalized_custodians = None;
         self.deposits.clear();
         self.state_checkpoints.clear();
@@ -81,6 +81,7 @@ impl MemBlock {
         assert!(self.txs.is_empty());
         assert!(self.deposits.is_empty());
         self.withdrawals.push(withdrawal_hash);
+        self.withdrawals_set.insert(withdrawal_hash);
         self.state_checkpoints.push(state_checkpoint);
     }
 
@@ -95,7 +96,7 @@ impl MemBlock {
         self.txs_prev_state_checkpoint = Some(prev_state_checkpoint);
     }
 
-    pub fn push_tx(&mut self, tx_hash: H256, receipt: TxReceipt) {
+    pub fn push_tx(&mut self, tx_hash: H256, receipt: &TxReceipt) {
         let post_state = receipt.post_state();
         let state_checkpoint = calculate_state_checkpoint(
             &post_state.merkle_root().unpack(),
@@ -107,7 +108,7 @@ impl MemBlock {
             hex::encode(state_checkpoint.as_slice())
         );
         self.txs.push(tx_hash);
-        self.tx_receipts.insert(tx_hash, receipt);
+        self.txs_set.insert(tx_hash);
         self.state_checkpoints.push(state_checkpoint);
     }
 
@@ -123,6 +124,10 @@ impl MemBlock {
         self.finalized_custodians.as_ref()
     }
 
+    pub fn withdrawals_set(&self) -> &HashSet<H256> {
+        &self.withdrawals_set
+    }
+
     pub fn deposits(&self) -> &[DepositInfo] {
         &self.deposits
     }
@@ -131,8 +136,8 @@ impl MemBlock {
         &self.txs
     }
 
-    pub fn tx_receipts(&self) -> &HashMap<H256, TxReceipt> {
-        &self.tx_receipts
+    pub fn txs_set(&self) -> &HashSet<H256> {
+        &self.txs_set
     }
 
     pub fn state_checkpoints(&self) -> &[H256] {

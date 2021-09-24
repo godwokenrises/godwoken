@@ -1,6 +1,5 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::constant::MEMORY_BLOCK_NUMBER;
 use crate::{smt_store_impl::SMTStore, traits::KVStore};
 use gw_common::h256_ext::H256Ext;
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
@@ -737,10 +736,6 @@ impl StoreTransaction {
             self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
         }
         Ok(())
-    }
-
-    pub fn clear_mem_block_state(&self) -> Result<(), Error> {
-        self.clear_block_state(MEMORY_BLOCK_NUMBER)
     }
 
     pub(crate) fn clear_block_state(&self, block_number: u64) -> Result<(), Error> {

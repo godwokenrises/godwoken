@@ -19,7 +19,7 @@ use gw_jsonrpc_types::{
 use gw_store::{
     chain_view::ChainView,
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
-    transaction::StoreTransaction,
+    transaction::{mem_pool_store::MemPoolStore, StoreTransaction},
     Store,
 };
 use gw_traits::CodeStore;
@@ -219,7 +219,6 @@ async fn ping() -> Result<String> {
 
 async fn get_transaction(
     Params((tx_hash,)): Params<(JsonH256,)>,
-    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<Option<L2TransactionWithStatus>> {
     let tx_hash = to_h256(tx_hash);
@@ -243,17 +242,10 @@ async fn get_transaction(
             tx_opt = db.get_transaction_by_key(&tx_info.key())?;
             status = L2TransactionStatus::Committed;
         }
-        None => match &*mem_pool {
-            Some(mem_pool) => {
-                let mem_pool = mem_pool.lock().await;
-                tx_opt = mem_pool.all_txs().get(&tx_hash).cloned();
-                status = L2TransactionStatus::Pending;
-            }
-            None => {
-                tx_opt = None;
-                status = L2TransactionStatus::Pending;
-            }
-        },
+        None => {
+            tx_opt = db.get_mem_pool_transaction(&tx_hash)?;
+            status = L2TransactionStatus::Pending;
+        }
     };
 
     Ok(tx_opt.map(|tx| L2TransactionWithStatus {
@@ -333,7 +325,6 @@ async fn get_tip_block_hash(store: Data<Store>) -> Result<JsonH256> {
 
 async fn get_transaction_receipt(
     Params((tx_hash,)): Params<(JsonH256,)>,
-    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<Option<TxReceipt>> {
     let tx_hash = to_h256(tx_hash);
@@ -346,18 +337,9 @@ async fn get_transaction_receipt(
         return Ok(Some(receipt));
     }
     // search from mem pool
-    let receipt_opt = match mem_pool.as_deref() {
-        Some(mem_pool) => mem_pool
-            .lock()
-            .await
-            .mem_block()
-            .tx_receipts()
-            .get(&tx_hash)
-            .map(ToOwned::to_owned)
-            .map(Into::into),
-        None => None,
-    };
-
+    let receipt_opt = db
+        .get_mem_pool_transaction_receipt(&tx_hash)?
+        .map(Into::into);
     Ok(receipt_opt)
 }
 
@@ -407,17 +389,10 @@ enum ExecuteRawL2TransactionParams {
 
 async fn execute_raw_l2transaction(
     Params(params): Params<ExecuteRawL2TransactionParams>,
-    mem_pool: Data<MemPool>,
     mem_pool_config: Data<MemPoolConfig>,
     store: Data<Store>,
     generator: Data<Generator>,
 ) -> Result<RunResult, RpcError> {
-    let mem_pool = match mem_pool.clone() {
-        Some(mem_pool) => mem_pool,
-        None => {
-            return Err(mem_pool_is_disabled_err());
-        }
-    };
     let (raw_l2tx, block_number_opt) = match params {
         ExecuteRawL2TransactionParams::Tip(p) => (p.0, None),
         ExecuteRawL2TransactionParams::Number(p) => p,
@@ -449,7 +424,9 @@ async fn execute_raw_l2transaction(
                 .number(number.pack())
                 .build()
         }
-        None => mem_pool.lock().await.mem_block().block_info().to_owned(),
+        None => db
+            .get_mem_pool_block_info()?
+            .expect("get mem pool block info"),
     };
 
     let execute_l2tx_max_cycles = mem_pool_config.execute_l2tx_max_cycles;
