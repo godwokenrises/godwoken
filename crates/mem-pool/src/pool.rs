@@ -24,7 +24,7 @@ use gw_generator::{
 use gw_store::{
     chain_view::ChainView,
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
-    transaction::StoreTransaction,
+    transaction::{mem_pool_store::MemPoolStore, StoreTransaction},
     Store,
 };
 use gw_types::{
@@ -42,10 +42,7 @@ use std::{
 };
 
 use crate::{
-    constants::{
-        MAX_IN_POOL_TXS, MAX_IN_POOL_WITHDRAWAL, MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS,
-        MAX_TX_SIZE, MAX_WITHDRAWAL_SIZE,
-    },
+    constants::{MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS, MAX_TX_SIZE, MAX_WITHDRAWAL_SIZE},
     custodian::AvailableCustodians,
     mem_block::MemBlock,
     traits::MemPoolProvider,
@@ -62,10 +59,6 @@ pub struct MemPool {
     generator: Arc<Generator>,
     /// pending queue, contains executable contents(can be pacakged into block)
     pending: HashMap<u32, EntryList>,
-    /// all transactions in the pool
-    all_txs: HashMap<H256, L2Transaction>,
-    /// all withdrawals in the pool
-    all_withdrawals: HashMap<H256, WithdrawalRequest>,
     /// memory block
     mem_block: MemBlock,
     /// Mem pool provider
@@ -85,8 +78,6 @@ impl MemPool {
         config: MemPoolConfig,
     ) -> Result<Self> {
         let pending = Default::default();
-        let all_txs = Default::default();
-        let all_withdrawals = Default::default();
 
         let tip_block = store.get_tip_block()?;
         let tip = (tip_block.hash().into(), tip_block.raw().number().unpack());
@@ -112,8 +103,6 @@ impl MemPool {
             current_tip: tip,
             generator,
             pending,
-            all_txs,
-            all_withdrawals,
             mem_block,
             provider,
             offchain_validator,
@@ -127,14 +116,6 @@ impl MemPool {
 
     pub fn mem_block(&self) -> &MemBlock {
         &self.mem_block
-    }
-
-    pub fn all_txs(&self) -> &HashMap<H256, L2Transaction> {
-        &self.all_txs
-    }
-
-    pub fn all_withdrawals(&self) -> &HashMap<H256, WithdrawalRequest> {
-        &self.all_withdrawals
     }
 
     pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send>) {
@@ -162,17 +143,8 @@ impl MemPool {
     fn push_transaction_with_db(&mut self, db: &StoreTransaction, tx: L2Transaction) -> Result<()> {
         // check duplication
         let tx_hash: H256 = tx.raw().hash().into();
-        if self.mem_block.tx_receipts().contains_key(&tx_hash) {
+        if self.mem_block.txs_set().contains(&tx_hash) {
             return Err(anyhow!("duplicated tx"));
-        }
-
-        // remove under price tx if pool is full
-        if self.all_txs.len() >= MAX_IN_POOL_TXS {
-            //TODO
-            return Err(anyhow!(
-                "Too many txs in the pool! MAX_IN_POOL_TXS: {}",
-                MAX_IN_POOL_TXS
-            ));
         }
 
         // reject if mem block is full
@@ -191,11 +163,12 @@ impl MemPool {
         let tx_receipt = self.finalize_tx(db, tx.clone())?;
 
         // save tx receipt in mem pool
-        self.mem_block.push_tx(tx_hash, tx_receipt);
+        self.mem_block.push_tx(tx_hash, &tx_receipt);
+        db.insert_mem_pool_transaction_receipt(&tx_hash, tx_receipt)?;
 
         // Add to pool
         let account_id: u32 = tx.raw().from_id().unpack();
-        self.all_txs.insert(tx_hash, tx.clone());
+        db.insert_mem_pool_transaction(&tx_hash, tx.clone())?;
         let entry_list = self.pending.entry(account_id).or_default();
         entry_list.txs.push(tx);
 
@@ -283,28 +256,16 @@ impl MemPool {
 
         // check duplication
         let withdrawal_hash: H256 = withdrawal.raw().hash().into();
-        if self.all_withdrawals.contains_key(&withdrawal_hash) {
+        if self.mem_block.withdrawals_set().contains(&withdrawal_hash) {
             return Err(anyhow!("duplicated withdrawal"));
         }
 
         // basic verification
         self.verify_withdrawal_request(&withdrawal)?;
 
-        // remove under price tx if pool is full
-        if self.all_withdrawals.len() >= MAX_IN_POOL_WITHDRAWAL {
-            //TODO
-            return Err(anyhow!(
-                "Too many withdrawals in the pool! MAX_IN_POOL_WITHDRAWALS: {}",
-                MAX_IN_POOL_WITHDRAWAL
-            ));
-        }
         // Check replace-by-fee
         // TODO
 
-        // Add to pool
-        // TODO check nonce conflict
-        self.all_withdrawals
-            .insert(withdrawal_hash, withdrawal.clone());
         let db = self.store.begin_transaction();
         let state_db = self.fetch_state_db(&db)?;
         let state = state_db.state_tree()?;
@@ -313,7 +274,10 @@ impl MemPool {
             .get_account_id_by_script_hash(&account_script_hash)?
             .expect("get account_id");
         let entry_list = self.pending.entry(account_id).or_default();
-        entry_list.withdrawals.push(withdrawal);
+        entry_list.withdrawals.push(withdrawal.clone());
+        // Add to pool
+        db.insert_mem_pool_withdrawal(&withdrawal_hash, withdrawal)?;
+        db.commit()?;
         Ok(())
     }
 
@@ -361,19 +325,17 @@ impl MemPool {
     pub fn try_to_recovery_from_invalid_state(&mut self) -> Result<()> {
         log::warn!("[mem-pool] try to recovery from invalid state by drop txs & deposits");
         log::warn!("[mem-pool] drop mem-block");
+        log::warn!(
+            "[mem-pool] drop withdrawals: {}",
+            self.mem_block.withdrawals().len()
+        );
+        log::warn!("[mem-pool] drop txs: {}", self.mem_block.txs().len());
         for tx_hash in self.mem_block.txs() {
             log::warn!("[mem-pool] drop tx: {}", hex::encode(tx_hash.as_slice()));
         }
         self.mem_block.clear();
         log::warn!("[mem-pool] drop pending: {}", self.pending.len());
         self.pending.clear();
-        log::warn!(
-            "[mem-pool] drop withdrawals: {}",
-            self.all_withdrawals.len()
-        );
-        self.all_withdrawals.clear();
-        log::warn!("[mem-pool] drop txs: {}", self.all_txs.len());
-        self.all_txs.clear();
         log::warn!("[mem-pool] try_to_recovery - done");
         Ok(())
     }
@@ -418,9 +380,7 @@ impl MemPool {
             .txs()
             .iter()
             .map(|tx_hash| {
-                self.all_txs
-                    .get(tx_hash)
-                    .map(ToOwned::to_owned)
+                db.get_mem_pool_transaction(tx_hash)?
                     .ok_or_else(|| anyhow!("can't find tx_hash from mem pool"))
             })
             .collect::<Result<_>>()?;
@@ -430,15 +390,12 @@ impl MemPool {
             .withdrawals()
             .iter()
             .map(|withdrawal_hash| {
-                self.all_withdrawals
-                    .get(withdrawal_hash)
-                    .map(ToOwned::to_owned)
-                    .ok_or_else(|| {
-                        anyhow!(
-                            "can't find withdrawal_hash from mem pool {}",
-                            hex::encode(withdrawal_hash.as_slice())
-                        )
-                    })
+                db.get_mem_pool_withdrawal(withdrawal_hash)?.ok_or_else(|| {
+                    anyhow!(
+                        "can't find withdrawal_hash from mem pool {}",
+                        hex::encode(withdrawal_hash.as_slice())
+                    )
+                })
             })
             .collect::<Result<_>>()?;
         let state_checkpoint_list = self.mem_block.state_checkpoints().to_vec();
@@ -475,9 +432,9 @@ impl MemPool {
         let finalized_custodians = self.mem_block.finalized_custodians().cloned();
 
         log::debug!(
-            "output mem block, txs: {} tx receipts: {} state_checkpoints: {}",
+            "output mem block, txs: {} tx withdrawals: {} state_checkpoints: {}",
             self.mem_block.txs().len(),
-            self.mem_block.tx_receipts().len(),
+            self.mem_block.withdrawals().len(),
             self.mem_block.state_checkpoints().len(),
         );
 
@@ -572,6 +529,7 @@ impl MemPool {
         let db = self.store.begin_transaction();
         self.reset_mem_block_state_db(&db, merkle_state)?;
         let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
+        db.update_mem_pool_block_info(self.mem_block.block_info())?;
         let reverted_block_root: H256 = {
             let smt = db.reverted_block_smt()?;
             smt.root().to_owned()
@@ -585,20 +543,26 @@ impl MemPool {
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
 
         // mem block withdrawals
-        #[allow(clippy::needless_collect)]
-        let mem_block_withdrawals: Vec<_> = mem_block_content
-            .withdrawals
-            .into_iter()
-            .filter_map(|withdrawal_hash| self.all_withdrawals.get(&withdrawal_hash).cloned())
-            .collect();
+        let mem_block_withdrawals: Vec<_> = {
+            let mut withdrawals = Vec::with_capacity(mem_block_content.withdrawals.len());
+            for withdrawal_hash in mem_block_content.withdrawals {
+                if let Some(withdrawal) = db.get_mem_pool_withdrawal(&withdrawal_hash)? {
+                    withdrawals.push(withdrawal);
+                }
+            }
+            withdrawals
+        };
 
         // Process txs
-        #[allow(clippy::needless_collect)]
-        let mem_block_txs: Vec<_> = mem_block_content
-            .txs
-            .into_iter()
-            .filter_map(|tx_hash| self.all_txs.get(&tx_hash).cloned())
-            .collect();
+        let mem_block_txs: Vec<_> = {
+            let mut txs = Vec::with_capacity(mem_block_content.txs.len());
+            for tx_hash in mem_block_content.txs {
+                if let Some(tx) = db.get_mem_pool_transaction(&tx_hash)? {
+                    txs.push(tx);
+                }
+            }
+            txs
+        };
 
         // remove from pending
         self.remove_unexecutables(&db)?;
@@ -629,7 +593,7 @@ impl MemPool {
             let deprecated_txs = list.remove_lower_nonce_txs(nonce);
             for tx in deprecated_txs {
                 let tx_hash = tx.hash().into();
-                self.all_txs.remove(&tx_hash);
+                db.remove_mem_pool_transaction(&tx_hash)?;
             }
             // Drop all withdrawals that are have no enough balance
             let script_hash = state.get_script_hash(account_id)?;
@@ -638,7 +602,7 @@ impl MemPool {
             let deprecated_withdrawals = list.remove_lower_nonce_withdrawals(nonce, capacity);
             for withdrawal in deprecated_withdrawals {
                 let withdrawal_hash: H256 = withdrawal.hash().into();
-                self.all_withdrawals.remove(&withdrawal_hash);
+                db.remove_mem_pool_withdrawal(&withdrawal_hash)?;
             }
             // Delete empty entry
             if list.is_empty() {
@@ -751,8 +715,8 @@ impl MemPool {
         assert!(self.mem_block.withdrawals().is_empty());
         assert!(self.mem_block.state_checkpoints().is_empty());
         assert!(self.mem_block.deposits().is_empty());
-        assert!(self.mem_block.tx_receipts().is_empty());
         assert!(self.mem_block.finalized_custodians().is_none());
+        assert!(self.mem_block.txs().is_empty());
 
         // find withdrawals from pending
         if withdrawals.is_empty() {

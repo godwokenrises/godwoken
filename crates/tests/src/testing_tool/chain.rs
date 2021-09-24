@@ -10,8 +10,8 @@ use gw_generator::{
     genesis::init_genesis,
     Generator,
 };
-use gw_mem_pool::pool::MemPool;
-use gw_store::Store;
+use gw_mem_pool::{custodian::AvailableCustodians, pool::MemPool};
+use gw_store::{transaction::mem_pool_store::MemPoolStore, Store};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -223,7 +223,7 @@ pub fn construct_block(
         ..Default::default()
     };
     for withdrawal_hash in mem_pool.mem_block().withdrawals().iter() {
-        let req = mem_pool.all_withdrawals().get(withdrawal_hash).unwrap();
+        let req = db.get_mem_pool_withdrawal(withdrawal_hash)?.unwrap();
         if 0 == req.raw().amount().unpack() {
             continue;
         }

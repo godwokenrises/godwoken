@@ -3,7 +3,7 @@
 /// Column families alias type
 pub type Col = u8;
 /// Total column number
-pub const COLUMNS: u32 = 26;
+pub const COLUMNS: u32 = 28;
 /// Column store meta data
 pub const COLUMN_META: Col = 0;
 /// Column store chain index
@@ -38,8 +38,8 @@ pub const COLUMN_SCRIPT: Col = 14;
 pub const COLUMN_DATA: Col = 15;
 /// Column block deposit requests
 pub const COLUMN_BLOCK_DEPOSIT_REQUESTS: Col = 16;
-/// TODO remove this column Column ~custodian assets~ deprecated
-const _COLUMN_UNUSED: Col = 17;
+/// Column mem pool transaction
+pub const COLUMN_MEM_POOL_TRANSACTION_RECEIPT: Col = 17;
 /// Column block state record
 pub const COLUMN_BLOCK_STATE_RECORD: Col = 18;
 /// Column script prefix
@@ -56,6 +56,10 @@ pub const COLUMN_BAD_BLOCK_CHALLENGE_TARGET: Col = 23;
 pub const COLUMN_REVERTED_BLOCK_SMT_ROOT: Col = 24;
 /// Column asset script
 pub const COLUMN_ASSET_SCRIPT: Col = 25;
+/// Column mem pool transaction
+pub const COLUMN_MEM_POOL_TRANSACTION: Col = 26;
+/// Column mem pool withdrawal
+pub const COLUMN_MEM_POOL_WITHDRAWAL: Col = 27;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";
@@ -71,6 +75,8 @@ pub const META_LAST_VALID_TIP_BLOCK_HASH_KEY: &[u8] = b"LAST_VALID_TIP_BLOCK_HAS
 pub const META_MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY: &[u8] = b"MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY";
 /// account SMT count
 pub const META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY: &[u8] = b"MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY";
+/// mem pool block info
+pub const META_MEM_POOL_BLOCK_INFO: &[u8] = b"MEM_POOL_BLOCK_INFO";
 
 /// CHAIN_SPEC_HASH_KEY tracks the hash of chain spec which created current database
 pub const CHAIN_SPEC_HASH_KEY: &[u8] = b"chain-spec-hash";
