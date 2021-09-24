@@ -11,20 +11,20 @@ pub struct Backend {
     pub validator_script_type_hash: H256,
 }
 
-impl From<Backend> for BackendInfo {
-    fn from(backend: Backend) -> Self {
+impl Backend {
+    fn get_backend_info(&self) -> BackendInfo {
         let mut validator_code_hash = [0u8; 32];
         let mut hasher = new_blake2b();
-        hasher.update(&backend.validator);
+        hasher.update(&self.validator);
         hasher.finalize(&mut validator_code_hash);
         let mut generator_code_hash = [0u8; 32];
         let mut hasher = new_blake2b();
-        hasher.update(&backend.generator);
+        hasher.update(&self.generator);
         hasher.finalize(&mut generator_code_hash);
         BackendInfo {
             validator_code_hash: validator_code_hash.into(),
             generator_code_hash: generator_code_hash.into(),
-            validator_script_type_hash: backend.validator_script_type_hash,
+            validator_script_type_hash: self.validator_script_type_hash,
         }
     }
 }
@@ -81,7 +81,7 @@ impl BackendManage {
         self.backends
             .values()
             .into_iter()
-            .map(|backend| backend.clone().into())
+            .map(|backend| backend.get_backend_info())
             .collect()
     }
 }
