@@ -24,8 +24,8 @@ pub struct MemBlock {
     txs: Vec<H256>,
     /// Finalized withdrawals
     withdrawals: Vec<H256>,
-    /// Collected custodians to produce finalized withdrawals
-    collected_custodians: Option<CollectedCustodianCells>,
+    /// Finalized custodians to produce finalized withdrawals
+    finalized_custodians: Option<CollectedCustodianCells>,
     /// Finalized withdrawals
     deposits: Vec<DepositInfo>,
     /// State check points
@@ -70,7 +70,7 @@ impl MemBlock {
         self.tx_receipts.clear();
         self.txs.clear();
         self.withdrawals.clear();
-        self.collected_custodians = None;
+        self.finalized_custodians = None;
         self.deposits.clear();
         self.state_checkpoints.clear();
         self.txs_prev_state_checkpoint = None;
@@ -84,9 +84,9 @@ impl MemBlock {
         self.state_checkpoints.push(state_checkpoint);
     }
 
-    pub fn set_collected_custodians(&mut self, collected_custodians: CollectedCustodianCells) {
-        assert!(self.collected_custodians.is_none());
-        self.collected_custodians = Some(collected_custodians);
+    pub fn set_finalized_custodians(&mut self, finalized_custodians: CollectedCustodianCells) {
+        assert!(self.finalized_custodians.is_none());
+        self.finalized_custodians = Some(finalized_custodians);
     }
 
     pub fn push_deposits(&mut self, deposit_cells: Vec<DepositInfo>, prev_state_checkpoint: H256) {
@@ -119,8 +119,8 @@ impl MemBlock {
         &self.withdrawals
     }
 
-    pub fn collected_custodians(&self) -> Option<&CollectedCustodianCells> {
-        self.collected_custodians.as_ref()
+    pub fn finalized_custodians(&self) -> Option<&CollectedCustodianCells> {
+        self.finalized_custodians.as_ref()
     }
 
     pub fn deposits(&self) -> &[DepositInfo] {

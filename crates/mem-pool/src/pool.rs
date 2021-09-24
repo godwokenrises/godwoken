@@ -472,7 +472,7 @@ impl MemPool {
             kv_state,
             kv_state_proof,
         };
-        let collected_custodians = self.mem_block.collected_custodians().cloned();
+        let finalized_custodians = self.mem_block.finalized_custodians().cloned();
 
         log::debug!(
             "output mem block, txs: {} tx receipts: {} state_checkpoints: {}",
@@ -481,7 +481,7 @@ impl MemPool {
             self.mem_block.state_checkpoints().len(),
         );
 
-        Ok((collected_custodians, param))
+        Ok((finalized_custodians, param))
     }
 
     /// Reset
@@ -752,7 +752,7 @@ impl MemPool {
         assert!(self.mem_block.state_checkpoints().is_empty());
         assert!(self.mem_block.deposits().is_empty());
         assert!(self.mem_block.tx_receipts().is_empty());
-        assert!(self.mem_block.collected_custodians().is_none());
+        assert!(self.mem_block.finalized_custodians().is_none());
 
         // find withdrawals from pending
         if withdrawals.is_empty() {
@@ -764,7 +764,7 @@ impl MemPool {
         }
 
         let max_withdrawal_capacity = std::u128::MAX;
-        let collected_custodians = {
+        let finalized_custodians = {
             // query withdrawals from ckb-indexer
             let last_finalized_block_number = self
                 .generator
@@ -778,7 +778,7 @@ impl MemPool {
             smol::block_on(task)?
         };
 
-        let available_custodians = AvailableCustodians::from(&collected_custodians);
+        let available_custodians = AvailableCustodians::from(&finalized_custodians);
         let asset_scripts: HashMap<H256, Script> = {
             let sudt_value = available_custodians.sudt.values();
             sudt_value.map(|(_, script)| (script.hash().into(), script.to_owned()))
@@ -888,7 +888,7 @@ impl MemPool {
         self.mem_block
             .append_touched_keys(touched_keys.borrow().iter().cloned());
         self.mem_block
-            .set_collected_custodians(collected_custodians);
+            .set_finalized_custodians(finalized_custodians);
 
         // remove unused withdrawals
         log::info!(

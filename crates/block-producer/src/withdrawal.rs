@@ -31,17 +31,17 @@ pub struct GeneratedWithdrawals {
 // Note: custodian lock search rollup cell in inputs
 pub fn generate(
     rollup_context: &RollupContext,
-    custodian_cells: CollectedCustodianCells,
+    finalized_custodians: CollectedCustodianCells,
     block: &L2Block,
     block_producer_config: &BlockProducerConfig,
 ) -> Result<Option<GeneratedWithdrawals>> {
     if block.withdrawals().is_empty() {
         return Ok(None);
     }
-    log::debug!("custodian inputs {:?}", custodian_cells);
+    log::debug!("custodian inputs {:?}", finalized_custodians);
 
     let total_withdrawal_amount = sum_withdrawals(block.withdrawals().into_iter());
-    let mut generator = Generator::new(rollup_context, (&custodian_cells).into());
+    let mut generator = Generator::new(rollup_context, (&finalized_custodians).into());
     for req in block.withdrawals().into_iter() {
         generator
             .include_and_verify(&req, block)
@@ -56,7 +56,7 @@ pub fn generate(
         cell_deps.push(sudt_type_dep.into());
     }
 
-    let custodian_inputs = custodian_cells.cells_info.into_iter().map(|cell| {
+    let custodian_inputs = finalized_custodians.cells_info.into_iter().map(|cell| {
         let input = CellInput::new_builder()
             .previous_output(cell.out_point.clone())
             .build();
