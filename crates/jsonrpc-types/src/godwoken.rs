@@ -1027,13 +1027,3 @@ pub struct BackendInfo {
     pub generator_code_hash: H256,
     pub validator_script_type_hash: H256,
 }
-
-impl From<gw_common::backend::BackendInfo> for BackendInfo {
-    fn from(from: gw_common::backend::BackendInfo) -> Self {
-        Self {
-            validator_code_hash: H256(from.validator_code_hash.into()),
-            generator_code_hash: H256(from.generator_code_hash.into()),
-            validator_script_type_hash: H256(from.validator_script_type_hash.into()),
-        }
-    }
-}

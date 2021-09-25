@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     account_lock_manage::AccountLockManage,
@@ -17,7 +17,6 @@ use crate::{error::AccountError, syscalls::L2Syscalls};
 use crate::{error::LockAlgorithmError, traits::StateExt};
 use gw_ckb_hardfork::GLOBAL_VM_VERSION;
 use gw_common::{
-    backend::BackendInfo,
     builtins::CKB_SUDT_ACCOUNT_ID,
     error::Error as StateError,
     h256_ext::H256Ext,
@@ -92,7 +91,6 @@ pub enum ApplyBlockResult {
 
 pub struct Generator {
     backend_manage: BackendManage,
-    backend_info: Vec<BackendInfo>,
     account_lock_manage: AccountLockManage,
     rollup_context: RollupContext,
     sudt_proxy_account_whitelist: SUDTProxyAccountWhitelist,
@@ -113,10 +111,8 @@ impl Generator {
                 .map(|hash| hash.0.into())
                 .collect(),
         );
-        let backend_info = backend_manage.get_backend_info();
         Generator {
             backend_manage,
-            backend_info,
             account_lock_manage,
             rollup_context,
             sudt_proxy_account_whitelist,
@@ -780,8 +776,8 @@ impl Generator {
         Ok((output, data))
     }
 
-    pub fn get_backend_info(&self) -> Vec<gw_common::backend::BackendInfo> {
-        self.backend_info.clone()
+    pub fn get_backends(&self) -> &HashMap<H256, Backend> {
+        self.backend_manage.get_backends()
     }
 }
 

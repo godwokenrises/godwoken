@@ -1,5 +1,5 @@
 use anyhow::Result;
-use gw_common::{backend::BackendInfo, blake2b::new_blake2b, H256};
+use gw_common::H256;
 use gw_config::BackendConfig;
 use gw_types::bytes::Bytes;
 use std::{collections::HashMap, fs};
@@ -9,24 +9,6 @@ pub struct Backend {
     pub validator: Bytes,
     pub generator: Bytes,
     pub validator_script_type_hash: H256,
-}
-
-impl Backend {
-    fn get_backend_info(&self) -> BackendInfo {
-        let mut validator_code_hash = [0u8; 32];
-        let mut hasher = new_blake2b();
-        hasher.update(&self.validator);
-        hasher.finalize(&mut validator_code_hash);
-        let mut generator_code_hash = [0u8; 32];
-        let mut hasher = new_blake2b();
-        hasher.update(&self.generator);
-        hasher.finalize(&mut generator_code_hash);
-        BackendInfo {
-            validator_code_hash: validator_code_hash.into(),
-            generator_code_hash: generator_code_hash.into(),
-            validator_script_type_hash: self.validator_script_type_hash,
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -77,11 +59,7 @@ impl BackendManage {
         self.backends.get(code_hash)
     }
 
-    pub fn get_backend_info(&self) -> Vec<BackendInfo> {
-        self.backends
-            .values()
-            .into_iter()
-            .map(|backend| backend.get_backend_info())
-            .collect()
+    pub fn get_backends(&self) -> &HashMap<H256, Backend> {
+        &self.backends
     }
 }
