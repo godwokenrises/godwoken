@@ -95,8 +95,8 @@ pub struct BlockCooldown {
 impl Default for BlockCooldown {
     fn default() -> Self {
         BlockCooldown {
-            withdrawals: 4,
-            txs: 2,
+            withdrawals: 10, // drop 10% of withdrawals
+            txs: 10,         // drop 10% of txs
         }
     }
 }

@@ -276,16 +276,16 @@ impl BlockProducer {
                 mut block,
                 mut global_state,
             } = block_result;
-            mem_block_output_param
-                .block_limit
-                .set(block.withdrawals().len(), block.transactions().len());
+
             let number: u64 = block.raw().number().unpack();
+            let block_txs = block.transactions().len();
+            let block_withdrawals = block.withdrawals().len();
             log::info!(
                 "produce new block #{} (txs: {}, deposits: {}, withdrawals: {})",
                 number,
-                block.transactions().len(),
+                block_txs,
                 deposit_cells.len(),
-                block.withdrawals().len(),
+                block_withdrawals,
             );
             if !block.withdrawals().is_empty() && opt_finalized_custodians.is_none() {
                 bail!("unexpected none custodians for withdrawals ",);
@@ -327,19 +327,23 @@ impl BlockProducer {
             };
 
             if tx.as_slice().len() > MAX_BLOCK_BYTES as usize {
-                let mut block_limit = &mut mem_block_output_param.block_limit;
-                block_limit.max_withdrawals = block_limit
-                    .max_withdrawals
-                    .saturating_sub(self.config.block_cooldown.withdrawals);
-                block_limit.max_txs = block_limit
-                    .max_txs
-                    .saturating_sub(self.config.block_cooldown.txs);
-
-                log::info!("[produce_next_block] tx exceeded maximum block bytes, update output param block limit to {:?}", block_limit);
-
-                if block_limit.max_withdrawals == 0 && block_limit.max_txs == 0 {
+                // Drop some percentage of withdrawals and txs
+                let max_withdrawals = block_withdrawals
+                    .saturating_mul(self.config.block_cooldown.withdrawals)
+                    .wrapping_div(100);
+                let max_txs = block_txs
+                    .saturating_mul(self.config.block_cooldown.txs)
+                    .wrapping_div(100);
+                if max_withdrawals == 0 && max_txs == 0 {
                     unreachable!("reduce block limit to 0 withdrawals and 0 txs");
                 }
+
+                mem_block_output_param
+                    .block_limit
+                    .set(max_withdrawals, max_txs);
+
+                log::info!("[produce_next_block] tx exceeded maximum block bytes, update output param block limit to {:?}", mem_block_output_param.block_limit);
+
                 continue;
             }
 
