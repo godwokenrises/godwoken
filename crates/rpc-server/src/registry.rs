@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::OffChainMockContext;
-use gw_common::{state::State, H256};
+use gw_common::{blake2b::new_blake2b, state::State, H256};
 use gw_config::{DebugConfig, MemPoolConfig};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
@@ -11,8 +11,8 @@ use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
     debugger::{DumpChallengeTarget, ReprMockTransaction},
     godwoken::{
-        GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus, L2TransactionStatus,
-        L2TransactionWithStatus, RunResult, TxReceipt,
+        BackendInfo, GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus,
+        L2TransactionStatus, L2TransactionWithStatus, NodeInfo, RunResult, TxReceipt,
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
@@ -27,6 +27,7 @@ use gw_types::{
     packed::{self, BlockInfo, RawL2Block, RollupConfig},
     prelude::*,
 };
+use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
 use smol::lock::Mutex;
 use std::sync::Arc;
@@ -118,6 +119,7 @@ pub struct Registry {
     rollup_config: RollupConfig,
     debug_config: DebugConfig,
     mem_pool_config: MemPoolConfig,
+    backend_info: Vec<BackendInfo>,
 }
 
 impl Registry {
@@ -136,6 +138,7 @@ impl Registry {
     where
         T: TestModeRPC + Send + Sync + 'static,
     {
+        let backend_info = get_backend_info(generator.clone());
         Self {
             mem_pool,
             store,
@@ -147,6 +150,7 @@ impl Registry {
             chain,
             offchain_mock_context,
             mem_pool_config,
+            backend_info,
         }
     }
 
@@ -159,6 +163,7 @@ impl Registry {
             .with_data(Data::new(self.store))
             .with_data(Data::new(self.rollup_config))
             .with_data(Data::new(self.mem_pool_config))
+            .with_data(Data::new(self.backend_info))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -187,7 +192,8 @@ impl Registry {
             .with_method(
                 "gw_compute_l2_sudt_script_hash",
                 compute_l2_sudt_script_hash,
-            );
+            )
+            .with_method("gw_get_node_info", get_node_info);
 
         // Tests
         if let Some(tests_rpc_impl) = self.tests_rpc_impl {
@@ -211,6 +217,30 @@ impl Registry {
 
         Ok(server.finish())
     }
+}
+
+fn get_backend_info(generator: Arc<Generator>) -> Vec<BackendInfo> {
+    generator
+        .get_backends()
+        .values()
+        .map(|b| {
+            let mut validator_code_hash = [0u8; 32];
+            let mut hasher = new_blake2b();
+            hasher.update(&b.validator);
+            hasher.finalize(&mut validator_code_hash);
+            let mut generator_code_hash = [0u8; 32];
+            let mut hasher = new_blake2b();
+            hasher.update(&b.generator);
+            hasher.finalize(&mut generator_code_hash);
+            BackendInfo {
+                validator_code_hash: validator_code_hash.into(),
+                generator_code_hash: generator_code_hash.into(),
+                validator_script_type_hash: ckb_fixed_hash::H256(
+                    b.validator_script_type_hash.into(),
+                ),
+            }
+        })
+        .collect()
 }
 
 async fn ping() -> Result<String> {
@@ -701,6 +731,13 @@ async fn compute_l2_sudt_script_hash(
     let l2_sudt_script =
         build_l2_sudt_script(generator.rollup_context(), &to_h256(l1_sudt_script_hash));
     Ok(to_jsonh256(l2_sudt_script.hash().into()))
+}
+
+async fn get_node_info(backend_info: Data<Vec<BackendInfo>>) -> Result<NodeInfo> {
+    Ok(NodeInfo {
+        version: Version::current().to_string(),
+        backends: backend_info.clone(),
+    })
 }
 
 async fn tests_produce_block(

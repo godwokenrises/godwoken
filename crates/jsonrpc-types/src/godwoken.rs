@@ -1011,3 +1011,19 @@ impl From<offchain::RunResult> for RunResult {
         }
     }
 }
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct NodeInfo {
+    // godwoken current version
+    pub version: String,
+    pub backends: Vec<BackendInfo>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct BackendInfo {
+    pub validator_code_hash: H256,
+    pub generator_code_hash: H256,
+    pub validator_script_type_hash: H256,
+}

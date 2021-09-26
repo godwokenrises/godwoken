@@ -58,4 +58,8 @@ impl BackendManage {
     pub fn get_backend(&self, code_hash: &H256) -> Option<&Backend> {
         self.backends.get(code_hash)
     }
+
+    pub fn get_backends(&self) -> &HashMap<H256, Backend> {
+        &self.backends
+    }
 }

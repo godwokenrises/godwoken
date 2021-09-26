@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     account_lock_manage::AccountLockManage,
@@ -774,6 +774,10 @@ impl Generator {
         }
 
         Ok((output, data))
+    }
+
+    pub fn get_backends(&self) -> &HashMap<H256, Backend> {
+        self.backend_manage.get_backends()
     }
 }
 
