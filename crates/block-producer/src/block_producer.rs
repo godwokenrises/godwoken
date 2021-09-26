@@ -44,9 +44,6 @@ use std::{
     time::Duration,
 };
 
-const MEM_BLOCK_OUTPUT_PARAM_LIMIT_WITHDRAWALS_COOLDOWN: usize = 4;
-const MEM_BLOCK_OUTPUT_PARAM_LIMIT_TXS_COOLDOWN: usize = 2;
-
 const TRANSACTION_SRIPT_ERROR: &str = "TransactionScriptError";
 const TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR: &str = "ExceededMaximumBlockBytes";
 
@@ -333,10 +330,10 @@ impl BlockProducer {
                 let mut block_limit = &mut mem_block_output_param.block_limit;
                 block_limit.max_withdrawals = block_limit
                     .max_withdrawals
-                    .saturating_sub(MEM_BLOCK_OUTPUT_PARAM_LIMIT_WITHDRAWALS_COOLDOWN);
+                    .saturating_sub(self.config.block_cooldown.withdrawals);
                 block_limit.max_txs = block_limit
                     .max_txs
-                    .saturating_sub(MEM_BLOCK_OUTPUT_PARAM_LIMIT_TXS_COOLDOWN);
+                    .saturating_sub(self.config.block_cooldown.txs);
 
                 log::info!("[produce_next_block] tx exceeded maximum block bytes, update output param block limit to {:?}", block_limit);
 

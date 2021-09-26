@@ -259,6 +259,7 @@ pub fn generate_config(
     let rpc_server = RPCServerConfig { listen: server_url };
     let block_producer: Option<BlockProducerConfig> = Some(BlockProducerConfig {
         account_id,
+        block_cooldown: Default::default(),
         // cell deps
         poa_lock_dep,
         poa_state_dep,

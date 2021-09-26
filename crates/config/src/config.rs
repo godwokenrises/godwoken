@@ -86,9 +86,26 @@ pub struct ChallengerConfig {
     pub burn_lock: Script,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BlockCooldown {
+    pub withdrawals: usize,
+    pub txs: usize,
+}
+
+impl Default for BlockCooldown {
+    fn default() -> Self {
+        BlockCooldown {
+            withdrawals: 4,
+            txs: 2,
+        }
+    }
+}
+
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockProducerConfig {
     pub account_id: u32,
+    #[serde(default)]
+    pub block_cooldown: BlockCooldown,
     // cell deps
     pub rollup_cell_type_dep: CellDep,
     pub rollup_config_cell_dep: CellDep,
