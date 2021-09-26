@@ -49,6 +49,41 @@ use crate::{
     types::EntryList,
 };
 
+#[derive(Debug)]
+pub struct MemBlockLimit {
+    pub max_withdrawals: usize,
+    pub max_txs: usize,
+}
+
+impl MemBlockLimit {
+    pub fn set(&mut self, max_withdrawals: usize, max_txs: usize) {
+        self.max_withdrawals = max_withdrawals;
+        self.max_txs = max_txs;
+    }
+}
+
+impl Default for MemBlockLimit {
+    fn default() -> Self {
+        MemBlockLimit {
+            max_withdrawals: MAX_MEM_BLOCK_WITHDRAWALS,
+            max_txs: MAX_MEM_BLOCK_TXS,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct OutputParam {
+    pub block_limit: MemBlockLimit,
+}
+
+impl Default for OutputParam {
+    fn default() -> Self {
+        OutputParam {
+            block_limit: MemBlockLimit::default(),
+        }
+    }
+}
+
 /// MemPool
 pub struct MemPool {
     /// store
@@ -341,7 +376,21 @@ impl MemPool {
     }
 
     /// output mem block
-    pub fn output_mem_block(&self) -> Result<(Option<CollectedCustodianCells>, BlockParam)> {
+    pub fn output_mem_block(
+        &mut self,
+        output_param: &OutputParam,
+    ) -> Result<(Option<CollectedCustodianCells>, BlockParam)> {
+        if self.mem_block.txs().len() > output_param.block_limit.max_txs
+            || self.mem_block.withdrawals().len() > output_param.block_limit.max_withdrawals
+        {
+            log::info!("[mem-pool] reset due to output param {:?}", output_param);
+            self.reset_with_limit(
+                Some(self.current_tip.0),
+                Some(self.current_tip.0),
+                &output_param.block_limit,
+            )?;
+        }
+
         let db = self.store.begin_transaction();
         let state_db = StateDBTransaction::from_checkpoint(
             &db,
@@ -445,6 +494,15 @@ impl MemPool {
     /// this method reset the current state of the mem pool
     /// discarded txs & withdrawals will be reinject to pool
     fn reset(&mut self, old_tip: Option<H256>, new_tip: Option<H256>) -> Result<()> {
+        self.reset_with_limit(old_tip, new_tip, &MemBlockLimit::default())
+    }
+
+    fn reset_with_limit(
+        &mut self,
+        old_tip: Option<H256>,
+        new_tip: Option<H256>,
+        limit: &MemBlockLimit,
+    ) -> Result<()> {
         let mut reinject_txs = Default::default();
         let mut reinject_withdrawals = Default::default();
         // read block from db
@@ -571,9 +629,13 @@ impl MemPool {
         // re-inject withdrawals
         let withdrawals_iter = reinject_withdrawals
             .into_iter()
-            .chain(mem_block_withdrawals);
+            .chain(mem_block_withdrawals)
+            .take(limit.max_withdrawals);
         // re-inject txs
-        let txs_iter = reinject_txs.into_iter().chain(mem_block_txs);
+        let txs_iter = reinject_txs
+            .into_iter()
+            .chain(mem_block_txs)
+            .take(limit.max_txs);
         self.prepare_next_mem_block(&db, withdrawals_iter, txs_iter)?;
         db.commit()?;
 

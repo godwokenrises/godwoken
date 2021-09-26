@@ -10,7 +10,7 @@ use gw_generator::{
     genesis::init_genesis,
     Generator,
 };
-use gw_mem_pool::pool::MemPool;
+use gw_mem_pool::pool::{MemPool, OutputParam};
 use gw_store::{transaction::mem_pool_store::MemPoolStore, Store};
 use gw_types::{
     bytes::Bytes,
@@ -269,7 +269,7 @@ pub fn construct_block(
     // refresh mem block
     mem_pool.reset_mem_block()?;
 
-    let (_custodians, block_param) = mem_pool.output_mem_block().unwrap();
+    let (_custodians, block_param) = mem_pool.output_mem_block(&OutputParam::default()).unwrap();
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash,
         rollup_config_hash,

@@ -7,6 +7,7 @@ use crate::{
     utils,
 };
 use anyhow::{anyhow, bail, Context, Result};
+use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
 use gw_chain::chain::{Chain, SyncEvent};
@@ -14,7 +15,10 @@ use gw_common::{h256_ext::H256Ext, H256};
 use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::Generator;
 use gw_jsonrpc_types::test_mode::TestModePayload;
-use gw_mem_pool::{custodian::to_custodian_cell, pool::MemPool};
+use gw_mem_pool::{
+    custodian::to_custodian_cell,
+    pool::{MemPool, OutputParam},
+};
 use gw_poa::{PoA, ShouldIssueBlock};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::Store;
@@ -39,6 +43,9 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+
+const MEM_BLOCK_OUTPUT_PARAM_LIMIT_WITHDRAWALS_COOLDOWN: usize = 4;
+const MEM_BLOCK_OUTPUT_PARAM_LIMIT_TXS_COOLDOWN: usize = 2;
 
 const TRANSACTION_SRIPT_ERROR: &str = "TransactionScriptError";
 const TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR: &str = "ExceededMaximumBlockBytes";
@@ -226,7 +233,8 @@ impl BlockProducer {
             .should_issue_next_block(median_time, &poa_cell_input)
             .await?
         {
-            self.produce_next_block(median_time, rollup_cell).await?;
+            let (block_number, tx) = self.produce_next_block(median_time, rollup_cell).await?;
+            self.submit_block_tx(block_number, tx).await?;
         }
         Ok(())
     }
@@ -235,7 +243,7 @@ impl BlockProducer {
         &mut self,
         median_time: Duration,
         rollup_cell: CellInfo,
-    ) -> Result<()> {
+    ) -> Result<(u64, Transaction)> {
         if let Some(ref tests_control) = self.tests_control {
             match tests_control.payload().await {
                 Some(TestModePayload::None) => tests_control.clear_none().await?,
@@ -244,83 +252,110 @@ impl BlockProducer {
             }
         }
 
-        // get txs & withdrawal requests from mem pool
-        let (opt_finalized_custodians, block_param) = {
-            let mem_pool = self.mem_pool.lock().await;
-            mem_pool.output_mem_block()?
-        };
-        let deposit_cells = block_param.deposits.clone();
+        let mut mem_block_output_param = OutputParam::default();
+        loop {
+            // get txs & withdrawal requests from mem pool
+            let (opt_finalized_custodians, block_param) = {
+                let mut mem_pool = self.mem_pool.lock().await;
+                mem_pool.output_mem_block(&mem_block_output_param)?
+            };
+            let deposit_cells = block_param.deposits.clone();
 
-        // produce block
-        let reverted_block_root: H256 = {
+            // produce block
+            let reverted_block_root: H256 = {
+                let db = self.store.begin_transaction();
+                let smt = db.reverted_block_smt()?;
+                smt.root().to_owned()
+            };
+            let param = ProduceBlockParam {
+                stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
+                reverted_block_root,
+                rollup_config_hash: self.rollup_config_hash,
+                block_param,
+            };
             let db = self.store.begin_transaction();
-            let smt = db.reverted_block_smt()?;
-            smt.root().to_owned()
-        };
-        let param = ProduceBlockParam {
-            stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
-            reverted_block_root,
-            rollup_config_hash: self.rollup_config_hash,
-            block_param,
-        };
-        let db = self.store.begin_transaction();
-        let block_result = produce_block(&db, &self.generator, param)?;
-        let ProduceBlockResult {
-            mut block,
-            mut global_state,
-        } = block_result;
-        let number: u64 = block.raw().number().unpack();
-        log::info!(
-            "produce new block #{} (txs: {}, deposits: {}, withdrawals: {})",
-            number,
-            block.transactions().len(),
-            deposit_cells.len(),
-            block.withdrawals().len(),
-        );
-        if !block.withdrawals().is_empty() && opt_finalized_custodians.is_none() {
-            bail!("unexpected none custodians for withdrawals ",);
-        }
-        let finalized_custodians = opt_finalized_custodians.unwrap_or_default();
-
-        if let Some(ref tests_control) = self.tests_control {
-            if let Some(TestModePayload::BadBlock { .. }) = tests_control.payload().await {
-                let (bad_block, bad_global_state) = tests_control
-                    .generate_a_bad_block(block, global_state)
-                    .await?;
-
-                block = bad_block;
-                global_state = bad_global_state;
+            let block_result = produce_block(&db, &self.generator, param)?;
+            let ProduceBlockResult {
+                mut block,
+                mut global_state,
+            } = block_result;
+            mem_block_output_param
+                .block_limit
+                .set(block.withdrawals().len(), block.transactions().len());
+            let number: u64 = block.raw().number().unpack();
+            log::info!(
+                "produce new block #{} (txs: {}, deposits: {}, withdrawals: {})",
+                number,
+                block.transactions().len(),
+                deposit_cells.len(),
+                block.withdrawals().len(),
+            );
+            if !block.withdrawals().is_empty() && opt_finalized_custodians.is_none() {
+                bail!("unexpected none custodians for withdrawals ",);
             }
-        }
+            let finalized_custodians = opt_finalized_custodians.unwrap_or_default();
 
-        // composite tx
-        let tx = match self
-            .complete_tx_skeleton(
-                deposit_cells,
-                finalized_custodians,
-                block,
-                global_state,
-                median_time,
-                rollup_cell,
-            )
-            .await
-        {
-            Ok(tx) => tx,
-            Err(err) => {
-                log::error!(
-                    "[produce_next_block] Failed to composite submitting transaction: {}",
-                    err
-                );
-                self.mem_pool.lock().await.reset_mem_block()?;
-                return Err(err);
+            if let Some(ref tests_control) = self.tests_control {
+                if let Some(TestModePayload::BadBlock { .. }) = tests_control.payload().await {
+                    let (bad_block, bad_global_state) = tests_control
+                        .generate_a_bad_block(block, global_state)
+                        .await?;
+
+                    block = bad_block;
+                    global_state = bad_global_state;
+                }
             }
-        };
 
+            // composite tx
+            let tx = match self
+                .complete_tx_skeleton(
+                    deposit_cells,
+                    finalized_custodians,
+                    block,
+                    global_state,
+                    median_time,
+                    rollup_cell.clone(),
+                )
+                .await
+            {
+                Ok(tx) => tx,
+                Err(err) => {
+                    log::error!(
+                        "[produce_next_block] Failed to composite submitting transaction: {}",
+                        err
+                    );
+                    self.mem_pool.lock().await.reset_mem_block()?;
+                    return Err(err);
+                }
+            };
+
+            if tx.as_slice().len() > MAX_BLOCK_BYTES as usize {
+                let mut block_limit = &mut mem_block_output_param.block_limit;
+                block_limit.max_withdrawals = block_limit
+                    .max_withdrawals
+                    .saturating_sub(MEM_BLOCK_OUTPUT_PARAM_LIMIT_WITHDRAWALS_COOLDOWN);
+                block_limit.max_txs = block_limit
+                    .max_txs
+                    .saturating_sub(MEM_BLOCK_OUTPUT_PARAM_LIMIT_TXS_COOLDOWN);
+
+                log::info!("[produce_next_block] tx exceeded maximum block bytes, update output param block limit to {:?}", block_limit);
+
+                if block_limit.max_withdrawals == 0 && block_limit.max_txs == 0 {
+                    unreachable!("reduce block limit to 0 withdrawals and 0 txs");
+                }
+                continue;
+            }
+
+            return Ok((number, tx));
+        }
+    }
+
+    async fn submit_block_tx(&mut self, block_number: u64, tx: Transaction) -> Result<()> {
         let cycles = utils::dry_run_transaction(
             &self.debug_config,
             &self.rpc_client,
             tx.clone(),
-            format!("L2 block {}", number).as_str(),
+            format!("L2 block {}", block_number).as_str(),
         )
         .await;
 
@@ -345,7 +380,7 @@ impl BlockProducer {
             Ok(tx_hash) => {
                 log::info!(
                     "Submitted l2 block {} in tx {}",
-                    number,
+                    block_number,
                     hex::encode(tx_hash.as_slice())
                 );
             }
