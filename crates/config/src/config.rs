@@ -90,13 +90,15 @@ pub struct ChallengerConfig {
 pub struct BlockCooldown {
     pub withdrawals: usize,
     pub txs: usize,
+    pub max_retry: usize,
 }
 
 impl Default for BlockCooldown {
     fn default() -> Self {
         BlockCooldown {
             withdrawals: 10, // drop 10% of withdrawals
-            txs: 10,         // drop 10% of txs
+            txs: 50,         // drop 50% of txs
+            max_retry: 5,
         }
     }
 }

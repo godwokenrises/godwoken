@@ -250,6 +250,7 @@ impl BlockProducer {
         }
 
         let mut mem_block_output_param = OutputParam::default();
+        let mut max_retry = self.config.block_cooldown.max_retry;
         loop {
             // get txs & withdrawal requests from mem pool
             let (opt_finalized_custodians, block_param) = {
@@ -327,6 +328,11 @@ impl BlockProducer {
             };
 
             if tx.as_slice().len() > MAX_BLOCK_BYTES as usize {
+                max_retry -= 1;
+                if max_retry == 0 {
+                    bail!("[produce_next_block] repackage block reach max retry");
+                }
+
                 // Drop txs first
                 let max_txs = block_txs
                     .saturating_mul(self.config.block_cooldown.txs)
