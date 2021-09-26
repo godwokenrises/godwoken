@@ -56,9 +56,11 @@ pub struct MemBlockLimit {
 }
 
 impl MemBlockLimit {
-    pub fn set(&mut self, max_withdrawals: usize, max_txs: usize) {
-        self.max_withdrawals = max_withdrawals;
-        self.max_txs = max_txs;
+    pub fn new(max_withdrawals: usize, max_txs: usize) -> Self {
+        MemBlockLimit {
+            max_withdrawals,
+            max_txs,
+        }
     }
 }
 

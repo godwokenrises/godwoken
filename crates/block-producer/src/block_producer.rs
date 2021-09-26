@@ -17,7 +17,7 @@ use gw_generator::Generator;
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_mem_pool::{
     custodian::to_custodian_cell,
-    pool::{MemPool, OutputParam},
+    pool::{MemBlockLimit, MemPool, OutputParam},
 };
 use gw_poa::{PoA, ShouldIssueBlock};
 use gw_rpc_client::rpc_client::RPCClient;
@@ -327,21 +327,25 @@ impl BlockProducer {
             };
 
             if tx.as_slice().len() > MAX_BLOCK_BYTES as usize {
-                // Drop some percentage of withdrawals and txs
-                let max_withdrawals = block_withdrawals
-                    .saturating_mul(self.config.block_cooldown.withdrawals)
-                    .wrapping_div(100);
+                // Drop txs first
                 let max_txs = block_txs
                     .saturating_mul(self.config.block_cooldown.txs)
                     .wrapping_div(100);
+
+                let max_withdrawals = if max_txs == 0 {
+                    // Drop withdrawals after all txs are dropped
+                    block_withdrawals
+                        .saturating_mul(self.config.block_cooldown.withdrawals)
+                        .wrapping_div(100)
+                } else {
+                    block_withdrawals
+                };
+
                 if max_withdrawals == 0 && max_txs == 0 {
                     unreachable!("reduce block limit to 0 withdrawals and 0 txs");
                 }
 
-                mem_block_output_param
-                    .block_limit
-                    .set(max_withdrawals, max_txs);
-
+                mem_block_output_param.block_limit = MemBlockLimit::new(max_withdrawals, max_txs);
                 log::info!("[produce_next_block] tx exceeded maximum block bytes, update output param block limit to {:?}", mem_block_output_param.block_limit);
 
                 continue;
