@@ -1,5 +1,5 @@
+use crate::deploy_scripts::Programs;
 use crate::utils;
-use crate::{deploy_scripts::Programs, utils::transaction::make_path};
 use anyhow::Result;
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{JsonBytes, Script, ScriptHashType};
@@ -146,7 +146,10 @@ struct ScriptsInfo {
 
 impl ScriptsInfo {
     fn source_script_path(&self, repos_dir: &Path) -> PathBuf {
-        make_path(repos_dir, vec![self.source.as_path()])
+        let mut p = PathBuf::default();
+        p.push(repos_dir);
+        p.push(self.source.as_path());
+        p
     }
 
     fn target_script_path(&self, target_root_dir: &Path) -> PathBuf {
@@ -157,7 +160,10 @@ impl ScriptsInfo {
             .next()
             .expect("get repo name")
             .as_os_str();
-        make_path(target_root_dir, vec![repo_name, script_name])
+        let mut p = PathBuf::from(target_root_dir);
+        p.push(repo_name);
+        p.push(script_name);
+        p
     }
 }
 
@@ -332,7 +338,7 @@ fn generate_script_deploy_config(
 }
 
 fn build_godwoken_scripts(repos_dir: &Path, repo_name: &str) {
-    let repo_dir = make_path(repos_dir, vec![repo_name]).display().to_string();
+    let repo_dir = repos_dir.join(repo_name).display().to_string();
     let target_dir = format!("{}/c", repo_dir);
     utils::transaction::run("make", vec!["-C", &target_dir]).expect("run make");
     utils::transaction::run_in_dir(
@@ -344,12 +350,12 @@ fn build_godwoken_scripts(repos_dir: &Path, repo_name: &str) {
 }
 
 fn build_godwoken_polyjuice(repos_dir: &Path, repo_name: &str) {
-    let target_dir = make_path(repos_dir, vec![repo_name]).display().to_string();
+    let target_dir = repos_dir.join(repo_name).display().to_string();
     utils::transaction::run("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
 }
 
 fn build_clerkb(repos_dir: &Path, repo_name: &str) {
-    let target_dir = make_path(repos_dir, vec![repo_name]).display().to_string();
+    let target_dir = repos_dir.join(repo_name).display().to_string();
     utils::transaction::run("yarn", vec!["--cwd", &target_dir]).expect("run yarn");
     utils::transaction::run("make", vec!["-C", &target_dir, "all-via-docker"]).expect("run make");
 }
@@ -374,7 +380,7 @@ fn run_pull_code(mut repo_url: Url, is_recursive: bool, repos_dir: &Path, repo_n
         .expect("valid branch, tag, or commit")
         .to_owned();
     repo_url.set_fragment(None);
-    let target_dir = make_path(repos_dir, vec![repo_name]);
+    let target_dir = repos_dir.join(repo_name);
     if target_dir.exists() {
         if run_git_checkout(&target_dir.display().to_string(), &commit).is_ok() {
             return;

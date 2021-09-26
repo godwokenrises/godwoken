@@ -3,7 +3,7 @@ use crate::deploy_scripts::deploy_scripts;
 use crate::generate_config::generate_config;
 use crate::prepare_scripts::{self, prepare_scripts, ScriptsBuildMode};
 use crate::utils;
-use crate::utils::transaction::{make_path, run_in_output_mode};
+use crate::utils::transaction::run_in_output_mode;
 use ckb_sdk::Address;
 use ckb_types::{
     core::ScriptHashType, packed as ckb_packed, prelude::Builder as CKBBuilder,
@@ -21,9 +21,6 @@ use std::{
     thread, time,
 };
 
-pub const TRANSFER_CAPACITY: &str = "200000";
-const MIN_WALLET_CAPACITY: f64 = 100000.0f64;
-
 #[derive(Debug)]
 pub struct NodeWalletInfo {
     pub testnet_address: String,
@@ -40,21 +37,22 @@ pub fn setup(
     scripts_path: &Path,
     privkey_path: &Path,
     cells_lock_address: &str,
-    nodes_count: u8,
+    nodes_count: usize,
     server_url: &str,
     output_dir: &Path,
+    transfer_capacity: u64,
 ) {
-    let prepare_scripts_result = make_path(output_dir, vec!["scripts-deploy.json"]);
+    let mut prepare_scripts_result_path = output_dir.join("scripts-deploy.json");
     prepare_scripts(
         mode,
         scripts_path,
         Path::new(prepare_scripts::REPOS_DIR_PATH),
         Path::new(prepare_scripts::SCRIPTS_DIR_PATH),
-        &prepare_scripts_result,
+        &prepare_scripts_result_path,
     )
     .expect("prepare scripts");
 
-    let scripts_deployment_result = make_path(output_dir, vec!["scripts-deploy-result.json"]);
+    let scripts_deployment_result = output_dir.join("scripts-deploy-result.json");
     let cells_lock: ckb_types::packed::Script = Address::from_str(cells_lock_address)
         .unwrap()
         .payload()
@@ -62,25 +60,24 @@ pub fn setup(
     deploy_scripts(
         privkey_path,
         ckb_rpc_url,
-        &prepare_scripts_result,
+        &prepare_scripts_result_path,
         &scripts_deployment_result,
         Some(cells_lock.into()),
     )
     .expect("deploy scripts");
 
-    let poa_config_path = make_path(output_dir, vec!["poa-config.json"]);
-    let rollup_config_path = make_path(output_dir, vec!["rollup-config.json"]);
-    let capacity = TRANSFER_CAPACITY.parse().expect("get capacity");
+    let poa_config_path = output_dir.join("poa-config.json");
+    let rollup_config_path = output_dir.join("rollup-config.json");
     prepare_nodes_configs(
         privkey_path,
-        capacity,
+        transfer_capacity,
         nodes_count,
         output_dir,
         &poa_config_path,
         &rollup_config_path,
     );
 
-    let genesis_deploy_result = make_path(output_dir, vec!["genesis-deploy-result.json"]);
+    let genesis_deploy_result = output_dir.join("genesis-deploy-result.json");
     deploy_genesis(
         privkey_path,
         ckb_rpc_url,
@@ -95,8 +92,8 @@ pub fn setup(
 
     (0..nodes_count).for_each(|index| {
         let node_name = format!("node{}", index + 1);
-        let privkey_path = make_path(output_dir, vec![&node_name, &"pk".to_owned()]);
-        let output_file_path = make_path(output_dir, vec![node_name, "config.toml".to_owned()]);
+        let privkey_path = output_dir.join(&node_name).join("pk");
+        let output_file_path = output_dir.join(node_name).join("config.toml");
         generate_config(
             &genesis_deploy_result,
             &scripts_deployment_result,
@@ -105,7 +102,7 @@ pub fn setup(
             indexer_url.to_owned(),
             output_file_path.as_ref(),
             None,
-            &prepare_scripts_result,
+            &prepare_scripts_result_path,
             server_url.to_string(),
         )
         .expect("generate_config");
@@ -116,8 +113,8 @@ pub fn setup(
 
 fn prepare_nodes_configs(
     payer_privkey: &Path,
-    capacity: u32,
-    nodes_count: u8,
+    capacity: u64,
+    nodes_count: usize,
     output_dir: &Path,
     poa_config_path: &Path,
     rollup_config_path: &Path,
@@ -128,13 +125,13 @@ fn prepare_nodes_configs(
     generate_rollup_config(rollup_config_path);
 }
 
-fn prepare_privkeys(output_dir: &Path, nodes_count: u8) -> HashMap<String, PathBuf> {
+fn prepare_privkeys(output_dir: &Path, nodes_count: usize) -> HashMap<String, PathBuf> {
     (0..nodes_count)
         .map(|index| {
             let node_name = format!("node{}", (index + 1).to_string());
-            let node_dir = make_path(output_dir, vec![&node_name]);
+            let node_dir = output_dir.join(node_name);
             fs::create_dir_all(&node_dir).expect("create node dir");
-            let privkey_file = make_path(&node_dir, vec!["pk"]);
+            let privkey_file = node_dir.join("pk");
             let privkey = fs::read_to_string(&privkey_file)
                 .map(|s| s.trim().into())
                 .unwrap_or_else(|_| Vec::new());
@@ -152,7 +149,7 @@ fn prepare_privkeys(output_dir: &Path, nodes_count: u8) -> HashMap<String, PathB
 
 fn check_wallets_info(
     nodes_privkeys: HashMap<String, PathBuf>,
-    capacity: u32,
+    capacity: u64,
     payer_privkey_path: &Path,
 ) -> HashMap<String, NodeWalletInfo> {
     nodes_privkeys
@@ -161,17 +158,11 @@ fn check_wallets_info(
             let wallet_info = get_wallet_info(&privkey);
             let mut current_capacity = query_wallet_capacity(&wallet_info.testnet_address);
             log::info!("{}'s wallet capacity: {}", node, current_capacity);
-            if current_capacity < MIN_WALLET_CAPACITY {
-                log::info!("Start to transfer ckb, and it will take 30 seconds...");
-                transfer_ckb(&wallet_info, payer_privkey_path, capacity);
-                thread::sleep(time::Duration::from_secs(30));
-                current_capacity = query_wallet_capacity(&wallet_info.testnet_address);
-                assert!(
-                    current_capacity >= MIN_WALLET_CAPACITY,
-                    "wallet haven't received ckb, please try again"
-                );
-                log::info!("{}'s wallet capacity: {}", node, current_capacity);
-            }
+            log::info!("Start to transfer ckb, and it will take 30 seconds...");
+            transfer_ckb(&wallet_info, payer_privkey_path, capacity);
+            thread::sleep(time::Duration::from_secs(30));
+            current_capacity = query_wallet_capacity(&wallet_info.testnet_address);
+            log::info!("{}'s wallet capacity: {}", node, current_capacity);
             (node, wallet_info)
         })
         .collect()
@@ -253,7 +244,7 @@ fn query_wallet_capacity(address: &str) -> f64 {
         .expect("parse capacity")
 }
 
-fn transfer_ckb(node_wallet: &NodeWalletInfo, payer_privkey_path: &Path, capacity: u32) {
+fn transfer_ckb(node_wallet: &NodeWalletInfo, payer_privkey_path: &Path, capacity: u64) {
     utils::transaction::run(
         "ckb-cli",
         vec![

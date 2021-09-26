@@ -137,14 +137,6 @@ where
     }
 }
 
-pub fn make_path<P: AsRef<Path>>(parent_dir_path: &Path, paths: Vec<P>) -> PathBuf {
-    let mut target = PathBuf::from(parent_dir_path);
-    for p in paths {
-        target.push(p);
-    }
-    target
-}
-
 // Read config.toml
 pub fn read_config<P: AsRef<Path>>(path: P) -> Result<Config, String> {
     let content = fs::read(&path).map_err(|err| err.to_string())?;

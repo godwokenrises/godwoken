@@ -356,7 +356,7 @@ fn run_cli() -> Result<()> {
                     Arg::with_name("nodes-count")
                         .short("n")
                         .takes_value(true)
-                        .default_value("2")
+                        .default_value("1")
                         .required(true)
                         .help("The godwoken nodes count"),
                 )
