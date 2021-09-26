@@ -41,6 +41,7 @@ use std::{
 };
 
 const TRANSACTION_SRIPT_ERROR: &str = "TransactionScriptError";
+const TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR: &str = "ExceededMaximumBlockBytes";
 
 fn generate_custodian_cells(
     rollup_context: &RollupContext,
@@ -353,7 +354,10 @@ impl BlockProducer {
                 self.poa.reset_current_round();
 
                 // dumping script error transactions
-                if err.to_string().contains(TRANSACTION_SRIPT_ERROR) {
+                let err_str = err.to_string();
+                if err_str.contains(TRANSACTION_SRIPT_ERROR)
+                    || err_str.contains(TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR)
+                {
                     // dumping failed tx
                     utils::dump_transaction(
                         &self.debug_config.debug_tx_dump_path,
