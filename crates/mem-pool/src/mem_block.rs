@@ -12,7 +12,7 @@ pub struct MemBlockContent {
     pub txs: Vec<H256>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct MemBlock {
     block_producer_id: u32,
     /// Finalized txs

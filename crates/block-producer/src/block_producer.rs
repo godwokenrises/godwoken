@@ -253,7 +253,7 @@ impl BlockProducer {
         loop {
             // get txs & withdrawal requests from mem pool
             let (opt_finalized_custodians, block_param) = {
-                let mut mem_pool = self.mem_pool.lock().await;
+                let mem_pool = self.mem_pool.lock().await;
                 mem_pool.output_mem_block(&mem_block_output_param)?
             };
             let deposit_cells = block_param.deposits.clone();
