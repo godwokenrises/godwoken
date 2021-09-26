@@ -49,6 +49,11 @@ use crate::{
     types::EntryList,
 };
 
+pub enum MemBlockDBMode {
+    NewBlock,
+    Repackage,
+}
+
 #[derive(Debug)]
 pub struct MemBlockLimit {
     pub max_withdrawals: usize,
@@ -160,10 +165,23 @@ impl MemPool {
     }
 
     pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
+        self.fetch_state_db_with_mode(db, MemBlockDBMode::NewBlock)
+    }
+
+    pub fn fetch_state_db_with_mode<'a>(
+        &self,
+        db: &'a StoreTransaction,
+        mode: MemBlockDBMode,
+    ) -> Result<StateDBTransaction<'a>> {
+        // Repackage offset must be smaller than NewBlock, so that it has clean state.
+        let db_mode = match mode {
+            MemBlockDBMode::NewBlock => StateDBMode::Write(WriteContext::new(u32::MAX)),
+            MemBlockDBMode::Repackage => StateDBMode::Write(WriteContext::new(0)),
+        };
         StateDBTransaction::from_checkpoint(
             db,
             CheckPoint::new(self.current_tip.1, SubState::MemBlock),
-            StateDBMode::Write(WriteContext::default()),
+            db_mode,
         )
         .map_err(|err| anyhow!("err: {}", err))
     }
@@ -387,10 +405,7 @@ impl MemPool {
             || self.mem_block.withdrawals().len() > output_param.block_limit.max_withdrawals;
 
         let (mem_block, post_merkle_state) = if repackage {
-            let mem_block = self.repackage_mem_block(output_param)?;
-            let mem_db_state = self.fetch_repackage_state_db(&db)?;
-
-            (mem_block, mem_db_state.state_tree()?.merkle_state()?)
+            self.repackage_mem_block(output_param)?
         } else {
             let mem_block = self.mem_block.clone();
             let mem_db_state = self.fetch_state_db(&db)?;
@@ -487,28 +502,13 @@ impl MemPool {
         Ok((finalized_custodians, param))
     }
 
-    fn fetch_repackage_state_db<'a>(
+    fn repackage_mem_block(
         &self,
-        db: &'a StoreTransaction,
-    ) -> Result<StateDBTransaction<'a>> {
-        let ctx = WriteContext::new(u32::MAX);
-        assert_ne!(
-            ctx,
-            WriteContext::default(),
-            "repackage should not override current mem block"
-        );
-        StateDBTransaction::from_checkpoint(
-            db,
-            CheckPoint::new(self.current_tip.1, SubState::MemBlock),
-            StateDBMode::Write(ctx),
-        )
-        .map_err(|err| anyhow!("err: {}", err))
-    }
-
-    fn repackage_mem_block(&self, output_param: &OutputParam) -> Result<MemBlock> {
+        output_param: &OutputParam,
+    ) -> Result<(MemBlock, AccountMerkleState)> {
         let mem_block = &self.mem_block;
         let db = self.store.begin_transaction();
-        let state_db = self.fetch_repackage_state_db(&db)?;
+        let state_db = self.fetch_state_db_with_mode(&db, MemBlockDBMode::Repackage)?;
 
         let (withdrawals, txs) = {
             let MemBlockLimit {
@@ -539,7 +539,9 @@ impl MemPool {
         assert!(new_mem_block.deposits().is_empty());
         assert!(new_mem_block.txs().is_empty());
 
-        let mut state = state_db.state_tree()?;
+        let mut state =
+            state_db.state_tree_with_merkle_state(mem_block.prev_merkle_state().to_owned())?;
+
         state.tracker_mut().enable();
 
         // Finalize withdrawals
@@ -591,7 +593,7 @@ impl MemPool {
             new_mem_block.push_tx(tx.hash().into(), &tx_receipt);
         }
 
-        Ok(new_mem_block)
+        Ok((new_mem_block, state.merkle_state()?))
     }
 
     /// Reset
