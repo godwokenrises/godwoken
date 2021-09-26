@@ -1256,11 +1256,8 @@ impl RPCClient {
             .find(|f| f.rfc == rfc)
             .ok_or_else(|| anyhow!("rfc {} hardfork feature not found!", rfc))?;
 
-        let epoch_number: u64 = rfc_info
-            .epoch_number
-            .ok_or_else(|| anyhow!("rfc {} epoch_number not found!", rfc))?
-            .into();
-
+        // if epoch_number is null, which means the fork will never going to happen
+        let epoch_number: u64 = rfc_info.epoch_number.map(Into::into).unwrap_or(u64::MAX);
         Ok(epoch_number)
     }
 }
