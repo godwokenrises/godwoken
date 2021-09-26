@@ -510,7 +510,7 @@ impl MemPool {
         let db = self.store.begin_transaction();
         let state_db = self.fetch_state_db_with_mode(&db, MemBlockDBMode::Repackage)?;
 
-        let (withdrawals, txs) = {
+        let (withdrawals, tx_hashes) = {
             let MemBlockLimit {
                 max_withdrawals,
                 max_txs,
@@ -521,13 +521,9 @@ impl MemPool {
                 let to_withdrawals = hashes.flat_map(|h| db.get_mem_pool_withdrawal(h).transpose());
                 to_withdrawals.collect::<Result<Vec<_>, _>>()?
             };
-            let txs = {
-                let hashes = mem_block.txs().iter().take(max_txs);
-                let to_txs = hashes.flat_map(|h| db.get_mem_pool_transaction(h).transpose());
-                to_txs.collect::<Result<Vec<_>, _>>()?
-            };
+            let tx_hashes = mem_block.txs().iter().take(max_txs).collect::<Vec<_>>();
 
-            (withdrawals, txs)
+            (withdrawals, tx_hashes)
         };
 
         let mut new_mem_block = mem_block.clone();
@@ -572,28 +568,26 @@ impl MemPool {
         new_mem_block.append_touched_keys(touched_keys.borrow().iter().cloned());
 
         // Finalize txs
-        for tx in txs {
-            let tip_block_hash = db.get_tip_block_hash()?;
-            let chain_view = ChainView::new(&db, tip_block_hash);
-            let block_info = new_mem_block.block_info();
+        let mut post_tx_merkle_state = None;
+        let tx_len = tx_hashes.len();
+        for (idx, tx_hash) in tx_hashes.into_iter().enumerate() {
+            let tx_receipt = db
+                .get_mem_pool_transaction_receipt(tx_hash)?
+                .ok_or_else(|| anyhow!("tx {:?} receipt not found", tx_hash))?;
 
-            let raw_tx = tx.raw();
-            let run_result = self.generator.execute_transaction(
-                &chain_view,
-                &state,
-                block_info,
-                &raw_tx,
-                L2TX_MAX_CYCLES,
-            )?;
-            state.apply_run_result(&run_result)?;
+            new_mem_block.push_tx(*tx_hash, &tx_receipt);
 
-            let merkle_state = state.merkle_state()?;
-            let tx_receipt =
-                TxReceipt::build_receipt(tx.witness_hash().into(), run_result, merkle_state);
-            new_mem_block.push_tx(tx.hash().into(), &tx_receipt);
+            if idx + 1 == tx_len {
+                post_tx_merkle_state = Some(tx_receipt.post_state())
+            }
         }
 
-        Ok((new_mem_block, state.merkle_state()?))
+        let post_merkle_state = match post_tx_merkle_state {
+            Some(state) => state,
+            None => state.merkle_state()?,
+        };
+
+        Ok((new_mem_block, post_merkle_state))
     }
 
     /// Reset
