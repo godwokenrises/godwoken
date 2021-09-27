@@ -544,7 +544,7 @@ impl MemPool {
 
             repackage_block.append_touched_keys(mem_block.touched_keys().clone().into_iter());
         } else {
-            assert_eq!(tx_hashes.len(), 0, "reduce txs first");
+            assert_eq!(tx_hashes.len(), 0, "must drop txs first");
             log::info!(
                 "[mem-pool] repackage withdrawals {} and deposits {}",
                 withdrawal_hashes.len(),
