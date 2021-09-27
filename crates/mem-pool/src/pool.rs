@@ -55,39 +55,19 @@ pub enum MemBlockDBMode {
 }
 
 #[derive(Debug)]
-pub struct MemBlockLimit {
-    pub max_withdrawals: usize,
-    pub max_txs: usize,
-}
-
-impl MemBlockLimit {
-    pub fn new(max_withdrawals: usize, max_txs: usize) -> Self {
-        MemBlockLimit {
-            max_withdrawals,
-            max_txs,
-        }
-    }
-}
-
-impl Default for MemBlockLimit {
-    fn default() -> Self {
-        MemBlockLimit {
-            max_withdrawals: MAX_MEM_BLOCK_WITHDRAWALS,
-            max_txs: MAX_MEM_BLOCK_TXS,
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct OutputParam {
-    pub block_limit: MemBlockLimit,
+    pub retry_count: usize,
+}
+
+impl OutputParam {
+    pub fn new(retry_count: usize) -> Self {
+        OutputParam { retry_count }
+    }
 }
 
 impl Default for OutputParam {
     fn default() -> Self {
-        OutputParam {
-            block_limit: MemBlockLimit::default(),
-        }
+        OutputParam { retry_count: 0 }
     }
 }
 
@@ -401,10 +381,8 @@ impl MemPool {
         output_param: &OutputParam,
     ) -> Result<(Option<CollectedCustodianCells>, BlockParam)> {
         let db = self.store.begin_transaction();
-        let repackage = self.mem_block.txs().len() > output_param.block_limit.max_txs
-            || self.mem_block.withdrawals().len() > output_param.block_limit.max_withdrawals;
 
-        let (mem_block, post_merkle_state) = if repackage {
+        let (mem_block, post_merkle_state) = if output_param.retry_count > 0 {
             self.repackage_mem_block(output_param)?
         } else {
             let mem_block = self.mem_block.clone();
@@ -506,20 +484,30 @@ impl MemPool {
         &self,
         output_param: &OutputParam,
     ) -> Result<(MemBlock, AccountMerkleState)> {
+        log::info!(
+            "[mem-pool] repackage mem block, retry count {}",
+            output_param.retry_count
+        );
+
         let mem_block = &self.mem_block;
         let db = self.store.begin_transaction();
         let state_db = self.fetch_state_db_with_mode(&db, MemBlockDBMode::Repackage)?;
 
-        let (withdrawal_hashes, tx_hashes) = {
-            let MemBlockLimit {
-                max_withdrawals,
-                max_txs,
-            } = output_param.block_limit;
+        let (withdrawal_hashes, deposits, tx_hashes) = {
+            let total =
+                mem_block.withdrawals().len() + mem_block.deposits().len() + mem_block.txs().len();
+            // Drop base on retry count
+            let mut remain = total / (output_param.retry_count + 1);
 
-            let withdrawal_hashes = mem_block.withdrawals().iter().take(max_withdrawals);
-            let tx_hashes = mem_block.txs().iter().take(max_txs);
+            let withdrawal_hashes = mem_block.withdrawals().iter().take(remain);
+            remain = remain.saturating_sub(withdrawal_hashes.len());
 
-            (withdrawal_hashes, tx_hashes)
+            let deposits = mem_block.deposits().iter().take(remain);
+            remain = remain.saturating_sub(deposits.len());
+
+            let tx_hashes = mem_block.txs().iter().take(remain);
+
+            (withdrawal_hashes, deposits, tx_hashes)
         };
 
         let mut repackage_block = mem_block.clone();
@@ -534,7 +522,9 @@ impl MemPool {
         let mut state =
             state_db.state_tree_with_merkle_state(mem_block.prev_merkle_state().to_owned())?;
 
-        if withdrawal_hashes.len() == mem_block.withdrawals().len() {
+        if withdrawal_hashes.len() == mem_block.withdrawals().len()
+            && deposits.len() == mem_block.deposits().len()
+        {
             // Simply reuse mem block withdrawals and deposit result
             assert!(mem_block.state_checkpoints().len() >= withdrawal_hashes.len());
             for (hash, checkpoint) in withdrawal_hashes.zip(mem_block.state_checkpoints().iter()) {
@@ -562,11 +552,11 @@ impl MemPool {
             };
             let withdrawals: Vec<_> = withdrawal_hashes.map(to_withdaral).collect::<Result<_>>()?;
 
-            for withdrawal in withdrawals {
+            for withdrawal in withdrawals.iter() {
                 state.apply_withdrawal_request(
                     self.generator.rollup_context(),
                     mem_block.block_producer_id(),
-                    &withdrawal,
+                    withdrawal,
                 )?;
 
                 repackage_block.push_withdrawal(
@@ -579,7 +569,7 @@ impl MemPool {
             }
 
             // Repackage deposits
-            let deposit_cells = mem_block.deposits().to_vec();
+            let deposit_cells: Vec<_> = deposits.cloned().collect();
             let deposits: Vec<_> = deposit_cells.iter().map(|i| i.request.clone()).collect();
             state.apply_deposit_requests(self.generator.rollup_context(), &deposits)?;
             let prev_state_checkpoint = state.calculate_state_checkpoint()?;

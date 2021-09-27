@@ -17,7 +17,7 @@ use gw_generator::Generator;
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_mem_pool::{
     custodian::to_custodian_cell,
-    pool::{MemBlockLimit, MemPool, OutputParam},
+    pool::{MemPool, OutputParam},
 };
 use gw_poa::{PoA, ShouldIssueBlock};
 use gw_rpc_client::rpc_client::RPCClient;
@@ -44,6 +44,7 @@ use std::{
     time::Duration,
 };
 
+const MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT: usize = 5;
 const TRANSACTION_SRIPT_ERROR: &str = "TransactionScriptError";
 const TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR: &str = "ExceededMaximumBlockBytes";
 
@@ -249,13 +250,12 @@ impl BlockProducer {
             }
         }
 
-        let mut mem_block_output_param = OutputParam::default();
-        let mut max_retry = self.config.block_cooldown.max_retry;
-        loop {
+        let mut retry_count = 0;
+        while retry_count <= MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT {
             // get txs & withdrawal requests from mem pool
             let (opt_finalized_custodians, block_param) = {
                 let mem_pool = self.mem_pool.lock().await;
-                mem_pool.output_mem_block(&mem_block_output_param)?
+                mem_pool.output_mem_block(&OutputParam::new(retry_count))?
             };
             let deposit_cells = block_param.deposits.clone();
 
@@ -327,38 +327,14 @@ impl BlockProducer {
                 }
             };
 
-            if tx.as_slice().len() > MAX_BLOCK_BYTES as usize {
-                max_retry -= 1;
-                if max_retry == 0 {
-                    bail!("[produce_next_block] repackage block reach max retry");
-                }
-
-                // Drop txs first
-                let max_txs = block_txs
-                    .saturating_mul(self.config.block_cooldown.txs)
-                    .wrapping_div(100);
-
-                let max_withdrawals = if max_txs == 0 {
-                    // Drop withdrawals after all txs are dropped
-                    block_withdrawals
-                        .saturating_mul(self.config.block_cooldown.withdrawals)
-                        .wrapping_div(100)
-                } else {
-                    block_withdrawals
-                };
-
-                if max_withdrawals == 0 && max_txs == 0 {
-                    unreachable!("reduce block limit to 0 withdrawals and 0 txs");
-                }
-
-                mem_block_output_param.block_limit = MemBlockLimit::new(max_withdrawals, max_txs);
-                log::info!("[produce_next_block] tx exceeded maximum block bytes, update output param block limit to {:?}", mem_block_output_param.block_limit);
-
-                continue;
+            if tx.as_slice().len() <= MAX_BLOCK_BYTES as usize {
+                return Ok((number, tx));
             }
 
-            return Ok((number, tx));
+            retry_count += 1;
         }
+
+        Err(anyhow!("[produce_next_block] package reach max retry"))
     }
 
     async fn submit_block_tx(&mut self, block_number: u64, tx: Transaction) -> Result<()> {
