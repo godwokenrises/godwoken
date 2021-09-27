@@ -522,10 +522,12 @@ impl MemPool {
         let mut state =
             state_db.state_tree_with_merkle_state(mem_block.prev_merkle_state().to_owned())?;
 
+        // NOTE: Must have at least one tx to have correct psot block state
         if withdrawal_hashes.len() == mem_block.withdrawals().len()
             && deposits.len() == mem_block.deposits().len()
+            && tx_hashes.len() > 0
         {
-            // Simply reuse mem block withdrawals and deposit result
+            // Simply reuse mem block withdrawals and depoist result
             assert!(mem_block.state_checkpoints().len() >= withdrawal_hashes.len());
             for (hash, checkpoint) in withdrawal_hashes.zip(mem_block.state_checkpoints().iter()) {
                 repackage_block.push_withdrawal(*hash, *checkpoint);
@@ -543,6 +545,12 @@ impl MemPool {
             repackage_block.append_touched_keys(mem_block.touched_keys().clone().into_iter());
         } else {
             assert_eq!(tx_hashes.len(), 0, "reduce txs first");
+            log::info!(
+                "[mem-pool] repackage withdrawals {} and deposits {}",
+                withdrawal_hashes.len(),
+                deposits.len()
+            );
+
             state.tracker_mut().enable();
 
             // Repackage withdrawals
