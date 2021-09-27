@@ -534,9 +534,9 @@ impl MemPool {
         let mut state =
             state_db.state_tree_with_merkle_state(mem_block.prev_merkle_state().to_owned())?;
 
-        if withdrawal_hashes.len() == mem_block.withdrawals().len() && tx_hashes.len() > 0 {
+        if withdrawal_hashes.len() == mem_block.withdrawals().len() {
             // Simply reuse mem block withdrawals and deposit result
-            assert!(mem_block.state_checkpoints().len() > withdrawal_hashes.len());
+            assert!(mem_block.state_checkpoints().len() >= withdrawal_hashes.len());
             for (hash, checkpoint) in withdrawal_hashes.zip(mem_block.state_checkpoints().iter()) {
                 repackage_block.push_withdrawal(*hash, *checkpoint);
             }
@@ -552,6 +552,7 @@ impl MemPool {
 
             repackage_block.append_touched_keys(mem_block.touched_keys().clone().into_iter());
         } else {
+            assert_eq!(tx_hashes.len(), 0, "reduce txs first");
             state.tracker_mut().enable();
 
             // Repackage withdrawals
