@@ -51,7 +51,7 @@ use crate::{
 
 pub enum MemBlockDBMode {
     NewBlock,
-    Repackage,
+    Package,
 }
 
 #[derive(Debug)]
@@ -156,7 +156,7 @@ impl MemPool {
         // Repackage offset must be smaller than NewBlock, so that it has clean state.
         let db_mode = match mode {
             MemBlockDBMode::NewBlock => StateDBMode::Write(WriteContext::new(u32::MAX)),
-            MemBlockDBMode::Repackage => StateDBMode::Write(WriteContext::new(0)),
+            MemBlockDBMode::Package => StateDBMode::Write(WriteContext::new(0)),
         };
         StateDBTransaction::from_checkpoint(
             db,
@@ -380,17 +380,9 @@ impl MemPool {
         &self,
         output_param: &OutputParam,
     ) -> Result<(Option<CollectedCustodianCells>, BlockParam)> {
+        let (mem_block, post_merkle_state) = self.package_mem_block(output_param)?;
+
         let db = self.store.begin_transaction();
-
-        let (mem_block, post_merkle_state) = if output_param.retry_count > 0 {
-            self.repackage_mem_block(output_param)?
-        } else {
-            let mem_block = self.mem_block.clone();
-            let mem_db_state = self.fetch_state_db(&db)?;
-
-            (mem_block, mem_db_state.state_tree()?.merkle_state()?)
-        };
-
         let state_db = StateDBTransaction::from_checkpoint(
             &db,
             CheckPoint::new(self.current_tip.1, SubState::Block),
@@ -480,18 +472,22 @@ impl MemPool {
         Ok((finalized_custodians, param))
     }
 
-    fn repackage_mem_block(
+    fn package_mem_block(
         &self,
         output_param: &OutputParam,
     ) -> Result<(MemBlock, AccountMerkleState)> {
-        log::info!(
-            "[mem-pool] repackage mem block, retry count {}",
-            output_param.retry_count
-        );
+        let db = self.store.begin_transaction();
+        let retry_count = output_param.retry_count;
+        if retry_count == 0 {
+            let mem_block = self.mem_block.clone();
+            let mem_db_state = self.fetch_state_db(&db)?;
+
+            return Ok((mem_block, mem_db_state.state_tree()?.merkle_state()?));
+        }
+        log::info!("[mem-pool] package mem block, retry count {}", retry_count);
 
         let mem_block = &self.mem_block;
-        let db = self.store.begin_transaction();
-        let state_db = self.fetch_state_db_with_mode(&db, MemBlockDBMode::Repackage)?;
+        let state_db = self.fetch_state_db_with_mode(&db, MemBlockDBMode::Package)?;
 
         let (withdrawal_hashes, deposits, tx_hashes) = {
             let total =
@@ -510,8 +506,10 @@ impl MemPool {
             (withdrawal_hashes, deposits, tx_hashes)
         };
 
-        let mut repackage_block = mem_block.clone();
-        repackage_block.clear();
+        let mut repackage_block = MemBlock::new(
+            mem_block.block_info().to_owned(),
+            mem_block.prev_merkle_state().to_owned(),
+        );
 
         assert!(repackage_block.state_checkpoints().is_empty());
         assert!(repackage_block.withdrawals().is_empty());
@@ -522,7 +520,7 @@ impl MemPool {
         let mut state =
             state_db.state_tree_with_merkle_state(mem_block.prev_merkle_state().to_owned())?;
 
-        // NOTE: Must have at least one tx to have correct psot block state
+        // NOTE: Must have at least one tx to have correct post block state
         if withdrawal_hashes.len() == mem_block.withdrawals().len()
             && deposits.len() == mem_block.deposits().len()
             && tx_hashes.len() > 0

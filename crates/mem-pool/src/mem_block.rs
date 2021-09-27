@@ -40,6 +40,15 @@ pub struct MemBlock {
 }
 
 impl MemBlock {
+    pub fn new(block_info: BlockInfo, prev_merkle_state: AccountMerkleState) -> Self {
+        MemBlock {
+            block_producer_id: block_info.block_producer_id().unpack(),
+            block_info,
+            prev_merkle_state,
+            ..Default::default()
+        }
+    }
+
     pub fn block_info(&self) -> &BlockInfo {
         &self.block_info
     }
