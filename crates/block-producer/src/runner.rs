@@ -599,6 +599,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         Arc::clone(&chain),
         offchain_mock_context,
         config.mem_pool.clone(),
+        config.node_mode,
     );
 
     let (exit_sender, exit_recv) = async_channel::bounded(100);

@@ -4,7 +4,7 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::OffChainMockContext;
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{DebugConfig, MemPoolConfig};
+use gw_config::{DebugConfig, MemPoolConfig, NodeMode};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
@@ -120,6 +120,7 @@ pub struct Registry {
     debug_config: DebugConfig,
     mem_pool_config: MemPoolConfig,
     backend_info: Vec<BackendInfo>,
+    node_mode: NodeMode,
 }
 
 impl Registry {
@@ -134,6 +135,7 @@ impl Registry {
         chain: Arc<Mutex<Chain>>,
         offchain_mock_context: Option<OffChainMockContext>,
         mem_pool_config: MemPoolConfig,
+        node_mode: NodeMode,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -151,6 +153,7 @@ impl Registry {
             offchain_mock_context,
             mem_pool_config,
             backend_info,
+            node_mode,
         }
     }
 
@@ -187,13 +190,16 @@ impl Registry {
             .with_method("gw_get_transaction_receipt", get_transaction_receipt)
             .with_method("gw_execute_l2transaction", execute_l2transaction)
             .with_method("gw_execute_raw_l2transaction", execute_raw_l2transaction)
-            .with_method("gw_submit_l2transaction", submit_l2transaction)
-            .with_method("gw_submit_withdrawal_request", submit_withdrawal_request)
             .with_method(
                 "gw_compute_l2_sudt_script_hash",
                 compute_l2_sudt_script_hash,
             )
             .with_method("gw_get_node_info", get_node_info);
+        if self.node_mode != NodeMode::ReadOnly {
+            server = server
+                .with_method("gw_submit_l2transaction", submit_l2transaction)
+                .with_method("gw_submit_withdrawal_request", submit_withdrawal_request);
+        }
 
         // Tests
         if let Some(tests_rpc_impl) = self.tests_rpc_impl {
