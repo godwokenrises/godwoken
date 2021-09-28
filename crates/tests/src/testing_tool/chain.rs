@@ -10,7 +10,7 @@ use gw_generator::{
     genesis::init_genesis,
     Generator,
 };
-use gw_mem_pool::{custodian::AvailableCustodians, pool::MemPool};
+use gw_mem_pool::pool::MemPool;
 use gw_store::{transaction::mem_pool_store::MemPoolStore, Store};
 use gw_types::{
     bytes::Bytes,
