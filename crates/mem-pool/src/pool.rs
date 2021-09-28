@@ -494,6 +494,10 @@ impl MemPool {
                 mem_block.withdrawals().len() + mem_block.deposits().len() + mem_block.txs().len();
             // Drop base on retry count
             let mut remain = total / (output_param.retry_count + 1);
+            if 0 == remain {
+                // Package at least one
+                remain = 1;
+            }
 
             let withdrawal_hashes = mem_block.withdrawals().iter().take(remain);
             remain = remain.saturating_sub(withdrawal_hashes.len());
