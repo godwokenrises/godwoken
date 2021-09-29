@@ -49,6 +49,28 @@ use crate::{
     types::EntryList,
 };
 
+pub enum MemBlockDBMode {
+    NewBlock,
+    Package,
+}
+
+#[derive(Debug)]
+pub struct OutputParam {
+    pub retry_count: usize,
+}
+
+impl OutputParam {
+    pub fn new(retry_count: usize) -> Self {
+        OutputParam { retry_count }
+    }
+}
+
+impl Default for OutputParam {
+    fn default() -> Self {
+        OutputParam { retry_count: 0 }
+    }
+}
+
 /// MemPool
 pub struct MemPool {
     /// store
@@ -123,10 +145,23 @@ impl MemPool {
     }
 
     pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
+        self.fetch_state_db_with_mode(db, MemBlockDBMode::NewBlock)
+    }
+
+    pub fn fetch_state_db_with_mode<'a>(
+        &self,
+        db: &'a StoreTransaction,
+        mode: MemBlockDBMode,
+    ) -> Result<StateDBTransaction<'a>> {
+        // Repackage offset must be smaller than NewBlock, so that it has clean state.
+        let db_mode = match mode {
+            MemBlockDBMode::NewBlock => StateDBMode::Write(WriteContext::new(u32::MAX)),
+            MemBlockDBMode::Package => StateDBMode::Write(WriteContext::new(0)),
+        };
         StateDBTransaction::from_checkpoint(
             db,
             CheckPoint::new(self.current_tip.1, SubState::MemBlock),
-            StateDBMode::Write(WriteContext::default()),
+            db_mode,
         )
         .map_err(|err| anyhow!("err: {}", err))
     }
@@ -341,7 +376,12 @@ impl MemPool {
     }
 
     /// output mem block
-    pub fn output_mem_block(&self) -> Result<(Option<CollectedCustodianCells>, BlockParam)> {
+    pub fn output_mem_block(
+        &self,
+        output_param: &OutputParam,
+    ) -> Result<(Option<CollectedCustodianCells>, BlockParam)> {
+        let (mem_block, post_merkle_state) = self.package_mem_block(output_param)?;
+
         let db = self.store.begin_transaction();
         let state_db = StateDBTransaction::from_checkpoint(
             &db,
@@ -351,8 +391,7 @@ impl MemPool {
         // generate kv state & merkle proof from tip state
         let state = state_db.state_tree()?;
 
-        let kv_state: Vec<(H256, H256)> = self
-            .mem_block
+        let kv_state: Vec<(H256, H256)> = mem_block
             .touched_keys()
             .iter()
             .map(|k| {
@@ -375,8 +414,7 @@ impl MemPool {
                 .0
         };
 
-        let txs = self
-            .mem_block
+        let txs = mem_block
             .txs()
             .iter()
             .map(|tx_hash| {
@@ -384,9 +422,8 @@ impl MemPool {
                     .ok_or_else(|| anyhow!("can't find tx_hash from mem pool"))
             })
             .collect::<Result<_>>()?;
-        let deposits = self.mem_block.deposits().to_vec();
-        let withdrawals = self
-            .mem_block
+        let deposits = mem_block.deposits().to_vec();
+        let withdrawals = mem_block
             .withdrawals()
             .iter()
             .map(|withdrawal_hash| {
@@ -398,22 +435,16 @@ impl MemPool {
                 })
             })
             .collect::<Result<_>>()?;
-        let state_checkpoint_list = self.mem_block.state_checkpoints().to_vec();
-        let txs_prev_state_checkpoint = self
-            .mem_block
+        let state_checkpoint_list = mem_block.state_checkpoints().to_vec();
+        let txs_prev_state_checkpoint = mem_block
             .txs_prev_state_checkpoint()
             .ok_or_else(|| anyhow!("Mem block has no txs prev state checkpoint"))?;
-        let prev_merkle_state = self.mem_block.prev_merkle_state().clone();
-        let post_merkle_state = {
-            let mem_db_state = self.fetch_state_db(&db)?;
-            let mem_state = mem_db_state.state_tree()?;
-            mem_state.get_merkle_state()
-        };
+        let prev_merkle_state = mem_block.prev_merkle_state().clone();
         let parent_block = db
             .get_block(&self.current_tip.0)?
             .ok_or_else(|| anyhow!("can't found tip block"))?;
 
-        let block_info = self.mem_block.block_info();
+        let block_info = mem_block.block_info();
         let param = BlockParam {
             number: block_info.number().unpack(),
             block_producer_id: block_info.block_producer_id().unpack(),
@@ -429,16 +460,156 @@ impl MemPool {
             kv_state,
             kv_state_proof,
         };
-        let finalized_custodians = self.mem_block.finalized_custodians().cloned();
+        let finalized_custodians = mem_block.finalized_custodians().cloned();
 
         log::debug!(
             "output mem block, txs: {} tx withdrawals: {} state_checkpoints: {}",
-            self.mem_block.txs().len(),
-            self.mem_block.withdrawals().len(),
-            self.mem_block.state_checkpoints().len(),
+            mem_block.txs().len(),
+            mem_block.withdrawals().len(),
+            mem_block.state_checkpoints().len(),
         );
 
         Ok((finalized_custodians, param))
+    }
+
+    fn package_mem_block(
+        &self,
+        output_param: &OutputParam,
+    ) -> Result<(MemBlock, AccountMerkleState)> {
+        let db = self.store.begin_transaction();
+        let retry_count = output_param.retry_count;
+        if retry_count == 0 {
+            let mem_block = self.mem_block.clone();
+            let mem_db_state = self.fetch_state_db(&db)?;
+
+            return Ok((mem_block, mem_db_state.state_tree()?.merkle_state()?));
+        }
+        log::info!("[mem-pool] package mem block, retry count {}", retry_count);
+
+        let mem_block = &self.mem_block;
+        let state_db = self.fetch_state_db_with_mode(&db, MemBlockDBMode::Package)?;
+
+        let (withdrawal_hashes, deposits, tx_hashes) = {
+            let total =
+                mem_block.withdrawals().len() + mem_block.deposits().len() + mem_block.txs().len();
+            // Drop base on retry count
+            let mut remain = total / (output_param.retry_count + 1);
+            if 0 == remain {
+                // Package at least one
+                remain = 1;
+            }
+
+            let withdrawal_hashes = mem_block.withdrawals().iter().take(remain);
+            remain = remain.saturating_sub(withdrawal_hashes.len());
+
+            let deposits = mem_block.deposits().iter().take(remain);
+            remain = remain.saturating_sub(deposits.len());
+
+            let tx_hashes = mem_block.txs().iter().take(remain);
+
+            (withdrawal_hashes, deposits, tx_hashes)
+        };
+
+        let mut repackage_block = MemBlock::new(
+            mem_block.block_info().to_owned(),
+            mem_block.prev_merkle_state().to_owned(),
+        );
+
+        assert!(repackage_block.state_checkpoints().is_empty());
+        assert!(repackage_block.withdrawals().is_empty());
+        assert!(repackage_block.finalized_custodians().is_none());
+        assert!(repackage_block.deposits().is_empty());
+        assert!(repackage_block.txs().is_empty());
+
+        let mut state =
+            state_db.state_tree_with_merkle_state(mem_block.prev_merkle_state().to_owned())?;
+
+        // NOTE: Must have at least one tx to have correct post block state
+        if withdrawal_hashes.len() == mem_block.withdrawals().len()
+            && deposits.len() == mem_block.deposits().len()
+            && tx_hashes.len() > 0
+        {
+            // Simply reuse mem block withdrawals and depoist result
+            assert!(mem_block.state_checkpoints().len() >= withdrawal_hashes.len());
+            for (hash, checkpoint) in withdrawal_hashes.zip(mem_block.state_checkpoints().iter()) {
+                repackage_block.push_withdrawal(*hash, *checkpoint);
+            }
+            if let Some(finalized_custodians) = mem_block.finalized_custodians() {
+                repackage_block.set_finalized_custodians(finalized_custodians.to_owned());
+            }
+
+            let deposit_cells = mem_block.deposits().to_vec();
+            let prev_state_checkpoint = mem_block
+                .txs_prev_state_checkpoint()
+                .ok_or_else(|| anyhow!("repackage mem block but no prev state checkpoint"))?;
+            repackage_block.push_deposits(deposit_cells, prev_state_checkpoint);
+
+            repackage_block.append_touched_keys(mem_block.touched_keys().clone().into_iter());
+        } else {
+            assert_eq!(tx_hashes.len(), 0, "must drop txs first");
+            log::info!(
+                "[mem-pool] repackage withdrawals {} and deposits {}",
+                withdrawal_hashes.len(),
+                deposits.len()
+            );
+
+            state.tracker_mut().enable();
+
+            // Repackage withdrawals
+            let to_withdaral = |hash: &H256| -> Result<_> {
+                db.get_mem_pool_withdrawal(hash)?
+                    .ok_or_else(|| anyhow!("repackage {:?} withdrawal not found", hash))
+            };
+            let withdrawals: Vec<_> = withdrawal_hashes.map(to_withdaral).collect::<Result<_>>()?;
+
+            for withdrawal in withdrawals.iter() {
+                state.apply_withdrawal_request(
+                    self.generator.rollup_context(),
+                    mem_block.block_producer_id(),
+                    withdrawal,
+                )?;
+
+                repackage_block.push_withdrawal(
+                    withdrawal.hash().into(),
+                    state.calculate_state_checkpoint()?,
+                );
+            }
+            if let Some(finalized_custodians) = mem_block.finalized_custodians() {
+                repackage_block.set_finalized_custodians(finalized_custodians.to_owned());
+            }
+
+            // Repackage deposits
+            let deposit_cells: Vec<_> = deposits.cloned().collect();
+            let deposits: Vec<_> = deposit_cells.iter().map(|i| i.request.clone()).collect();
+            state.apply_deposit_requests(self.generator.rollup_context(), &deposits)?;
+            let prev_state_checkpoint = state.calculate_state_checkpoint()?;
+            repackage_block.push_deposits(deposit_cells, prev_state_checkpoint);
+
+            let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
+            repackage_block.append_touched_keys(touched_keys.borrow().iter().cloned());
+        }
+
+        // Repackage txs
+        let mut post_tx_merkle_state = None;
+        let tx_len = tx_hashes.len();
+        for (idx, tx_hash) in tx_hashes.into_iter().enumerate() {
+            let tx_receipt = db
+                .get_mem_pool_transaction_receipt(tx_hash)?
+                .ok_or_else(|| anyhow!("tx {:?} receipt not found", tx_hash))?;
+
+            repackage_block.push_tx(*tx_hash, &tx_receipt);
+
+            if idx + 1 == tx_len {
+                post_tx_merkle_state = Some(tx_receipt.post_state())
+            }
+        }
+
+        let post_merkle_state = match post_tx_merkle_state {
+            Some(state) => state,
+            None => state.merkle_state()?,
+        };
+
+        Ok((repackage_block, post_merkle_state))
     }
 
     /// Reset

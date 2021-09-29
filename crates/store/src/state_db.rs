@@ -271,7 +271,10 @@ impl CheckPoint {
                     unreachable!()
                 }
             },
-            SubState::MemBlock => Ok((MEMORY_BLOCK_NUMBER, 0)),
+            SubState::MemBlock => match db_mode {
+                StateDBMode::Write(ctx) => Ok((MEMORY_BLOCK_NUMBER, ctx.tx_offset)),
+                _ => Ok((MEMORY_BLOCK_NUMBER, u32::MAX)),
+            },
         }
     }
 }
