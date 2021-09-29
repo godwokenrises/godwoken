@@ -16,7 +16,7 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::registry::TestModeRPC;
 use gw_store::Store;
 use gw_types::core::{ChallengeTargetType, Status};
-use gw_types::offchain::InputCellInfo;
+use gw_types::offchain::{global_state_from_slice, InputCellInfo};
 use gw_types::packed::{
     BlockMerkleState, ChallengeTarget, ChallengeWitness, GlobalState, L2Block, L2Transaction,
     SubmitWithdrawals, WithdrawalRequest,
@@ -315,7 +315,7 @@ impl TestModeRPC for TestModeControl {
             opt.ok_or_else(|| anyhow!("rollup cell not found"))?
         };
 
-        let global_state = GlobalState::from_slice(&rollup_cell.data)
+        let global_state = global_state_from_slice(&rollup_cell.data)
             .map_err(|_| anyhow!("parse rollup up global state"))?;
 
         Ok(global_state.into())

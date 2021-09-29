@@ -9,8 +9,8 @@ use gw_challenge::cancel_challenge::RecoverAccountsContext;
 use gw_common::H256;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::core::Status;
-use gw_types::offchain::{CellInfo, InputCellInfo, TxStatus};
-use gw_types::packed::{CellDep, CellInput, GlobalState, Transaction, WitnessArgs};
+use gw_types::offchain::{global_state_from_slice, CellInfo, InputCellInfo, TxStatus};
+use gw_types::packed::{CellDep, CellInput, Transaction, WitnessArgs};
 use gw_types::prelude::Unpack;
 
 use smol::lock::Mutex;
@@ -180,7 +180,7 @@ impl Cleaner {
     async fn query_rollup_status(&self) -> Result<Status> {
         let query_cell = self.rpc_client.query_rollup_cell().await?;
         let rollup_cell = query_cell.ok_or_else(|| anyhow!("rollup cell not found"))?;
-        let global_state = GlobalState::from_slice(&rollup_cell.data)?;
+        let global_state = global_state_from_slice(&rollup_cell.data)?;
 
         let status: u8 = global_state.status().into();
         Status::try_from(status).map_err(|n| anyhow!("invalid status {}", n))

@@ -13,6 +13,7 @@ use gw_db::{
     DBPinnableSlice, RocksDB,
 };
 use gw_types::{
+    offchain::global_state_from_slice,
     packed::{self, GlobalState, L2Block, L2Transaction},
     prelude::*,
 };
@@ -99,7 +100,7 @@ impl<'a> Store {
     ) -> Result<Option<GlobalState>, Error> {
         match self.get(COLUMN_BLOCK_GLOBAL_STATE, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::GlobalStateReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
+                global_state_from_slice(slice.as_ref()).expect("global state should be ok"),
             )),
             None => Ok(None),
         }

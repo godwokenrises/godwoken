@@ -601,6 +601,272 @@ impl molecule::prelude::Builder for AccountMerkleStateBuilder {
     }
 }
 #[derive(Clone)]
+pub struct GlobalStateV0(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for GlobalStateV0 {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for GlobalStateV0 {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for GlobalStateV0 {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "rollup_config_hash", self.rollup_config_hash())?;
+        write!(f, ", {}: {}", "account", self.account())?;
+        write!(f, ", {}: {}", "block", self.block())?;
+        write!(
+            f,
+            ", {}: {}",
+            "reverted_block_root",
+            self.reverted_block_root()
+        )?;
+        write!(f, ", {}: {}", "tip_block_hash", self.tip_block_hash())?;
+        write!(
+            f,
+            ", {}: {}",
+            "last_finalized_block_number",
+            self.last_finalized_block_number()
+        )?;
+        write!(f, ", {}: {}", "status", self.status())?;
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for GlobalStateV0 {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
+        ];
+        GlobalStateV0::new_unchecked(v.into())
+    }
+}
+impl GlobalStateV0 {
+    pub const TOTAL_SIZE: usize = 181;
+    pub const FIELD_SIZES: [usize; 7] = [32, 36, 40, 32, 32, 8, 1];
+    pub const FIELD_COUNT: usize = 7;
+    pub fn rollup_config_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(0..32))
+    }
+    pub fn account(&self) -> AccountMerkleState {
+        AccountMerkleState::new_unchecked(self.0.slice(32..68))
+    }
+    pub fn block(&self) -> BlockMerkleState {
+        BlockMerkleState::new_unchecked(self.0.slice(68..108))
+    }
+    pub fn reverted_block_root(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(108..140))
+    }
+    pub fn tip_block_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(140..172))
+    }
+    pub fn last_finalized_block_number(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(172..180))
+    }
+    pub fn status(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(180..181))
+    }
+    pub fn as_reader<'r>(&'r self) -> GlobalStateV0Reader<'r> {
+        GlobalStateV0Reader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for GlobalStateV0 {
+    type Builder = GlobalStateV0Builder;
+    const NAME: &'static str = "GlobalStateV0";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        GlobalStateV0(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        GlobalStateV0Reader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        GlobalStateV0Reader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .rollup_config_hash(self.rollup_config_hash())
+            .account(self.account())
+            .block(self.block())
+            .reverted_block_root(self.reverted_block_root())
+            .tip_block_hash(self.tip_block_hash())
+            .last_finalized_block_number(self.last_finalized_block_number())
+            .status(self.status())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct GlobalStateV0Reader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for GlobalStateV0Reader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for GlobalStateV0Reader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for GlobalStateV0Reader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "rollup_config_hash", self.rollup_config_hash())?;
+        write!(f, ", {}: {}", "account", self.account())?;
+        write!(f, ", {}: {}", "block", self.block())?;
+        write!(
+            f,
+            ", {}: {}",
+            "reverted_block_root",
+            self.reverted_block_root()
+        )?;
+        write!(f, ", {}: {}", "tip_block_hash", self.tip_block_hash())?;
+        write!(
+            f,
+            ", {}: {}",
+            "last_finalized_block_number",
+            self.last_finalized_block_number()
+        )?;
+        write!(f, ", {}: {}", "status", self.status())?;
+        write!(f, " }}")
+    }
+}
+impl<'r> GlobalStateV0Reader<'r> {
+    pub const TOTAL_SIZE: usize = 181;
+    pub const FIELD_SIZES: [usize; 7] = [32, 36, 40, 32, 32, 8, 1];
+    pub const FIELD_COUNT: usize = 7;
+    pub fn rollup_config_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
+    }
+    pub fn account(&self) -> AccountMerkleStateReader<'r> {
+        AccountMerkleStateReader::new_unchecked(&self.as_slice()[32..68])
+    }
+    pub fn block(&self) -> BlockMerkleStateReader<'r> {
+        BlockMerkleStateReader::new_unchecked(&self.as_slice()[68..108])
+    }
+    pub fn reverted_block_root(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[108..140])
+    }
+    pub fn tip_block_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[140..172])
+    }
+    pub fn last_finalized_block_number(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[172..180])
+    }
+    pub fn status(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[180..181])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for GlobalStateV0Reader<'r> {
+    type Entity = GlobalStateV0;
+    const NAME: &'static str = "GlobalStateV0Reader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        GlobalStateV0Reader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct GlobalStateV0Builder {
+    pub(crate) rollup_config_hash: Byte32,
+    pub(crate) account: AccountMerkleState,
+    pub(crate) block: BlockMerkleState,
+    pub(crate) reverted_block_root: Byte32,
+    pub(crate) tip_block_hash: Byte32,
+    pub(crate) last_finalized_block_number: Uint64,
+    pub(crate) status: Byte,
+}
+impl GlobalStateV0Builder {
+    pub const TOTAL_SIZE: usize = 181;
+    pub const FIELD_SIZES: [usize; 7] = [32, 36, 40, 32, 32, 8, 1];
+    pub const FIELD_COUNT: usize = 7;
+    pub fn rollup_config_hash(mut self, v: Byte32) -> Self {
+        self.rollup_config_hash = v;
+        self
+    }
+    pub fn account(mut self, v: AccountMerkleState) -> Self {
+        self.account = v;
+        self
+    }
+    pub fn block(mut self, v: BlockMerkleState) -> Self {
+        self.block = v;
+        self
+    }
+    pub fn reverted_block_root(mut self, v: Byte32) -> Self {
+        self.reverted_block_root = v;
+        self
+    }
+    pub fn tip_block_hash(mut self, v: Byte32) -> Self {
+        self.tip_block_hash = v;
+        self
+    }
+    pub fn last_finalized_block_number(mut self, v: Uint64) -> Self {
+        self.last_finalized_block_number = v;
+        self
+    }
+    pub fn status(mut self, v: Byte) -> Self {
+        self.status = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for GlobalStateV0Builder {
+    type Entity = GlobalStateV0;
+    const NAME: &'static str = "GlobalStateV0Builder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        writer.write_all(self.rollup_config_hash.as_slice())?;
+        writer.write_all(self.account.as_slice())?;
+        writer.write_all(self.block.as_slice())?;
+        writer.write_all(self.reverted_block_root.as_slice())?;
+        writer.write_all(self.tip_block_hash.as_slice())?;
+        writer.write_all(self.last_finalized_block_number.as_slice())?;
+        writer.write_all(self.status.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        GlobalStateV0::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
 pub struct GlobalState(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for GlobalState {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -632,10 +898,17 @@ impl ::core::fmt::Display for GlobalState {
         write!(
             f,
             ", {}: {}",
+            "tip_block_timestamp",
+            self.tip_block_timestamp()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
             "last_finalized_block_number",
             self.last_finalized_block_number()
         )?;
         write!(f, ", {}: {}", "status", self.status())?;
+        write!(f, ", {}: {}", "version", self.version())?;
         write!(f, " }}")
     }
 }
@@ -648,15 +921,15 @@ impl ::core::default::Default for GlobalState {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         GlobalState::new_unchecked(v.into())
     }
 }
 impl GlobalState {
-    pub const TOTAL_SIZE: usize = 181;
-    pub const FIELD_SIZES: [usize; 7] = [32, 36, 40, 32, 32, 8, 1];
-    pub const FIELD_COUNT: usize = 7;
+    pub const TOTAL_SIZE: usize = 190;
+    pub const FIELD_SIZES: [usize; 9] = [32, 36, 40, 32, 32, 8, 8, 1, 1];
+    pub const FIELD_COUNT: usize = 9;
     pub fn rollup_config_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
@@ -672,11 +945,17 @@ impl GlobalState {
     pub fn tip_block_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(140..172))
     }
-    pub fn last_finalized_block_number(&self) -> Uint64 {
+    pub fn tip_block_timestamp(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(172..180))
     }
+    pub fn last_finalized_block_number(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(180..188))
+    }
     pub fn status(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(180..181))
+        Byte::new_unchecked(self.0.slice(188..189))
+    }
+    pub fn version(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(189..190))
     }
     pub fn as_reader<'r>(&'r self) -> GlobalStateReader<'r> {
         GlobalStateReader::new_unchecked(self.as_slice())
@@ -710,8 +989,10 @@ impl molecule::prelude::Entity for GlobalState {
             .block(self.block())
             .reverted_block_root(self.reverted_block_root())
             .tip_block_hash(self.tip_block_hash())
+            .tip_block_timestamp(self.tip_block_timestamp())
             .last_finalized_block_number(self.last_finalized_block_number())
             .status(self.status())
+            .version(self.version())
     }
 }
 #[derive(Clone, Copy)]
@@ -746,17 +1027,24 @@ impl<'r> ::core::fmt::Display for GlobalStateReader<'r> {
         write!(
             f,
             ", {}: {}",
+            "tip_block_timestamp",
+            self.tip_block_timestamp()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
             "last_finalized_block_number",
             self.last_finalized_block_number()
         )?;
         write!(f, ", {}: {}", "status", self.status())?;
+        write!(f, ", {}: {}", "version", self.version())?;
         write!(f, " }}")
     }
 }
 impl<'r> GlobalStateReader<'r> {
-    pub const TOTAL_SIZE: usize = 181;
-    pub const FIELD_SIZES: [usize; 7] = [32, 36, 40, 32, 32, 8, 1];
-    pub const FIELD_COUNT: usize = 7;
+    pub const TOTAL_SIZE: usize = 190;
+    pub const FIELD_SIZES: [usize; 9] = [32, 36, 40, 32, 32, 8, 8, 1, 1];
+    pub const FIELD_COUNT: usize = 9;
     pub fn rollup_config_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
@@ -772,11 +1060,17 @@ impl<'r> GlobalStateReader<'r> {
     pub fn tip_block_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[140..172])
     }
-    pub fn last_finalized_block_number(&self) -> Uint64Reader<'r> {
+    pub fn tip_block_timestamp(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[172..180])
     }
+    pub fn last_finalized_block_number(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[180..188])
+    }
     pub fn status(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[180..181])
+        ByteReader::new_unchecked(&self.as_slice()[188..189])
+    }
+    pub fn version(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[189..190])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for GlobalStateReader<'r> {
@@ -807,13 +1101,15 @@ pub struct GlobalStateBuilder {
     pub(crate) block: BlockMerkleState,
     pub(crate) reverted_block_root: Byte32,
     pub(crate) tip_block_hash: Byte32,
+    pub(crate) tip_block_timestamp: Uint64,
     pub(crate) last_finalized_block_number: Uint64,
     pub(crate) status: Byte,
+    pub(crate) version: Byte,
 }
 impl GlobalStateBuilder {
-    pub const TOTAL_SIZE: usize = 181;
-    pub const FIELD_SIZES: [usize; 7] = [32, 36, 40, 32, 32, 8, 1];
-    pub const FIELD_COUNT: usize = 7;
+    pub const TOTAL_SIZE: usize = 190;
+    pub const FIELD_SIZES: [usize; 9] = [32, 36, 40, 32, 32, 8, 8, 1, 1];
+    pub const FIELD_COUNT: usize = 9;
     pub fn rollup_config_hash(mut self, v: Byte32) -> Self {
         self.rollup_config_hash = v;
         self
@@ -834,12 +1130,20 @@ impl GlobalStateBuilder {
         self.tip_block_hash = v;
         self
     }
+    pub fn tip_block_timestamp(mut self, v: Uint64) -> Self {
+        self.tip_block_timestamp = v;
+        self
+    }
     pub fn last_finalized_block_number(mut self, v: Uint64) -> Self {
         self.last_finalized_block_number = v;
         self
     }
     pub fn status(mut self, v: Byte) -> Self {
         self.status = v;
+        self
+    }
+    pub fn version(mut self, v: Byte) -> Self {
+        self.version = v;
         self
     }
 }
@@ -855,8 +1159,10 @@ impl molecule::prelude::Builder for GlobalStateBuilder {
         writer.write_all(self.block.as_slice())?;
         writer.write_all(self.reverted_block_root.as_slice())?;
         writer.write_all(self.tip_block_hash.as_slice())?;
+        writer.write_all(self.tip_block_timestamp.as_slice())?;
         writer.write_all(self.last_finalized_block_number.as_slice())?;
         writer.write_all(self.status.as_slice())?;
+        writer.write_all(self.version.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -14487,6 +14793,7 @@ impl ::core::fmt::Display for RollupRevert {
             "reverted_block_proof",
             self.reverted_block_proof()
         )?;
+        write!(f, ", {}: {}", "new_tip_block", self.new_tip_block())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -14497,13 +14804,25 @@ impl ::core::fmt::Display for RollupRevert {
 impl ::core::default::Default for RollupRevert {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            28, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            100, 1, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 68, 1, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0,
+            0, 0, 128, 0, 0, 0, 164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 84, 0, 0, 0, 16, 0, 0, 0, 48, 0,
+            0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RollupRevert::new_unchecked(v.into())
     }
 }
 impl RollupRevert {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -14535,11 +14854,17 @@ impl RollupRevert {
     pub fn reverted_block_proof(&self) -> Bytes {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Bytes::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn new_tip_block(&self) -> RawL2Block {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            Bytes::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[20..]) as usize;
+            RawL2Block::new_unchecked(self.0.slice(start..end))
         } else {
-            Bytes::new_unchecked(self.0.slice(start..))
+            RawL2Block::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> RollupRevertReader<'r> {
@@ -14572,6 +14897,7 @@ impl molecule::prelude::Entity for RollupRevert {
             .reverted_blocks(self.reverted_blocks())
             .block_proof(self.block_proof())
             .reverted_block_proof(self.reverted_block_proof())
+            .new_tip_block(self.new_tip_block())
     }
 }
 #[derive(Clone, Copy)]
@@ -14601,6 +14927,7 @@ impl<'r> ::core::fmt::Display for RollupRevertReader<'r> {
             "reverted_block_proof",
             self.reverted_block_proof()
         )?;
+        write!(f, ", {}: {}", "new_tip_block", self.new_tip_block())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -14609,7 +14936,7 @@ impl<'r> ::core::fmt::Display for RollupRevertReader<'r> {
     }
 }
 impl<'r> RollupRevertReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -14641,11 +14968,17 @@ impl<'r> RollupRevertReader<'r> {
     pub fn reverted_block_proof(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        BytesReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn new_tip_block(&self) -> RawL2BlockReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            BytesReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[20..]) as usize;
+            RawL2BlockReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            BytesReader::new_unchecked(&self.as_slice()[start..])
+            RawL2BlockReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -14701,6 +15034,7 @@ impl<'r> molecule::prelude::Reader<'r> for RollupRevertReader<'r> {
         RawL2BlockVecReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         BytesReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         BytesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        RawL2BlockReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         Ok(())
     }
 }
@@ -14709,9 +15043,10 @@ pub struct RollupRevertBuilder {
     pub(crate) reverted_blocks: RawL2BlockVec,
     pub(crate) block_proof: Bytes,
     pub(crate) reverted_block_proof: Bytes,
+    pub(crate) new_tip_block: RawL2Block,
 }
 impl RollupRevertBuilder {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn reverted_blocks(mut self, v: RawL2BlockVec) -> Self {
         self.reverted_blocks = v;
         self
@@ -14724,6 +15059,10 @@ impl RollupRevertBuilder {
         self.reverted_block_proof = v;
         self
     }
+    pub fn new_tip_block(mut self, v: RawL2Block) -> Self {
+        self.new_tip_block = v;
+        self
+    }
 }
 impl molecule::prelude::Builder for RollupRevertBuilder {
     type Entity = RollupRevert;
@@ -14733,6 +15072,7 @@ impl molecule::prelude::Builder for RollupRevertBuilder {
             + self.reverted_blocks.as_slice().len()
             + self.block_proof.as_slice().len()
             + self.reverted_block_proof.as_slice().len()
+            + self.new_tip_block.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -14743,6 +15083,8 @@ impl molecule::prelude::Builder for RollupRevertBuilder {
         total_size += self.block_proof.as_slice().len();
         offsets.push(total_size);
         total_size += self.reverted_block_proof.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.new_tip_block.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -14750,6 +15092,7 @@ impl molecule::prelude::Builder for RollupRevertBuilder {
         writer.write_all(self.reverted_blocks.as_slice())?;
         writer.write_all(self.block_proof.as_slice())?;
         writer.write_all(self.reverted_block_proof.as_slice())?;
+        writer.write_all(self.new_tip_block.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

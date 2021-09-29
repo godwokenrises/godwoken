@@ -1,5 +1,8 @@
-use crate::packed::{AccountMerkleState, Byte32, TransactionKey, TxReceipt};
+use crate::packed::{
+    AccountMerkleState, Byte32, GlobalState, GlobalStateV0, TransactionKey, TxReceipt,
+};
 use crate::prelude::*;
+use ckb_types::error::VerificationError;
 use sparse_merkle_tree::H256;
 
 use super::RunResult;
@@ -33,5 +36,12 @@ impl TxReceipt {
             )
             .logs(run_result.logs.pack())
             .build()
+    }
+}
+
+pub fn global_state_from_slice(slice: &[u8]) -> Result<GlobalState, VerificationError> {
+    match GlobalState::from_slice(slice) {
+        Ok(state) => Ok(state),
+        Err(_) => GlobalStateV0::from_slice(slice).map(Into::into),
     }
 }

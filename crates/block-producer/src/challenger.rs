@@ -24,7 +24,9 @@ use gw_poa::{PoA, ShouldIssueBlock};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
 use gw_types::core::{ChallengeTargetType, Status};
-use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, TxStatus};
+use gw_types::offchain::{
+    global_state_from_slice, CellInfo, InputCellInfo, RollupContext, TxStatus,
+};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, ChallengeTarget,
     GlobalState, OutPoint, Script, Transaction, WitnessArgs,
@@ -727,7 +729,7 @@ impl RollupState {
         let query_cell = rpc_client.query_rollup_cell().await?;
 
         let rollup_cell = query_cell.ok_or_else(|| anyhow!("rollup cell not found"))?;
-        let global_state = GlobalState::from_slice(&rollup_cell.data)?;
+        let global_state = global_state_from_slice(&rollup_cell.data)?;
 
         Ok(RollupState {
             rollup_cell,

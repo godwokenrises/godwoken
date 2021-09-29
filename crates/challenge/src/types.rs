@@ -1,8 +1,8 @@
 use gw_common::{sparse_merkle_tree::CompiledMerkleProof, H256};
 use gw_types::offchain::RecoverAccount;
 use gw_types::packed::{
-    Bytes, RawL2BlockVec, Script, VerifyTransactionSignatureWitness, VerifyTransactionWitness,
-    VerifyWithdrawalWitness,
+    Bytes, RawL2Block, RawL2BlockVec, Script, VerifyTransactionSignatureWitness,
+    VerifyTransactionWitness, VerifyWithdrawalWitness,
 };
 
 use std::collections::HashMap;
@@ -27,6 +27,7 @@ pub struct VerifyContext {
 
 #[derive(Debug, Clone)]
 pub struct RevertWitness {
+    pub new_tip_block: RawL2Block,
     pub reverted_blocks: RawL2BlockVec, // sorted by block number
     pub block_proof: CompiledMerkleProof,
     pub reverted_block_proof: CompiledMerkleProof,

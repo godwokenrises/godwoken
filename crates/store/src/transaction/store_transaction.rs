@@ -16,6 +16,7 @@ use gw_db::schema::{
 use gw_db::{
     error::Error, iter::DBIter, DBIterator, Direction::Forward, IteratorMode, RocksDBTransaction,
 };
+use gw_types::offchain::global_state_from_slice;
 use gw_types::packed::Script;
 use gw_types::{
     packed::{
@@ -346,7 +347,7 @@ impl StoreTransaction {
     ) -> Result<Option<packed::GlobalState>, Error> {
         match self.get(COLUMN_BLOCK_GLOBAL_STATE, block_hash.as_slice()) {
             Some(slice) => Ok(Some(
-                packed::GlobalStateReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
+                global_state_from_slice(slice.as_ref()).expect("global state should be ok"),
             )),
             None => Ok(None),
         }
