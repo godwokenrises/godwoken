@@ -5,8 +5,8 @@ use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_config::{
-    BackendConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config, GenesisConfig,
-    NodeMode, RPCClientConfig, RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
+    BackendConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config, DBConfig,
+    GenesisConfig, NodeMode, RPCClientConfig, RPCServerConfig, WalletConfig, Web3IndexerConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
@@ -240,8 +240,11 @@ pub fn generate_config(
         },
     ];
 
-    // FIXME change to a directory path after we tested the persist storage
-    let store: StoreConfig = StoreConfig { path: "".into() };
+    let db = DBConfig {
+        path: "".into(),
+        options: HashMap::new(),
+        options_file: None,
+    };
     let genesis_committed_info = L2BlockCommittedInfo {
         block_hash,
         number,
@@ -302,7 +305,6 @@ pub fn generate_config(
 
     let config: Config = Config {
         backends,
-        store,
         genesis,
         chain,
         rpc_client,
@@ -315,6 +317,7 @@ pub fn generate_config(
         offchain_validator: Default::default(),
         mem_pool: Default::default(),
         db_block_validator: Default::default(),
+        db,
     };
 
     let output_content = toml::to_string_pretty(&config).expect("serde toml to string pretty");

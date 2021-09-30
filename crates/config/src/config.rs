@@ -13,7 +13,6 @@ use std::{
 pub struct Config {
     pub node_mode: NodeMode,
     pub backends: Vec<BackendConfig>,
-    pub store: StoreConfig,
     pub genesis: GenesisConfig,
     pub chain: ChainConfig,
     pub rpc_client: RPCClientConfig,
@@ -30,6 +29,8 @@ pub struct Config {
     pub mem_pool: MemPoolConfig,
     #[serde(default)]
     pub db_block_validator: Option<DBBlockValidatorConfig>,
+    #[serde(default)]
+    pub db: DBConfig,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -104,11 +105,6 @@ pub struct BlockProducerConfig {
     pub allowed_contract_deps: HashMap<H256, CellDep>,
     pub challenger_config: ChallengerConfig,
     pub wallet_config: WalletConfig,
-}
-
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct StoreConfig {
-    pub path: PathBuf,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -220,4 +216,13 @@ impl Default for DBBlockValidatorConfig {
             parallel_verify_blocks: true,
         }
     }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct DBConfig {
+    #[serde(default)]
+    pub path: PathBuf,
+    #[serde(default)]
+    pub options: HashMap<String, String>,
+    pub options_file: Option<PathBuf>,
 }

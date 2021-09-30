@@ -1957,6 +1957,7 @@ name = "gw-db"
 version = "0.1.0"
 dependencies = [
  "ckb-rocksdb",
+ "gw-config",
  "libc",
  "serde",
  "tempfile",

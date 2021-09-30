@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 rocksdb = { package = "ckb-rocksdb", version = "=0.15.1", features = ["snappy"] }
+gw-config = { path = "../config" }
 libc = "0.2"
 thiserror = "1.0"
 tempfile = "3.0"

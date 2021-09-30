@@ -10,7 +10,7 @@ use gw_challenge::offchain::{OffChainMockContext, OffChainValidatorContext};
 use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION};
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
-use gw_db::{config::Config as DBConfig, schema::COLUMNS, RocksDB};
+use gw_db::{schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{
         secp256k1::{Secp256k1Eth, Secp256k1Tron},
@@ -43,7 +43,7 @@ use std::{
     collections::HashMap,
     net::{SocketAddr, ToSocketAddrs},
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const MIN_CKB_VERSION: &str = "0.40.0";
@@ -248,17 +248,15 @@ impl BaseInitComponents {
         }
 
         // Open store
-        let store = if config.store.path.as_os_str().is_empty() {
+        let timer = Instant::now();
+        let store = if config.db.path.as_os_str().is_empty() {
             log::warn!("config.store.path is blank, using temporary store");
             Store::open_tmp().with_context(|| "init store")?
         } else {
-            let db_config = DBConfig {
-                path: config.store.path.to_owned(),
-                options: Default::default(),
-                options_file: Default::default(),
-            };
-            Store::new(RocksDB::open(&db_config, COLUMNS))
+            Store::new(RocksDB::open(&config.db, COLUMNS))
         };
+        let elapsed_ms = timer.elapsed().as_millis();
+        log::debug!("Open rocksdb costs: {}ms.", elapsed_ms);
 
         let secp_data: Bytes = {
             let out_point = config.genesis.secp_data_dep.out_point.clone();
