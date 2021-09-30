@@ -1,9 +1,9 @@
-use crate::config::Config as DBConfig;
 use crate::schema::Col;
 use crate::snapshot::RocksDBSnapshot;
 use crate::transaction::RocksDBTransaction;
 use crate::write_batch::RocksDBWriteBatch;
 use crate::{internal_error, Result};
+use gw_config::DBConfig;
 use rocksdb::ops::{
     CreateCF, DropCF, GetColumnFamilys, GetPinned, GetPinnedCF, IterateCF, OpenCF, Put, SetOptions,
     WriteOps,
