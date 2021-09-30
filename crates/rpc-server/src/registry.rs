@@ -407,11 +407,25 @@ async fn get_transaction_receipt(
     }
 }
 
+// l2tx, block_number
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum ExecuteL2TransactionParams {
+    Tip((JsonBytes,)),
+    Number((JsonBytes, Option<GwUint64>)),
+}
+
 async fn execute_l2transaction(
-    Params((l2tx,)): Params<(JsonBytes,)>,
+    Params(params): Params<ExecuteL2TransactionParams>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<RunResult, RpcError> {
+    let (l2tx, block_number_opt) = match params {
+        ExecuteL2TransactionParams::Tip(p) => (p.0, None),
+        ExecuteL2TransactionParams::Number(p) => p,
+    };
+    let block_number_opt = block_number_opt.map(|n| n.value());
+
     let mem_pool = match &*mem_pool {
         Some(mem_pool) => mem_pool,
         None => {
@@ -421,19 +435,32 @@ async fn execute_l2transaction(
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
 
-    let raw_block = store.get_tip_block()?.raw();
-    let block_producer_id = raw_block.block_producer_id();
-    let timestamp = raw_block.timestamp();
-    let number = {
-        let number: u64 = raw_block.number().unpack();
-        number.saturating_add(1)
-    };
+    let db = store.begin_transaction();
 
-    let block_info = BlockInfo::new_builder()
-        .block_producer_id(block_producer_id)
-        .timestamp(timestamp)
-        .number(number.pack())
-        .build();
+    let block_info = match block_number_opt {
+        Some(block_number) => {
+            let block_hash = match db.get_block_hash_by_number(block_number)? {
+                Some(block_hash) => block_hash,
+                None => return Err(header_not_found_err()),
+            };
+            let raw_block = match store.get_block(&block_hash)? {
+                Some(block) => block.raw(),
+                None => return Err(header_not_found_err()),
+            };
+            let block_producer_id = raw_block.block_producer_id();
+            let timestamp = raw_block.timestamp();
+            let number: u64 = raw_block.number().unpack();
+
+            BlockInfo::new_builder()
+                .block_producer_id(block_producer_id)
+                .timestamp(timestamp)
+                .number(number.pack())
+                .build()
+        }
+        None => db
+            .get_mem_pool_block_info()?
+            .expect("get mem pool block info"),
+    };
 
     let run_result: RunResult = mem_pool
         .lock()

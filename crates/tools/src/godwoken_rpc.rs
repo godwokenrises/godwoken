@@ -91,8 +91,8 @@ impl GodwokenRpcClient {
             .map(Into::into)
     }
 
-    pub fn execute_l2transaction(&mut self, l2tx: JsonBytes) -> Result<RunResult, String> {
-        let params = serde_json::to_value((l2tx,)).map_err(|err| err.to_string())?;
+    pub fn execute_l2transaction(&mut self, l2tx: JsonBytes, block_number_opt: Option<u64>) -> Result<RunResult, String> {
+        let params = serde_json::to_value((l2tx,block_number_opt)).map_err(|err| err.to_string())?;
         self.rpc::<RunResult>("execute_l2transaction", params)
             .map(Into::into)
     }
