@@ -8,9 +8,9 @@ use std::path::Path;
 
 use crate::{
     account::{eth_sign, privkey_to_short_address, read_privkey, short_address_to_account_id},
-    deploy_scripts::ScriptsDeploymentResult,
     godwoken_rpc::GodwokenRpcClient,
     transfer::generate_transaction_message_to_sign,
+    types::ScriptsDeploymentResult,
     utils::transaction::{read_config, wait_for_l2_tx},
 };
 use gw_types::{bytes::Bytes as GwBytes, prelude::Pack as GwPack};

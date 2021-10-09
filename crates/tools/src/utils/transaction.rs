@@ -10,7 +10,7 @@ use ckb_sdk::NetworkType;
 use gw_config::Config;
 use gw_jsonrpc_types::godwoken::TxReceipt;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{Duration, Instant};
 use std::{env, ffi::OsStr, process::Command};
 
@@ -82,10 +82,11 @@ pub fn wait_for_tx(
     tx_hash: &H256,
     timeout_secs: u64,
 ) -> Result<TransactionView, String> {
+    log::info!("waiting tx {}", hex::encode(&tx_hash));
     let retry_timeout = Duration::from_secs(timeout_secs);
     let start_time = Instant::now();
     while start_time.elapsed() < retry_timeout {
-        std::thread::sleep(Duration::from_secs(2));
+        std::thread::sleep(Duration::from_secs(5));
         match rpc_client.get_transaction(tx_hash.clone())? {
             Some(tx_with_status) if tx_with_status.tx_status.status == Status::Pending => {
                 log::info!("tx pending");

@@ -1,8 +1,8 @@
-use crate::deploy_scripts::Programs;
-use crate::utils;
+use crate::{
+    types::{BuildScriptsResult, Programs},
+    utils,
+};
 use anyhow::Result;
-use ckb_fixed_hash::H256;
-use ckb_jsonrpc_types::{JsonBytes, Script, ScriptHashType};
 use clap::arg_enum;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -12,7 +12,7 @@ use std::{
 };
 use url::Url;
 
-pub const REPOS_DIR_PATH: &str = "tmp/scripts-build-dir/";
+pub const SCRIPT_BUILD_DIR_PATH: &str = "scripts-build/";
 pub const SCRIPTS_DIR_PATH: &str = "scripts/";
 const GODWOKEN_SCRIPTS: &str = "godwoken-scripts";
 const GODWOKEN_POLYJUICE: &str = "godwoken-polyjuice";
@@ -38,14 +38,14 @@ struct ScriptsBuildConfig {
 impl Default for ScriptsBuildConfig {
     fn default() -> Self {
         ScriptsBuildConfig {
-            prebuild_image: PathBuf::from("nervos/godwoken-prebuilds:v0.3.0"),
+            prebuild_image: PathBuf::from("nervos/godwoken-prebuilds:v0.6.7-rc1"),
             repos: ReposUrl {
                 godwoken_scripts: Url::parse(
-                    "https://github.com/nervosnetwork/godwoken-scripts#v0.5.0-rc1",
+                    "https://github.com/nervosnetwork/godwoken-scripts#v0.8.4-rc1",
                 )
                 .expect("url parse"),
                 godwoken_polyjuice: Url::parse(
-                    "https://github.com/nervosnetwork/godwoken-polyjuice#v0.6.0-rc6",
+                    "https://github.com/nervosnetwork/godwoken-polyjuice#v0.8.8",
                 )
                 .expect("url parse"),
                 clerkb: Url::parse("https://github.com/nervosnetwork/clerkb#v0.4.0")
@@ -122,13 +122,6 @@ impl Default for ScriptsBuildConfig {
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
-struct BuildScriptsResult {
-    programs: Programs,
-    lock: Script,
-    built_scripts: HashMap<String, PathBuf>,
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
 struct ReposUrl {
     godwoken_scripts: Url,
     godwoken_polyjuice: Url,
@@ -169,22 +162,26 @@ impl ScriptsInfo {
 
 pub fn prepare_scripts(
     mode: ScriptsBuildMode,
-    input_path: &Path,
-    repos_dir: &Path,
-    scripts_dir: &Path,
-    output_path: &Path,
-) -> Result<()> {
-    let scripts_build_config = read_script_build_config(input_path);
+    scripts_lock: ckb_jsonrpc_types::Script,
+    build_config_path: &Path,
+    build_dir: &Path,
+    scripts_output_dir: &Path,
+) -> Result<BuildScriptsResult> {
+    let scripts_build_config = read_script_build_config(build_config_path);
     match mode {
         ScriptsBuildMode::Build => {
-            prepare_scripts_in_build_mode(&scripts_build_config, repos_dir, scripts_dir);
+            prepare_scripts_in_build_mode(&scripts_build_config, build_dir, scripts_output_dir);
         }
         ScriptsBuildMode::Copy => {
-            prepare_scripts_in_copy_mode(scripts_build_config.prebuild_image, scripts_dir);
+            prepare_scripts_in_copy_mode(scripts_build_config.prebuild_image, scripts_output_dir);
         }
     }
-    check_scripts(scripts_dir, &scripts_build_config.scripts);
-    generate_script_deploy_config(scripts_dir, &scripts_build_config.scripts, output_path)
+    check_scripts(scripts_output_dir, &scripts_build_config.scripts);
+    generate_script_deploy_config(
+        scripts_output_dir,
+        scripts_lock,
+        &scripts_build_config.scripts,
+    )
 }
 
 fn read_script_build_config<P: AsRef<Path>>(input_path: P) -> ScriptsBuildConfig {
@@ -285,10 +282,9 @@ fn check_scripts(target_dir: &Path, scripts_info: &HashMap<String, ScriptsInfo>)
 
 fn generate_script_deploy_config(
     target_dir: &Path,
+    scripts_lock: ckb_jsonrpc_types::Script,
     scripts_info: &HashMap<String, ScriptsInfo>,
-    output_path: &Path,
-) -> Result<()> {
-    log::info!("Generate scripts-deploy.json...");
+) -> Result<BuildScriptsResult> {
     let always_success = scripts_info
         .get("always_success")
         .expect("get script info")
@@ -318,23 +314,13 @@ fn generate_script_deploy_config(
     };
     let build_scripts_result = BuildScriptsResult {
         programs,
-        lock: Script {
-            code_hash: H256::default(),
-            hash_type: ScriptHashType::Data,
-            args: JsonBytes::default(),
-        },
+        lock: scripts_lock,
         built_scripts: scripts_info
             .iter()
             .map(|(k, v)| (k.clone(), v.target_script_path(target_dir)))
             .collect(),
     };
-    let output_content =
-        serde_json::to_string_pretty(&build_scripts_result).expect("serde json to string pretty");
-    let output_dir = output_path.parent().expect("get output dir");
-    fs::create_dir_all(&output_dir).expect("create output dir");
-    fs::write(output_path, output_content.as_bytes())?;
-    log::info!("Finish");
-    Ok(())
+    Ok(build_scripts_result)
 }
 
 fn build_godwoken_scripts(repos_dir: &Path, repo_name: &str) {

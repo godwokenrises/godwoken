@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::{
-    deploy_scripts::ScriptsDeploymentResult, godwoken_rpc::GodwokenRpcClient,
+    godwoken_rpc::GodwokenRpcClient, types::ScriptsDeploymentResult,
     utils::transaction::read_config,
 };
 use ckb_jsonrpc_types::JsonBytes;

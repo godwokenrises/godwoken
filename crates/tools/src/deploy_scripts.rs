@@ -1,4 +1,7 @@
-use crate::utils::transaction::{get_network_type, run_cmd, wait_for_tx, TYPE_ID_CODE_HASH};
+use crate::{
+    types::{BuildScriptsResult, DeployItem, Programs, ScriptsDeploymentResult},
+    utils::transaction::{get_network_type, run_cmd, wait_for_tx, TYPE_ID_CODE_HASH},
+};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{CellDep, DepType, OutPoint, Script};
 use ckb_sdk::{Address, AddressPayload, HttpRpcClient, HumanCapacity};
@@ -10,69 +13,13 @@ use ckb_types::{
 };
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str::FromStr;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-pub struct Programs {
-    // path: godwoken-scripts/build/release/custodian-lock
-    pub custodian_lock: PathBuf,
-    // path: godwoken-scripts/build/release/deposit-lock
-    pub deposit_lock: PathBuf,
-    // path: godwoken-scripts/build/release/withdrawal-lock
-    pub withdrawal_lock: PathBuf,
-    // path: godwoken-scripts/build/release/challenge-lock
-    pub challenge_lock: PathBuf,
-    // path: godwoken-scripts/build/release/stake-lock
-    pub stake_lock: PathBuf,
-    // path: godwoken-scripts/build/release/state-validator
-    pub state_validator: PathBuf,
-    // path: godwoken-scripts/c/build/sudt-validator
-    pub l2_sudt_validator: PathBuf,
-
-    // path: godwoken-scripts/c/build/account_locks/eth-account-lock
-    pub eth_account_lock: PathBuf,
-    // path: godwoken-scripts/c/build/account_locks/tron-account-lock
-    pub tron_account_lock: PathBuf,
-
-    // path: godwoken-scripts/c/build/meta-contract-validator
-    pub meta_contract_validator: PathBuf,
-    // path: godwoken-polyjuice/build/validator
-    pub polyjuice_validator: PathBuf,
-
-    // path: clerkb/build/debug/poa.strip
-    pub state_validator_lock: PathBuf,
-    // path: clerkb/build/debug/state.strip
-    pub poa_state: PathBuf,
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-pub struct DeploymentIndex {
+struct DeploymentIndex {
     pub programs: Programs,
     pub lock: Script,
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-pub struct DeployItem {
-    pub script_type_hash: H256,
-    pub cell_dep: CellDep,
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-pub struct ScriptsDeploymentResult {
-    pub custodian_lock: DeployItem,
-    pub deposit_lock: DeployItem,
-    pub withdrawal_lock: DeployItem,
-    pub challenge_lock: DeployItem,
-    pub stake_lock: DeployItem,
-    pub state_validator: DeployItem,
-    pub meta_contract_validator: DeployItem,
-    pub l2_sudt_validator: DeployItem,
-    pub eth_account_lock: DeployItem,
-    pub tron_account_lock: DeployItem,
-    pub polyjuice_validator: DeployItem,
-    pub state_validator_lock: DeployItem,
-    pub poa_state: DeployItem,
 }
 
 pub fn deploy_program(
@@ -164,10 +111,8 @@ pub fn deploy_program(
 pub fn deploy_scripts(
     privkey_path: &Path,
     ckb_rpc_url: &str,
-    input_path: &Path,
-    output_path: &Path,
-    cell_lock_opt: Option<Script>,
-) -> Result<(), String> {
+    scripts_result: &BuildScriptsResult,
+) -> Result<ScriptsDeploymentResult, String> {
     if let Err(err) = run_cmd(vec!["--version"]) {
         return Err(format!(
             "Please install ckb-cli (cargo install ckb-cli) first: {}",
@@ -175,32 +120,27 @@ pub fn deploy_scripts(
         ));
     }
 
-    let input = fs::read_to_string(input_path).map_err(|err| err.to_string())?;
-    let deployment_index: DeploymentIndex =
-        serde_json::from_str(input.as_str()).map_err(|err| err.to_string())?;
-
     let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
     let network_type = get_network_type(&mut rpc_client)?;
-    let target_lock =
-        packed::Script::from(cell_lock_opt.unwrap_or_else(|| deployment_index.lock.clone()));
+    let target_lock = packed::Script::from(scripts_result.lock.clone());
     let address_payload = AddressPayload::from(target_lock.clone());
     let target_address = Address::new(network_type, address_payload);
 
     let mut total_file_size = 0;
     for path in &[
-        &deployment_index.programs.custodian_lock,
-        &deployment_index.programs.deposit_lock,
-        &deployment_index.programs.withdrawal_lock,
-        &deployment_index.programs.challenge_lock,
-        &deployment_index.programs.stake_lock,
-        &deployment_index.programs.state_validator,
-        &deployment_index.programs.l2_sudt_validator,
-        &deployment_index.programs.eth_account_lock,
-        &deployment_index.programs.tron_account_lock,
-        &deployment_index.programs.meta_contract_validator,
-        &deployment_index.programs.polyjuice_validator,
-        &deployment_index.programs.state_validator_lock,
-        &deployment_index.programs.poa_state,
+        &scripts_result.programs.custodian_lock,
+        &scripts_result.programs.deposit_lock,
+        &scripts_result.programs.withdrawal_lock,
+        &scripts_result.programs.challenge_lock,
+        &scripts_result.programs.stake_lock,
+        &scripts_result.programs.state_validator,
+        &scripts_result.programs.l2_sudt_validator,
+        &scripts_result.programs.eth_account_lock,
+        &scripts_result.programs.tron_account_lock,
+        &scripts_result.programs.meta_contract_validator,
+        &scripts_result.programs.polyjuice_validator,
+        &scripts_result.programs.state_validator_lock,
+        &scripts_result.programs.poa_state,
     ] {
         match fs::metadata(path).map_err(|err| err.to_string()) {
             Ok(metadata) => {
@@ -220,70 +160,70 @@ pub fn deploy_scripts(
     let custodian_lock = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.custodian_lock,
+        &scripts_result.programs.custodian_lock,
         &target_lock,
         &target_address,
     )?;
     let deposit_lock = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.deposit_lock,
+        &scripts_result.programs.deposit_lock,
         &target_lock,
         &target_address,
     )?;
     let withdrawal_lock = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.withdrawal_lock,
+        &scripts_result.programs.withdrawal_lock,
         &target_lock,
         &target_address,
     )?;
     let challenge_lock = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.challenge_lock,
+        &scripts_result.programs.challenge_lock,
         &target_lock,
         &target_address,
     )?;
     let stake_lock = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.stake_lock,
+        &scripts_result.programs.stake_lock,
         &target_lock,
         &target_address,
     )?;
     let state_validator = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.state_validator,
+        &scripts_result.programs.state_validator,
         &target_lock,
         &target_address,
     )?;
     let l2_sudt_validator = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.l2_sudt_validator,
+        &scripts_result.programs.l2_sudt_validator,
         &target_lock,
         &target_address,
     )?;
     let meta_contract_validator = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.meta_contract_validator,
+        &scripts_result.programs.meta_contract_validator,
         &target_lock,
         &target_address,
     )?;
     let eth_account_lock = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.eth_account_lock,
+        &scripts_result.programs.eth_account_lock,
         &target_lock,
         &target_address,
     )?;
     let tron_account_lock = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.tron_account_lock,
+        &scripts_result.programs.tron_account_lock,
         &target_lock,
         &target_address,
     )?;
@@ -291,21 +231,21 @@ pub fn deploy_scripts(
     let polyjuice_validator = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.polyjuice_validator,
+        &scripts_result.programs.polyjuice_validator,
         &target_lock,
         &target_address,
     )?;
     let state_validator_lock = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.state_validator_lock,
+        &scripts_result.programs.state_validator_lock,
         &target_lock,
         &target_address,
     )?;
     let poa_state = deploy_program(
         privkey_path,
         &mut rpc_client,
-        &deployment_index.programs.poa_state,
+        &scripts_result.programs.poa_state,
         &target_lock,
         &target_address,
     )?;
@@ -324,8 +264,5 @@ pub fn deploy_scripts(
         state_validator_lock,
         poa_state,
     };
-    let output_content =
-        serde_json::to_string_pretty(&deployment_result).expect("serde json to string pretty");
-    fs::write(output_path, output_content.as_bytes()).map_err(|err| err.to_string())?;
-    Ok(())
+    Ok(deployment_result)
 }

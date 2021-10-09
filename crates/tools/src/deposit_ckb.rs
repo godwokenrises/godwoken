@@ -1,7 +1,7 @@
 use crate::account::{privkey_to_eth_address, read_privkey};
-use crate::deploy_scripts::ScriptsDeploymentResult;
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::hasher::CkbHasher;
+use crate::types::ScriptsDeploymentResult;
 use crate::utils::transaction::{get_network_type, read_config, run_cmd, wait_for_tx};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;

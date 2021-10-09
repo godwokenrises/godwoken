@@ -2,9 +2,9 @@ use crate::account::{
     eth_sign, parse_account_short_address, privkey_to_short_address, read_privkey,
     short_address_to_account_id,
 };
-use crate::deploy_scripts::ScriptsDeploymentResult;
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::hasher::{CkbHasher, EthHasher};
+use crate::types::ScriptsDeploymentResult;
 use crate::utils::transaction::{read_config, wait_for_l2_tx};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
