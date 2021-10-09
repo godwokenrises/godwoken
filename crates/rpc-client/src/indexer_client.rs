@@ -70,7 +70,11 @@ impl CKBIndexerClient {
             )?;
 
             if cells.last_cursor.is_empty() {
-                return Err(anyhow!("no enough payment cells"));
+                return Err(anyhow!(
+                    "no enough payment cells, required: {}, taken: {:?}",
+                    required_capacity,
+                    taken_outpoints
+                ));
             }
             cursor = Some(cells.last_cursor);
 

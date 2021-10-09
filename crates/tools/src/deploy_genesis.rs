@@ -1,8 +1,7 @@
+use std::ops::Deref;
 use std::path::Path;
 use std::str::FromStr;
-use std::{fs, ops::Deref};
 
-use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 
 use ckb_fixed_hash::H256;
@@ -32,36 +31,12 @@ use gw_types::{
     prelude::Pack as GwPack, prelude::PackVec as GwPackVec,
 };
 
-use super::deploy_scripts::ScriptsDeploymentResult;
+use crate::types::{
+    PoAConfig, PoASetup, RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig,
+};
 use crate::utils::transaction::{get_network_type, run_cmd, wait_for_tx, TYPE_ID_CODE_HASH};
 
 use std::time::{SystemTime, UNIX_EPOCH};
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-pub struct UserRollupConfig {
-    pub l1_sudt_script_type_hash: H256,
-    pub burn_lock_hash: H256,
-    pub required_staking_capacity: u64,
-    pub challenge_maturity_blocks: u64,
-    pub finality_blocks: u64,
-    pub reward_burn_rate: u8, // * reward_burn_rate / 100
-    pub allowed_eoa_type_hashes: Vec<H256>,
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-pub struct PoAConfig {
-    pub poa_setup: PoASetup,
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-pub struct PoASetup {
-    pub identity_size: u8,
-    pub round_interval_uses_seconds: bool,
-    pub identities: Vec<rpc_types::JsonBytes>,
-    pub aggregator_change_threshold: u8,
-    pub round_intervals: u32,
-    pub subblocks_per_round: u32,
-}
 
 pub fn serialize_poa_setup(setup: &PoASetup) -> Bytes {
     let mut buffer = BytesMut::new();
@@ -103,18 +78,6 @@ pub fn serialize_poa_data(data: &PoAData) -> Bytes {
     buffer.extend_from_slice(&data.subblock_index.to_le_bytes()[..]);
     buffer.extend_from_slice(&data.aggregator_index.to_le_bytes()[..]);
     buffer.freeze()
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
-pub struct GenesisDeploymentResult {
-    pub tx_hash: H256,
-    pub timestamp: u64,
-    pub rollup_type_hash: H256,
-    pub rollup_type_script: ckb_jsonrpc_types::Script,
-    pub rollup_config: gw_jsonrpc_types::godwoken::RollupConfig,
-    pub rollup_config_cell_dep: ckb_jsonrpc_types::CellDep,
-    pub layer2_genesis_hash: H256,
-    pub genesis_config: GenesisConfig,
 }
 
 struct DeployContext<'a> {
@@ -240,43 +203,47 @@ impl<'a> DeployContext<'a> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn deploy_genesis(
-    privkey_path: &Path,
-    ckb_rpc_url: &str,
-    deployment_result_path: &Path,
-    user_rollup_config_path: &Path,
-    poa_config_path: &Path,
-    timestamp: Option<u64>,
-    output_path: &Path,
-    skip_config_check: bool,
-) -> Result<(), String> {
-    let deployment_result_string =
-        std::fs::read_to_string(deployment_result_path).map_err(|err| err.to_string())?;
-    let deployment_result: ScriptsDeploymentResult =
-        serde_json::from_str(&deployment_result_string).map_err(|err| err.to_string())?;
-    let user_rollup_config_string =
-        std::fs::read_to_string(user_rollup_config_path).map_err(|err| err.to_string())?;
-    let user_rollup_config: UserRollupConfig =
-        serde_json::from_str(&user_rollup_config_string).map_err(|err| err.to_string())?;
-    let poa_config_string =
-        std::fs::read_to_string(poa_config_path).map_err(|err| err.to_string())?;
-    let poa_config: PoAConfig =
-        serde_json::from_str(&poa_config_string).map_err(|err| err.to_string())?;
-    let poa_setup = poa_config.poa_setup;
+pub struct DeployRollupCellArgs<'a> {
+    pub privkey_path: &'a Path,
+    pub ckb_rpc_url: &'a str,
+    pub scripts_result: &'a ScriptsDeploymentResult,
+    pub user_rollup_config: &'a UserRollupConfig,
+    pub poa_config: &'a PoAConfig,
+    pub timestamp: Option<u64>,
+    pub skip_config_check: bool,
+}
 
+pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeploymentResult, String> {
+    let DeployRollupCellArgs {
+        privkey_path,
+        ckb_rpc_url,
+        scripts_result,
+        user_rollup_config,
+        poa_config,
+        timestamp,
+        skip_config_check,
+    } = args;
+
+    let poa_setup = poa_config.poa_setup.clone();
+
+    let burn_lock_hash: [u8; 32] = {
+        let lock: ckb_types::packed::Script = user_rollup_config.burn_lock.clone().into();
+        lock.calc_script_hash().unpack()
+    };
+    // check config
     if !skip_config_check {
-        let burn_lock_script = ckb_packed::Script::new_builder()
+        let expected_burn_lock_script = ckb_packed::Script::new_builder()
             .code_hash(CKBPack::pack(&[0u8; 32]))
             .hash_type(ScriptHashType::Data.into())
             .build();
-        let burn_lock_script_hash: [u8; 32] = burn_lock_script.calc_script_hash().unpack();
-        if H256(burn_lock_script_hash) != user_rollup_config.burn_lock_hash {
+        let expected_burn_lock_hash: [u8; 32] =
+            expected_burn_lock_script.calc_script_hash().unpack();
+        if H256(expected_burn_lock_hash) != H256(burn_lock_hash) {
             return Err(format!(
                 "The burn lock hash: 0x{} is not default, we suggest to use default burn lock \
                 0x{} (code_hash: 0x, hash_type: Data, args: empty)",
-                hex::encode(user_rollup_config.burn_lock_hash),
-                hex::encode(burn_lock_script_hash)
+                hex::encode(&burn_lock_hash),
+                hex::encode(expected_burn_lock_hash)
             ));
         }
         if poa_setup.round_intervals == 0 {
@@ -292,8 +259,8 @@ pub fn deploy_genesis(
         .next()
         .map(ToOwned::to_owned)
         .ok_or_else(|| "File is empty".to_string())?;
-    let privkey_data =
-        H256::from_str(&privkey_string.trim()[2..]).map_err(|err| err.to_string())?;
+    let privkey_data = H256::from_str(&privkey_string.trim().trim_start_matches("0x"))
+        .map_err(|err| err.to_string())?;
     let privkey = secp256k1::SecretKey::from_slice(privkey_data.as_bytes())
         .map_err(|err| format!("Invalid secp256k1 secret key format, error: {}", err))?;
     let pubkey = secp256k1::PublicKey::from_secret_key(&SECP256K1, &privkey);
@@ -309,40 +276,43 @@ pub fn deploy_genesis(
 
     // deploy rollup config cell
     let allowed_contract_type_hashes: Vec<gw_packed::Byte32> = vec![
-        GwPack::pack(&deployment_result.meta_contract_validator.script_type_hash),
-        GwPack::pack(&deployment_result.l2_sudt_validator.script_type_hash),
-        GwPack::pack(&deployment_result.polyjuice_validator.script_type_hash),
+        GwPack::pack(&scripts_result.meta_contract_validator.script_type_hash),
+        GwPack::pack(&scripts_result.l2_sudt_validator.script_type_hash),
+        GwPack::pack(&scripts_result.polyjuice_validator.script_type_hash),
     ];
 
-    let mut allowed_eoa_type_hashes: Vec<gw_packed::Byte32> = vec![GwPack::pack(
-        &deployment_result.eth_account_lock.script_type_hash,
-    )];
+    // EOA scripts
+    let mut allowed_eoa_type_hashes: Vec<gw_packed::Byte32> = vec![
+        GwPack::pack(&scripts_result.eth_account_lock.script_type_hash),
+        GwPack::pack(&scripts_result.tron_account_lock.script_type_hash),
+    ];
     allowed_eoa_type_hashes.extend(
         user_rollup_config
             .allowed_eoa_type_hashes
+            .clone()
             .into_iter()
             .map(|hash| GwPack::pack(&hash)),
     );
     allowed_eoa_type_hashes.dedup();
+
+    // composite rollup config
     let rollup_config = RollupConfig::new_builder()
         .l1_sudt_script_type_hash(GwPack::pack(&user_rollup_config.l1_sudt_script_type_hash))
         .custodian_script_type_hash(GwPack::pack(
-            &deployment_result.custodian_lock.script_type_hash,
+            &scripts_result.custodian_lock.script_type_hash,
         ))
-        .deposit_script_type_hash(GwPack::pack(
-            &deployment_result.deposit_lock.script_type_hash,
-        ))
+        .deposit_script_type_hash(GwPack::pack(&scripts_result.deposit_lock.script_type_hash))
         .withdrawal_script_type_hash(GwPack::pack(
-            &deployment_result.withdrawal_lock.script_type_hash,
+            &scripts_result.withdrawal_lock.script_type_hash,
         ))
         .challenge_script_type_hash(GwPack::pack(
-            &deployment_result.challenge_lock.script_type_hash,
+            &scripts_result.challenge_lock.script_type_hash,
         ))
-        .stake_script_type_hash(GwPack::pack(&deployment_result.stake_lock.script_type_hash))
+        .stake_script_type_hash(GwPack::pack(&scripts_result.stake_lock.script_type_hash))
         .l2_sudt_validator_script_type_hash(GwPack::pack(
-            &deployment_result.l2_sudt_validator.script_type_hash,
+            &scripts_result.l2_sudt_validator.script_type_hash,
         ))
-        .burn_lock_hash(GwPack::pack(&user_rollup_config.burn_lock_hash))
+        .burn_lock_hash(GwPack::pack(&burn_lock_hash))
         .required_staking_capacity(GwPack::pack(&user_rollup_config.required_staking_capacity))
         .challenge_maturity_blocks(GwPack::pack(&user_rollup_config.challenge_maturity_blocks))
         .finality_blocks(GwPack::pack(&user_rollup_config.finality_blocks))
@@ -355,17 +325,13 @@ pub fn deploy_genesis(
         privkey_path,
         owner_address: &owner_address,
         genesis_info: &genesis_info,
-        deployment_result: &deployment_result,
+        deployment_result: &scripts_result,
     };
-    // FIXME: Right now, to update a rollup config, deploy an new one.
+
     let (rollup_config_output, rollup_config_data): (ckb_packed::CellOutput, Bytes) = {
         let data = rollup_config.as_bytes();
-        let lock_script = ckb_packed::Script::new_builder()
-            .code_hash(CKBPack::pack(&[0u8; 32]))
-            .hash_type(ScriptHashType::Data.into())
-            .build();
         let output = ckb_packed::CellOutput::new_builder()
-            .lock(lock_script)
+            .lock(user_rollup_config.cells_lock.clone().into())
             .build();
         let output = fit_output_capacity(output, data.len());
         (output, data)
@@ -417,7 +383,7 @@ pub fn deploy_genesis(
     // calculate by: blake2b_hash(firstInput + rullupCell.outputIndex)
     let rollup_type_script = ckb_packed::Script::new_builder()
         .code_hash(CKBPack::pack(
-            &deployment_result.state_validator.script_type_hash,
+            &scripts_result.state_validator.script_type_hash,
         ))
         .hash_type(ScriptHashType::Type.into())
         .args(CKBPack::pack(&rollup_cell_type_id))
@@ -428,7 +394,7 @@ pub fn deploy_genesis(
     // 1. build genesis block
     let genesis_config = GenesisConfig {
         timestamp,
-        meta_contract_validator_type_hash: deployment_result
+        meta_contract_validator_type_hash: scripts_result
             .meta_contract_validator
             .script_type_hash
             .clone(),
@@ -452,7 +418,7 @@ pub fn deploy_genesis(
         );
         let lock_script = ckb_packed::Script::new_builder()
             .code_hash(CKBPack::pack(
-                &deployment_result.state_validator_lock.script_type_hash,
+                &scripts_result.state_validator_lock.script_type_hash,
             ))
             .hash_type(ScriptHashType::Type.into())
             .args(CKBPack::pack(&lock_args))
@@ -469,7 +435,7 @@ pub fn deploy_genesis(
     let (poa_setup_output, poa_setup_data): (ckb_packed::CellOutput, Bytes) = {
         let data = serialize_poa_setup(&poa_setup);
         let lock_script = ckb_packed::Script::new_builder()
-            .code_hash(CKBPack::pack(&deployment_result.poa_state.script_type_hash))
+            .code_hash(CKBPack::pack(&scripts_result.poa_state.script_type_hash))
             .hash_type(ScriptHashType::Type.into())
             .args(CKBPack::pack(
                 &rollup_output.lock().calc_script_hash().as_bytes(),
@@ -498,7 +464,7 @@ pub fn deploy_genesis(
         };
         let data = serialize_poa_data(&poa_data);
         let lock_script = ckb_packed::Script::new_builder()
-            .code_hash(CKBPack::pack(&deployment_result.poa_state.script_type_hash))
+            .code_hash(CKBPack::pack(&scripts_result.poa_state.script_type_hash))
             .hash_type(ScriptHashType::Type.into())
             .args(CKBPack::pack(
                 &rollup_output.lock().calc_script_hash().as_bytes(),
@@ -517,7 +483,7 @@ pub fn deploy_genesis(
         (output, data)
     };
 
-    // 5. put genesis block in rollup'cell witness
+    // 5. put genesis block in rollup cell witness
     let witness_0: ckb_packed::WitnessArgs = {
         let output_type = genesis_with_global_state.genesis.as_bytes();
         ckb_packed::WitnessArgs::new_builder()
@@ -538,7 +504,7 @@ pub fn deploy_genesis(
     )?;
 
     // 7. write genesis deployment result
-    let genesis_deployment_result = GenesisDeploymentResult {
+    let rollup_result = RollupDeploymentResult {
         tx_hash,
         timestamp,
         rollup_type_hash: rollup_script_hash,
@@ -548,10 +514,7 @@ pub fn deploy_genesis(
         genesis_config,
         layer2_genesis_hash: genesis_with_global_state.genesis.hash().into(),
     };
-    let output_content = serde_json::to_string_pretty(&genesis_deployment_result)
-        .expect("serde json to string pretty");
-    fs::write(output_path, output_content.as_bytes()).map_err(|err| err.to_string())?;
-    Ok(())
+    Ok(rollup_result)
 }
 
 fn calculate_type_id(first_cell_input: &ckb_packed::CellInput, first_output_index: u64) -> Bytes {

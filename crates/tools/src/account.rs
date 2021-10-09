@@ -1,5 +1,6 @@
 use crate::godwoken_rpc::GodwokenRpcClient;
-use crate::{deploy_scripts::ScriptsDeploymentResult, hasher::CkbHasher};
+use crate::hasher::CkbHasher;
+use crate::types::ScriptsDeploymentResult;
 use ckb_crypto::secp::Privkey;
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;

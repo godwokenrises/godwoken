@@ -13,19 +13,28 @@ mod polyjuice;
 mod prepare_scripts;
 mod setup;
 mod transfer;
+pub(crate) mod types;
 mod update_cell;
 mod utils;
 mod withdraw;
 
 use anyhow::Result;
 use clap::{value_t, App, Arg, SubCommand};
+use deploy_genesis::DeployRollupCellArgs;
 use dump_tx::ChallengeBlock;
+use generate_config::GenerateNodeConfigArgs;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
+use types::{
+    BuildScriptsResult, PoAConfig, RollupDeploymentResult, ScriptsDeploymentResult,
+    UserRollupConfig,
+};
 use utils::cli_args;
+
+use crate::setup::SetupArgs;
 
 fn main() {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
@@ -162,6 +171,13 @@ fn run_cli() -> Result<()> {
                         .required(true)
                         .help("The genesis deployment results json file path"),
                 )
+                .arg(
+                    Arg::with_name("user-rollup-config-path")
+                        .short("r")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The user rollup config json file path"),
+                )
                 .arg(arg_privkey_path.clone())
                 .arg(
                     Arg::with_name("database-url")
@@ -214,7 +230,7 @@ fn run_cli() -> Result<()> {
                     Arg::with_name("repos-dir-path")
                         .short("r")
                         .takes_value(true)
-                        .default_value(prepare_scripts::REPOS_DIR_PATH)
+                        .default_value(prepare_scripts::SCRIPT_BUILD_DIR_PATH)
                         .required(true)
                         .help("The repos dir path"),
                 )
@@ -338,6 +354,13 @@ fn run_cli() -> Result<()> {
                         .help("Scripts generation mode: build or copy"),
                 )
                 .arg(
+                    Arg::with_name("setup-config-path")
+                        .short("c")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The setup config json file path"),
+                )
+                .arg(
                     Arg::with_name("scripts-build-file-path")
                         .short("s")
                         .takes_value(true)
@@ -345,13 +368,6 @@ fn run_cli() -> Result<()> {
                         .help("The scripts build json file path"),
                 )
                 .arg(arg_privkey_path.clone())
-                .arg(
-                    Arg::with_name("cells-lock-address")
-                        .long("cells-lock-address")
-                        .takes_value(true)
-                        .required(true)
-                        .help("Lock of cells"),
-                )
                 .arg(
                     Arg::with_name("nodes-count")
                         .short("n")
@@ -372,7 +388,7 @@ fn run_cli() -> Result<()> {
                     Arg::with_name("output-dir-path")
                         .short("o")
                         .takes_value(true)
-                        .default_value("deploy/")
+                        .default_value("output/")
                         .required(true)
                         .help("The godwoken nodes configs output dir path"),
                 ),
@@ -697,15 +713,18 @@ fn run_cli() -> Result<()> {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
             let input_path = Path::new(m.value_of("input-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
-            if let Err(err) = deploy_scripts::deploy_scripts(
-                privkey_path,
-                ckb_rpc_url,
-                input_path,
-                output_path,
-                None,
-            ) {
-                log::error!("Deploy scripts error: {}", err);
-                std::process::exit(-1);
+            let build_script_result: BuildScriptsResult = {
+                let content = std::fs::read(input_path)?;
+                serde_json::from_slice(&content)?
+            };
+            match deploy_scripts::deploy_scripts(privkey_path, ckb_rpc_url, &build_script_result) {
+                Ok(script_deployment) => {
+                    output_json_file(&script_deployment, output_path);
+                }
+                Err(err) => {
+                    log::error!("Deploy scripts error: {}", err);
+                    std::process::exit(-1);
+                }
             };
         }
         ("deploy-genesis", Some(m)) => {
@@ -718,19 +737,40 @@ fn run_cli() -> Result<()> {
             let timestamp = m
                 .value_of("genesis-timestamp")
                 .map(|s| s.parse().expect("timestamp in milliseconds"));
-            if let Err(err) = deploy_genesis::deploy_genesis(
+            let skip_config_check = m.is_present("skip-config-check");
+
+            let script_results: ScriptsDeploymentResult = {
+                let content = std::fs::read(deployment_results_path)?;
+                serde_json::from_slice(&content)?
+            };
+            let user_rollup_config: UserRollupConfig = {
+                let content = std::fs::read(user_rollup_path)?;
+                serde_json::from_slice(&content)?
+            };
+            let poa_config: PoAConfig = {
+                let content = std::fs::read(poa_config_path)?;
+                serde_json::from_slice(&content)?
+            };
+
+            let args = DeployRollupCellArgs {
+                skip_config_check,
                 privkey_path,
                 ckb_rpc_url,
-                deployment_results_path,
-                user_rollup_path,
-                poa_config_path,
+                scripts_result: &script_results,
+                user_rollup_config: &user_rollup_config,
+                poa_config: &poa_config,
                 timestamp,
-                output_path,
-                m.is_present("skip-config-check"),
-            ) {
-                log::error!("Deploy genesis error: {}", err);
-                std::process::exit(-1);
             };
+
+            match deploy_genesis::deploy_rollup_cell(args) {
+                Ok(rollup_deployment) => {
+                    output_json_file(&rollup_deployment, output_path);
+                }
+                Err(err) => {
+                    log::error!("Deploy genesis error: {}", err);
+                    std::process::exit(-1);
+                }
+            }
         }
         ("generate-config", Some(m)) => {
             let ckb_url = m.value_of("ckb-rpc-url").unwrap().to_string();
@@ -738,6 +778,7 @@ fn run_cli() -> Result<()> {
             let scripts_results_path =
                 Path::new(m.value_of("scripts-deployment-results-path").unwrap());
             let genesis_path = Path::new(m.value_of("genesis-deployment-results-path").unwrap());
+            let user_rollup_config_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
             let database_url = m.value_of("database-url");
@@ -745,20 +786,45 @@ fn run_cli() -> Result<()> {
                 Path::new(m.value_of("scripts-deployment-config-path").unwrap());
             let server_url = m.value_of("rpc-server-url").unwrap().to_string();
 
-            if let Err(err) = generate_config::generate_config(
-                genesis_path,
-                scripts_results_path,
+            let rollup_result: RollupDeploymentResult = {
+                let content = std::fs::read(genesis_path)?;
+                serde_json::from_slice(&content)?
+            };
+            let scripts_deployment: ScriptsDeploymentResult = {
+                let content = std::fs::read(scripts_results_path)?;
+                serde_json::from_slice(&content)?
+            };
+            let build_scripts_result: BuildScriptsResult = {
+                let content = std::fs::read(scripts_config_path)?;
+                serde_json::from_slice(&content)?
+            };
+            let user_rollup_config: UserRollupConfig = {
+                let content = std::fs::read(user_rollup_config_path)?;
+                serde_json::from_slice(&content)?
+            };
+
+            let args = GenerateNodeConfigArgs {
+                rollup_result: &rollup_result,
+                scripts_deployment: &scripts_deployment,
+                build_scripts_result: &build_scripts_result,
                 privkey_path,
                 ckb_url,
                 indexer_url,
-                output_path,
                 database_url,
-                scripts_config_path,
                 server_url,
-            ) {
-                log::error!("Generate config error: {}", err);
-                std::process::exit(-1);
+                user_rollup_config: &user_rollup_config,
+                node_mode: gw_config::NodeMode::ReadOnly,
             };
+
+            match generate_config::generate_node_config(args) {
+                Ok(config) => {
+                    output_json_file(&config, output_path);
+                }
+                Err(err) => {
+                    log::error!("Generate config error: {}", err);
+                    std::process::exit(-1);
+                }
+            }
         }
         ("prepare-scripts", Some(m)) => {
             let mode = value_t!(m, "mode", prepare_scripts::ScriptsBuildMode).unwrap();
@@ -766,15 +832,20 @@ fn run_cli() -> Result<()> {
             let repos_dir = Path::new(m.value_of("repos-dir-path").unwrap());
             let scripts_dir = Path::new(m.value_of("scripts-dir-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
-            if let Err(err) = prepare_scripts::prepare_scripts(
+            match prepare_scripts::prepare_scripts(
                 mode,
+                Default::default(),
                 input_path,
                 repos_dir,
                 scripts_dir,
-                output_path,
             ) {
-                log::error!("Prepare scripts error: {}", err);
-                std::process::exit(-1);
+                Ok(build_script_result) => {
+                    output_json_file(&build_script_result, output_path);
+                }
+                Err(err) => {
+                    log::error!("Prepare scripts error: {}", err);
+                    std::process::exit(-1);
+                }
             };
         }
         ("update-cell", Some(m)) => {
@@ -851,27 +922,28 @@ fn run_cli() -> Result<()> {
         ("setup", Some(m)) => {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
             let indexer_url = m.value_of("indexer-rpc-url").unwrap();
+            let setup_config_path = Path::new(m.value_of("setup-config-path").unwrap());
             let mode = value_t!(m, "mode", prepare_scripts::ScriptsBuildMode).unwrap();
             let scripts_path = Path::new(m.value_of("scripts-build-file-path").unwrap());
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
-            let cells_lock_address = m.value_of("cells-lock-address").unwrap();
             let nodes_count = m
                 .value_of("nodes-count")
                 .map(|c| c.parse().expect("nodes count"))
                 .unwrap();
             let server_url = m.value_of("rpc-server-url").unwrap();
             let output_dir = Path::new(m.value_of("output-dir-path").unwrap());
-            setup::setup(
+            let args = SetupArgs {
                 ckb_rpc_url,
                 indexer_url,
                 mode,
-                scripts_path,
+                build_scripts_config_path: scripts_path,
                 privkey_path,
-                cells_lock_address,
                 nodes_count,
                 server_url,
+                setup_config_path,
                 output_dir,
-            );
+            };
+            setup::setup(args);
         }
         ("transfer", Some(m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
@@ -1107,4 +1179,16 @@ fn run_cli() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn output_json_file<T>(content: &T, output_path: &Path)
+where
+    T: serde::Serialize,
+{
+    let output_content =
+        serde_json::to_string_pretty(content).expect("serde json to string pretty");
+    let output_dir = output_path.parent().expect("get output dir");
+    std::fs::create_dir_all(&output_dir).expect("create output dir");
+    std::fs::write(output_path, output_content.as_bytes()).expect("generate json file");
+    println!("Generate file {:?}", output_path);
 }
