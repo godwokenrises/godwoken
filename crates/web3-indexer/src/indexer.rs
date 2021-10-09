@@ -91,12 +91,22 @@ impl Web3Indexer {
             None => return Err(anyhow!("can't find l2 block from l1 transaction")),
         };
         let number: u64 = l2_block.raw().number().unpack();
-        let local_tip_number = self.tip_number().await?;
-        if local_tip_number.is_none() || number > local_tip_number.unwrap() {
+        let local_tip_number = self.tip_number().await?.unwrap_or(0);
+        if number > local_tip_number || self.query_number(number).await?.is_none() {
             self.insert_l2block(store, l2_block).await?;
             log::debug!("web3 indexer: sync new block #{}", number);
         }
         Ok(())
+    }
+
+    async fn query_number(&self, number: u64) -> Result<Option<u64>> {
+        let row: Option<(Decimal,)> = sqlx::query_as(&format!(
+            "SELECT number FROM blocks WHERE number={} LIMIT 1",
+            number
+        ))
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.and_then(|(n,)| n.to_u64()))
     }
 
     async fn tip_number(&self) -> Result<Option<u64>> {
