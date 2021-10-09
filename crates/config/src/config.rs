@@ -30,7 +30,7 @@ pub struct Config {
     #[serde(default)]
     pub db_block_validator: Option<DBBlockValidatorConfig>,
     #[serde(default)]
-    pub db: DBConfig,
+    pub store: StoreConfig,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -219,7 +219,7 @@ impl Default for DBBlockValidatorConfig {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct DBConfig {
+pub struct StoreConfig {
     #[serde(default)]
     pub path: PathBuf,
     #[serde(default)]

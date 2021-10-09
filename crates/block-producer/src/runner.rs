@@ -249,11 +249,11 @@ impl BaseInitComponents {
 
         // Open store
         let timer = Instant::now();
-        let store = if config.db.path.as_os_str().is_empty() {
+        let store = if config.store.path.as_os_str().is_empty() {
             log::warn!("config.store.path is blank, using temporary store");
             Store::open_tmp().with_context(|| "init store")?
         } else {
-            Store::new(RocksDB::open(&config.db, COLUMNS))
+            Store::new(RocksDB::open(&config.store, COLUMNS))
         };
         let elapsed_ms = timer.elapsed().as_millis();
         log::debug!("Open rocksdb costs: {}ms.", elapsed_ms);

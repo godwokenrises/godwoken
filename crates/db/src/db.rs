@@ -3,7 +3,7 @@ use crate::snapshot::RocksDBSnapshot;
 use crate::transaction::RocksDBTransaction;
 use crate::write_batch::RocksDBWriteBatch;
 use crate::{internal_error, Result};
-use gw_config::DBConfig;
+use gw_config::StoreConfig;
 use rocksdb::ops::{
     CreateCF, DropCF, GetColumnFamilys, GetPinned, GetPinnedCF, IterateCF, OpenCF, Put, SetOptions,
     WriteOps,
@@ -23,7 +23,7 @@ pub struct RocksDB {
 }
 
 impl RocksDB {
-    pub(crate) fn open_with_check(config: &DBConfig, columns: u32) -> Result<Self> {
+    pub(crate) fn open_with_check(config: &StoreConfig, columns: u32) -> Result<Self> {
         let cf_names: Vec<_> = (0..columns).map(|c| c.to_string()).collect();
 
         let (mut opts, cf_descriptors) = if let Some(ref file) = config.options_file {
@@ -113,13 +113,13 @@ impl RocksDB {
         })
     }
 
-    pub fn open(config: &DBConfig, columns: u32) -> Self {
+    pub fn open(config: &StoreConfig, columns: u32) -> Self {
         Self::open_with_check(config, columns).unwrap_or_else(|err| panic!("{}", err))
     }
 
     pub fn open_tmp(columns: u32) -> Self {
         let tmp_dir = tempfile::Builder::new().tempdir().unwrap();
-        let config = DBConfig {
+        let config = StoreConfig {
             path: tmp_dir.path().to_path_buf(),
             ..Default::default()
         };
@@ -216,7 +216,7 @@ pub(crate) fn cf_handle(db: &OptimisticTransactionDB, col: Col) -> Result<&Colum
 
 #[cfg(test)]
 mod tests {
-    use super::{DBConfig, Result, RocksDB};
+    use super::{Result, RocksDB, StoreConfig};
     use std::collections::HashMap;
 
     fn setup_db(prefix: &str, columns: u32) -> RocksDB {
@@ -225,7 +225,7 @@ mod tests {
 
     fn setup_db_with_check(prefix: &str, columns: u32) -> Result<RocksDB> {
         let tmp_dir = tempfile::Builder::new().prefix(prefix).tempdir().unwrap();
-        let config = DBConfig {
+        let config = StoreConfig {
             path: tmp_dir.as_ref().to_path_buf(),
             ..Default::default()
         };
@@ -239,7 +239,7 @@ mod tests {
             .prefix("test_set_rocksdb_options")
             .tempdir()
             .unwrap();
-        let config = DBConfig {
+        let config = StoreConfig {
             path: tmp_dir.as_ref().to_path_buf(),
             options: {
                 let mut opts = HashMap::new();
@@ -257,7 +257,7 @@ mod tests {
             .prefix("test_set_rocksdb_options_empty")
             .tempdir()
             .unwrap();
-        let config = DBConfig {
+        let config = StoreConfig {
             path: tmp_dir.as_ref().to_path_buf(),
             options: HashMap::new(),
             options_file: None,
@@ -272,7 +272,7 @@ mod tests {
             .prefix("test_panic_on_invalid_rocksdb_options")
             .tempdir()
             .unwrap();
-        let config = DBConfig {
+        let config = StoreConfig {
             path: tmp_dir.as_ref().to_path_buf(),
             options: {
                 let mut opts = HashMap::new();
