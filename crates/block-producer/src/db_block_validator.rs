@@ -30,7 +30,7 @@ use std::{
 use crate::runner::BaseInitComponents;
 
 pub fn verify(config: Config, from_block: Option<u64>, to_block: Option<u64>) -> Result<()> {
-    if config.db.path.as_os_str().is_empty() {
+    if config.store.path.as_os_str().is_empty() {
         bail!("empty store path, no db block to verify");
     }
     if config.block_producer.is_none() {
