@@ -9,6 +9,8 @@ use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_sdk::{Address, HumanCapacity};
 use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
+use gw_types::core::ScriptHashType;
+use gw_types::packed::{CellOutput, WithdrawalLockArgs};
 use gw_types::{
     bytes::Bytes as GwBytes,
     packed::{Byte32, RawWithdrawalRequest, WithdrawalRequest},
@@ -46,6 +48,17 @@ pub fn withdraw(
 
     let config = read_config(&config_path)?;
     let rollup_type_hash = &config.genesis.rollup_type_hash;
+
+    let is_sudt = sudt_script_hash != H256([0u8; 32]);
+    let minimal_capacity = minimal_withdrawal_capacity(is_sudt)?;
+    if capacity < minimal_capacity {
+        let msg = format!(
+            "Withdrawal required {} CKB at least, provided {}.",
+            HumanCapacity::from(minimal_capacity).to_string(),
+            HumanCapacity::from(capacity).to_string()
+        );
+        return Err(msg);
+    }
 
     let payment_lock_hash = H256::from([0u8; 32]);
 
@@ -187,4 +200,59 @@ fn wait_for_balance_change(
 fn parse_capacity(capacity: &str) -> Result<u64, String> {
     let human_capacity = HumanCapacity::from_str(capacity)?;
     Ok(human_capacity.into())
+}
+
+fn minimal_withdrawal_capacity(is_sudt: bool) -> Result<u64, String> {
+    // fixed size, the specific value is not important.
+    let dummy_hash = gw_types::core::H256::zero();
+    let dummy_block_number = 0u64;
+    let dummy_rollup_type_hash = dummy_hash;
+
+    let dummy_withdrawal_lock_args = WithdrawalLockArgs::new_builder()
+        .account_script_hash(dummy_hash.pack())
+        .withdrawal_block_hash(dummy_hash.pack())
+        .withdrawal_block_number(dummy_block_number.pack())
+        .sudt_script_hash(dummy_hash.pack())
+        .sell_amount(0.pack())
+        .sell_capacity(0.pack())
+        .owner_lock_hash(dummy_hash.pack())
+        .payment_lock_hash(dummy_hash.pack())
+        .build();
+
+    let args: gw_types::bytes::Bytes = dummy_rollup_type_hash
+        .as_slice()
+        .iter()
+        .chain(dummy_withdrawal_lock_args.as_slice().iter())
+        .cloned()
+        .collect();
+
+    let lock_script = gw_types::packed::Script::new_builder()
+        .code_hash(dummy_hash.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args(args.pack())
+        .build();
+
+    let type_script = if is_sudt {
+        let type_ = gw_types::packed::Script::new_builder()
+            .code_hash(dummy_hash.pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(dummy_hash.as_slice().pack())
+            .build();
+        Some(type_)
+    } else {
+        None
+    };
+
+    let output = CellOutput::new_builder()
+        .capacity(0.pack())
+        .lock(lock_script)
+        .type_(type_script.pack())
+        .build();
+
+    let data_capacity = if is_sudt { 16 } else { 0 };
+
+    let capacity = output
+        .occupied_capacity(data_capacity)
+        .map_err(|err| err.to_string())?;
+    Ok(capacity)
 }

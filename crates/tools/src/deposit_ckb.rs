@@ -5,12 +5,13 @@ use crate::hasher::CkbHasher;
 use crate::utils::transaction::{get_network_type, read_config, run_cmd, wait_for_tx};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
-use ckb_sdk::{Address, AddressPayload, HttpRpcClient, SECP256K1};
+use ckb_sdk::{Address, AddressPayload, HttpRpcClient, HumanCapacity, SECP256K1};
 use ckb_types::{
     bytes::Bytes as CKBBytes, core::ScriptHashType, packed::Script as CKBScript,
     prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity, prelude::Pack as CKBPack,
     prelude::Unpack as CKBUnpack,
 };
+use gw_types::packed::{CellOutput, CustodianLockArgs};
 use gw_types::{
     bytes::Bytes as GwBytes,
     packed::{Byte32, DepositLockArgs, Script},
@@ -83,6 +84,17 @@ pub fn deposit_ckb(
         .cancel_timeout(GwPack::pack(&0xc00000000002a300u64))
         .layer2_lock(l2_lock)
         .build();
+
+    let minimal_capacity = minimal_deposit_capacity(&deposit_lock_args)?;
+    let capacity_in_shannons = parse_capacity(capacity)?;
+    if capacity_in_shannons < minimal_capacity {
+        let msg = format!(
+            "Deposit CKB required {} CKB at least, provided {}.",
+            HumanCapacity::from(minimal_capacity).to_string(),
+            HumanCapacity::from(capacity_in_shannons).to_string()
+        );
+        return Err(msg);
+    }
 
     let mut l1_lock_args = rollup_type_hash.as_bytes().to_vec();
     l1_lock_args.append(&mut deposit_lock_args.as_bytes().to_vec());
@@ -185,4 +197,45 @@ fn get_balance_by_short_address(
     let bytes = JsonBytes::from_vec(short_address);
     let balance = godwoken_rpc_client.get_balance(bytes, 1)?;
     Ok(balance)
+}
+
+// only for CKB
+fn minimal_deposit_capacity(deposit_lock_args: &DepositLockArgs) -> Result<u64, String> {
+    // fixed size, the specific value is not important.
+    let dummy_hash = gw_types::core::H256::zero();
+    let dummy_block_number = 0u64;
+    let dummy_rollup_type_hash = dummy_hash;
+
+    let custodian_lock_args = CustodianLockArgs::new_builder()
+        .deposit_block_hash(dummy_hash.pack())
+        .deposit_block_number(gw_types::prelude::Pack::pack(&dummy_block_number))
+        .deposit_lock_args(deposit_lock_args.clone())
+        .build();
+
+    let args: gw_types::bytes::Bytes = dummy_rollup_type_hash
+        .as_slice()
+        .iter()
+        .chain(custodian_lock_args.as_slice().iter())
+        .cloned()
+        .collect();
+
+    let lock_script = Script::new_builder()
+        .code_hash(dummy_hash.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args(gw_types::prelude::Pack::pack(&args))
+        .build();
+
+    // no type / data when deposit CKB
+    let output = CellOutput::new_builder()
+        .capacity(gw_types::prelude::Pack::pack(&0))
+        .lock(lock_script)
+        .build();
+
+    let capacity = output.occupied_capacity(0).map_err(|err| err.to_string())?;
+    Ok(capacity)
+}
+
+fn parse_capacity(capacity: &str) -> Result<u64, String> {
+    let human_capacity = HumanCapacity::from_str(capacity)?;
+    Ok(human_capacity.into())
 }
