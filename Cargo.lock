@@ -1823,7 +1823,7 @@ dependencies = [
 
 [[package]]
 name = "gw-block-producer"
-version = "0.6.4"
+version = "0.6.7"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -2237,7 +2237,7 @@ dependencies = [
 
 [[package]]
 name = "gw-version"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "anyhow",
 ]
