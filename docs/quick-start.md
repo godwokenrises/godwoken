@@ -2,10 +2,10 @@
 
 ## Requirements
 
-- Install [ckb](https://github.com/nervosnetwork/ckb)(v0.40.0 or above), run ckb and ckb-miner
-- Install [ckb indexer](https://github.com/nervosnetwork/ckb-indexer)(v0.2.1 or above) and run
-- Install [ckb_cli](https://github.com/nervosnetwork/ckb-cli)(v0.40.0 or above)
-- Install [moleculec](https://github.com/nervosnetwork/molecule)(v0.6.1 or above)
+- Install [ckb](https://github.com/nervosnetwork/ckb)(v0.100.0 or above), run ckb and ckb-miner
+- Install [ckb indexer](https://github.com/nervosnetwork/ckb-indexer)(v0.3.0 or above) and run
+- Install [ckb_cli](https://github.com/nervosnetwork/ckb-cli)(v0.100.0 or above)
+- Install [moleculec](https://github.com/nervosnetwork/molecule)(v0.7.2 or above)
 - Install [capsule](https://github.com/nervosnetwork/capsule)(v0.4.6 or above)
 
 ## Clone the source with git
@@ -17,17 +17,19 @@ cd godwoken
 
 ## Setup
 
-The setup subcommand in gw-tools crate can complete all the settings before the godwoken node starts: preparing scripts, deploying scripts, deploying layer 2 genesis block, and generating configuration files. The command can be used as follows:
+We can use gw-tools `setup` command to complete settings: building scripts, deploy scripts, initialize layer2 genesis block, and generate configurations.
+
+Before that, we need to prepare a deploy key with enough CKB(about 2 millions for the default setup).
 
 ```bash
-RUST_LOG=info cargo +nightly run --bin gw-tools -- setup -s deploy/scripts-build.json -k deploy/pk -o deploy/
+gw-tools setup -n 2 -k <deploy_key> -s build-scripts.json -c setup-config.json
 ```
 
-The input file scripts-build.json for this command is as follows(you need to modify the prebuild_image & repos):
+The input file `scripts-build.json` describes how we build CKB scripts.
 
 ```json
 {
-    "prebuild_image": "nervos/godwoken-prebuilds:<tags>",
+    "prebuild_image": "nervos/godwoken-prebuilds:v0.6.7",
     "repos": {
         "godwoken_scripts": "https://github.com/nervosnetwork/godwoken-scripts#master",
         "godwoken_polyjuice": "https://github.com/nervosnetwork/godwoken-polyjuice#main",
@@ -38,21 +40,47 @@ The input file scripts-build.json for this command is as follows(you need to mod
 
 **NOTES**: By default, the setup command is executed in `build` mode. You can specify the `copy` mode with the additional parameter `-m copy`, then the deployment process will copy the scripts from prebuilt docker image instead of building it, which saves a lot of time.
 
-After the setup command is successfully completed, you need to set a reward lock in the node's config.toml(default relative path: deploy/node1/config.toml):
+The another input file `setup-config.json` provides several configures for the Rollup.
 
-```toml
-[block_producer.challenger_config.rewards_receiver_lock]
-code_hash = '<code_hash>'
-hash_type = 'type'
-args = '0x'
+``` json
+{
+  "l1_sudt_script_type_hash": "0xc5e5dcf215925f7ef4dfaf5f4b4f105bc321c02776d6e7d52a1db3fcd9d011a4",
+  "l1_sudt_cell_dep": {
+    "dep_type": "code",
+    "out_point": {
+      "tx_hash": "0xe12877ebd2c3c364dc46c5c992bcfaf4fee33fa13eebdf82c591fc9825aab769",
+      "index": "0x0"
+    }
+  },
+  "node_initial_ckb": 1200000,
+  "cells_lock": {
+    "code_hash": "0x49027a6b9512ef4144eb41bc5559ef2364869748e65903bd14da08c3425c0503",
+    "hash_type": "type",
+    "args": "0x0000000000000000000000000000000000000000"
+  },
+  "reward_lock": {
+    "code_hash": "0x49027a6b9512ef4144eb41bc5559ef2364869748e65903bd14da08c3425c0503",
+    "hash_type": "type",
+    "args": "0x0000000000000000000000000000000000000000"
+  },
+  "burn_lock": {
+    "code_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "hash_type": "data",
+    "args": "0x"
+  }
+}
 ```
+
+**NOTES**: You must modify this file, to set correct simple UDT script, otherwise the sUDT deposit won't work. The `cells_lock` is used to unlock/upgrade Rollup scripts. `reward_lock` is used to receive challenge rewards. The `burn_lock` is used to received burned assets should be unlock-able.
 
 ## Start Node
 
-Now you can start godwoken node.
+Now you can adjust the `config.toml` file and start godwoken node.
 
 ```bash
-RUST_LOG=info cargo +nightly run --bin godwoken run -c deploy/node1/config.toml
+cd output/node1
+cp -r ../scripts ./scripts
+./godwoken run
 ```
 
 **NOTES**: 
