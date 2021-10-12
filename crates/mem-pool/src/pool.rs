@@ -42,7 +42,10 @@ use std::{
 };
 
 use crate::{
-    constants::{MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS, MAX_TX_SIZE, MAX_WITHDRAWAL_SIZE},
+    constants::{
+        MAX_FAILED_TX_RECEIPT_BLOCKS, MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS, MAX_TX_SIZE,
+        MAX_WITHDRAWAL_SIZE,
+    },
     custodian::AvailableCustodians,
     mem_block::MemBlock,
     traits::MemPoolProvider,
@@ -708,6 +711,15 @@ impl MemPool {
         if let Some(ref mut offchain_validator) = self.offchain_validator {
             let timestamp = self.mem_block.block_info().timestamp().unpack();
             offchain_validator.reset(&new_tip_block, timestamp, reverted_block_root);
+        }
+
+        // clear block failed tx receipt
+        {
+            let block_number = {
+                let block_number = self.mem_block.block_info().number().unpack();
+                block_number.saturating_sub(MAX_FAILED_TX_RECEIPT_BLOCKS)
+            };
+            db.clear_mem_pool_failed_transaction_receipt(block_number)?;
         }
 
         // set tip
