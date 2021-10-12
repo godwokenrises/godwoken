@@ -147,7 +147,7 @@ pub fn read_privkey(privkey_path: &Path) -> Result<H256, String> {
         .next()
         .map(ToOwned::to_owned)
         .ok_or_else(|| "Privkey file is empty".to_string())?;
-    let privkey = H256::from_str(privkey_string.trim().trim_end_matches("0x"))
+    let privkey = H256::from_str(privkey_string.trim().trim_start_matches("0x"))
         .map_err(|err| err.to_string())?;
     Ok(privkey)
 }
