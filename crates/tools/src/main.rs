@@ -105,11 +105,7 @@ fn run_cli() -> Result<()> {
                 .arg(arg_privkey_path.clone())
                 .arg(arg_ckb_rpc.clone())
                 .arg(
-                    Arg::with_name("genesis-deployment-path")
-                        .short("d")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The deployment results json file path"),
+                    arg_deployment_results_path.clone()
                 )
                 .arg(
                     Arg::with_name("genesis-timestamp")
@@ -120,7 +116,8 @@ fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("user-rollup-config-path")
-                        .short("u")
+                        .long("rollup-config")
+                        .short("r")
                         .takes_value(true)
                         .required(true)
                         .help("The user rollup config json file path"),
@@ -150,19 +147,10 @@ fn run_cli() -> Result<()> {
                 .about("Generate configure")
                 .arg(arg_ckb_rpc.clone())
                 .arg(
-                    Arg::with_name("indexer-rpc-url")
-                        .short("i")
-                        .takes_value(true)
-                        .default_value("http://127.0.0.1:8116")
-                        .required(true)
-                        .help("The URL of ckb indexer"),
+                    arg_indexer_rpc.clone()
                 )
                 .arg(
-                    Arg::with_name("scripts-deployment-path")
-                        .short("s")
-                        .takes_value(true)
-                        .required(true)
-                        .help("Scripts deployment results json file path"),
+                    arg_deployment_results_path.clone()
                 )
                 .arg(
                     Arg::with_name("genesis-deployment-path")
@@ -173,6 +161,7 @@ fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("user-rollup-config-path")
+                        .long("rollup-config")
                         .short("r")
                         .takes_value(true)
                         .required(true)
@@ -201,7 +190,7 @@ fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("rpc-server-url")
-                        .short("u")
+                        .long("rpc-server-url")
                         .takes_value(true)
                         .default_value("localhost:8119")
                         .required(true)
@@ -236,7 +225,7 @@ fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("scripts-dir-path")
-                        .short("s")
+                        .long("scripts-output-path")
                         .takes_value(true)
                         .default_value(prepare_scripts::SCRIPTS_DIR_PATH)
                         .required(true)
@@ -328,7 +317,6 @@ fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("sudt-script-hash")
-                        .short("s")
                         .long("sudt-script-hash")
                         .takes_value(true)
                         .required(false)
@@ -365,7 +353,6 @@ fn run_cli() -> Result<()> {
                 .arg(
                     Arg::with_name("scripts-build-file-path")
                         .long("scripts-build-config")
-                        .short("s")
                         .takes_value(true)
                         .required(true)
                         .help("The scripts build json file path"),
@@ -735,7 +722,7 @@ fn run_cli() -> Result<()> {
         ("deploy-genesis", Some(m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
-            let deployment_results_path = Path::new(m.value_of("genesis-deployment-path").unwrap());
+            let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let user_rollup_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
             let poa_config_path = Path::new(m.value_of("poa-config-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
@@ -745,7 +732,7 @@ fn run_cli() -> Result<()> {
             let skip_config_check = m.is_present("skip-config-check");
 
             let script_results: ScriptsDeploymentResult = {
-                let content = std::fs::read(deployment_results_path)?;
+                let content = std::fs::read(scripts_deployment_path)?;
                 serde_json::from_slice(&content)?
             };
             let user_rollup_config: UserRollupConfig = {
@@ -822,7 +809,9 @@ fn run_cli() -> Result<()> {
 
             match generate_config::generate_node_config(args) {
                 Ok(config) => {
-                    output_json_file(&config, output_path);
+                    let content = toml::to_string_pretty(&config).unwrap();
+                    std::fs::write(output_path, content).unwrap();
+                    log::info!("Generate file {:?}", output_path);
                 }
                 Err(err) => {
                     log::error!("Generate config error: {}", err);
