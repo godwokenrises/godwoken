@@ -196,7 +196,8 @@ impl<'a> DeployContext<'a> {
             max_tx_fee_str,
             "--skip-check",
         ])?;
-        let tx_hash = H256::from_str(&send_output.trim()[2..]).map_err(|err| err.to_string())?;
+        let tx_hash = H256::from_str(&send_output.trim().trim_start_matches("0x"))
+            .map_err(|err| err.to_string())?;
         log::info!("tx_hash: {:#x}", tx_hash);
         wait_for_tx(rpc_client, &tx_hash, 120)?;
         Ok(tx_hash)
@@ -665,9 +666,13 @@ fn get_live_cells(
                     return None;
                 }
 
-                let input_tx_hash =
-                    H256::from_str(&live_cell["tx_hash"].as_str().expect("live cell tx hash")[2..])
-                        .expect("convert to h256");
+                let input_tx_hash = H256::from_str(
+                    &live_cell["tx_hash"]
+                        .as_str()
+                        .expect("live cell tx hash")
+                        .trim_start_matches("0x"),
+                )
+                .expect("convert to h256");
                 let input_index = live_cell["output_index"]
                     .as_u64()
                     .expect("live cell output index") as u32;

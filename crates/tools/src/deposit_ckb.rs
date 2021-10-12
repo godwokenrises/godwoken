@@ -25,7 +25,7 @@ use std::u128;
 #[allow(clippy::too_many_arguments)]
 pub fn deposit_ckb(
     privkey_path: &Path,
-    deployment_results_path: &Path,
+    scripts_deployment_path: &Path,
     config_path: &Path,
     capacity: &str,
     fee: &str,
@@ -33,10 +33,10 @@ pub fn deposit_ckb(
     eth_address: Option<&str>,
     godwoken_rpc_url: &str,
 ) -> Result<(), String> {
-    let deployment_result_string =
-        std::fs::read_to_string(deployment_results_path).map_err(|err| err.to_string())?;
-    let deployment_result: ScriptsDeploymentResult =
-        serde_json::from_str(&deployment_result_string).map_err(|err| err.to_string())?;
+    let scripts_deployment_content =
+        std::fs::read_to_string(scripts_deployment_path).map_err(|err| err.to_string())?;
+    let scripts_deployment: ScriptsDeploymentResult =
+        serde_json::from_str(&scripts_deployment_content).map_err(|err| err.to_string())?;
 
     let config = read_config(&config_path)?;
 
@@ -45,7 +45,8 @@ pub fn deposit_ckb(
     // Using private key to calculate eth address when eth_address not provided.
     let eth_address_bytes = match eth_address {
         Some(addr) => {
-            let addr_vec = hex::decode(&addr[2..].as_bytes()).map_err(|err| err.to_string())?;
+            let addr_vec = hex::decode(&addr.trim_start_matches("0x").as_bytes())
+                .map_err(|err| err.to_string())?;
             CKBBytes::from(addr_vec)
         }
         None => privkey_to_eth_address(&privkey)?,
@@ -58,7 +59,7 @@ pub fn deposit_ckb(
         .map_err(|err| err.to_string())?;
 
     // build layer2 lock
-    let l2_code_hash = &deployment_result.eth_account_lock.script_type_hash;
+    let l2_code_hash = &scripts_deployment.eth_account_lock.script_type_hash;
 
     let mut l2_args_vec = rollup_type_hash.as_bytes().to_vec();
     l2_args_vec.append(&mut eth_address_bytes.to_vec());
@@ -99,7 +100,7 @@ pub fn deposit_ckb(
     let mut l1_lock_args = rollup_type_hash.as_bytes().to_vec();
     l1_lock_args.append(&mut deposit_lock_args.as_bytes().to_vec());
 
-    let deposit_lock_code_hash = &deployment_result.deposit_lock.script_type_hash;
+    let deposit_lock_code_hash = &scripts_deployment.deposit_lock.script_type_hash;
 
     let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
     let network_type = get_network_type(&mut rpc_client)?;
@@ -132,7 +133,8 @@ pub fn deposit_ckb(
         fee,
         "--skip-check-to-address",
     ])?;
-    let tx_hash = H256::from_str(&output.trim()[2..]).map_err(|err| err.to_string())?;
+    let tx_hash =
+        H256::from_str(&output.trim().trim_start_matches("0x")).map_err(|err| err.to_string())?;
     log::info!("tx_hash: {:#x}", tx_hash);
 
     wait_for_tx(&mut rpc_client, &tx_hash, 180u64)?;

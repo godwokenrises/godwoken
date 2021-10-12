@@ -56,12 +56,12 @@ pub fn eth_sign(msg: &H256, privkey: H256) -> Result<[u8; 65], String> {
 pub fn privkey_to_l2_script_hash(
     privkey: &H256,
     rollup_type_hash: &H256,
-    deployment_result: &ScriptsDeploymentResult,
+    scripts_deployment: &ScriptsDeploymentResult,
 ) -> Result<H256, String> {
     let eth_address = privkey_to_eth_address(privkey)?;
 
     let code_hash = Byte32::from_slice(
-        deployment_result
+        scripts_deployment
             .eth_account_lock
             .script_type_hash
             .as_bytes(),
@@ -92,9 +92,9 @@ pub fn l2_script_hash_to_short_address(script_hash: &H256) -> GwBytes {
 pub fn privkey_to_short_address(
     privkey: &H256,
     rollup_type_hash: &H256,
-    deployment_result: &ScriptsDeploymentResult,
+    scripts_deployment: &ScriptsDeploymentResult,
 ) -> Result<GwBytes, String> {
-    let script_hash = privkey_to_l2_script_hash(privkey, rollup_type_hash, deployment_result)?;
+    let script_hash = privkey_to_l2_script_hash(privkey, rollup_type_hash, scripts_deployment)?;
 
     let short_address = l2_script_hash_to_short_address(&script_hash);
     Ok(short_address)

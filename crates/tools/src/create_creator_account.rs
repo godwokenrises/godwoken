@@ -21,14 +21,14 @@ pub fn create_creator_account(
     sudt_id: u32,
     fee_amount: &str,
     config_path: &Path,
-    deployment_results_path: &Path,
+    scripts_deployment_path: &Path,
 ) -> Result<(), String> {
     let fee: u128 = fee_amount.parse().expect("fee format error");
 
-    let deployment_result_string =
-        std::fs::read_to_string(deployment_results_path).map_err(|err| err.to_string())?;
-    let deployment_result: ScriptsDeploymentResult =
-        serde_json::from_str(&deployment_result_string).map_err(|err| err.to_string())?;
+    let scripts_deployment_content =
+        std::fs::read_to_string(scripts_deployment_path).map_err(|err| err.to_string())?;
+    let scripts_deployment: ScriptsDeploymentResult =
+        serde_json::from_str(&scripts_deployment_content).map_err(|err| err.to_string())?;
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
@@ -36,7 +36,7 @@ pub fn create_creator_account(
     let rollup_type_hash = &config.genesis.rollup_type_hash;
 
     let privkey = read_privkey(privkey_path)?;
-    let from_address = privkey_to_short_address(&privkey, rollup_type_hash, &deployment_result)?;
+    let from_address = privkey_to_short_address(&privkey, rollup_type_hash, &scripts_deployment)?;
     let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
     let from_id = from_id.expect("Account id of provided privkey not found!");
     log::info!("from id: {}", from_id);
