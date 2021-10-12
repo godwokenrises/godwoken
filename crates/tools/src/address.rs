@@ -14,24 +14,26 @@ use gw_types::{bytes::Bytes as GwBytes, packed::Script, prelude::Pack as GwPack}
 pub fn to_godwoken_short_address(
     eth_eoa_address: &str,
     config_path: &Path,
-    deployment_results_path: &Path,
+    scripts_deployment_path: &Path,
 ) -> Result<(), String> {
     if eth_eoa_address.len() != 42 || !eth_eoa_address.starts_with("0x") {
         return Err("eth eoa address format error!".to_owned());
     }
 
-    let eth_eoa_addr =
-        GwBytes::from(hex::decode(eth_eoa_address[2..].as_bytes()).map_err(|err| err.to_string())?);
+    let eth_eoa_addr = GwBytes::from(
+        hex::decode(eth_eoa_address.trim_start_matches("0x").as_bytes())
+            .map_err(|err| err.to_string())?,
+    );
 
     let config = read_config(&config_path)?;
     let rollup_type_hash = &config.genesis.rollup_type_hash;
 
-    let deployment_result_string =
-        std::fs::read_to_string(deployment_results_path).map_err(|err| err.to_string())?;
-    let deployment_result: ScriptsDeploymentResult =
-        serde_json::from_str(&deployment_result_string).map_err(|err| err.to_string())?;
+    let scripts_deployment_content =
+        std::fs::read_to_string(scripts_deployment_path).map_err(|err| err.to_string())?;
+    let scripts_deployment: ScriptsDeploymentResult =
+        serde_json::from_str(&scripts_deployment_content).map_err(|err| err.to_string())?;
 
-    let l2_code_hash = &deployment_result.eth_account_lock.script_type_hash;
+    let l2_code_hash = &scripts_deployment.eth_account_lock.script_type_hash;
     let mut l2_args_vec = rollup_type_hash.as_bytes().to_vec();
     l2_args_vec.append(&mut eth_eoa_addr.to_vec());
     let l2_lock_args = GwBytes::from(l2_args_vec);
@@ -61,7 +63,8 @@ pub fn to_eth_eoa_address(
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
     let short_address = GwBytes::from(
-        hex::decode(godwoken_short_address[2..].as_bytes()).map_err(|err| err.to_string())?,
+        hex::decode(godwoken_short_address.trim_start_matches("0x").as_bytes())
+            .map_err(|err| err.to_string())?,
     );
 
     let script_hash = godwoken_rpc_client

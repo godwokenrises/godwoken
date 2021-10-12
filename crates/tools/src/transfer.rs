@@ -23,15 +23,15 @@ pub fn transfer(
     amount: &str,
     fee: &str,
     config_path: &Path,
-    deployment_results_path: &Path,
+    scripts_deployment_path: &Path,
 ) -> Result<(), String> {
     let amount: u128 = amount.parse().expect("sUDT amount format error");
     let fee: u128 = fee.parse().expect("fee format error");
 
-    let deployment_result_string =
-        std::fs::read_to_string(deployment_results_path).map_err(|err| err.to_string())?;
-    let deployment_result: ScriptsDeploymentResult =
-        serde_json::from_str(&deployment_result_string).map_err(|err| err.to_string())?;
+    let scripts_deployment_content =
+        std::fs::read_to_string(scripts_deployment_path).map_err(|err| err.to_string())?;
+    let scripts_deployment: ScriptsDeploymentResult =
+        serde_json::from_str(&scripts_deployment_content).map_err(|err| err.to_string())?;
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
@@ -43,7 +43,7 @@ pub fn transfer(
     let privkey = read_privkey(privkey_path)?;
 
     // get from_id
-    let from_address = privkey_to_short_address(&privkey, rollup_type_hash, &deployment_result)?;
+    let from_address = privkey_to_short_address(&privkey, rollup_type_hash, &scripts_deployment)?;
     let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
     let from_id = from_id.expect("from id not found!");
 

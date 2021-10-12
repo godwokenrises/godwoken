@@ -22,7 +22,7 @@ const GW_LOG_POLYJUICE_SYSTEM: u8 = 0x2;
 pub fn deploy(
     godwoken_rpc_url: &str,
     config_path: &Path,
-    deployment_results_path: &Path,
+    scripts_deployment_path: &Path,
     privkey_path: &Path,
     creator_account_id: u32,
     gas_limit: u64,
@@ -30,12 +30,14 @@ pub fn deploy(
     data: &str,
     value: u128,
 ) -> Result<(), String> {
-    let data = GwBytes::from(hex::decode(data[2..].as_bytes()).map_err(|err| err.to_string())?);
+    let data = GwBytes::from(
+        hex::decode(data.trim_start_matches("0x").as_bytes()).map_err(|err| err.to_string())?,
+    );
 
-    let deployment_result_string =
-        std::fs::read_to_string(deployment_results_path).map_err(|err| err.to_string())?;
-    let deployment_result: ScriptsDeploymentResult =
-        serde_json::from_str(&deployment_result_string).map_err(|err| err.to_string())?;
+    let scripts_deployment_string =
+        std::fs::read_to_string(scripts_deployment_path).map_err(|err| err.to_string())?;
+    let scripts_deployment: ScriptsDeploymentResult =
+        serde_json::from_str(&scripts_deployment_string).map_err(|err| err.to_string())?;
 
     let config = read_config(config_path)?;
     let rollup_type_hash = &config.genesis.rollup_type_hash;
@@ -54,7 +56,7 @@ pub fn deploy(
         data,
         value,
         rollup_type_hash,
-        &deployment_result,
+        &scripts_deployment,
     )?;
 
     Ok(())
@@ -64,7 +66,7 @@ pub fn deploy(
 pub fn send_transaction(
     godwoken_rpc_url: &str,
     config_path: &Path,
-    deployment_results_path: &Path,
+    scripts_deployment_path: &Path,
     privkey_path: &Path,
     creator_account_id: u32,
     gas_limit: u64,
@@ -73,12 +75,14 @@ pub fn send_transaction(
     value: u128,
     to_address: &str,
 ) -> Result<(), String> {
-    let data = GwBytes::from(hex::decode(data[2..].as_bytes()).map_err(|err| err.to_string())?);
+    let data = GwBytes::from(
+        hex::decode(data.trim_start_matches("0x").as_bytes()).map_err(|err| err.to_string())?,
+    );
 
-    let deployment_result_string =
-        std::fs::read_to_string(deployment_results_path).map_err(|err| err.to_string())?;
-    let deployment_result: ScriptsDeploymentResult =
-        serde_json::from_str(&deployment_result_string).map_err(|err| err.to_string())?;
+    let scripts_deployment_string =
+        std::fs::read_to_string(scripts_deployment_path).map_err(|err| err.to_string())?;
+    let scripts_deployment: ScriptsDeploymentResult =
+        serde_json::from_str(&scripts_deployment_string).map_err(|err| err.to_string())?;
 
     let config = read_config(config_path)?;
     let rollup_type_hash = &config.genesis.rollup_type_hash;
@@ -87,8 +91,10 @@ pub fn send_transaction(
 
     let privkey = read_privkey(privkey_path)?;
 
-    let to_address =
-        GwBytes::from(hex::decode(to_address[2..].as_bytes()).map_err(|err| err.to_string())?);
+    let to_address = GwBytes::from(
+        hex::decode(to_address.trim_start_matches("0x").as_bytes())
+            .map_err(|err| err.to_string())?,
+    );
 
     send(
         &mut godwoken_rpc_client,
@@ -100,7 +106,7 @@ pub fn send_transaction(
         data,
         value,
         rollup_type_hash,
-        &deployment_result,
+        &scripts_deployment,
     )?;
 
     Ok(())
@@ -116,13 +122,17 @@ pub fn polyjuice_call(
     to_address: &str,
     from: &str,
 ) -> Result<(), String> {
-    let data = GwBytes::from(hex::decode(data[2..].as_bytes()).map_err(|err| err.to_string())?);
+    let data = GwBytes::from(
+        hex::decode(data.trim_start_matches("0x").as_bytes()).map_err(|err| err.to_string())?,
+    );
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
     let to_address_str = to_address;
-    let to_address =
-        GwBytes::from(hex::decode(to_address_str[2..].as_bytes()).map_err(|err| err.to_string())?);
+    let to_address = GwBytes::from(
+        hex::decode(to_address_str.trim_start_matches("0x").as_bytes())
+            .map_err(|err| err.to_string())?,
+    );
 
     let from_address = parse_account_short_address(&mut godwoken_rpc_client, from)?;
     let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
@@ -176,7 +186,7 @@ fn send(
     data: GwBytes,
     value: u128,
     rollup_type_hash: &H256,
-    deployment_result: &ScriptsDeploymentResult,
+    scripts_deployment: &ScriptsDeploymentResult,
 ) -> Result<(), String> {
     let to_address = if to_address == [0u8; 20][..] || to_address.is_empty() {
         None
@@ -184,7 +194,7 @@ fn send(
         Some(to_address)
     };
 
-    let l2_script_hash = privkey_to_l2_script_hash(privkey, rollup_type_hash, deployment_result)?;
+    let l2_script_hash = privkey_to_l2_script_hash(privkey, rollup_type_hash, scripts_deployment)?;
     let from_address = l2_script_hash_to_short_address(&l2_script_hash);
     let from_id = short_address_to_account_id(godwoken_rpc_client, &from_address)?
         .expect("Can find account id by privkey!");

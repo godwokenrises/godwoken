@@ -43,27 +43,27 @@ fn main() {
 
 fn run_cli() -> Result<()> {
     let arg_privkey_path = Arg::with_name("privkey-path")
+        .long("privkey-path")
         .short("k")
         .takes_value(true)
         .required(true)
         .help("The private key file path");
     let arg_ckb_rpc = Arg::with_name("ckb-rpc-url")
-        .short("r")
+        .long("ckb-rpc")
         .takes_value(true)
         .default_value("http://127.0.0.1:8114")
         .help("CKB jsonrpc rpc sever URL");
     let arg_indexer_rpc = Arg::with_name("indexer-rpc-url")
-        .short("i")
+        .long("ckb-indexer-rpc")
         .takes_value(true)
         .default_value("http://127.0.0.1:8116")
         .required(true)
         .help("The URL of ckb indexer");
-    let arg_deployment_results_path = Arg::with_name("deployment-results-path")
-        .short("d")
-        .long("deployment-results-path")
+    let arg_deployment_results_path = Arg::with_name("scripts-deployment-path")
+        .long("scripts-deployment-path")
         .takes_value(true)
         .required(true)
-        .help("The deployment results json file path");
+        .help("The scripts deployment results json file path");
     let arg_config_path = Arg::with_name("config-path")
         .short("o")
         .long("config-path")
@@ -105,7 +105,7 @@ fn run_cli() -> Result<()> {
                 .arg(arg_privkey_path.clone())
                 .arg(arg_ckb_rpc.clone())
                 .arg(
-                    Arg::with_name("deployment-results-path")
+                    Arg::with_name("genesis-deployment-path")
                         .short("d")
                         .takes_value(true)
                         .required(true)
@@ -158,14 +158,14 @@ fn run_cli() -> Result<()> {
                         .help("The URL of ckb indexer"),
                 )
                 .arg(
-                    Arg::with_name("scripts-deployment-results-path")
+                    Arg::with_name("scripts-deployment-path")
                         .short("s")
                         .takes_value(true)
                         .required(true)
                         .help("Scripts deployment results json file path"),
                 )
                 .arg(
-                    Arg::with_name("genesis-deployment-results-path")
+                    Arg::with_name("genesis-deployment-path")
                         .short("g")
                         .takes_value(true)
                         .required(true)
@@ -347,6 +347,7 @@ fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("mode")
+                        .long("build-mode")
                         .short("m")
                         .takes_value(true)
                         .default_value("build")
@@ -355,6 +356,7 @@ fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("setup-config-path")
+                        .long("setup-config-path")
                         .short("c")
                         .takes_value(true)
                         .required(true)
@@ -362,6 +364,7 @@ fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("scripts-build-file-path")
+                        .long("scripts-build-config")
                         .short("s")
                         .takes_value(true)
                         .required(true)
@@ -370,6 +373,7 @@ fn run_cli() -> Result<()> {
                 .arg(arg_privkey_path.clone())
                 .arg(
                     Arg::with_name("nodes-count")
+                        .long("nodes")
                         .short("n")
                         .takes_value(true)
                         .default_value("1")
@@ -378,7 +382,7 @@ fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("rpc-server-url")
-                        .short("u")
+                        .long("rpc-server-url")
                         .takes_value(true)
                         .default_value("localhost:8119")
                         .required(true)
@@ -386,6 +390,7 @@ fn run_cli() -> Result<()> {
                 )
                 .arg(
                     Arg::with_name("output-dir-path")
+                        .long("output")
                         .short("o")
                         .takes_value(true)
                         .default_value("output/")
@@ -730,7 +735,7 @@ fn run_cli() -> Result<()> {
         ("deploy-genesis", Some(m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
-            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let deployment_results_path = Path::new(m.value_of("genesis-deployment-path").unwrap());
             let user_rollup_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
             let poa_config_path = Path::new(m.value_of("poa-config-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
@@ -775,9 +780,8 @@ fn run_cli() -> Result<()> {
         ("generate-config", Some(m)) => {
             let ckb_url = m.value_of("ckb-rpc-url").unwrap().to_string();
             let indexer_url = m.value_of("indexer-rpc-url").unwrap().to_string();
-            let scripts_results_path =
-                Path::new(m.value_of("scripts-deployment-results-path").unwrap());
-            let genesis_path = Path::new(m.value_of("genesis-deployment-results-path").unwrap());
+            let scripts_results_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
+            let genesis_path = Path::new(m.value_of("genesis-deployment-path").unwrap());
             let user_rollup_config_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
@@ -877,13 +881,13 @@ fn run_cli() -> Result<()> {
             let capacity = m.value_of("capacity").unwrap();
             let fee = m.value_of("fee").unwrap();
             let eth_address = m.value_of("eth-address");
-            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
 
             if let Err(err) = deposit_ckb::deposit_ckb(
                 privkey_path,
-                deployment_results_path,
+                scripts_deployment_path,
                 config_path,
                 capacity,
                 fee,
@@ -899,7 +903,7 @@ fn run_cli() -> Result<()> {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let capacity = m.value_of("capacity").unwrap();
             let amount = m.value_of("amount").unwrap();
-            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
             let owner_ckb_address = m.value_of("owner-ckb-address").unwrap();
@@ -913,7 +917,7 @@ fn run_cli() -> Result<()> {
                 sudt_script_hash,
                 owner_ckb_address,
                 config_path,
-                deployment_results_path,
+                scripts_deployment_path,
             ) {
                 log::error!("Withdrawal error: {}", err);
                 std::process::exit(-1);
@@ -949,7 +953,7 @@ fn run_cli() -> Result<()> {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let amount = m.value_of("amount").unwrap();
             let fee = m.value_of("fee").unwrap();
-            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
             let to = m.value_of("to").unwrap();
@@ -967,7 +971,7 @@ fn run_cli() -> Result<()> {
                 amount,
                 fee,
                 config_path,
-                deployment_results_path,
+                scripts_deployment_path,
             ) {
                 log::error!("Transfer error: {}", err);
                 std::process::exit(-1);
@@ -976,7 +980,7 @@ fn run_cli() -> Result<()> {
         ("create-creator-account", Some(m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let fee = m.value_of("fee").unwrap();
-            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
             let sudt_id = m
@@ -991,7 +995,7 @@ fn run_cli() -> Result<()> {
                 sudt_id,
                 fee,
                 config_path,
-                deployment_results_path,
+                scripts_deployment_path,
             ) {
                 log::error!("Create creator account error: {}", err);
                 std::process::exit(-1);
@@ -1013,7 +1017,7 @@ fn run_cli() -> Result<()> {
         }
         ("polyjuice-deploy", Some(m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
-            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
 
@@ -1042,7 +1046,7 @@ fn run_cli() -> Result<()> {
             if let Err(err) = polyjuice::deploy(
                 godwoken_rpc_url,
                 config_path,
-                deployment_results_path,
+                scripts_deployment_path,
                 privkey_path,
                 creator_account_id,
                 gas_limit,
@@ -1056,7 +1060,7 @@ fn run_cli() -> Result<()> {
         }
         ("polyjuice-send", Some(m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
-            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
 
@@ -1086,7 +1090,7 @@ fn run_cli() -> Result<()> {
             if let Err(err) = polyjuice::send_transaction(
                 godwoken_rpc_url,
                 config_path,
-                deployment_results_path,
+                scripts_deployment_path,
                 privkey_path,
                 creator_account_id,
                 gas_limit,
@@ -1135,14 +1139,14 @@ fn run_cli() -> Result<()> {
             };
         }
         ("to-short-address", Some(m)) => {
-            let deployment_results_path = Path::new(m.value_of("deployment-results-path").unwrap());
+            let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let eth_address = m.value_of("eth-address").unwrap();
 
             if let Err(err) = address::to_godwoken_short_address(
                 eth_address,
                 config_path,
-                deployment_results_path,
+                scripts_deployment_path,
             ) {
                 log::error!("To short address error: {}", err);
                 std::process::exit(-1);
