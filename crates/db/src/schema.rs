@@ -3,7 +3,7 @@
 /// Column families alias type
 pub type Col = u8;
 /// Total column number
-pub const COLUMNS: u32 = 28;
+pub const COLUMNS: u32 = 29;
 /// Column store meta data
 pub const COLUMN_META: Col = 0;
 /// Column store chain index
@@ -60,6 +60,8 @@ pub const COLUMN_ASSET_SCRIPT: Col = 25;
 pub const COLUMN_MEM_POOL_TRANSACTION: Col = 26;
 /// Column mem pool withdrawal
 pub const COLUMN_MEM_POOL_WITHDRAWAL: Col = 27;
+/// Column mem pool failed transaction receipt
+pub const COLUMN_MEM_POOL_FAILED_TRANSACTION_RECEIPT: Col = 28;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";

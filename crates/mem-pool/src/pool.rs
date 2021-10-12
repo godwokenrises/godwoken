@@ -1064,7 +1064,15 @@ impl MemPool {
         }
 
         if run_result.exit_code != 0 {
-            return Err(TransactionError::InvalidExitCode(run_result.exit_code).into());
+            let exit_code = run_result.exit_code;
+
+            let block_number = self.mem_block.block_info().number().unpack();
+            let tx_hash: H256 = tx.hash().into();
+            let tx_receipt =
+                TxReceipt::build_receipt(tx.witness_hash().into(), run_result, Default::default());
+
+            db.insert_mem_pool_failed_transaction_receipt(block_number, &tx_hash, tx_receipt)?;
+            return Err(TransactionError::InvalidExitCode(exit_code).into());
         }
 
         // apply run result

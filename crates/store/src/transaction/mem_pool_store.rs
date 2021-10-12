@@ -2,9 +2,11 @@ use gw_common::H256;
 use gw_db::{
     error::Error,
     schema::{
-        COLUMN_MEM_POOL_TRANSACTION, COLUMN_MEM_POOL_TRANSACTION_RECEIPT,
-        COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META, META_MEM_POOL_BLOCK_INFO,
+        COLUMN_MEM_POOL_FAILED_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_TRANSACTION,
+        COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
+        META_MEM_POOL_BLOCK_INFO,
     },
+    Direction, IteratorMode,
 };
 use gw_types::{packed, prelude::*};
 
@@ -35,6 +37,21 @@ pub trait MemPoolStore {
         &self,
         tx_hash: &H256,
     ) -> Result<Option<packed::TxReceipt>, Error>;
+
+    fn insert_mem_pool_failed_transaction_receipt(
+        &self,
+        block_number: u64,
+        tx_hash: &H256,
+        tx_receipt: packed::TxReceipt,
+    ) -> Result<(), Error>;
+
+    fn get_mem_pool_failed_transaction_receipt(
+        &self,
+        block_number: u64,
+        tx_hash: &H256,
+    ) -> Result<Option<packed::TxReceipt>, Error>;
+
+    fn clear_mem_pool_failed_transaction_receipt(&self, block_number: u64) -> Result<(), Error>;
 
     fn insert_mem_pool_withdrawal(
         &self,
@@ -113,6 +130,49 @@ impl MemPoolStore for StoreTransaction {
             }))
     }
 
+    fn insert_mem_pool_failed_transaction_receipt(
+        &self,
+        block_number: u64,
+        tx_hash: &H256,
+        tx_receipt: packed::TxReceipt,
+    ) -> Result<(), Error> {
+        let key = build_failed_tx_receipt_key(block_number, tx_hash);
+
+        self.insert_raw(
+            COLUMN_MEM_POOL_FAILED_TRANSACTION_RECEIPT,
+            &key,
+            tx_receipt.as_slice(),
+        )
+    }
+
+    fn get_mem_pool_failed_transaction_receipt(
+        &self,
+        block_number: u64,
+        tx_hash: &H256,
+    ) -> Result<Option<packed::TxReceipt>, Error> {
+        let key = build_failed_tx_receipt_key(block_number, tx_hash);
+
+        Ok(self
+            .get(COLUMN_MEM_POOL_FAILED_TRANSACTION_RECEIPT, &key)
+            .map(|slice| {
+                packed::TxReceiptReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
+            }))
+    }
+
+    fn clear_mem_pool_failed_transaction_receipt(&self, block_number: u64) -> Result<(), Error> {
+        let prefix_key = build_failed_tx_receipt_prefix_key(block_number);
+        let iter = self.get_iter(
+            COLUMN_MEM_POOL_FAILED_TRANSACTION_RECEIPT,
+            IteratorMode::From(&prefix_key, Direction::Forward),
+        );
+
+        for (receipt_key, _receipt) in iter {
+            self.delete(COLUMN_MEM_POOL_FAILED_TRANSACTION_RECEIPT, &receipt_key)?;
+        }
+
+        Ok(())
+    }
+
     fn insert_mem_pool_withdrawal(
         &self,
         withdrawal_hash: &H256,
@@ -152,4 +212,24 @@ impl MemPoolStore for StoreTransaction {
                 packed::BlockInfoReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
             }))
     }
+}
+
+fn build_failed_tx_receipt_prefix_key(block_number: u64) -> [u8; 9] {
+    let mut key = [0; 9];
+
+    key[0] = b'b';
+    key[1..9].copy_from_slice(&block_number.to_be_bytes());
+
+    key
+}
+
+// b + block_number(8) + t + tx_hash(32) = 42
+fn build_failed_tx_receipt_key(block_number: u64, tx_hash: &H256) -> [u8; 42] {
+    let mut key = [0; 42];
+
+    key[0..9].copy_from_slice(&build_failed_tx_receipt_prefix_key(block_number));
+    key[9] = b't';
+    key[10..42].copy_from_slice(tx_hash.as_slice());
+
+    key
 }
