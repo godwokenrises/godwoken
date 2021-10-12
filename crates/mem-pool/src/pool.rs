@@ -219,9 +219,10 @@ impl MemPool {
 
         let state_db = self.fetch_state_db(db)?;
         let state = state_db.state_tree()?;
+        // verify transaction
+        self.generator.verify_transaction(&state, tx)?;
         // verify signature
         self.generator.check_transaction_signature(&state, tx)?;
-        self.generator.verify_transaction(&state, tx)?;
 
         Ok(())
     }
