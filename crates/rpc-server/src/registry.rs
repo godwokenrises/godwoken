@@ -16,6 +16,7 @@ use gw_jsonrpc_types::{
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
+use gw_mem_pool::MAX_FAILED_TX_RECEIPT_BLOCKS;
 use gw_store::{
     chain_view::ChainView,
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
@@ -380,6 +381,7 @@ async fn get_transaction_receipt(
 ) -> Result<Option<TxReceipt>> {
     let tx_hash = to_h256(tx_hash);
     let db = store.begin_transaction();
+
     // search from db
     if let Some(receipt) = db.get_transaction_receipt(&tx_hash)?.map(|receipt| {
         let receipt: TxReceipt = receipt.into();
@@ -387,23 +389,45 @@ async fn get_transaction_receipt(
     }) {
         return Ok(Some(receipt));
     }
+
     // search from mem pool
-    match db.get_mem_pool_transaction_receipt(&tx_hash)? {
-        Some(receipt) => Ok(Some(receipt.into())),
-        None => {
-            // the tx maybe in the mem-pool but not finalized
-            // so we try to sync with mem-pool, then fetch from db again
-            if let Some(mem_pool) = mem_pool.as_ref() {
-                // we only need to sync with mem-pool, wait for tx get finalized.
-                mem_pool.lock().await;
-                let receipt_opt = db
-                    .get_mem_pool_transaction_receipt(&tx_hash)?
-                    .map(Into::into);
-                Ok(receipt_opt)
-            } else {
-                Ok(None)
+    if let Some(receipt) = db.get_mem_pool_transaction_receipt(&tx_hash)? {
+        return Ok(Some(receipt.into()));
+    }
+
+    // try failed tx receipt
+    {
+        let block_info = db
+            .get_mem_pool_block_info()?
+            .expect("get mem pool block info");
+        let (max, min) = {
+            let block_number = block_info.number().unpack();
+            (
+                block_number,
+                block_number.saturating_sub(MAX_FAILED_TX_RECEIPT_BLOCKS) + 1,
+            )
+        };
+
+        for block_number in min..=max {
+            if let Some(receipt) =
+                db.get_mem_pool_failed_transaction_receipt(block_number, &tx_hash)?
+            {
+                return Ok(Some(receipt.into()));
             }
         }
+    }
+
+    // the tx maybe in the mem-pool but not finalized
+    // so we try to sync with mem-pool, then fetch from db again
+    if let Some(mem_pool) = mem_pool.as_ref() {
+        // we only need to sync with mem-pool, wait for tx get finalized.
+        mem_pool.lock().await;
+        let receipt_opt = db
+            .get_mem_pool_transaction_receipt(&tx_hash)?
+            .map(Into::into);
+        Ok(receipt_opt)
+    } else {
+        Ok(None)
     }
 }
 
