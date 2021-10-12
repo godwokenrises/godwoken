@@ -134,7 +134,7 @@ pub fn deposit_ckb(
         "--skip-check-to-address",
     ])?;
     let tx_hash =
-        H256::from_str(&output.trim().trim_start_matches("0x")).map_err(|err| err.to_string())?;
+        H256::from_str(output.trim().trim_start_matches("0x")).map_err(|err| err.to_string())?;
     log::info!("tx_hash: {:#x}", tx_hash);
 
     wait_for_tx(&mut rpc_client, &tx_hash, 180u64)?;

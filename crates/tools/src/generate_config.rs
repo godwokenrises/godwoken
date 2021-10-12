@@ -213,7 +213,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         burn_lock: {
             let lock: ckb_types::packed::Script = user_rollup_config.burn_lock.clone().into();
             let lock = gw_types::packed::Script::new_unchecked(lock.as_bytes());
-            lock.clone().into()
+            lock.into()
         },
     };
 
@@ -302,18 +302,15 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
     let tron_allowed_eoa_hash = genesis.rollup_config.allowed_eoa_type_hashes.get(1);
     let tron_account_lock_hash = tron_allowed_eoa_hash.map(ToOwned::to_owned);
 
-    let web3_indexer = match database_url {
-        Some(database_url) => Some(Web3IndexerConfig {
-            database_url: database_url.to_owned(),
-            polyjuice_script_type_hash: scripts_deployment
-                .polyjuice_validator
-                .script_type_hash
-                .clone(),
-            eth_account_lock_hash: eth_account_lock_hash.to_owned(),
-            tron_account_lock_hash,
-        }),
-        None => None,
-    };
+    let web3_indexer = database_url.map(|database_url| Web3IndexerConfig {
+        database_url: database_url.to_owned(),
+        polyjuice_script_type_hash: scripts_deployment
+            .polyjuice_validator
+            .script_type_hash
+            .clone(),
+        eth_account_lock_hash: eth_account_lock_hash.to_owned(),
+        tron_account_lock_hash,
+    });
 
     let config: Config = Config {
         backends,

@@ -196,7 +196,7 @@ impl<'a> DeployContext<'a> {
             max_tx_fee_str,
             "--skip-check",
         ])?;
-        let tx_hash = H256::from_str(&send_output.trim().trim_start_matches("0x"))
+        let tx_hash = H256::from_str(send_output.trim().trim_start_matches("0x"))
             .map_err(|err| err.to_string())?;
         log::info!("tx_hash: {:#x}", tx_hash);
         wait_for_tx(rpc_client, &tx_hash, 120)?;
@@ -260,7 +260,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         .next()
         .map(ToOwned::to_owned)
         .ok_or_else(|| "File is empty".to_string())?;
-    let privkey_data = H256::from_str(&privkey_string.trim().trim_start_matches("0x"))
+    let privkey_data = H256::from_str(privkey_string.trim().trim_start_matches("0x"))
         .map_err(|err| err.to_string())?;
     let privkey = secp256k1::SecretKey::from_slice(privkey_data.as_bytes())
         .map_err(|err| format!("Invalid secp256k1 secret key format, error: {}", err))?;
@@ -326,7 +326,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         privkey_path,
         owner_address: &owner_address,
         genesis_info: &genesis_info,
-        deployment_result: &scripts_result,
+        deployment_result: scripts_result,
     };
 
     let (rollup_config_output, rollup_config_data): (ckb_packed::CellOutput, Bytes) = {
@@ -667,7 +667,7 @@ fn get_live_cells(
                 }
 
                 let input_tx_hash = H256::from_str(
-                    &live_cell["tx_hash"]
+                    live_cell["tx_hash"]
                         .as_str()
                         .expect("live cell tx hash")
                         .trim_start_matches("0x"),

@@ -34,7 +34,7 @@ pub struct SetupArgs<'a> {
     pub setup_config_path: &'a Path,
 }
 
-pub fn setup<'a>(args: SetupArgs<'a>) {
+pub fn setup(args: SetupArgs<'_>) {
     let SetupArgs {
         ckb_rpc_url,
         indexer_url,
@@ -58,7 +58,7 @@ pub fn setup<'a>(args: SetupArgs<'a>) {
         log::info!("Generate {:?} ...", &output_path);
         let build_scripts_result = prepare_scripts(
             mode,
-            setup_config.cells_lock.clone().into(),
+            setup_config.cells_lock.clone(),
             build_scripts_config_path,
             &output_dir.join(prepare_scripts::SCRIPT_BUILD_DIR_PATH),
             &output_dir.join(prepare_scripts::SCRIPTS_DIR_PATH),
@@ -202,7 +202,7 @@ fn init_node_wallet(
     node_initial_ckb: u64,
     payer_privkey_path: &Path,
 ) -> NodeWalletInfo {
-    let wallet_info = get_wallet_info(&node_privkey);
+    let wallet_info = get_wallet_info(node_privkey);
     let mut current_capacity = query_wallet_capacity(&wallet_info.testnet_address);
     log::info!("node's wallet capacity: {}", current_capacity);
     log::info!("Start to transfer ckb, and it will take 30 seconds...");
@@ -240,10 +240,10 @@ fn generate_poa_config(nodes: &[(String, NodeWalletInfo)]) -> PoAConfig {
 
 fn generate_rollup_config(setup_config: &SetupConfig) -> Result<UserRollupConfig> {
     let rollup_config = UserRollupConfig {
-        l1_sudt_script_type_hash: setup_config.l1_sudt_script_type_hash.clone().into(),
-        l1_sudt_cell_dep: setup_config.l1_sudt_cell_dep.clone().into(),
-        burn_lock: setup_config.burn_lock.clone().into(),
-        reward_lock: setup_config.reward_lock.clone().into(),
+        l1_sudt_script_type_hash: setup_config.l1_sudt_script_type_hash.clone(),
+        l1_sudt_cell_dep: setup_config.l1_sudt_cell_dep.clone(),
+        burn_lock: setup_config.burn_lock.clone(),
+        reward_lock: setup_config.reward_lock.clone(),
         required_staking_capacity: 100000000000000u64,
         challenge_maturity_blocks: 450,
         finality_blocks: 10000,
