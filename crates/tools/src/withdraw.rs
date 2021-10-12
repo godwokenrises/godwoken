@@ -32,7 +32,7 @@ pub fn withdraw(
     config_path: &Path,
     scripts_deployment_path: &Path,
 ) -> Result<(), String> {
-    let sudt_script_hash = H256::from_str(&sudt_script_hash.trim().trim_start_matches("0x"))
+    let sudt_script_hash = H256::from_str(sudt_script_hash.trim().trim_start_matches("0x"))
         .map_err(|err| err.to_string())?;
     let capacity = parse_capacity(capacity)?;
     let amount: u128 = amount.parse().expect("sUDT amount format error");

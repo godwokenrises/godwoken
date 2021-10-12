@@ -88,7 +88,7 @@ pub fn deploy_program(
         "--skip-check-to-address",
     ])?;
     let tx_hash =
-        H256::from_str(&output.trim().trim_start_matches("0x")).map_err(|err| err.to_string())?;
+        H256::from_str(output.trim().trim_start_matches("0x")).map_err(|err| err.to_string())?;
     log::info!("tx_hash: {:#x}", tx_hash);
 
     let tx = wait_for_tx(rpc_client, &tx_hash, 120)?;
