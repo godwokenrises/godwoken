@@ -5,8 +5,8 @@
 - Install [ckb](https://github.com/nervosnetwork/ckb)(v0.100.0 or above), run ckb and ckb-miner
 - Install [ckb indexer](https://github.com/nervosnetwork/ckb-indexer)(v0.3.0 or above) and run
 - Install [ckb_cli](https://github.com/nervosnetwork/ckb-cli)(v0.100.0 or above)
-- Install [moleculec](https://github.com/nervosnetwork/molecule)(v0.7.2 or above)
-- Install [capsule](https://github.com/nervosnetwork/capsule)(v0.4.6 or above)
+- Install [moleculec](https://github.com/nervosnetwork/molecule)(v0.7.2)
+- Install [capsule](https://github.com/nervosnetwork/capsule)(v0.4.6)
 
 ## Clone the source with git
 
