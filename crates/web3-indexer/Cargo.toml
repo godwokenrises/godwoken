@@ -15,9 +15,11 @@ gw-config = { path = "../config" }
 gw-common = { path = "../common" }
 gw-generator = { path = "../generator" }
 gw-traits = { path = "../traits" }
+gw-mem-pool = { path = "../mem-pool" }
 ckb-hash = "0.100.0"
 ckb-types = "0.100.0"
 anyhow = "1.0"
+smol = "1.2.5"
 thiserror = "1.0"
 sqlx = { version = "0.5", features = [ "runtime-async-std-native-tls", "postgres", "sqlite", "chrono", "decimal" ] }
 rust_decimal = "1.10.3"
@@ -26,3 +28,4 @@ faster-hex = "0.5.0"
 log = "0.4"
 rlp = "0.5"
 sha3 = "0.9.1"
+ethabi = "15.0.0"

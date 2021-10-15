@@ -20,7 +20,9 @@ use gw_generator::{
     genesis::init_genesis,
     Generator,
 };
-use gw_mem_pool::{default_provider::DefaultMemPoolProvider, pool::MemPool};
+use gw_mem_pool::{
+    default_provider::DefaultMemPoolProvider, pool::MemPool, traits::MemPoolErrorTxHandler,
+};
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
@@ -32,7 +34,7 @@ use gw_types::{
     prelude::*,
 };
 use gw_utils::{genesis_info::CKBGenesisInfo, wallet::Wallet};
-use gw_web3_indexer::Web3Indexer;
+use gw_web3_indexer::{ErrorReceiptIndexer, Web3Indexer};
 use semver::Version;
 use smol::lock::Mutex;
 use sqlx::{
@@ -394,7 +396,10 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     );
 
     let base = BaseInitComponents::init(&config, skip_config_check)?;
-    let (mem_pool, wallet, poa, offchain_mock_context) = match config.block_producer.clone() {
+    let (mem_pool, wallet, poa, offchain_mock_context, pg_pool) = match config
+        .block_producer
+        .clone()
+    {
         Some(block_producer_config) => {
             let wallet = Wallet::from_config(&block_producer_config.wallet_config)
                 .with_context(|| "init wallet")?;
@@ -423,11 +428,31 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 Arc::clone(&poa),
                 base.store.clone(),
             );
+            let pg_pool = {
+                let config = config.web3_indexer.as_ref();
+                let init_pool = config.map(|web3_indexer_config| {
+                    smol::block_on(async {
+                        let mut opts: PgConnectOptions =
+                            web3_indexer_config.database_url.parse()?;
+                        opts.log_statements(log::LevelFilter::Debug)
+                            .log_slow_statements(log::LevelFilter::Warn, Duration::from_secs(5));
+                        PgPoolOptions::new()
+                            .max_connections(5)
+                            .connect_with(opts)
+                            .await
+                    })
+                });
+                init_pool.transpose()?
+            };
+            let error_tx_handler = pg_pool.clone().map(|pool| {
+                Box::new(ErrorReceiptIndexer::new(pool)) as Box<dyn MemPoolErrorTxHandler + Send>
+            });
             let mem_pool = Arc::new(Mutex::new(
                 MemPool::create(
                     base.store.clone(),
                     base.generator.clone(),
                     Box::new(mem_pool_provider),
+                    error_tx_handler,
                     offchain_validator_context,
                     config.mem_pool.clone(),
                 )
@@ -438,9 +463,10 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 Some(wallet),
                 Some(poa),
                 Some(offchain_mock_context),
+                pg_pool,
             )
         }
-        None => (None, None, None, None),
+        None => (None, None, None, None, None),
     };
 
     let BaseInitComponents {
@@ -470,15 +496,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     // create web3 indexer
     let web3_indexer = match config.web3_indexer {
         Some(web3_indexer_config) => {
-            let pool = smol::block_on(async {
-                let mut opts: PgConnectOptions = web3_indexer_config.database_url.parse()?;
-                opts.log_statements(log::LevelFilter::Debug)
-                    .log_slow_statements(log::LevelFilter::Warn, Duration::from_secs(5));
-                PgPoolOptions::new()
-                    .max_connections(5)
-                    .connect_with(opts)
-                    .await
-            })?;
+            let pool = pg_pool.unwrap();
             let polyjuce_type_script_hash = web3_indexer_config.polyjuice_script_type_hash;
             let eth_account_lock_hash = web3_indexer_config.eth_account_lock_hash;
             let tron_account_lock_hash = web3_indexer_config.tron_account_lock_hash;

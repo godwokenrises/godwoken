@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use gw_types::{
-    offchain::{CollectedCustodianCells, DepositInfo, RollupContext},
+    offchain::{CollectedCustodianCells, DepositInfo, ErrorTxReceipt, RollupContext},
     packed::WithdrawalRequest,
 };
 use smol::Task;
@@ -16,4 +16,8 @@ pub trait MemPoolProvider {
         last_finalized_block_number: u64,
         rollup_context: RollupContext,
     ) -> Task<Result<CollectedCustodianCells>>;
+}
+
+pub trait MemPoolErrorTxHandler {
+    fn handle_error_receipt(&self, receipt: ErrorTxReceipt) -> Task<Result<()>>;
 }

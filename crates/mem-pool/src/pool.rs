@@ -28,7 +28,7 @@ use gw_store::{
     Store,
 };
 use gw_types::{
-    offchain::{BlockParam, CollectedCustodianCells, DepositInfo, RunResult},
+    offchain::{BlockParam, CollectedCustodianCells, DepositInfo, ErrorTxReceipt, RunResult},
     packed::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, RawL2Transaction, Script, TxReceipt,
         WithdrawalRequest,
@@ -45,7 +45,7 @@ use crate::{
     constants::{MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS, MAX_TX_SIZE, MAX_WITHDRAWAL_SIZE},
     custodian::AvailableCustodians,
     mem_block::MemBlock,
-    traits::MemPoolProvider,
+    traits::{MemPoolErrorTxHandler, MemPoolProvider},
     types::EntryList,
 };
 
@@ -79,6 +79,8 @@ pub struct MemPool {
     current_tip: (H256, u64),
     /// generator instance
     generator: Arc<Generator>,
+    /// error tx handler,
+    error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
     /// pending queue, contains executable contents(can be pacakged into block)
     pending: HashMap<u32, EntryList>,
     /// memory block
@@ -96,6 +98,7 @@ impl MemPool {
         store: Store,
         generator: Arc<Generator>,
         provider: Box<dyn MemPoolProvider + Send>,
+        error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
         offchain_validator_context: Option<OffChainValidatorContext>,
         config: MemPoolConfig,
     ) -> Result<Self> {
@@ -124,6 +127,7 @@ impl MemPool {
             store,
             current_tip: tip,
             generator,
+            error_tx_handler,
             pending,
             mem_block,
             provider,
@@ -1065,6 +1069,19 @@ impl MemPool {
         }
 
         if run_result.exit_code != 0 {
+            let tx_hash: H256 = tx.hash().into();
+            let block_number = self.mem_block.block_info().number().unpack();
+
+            let receipt = ErrorTxReceipt {
+                tx_hash,
+                block_number,
+                return_data: run_result.return_data,
+                last_log: run_result.logs.last().cloned(),
+            };
+            if let Some(ref error_tx_handler) = self.error_tx_handler {
+                error_tx_handler.handle_error_receipt(receipt).detach();
+            }
+
             return Err(TransactionError::InvalidExitCode(run_result.exit_code).into());
         }
 
