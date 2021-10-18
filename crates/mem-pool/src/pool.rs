@@ -227,10 +227,10 @@ impl MemPool {
         Ok(())
     }
 
-    /// Execute tx without push it into pool
-    pub fn execute_transaction(
+    /// Execute tx without push it into pool and check exit code
+    pub fn unchecked_execute_transaction(
         &self,
-        tx: L2Transaction,
+        tx: &L2Transaction,
         block_info: &BlockInfo,
     ) -> Result<RunResult> {
         let db = self.store.begin_transaction();
@@ -239,12 +239,12 @@ impl MemPool {
         let tip_block_hash = self.store.get_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
         // verify tx signature
-        self.generator.check_transaction_signature(&state, &tx)?;
+        self.generator.check_transaction_signature(&state, tx)?;
         // tx basic verification
-        self.generator.verify_transaction(&state, &tx)?;
+        self.generator.verify_transaction(&state, tx)?;
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = self.generator.execute_transaction(
+        let run_result = self.generator.unchecked_execute_transaction(
             &chain_view,
             &state,
             block_info,

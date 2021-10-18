@@ -11,7 +11,7 @@ use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
     debugger::{DumpChallengeTarget, ReprMockTransaction},
     godwoken::{
-        BackendInfo, GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus,
+        BackendInfo, ErrorTxReceipt, GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus,
         L2TransactionStatus, L2TransactionWithStatus, NodeInfo, RunResult, TxReceipt,
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
@@ -48,6 +48,7 @@ const INVALID_NONCE_ERR_CODE: i64 = -32001;
 const INTERNAL_ERROR_ERR_CODE: i64 = -32099;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
 const INVALID_PARAM_ERR_CODE: i64 = -32602;
+const INVALID_REQUEST: i64 = -32600;
 
 fn header_not_found_err() -> RpcError {
     RpcError::Provided {
@@ -485,12 +486,27 @@ async fn execute_l2transaction(
         .number(number.pack())
         .build();
 
-    let run_result: RunResult = mem_pool
-        .lock()
-        .await
-        .execute_transaction(tx, &block_info)?
-        .into();
-    Ok(run_result)
+    let mut run_result = {
+        let mem_pool = mem_pool.lock().await;
+        mem_pool.unchecked_execute_transaction(&tx, &block_info)?
+    };
+
+    if run_result.exit_code != 0 {
+        let receipt = gw_types::offchain::ErrorTxReceipt {
+            tx_hash: tx.hash().into(),
+            block_number: number,
+            return_data: run_result.return_data,
+            last_log: run_result.logs.pop(),
+        };
+
+        return Err(RpcError::Full {
+            code: INVALID_REQUEST,
+            message: TransactionError::InvalidExitCode(run_result.exit_code).to_string(),
+            data: Some(Box::new(ErrorTxReceipt::from(receipt))),
+        });
+    }
+
+    Ok(run_result.into())
 }
 
 // raw_l2tx, block_number
@@ -544,6 +560,9 @@ async fn execute_raw_l2transaction(
     };
 
     let execute_l2tx_max_cycles = mem_pool_config.execute_l2tx_max_cycles;
+    let tx_hash: H256 = raw_l2tx.hash().into();
+    let block_number: u64 = block_info.number().unpack();
+
     // execute tx in task
     let task: smol::Task<Result<_>> = smol::spawn(async move {
         let state_db = get_state_db_at_block(&db, block_number_opt.map(Into::into), true)
@@ -554,7 +573,7 @@ async fn execute_raw_l2transaction(
             ChainView::new(&db, tip_block_hash)
         };
         // execute tx
-        let run_result = generator.execute_transaction(
+        let run_result = generator.unchecked_execute_transaction(
             &chain_view,
             &state,
             &block_info,
@@ -563,8 +582,24 @@ async fn execute_raw_l2transaction(
         )?;
         Ok(run_result)
     });
-    let run_result = task.await?.into();
-    Ok(run_result)
+
+    let mut run_result = task.await?;
+    if run_result.exit_code != 0 {
+        let receipt = gw_types::offchain::ErrorTxReceipt {
+            tx_hash,
+            block_number,
+            return_data: run_result.return_data,
+            last_log: run_result.logs.pop(),
+        };
+
+        return Err(RpcError::Full {
+            code: INVALID_REQUEST,
+            message: TransactionError::InvalidExitCode(run_result.exit_code).to_string(),
+            data: Some(Box::new(ErrorTxReceipt::from(receipt))),
+        });
+    }
+
+    Ok(run_result.into())
 }
 
 async fn submit_l2transaction(
