@@ -1027,3 +1027,23 @@ pub struct BackendInfo {
     pub generator_code_hash: H256,
     pub validator_script_type_hash: H256,
 }
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct ErrorTxReceipt {
+    pub tx_hash: H256,
+    pub block_number: Uint64,
+    pub return_data: JsonBytes,
+    pub last_log: Option<LogItem>,
+}
+
+impl From<offchain::ErrorTxReceipt> for ErrorTxReceipt {
+    fn from(receipt: offchain::ErrorTxReceipt) -> Self {
+        ErrorTxReceipt {
+            tx_hash: H256::from(Into::<[u8; 32]>::into(receipt.tx_hash)),
+            block_number: receipt.block_number.into(),
+            return_data: JsonBytes::from_vec(receipt.return_data),
+            last_log: receipt.last_log.map(Into::into),
+        }
+    }
+}
