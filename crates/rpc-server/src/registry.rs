@@ -30,7 +30,10 @@ use gw_types::{
 use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
 use smol::lock::Mutex;
-use std::sync::Arc;
+use std::{
+    convert::{TryFrom, TryInto},
+    sync::Arc,
+};
 
 // type alias
 type RPCServer = Arc<Server<MapRouter>>;
@@ -57,6 +60,13 @@ fn mem_pool_is_disabled_err() -> RpcError {
     RpcError::Provided {
         code: METHOD_NOT_AVAILABLE_ERR_CODE,
         message: "mem-pool is disabled",
+    }
+}
+
+fn invalid_param_err(msg: &'static str) -> RpcError {
+    RpcError::Provided {
+        code: INVALID_PARAM_ERR_CODE,
+        message: msg,
     }
 }
 
@@ -253,13 +263,38 @@ async fn ping() -> Result<String> {
     Ok("pong".to_string())
 }
 
+enum GetTxVerbose {
+    TxWithStatus = 0,
+    OnlyStatus = 1,
+}
+
+impl TryFrom<u8> for GetTxVerbose {
+    type Error = u8;
+    fn try_from(n: u8) -> Result<Self, u8> {
+        let verbose = match n {
+            0 => Self::TxWithStatus,
+            1 => Self::OnlyStatus,
+            _ => {
+                return Err(n);
+            }
+        };
+        Ok(verbose)
+    }
+}
+
 async fn get_transaction(
-    Params((tx_hash,)): Params<(JsonH256,)>,
+    Params((tx_hash, verbose)): Params<(JsonH256, Option<u8>)>,
     store: Data<Store>,
     mem_pool: Data<MemPool>,
-) -> Result<Option<L2TransactionWithStatus>> {
+) -> Result<Option<L2TransactionWithStatus>, RpcError> {
     let tx_hash = to_h256(tx_hash);
     let db = store.begin_transaction();
+    let verbose: GetTxVerbose = match verbose {
+        None => GetTxVerbose::TxWithStatus,
+        Some(v) => v
+            .try_into()
+            .map_err(|_err| invalid_param_err("invalid verbose param"))?,
+    };
     let tx_opt;
     let status;
     match db.get_transaction_info(&tx_hash)? {
@@ -298,9 +333,15 @@ async fn get_transaction(
         }
     };
 
-    Ok(tx_opt.map(|tx| L2TransactionWithStatus {
-        transaction: tx.into(),
-        status,
+    Ok(tx_opt.map(|tx| match verbose {
+        GetTxVerbose::OnlyStatus => L2TransactionWithStatus {
+            transaction: None,
+            status,
+        },
+        GetTxVerbose::TxWithStatus => L2TransactionWithStatus {
+            transaction: Some(tx.into()),
+            status,
+        },
     }))
 }
 

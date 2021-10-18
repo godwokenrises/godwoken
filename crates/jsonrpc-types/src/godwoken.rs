@@ -509,7 +509,7 @@ impl Default for L2TransactionStatus {
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct L2TransactionWithStatus {
-    pub transaction: L2TransactionView,
+    pub transaction: Option<L2TransactionView>,
     pub status: L2TransactionStatus,
 }
 
