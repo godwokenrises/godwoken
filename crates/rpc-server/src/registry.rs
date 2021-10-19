@@ -263,6 +263,13 @@ async fn ping() -> Result<String> {
     Ok("pong".to_string())
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum GetTxParams {
+    Default((JsonH256,)),
+    WithVerbose((JsonH256, u8)),
+}
+
 enum GetTxVerbose {
     TxWithStatus = 0,
     OnlyStatus = 1,
@@ -283,18 +290,20 @@ impl TryFrom<u8> for GetTxVerbose {
 }
 
 async fn get_transaction(
-    Params((tx_hash, verbose)): Params<(JsonH256, Option<u8>)>,
+    Params(param): Params<GetTxParams>,
     store: Data<Store>,
     mem_pool: Data<MemPool>,
 ) -> Result<Option<L2TransactionWithStatus>, RpcError> {
-    let tx_hash = to_h256(tx_hash);
-    let db = store.begin_transaction();
-    let verbose: GetTxVerbose = match verbose {
-        None => GetTxVerbose::TxWithStatus,
-        Some(v) => v
-            .try_into()
-            .map_err(|_err| invalid_param_err("invalid verbose param"))?,
+    let (tx_hash, verbose) = match param {
+        GetTxParams::Default((tx_hash,)) => (to_h256(tx_hash), GetTxVerbose::TxWithStatus),
+        GetTxParams::WithVerbose((tx_hash, verbose)) => {
+            let verbose = verbose
+                .try_into()
+                .map_err(|_err| invalid_param_err("invalid verbose param"))?;
+            (to_h256(tx_hash), verbose)
+        }
     };
+    let db = store.begin_transaction();
     let tx_opt;
     let status;
     match db.get_transaction_info(&tx_hash)? {
