@@ -18,16 +18,13 @@ impl ErrorReceiptIndexer {
     pub fn new(pool: PgPool) -> Self {
         ErrorReceiptIndexer { pool }
     }
-}
 
-impl MemPoolErrorTxHandler for ErrorReceiptIndexer {
-    fn handle_error_receipt(&self, receipt: ErrorTxReceipt) -> Task<Result<()>> {
+    async fn insert_error_tx_receipt(pool: PgPool, receipt: ErrorTxReceipt) -> Result<()> {
         let record = ErrorReceiptRecord::from(receipt);
-        let pool = self.pool.clone();
+        log::debug!("error tx receipt record {:?}", record);
 
-        smol::spawn(async move {
-            let mut db = pool.begin().await?;
-            sqlx::query("INSERT INTO error_transactions (hash, block_number, cumulative_gas_used, gas_used, status_code, status_reason) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
+        let mut db = pool.begin().await?;
+        sqlx::query("INSERT INTO error_transactions (hash, block_number, cumulative_gas_used, gas_used, status_code, status_reason) VALUES ($1, $2, $3, $4, $5, $6)")
             .bind(hex(record.tx_hash.as_slice())?)
             .bind(Decimal::from(record.block_number))
             .bind(Decimal::from(record.cumulative_gas_used))
@@ -37,7 +34,19 @@ impl MemPoolErrorTxHandler for ErrorReceiptIndexer {
             .execute(&mut db)
             .await?;
 
-            db.commit().await?;
+        db.commit().await?;
+        Ok(())
+    }
+}
+
+impl MemPoolErrorTxHandler for ErrorReceiptIndexer {
+    fn handle_error_receipt(&self, receipt: ErrorTxReceipt) -> Task<Result<()>> {
+        let pool = self.pool.clone();
+
+        smol::spawn(async move {
+            if let Err(err) = Self::insert_error_tx_receipt(pool, receipt).await {
+                log::error!("insert error tx receipt {}", err);
+            }
             Ok(())
         })
     }
@@ -50,7 +59,7 @@ struct ErrorReceiptRecord {
     cumulative_gas_used: u64,
     gas_used: u64,
     status_code: u32,
-    status_reason: String,
+    status_reason: Vec<u8>,
 }
 
 impl From<ErrorTxReceipt> for ErrorReceiptRecord {
@@ -61,16 +70,25 @@ impl From<ErrorTxReceipt> for ErrorReceiptRecord {
             cumulative_gas_used: 0,
             gas_used: 0,
             status_code: 0,
-            status_reason: Default::default(),
+            status_reason: receipt.return_data[..MAX_RETURN_DATA].to_vec(),
         };
 
-        match receipt.last_log.map(|log| parse_log(&log)).transpose() {
-            Ok(Some(GwLog::PolyjuiceSystem {
+        let gw_log = match receipt.last_log.map(|log| parse_log(&log)).transpose() {
+            Ok(Some(log)) => log,
+            Err(err) => {
+                log::error!("[error receipt]: parse log error {}", err);
+                return basic_record;
+            }
+            _ => return basic_record,
+        };
+
+        match gw_log {
+            GwLog::PolyjuiceSystem {
                 gas_used,
                 cumulative_gas_used,
                 created_address: _,
                 status_code,
-            })) => {
+            } => {
                 let isnt_string = |t: &ethabi::token::Token| -> bool {
                     !matches!(t, ethabi::token::Token::String(_))
                 };
@@ -86,13 +104,10 @@ impl From<ErrorTxReceipt> for ErrorReceiptRecord {
                                 .join("");
 
                             reason.truncate(MAX_RETURN_DATA);
-                            reason
+                            reason.as_bytes().to_vec()
                         }
                         _ => {
-                            log::warn!(
-                                "unsupported polyjuice status reason {:?}",
-                                receipt.return_data
-                            );
+                            log::warn!("unsupported polyjuice reason {:?}", receipt.return_data);
                             basic_record.status_reason
                         }
                     };
@@ -104,10 +119,6 @@ impl From<ErrorTxReceipt> for ErrorReceiptRecord {
                     status_reason,
                     ..basic_record
                 }
-            }
-            Err(err) => {
-                log::error!("[error receipt]: parse log error {}", err);
-                basic_record
             }
             _ => basic_record,
         }
