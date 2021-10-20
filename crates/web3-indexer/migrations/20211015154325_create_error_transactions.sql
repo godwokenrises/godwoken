@@ -6,7 +6,7 @@ CREATE TABLE error_transactions (
     cumulative_gas_used NUMERIC,
     gas_used NUMERIC,
     status_code NUMERIC NOT NULL,
-    status_reason TEXT NOT NULL
+    status_reason bytea NOT NULL
 );
 
 CREATE INDEX ON error_transactions (block_number);
