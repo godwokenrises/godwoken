@@ -47,6 +47,7 @@ use crate::{
     mem_block::MemBlock,
     traits::MemPoolProvider,
     types::EntryList,
+    withdrawal::Generator as WithdrawalGenerator,
 };
 
 pub enum MemBlockDBMode {
@@ -325,6 +326,25 @@ impl MemPool {
         // verify withdrawal signature
         self.generator
             .check_withdrawal_request_signature(&state, withdrawal_request)?;
+
+        // verify finalized custodian
+        let finalized_custodians = {
+            // query withdrawals from ckb-indexer
+            let last_finalized_block_number = self
+                .generator
+                .rollup_context()
+                .last_finalized_block_number(self.current_tip.1);
+            let task = self.provider.query_available_custodians(
+                vec![withdrawal_request.clone()],
+                last_finalized_block_number,
+                self.generator.rollup_context().to_owned(),
+            );
+            smol::block_on(task)?
+        };
+        let avaliable_custodians = AvailableCustodians::from(&finalized_custodians);
+        let withdrawal_generator =
+            WithdrawalGenerator::new(self.generator.rollup_context(), avaliable_custodians);
+        withdrawal_generator.verify_remained_amount(withdrawal_request)?;
 
         // withdrawal basic verification
         let asset_script =
