@@ -47,8 +47,17 @@ pub async fn generate(
         .args(lock_args.pack())
         .build();
 
+    let required_staking_capacity = rollup_context
+        .rollup_config
+        .required_staking_capacity()
+        .unpack();
     if let Some(unlocked_stake) = rpc_client
-        .query_stake(rollup_context, owner_lock_hash, None)
+        .query_stake(
+            rollup_context,
+            owner_lock_hash,
+            required_staking_capacity,
+            None,
+        )
         .await?
     {
         let stake_lock_dep = block_producer_config.stake_cell_lock_dep.clone();
