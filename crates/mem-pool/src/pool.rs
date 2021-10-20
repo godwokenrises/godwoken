@@ -1078,7 +1078,7 @@ impl MemPool {
                 return_data: run_result.return_data,
                 last_log: run_result.logs.last().cloned(),
             };
-            if let Some(ref error_tx_handler) = self.error_tx_handler {
+            if let Some(ref mut error_tx_handler) = self.error_tx_handler {
                 error_tx_handler.handle_error_receipt(receipt).detach();
             }
 
