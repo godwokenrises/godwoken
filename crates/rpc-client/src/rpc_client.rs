@@ -491,6 +491,7 @@ impl RPCClient {
         &self,
         rollup_context: &RollupContext,
         owner_lock_hash: [u8; 32],
+        required_staking_capacity: u64,
         last_finalized_block_number: Option<u64>,
     ) -> Result<Option<CellInfo>> {
         let lock = Script::new_builder()
@@ -508,7 +509,7 @@ impl RPCClient {
             filter: Some(SearchKeyFilter {
                 script: None,
                 output_data_len_range: None,
-                output_capacity_range: None,
+                output_capacity_range: Some([required_staking_capacity.into(), u64::MAX.into()]),
                 block_range: None,
             }),
         };
