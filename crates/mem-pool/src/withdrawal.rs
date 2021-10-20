@@ -109,8 +109,14 @@ impl<'a> Generator<'a> {
         )
         .map_err(|min_capacity| anyhow!("{} minimal capacity for {}", min_capacity, req))?;
 
+        self.verify_remained_amount(req).map(|_| output)
+    }
+
+    pub fn verify_remained_amount(&self, req: &WithdrawalRequest) -> Result<()> {
         // Verify remaind sudt
         let mut ckb_custodian = self.ckb_custodian.clone();
+        let sudt_type_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
+        let req_sudt: u128 = req.raw().amount().unpack();
         if 0 != req_sudt {
             let sudt_custodian = match self.sudt_custodians.get(&sudt_type_hash) {
                 Some(custodian) => custodian,
@@ -139,9 +145,9 @@ impl<'a> Generator<'a> {
         // Verify remaind ckb
         let req_ckb = req.raw().capacity().unpack() as u128;
         match ckb_custodian.balance.checked_sub(req_ckb) {
-            Some(_) => Ok(output),
+            Some(_) => Ok(()),
             // Consume all remaind ckb
-            None if req_ckb == ckb_custodian.capacity => Ok(output),
+            None if req_ckb == ckb_custodian.capacity => Ok(()),
             // No able to cover withdrawal cell and ckb custodian change
             None => Err(anyhow!(
                 "no enough finalized custodian capacity, custodian ckb: {}, required ckb: {}",
