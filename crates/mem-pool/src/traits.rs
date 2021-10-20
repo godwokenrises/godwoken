@@ -19,5 +19,5 @@ pub trait MemPoolProvider {
 }
 
 pub trait MemPoolErrorTxHandler {
-    fn handle_error_receipt(&self, receipt: ErrorTxReceipt) -> Task<Result<()>>;
+    fn handle_error_receipt(&mut self, receipt: ErrorTxReceipt) -> Task<Result<()>>;
 }
