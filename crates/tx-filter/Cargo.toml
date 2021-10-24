@@ -1,0 +1,16 @@
+[package]
+name = "gw-tx-filter"
+version = "0.1.0"
+authors = ["Nervos Network"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+dashmap = "4.0"
+gw-common = { path = "../common" }
+gw-store = { path = "../store" }
+gw-types = { path = "../types" }
+gw-traits = { path = "../traits/" }
+thiserror = "1.0.30"
