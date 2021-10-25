@@ -126,6 +126,11 @@ pub enum TransactionError {
     ExceededMaxWriteData { max_bytes: usize, used_bytes: usize },
     #[error("Cannot create sUDT proxy contract from account id: {account_id}.")]
     InvalidSUDTProxyCreatorAccount { account_id: u32 },
+    #[error("Cannot create backend {} contract from account id: {account_id}")]
+    InvalidContractCreatorAccount {
+        backend: &'static str,
+        account_id: u32,
+    },
 }
 
 impl From<VMError> for TransactionError {

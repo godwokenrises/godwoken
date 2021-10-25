@@ -4,6 +4,7 @@ use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
     constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
+    contract_creator_allowlist::PolyjuiceContractCreatorAllowList,
     erc20_creator_whitelist::SUDTProxyAccountWhitelist,
     error::{BlockError, TransactionValidateError, WithdrawalError},
     vm_cost_model::instruction_cycles,
@@ -94,6 +95,7 @@ pub struct Generator {
     account_lock_manage: AccountLockManage,
     rollup_context: RollupContext,
     sudt_proxy_account_whitelist: SUDTProxyAccountWhitelist,
+    polyjuice_contract_creator_allowlist: Option<PolyjuiceContractCreatorAllowList>,
 }
 
 impl Generator {
@@ -103,6 +105,9 @@ impl Generator {
         rollup_context: RollupContext,
         rpc_config: RPCConfig,
     ) -> Self {
+        let polyjuice_contract_creator_allowlist =
+            PolyjuiceContractCreatorAllowList::from_rpc_config(&rpc_config);
+
         let sudt_proxy_account_whitelist = SUDTProxyAccountWhitelist::new(
             rpc_config.allowed_sudt_proxy_creator_account_id,
             rpc_config
@@ -111,11 +116,13 @@ impl Generator {
                 .map(|hash| hash.0.into())
                 .collect(),
         );
+
         Generator {
             backend_manage,
             account_lock_manage,
             rollup_context,
             sudt_proxy_account_whitelist,
+            polyjuice_contract_creator_allowlist,
         }
     }
 
@@ -635,6 +642,12 @@ impl Generator {
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
     ) -> Result<RunResult, TransactionError> {
+        if let Some(polyjuice_contract_creator_allowlist) =
+            self.polyjuice_contract_creator_allowlist.as_ref()
+        {
+            polyjuice_contract_creator_allowlist.validate(state, raw_tx)?;
+        }
+
         let sender_id: u32 = raw_tx.from_id().unpack();
         let nonce_before_execution = state.get_nonce(sender_id)?;
 
