@@ -4,7 +4,6 @@ use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
     constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
-    contract_creator_allowlist::PolyjuiceContractCreatorAllowList,
     erc20_creator_whitelist::SUDTProxyAccountWhitelist,
     error::{BlockError, TransactionValidateError, WithdrawalError},
     vm_cost_model::instruction_cycles,
@@ -31,6 +30,7 @@ use gw_store::{
     transaction::StoreTransaction,
 };
 use gw_traits::{ChainStore, CodeStore};
+use gw_tx_filter::polyjuice_contract_creator_allowlist::PolyjuiceContractCreatorAllowList;
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType},
@@ -645,7 +645,17 @@ impl Generator {
         if let Some(polyjuice_contract_creator_allowlist) =
             self.polyjuice_contract_creator_allowlist.as_ref()
         {
-            polyjuice_contract_creator_allowlist.validate(state, raw_tx)?;
+            use gw_tx_filter::polyjuice_contract_creator_allowlist::Error;
+            match polyjuice_contract_creator_allowlist.validate_with_state(state, raw_tx) {
+                Ok(_) => (),
+                Err(Error::Common(err)) => return Err(TransactionError::from(err)),
+                Err(Error::PermissionDenied { account_id }) => {
+                    return Err(TransactionError::InvalidContractCreatorAccount {
+                        backend: "polyjuice",
+                        account_id,
+                    })
+                }
+            }
         }
 
         let sender_id: u32 = raw_tx.from_id().unpack();
