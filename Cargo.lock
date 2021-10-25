@@ -2211,19 +2211,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gw-tx-filter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "dashmap",
- "gw-common",
- "gw-store",
- "gw-traits",
- "gw-types",
- "thiserror",
-]
-
-[[package]]
 name = "gw-types"
 version = "0.1.0"
 dependencies = [

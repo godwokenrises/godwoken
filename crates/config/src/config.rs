@@ -48,6 +48,8 @@ pub struct RPCClientConfig {
 pub struct RPCConfig {
     pub allowed_sudt_proxy_creator_account_id: Vec<u32>,
     pub sudt_proxy_code_hashes: Vec<H256>,
+    pub allowed_polyjuice_contract_creator_account_ids: Option<Vec<u32>>,
+    pub polyjuice_script_code_hash: Option<H256>,
 }
 
 /// Onchain rollup cell config

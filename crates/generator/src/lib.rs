@@ -4,6 +4,7 @@
 pub mod account_lock_manage;
 pub mod backend_manage;
 pub mod constants;
+pub mod contract_creator_allowlist;
 pub mod dummy_state;
 pub mod erc20_creator_whitelist;
 pub mod error;
