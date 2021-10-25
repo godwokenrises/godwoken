@@ -6,7 +6,19 @@ use gw_types::bytes::Bytes;
 use gw_types::packed::RawL2Transaction;
 use gw_types::prelude::Unpack;
 
-use crate::error::TransactionError;
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("Permission denied, cannot create polyjuice contract from account {account_id}")]
+    PermissionDenied { account_id: u32 },
+    #[error("{0}")]
+    Common(gw_common::error::Error),
+}
+
+impl From<gw_common::error::Error> for Error {
+    fn from(err: gw_common::error::Error) -> Self {
+        Error::Common(err)
+    }
+}
 
 pub struct PolyjuiceContractCreatorAllowList {
     pub polyjuice_code_hash: H256,
@@ -35,11 +47,11 @@ impl PolyjuiceContractCreatorAllowList {
     }
 
     // TODO: Cached polyjuice deployment id? But tx may fail then invalid id.
-    pub fn validate<S: State + CodeStore>(
+    pub fn validate_with_state<S: State + CodeStore>(
         &self,
         state: &S,
         tx: &RawL2Transaction,
-    ) -> Result<(), TransactionError> {
+    ) -> Result<(), Error> {
         let to_id: u32 = tx.to_id().unpack();
 
         // 0 is reversed for meta contract and 1 is reversed for sudt
@@ -61,8 +73,7 @@ impl PolyjuiceContractCreatorAllowList {
             PolyjuiceArgs::is_contract_create(&Unpack::<Bytes>::unpack(&tx.args()));
 
         if is_contract_create && !self.allowed_creator_ids.contains(&from_id) {
-            return Err(TransactionError::InvalidContractCreatorAccount {
-                backend: "polyjuice",
+            return Err(Error::PermissionDenied {
                 account_id: from_id,
             });
         }

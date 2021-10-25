@@ -1976,6 +1976,7 @@ dependencies = [
  "gw-config",
  "gw-store",
  "gw-traits",
+ "gw-tx-filter",
  "gw-types",
  "hex",
  "lazy_static",
@@ -2208,6 +2209,17 @@ dependencies = [
  "gw-common",
  "gw-db",
  "gw-types",
+]
+
+[[package]]
+name = "gw-tx-filter"
+version = "0.1.0"
+dependencies = [
+ "gw-common",
+ "gw-config",
+ "gw-traits",
+ "gw-types",
+ "thiserror",
 ]
 
 [[package]]

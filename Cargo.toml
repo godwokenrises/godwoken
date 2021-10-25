@@ -22,6 +22,7 @@ members = [
   "crates/version",
   "crates/utils",
   "crates/ckb-hardfork",
+  "crates/tx-filter",
 ]
 
 [profile.release]
