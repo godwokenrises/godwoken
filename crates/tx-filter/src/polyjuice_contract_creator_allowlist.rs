@@ -85,6 +85,8 @@ impl PolyjuiceContractCreatorAllowList {
 struct PolyjuiceArgs;
 
 impl PolyjuiceArgs {
+    // evmc_call_kind.EVMC_CREATE = 3
+    // https://github.com/ethereum/evmc/blob/v9.0.0/include/evmc/evmc.h#L81
     // https://github.com/nervosnetwork/godwoken-polyjuice/blob/v0.6.0-rc1/polyjuice-tests/src/helper.rs#L322
     fn is_contract_create(args: &[u8]) -> bool {
         args[7] == 3u8
