@@ -6,6 +6,8 @@ use gw_types::bytes::Bytes;
 use gw_types::packed::RawL2Transaction;
 use gw_types::prelude::Unpack;
 
+use std::collections::HashSet;
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Permission denied, cannot create polyjuice contract from account {account_id}")]
@@ -22,7 +24,7 @@ impl From<gw_common::error::Error> for Error {
 
 pub struct PolyjuiceContractCreatorAllowList {
     pub polyjuice_code_hash: H256,
-    pub allowed_creator_ids: Vec<u32>,
+    pub allowed_creator_ids: HashSet<u32>,
 }
 
 impl PolyjuiceContractCreatorAllowList {
@@ -33,13 +35,13 @@ impl PolyjuiceContractCreatorAllowList {
         ) {
             (Some(allowed_creator_ids), Some(polyjuice_code_hash)) => Some(Self::new(
                 H256::from(polyjuice_code_hash.0),
-                allowed_creator_ids.to_vec(),
+                allowed_creator_ids.clone(),
             )),
             _ => None,
         }
     }
 
-    pub fn new(polyjuice_code_hash: H256, allowed_creator_ids: Vec<u32>) -> Self {
+    pub fn new(polyjuice_code_hash: H256, allowed_creator_ids: HashSet<u32>) -> Self {
         Self {
             polyjuice_code_hash,
             allowed_creator_ids,
@@ -52,10 +54,15 @@ impl PolyjuiceContractCreatorAllowList {
         state: &S,
         tx: &RawL2Transaction,
     ) -> Result<(), Error> {
+        let from_id: u32 = tx.from_id().unpack();
         let to_id: u32 = tx.to_id().unpack();
 
         // 0 is reversed for meta contract and 1 is reversed for sudt
         if to_id < 2 {
+            return Ok(());
+        }
+
+        if self.allowed_creator_ids.contains(&from_id) {
             return Ok(());
         }
 
@@ -68,7 +75,6 @@ impl PolyjuiceContractCreatorAllowList {
             return Ok(());
         }
 
-        let from_id: u32 = tx.from_id().unpack();
         let is_contract_create =
             PolyjuiceArgs::is_contract_create(&Unpack::<Bytes>::unpack(&tx.args()));
 
@@ -95,7 +101,8 @@ impl PolyjuiceArgs {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
+    use std::iter::FromIterator;
 
     use gw_common::error::Error;
     use gw_common::smt::SMT;
@@ -190,7 +197,7 @@ mod tests {
         let allowed_creator_id = dummy_state.create_account([99u8; 32].into()).unwrap();
         let allowlist = PolyjuiceContractCreatorAllowList::new(
             TEST_POLYJUICE_SCRIPT_CODE_HASH.into(),
-            vec![allowed_creator_id],
+            HashSet::from_iter(vec![allowed_creator_id]),
         );
 
         // Creator from allowlist should be ok
