@@ -2,12 +2,12 @@ use gw_common::H256;
 use gw_types::offchain::RunResult;
 use log::debug;
 
-pub struct SUDTProxyAccountWhitelist {
+pub struct SUDTProxyAccountAllowlist {
     allowed_sudt_proxy_creator_account_id: Vec<u32>,
     sudt_proxy_code_hashes: Vec<H256>,
 }
 
-impl SUDTProxyAccountWhitelist {
+impl SUDTProxyAccountAllowlist {
     pub fn new(
         allowed_sudt_proxy_creator_account_id: Vec<u32>,
         sudt_proxy_code_hashes: Vec<H256>,
@@ -18,7 +18,7 @@ impl SUDTProxyAccountWhitelist {
         }
     }
 
-    /// Only accounts in white list could create sUDT proxy contract.
+    /// Only accounts in allow list could create sUDT proxy contract.
     pub fn validate(&self, run_result: &RunResult, from_id: u32) -> bool {
         if self.allowed_sudt_proxy_creator_account_id.is_empty()
             || self.sudt_proxy_code_hashes.is_empty()
@@ -38,7 +38,7 @@ impl SUDTProxyAccountWhitelist {
 
         for k in run_result.write_data.keys() {
             debug!(
-                "whiltelist: from_id: {:?}, code_hash: {:?}",
+                "allowlist: from_id: {:?}, code_hash: {:?}",
                 &from_id,
                 hex::encode(k.as_slice())
             );
@@ -53,7 +53,7 @@ impl SUDTProxyAccountWhitelist {
     }
 }
 
-impl Default for SUDTProxyAccountWhitelist {
+impl Default for SUDTProxyAccountAllowlist {
     fn default() -> Self {
         Self {
             allowed_sudt_proxy_creator_account_id: vec![],

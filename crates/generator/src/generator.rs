@@ -4,7 +4,7 @@ use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
     constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
-    erc20_creator_whitelist::SUDTProxyAccountWhitelist,
+    erc20_creator_allowlist::SUDTProxyAccountAllowlist,
     error::{BlockError, TransactionValidateError, WithdrawalError},
     vm_cost_model::instruction_cycles,
 };
@@ -94,7 +94,7 @@ pub struct Generator {
     backend_manage: BackendManage,
     account_lock_manage: AccountLockManage,
     rollup_context: RollupContext,
-    sudt_proxy_account_whitelist: SUDTProxyAccountWhitelist,
+    sudt_proxy_account_whitelist: SUDTProxyAccountAllowlist,
     polyjuice_contract_creator_allowlist: Option<PolyjuiceContractCreatorAllowList>,
 }
 
@@ -108,7 +108,7 @@ impl Generator {
         let polyjuice_contract_creator_allowlist =
             PolyjuiceContractCreatorAllowList::from_rpc_config(&rpc_config);
 
-        let sudt_proxy_account_whitelist = SUDTProxyAccountWhitelist::new(
+        let sudt_proxy_account_whitelist = SUDTProxyAccountAllowlist::new(
             rpc_config.allowed_sudt_proxy_creator_account_id,
             rpc_config
                 .sudt_proxy_code_hashes
