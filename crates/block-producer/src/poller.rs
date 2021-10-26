@@ -16,7 +16,7 @@ use gw_rpc_client::{
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{RollupContext, TxStatus},
+    offchain::{global_state_from_slice, RollupContext, TxStatus},
     packed::{
         CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositLockArgs,
         DepositRequest, L2BlockCommittedInfo, OutPoint, RollupAction, RollupActionUnion, Script,
@@ -81,10 +81,47 @@ impl ChainUpdater {
         };
         if !self.find_l2block_on_l1(local_tip_committed_info).await? {
             self.revert_to_valid_tip_on_l1().await?;
+            log::info!("revert to valid tip on l1");
         }
 
+        self.try_sync().await?;
+
+        // Double check that we are synced to latest block
+        if let Some(rollup_cell) = self.rpc_client.query_rollup_cell().await? {
+            let local_tip_block_number: u64 = {
+                let chain = self.chain.lock().await;
+                chain.local_state().tip().raw().number().unpack()
+            };
+            let tip_block_number = {
+                let global_state = global_state_from_slice(&rollup_cell.data)?;
+                Unpack::<u64>::unpack(&global_state.block().count()).saturating_sub(1)
+            };
+            assert!(tip_block_number >= local_tip_block_number);
+
+            if local_tip_block_number.saturating_add(1) == tip_block_number {
+                log::info!("single update to latest l2 block {}", tip_block_number);
+
+                let tx_hash = rollup_cell.out_point.tx_hash().unpack();
+                self.update_single(&tx_hash).await?;
+            } else {
+                self.try_sync().await?;
+            }
+        }
+
+        if initial_syncing {
+            // Start notify mem pool after synced
+            self.chain.lock().await.complete_initial_syncing()?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn try_sync(&mut self) -> anyhow::Result<()> {
         let valid_tip_l1_block_number = {
             let chain = self.chain.lock().await;
+            let local_tip_block: u64 = chain.local_state().tip().raw().number().unpack();
+            log::info!("try sync from l2 block {}", local_tip_block);
+
             chain.local_state().last_synced().number().unpack()
         };
         let search_key = SearchKey {
@@ -130,11 +167,6 @@ impl ChainUpdater {
 
             log::debug!("Poll transactions: {}", txs.objects.len());
             self.update(&txs.objects).await?;
-        }
-
-        if initial_syncing {
-            // Start notify mem pool after synced
-            self.chain.lock().await.complete_initial_syncing()?;
         }
 
         Ok(())

@@ -211,8 +211,8 @@ impl BlockProducer {
         // query median time & rollup cell
         let rollup_cell_opt = self.rpc_client.query_rollup_cell().await?;
         let rollup_cell = rollup_cell_opt.ok_or_else(|| anyhow!("can't found rollup cell"))?;
+        let global_state = global_state_from_slice(&rollup_cell.data)?;
         let rollup_state = {
-            let global_state = global_state_from_slice(&rollup_cell.data)?;
             let status: u8 = global_state.status().into();
             Status::try_from(status).map_err(|n| anyhow!("invalid status {}", n))?
         };
@@ -235,6 +235,13 @@ impl BlockProducer {
             .await?
         {
             let (block_number, tx) = self.produce_next_block(median_time, rollup_cell).await?;
+
+            let expected_next_block_number = global_state.block().count().unpack();
+            if expected_next_block_number != block_number {
+                log::warn!("produce unexpected next block, expect {} produce {}, wait until chain is synced to latest block", expected_next_block_number, block_number);
+                return Ok(());
+            }
+
             self.submit_block_tx(block_number, tx).await?;
         }
         Ok(())
