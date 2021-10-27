@@ -111,6 +111,7 @@ impl ChainUpdater {
         self.try_sync().await?;
 
         // Double check that we are synced to latest block
+        // TODO: remove
         if let Some(rollup_cell) = self.rpc_client.query_rollup_cell().await? {
             let local_tip_block_number: u64 = {
                 let chain = self.chain.lock().await;
