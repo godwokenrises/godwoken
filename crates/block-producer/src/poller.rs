@@ -105,7 +105,7 @@ impl ChainUpdater {
                 local_tip_block_hash,
                 committed_l1_block_number,
                 committed_l1_block_hash
-            )
+            );
         }
 
         self.try_sync().await?;
@@ -320,7 +320,7 @@ impl ChainUpdater {
         Ok(l1_block_hash == Some(block_hash))
     }
 
-    async fn revert_to_valid_tip_on_l1(&self) -> Result<()> {
+    async fn revert_to_valid_tip_on_l1(&mut self) -> Result<()> {
         let db = { self.chain.lock().await.store().begin_transaction() };
         let mut revert_l1_actions = Vec::new();
 
@@ -377,6 +377,13 @@ impl ChainUpdater {
             reverts: revert_l1_actions,
             updates: vec![],
         })?;
+
+        // Also revert last tx hash
+        let local_tip_committed_info = db
+            .get_l2block_committed_info(&db.get_tip_block_hash()?)?
+            .expect("tip committed info should exists");
+        let local_tip_committed_l1_tx_hash = local_tip_committed_info.transaction_hash().unpack();
+        self.last_tx_hash = Some(local_tip_committed_l1_tx_hash);
 
         Ok(())
     }
