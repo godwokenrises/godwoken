@@ -127,8 +127,6 @@ impl ChainUpdater {
 
                 let tx_hash = rollup_cell.out_point.tx_hash().unpack();
                 self.update_single(&tx_hash).await?;
-            } else {
-                self.try_sync().await?;
             }
         }
 
@@ -146,8 +144,8 @@ impl ChainUpdater {
             let local_tip_block: u64 = chain.local_state().tip().raw().number().unpack();
             let local_committed_l1_block: u64 = chain.local_state().last_synced().number().unpack();
 
-            log::info!(
-                "try sync from l2 block {} on l1 block {}",
+            log::debug!(
+                "try sync from l2 block {} (l1 block {})",
                 local_tip_block,
                 local_committed_l1_block
             );
