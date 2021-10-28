@@ -212,6 +212,7 @@ impl ChainUpdater {
     async fn update_single(&mut self, tx_hash: &H256) -> anyhow::Result<()> {
         if let Some(last_tx_hash) = &self.last_tx_hash {
             if last_tx_hash == tx_hash {
+                log::info!("known last tx hash, skip {}", tx_hash);
                 return Ok(());
             }
         }
