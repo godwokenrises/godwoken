@@ -100,11 +100,17 @@ pub fn build_genesis_from_store(
         &rollup_context.rollup_script_hash,
         &allowed_eoa_type_hashes.get(0).unwrap().unpack(),
     );
+    log::info!("created genesis accounts {}", accounts.len());
     let private_keys = accounts
         .into_iter()
         .map(|a| format!("0x{}", hex::encode(a.sk)))
         .collect::<Vec<_>>();
-    std::fs::write("/code/workspace/account_pks", private_keys.join("\n")).unwrap();
+    std::fs::write(
+        std::path::Path::new("/code/workspace/account_pks"),
+        private_keys.join("\n").as_bytes(),
+    )
+    .unwrap();
+    log::info!("write account pks to /code/workspace/account_pks");
 
     let prev_state_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
     let submit_txs = SubmitTransactions::new_builder()
