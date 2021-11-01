@@ -24,8 +24,11 @@ use gw_types::{
     },
     prelude::*,
 };
-use secp256k1::Secp256k1;
+use secp256k1::{rand::rngs::OsRng, Secp256k1};
 use sha3::{Digest, Keccak256};
+
+const GENESIS_ACCOUNT_SKS: &str = "/code/workspace/account_sks";
+const GENESIS_ACCOUNTS: &str = "/code/workspace/accounts";
 
 /// Build genesis block
 pub fn build_genesis(config: &GenesisConfig, secp_data: Bytes) -> Result<GenesisWithGlobalState> {
@@ -94,23 +97,16 @@ pub fn build_genesis_from_store(
     );
 
     // Setup accounts for benchmark
+    if std::fs::File::open(GENESIS_ACCOUNT_SKS).is_err() {
+        generate_genesis_account_sks();
+    }
     let allowed_eoa_type_hashes = rollup_context.rollup_config.allowed_eoa_type_hashes();
     let accounts = generate_genesis_accounts_with_state(
         &mut tree,
         &rollup_context.rollup_script_hash,
         &allowed_eoa_type_hashes.get(0).unwrap().unpack(),
     );
-    log::info!("created genesis accounts {}", accounts.len());
-    let private_keys = accounts
-        .into_iter()
-        .map(|a| format!("0x{}", hex::encode(a.sk)))
-        .collect::<Vec<_>>();
-    std::fs::write(
-        std::path::Path::new("/code/workspace/account_pks"),
-        private_keys.join("\n").as_bytes(),
-    )
-    .unwrap();
-    log::info!("write account pks to /code/workspace/account_pks");
+    log::info!("read genesis accounts {}", accounts.len());
 
     let prev_state_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
     let submit_txs = SubmitTransactions::new_builder()
@@ -249,19 +245,40 @@ struct Account {
     script: Script,
 }
 
+fn generate_genesis_account_sks() {
+    let accounts: u64 = {
+        let accounts = std::fs::read_to_string(GENESIS_ACCOUNTS).unwrap();
+        accounts.parse().unwrap()
+    };
+
+    let private_keys = (0..accounts)
+        .map(|_| {
+            let sk = secp256k1::SecretKey::new(&mut OsRng::new().unwrap());
+            format!("0x{}", hex::encode(sk.as_ref()))
+        })
+        .collect::<Vec<_>>();
+
+    std::fs::write(
+        std::path::Path::new(GENESIS_ACCOUNT_SKS),
+        private_keys.join("\n").as_bytes(),
+    )
+    .unwrap();
+
+    log::info!("write account sks to {}", GENESIS_ACCOUNT_SKS);
+}
+
 fn generate_genesis_accounts_with_state(
     state: &mut (impl State + StateExt + CodeStore),
     rollup_type_hash: &H256,
     eth_account_lock_hash: &H256,
 ) -> Vec<Account> {
-    use secp256k1::rand::rngs::OsRng;
-
-    const BENCH_GENESIS_ACCOUNT_COUNT: u64 = 1000;
     const BENCH_GENESIS_ACCOUNT_CKB_BALANCE: u128 = 100_000_000;
 
     let secp = Secp256k1::new();
-    let mut build_account = || -> _ {
-        let (sk, pk) = secp.generate_keypair(&mut OsRng::new().unwrap());
+    let build_account = |hex: &str| -> _ {
+        let decoded = hex::decode(hex.trim_start_matches("0x")).unwrap();
+        let sk = secp256k1::SecretKey::from_slice(&decoded).unwrap();
+        let pk = secp256k1::PublicKey::from_secret_key(&secp, &sk);
 
         let mut hasher = Keccak256::new();
         hasher.update(&pk.serialize_uncompressed()[1..]);
@@ -299,7 +316,6 @@ fn generate_genesis_accounts_with_state(
         }
     };
 
-    (0..BENCH_GENESIS_ACCOUNT_COUNT)
-        .map(|_| build_account())
-        .collect()
+    let sks = std::fs::read_to_string(GENESIS_ACCOUNT_SKS).unwrap();
+    sks.split('\n').map(build_account).collect()
 }
