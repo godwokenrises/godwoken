@@ -25,11 +25,16 @@ use gw_types::{
 };
 use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
+use once_cell::sync::Lazy;
+use pprof::ProfilerGuard;
 use smol::lock::Mutex;
 use std::{
     convert::{TryFrom, TryInto},
     sync::Arc,
 };
+
+static PROFILER_GUARD: Lazy<std::sync::Mutex<Option<ProfilerGuard>>> =
+    Lazy::new(|| std::sync::Mutex::new(None));
 
 // type alias
 type RPCServer = Arc<Server<MapRouter>>;
@@ -169,7 +174,9 @@ impl Registry {
                 "gw_compute_l2_sudt_script_hash",
                 compute_l2_sudt_script_hash,
             )
-            .with_method("gw_get_node_info", get_node_info);
+            .with_method("gw_get_node_info", get_node_info)
+            .with_method("gw_start_profiler", start_profiler)
+            .with_method("gw_report_pprof", report_pprof);
         if self.node_mode != NodeMode::ReadOnly {
             server = server
                 .with_method("gw_submit_l2transaction", submit_l2transaction)
@@ -898,4 +905,25 @@ async fn debug_dump_cancel_challenge_tx(
         message: err.to_string(),
         data: None,
     })
+}
+
+async fn start_profiler() -> Result<()> {
+    log::info!("profiler started");
+    *PROFILER_GUARD.lock().unwrap() = Some(ProfilerGuard::new(100).unwrap());
+    Ok(())
+}
+
+async fn report_pprof() -> Result<()> {
+    if let Some(profiler) = PROFILER_GUARD.lock().unwrap().take() {
+        smol::spawn(async move {
+            if let Ok(report) = profiler.report().build() {
+                let file = std::fs::File::create("/code/workspace/flamegraph.svg").unwrap();
+                let mut options = pprof::flamegraph::Options::default();
+                options.image_width = Some(2500);
+                report.flamegraph_with_options(file, &mut options).unwrap();
+            }
+        })
+        .detach()
+    }
+    Ok(())
 }
