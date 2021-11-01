@@ -254,13 +254,14 @@ fn generate_genesis_accounts_with_state(
     rollup_type_hash: &H256,
     eth_account_lock_hash: &H256,
 ) -> Vec<Account> {
+    use secp256k1::rand::rngs::OsRng;
+
     const BENCH_GENESIS_ACCOUNT_COUNT: u64 = 1000;
     const BENCH_GENESIS_ACCOUNT_CKB_BALANCE: u128 = 100_000_000;
 
     let secp = Secp256k1::new();
-    let mut build_account = |key: [u8; 32]| -> _ {
-        let sk = secp256k1::SecretKey::from_slice(&key).unwrap();
-        let pk = secp256k1::PublicKey::from_secret_key(&secp, &sk);
+    let mut build_account = || -> _ {
+        let (sk, pk) = secp.generate_keypair(&mut OsRng::new().unwrap());
 
         let mut hasher = Keccak256::new();
         hasher.update(&pk.serialize_uncompressed()[1..]);
@@ -292,18 +293,13 @@ fn generate_genesis_accounts_with_state(
 
         Account {
             id,
-            sk: key,
+            sk: *sk.as_ref(),
             eth_addr,
             script: account_script,
         }
     };
 
     (0..BENCH_GENESIS_ACCOUNT_COUNT)
-        .map(|n: u64| {
-            let mut key = [0u8; 32];
-            key[0..8].copy_from_slice(&(n.to_be_bytes()));
-
-            build_account(key)
-        })
+        .map(|_| build_account())
         .collect()
 }
