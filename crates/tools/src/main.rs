@@ -343,6 +343,13 @@ fn run_cli() -> Result<()> {
                         .help("Scripts generation mode: build or copy"),
                 )
                 .arg(
+                    Arg::with_name("network")
+                        .long("network")
+                        .takes_value(true)
+                        .required(true)
+                        .help("CKB network: devnet, testnet or mainnet"),
+                )
+                .arg(
                     Arg::with_name("setup-config-path")
                         .long("setup-config-path")
                         .short("c")
@@ -917,6 +924,7 @@ fn run_cli() -> Result<()> {
             let indexer_url = m.value_of("indexer-rpc-url").unwrap();
             let setup_config_path = Path::new(m.value_of("setup-config-path").unwrap());
             let mode = value_t!(m, "mode", prepare_scripts::ScriptsBuildMode).unwrap();
+            let wallet_network = value_t!(m, "network", setup::WalletNetwork).unwrap();
             let scripts_path = Path::new(m.value_of("scripts-build-file-path").unwrap());
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let nodes_count = m
@@ -929,6 +937,7 @@ fn run_cli() -> Result<()> {
                 ckb_rpc_url,
                 indexer_url,
                 mode,
+                wallet_network,
                 build_scripts_config_path: scripts_path,
                 privkey_path,
                 nodes_count,

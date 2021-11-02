@@ -91,7 +91,7 @@ pub fn deploy_program(
         H256::from_str(output.trim().trim_start_matches("0x")).map_err(|err| err.to_string())?;
     log::info!("tx_hash: {:#x}", tx_hash);
 
-    let tx = wait_for_tx(rpc_client, &tx_hash, 120)?;
+    let tx = wait_for_tx(rpc_client, &tx_hash, 300)?;
     let first_output_type_script = tx.inner.outputs[0].type_.clone().expect("type id cell");
     let script_type_hash: H256 = packed::Script::from(first_output_type_script)
         .calc_script_hash()

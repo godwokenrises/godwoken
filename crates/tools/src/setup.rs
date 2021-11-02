@@ -6,6 +6,7 @@ use crate::types::{PoAConfig, PoASetup, SetupConfig, UserRollupConfig};
 use crate::utils;
 use crate::utils::transaction::run_in_output_mode;
 use anyhow::Result;
+use clap::arg_enum;
 use gw_config::NodeMode;
 use rand::Rng;
 use std::fs;
@@ -14,12 +15,31 @@ use std::{
     thread, time,
 };
 
+arg_enum! {
+    #[derive(Debug, Clone, Copy)]
+    pub enum WalletNetwork {
+        Testnet,
+        Mainnet,
+        Devnet,
+    }
+}
 #[derive(Debug)]
 pub struct NodeWalletInfo {
     pub testnet_address: String,
+    pub mainnet_address: String,
     pub lock_hash: String,
     pub lock_arg: String,
     pub block_assembler_code_hash: String,
+}
+
+impl NodeWalletInfo {
+    fn address(&self, network: WalletNetwork) -> &String {
+        match network {
+            WalletNetwork::Mainnet => &self.mainnet_address,
+            WalletNetwork::Testnet => &self.testnet_address,
+            WalletNetwork::Devnet => &self.testnet_address,
+        }
+    }
 }
 
 pub struct SetupArgs<'a> {
@@ -32,6 +52,7 @@ pub struct SetupArgs<'a> {
     pub server_url: &'a str,
     pub output_dir: &'a Path,
     pub setup_config_path: &'a Path,
+    pub wallet_network: WalletNetwork,
 }
 
 pub fn setup(args: SetupArgs<'_>) {
@@ -45,6 +66,7 @@ pub fn setup(args: SetupArgs<'_>) {
         server_url,
         output_dir,
         setup_config_path,
+        wallet_network,
     } = args;
 
     let setup_config: SetupConfig = {
@@ -92,6 +114,7 @@ pub fn setup(args: SetupArgs<'_>) {
         setup_config.node_initial_ckb,
         nodes_count,
         output_dir,
+        wallet_network,
     );
 
     // setup POA config
@@ -176,6 +199,7 @@ fn setup_nodes(
     node_initial_ckb: u64,
     nodes_count: usize,
     output_dir: &Path,
+    network: WalletNetwork,
 ) -> Vec<(String, NodeWalletInfo)> {
     (0..nodes_count)
         .map(|i| {
@@ -184,7 +208,8 @@ fn setup_nodes(
             log::info!("Generate privkey file for {}...", &node_name);
             let node_pk_path = prepare_privkey(&node_dir);
             log::info!("Initialize wallet for {}...", &node_name);
-            let node_wallet = init_node_wallet(&node_pk_path, node_initial_ckb, payer_privkey);
+            let node_wallet =
+                init_node_wallet(&node_pk_path, node_initial_ckb, payer_privkey, network);
             (node_name, node_wallet)
         })
         .collect()
@@ -201,15 +226,16 @@ fn init_node_wallet(
     node_privkey: &Path,
     node_initial_ckb: u64,
     payer_privkey_path: &Path,
+    network: WalletNetwork,
 ) -> NodeWalletInfo {
     let wallet_info = get_wallet_info(node_privkey);
-    let mut current_capacity = query_wallet_capacity(&wallet_info.testnet_address);
+    let mut current_capacity = query_wallet_capacity(&wallet_info.address(network));
     log::info!("node's wallet capacity: {}", current_capacity);
     log::info!("Start to transfer ckb, and it will take 30 seconds...");
-    transfer_ckb(&wallet_info, payer_privkey_path, node_initial_ckb);
+    transfer_ckb(&wallet_info, payer_privkey_path, node_initial_ckb, network);
     loop {
         thread::sleep(time::Duration::from_secs(5));
-        current_capacity = query_wallet_capacity(&wallet_info.testnet_address);
+        current_capacity = query_wallet_capacity(&wallet_info.address(network));
         if current_capacity > 0f64 {
             break;
         }
@@ -273,6 +299,7 @@ pub fn get_wallet_info(privkey_path: &Path) -> NodeWalletInfo {
     .expect("get key info");
     NodeWalletInfo {
         testnet_address: look_after_in_line(&stdout, "testnet:"),
+        mainnet_address: look_after_in_line(&stdout, "mainnet:"),
         lock_hash: look_after_in_line(&stdout, "lock_hash:"),
         lock_arg: look_after_in_line(&stdout, "lock_arg:"),
         block_assembler_code_hash: look_after_in_line(&stderr, "code_hash ="),
@@ -292,14 +319,19 @@ fn query_wallet_capacity(address: &str) -> f64 {
         .expect("parse capacity")
 }
 
-fn transfer_ckb(node_wallet: &NodeWalletInfo, payer_privkey_path: &Path, ckb_amount: u64) {
+fn transfer_ckb(
+    node_wallet: &NodeWalletInfo,
+    payer_privkey_path: &Path,
+    ckb_amount: u64,
+    network: WalletNetwork,
+) {
     utils::transaction::run(
         "ckb-cli",
         vec![
             "wallet",
             "transfer",
             "--to-address",
-            &node_wallet.testnet_address,
+            &node_wallet.address(network),
             "--capacity",
             &ckb_amount.to_string(),
             "--tx-fee",
