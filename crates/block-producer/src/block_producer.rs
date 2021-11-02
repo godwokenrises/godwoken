@@ -356,7 +356,7 @@ impl BlockProducer {
         )
         .await;
 
-        if cycles.is_none()
+        if (cycles.is_none() && self.debug_config.output_l1_tx_cycles)
             || cycles.unwrap_or(0) > self.debug_config.expected_l1_tx_upper_bound_cycles
         {
             log::warn!(
