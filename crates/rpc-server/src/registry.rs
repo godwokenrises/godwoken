@@ -299,7 +299,6 @@ impl TryFrom<u8> for GetTxVerbose {
 async fn get_transaction(
     Params(param): Params<GetTxParams>,
     store: Data<Store>,
-    mem_pool: Data<MemPool>,
 ) -> Result<Option<L2TransactionWithStatus>, RpcError> {
     let (tx_hash, verbose) = match param {
         GetTxParams::Default((tx_hash,)) => (to_h256(tx_hash), GetTxVerbose::TxWithStatus),
@@ -331,20 +330,7 @@ async fn get_transaction(
             status = L2TransactionStatus::Committed;
         }
         None => {
-            tx_opt = match db.get_mem_pool_transaction(&tx_hash)? {
-                Some(tx) => Some(tx),
-                None => {
-                    // the tx maybe in the mem-pool but not finalized
-                    // so we try to sync with mem-pool, then fetch from db again
-                    if let Some(mem_pool) = mem_pool.as_ref() {
-                        // we only need to sync with mem-pool, wait for tx get finalized.
-                        mem_pool.lock().await;
-                        db.get_mem_pool_transaction(&tx_hash)?.map(Into::into)
-                    } else {
-                        None
-                    }
-                }
-            };
+            tx_opt = db.get_mem_pool_transaction(&tx_hash)?;
             status = L2TransactionStatus::Pending;
         }
     };
@@ -433,7 +419,6 @@ async fn get_tip_block_hash(store: Data<Store>) -> Result<JsonH256> {
 async fn get_transaction_receipt(
     Params((tx_hash,)): Params<(JsonH256,)>,
     store: Data<Store>,
-    mem_pool: Data<MemPool>,
 ) -> Result<Option<TxReceipt>> {
     let tx_hash = to_h256(tx_hash);
     let db = store.begin_transaction();
@@ -447,20 +432,7 @@ async fn get_transaction_receipt(
     // search from mem pool
     match db.get_mem_pool_transaction_receipt(&tx_hash)? {
         Some(receipt) => Ok(Some(receipt.into())),
-        None => {
-            // the tx maybe in the mem-pool but not finalized
-            // so we try to sync with mem-pool, then fetch from db again
-            if let Some(mem_pool) = mem_pool.as_ref() {
-                // we only need to sync with mem-pool, wait for tx get finalized.
-                mem_pool.lock().await;
-                let receipt_opt = db
-                    .get_mem_pool_transaction_receipt(&tx_hash)?
-                    .map(Into::into);
-                Ok(receipt_opt)
-            } else {
-                Ok(None)
-            }
-        }
+        None => Ok(None),
     }
 }
 
