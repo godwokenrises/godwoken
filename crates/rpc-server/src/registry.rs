@@ -24,11 +24,12 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    packed::{self, BlockInfo, RawL2Block, RollupConfig},
+    packed::{self, BlockInfo, L2Transaction, RawL2Block, RollupConfig},
     prelude::*,
 };
 use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
+use smol::channel::Sender;
 use smol::lock::Mutex;
 use std::{
     convert::{TryFrom, TryInto},
@@ -49,6 +50,7 @@ const INTERNAL_ERROR_ERR_CODE: i64 = -32099;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
 const INVALID_PARAM_ERR_CODE: i64 = -32602;
 const INVALID_REQUEST: i64 = -32600;
+const MEMPOOL_IS_FULL_ERR_CODE: i64 = -32098;
 
 fn header_not_found_err() -> RpcError {
     RpcError::Provided {
@@ -132,6 +134,7 @@ pub struct Registry {
     mem_pool_config: MemPoolConfig,
     backend_info: Vec<BackendInfo>,
     node_mode: NodeMode,
+    tx_sender: Option<Sender<L2Transaction>>,
 }
 
 impl Registry {
@@ -147,6 +150,7 @@ impl Registry {
         offchain_mock_context: Option<OffChainMockContext>,
         mem_pool_config: MemPoolConfig,
         node_mode: NodeMode,
+        tx_sender: Option<Sender<L2Transaction>>,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -165,6 +169,7 @@ impl Registry {
             mem_pool_config,
             backend_info,
             node_mode,
+            tx_sender,
         }
     }
 
@@ -178,6 +183,7 @@ impl Registry {
             .with_data(Data::new(self.rollup_config))
             .with_data(Data::new(self.mem_pool_config))
             .with_data(Data::new(self.backend_info))
+            .with_data(Data::new(self.tx_sender))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -604,15 +610,14 @@ async fn execute_raw_l2transaction(
 
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
-    mem_pool: Data<MemPool>,
     store: Data<Store>,
+    tx_sender: Data<Option<Sender<L2Transaction>>>,
 ) -> Result<JsonH256, RpcError> {
-    let mem_pool = match mem_pool.clone() {
-        Some(mem_pool) => mem_pool,
-        None => {
-            return Err(mem_pool_is_disabled_err());
-        }
+    let tx_sender = match tx_sender.clone() {
+        Some(tx_sender) => tx_sender,
+        None => return Err(mem_pool_is_disabled_err()),
     };
+
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
     let tx_hash = to_jsonh256(tx.hash().into());
@@ -644,18 +649,14 @@ async fn submit_l2transaction(
             });
         }
     }
-    // run task in the background
-    smol::spawn(async move {
-        if let Err(err) = mem_pool.lock().await.push_transaction(tx.clone()) {
-            log::info!(
-                "[RPC] fail to push tx {:?} into mem-pool, err: {}",
-                faster_hex::hex_string(&tx.hash()),
-                err
-            );
-        }
-    })
-    .detach();
-    Ok(tx_hash)
+
+    match tx_sender.try_send(tx) {
+        Ok(_) => Ok(tx_hash),
+        Err(_) => Err(RpcError::Provided {
+            code: MEMPOOL_IS_FULL_ERR_CODE,
+            message: "mem pool is full",
+        }),
+    }
 }
 
 async fn submit_withdrawal_request(
