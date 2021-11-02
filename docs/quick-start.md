@@ -22,7 +22,7 @@ We can use gw-tools `setup` command to complete settings: building scripts, depl
 Before that, we need to prepare a deploy key with enough CKB(about 2 millions for the default setup).
 
 ```bash
-gw-tools setup -n 2 -k <deploy_key> --scripts-build-config build-scripts.json -c setup-config.json
+gw-tools setup -n 2 -k <deploy_key> --network devnet --scripts-build-config build-scripts.json -c setup-config.json
 ```
 
 The input file `scripts-build.json` describes how we build CKB scripts.
