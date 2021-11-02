@@ -307,6 +307,10 @@ impl RPCClient {
                 .await?,
         )?;
         let cell_info = if let Some(cell_with_status) = cell_with_status {
+            if cell_with_status.status != "live" {
+                return Ok(None);
+            }
+
             cell_with_status.cell.map(|cell| {
                 let output: ckb_types::packed::CellOutput = cell.output.into();
                 let output = CellOutput::new_unchecked(output.as_bytes());
