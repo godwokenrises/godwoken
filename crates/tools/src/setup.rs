@@ -229,13 +229,13 @@ fn init_node_wallet(
     network: WalletNetwork,
 ) -> NodeWalletInfo {
     let wallet_info = get_wallet_info(node_privkey);
-    let mut current_capacity = query_wallet_capacity(&wallet_info.address(network));
+    let mut current_capacity = query_wallet_capacity(wallet_info.address(network));
     log::info!("node's wallet capacity: {}", current_capacity);
     log::info!("Start to transfer ckb, and it will take 30 seconds...");
     transfer_ckb(&wallet_info, payer_privkey_path, node_initial_ckb, network);
     loop {
         thread::sleep(time::Duration::from_secs(5));
-        current_capacity = query_wallet_capacity(&wallet_info.address(network));
+        current_capacity = query_wallet_capacity(wallet_info.address(network));
         if current_capacity > 0f64 {
             break;
         }
@@ -331,7 +331,7 @@ fn transfer_ckb(
             "wallet",
             "transfer",
             "--to-address",
-            &node_wallet.address(network),
+            node_wallet.address(network),
             "--capacity",
             &ckb_amount.to_string(),
             "--tx-fee",
