@@ -1,4 +1,4 @@
-use ckb_fixed_hash::H256;
+use ckb_fixed_hash::{H160, H256};
 use gw_jsonrpc_types::{
     blockchain::{CellDep, Script},
     godwoken::{ChallengeTargetType, L2BlockCommittedInfo, RollupConfig},
@@ -48,7 +48,7 @@ pub struct RPCClientConfig {
 pub struct RPCConfig {
     pub allowed_sudt_proxy_creator_account_id: Vec<u32>,
     pub sudt_proxy_code_hashes: Vec<H256>,
-    pub allowed_polyjuice_contract_creator_account_ids: Option<HashSet<u32>>,
+    pub allowed_polyjuice_contract_creator_address: Option<HashSet<H160>>,
     pub polyjuice_script_code_hash: Option<H256>,
 }
 

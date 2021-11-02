@@ -24,27 +24,30 @@ impl From<gw_common::error::Error> for Error {
 
 pub struct PolyjuiceContractCreatorAllowList {
     pub polyjuice_code_hash: H256,
-    pub allowed_creator_ids: HashSet<u32>,
+    pub allowed_creator_eth_address: HashSet<[u8; 20]>,
 }
 
 impl PolyjuiceContractCreatorAllowList {
     pub fn from_rpc_config(config: &RPCConfig) -> Option<Self> {
         match (
-            &config.allowed_polyjuice_contract_creator_account_ids,
+            &config.allowed_polyjuice_contract_creator_address,
             &config.polyjuice_script_code_hash,
         ) {
-            (Some(allowed_creator_ids), Some(polyjuice_code_hash)) => Some(Self::new(
+            (Some(allowed_creator_address), Some(polyjuice_code_hash)) => Some(Self::new(
                 H256::from(polyjuice_code_hash.0),
-                allowed_creator_ids.clone(),
+                allowed_creator_address
+                    .iter()
+                    .map(|address| address.0)
+                    .collect(),
             )),
             _ => None,
         }
     }
 
-    pub fn new(polyjuice_code_hash: H256, allowed_creator_ids: HashSet<u32>) -> Self {
+    pub fn new(polyjuice_code_hash: H256, allowed_creator_eth_address: HashSet<[u8; 20]>) -> Self {
         Self {
             polyjuice_code_hash,
-            allowed_creator_ids,
+            allowed_creator_eth_address,
         }
     }
 
@@ -57,28 +60,43 @@ impl PolyjuiceContractCreatorAllowList {
         let from_id: u32 = tx.from_id().unpack();
         let to_id: u32 = tx.to_id().unpack();
 
-        // 0 is reversed for meta contract and 1 is reversed for sudt
-        if to_id < 2 {
+        // 1 is reversed for CKB sudt
+        if to_id == 1 {
             return Ok(());
         }
 
-        if self.allowed_creator_ids.contains(&from_id) {
-            return Ok(());
-        }
+        // check allowed list
+        {
+            let script_hash = state.get_script_hash(from_id)?;
+            let args: Bytes = state.get_script(&script_hash).unwrap().args().unpack();
 
-        let script_hash = state.get_script_hash(to_id)?;
-        let to_script = state
-            .get_script(&script_hash)
-            .ok_or(gw_common::error::Error::MissingKey)?;
+            // check if the args is a valid eth lock's args
+            if args.len() == 52 {
+                // get sender eth address
+                let mut sender_address = [0u8; 20];
+                sender_address.copy_from_slice(&args[32..]);
 
-        if Unpack::<H256>::unpack(&to_script.code_hash()) != self.polyjuice_code_hash {
-            return Ok(());
-        }
+                // return ok if sender is in the allowed list
+                if self.allowed_creator_eth_address.contains(&sender_address) {
+                    return Ok(());
+                }
+            }
+        };
 
-        let is_contract_create =
-            PolyjuiceArgs::is_contract_create(&Unpack::<Bytes>::unpack(&tx.args()));
+        // create contract through meta
+        let is_meta_create = to_id == 0;
 
-        if is_contract_create && !self.allowed_creator_ids.contains(&from_id) {
+        // create contract through polyjuice
+        let is_polyjuice_create = {
+            let script_hash = state.get_script_hash(to_id)?;
+            let to_script = state
+                .get_script(&script_hash)
+                .ok_or(gw_common::error::Error::MissingKey)?;
+            Unpack::<H256>::unpack(&to_script.code_hash()) == self.polyjuice_code_hash
+                && PolyjuiceArgs::is_contract_create(&Unpack::<Bytes>::unpack(&tx.args()))
+        };
+
+        if is_meta_create || is_polyjuice_create {
             return Err(Error::PermissionDenied {
                 account_id: from_id,
             });
@@ -117,7 +135,8 @@ mod tests {
 
     use super::PolyjuiceContractCreatorAllowList;
 
-    const TEST_POLYJUICE_SCRIPT_CODE_HASH: [u8; 32] = [0u8; 32];
+    const TEST_POLYJUICE_SCRIPT_CODE_HASH: [u8; 32] = [1u8; 32];
+    const TEST_ETH_SCRIPT_CODE_HASH: [u8; 32] = [2u8; 32];
 
     #[derive(Default)]
     pub struct DummyState {
@@ -194,10 +213,21 @@ mod tests {
             .unwrap();
         dummy_state.insert_script(deployment_script.hash().into(), deployment_script);
 
-        let allowed_creator_id = dummy_state.create_account([99u8; 32].into()).unwrap();
+        let allowed_creator_id = {
+            let eth_script = Script::new_builder()
+                .code_hash(TEST_ETH_SCRIPT_CODE_HASH.pack())
+                .hash_type(ScriptHashType::Type.into())
+                .args([42u8; 52].pack())
+                .build();
+            dummy_state.insert_script(eth_script.hash().into(), eth_script.clone());
+            dummy_state
+                .create_account(eth_script.hash().into())
+                .unwrap()
+        };
+
         let allowlist = PolyjuiceContractCreatorAllowList::new(
             TEST_POLYJUICE_SCRIPT_CODE_HASH.into(),
-            HashSet::from_iter(vec![allowed_creator_id]),
+            HashSet::from_iter(vec![[42u8; 20]]),
         );
 
         // Creator from allowlist should be ok
@@ -211,7 +241,17 @@ mod tests {
             .is_ok());
 
         // Creator not in allowlist should be error
-        let non_allowed_creator_id = dummy_state.create_account([100u8; 32].into()).unwrap();
+        let non_allowed_creator_id = {
+            let eth_script = Script::new_builder()
+                .code_hash(TEST_ETH_SCRIPT_CODE_HASH.pack())
+                .hash_type(ScriptHashType::Type.into())
+                .args([100u8; 52].pack())
+                .build();
+            dummy_state.insert_script(eth_script.hash().into(), eth_script.clone());
+            dummy_state
+                .create_account(eth_script.hash().into())
+                .unwrap()
+        };
         let create_contract_tx = RawL2Transaction::new_builder()
             .from_id(non_allowed_creator_id.pack())
             .to_id(deployment_id.pack())
@@ -248,15 +288,16 @@ mod tests {
             .validate_with_state(&dummy_state, &not_polyjuice_tx)
             .is_ok());
 
-        // Reversed script should be ok
+        // Call meta contract should be failed
         let reserve_script_0_tx = RawL2Transaction::new_builder()
             .from_id(non_allowed_creator_id.pack())
             .to_id(0u32.pack())
             .build();
         assert!(allowlist
             .validate_with_state(&dummy_state, &reserve_script_0_tx)
-            .is_ok());
+            .is_err());
 
+        // Reversed CKB SUDT script should be ok
         let reserve_script_1_tx = RawL2Transaction::new_builder()
             .from_id(non_allowed_creator_id.pack())
             .to_id(1u32.pack())
