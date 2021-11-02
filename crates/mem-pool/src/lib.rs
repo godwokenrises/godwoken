@@ -8,6 +8,7 @@ pub mod custodian;
 pub mod default_provider;
 mod deposit;
 mod mem_block;
+pub mod poller;
 pub mod pool;
 pub mod traits;
 mod types;
