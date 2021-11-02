@@ -139,6 +139,7 @@ pub struct BlockProducer {
     rpc_client: RPCClient,
     ckb_genesis_info: CKBGenesisInfo,
     tests_control: Option<TestModeControl>,
+    last_submitted_block: Option<SubmittedBlock>,
 }
 
 impl BlockProducer {
@@ -176,6 +177,7 @@ impl BlockProducer {
             config,
             debug_config,
             tests_control,
+            last_submitted_block: None,
         };
         Ok(block_producer)
     }
@@ -234,15 +236,31 @@ impl BlockProducer {
             .should_issue_next_block(median_time, &poa_cell_input)
             .await?
         {
-            let (block_number, tx) = self.produce_next_block(median_time, rollup_cell).await?;
-
             let expected_next_block_number = global_state.block().count().unpack();
+            if let Some(last_submitted_block) = self.last_submitted_block.as_ref() {
+                let rpc_client = &self.rpc_client;
+                let tx_hash = &last_submitted_block.tx_hash;
+                if expected_next_block_number == last_submitted_block.number {
+                    if let Some(tx_status) = rpc_client.get_transaction_status(*tx_hash).await? {
+                        log::info!(
+                            "expected next block {} is already submitted in tx {} status {:?}",
+                            last_submitted_block.number,
+                            ckb_types::H256(last_submitted_block.tx_hash.into()),
+                            tx_status
+                        );
+
+                        return Ok(());
+                    }
+                }
+            }
+
+            let (block_number, tx) = self.produce_next_block(median_time, rollup_cell).await?;
             if expected_next_block_number != block_number {
                 log::warn!("produce unexpected next block, expect {} produce {}, wait until chain is synced to latest block", expected_next_block_number, block_number);
                 return Ok(());
             }
 
-            self.submit_block_tx(block_number, tx).await?;
+            self.last_submitted_block = self.submit_block_tx(block_number, tx).await?;
         }
         Ok(())
     }
@@ -347,7 +365,11 @@ impl BlockProducer {
         Err(anyhow!("[produce_next_block] package reach max retry"))
     }
 
-    async fn submit_block_tx(&mut self, block_number: u64, tx: Transaction) -> Result<()> {
+    async fn submit_block_tx(
+        &mut self,
+        block_number: u64,
+        tx: Transaction,
+    ) -> Result<Option<SubmittedBlock>> {
         let cycles = utils::dry_run_transaction(
             &self.debug_config,
             &self.rpc_client,
@@ -375,11 +397,18 @@ impl BlockProducer {
         // send transaction
         match self.rpc_client.send_transaction(tx.clone()).await {
             Ok(tx_hash) => {
+                let submitted_block = SubmittedBlock {
+                    number: block_number,
+                    tx_hash,
+                };
+
                 log::info!(
                     "Submitted l2 block {} in tx {}",
-                    block_number,
+                    submitted_block.number,
                     hex::encode(tx_hash.as_slice())
                 );
+
+                Ok(Some(submitted_block))
             }
             Err(err) => {
                 log::error!("Submitting l2 block error: {}", err);
@@ -405,9 +434,10 @@ impl BlockProducer {
                     log::debug!("Skip dumping non-script-error tx");
                 }
                 self.mem_pool.lock().await.reset_mem_block()?;
+
+                Ok(None)
             }
         }
-        Ok(())
     }
 
     async fn complete_tx_skeleton(
@@ -706,4 +736,9 @@ impl BlockProducer {
         log::debug!("final tx size: {}", tx.as_slice().len());
         Ok(tx)
     }
+}
+
+struct SubmittedBlock {
+    number: u64,
+    tx_hash: H256,
 }
