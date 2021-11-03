@@ -178,6 +178,8 @@ impl Default for OffChainValidatorConfig {
 pub struct MemPoolConfig {
     pub execute_l2tx_max_cycles: u64,
     pub submit_l2tx_max_cycles: u64,
+    pub max_batch_channel_buffer_size: usize,
+    pub max_batch_tx_withdrawal_size: usize,
 }
 
 impl Default for MemPoolConfig {
@@ -185,6 +187,8 @@ impl Default for MemPoolConfig {
         Self {
             execute_l2tx_max_cycles: 100_000_000,
             submit_l2tx_max_cycles: 70_000_000,
+            max_batch_channel_buffer_size: 5000,
+            max_batch_tx_withdrawal_size: 500,
         }
     }
 }
