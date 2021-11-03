@@ -21,7 +21,7 @@ use gw_generator::{
     Generator,
 };
 use gw_mem_pool::{
-    default_provider::DefaultMemPoolProvider, poller::Packager, pool::MemPool,
+    batch::MemPoolBatch, default_provider::DefaultMemPoolProvider, pool::MemPool,
     traits::MemPoolErrorTxHandler,
 };
 use gw_poa::PoA;
@@ -606,15 +606,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     };
 
     // Transaction packager background service
-    let tx_sender = match mem_pool.clone() {
-        Some(mem_pool) => {
-            let (tx, rx) = smol::channel::bounded(5000);
-            let tx_packager = Packager::new(mem_pool, rx);
-            smol::spawn(tx_packager.run_in_background()).detach();
-            Some(tx)
-        }
-        None => None,
-    };
+    let mem_pool_batch = mem_pool.clone().map(MemPoolBatch::new);
 
     // RPC registry
     let rpc_registry = Registry::new(
@@ -628,7 +620,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         offchain_mock_context,
         config.mem_pool.clone(),
         config.node_mode,
-        tx_sender,
+        mem_pool_batch,
     );
 
     let (exit_sender, exit_recv) = async_channel::bounded(100);

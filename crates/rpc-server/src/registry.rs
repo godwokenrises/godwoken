@@ -16,6 +16,7 @@ use gw_jsonrpc_types::{
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
+use gw_mem_pool::batch::{BatchError, MemPoolBatch};
 use gw_store::{
     chain_view::ChainView,
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
@@ -24,12 +25,11 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    packed::{self, BlockInfo, L2Transaction, RawL2Block, RollupConfig},
+    packed::{self, BlockInfo, RawL2Block, RollupConfig},
     prelude::*,
 };
 use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
-use smol::channel::Sender;
 use smol::lock::Mutex;
 use std::{
     convert::{TryFrom, TryInto},
@@ -134,7 +134,7 @@ pub struct Registry {
     mem_pool_config: MemPoolConfig,
     backend_info: Vec<BackendInfo>,
     node_mode: NodeMode,
-    tx_sender: Option<Sender<L2Transaction>>,
+    mem_pool_batch: Option<MemPoolBatch>,
 }
 
 impl Registry {
@@ -150,7 +150,7 @@ impl Registry {
         offchain_mock_context: Option<OffChainMockContext>,
         mem_pool_config: MemPoolConfig,
         node_mode: NodeMode,
-        tx_sender: Option<Sender<L2Transaction>>,
+        mem_pool_batch: Option<MemPoolBatch>,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -169,7 +169,7 @@ impl Registry {
             mem_pool_config,
             backend_info,
             node_mode,
-            tx_sender,
+            mem_pool_batch,
         }
     }
 
@@ -183,7 +183,7 @@ impl Registry {
             .with_data(Data::new(self.rollup_config))
             .with_data(Data::new(self.mem_pool_config))
             .with_data(Data::new(self.backend_info))
-            .with_data(Data::new(self.tx_sender))
+            .with_data(Data::new(self.mem_pool_batch))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -583,10 +583,10 @@ async fn execute_raw_l2transaction(
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     store: Data<Store>,
-    tx_sender: Data<Option<Sender<L2Transaction>>>,
+    mem_pool_batch: Data<Option<MemPoolBatch>>,
 ) -> Result<JsonH256, RpcError> {
-    let tx_sender = match tx_sender.clone() {
-        Some(tx_sender) => tx_sender,
+    let mem_pool_batch = match &*mem_pool_batch {
+        Some(mem_pool_batch) => mem_pool_batch,
         None => return Err(mem_pool_is_disabled_err()),
     };
 
@@ -622,9 +622,13 @@ async fn submit_l2transaction(
         }
     }
 
-    match tx_sender.try_send(tx) {
+    match mem_pool_batch.try_push_transaction(tx) {
         Ok(_) => Ok(tx_hash),
-        Err(_) => Err(RpcError::Provided {
+        Err(BatchError::Shutdown) => Err(RpcError::Provided {
+            code: INTERNAL_ERROR_ERR_CODE,
+            message: "mem pool is unavailable due to batch shutdown",
+        }),
+        Err(BatchError::ExceededMaxLimit) => Err(RpcError::Provided {
             code: MEMPOOL_IS_FULL_ERR_CODE,
             message: "mem pool is full",
         }),
@@ -633,10 +637,10 @@ async fn submit_l2transaction(
 
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
-    mem_pool: Data<MemPool>,
+    mem_pool_batch: Data<Option<MemPoolBatch>>,
 ) -> Result<(), RpcError> {
-    let mem_pool = match &*mem_pool {
-        Some(mem_pool) => mem_pool,
+    let mem_pool_batch = match &*mem_pool_batch {
+        Some(mem_pool_batch) => mem_pool_batch,
         None => {
             return Err(mem_pool_is_disabled_err());
         }
@@ -644,8 +648,18 @@ async fn submit_withdrawal_request(
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequest::from_slice(&withdrawal_bytes)?;
 
-    mem_pool.lock().await.push_withdrawal_request(withdrawal)?;
-    Ok(())
+    // TODO: Withdrwal request validation
+    match mem_pool_batch.try_push_withdrawal_request(withdrawal) {
+        Ok(_) => Ok(()),
+        Err(BatchError::Shutdown) => Err(RpcError::Provided {
+            code: INTERNAL_ERROR_ERR_CODE,
+            message: "mem pool is unavailable due to batch shutdown",
+        }),
+        Err(BatchError::ExceededMaxLimit) => Err(RpcError::Provided {
+            code: MEMPOOL_IS_FULL_ERR_CODE,
+            message: "mem pool is full",
+        }),
+    }
 }
 
 // short_address, sudt_id, block_number
