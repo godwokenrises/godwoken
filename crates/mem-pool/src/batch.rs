@@ -4,7 +4,6 @@ use gw_types::packed::{BlockInfo, L2Transaction, WithdrawalRequest};
 use smol::channel::{Receiver, Sender, TryRecvError, TrySendError};
 use smol::lock::Mutex;
 
-use crate::constants::{MAX_BATCH_CHANNEL_BUFFER_SIZE, MAX_BATCH_TX_WITHDRAWAL_SIZE};
 use crate::pool::{Inner, MemPool};
 
 use std::sync::Arc;
@@ -36,8 +35,12 @@ pub struct MemPoolBatch {
 
 impl MemPoolBatch {
     pub fn new(inner: Inner, mem_pool: Arc<Mutex<MemPool>>) -> Self {
-        let (tx, rx) = smol::channel::bounded(MAX_BATCH_CHANNEL_BUFFER_SIZE);
-        let background_batch = BatchTxWithdrawalInBackground::new(mem_pool, rx);
+        let (tx, rx) = smol::channel::bounded(inner.config().max_batch_channel_buffer_size);
+        let background_batch = BatchTxWithdrawalInBackground::new(
+            mem_pool,
+            rx,
+            inner.config().max_batch_tx_withdrawal_size,
+        );
         smol::spawn(background_batch.run()).detach();
 
         MemPoolBatch {
@@ -100,16 +103,25 @@ impl BatchRequest {
 struct BatchTxWithdrawalInBackground {
     mem_pool: Arc<Mutex<MemPool>>,
     batch_rx: Receiver<BatchRequest>,
+    batch_size: usize,
 }
 
 // TODO: tx priority than withdrawal
 impl BatchTxWithdrawalInBackground {
-    fn new(mem_pool: Arc<Mutex<MemPool>>, batch_rx: Receiver<BatchRequest>) -> Self {
-        BatchTxWithdrawalInBackground { mem_pool, batch_rx }
+    fn new(
+        mem_pool: Arc<Mutex<MemPool>>,
+        batch_rx: Receiver<BatchRequest>,
+        batch_size: usize,
+    ) -> Self {
+        BatchTxWithdrawalInBackground {
+            mem_pool,
+            batch_rx,
+            batch_size,
+        }
     }
 
     async fn run(self) {
-        let mut batch = Vec::with_capacity(MAX_BATCH_TX_WITHDRAWAL_SIZE);
+        let mut batch = Vec::with_capacity(self.batch_size);
 
         loop {
             // Wait until we have tx
@@ -123,7 +135,7 @@ impl BatchTxWithdrawalInBackground {
             }
 
             // TODO: Support interval batch
-            while batch.len() < MAX_BATCH_TX_WITHDRAWAL_SIZE {
+            while batch.len() < self.batch_size {
                 match self.batch_rx.try_recv() {
                     Ok(tx) => batch.push(tx),
                     Err(TryRecvError::Empty) => break,
