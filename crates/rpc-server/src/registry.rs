@@ -38,7 +38,6 @@ use std::{
 
 // type alias
 type RPCServer = Arc<Server<MapRouter>>;
-type MemPool = Option<Arc<Mutex<gw_mem_pool::pool::MemPool>>>;
 type AccountID = Uint32;
 type JsonH256 = ckb_fixed_hash::H256;
 type BoxedTestsRPCImpl = Box<dyn TestModeRPC + Send + Sync>;
@@ -124,7 +123,6 @@ fn get_state_db_at_block<'a>(
 
 pub struct Registry {
     generator: Arc<Generator>,
-    mem_pool: MemPool,
     store: Store,
     tests_rpc_impl: Option<Arc<BoxedTestsRPCImpl>>,
     chain: Arc<Mutex<Chain>>,
@@ -141,7 +139,6 @@ impl Registry {
     #[allow(clippy::too_many_arguments)]
     pub fn new<T>(
         store: Store,
-        mem_pool: MemPool,
         generator: Arc<Generator>,
         tests_rpc_impl: Option<Box<T>>,
         rollup_config: RollupConfig,
@@ -157,7 +154,6 @@ impl Registry {
     {
         let backend_info = get_backend_info(generator.clone());
         Self {
-            mem_pool,
             store,
             generator,
             tests_rpc_impl: tests_rpc_impl
@@ -177,7 +173,6 @@ impl Registry {
         let mut server = JsonrpcServer::new();
 
         server = server
-            .with_data(Data::new(self.mem_pool))
             .with_data(Data(self.generator.clone()))
             .with_data(Data::new(self.store))
             .with_data(Data::new(self.rollup_config))
@@ -669,7 +664,7 @@ enum GetBalanceParams {
 
 async fn get_balance(
     Params(params): Params<GetBalanceParams>,
-    mem_pool: Data<MemPool>,
+    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<Uint128, RpcError> {
     let (short_address, sudt_id, block_number) = match params {
@@ -678,7 +673,7 @@ async fn get_balance(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some())?;
+    let state_db = get_state_db_at_block(&db, block_number, mem_pool_batch.is_some())?;
     let tree = state_db.state_tree()?;
     let balance = tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?;
     Ok(balance.into())
@@ -694,7 +689,7 @@ enum GetStorageAtParams {
 
 async fn get_storage_at(
     Params(params): Params<GetStorageAtParams>,
-    mem_pool: Data<MemPool>,
+    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<JsonH256, RpcError> {
     let (account_id, key, block_number) = match params {
@@ -703,7 +698,7 @@ async fn get_storage_at(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some())?;
+    let state_db = get_state_db_at_block(&db, block_number, mem_pool_batch.is_some())?;
 
     let tree = state_db.state_tree()?;
     let key: H256 = to_h256(key);
@@ -715,11 +710,11 @@ async fn get_storage_at(
 
 async fn get_account_id_by_script_hash(
     Params((script_hash,)): Params<(JsonH256,)>,
-    mem_pool: Data<MemPool>,
+    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<Option<AccountID>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some())?;
+    let state_db = get_state_db_at_block(&db, None, mem_pool_batch.is_some())?;
     let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
@@ -741,7 +736,7 @@ enum GetNonceParams {
 
 async fn get_nonce(
     Params(params): Params<GetNonceParams>,
-    mem_pool: Data<MemPool>,
+    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<Uint32, RpcError> {
     let (account_id, block_number) = match params {
@@ -750,7 +745,7 @@ async fn get_nonce(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some())?;
+    let state_db = get_state_db_at_block(&db, block_number, mem_pool_batch.is_some())?;
     let tree = state_db.state_tree()?;
 
     let nonce = tree.get_nonce(account_id.into())?;
@@ -760,11 +755,11 @@ async fn get_nonce(
 
 async fn get_script(
     Params((script_hash,)): Params<(JsonH256,)>,
-    mem_pool: Data<MemPool>,
+    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<Option<Script>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some())?;
+    let state_db = get_state_db_at_block(&db, None, mem_pool_batch.is_some())?;
     let tree = state_db.state_tree()?;
 
     let script_hash = to_h256(script_hash);
@@ -775,11 +770,11 @@ async fn get_script(
 
 async fn get_script_hash(
     Params((account_id,)): Params<(AccountID,)>,
-    mem_pool: Data<MemPool>,
+    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<JsonH256, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some())?;
+    let state_db = get_state_db_at_block(&db, None, mem_pool_batch.is_some())?;
     let tree = state_db.state_tree()?;
 
     let script_hash = tree.get_script_hash(account_id.into())?;
@@ -788,11 +783,11 @@ async fn get_script_hash(
 
 async fn get_script_hash_by_short_address(
     Params((short_address,)): Params<(JsonBytes,)>,
-    mem_pool: Data<MemPool>,
+    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<Option<JsonH256>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some())?;
+    let state_db = get_state_db_at_block(&db, None, mem_pool_batch.is_some())?;
     let tree = state_db.state_tree()?;
     let script_hash_opt = tree.get_script_hash_by_short_address(&short_address.into_bytes());
     Ok(script_hash_opt.map(to_jsonh256))
@@ -808,7 +803,7 @@ enum GetDataParams {
 
 async fn get_data(
     Params(params): Params<GetDataParams>,
-    mem_pool: Data<MemPool>,
+    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<Option<JsonBytes>, RpcError> {
     let (data_hash, block_number) = match params {
@@ -817,7 +812,7 @@ async fn get_data(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some())?;
+    let state_db = get_state_db_at_block(&db, block_number, mem_pool_batch.is_some())?;
     let tree = state_db.state_tree()?;
 
     let data_opt = tree
