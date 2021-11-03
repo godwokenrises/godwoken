@@ -111,6 +111,10 @@ impl Inner {
         }
     }
 
+    pub fn config(&self) -> &MemPoolConfig {
+        &self.config
+    }
+
     pub fn current_tip(&self) -> (H256, u64) {
         *self.current_tip.load_full()
     }
