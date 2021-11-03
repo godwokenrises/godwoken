@@ -8,6 +8,3 @@ pub const MAX_MEM_BLOCK_TXS: usize = 500;
 pub const MAX_TX_SIZE: usize = 50_000;
 /// MAX withdrawal size 50 KB
 pub const MAX_WITHDRAWAL_SIZE: usize = 50_000;
-
-pub const MAX_BATCH_CHANNEL_BUFFER_SIZE: usize = 5000;
-pub const MAX_BATCH_TX_WITHDRAWAL_SIZE: usize = 300;
