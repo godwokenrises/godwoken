@@ -9,7 +9,10 @@
 //!
 
 use anyhow::{anyhow, bail, Result};
-use arc_swap::ArcSwap;
+use arc_swap::{
+    access::{DynAccess, DynGuard},
+    ArcSwap,
+};
 use gw_challenge::offchain::{
     OffChainCancelChallengeValidator, OffChainValidatorContext, RollBackSavePointError,
 };
@@ -82,6 +85,8 @@ pub struct Inner {
     current_tip: Arc<ArcSwap<(H256, u64)>>,
     /// generator instance
     generator: Arc<Generator>,
+    /// Mem pool provider
+    provider: Arc<ArcSwap<Box<dyn MemPoolProvider + Send + Sync>>>,
     /// Mem pool config
     config: Arc<MemPoolConfig>,
 }
@@ -91,14 +96,17 @@ impl Inner {
         store: Store,
         tip: (H256, u64),
         generator: Arc<Generator>,
+        provider: Box<dyn MemPoolProvider + Send + Sync>,
         config: Arc<MemPoolConfig>,
     ) -> Self {
         let current_tip = Arc::new(ArcSwap::new(Arc::new(tip)));
+        let provider = Arc::new(ArcSwap::new(Arc::new(provider)));
 
         Inner {
             store,
             current_tip,
             generator,
+            provider,
             config,
         }
     }
@@ -109,6 +117,14 @@ impl Inner {
 
     pub fn set_current_tip(&self, tip: (H256, u64)) {
         self.current_tip.swap(Arc::new(tip));
+    }
+
+    pub fn provider(&self) -> DynGuard<Box<dyn MemPoolProvider + Send + Sync>> {
+        self.provider.load()
+    }
+
+    pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send + Sync>) {
+        self.provider.store(Arc::new(provider));
     }
 
     pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
@@ -159,6 +175,48 @@ impl Inner {
         )?;
         Ok(run_result)
     }
+
+    // Withdrawal request verification
+    // TODO: duplicate withdrawal check
+    pub fn verify_withdrawal_request(&self, withdrawal_request: &WithdrawalRequest) -> Result<()> {
+        // check withdrawal size
+        if withdrawal_request.as_slice().len() > MAX_WITHDRAWAL_SIZE {
+            return Err(anyhow!("withdrawal over size"));
+        }
+
+        let db = self.store.begin_transaction();
+        let state_db = self.fetch_state_db(&db)?;
+        let state = state_db.state_tree()?;
+        // verify withdrawal signature
+        self.generator
+            .check_withdrawal_request_signature(&state, withdrawal_request)?;
+
+        // verify finalized custodian
+        let finalized_custodians = {
+            // query withdrawals from ckb-indexer
+            let last_finalized_block_number = self
+                .generator
+                .rollup_context()
+                .last_finalized_block_number(self.current_tip().1);
+            let task = self.provider().query_available_custodians(
+                vec![withdrawal_request.clone()],
+                last_finalized_block_number,
+                self.generator.rollup_context().to_owned(),
+            );
+            smol::block_on(task)?
+        };
+        let avaliable_custodians = AvailableCustodians::from(&finalized_custodians);
+        let withdrawal_generator =
+            WithdrawalGenerator::new(self.generator.rollup_context(), avaliable_custodians);
+        withdrawal_generator.verify_remained_amount(withdrawal_request)?;
+
+        // withdrawal basic verification
+        let asset_script =
+            db.get_asset_script(&withdrawal_request.raw().sudt_script_hash().unpack())?;
+        self.generator
+            .verify_withdrawal_request(&state, withdrawal_request, asset_script)
+            .map_err(Into::into)
+    }
 }
 
 /// MemPool
@@ -175,8 +233,6 @@ pub struct MemPool {
     pending: HashMap<u32, EntryList>,
     /// memory block
     mem_block: MemBlock,
-    /// Mem pool provider
-    provider: Box<dyn MemPoolProvider + Send>,
     /// Offchain cancel challenge validator
     offchain_validator: Option<OffChainCancelChallengeValidator>,
     /// Config
@@ -187,7 +243,7 @@ impl MemPool {
     pub fn create(
         store: Store,
         generator: Arc<Generator>,
-        provider: Box<dyn MemPoolProvider + Send>,
+        provider: Box<dyn MemPoolProvider + Send + Sync>,
         error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
         offchain_validator_context: Option<OffChainValidatorContext>,
         config: MemPoolConfig,
@@ -202,6 +258,7 @@ impl MemPool {
             store.clone(),
             tip,
             Arc::clone(&generator),
+            provider,
             Arc::clone(&config),
         );
 
@@ -228,7 +285,6 @@ impl MemPool {
             error_tx_handler,
             pending,
             mem_block,
-            provider,
             offchain_validator,
             config,
         };
@@ -250,8 +306,8 @@ impl MemPool {
         self.inner.clone()
     }
 
-    pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send>) {
-        self.provider = provider;
+    pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send + Sync>) {
+        self.inner.set_provider(provider);
     }
 
     pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
@@ -370,7 +426,7 @@ impl MemPool {
         }
 
         // basic verification
-        self.verify_withdrawal_request(&withdrawal)?;
+        self.inner.verify_withdrawal_request(&withdrawal)?;
 
         // Check replace-by-fee
         // TODO
@@ -388,42 +444,6 @@ impl MemPool {
         db.insert_mem_pool_withdrawal(&withdrawal_hash, withdrawal)?;
         db.commit()?;
         Ok(())
-    }
-
-    /// Verify withdrawal request without push it into pool
-    pub fn verify_withdrawal_request(&self, withdrawal_request: &WithdrawalRequest) -> Result<()> {
-        let db = self.store.begin_transaction();
-        let state_db = self.fetch_state_db(&db)?;
-        let state = state_db.state_tree()?;
-        // verify withdrawal signature
-        self.generator
-            .check_withdrawal_request_signature(&state, withdrawal_request)?;
-
-        // verify finalized custodian
-        let finalized_custodians = {
-            // query withdrawals from ckb-indexer
-            let last_finalized_block_number = self
-                .generator
-                .rollup_context()
-                .last_finalized_block_number(self.current_tip().1);
-            let task = self.provider.query_available_custodians(
-                vec![withdrawal_request.clone()],
-                last_finalized_block_number,
-                self.generator.rollup_context().to_owned(),
-            );
-            smol::block_on(task)?
-        };
-        let avaliable_custodians = AvailableCustodians::from(&finalized_custodians);
-        let withdrawal_generator =
-            WithdrawalGenerator::new(self.generator.rollup_context(), avaliable_custodians);
-        withdrawal_generator.verify_remained_amount(withdrawal_request)?;
-
-        // withdrawal basic verification
-        let asset_script =
-            db.get_asset_script(&withdrawal_request.raw().sudt_script_hash().unpack())?;
-        self.generator
-            .verify_withdrawal_request(&state, withdrawal_request, asset_script)
-            .map_err(Into::into)
     }
 
     /// Return pending contents
@@ -787,7 +807,7 @@ impl MemPool {
         }
 
         // estimate next l2block timestamp
-        let estimated_timestamp = smol::block_on(self.provider.estimate_next_blocktime())?;
+        let estimated_timestamp = smol::block_on(self.inner.provider().estimate_next_blocktime())?;
         // reset mem block state
         let merkle_state = new_tip_block.raw().post_account();
         let db = self.store.begin_transaction();
@@ -920,7 +940,7 @@ impl MemPool {
             }
         }
         // query deposit cells
-        let task = self.provider.collect_deposit_cells();
+        let task = self.inner.provider().collect_deposit_cells();
         // Handle state before txs
         // withdrawal
         self.finalize_withdrawals(db, withdrawals.collect())?;
@@ -999,7 +1019,7 @@ impl MemPool {
                 .generator
                 .rollup_context()
                 .last_finalized_block_number(self.current_tip().1);
-            let task = self.provider.query_available_custodians(
+            let task = self.inner.provider().query_available_custodians(
                 withdrawals.clone(),
                 last_finalized_block_number,
                 self.generator.rollup_context().to_owned(),
