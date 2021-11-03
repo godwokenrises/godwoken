@@ -438,15 +438,16 @@ async fn get_transaction_receipt(
 
 async fn execute_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
-    mem_pool: Data<MemPool>,
+    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<RunResult, RpcError> {
-    let mem_pool = match &*mem_pool {
-        Some(mem_pool) => mem_pool,
+    let mem_pool_batch = match &*mem_pool_batch {
+        Some(mem_pool_batch) => mem_pool_batch,
         None => {
             return Err(mem_pool_is_disabled_err());
         }
     };
+
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
 
@@ -464,11 +465,7 @@ async fn execute_l2transaction(
         .number(number.pack())
         .build();
 
-    let mut run_result = {
-        let mem_pool = mem_pool.lock().await;
-        mem_pool.unchecked_execute_transaction(&tx, &block_info)?
-    };
-
+    let mut run_result = mem_pool_batch.unchecked_execute_transaction(&tx, &block_info)?;
     if run_result.exit_code != 0 {
         let receipt = gw_types::offchain::ErrorTxReceipt {
             tx_hash: tx.hash().into(),
