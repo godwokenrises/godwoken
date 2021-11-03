@@ -9,6 +9,7 @@
 //!
 
 use anyhow::{anyhow, bail, Result};
+use arc_swap::ArcSwap;
 use gw_challenge::offchain::{
     OffChainCancelChallengeValidator, OffChainValidatorContext, RollBackSavePointError,
 };
@@ -72,81 +73,42 @@ impl Default for OutputParam {
     }
 }
 
-/// MemPool
-pub struct MemPool {
+/// Shared mem pool logic
+#[derive(Clone)]
+pub struct Inner {
     /// store
     store: Store,
     /// current tip
-    current_tip: (H256, u64),
+    current_tip: Arc<ArcSwap<(H256, u64)>>,
     /// generator instance
     generator: Arc<Generator>,
-    /// error tx handler,
-    error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
-    /// pending queue, contains executable contents(can be pacakged into block)
-    pending: HashMap<u32, EntryList>,
-    /// memory block
-    mem_block: MemBlock,
-    /// Mem pool provider
-    provider: Box<dyn MemPoolProvider + Send>,
-    /// Offchain cancel challenge validator
-    offchain_validator: Option<OffChainCancelChallengeValidator>,
     /// Mem pool config
-    config: MemPoolConfig,
+    config: Arc<MemPoolConfig>,
 }
 
-impl MemPool {
-    pub fn create(
+impl Inner {
+    pub fn new(
         store: Store,
+        tip: (H256, u64),
         generator: Arc<Generator>,
-        provider: Box<dyn MemPoolProvider + Send>,
-        error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
-        offchain_validator_context: Option<OffChainValidatorContext>,
-        config: MemPoolConfig,
-    ) -> Result<Self> {
-        let pending = Default::default();
+        config: Arc<MemPoolConfig>,
+    ) -> Self {
+        let current_tip = Arc::new(ArcSwap::new(Arc::new(tip)));
 
-        let tip_block = store.get_tip_block()?;
-        let tip = (tip_block.hash().into(), tip_block.raw().number().unpack());
-
-        let mem_block: MemBlock = Default::default();
-        let reverted_block_root = {
-            let db = store.begin_transaction();
-            let smt = db.reverted_block_smt()?;
-            smt.root().to_owned()
-        };
-        let offchain_validator = offchain_validator_context.map(|offchain_validator_context| {
-            OffChainCancelChallengeValidator::new(
-                offchain_validator_context,
-                mem_block.block_producer_id().pack(),
-                &tip_block,
-                mem_block.block_info().timestamp().unpack(),
-                reverted_block_root,
-            )
-        });
-
-        let mut mem_pool = MemPool {
+        Inner {
             store,
-            current_tip: tip,
+            current_tip,
             generator,
-            error_tx_handler,
-            pending,
-            mem_block,
-            provider,
-            offchain_validator,
             config,
-        };
-
-        // set tip
-        mem_pool.reset(None, Some(tip.0))?;
-        Ok(mem_pool)
+        }
     }
 
-    pub fn mem_block(&self) -> &MemBlock {
-        &self.mem_block
+    pub fn current_tip(&self) -> (H256, u64) {
+        *self.current_tip.load_full()
     }
 
-    pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send>) {
-        self.provider = provider;
+    pub fn set_current_tip(&self, tip: (H256, u64)) {
+        self.current_tip.swap(Arc::new(tip));
     }
 
     pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
@@ -165,10 +127,143 @@ impl MemPool {
         };
         StateDBTransaction::from_checkpoint(
             db,
-            CheckPoint::new(self.current_tip.1, SubState::MemBlock),
+            CheckPoint::new(self.current_tip().1, SubState::MemBlock),
             db_mode,
         )
         .map_err(|err| anyhow!("err: {}", err))
+    }
+
+    /// Execute tx without push it into pool and check exit code
+    pub fn unchecked_execute_transaction(
+        &self,
+        tx: &L2Transaction,
+        block_info: &BlockInfo,
+    ) -> Result<RunResult> {
+        let db = self.store.begin_transaction();
+        let state_db = self.fetch_state_db(&db)?;
+        let state = state_db.state_tree()?;
+        let tip_block_hash = self.store.get_tip_block_hash()?;
+        let chain_view = ChainView::new(&db, tip_block_hash);
+        // verify tx signature
+        self.generator.check_transaction_signature(&state, tx)?;
+        // tx basic verification
+        self.generator.verify_transaction(&state, tx)?;
+        // execute tx
+        let raw_tx = tx.raw();
+        let run_result = self.generator.unchecked_execute_transaction(
+            &chain_view,
+            &state,
+            block_info,
+            &raw_tx,
+            self.config.execute_l2tx_max_cycles,
+        )?;
+        Ok(run_result)
+    }
+}
+
+/// MemPool
+pub struct MemPool {
+    /// Inner common logic
+    inner: Inner,
+    /// Store
+    store: Store,
+    /// Generator
+    generator: Arc<Generator>,
+    /// error tx handler,
+    error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
+    /// pending queue, contains executable contents(can be pacakged into block)
+    pending: HashMap<u32, EntryList>,
+    /// memory block
+    mem_block: MemBlock,
+    /// Mem pool provider
+    provider: Box<dyn MemPoolProvider + Send>,
+    /// Offchain cancel challenge validator
+    offchain_validator: Option<OffChainCancelChallengeValidator>,
+    /// Config
+    config: Arc<MemPoolConfig>,
+}
+
+impl MemPool {
+    pub fn create(
+        store: Store,
+        generator: Arc<Generator>,
+        provider: Box<dyn MemPoolProvider + Send>,
+        error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
+        offchain_validator_context: Option<OffChainValidatorContext>,
+        config: MemPoolConfig,
+    ) -> Result<Self> {
+        let pending = Default::default();
+
+        let tip_block = store.get_tip_block()?;
+        let tip = (tip_block.hash().into(), tip_block.raw().number().unpack());
+
+        let config = Arc::new(config);
+        let inner = Inner::new(
+            store.clone(),
+            tip,
+            Arc::clone(&generator),
+            Arc::clone(&config),
+        );
+
+        let mem_block: MemBlock = Default::default();
+        let reverted_block_root = {
+            let db = store.begin_transaction();
+            let smt = db.reverted_block_smt()?;
+            smt.root().to_owned()
+        };
+        let offchain_validator = offchain_validator_context.map(|offchain_validator_context| {
+            OffChainCancelChallengeValidator::new(
+                offchain_validator_context,
+                mem_block.block_producer_id().pack(),
+                &tip_block,
+                mem_block.block_info().timestamp().unpack(),
+                reverted_block_root,
+            )
+        });
+
+        let mut mem_pool = MemPool {
+            inner,
+            store,
+            generator,
+            error_tx_handler,
+            pending,
+            mem_block,
+            provider,
+            offchain_validator,
+            config,
+        };
+
+        // set tip
+        mem_pool.reset(None, Some(tip.0))?;
+        Ok(mem_pool)
+    }
+
+    pub fn mem_block(&self) -> &MemBlock {
+        &self.mem_block
+    }
+
+    pub fn current_tip(&self) -> (H256, u64) {
+        self.inner.current_tip()
+    }
+
+    pub fn inner(&self) -> Inner {
+        self.inner.clone()
+    }
+
+    pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send>) {
+        self.provider = provider;
+    }
+
+    pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
+        self.inner.fetch_state_db(db)
+    }
+
+    pub fn fetch_state_db_with_mode<'a>(
+        &self,
+        db: &'a StoreTransaction,
+        mode: MemBlockDBMode,
+    ) -> Result<StateDBTransaction<'a>> {
+        self.inner.fetch_state_db_with_mode(db, mode)
     }
 
     /// Push a layer2 tx into pool
@@ -230,33 +325,6 @@ impl MemPool {
         self.generator.check_transaction_signature(&state, tx)?;
 
         Ok(())
-    }
-
-    /// Execute tx without push it into pool and check exit code
-    pub fn unchecked_execute_transaction(
-        &self,
-        tx: &L2Transaction,
-        block_info: &BlockInfo,
-    ) -> Result<RunResult> {
-        let db = self.store.begin_transaction();
-        let state_db = self.fetch_state_db(&db)?;
-        let state = state_db.state_tree()?;
-        let tip_block_hash = self.store.get_tip_block_hash()?;
-        let chain_view = ChainView::new(&db, tip_block_hash);
-        // verify tx signature
-        self.generator.check_transaction_signature(&state, tx)?;
-        // tx basic verification
-        self.generator.verify_transaction(&state, tx)?;
-        // execute tx
-        let raw_tx = tx.raw();
-        let run_result = self.generator.unchecked_execute_transaction(
-            &chain_view,
-            &state,
-            block_info,
-            &raw_tx,
-            self.config.execute_l2tx_max_cycles,
-        )?;
-        Ok(run_result)
     }
 
     /// Execute tx without: a) push it into pool; 2) verify signature; 3) check nonce
@@ -337,7 +405,7 @@ impl MemPool {
             let last_finalized_block_number = self
                 .generator
                 .rollup_context()
-                .last_finalized_block_number(self.current_tip.1);
+                .last_finalized_block_number(self.current_tip().1);
             let task = self.provider.query_available_custodians(
                 vec![withdrawal_request.clone()],
                 last_finalized_block_number,
@@ -367,7 +435,7 @@ impl MemPool {
     /// this method update current state of mem pool
     pub fn notify_new_tip(&mut self, new_tip: H256) -> Result<()> {
         // reset pool state
-        self.reset(Some(self.current_tip.0), Some(new_tip))?;
+        self.reset(Some(self.current_tip().0), Some(new_tip))?;
         Ok(())
     }
 
@@ -375,7 +443,7 @@ impl MemPool {
     pub fn reset_mem_block(&mut self) -> Result<()> {
         log::info!("[mem-pool] reset mem block");
         // reset pool state
-        self.reset(Some(self.current_tip.0), Some(self.current_tip.0))?;
+        self.reset(Some(self.current_tip().0), Some(self.current_tip().0))?;
         Ok(())
     }
 
@@ -410,7 +478,7 @@ impl MemPool {
         let db = self.store.begin_transaction();
         let state_db = StateDBTransaction::from_checkpoint(
             &db,
-            CheckPoint::new(self.current_tip.1, SubState::Block),
+            CheckPoint::new(self.current_tip().1, SubState::Block),
             StateDBMode::ReadOnly,
         )?;
         // generate kv state & merkle proof from tip state
@@ -466,7 +534,7 @@ impl MemPool {
             .ok_or_else(|| anyhow!("Mem block has no txs prev state checkpoint"))?;
         let prev_merkle_state = mem_block.prev_merkle_state().clone();
         let parent_block = db
-            .get_block(&self.current_tip.0)?
+            .get_block(&self.current_tip().0)?
             .ok_or_else(|| anyhow!("can't found tip block"))?;
 
         let block_info = mem_block.block_info();
@@ -736,7 +804,8 @@ impl MemPool {
         }
 
         // set tip
-        self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
+        self.inner
+            .set_current_tip((new_tip, new_tip_block.raw().number().unpack()));
 
         // mem block withdrawals
         let mem_block_withdrawals: Vec<_> = {
@@ -929,7 +998,7 @@ impl MemPool {
             let last_finalized_block_number = self
                 .generator
                 .rollup_context()
-                .last_finalized_block_number(self.current_tip.1);
+                .last_finalized_block_number(self.current_tip().1);
             let task = self.provider.query_available_custodians(
                 withdrawals.clone(),
                 last_finalized_block_number,

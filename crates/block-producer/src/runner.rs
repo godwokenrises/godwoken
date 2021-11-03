@@ -606,7 +606,13 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     };
 
     // Transaction packager background service
-    let mem_pool_batch = mem_pool.clone().map(MemPoolBatch::new);
+    let mem_pool_batch = match mem_pool.as_ref() {
+        Some(mem_pool) => {
+            let inner = smol::block_on(mem_pool.lock()).inner();
+            Some(MemPoolBatch::new(inner, Arc::clone(mem_pool)))
+        }
+        None => None,
+    };
 
     // RPC registry
     let rpc_registry = Registry::new(

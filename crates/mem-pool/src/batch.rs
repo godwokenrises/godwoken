@@ -1,10 +1,11 @@
 use anyhow::Result;
-use gw_types::packed::{L2Transaction, WithdrawalRequest};
+use gw_types::offchain::RunResult;
+use gw_types::packed::{BlockInfo, L2Transaction, WithdrawalRequest};
 use smol::channel::{Receiver, Sender, TryRecvError, TrySendError};
 use smol::lock::Mutex;
 
 use crate::constants::{MAX_BATCH_CHANNEL_BUFFER_SIZE, MAX_BATCH_TX_WITHDRAWAL_SIZE};
-use crate::pool::MemPool;
+use crate::pool::{Inner, MemPool};
 
 use std::sync::Arc;
 
@@ -27,16 +28,18 @@ impl<T> From<TrySendError<T>> for BatchError {
 
 #[derive(Clone)]
 pub struct MemPoolBatch {
+    inner: Inner,
     background_batch_tx: Sender<BatchRequest>,
 }
 
 impl MemPoolBatch {
-    pub fn new(mem_pool: Arc<Mutex<MemPool>>) -> Self {
+    pub fn new(inner: Inner, mem_pool: Arc<Mutex<MemPool>>) -> Self {
         let (tx, rx) = smol::channel::bounded(MAX_BATCH_CHANNEL_BUFFER_SIZE);
         let background_batch = BatchTxWithdrawalInBackground::new(mem_pool, rx);
         smol::spawn(background_batch.run()).detach();
 
         MemPoolBatch {
+            inner,
             background_batch_tx: tx,
         }
     }
@@ -48,11 +51,22 @@ impl MemPoolBatch {
         Ok(())
     }
 
-    pub fn try_push_withdrawal_request(&self, req: WithdrawalRequest) -> Result<(), BatchError> {
+    pub fn try_push_withdrawal_request(
+        &self,
+        withdrawal: WithdrawalRequest,
+    ) -> Result<(), BatchError> {
         self.background_batch_tx
-            .try_send(BatchRequest::Withdrawal(req))?;
+            .try_send(BatchRequest::Withdrawal(withdrawal))?;
 
         Ok(())
+    }
+
+    pub fn unchecked_execute_transaction(
+        &self,
+        tx: &L2Transaction,
+        block_info: &BlockInfo,
+    ) -> Result<RunResult> {
+        self.inner.unchecked_execute_transaction(tx, block_info)
     }
 }
 
