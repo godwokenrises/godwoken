@@ -15,6 +15,8 @@ pub enum BatchError {
     ExceededMaxLimit,
     #[error("background batch service shutdown")]
     Shutdown,
+    #[error("push {0}")]
+    Push(anyhow::Error),
 }
 
 impl<T> From<TrySendError<T>> for BatchError {
@@ -55,6 +57,10 @@ impl MemPoolBatch {
         &self,
         withdrawal: WithdrawalRequest,
     ) -> Result<(), BatchError> {
+        self.inner
+            .verify_withdrawal_request(&withdrawal)
+            .map_err(BatchError::Push)?;
+
         self.background_batch_tx
             .try_send(BatchRequest::Withdrawal(withdrawal))?;
 
@@ -96,6 +102,7 @@ struct BatchTxWithdrawalInBackground {
     batch_rx: Receiver<BatchRequest>,
 }
 
+// TODO: tx priority than withdrawal
 impl BatchTxWithdrawalInBackground {
     fn new(mem_pool: Arc<Mutex<MemPool>>, batch_rx: Receiver<BatchRequest>) -> Self {
         BatchTxWithdrawalInBackground { mem_pool, batch_rx }
