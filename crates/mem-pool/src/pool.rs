@@ -331,7 +331,7 @@ impl MemPool {
         let db = self.store.begin_transaction();
         self.push_transaction_with_db(&db, tx)?;
         db.commit()?;
-        log::info!("pushed tx {}ms", t.elapsed().as_millis());
+        log::info!("push tx total time {}ms", t.elapsed().as_millis());
         Ok(())
     }
 
@@ -353,10 +353,14 @@ impl MemPool {
         }
 
         // verification
+        let t = Instant::now();
         self.verify_tx(db, &tx)?;
+        log::debug!("[push tx] basic verify time: {}ms", t.elapsed().as_millis());
 
         // instantly run tx in background & update local state
+        let t = Instant::now();
         let tx_receipt = self.finalize_tx(db, tx.clone())?;
+        log::debug!("[push tx] finalize tx time: {}ms", t.elapsed().as_millis());
 
         // save tx receipt in mem pool
         self.mem_block.push_tx(tx_hash, &tx_receipt);
@@ -1168,6 +1172,7 @@ impl MemPool {
 
         // execute tx
         let raw_tx = tx.raw();
+        let t = Instant::now();
         let run_result = self.generator.unchecked_execute_transaction(
             &chain_view,
             &state,
@@ -1175,6 +1180,7 @@ impl MemPool {
             &raw_tx,
             self.config.submit_l2tx_max_cycles,
         )?;
+        log::debug!("[push tx] execute tx time: {}ms", t.elapsed().as_millis());
 
         if let Some(ref mut offchain_validator) = self.offchain_validator {
             let maybe_cycles =
