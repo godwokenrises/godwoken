@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Instant,
+};
 
 use crate::{
     account_lock_manage::AccountLockManage,
@@ -688,7 +691,13 @@ impl Generator {
                 .load_backend(state, &script_hash)
                 .ok_or(TransactionError::BackendNotFound { script_hash })?;
             machine.load_program(&backend.generator, &[])?;
+            let t = Instant::now();
             exit_code = machine.run()?;
+            log::debug!(
+                "[execute tx] VM run time: {}ms, exit code: {}",
+                t.elapsed().as_millis(),
+                exit_code
+            );
             used_cycles = machine.machine.cycles();
         }
         // record used cycles
