@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::error::{AccountError, DepositError, Error, WithdrawalError};
 use crate::sudt::build_l2_sudt_script;
 use gw_common::{
@@ -91,18 +93,44 @@ impl<S: State + CodeStore> StateExt for S {
     }
 
     fn apply_run_result(&mut self, run_result: &RunResult) -> Result<(), Error> {
+        let t = Instant::now();
         for (k, v) in &run_result.write_values {
             self.update_raw(*k, *v)?;
         }
+        log::debug!(
+            "[apply run result] apply writes: {}ms, write_values: {}",
+            t.elapsed().as_millis(),
+            run_result.write_values.len()
+        );
+
+        let t = Instant::now();
         if let Some(id) = run_result.account_count {
             self.set_account_count(id)?;
         }
+        log::debug!(
+            "[apply run result] set account count: {}ms",
+            t.elapsed().as_millis(),
+        );
+
+        let t = Instant::now();
         for (script_hash, script) in &run_result.new_scripts {
             self.insert_script(*script_hash, Script::from_slice(script).expect("script"));
         }
+        log::debug!(
+            "[apply run result] apply new scripts: {}ms, new_scripts: {}",
+            t.elapsed().as_millis(),
+            run_result.new_scripts.len(),
+        );
+
+        let t = Instant::now();
         for (data_hash, data) in &run_result.write_data {
             self.insert_data(*data_hash, Bytes::from(data.clone()));
         }
+        log::debug!(
+            "[apply run result] apply write_data: {}ms, write_data: {}",
+            t.elapsed().as_millis(),
+            run_result.write_data.len(),
+        );
 
         Ok(())
     }
