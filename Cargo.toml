@@ -27,3 +27,9 @@ members = [
 
 [profile.release]
 overflow-checks = true
+
+[profile.release.build-override]
+opt-level = 3
+
+[profile.bench.build-override]
+opt-level = 3
