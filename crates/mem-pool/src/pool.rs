@@ -43,6 +43,7 @@ use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
     sync::Arc,
+    time::Instant,
 };
 
 use crate::{
@@ -328,9 +329,11 @@ impl MemPool {
 
     /// Push a layer2 tx into pool
     pub fn push_transaction(&mut self, tx: L2Transaction) -> Result<()> {
+        let t = Instant::now();
         let db = self.store.begin_transaction();
         self.push_transaction_with_db(&db, tx)?;
         db.commit()?;
+        log::info!("pushed tx {}ms", t.elapsed().as_millis());
         Ok(())
     }
 
@@ -459,7 +462,9 @@ impl MemPool {
     /// this method update current state of mem pool
     pub fn notify_new_tip(&mut self, new_tip: H256) -> Result<()> {
         // reset pool state
+        let t = Instant::now();
         self.reset(Some(self.current_tip().0), Some(new_tip))?;
+        log::info!("[mem-pool] notify_now_tip ({}ms)", t.elapsed().as_millis());
         Ok(())
     }
 
@@ -497,6 +502,7 @@ impl MemPool {
         &self,
         output_param: &OutputParam,
     ) -> Result<(Option<CollectedCustodianCells>, BlockParam)> {
+        let t = Instant::now();
         let (mem_block, post_merkle_state) = self.package_mem_block(output_param)?;
 
         let db = self.store.begin_transaction();
@@ -580,7 +586,8 @@ impl MemPool {
         let finalized_custodians = mem_block.finalized_custodians().cloned();
 
         log::debug!(
-            "output mem block, txs: {} tx withdrawals: {} state_checkpoints: {}",
+            "[mem-pool] output mem block ({}ms), txs: {} tx withdrawals: {} state_checkpoints: {}",
+            t.elapsed().as_millis(),
             mem_block.txs().len(),
             mem_block.withdrawals().len(),
             mem_block.state_checkpoints().len(),
