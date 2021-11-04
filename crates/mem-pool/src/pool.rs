@@ -1165,12 +1165,16 @@ impl MemPool {
 
     /// Execute tx & update local state
     fn finalize_tx(&mut self, db: &StoreTransaction, tx: L2Transaction) -> Result<TxReceipt> {
+        let t = Instant::now();
         let state_db = self.fetch_state_db(db)?;
         let mut state = state_db.state_tree()?;
         let tip_block_hash = db.get_tip_block_hash()?;
         let chain_view = ChainView::new(db, tip_block_hash);
-
         let block_info = self.mem_block.block_info();
+        log::debug!(
+            "[finalize tx] prepare context: {}ms",
+            t.elapsed().as_millis()
+        );
 
         // execute tx
         let raw_tx = tx.raw();
@@ -1182,7 +1186,10 @@ impl MemPool {
             &raw_tx,
             L2TX_MAX_CYCLES,
         )?;
-        log::debug!("[push tx] execute tx time: {}ms", t.elapsed().as_millis());
+        log::debug!(
+            "[finalize tx] execute tx time: {}ms",
+            t.elapsed().as_millis()
+        );
 
         if let Some(ref mut offchain_validator) = self.offchain_validator {
             let maybe_cycles =
@@ -1205,20 +1212,41 @@ impl MemPool {
                 last_log: run_result.logs.last().cloned(),
             };
             if let Some(ref mut error_tx_handler) = self.error_tx_handler {
+                let t = Instant::now();
                 error_tx_handler.handle_error_receipt(receipt).detach();
+                log::debug!(
+                    "[finalize tx] handle error tx: {}ms",
+                    t.elapsed().as_millis()
+                );
             }
 
             return Err(TransactionError::InvalidExitCode(run_result.exit_code).into());
         }
 
         // apply run result
+        let t = Instant::now();
         state.apply_run_result(&run_result)?;
+        log::debug!(
+            "[finalize tx] apply run result: {}ms",
+            t.elapsed().as_millis()
+        );
+
+        let t = Instant::now();
         state.submit_tree_to_mem_block()?;
+        log::debug!(
+            "[finalize tx] submit tree to mem_block: {}ms",
+            t.elapsed().as_millis()
+        );
 
         // generate tx receipt
+        let t = Instant::now();
         let merkle_state = state.merkle_state()?;
         let tx_receipt =
             TxReceipt::build_receipt(tx.witness_hash().into(), run_result, merkle_state);
+        log::debug!(
+            "[finalize tx] generate receipt: {}ms",
+            t.elapsed().as_millis()
+        );
 
         Ok(tx_receipt)
     }
