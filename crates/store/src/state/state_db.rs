@@ -1,8 +1,7 @@
 //! State DB
 
-use crate::constant::MEMORY_BLOCK_NUMBER;
 use crate::transaction::state::BlockStateRecordKeyReverse;
-use crate::{smt_store_impl::SMTStore, traits::KVStore, transaction::StoreTransaction};
+use crate::{smt::smt_store::SMTStore, traits::KVStore, transaction::StoreTransaction};
 use anyhow::{anyhow, Result};
 use gw_common::merkle_utils::calculate_state_checkpoint;
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
@@ -19,105 +18,6 @@ use gw_types::{
 };
 use std::{cell::RefCell, collections::HashSet, fmt, mem::size_of_val};
 
-const FLAG_DELETE_VALUE: u8 = 0;
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub struct WriteContext {
-    pub tx_offset: u32,
-}
-
-impl WriteContext {
-    pub fn new(tx_offset: u32) -> Self {
-        Self { tx_offset }
-    }
-}
-
-impl Default for WriteContext {
-    fn default() -> Self {
-        Self { tx_offset: 0 }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum StateDBMode {
-    Genesis,
-    ReadOnly,
-    Write(WriteContext),
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum SubState {
-    Withdrawal(u32),
-    PrevTxs,
-    Tx(u32),
-    Block, // Block post state
-    MemBlock,
-}
-
-impl SubState {
-    fn validate_in_block(&self, block: &L2Block) -> Result<()> {
-        match self {
-            SubState::Withdrawal(index) => {
-                if *index as usize >= block.withdrawals().len() {
-                    return Err(anyhow!("invalid withdrawal substate index"));
-                }
-            }
-            SubState::Tx(index) => {
-                if *index as usize >= block.transactions().len() {
-                    return Err(anyhow!("invalid tx substate index"));
-                }
-            }
-            _ => (),
-        }
-
-        Ok(())
-    }
-
-    fn extract_checkpoint_post_state_from_block(
-        &self,
-        db: &StoreTransaction,
-        block: &L2Block,
-    ) -> Result<AccountMerkleState, Error> {
-        self.validate_in_block(block).map_err(|e| e.to_string())?;
-
-        enum CheckPointIdx {
-            PrevTxs,
-            Idx(usize),
-        }
-
-        let checkpoint_idx = match *self {
-            SubState::Withdrawal(index) => CheckPointIdx::Idx(index as usize),
-            SubState::PrevTxs => CheckPointIdx::PrevTxs,
-            SubState::Tx(index) => CheckPointIdx::Idx(block.withdrawals().len() + index as usize),
-            SubState::Block => return Ok(block.raw().post_account()),
-            SubState::MemBlock => {
-                let root = db.get_mem_block_account_smt_root()?;
-                let count = db.get_mem_block_account_count()?;
-                let merkle_state = AccountMerkleState::new_builder()
-                    .merkle_root(root.pack())
-                    .count(count.pack())
-                    .build();
-                return Ok(merkle_state);
-            }
-        };
-
-        let checkpoint = match checkpoint_idx {
-            CheckPointIdx::Idx(idx) => {
-                let checkpoints = block.as_reader().raw().state_checkpoint_list().to_entity();
-                checkpoints.get(idx).expect("checkpoint exists")
-            }
-            CheckPointIdx::PrevTxs => {
-                let txs = block.as_reader().raw().submit_transactions();
-                txs.prev_state_checkpoint().to_entity()
-            }
-        };
-
-        db.get_checkpoint_post_state(&checkpoint)?
-            .ok_or_else(|| "can't find checkpoint".to_string().into())
-    }
-}
-
-/// Tracker state changes
 pub struct StateTracker {
     touched_keys: Option<RefCell<HashSet<H256>>>,
 }

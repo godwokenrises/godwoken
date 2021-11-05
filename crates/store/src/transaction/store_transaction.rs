@@ -63,10 +63,12 @@ impl StoreTransaction {
         self.inner.rollback()
     }
 
+    /// TODO Remove this
     pub fn set_save_point(&self) {
         self.inner.set_savepoint()
     }
 
+    /// TODO Remove this
     pub fn rollback_to_save_point(&self) -> Result<(), Error> {
         self.inner.rollback_to_savepoint()
     }
