@@ -16,8 +16,7 @@ use gw_types::{
 
 use super::StoreTransaction;
 use crate::{
-    constant::MEMORY_BLOCK_NUMBER,
-    smt_store_impl::SMTStore,
+    smt::smt_store::SMTStore,
     state::state_db::{StateContext, StateTree},
     traits::KVStore,
 };
