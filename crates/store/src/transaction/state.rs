@@ -15,7 +15,12 @@ use gw_types::{
 };
 
 use super::StoreTransaction;
-use crate::{constant::MEMORY_BLOCK_NUMBER, smt_store_impl::SMTStore, traits::KVStore};
+use crate::{
+    constant::MEMORY_BLOCK_NUMBER,
+    smt_store_impl::SMTStore,
+    state::state_db::{StateContext, StateTree},
+    traits::KVStore,
+};
 
 /// TODO use a variable instead of hardcode
 const NUMBER_OF_CONFIRMATION: u64 = 3600;
@@ -34,16 +39,13 @@ impl StoreTransaction {
         Ok(SMT::new(merkle_state.merkle_root().unpack(), smt_store))
     }
 
-    //     fn state_tree_with_merkle_state(
-    //         &self,
-    //         merkle_state: AccountMerkleState,
-    //     ) -> Result<StateTree<'_>, Error> {
-    //         Ok(StateTree::new(
-    //             self,
-    //             self.account_smt_with_merkle_state(merkle_state.clone())?,
-    //             merkle_state.count().unpack(),
-    //         ))
-    //     }
+    // get state tree
+    pub fn state_tree(&self, context: StateContext) -> Result<StateTree<'_>, Error> {
+        let block = self.get_tip_block()?;
+        let merkle_state = block.raw().post_account();
+        let tree = self.account_smt_with_merkle_state(merkle_state)?;
+        Ok(StateTree::new(tree, merkle_state.count().unpack(), context))
+    }
 
     // FIXME: This method may running into inconsistent state if current state is dirty.
     // We should separate the StateDB into ReadOnly & WriteOnly,

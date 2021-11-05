@@ -12,7 +12,7 @@ use gw_jsonrpc_types::debugger::ReprMockTransaction;
 use gw_mem_pool::pool::MemPool;
 use gw_store::{
     chain_view::ChainView,
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
+    state::state_db::{StateContext, StateTree},
     transaction::StoreTransaction,
     Store,
 };
@@ -648,12 +648,9 @@ impl Chain {
                     db.detach_block(&l2block)?;
                     // detach block state from state tree
                     {
-                        let state_db = StateDBTransaction::from_checkpoint(
-                            db,
-                            CheckPoint::from_block_hash(db, parent_block_hash, SubState::Block)?,
-                            StateDBMode::ReadOnly,
-                        )?;
-                        let tree = state_db.state_tree()?;
+                        let tree = db.state_tree(StateContext::DetachBlock(
+                            l2block.raw().number().unpack(),
+                        ))?;
                         tree.detach_block_state()?;
                     }
 
@@ -952,21 +949,18 @@ impl Chain {
         db.insert_asset_scripts(deposit_asset_scripts)?;
 
         let rollup_config = &self.generator.rollup_context().rollup_config;
-        db.attach_block(l2block.clone(), rollup_config)?;
+        db.attach_block(l2block.clone())?;
 
-        let state_db = StateDBTransaction::from_checkpoint(
-            db,
-            CheckPoint::new(block_number, SubState::Block),
-            StateDBMode::ReadOnly,
-        )?;
-        let tree = state_db.state_tree()?;
+        {
+            let tree = db.state_tree(StateContext::ReadOnly)?;
 
-        let post_merkle_root: H256 = l2block.raw().post_account().merkle_root().unpack();
-        assert_eq!(
-            tree.calculate_root()?,
-            post_merkle_root,
-            "post account merkle root must be consistent"
-        );
+            let post_merkle_root: H256 = l2block.raw().post_account().merkle_root().unpack();
+            assert_eq!(
+                tree.calculate_root()?,
+                post_merkle_root,
+                "post account merkle root must be consistent"
+            );
+        }
         self.local_state.tip = l2block;
         Ok(None)
     }
