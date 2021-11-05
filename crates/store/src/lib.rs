@@ -1,7 +1,7 @@
 pub mod chain_view;
 mod constant;
 pub mod smt_store_impl;
-pub mod state_db;
+pub mod state;
 mod store_impl;
 pub mod traits;
 pub mod transaction;
