@@ -155,7 +155,7 @@ impl StateTracker {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum StateContext {
-    None,
+    ReadOnly,
     AttachBlock(u64),
     DetachBlock(u64),
 }
@@ -163,21 +163,18 @@ pub enum StateContext {
 pub struct StateTree<'a> {
     tree: SMT<SMTStore<'a, StoreTransaction>>,
     account_count: u32,
-    db: &'a StoreTransaction,
     context: StateContext,
     tracker: StateTracker,
 }
 
 impl<'a> StateTree<'a> {
     pub fn new(
-        db: &'a StoreTransaction,
         tree: SMT<SMTStore<'a, StoreTransaction>>,
         account_count: u32,
         context: StateContext,
     ) -> Self {
         StateTree {
             tree,
-            db,
             account_count,
             context,
             tracker: StateTracker::new(),
@@ -203,15 +200,15 @@ impl<'a> StateTree<'a> {
         };
 
         // reset states to previous value
-        for record_key in self.db.iter_block_state_record(block_number) {
+        for record_key in self.db().iter_block_state_record(block_number) {
             let reverse_key =
                 BlockStateRecordKeyReverse::new(record_key.block_number(), &record_key.state_key());
-            let last_value = self.db.find_state_key_last_value(&reverse_key);
+            let last_value = self.db().find_state_key_last_value(&reverse_key);
             self.update_raw(record_key.state_key(), last_value.unwrap_or(H256::zero()))?;
         }
 
         // remove block's state record
-        self.db.remove_block_state_record(block_number)?;
+        self.db().remove_block_state_record(block_number)?;
 
         Ok(())
     }
@@ -219,13 +216,17 @@ impl<'a> StateTree<'a> {
     /// submit tree changes into memory block
     /// notice, this function do not commit the DBTransaction
     pub fn submit_tree_to_mem_block(&self) -> Result<(), Error> {
-        self.db
+        self.db()
             .set_mem_block_account_smt_root(*self.tree.root())
             .expect("set smt root");
-        self.db
+        self.db()
             .set_mem_block_account_count(self.account_count)
             .expect("set smt root");
         Ok(())
+    }
+
+    fn db(&self) -> &StoreTransaction {
+        &self.tree.store().inner_store()
     }
 }
 
@@ -242,7 +243,7 @@ impl<'a> State for StateTree<'a> {
         // record block's kv state
         match self.context {
             StateContext::AttachBlock(block_number) => {
-                self.db
+                self.db()
                     .record_block_state(block_number, key, value)
                     .expect("record block state");
             }
@@ -273,12 +274,12 @@ impl<'a> State for StateTree<'a> {
 
 impl<'a> CodeStore for StateTree<'a> {
     fn insert_script(&mut self, script_hash: H256, script: packed::Script) {
-        self.db
+        self.db()
             .insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())
             .expect("insert script");
 
         // build script_hash prefix search index
-        self.db
+        self.db()
             .insert_raw(
                 COLUMN_SCRIPT_PREFIX,
                 &script_hash.as_slice()[..20],
@@ -288,13 +289,13 @@ impl<'a> CodeStore for StateTree<'a> {
     }
 
     fn get_script(&self, script_hash: &H256) -> Option<packed::Script> {
-        self.db
+        self.db()
             .get(COLUMN_SCRIPT, script_hash.as_slice())
             .map(|slice| packed::ScriptReader::from_slice_should_be_ok(slice.as_ref()).to_entity())
     }
 
     fn get_script_hash_by_short_address(&self, script_hash_prefix: &[u8]) -> Option<H256> {
-        match self.db.get(COLUMN_SCRIPT_PREFIX, script_hash_prefix) {
+        match self.db().get(COLUMN_SCRIPT_PREFIX, script_hash_prefix) {
             Some(slice) => {
                 let mut hash = [0u8; 32];
                 hash.copy_from_slice(slice.as_ref());
@@ -305,13 +306,13 @@ impl<'a> CodeStore for StateTree<'a> {
     }
 
     fn insert_data(&mut self, data_hash: H256, code: Bytes) {
-        self.db
+        self.db()
             .insert_raw(COLUMN_DATA, data_hash.as_slice(), &code)
             .expect("insert data");
     }
 
     fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
-        self.db
+        self.db()
             .get(COLUMN_DATA, data_hash.as_slice())
             .map(|slice| Bytes::from(slice.to_vec()))
     }

@@ -26,6 +26,10 @@ impl<'a, DB: KVStore> SMTStore<'a, DB> {
             store,
         }
     }
+
+    pub fn inner_store(&self) -> &DB {
+        &self.store
+    }
 }
 
 impl<'a, DB: KVStore> Store<H256> for SMTStore<'a, DB> {
