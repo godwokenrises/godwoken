@@ -3,7 +3,7 @@
 /// Column families alias type
 pub type Col = u8;
 /// Total column number
-pub const COLUMNS: u32 = 28;
+pub const COLUMNS: u32 = 33;
 /// Column store meta data
 pub const COLUMN_META: Col = 0;
 /// Column store chain index
@@ -60,6 +60,16 @@ pub const COLUMN_ASSET_SCRIPT: Col = 25;
 pub const COLUMN_MEM_POOL_TRANSACTION: Col = 26;
 /// Column mem pool withdrawal
 pub const COLUMN_MEM_POOL_WITHDRAWAL: Col = 27;
+/// Column account SMT branch
+pub const COLUMN_MEM_POOL_ACCOUNT_SMT_BRANCH: Col = 28;
+/// Column account SMT leaf
+pub const COLUMN_MEM_POOL_ACCOUNT_SMT_LEAF: Col = 29;
+/// Column mem pool script
+pub const COLUMN_MEM_POOL_SCRIPT: Col = 30;
+/// Column data
+pub const COLUMN_MEM_POOL_DATA: Col = 31;
+/// Column script prefix
+pub const COLUMN_MEM_POOL_SCRIPT_PREFIX: Col = 32;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";

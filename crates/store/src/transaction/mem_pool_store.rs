@@ -1,64 +1,52 @@
-use gw_common::H256;
+use gw_common::{smt::SMT, H256};
 use gw_db::{
     error::Error,
     schema::{
-        COLUMN_MEM_POOL_TRANSACTION, COLUMN_MEM_POOL_TRANSACTION_RECEIPT,
-        COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META, META_MEM_POOL_BLOCK_INFO,
+        COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_MEM_POOL_ACCOUNT_SMT_BRANCH,
+        COLUMN_MEM_POOL_ACCOUNT_SMT_LEAF, COLUMN_MEM_POOL_DATA, COLUMN_MEM_POOL_SCRIPT,
+        COLUMN_MEM_POOL_SCRIPT_PREFIX, COLUMN_MEM_POOL_TRANSACTION,
+        COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
+        META_MEM_POOL_BLOCK_INFO,
     },
+    IteratorMode,
 };
 use gw_types::{packed, prelude::*};
 
 use super::StoreTransaction;
-use crate::{constant::MEMORY_BLOCK_NUMBER, traits::KVStore};
+use crate::{
+    smt::mem_pool_smt_store::{Columns, MemPoolSMTStore},
+    state::mem_pool_state_db::MemPoolStateTree,
+    traits::KVStore,
+};
 
-pub trait MemPoolStore {
-    fn insert_mem_pool_transaction(
-        &self,
-        tx_hash: &H256,
-        tx: packed::L2Transaction,
-    ) -> Result<(), Error>;
+impl StoreTransaction {
+    fn mem_pool_state_tree(&self) -> Result<MemPoolStateTree, Error> {
+        let mem_pool_columns = Columns {
+            leaf_col: COLUMN_MEM_POOL_ACCOUNT_SMT_LEAF,
+            branch_col: COLUMN_MEM_POOL_ACCOUNT_SMT_BRANCH,
+        };
+        let under_layer_columns = Columns {
+            leaf_col: COLUMN_ACCOUNT_SMT_LEAF,
+            branch_col: COLUMN_ACCOUNT_SMT_BRANCH,
+        };
+        let smt_store = MemPoolSMTStore::new(mem_pool_columns, under_layer_columns, self);
+        let merkle_root = self.get_mem_block_account_smt_root()?;
+        let account_count = self.get_mem_block_account_count()?;
+        let tree = SMT::new(merkle_root, smt_store);
+        Ok(MemPoolStateTree::new(tree, account_count))
+    }
 
-    fn get_mem_pool_transaction(
-        &self,
-        tx_hash: &H256,
-    ) -> Result<Option<packed::L2Transaction>, Error>;
-
-    fn remove_mem_pool_transaction(&self, tx_hash: &H256) -> Result<(), Error>;
-
-    fn insert_mem_pool_transaction_receipt(
-        &self,
-        tx_hash: &H256,
-        tx_receipt: packed::TxReceipt,
-    ) -> Result<(), Error>;
-
-    fn get_mem_pool_transaction_receipt(
-        &self,
-        tx_hash: &H256,
-    ) -> Result<Option<packed::TxReceipt>, Error>;
-
-    fn insert_mem_pool_withdrawal(
-        &self,
-        withdrawal_hash: &H256,
-        withdrawal: packed::WithdrawalRequest,
-    ) -> Result<(), Error>;
-
-    fn get_mem_pool_withdrawal(
-        &self,
-        withdrawal_hash: &H256,
-    ) -> Result<Option<packed::WithdrawalRequest>, Error>;
-
-    fn remove_mem_pool_withdrawal(&self, withdrawal_hash: &H256) -> Result<(), Error>;
-
-    fn update_mem_pool_block_info(&self, block_info: &packed::BlockInfo) -> Result<(), Error>;
-
-    fn get_mem_pool_block_info(&self) -> Result<Option<packed::BlockInfo>, Error>;
-
-    fn clear_mem_block_state(&self) -> Result<(), Error>;
-}
-
-impl MemPoolStore for StoreTransaction {
     fn clear_mem_block_state(&self) -> Result<(), Error> {
-        self.clear_block_state(MEMORY_BLOCK_NUMBER)
+        for col in [
+            COLUMN_MEM_POOL_SCRIPT,
+            COLUMN_MEM_POOL_DATA,
+            COLUMN_MEM_POOL_SCRIPT_PREFIX,
+        ] {
+            for (k, _v) in self.get_iter(col, IteratorMode::Start) {
+                self.delete(col, &k);
+            }
+        }
+        Ok(())
     }
 
     fn insert_mem_pool_transaction(
