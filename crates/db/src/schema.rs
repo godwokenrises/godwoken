@@ -44,8 +44,8 @@ pub const COLUMN_MEM_POOL_TRANSACTION_RECEIPT: Col = 17;
 pub const COLUMN_BLOCK_STATE_RECORD: Col = 18;
 /// Column script prefix
 pub const COLUMN_SCRIPT_PREFIX: Col = 19;
-/// Column checkpoint
-pub const COLUMN_CHECKPOINT: Col = 20;
+/// Column block state reverse record
+pub const COLUMN_BLOCK_STATE_REVERSE_RECORD: Col = 20;
 /// Column reverted block SMT branch
 pub const COLUMN_REVERTED_BLOCK_SMT_BRANCH: Col = 21;
 /// Column reverted block SMT leaf
