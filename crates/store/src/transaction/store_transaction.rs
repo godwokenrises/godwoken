@@ -27,9 +27,6 @@ use gw_types::{
 };
 use std::collections::HashSet;
 
-/// TODO use a variable instead of hardcode
-const NUMBER_OF_CONFIRMATION: u64 = 10000;
-
 pub struct StoreTransaction {
     pub(crate) inner: RocksDBTransaction,
 }
@@ -624,11 +621,7 @@ impl StoreTransaction {
     }
 
     /// Attach block to the rollup main chain
-    pub fn attach_block(
-        &self,
-        block: packed::L2Block,
-        _rollup_config: &RollupConfig,
-    ) -> Result<(), Error> {
+    pub fn attach_block(&self, block: packed::L2Block) -> Result<(), Error> {
         let raw = block.raw();
         let raw_number = raw.number();
         let block_hash = raw.hash();
@@ -664,11 +657,8 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn detach_block(
-        &self,
-        block: &packed::L2Block,
-        _rollup_config: &RollupConfig,
-    ) -> Result<(), Error> {
+    /// Delete block from DB
+    pub fn detach_block(&self, block: &packed::L2Block) -> Result<(), Error> {
         // remove transaction info
         for tx in block.transactions().into_iter() {
             let tx_hash = tx.hash();
@@ -702,98 +692,7 @@ impl StoreTransaction {
             parent_block_hash.as_slice(),
         )?;
         self.set_last_valid_tip_block_hash(&parent_block_hash)?;
-        // clear block state
-        self.clear_block_state(block_number)?;
 
         Ok(())
-    }
-
-    pub fn record_block_state(
-        &self,
-        block_number: u64,
-        tx_index: u32,
-        col: Col,
-        raw_key: &[u8],
-    ) -> Result<(), Error> {
-        let record_key = BlockStateRecordKey::new(block_number, tx_index, col, raw_key);
-        self.insert_raw(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice(), &[])
-    }
-
-    /// prune finalized block state record
-    fn prune_finalized_block_state_record(&self, tip_number: u64) -> Result<(), Error> {
-        if tip_number <= NUMBER_OF_CONFIRMATION {
-            return Ok(());
-        }
-        let to_be_pruned_block_number = tip_number - NUMBER_OF_CONFIRMATION - 1;
-        if to_be_pruned_block_number == 0 {
-            return Ok(());
-        }
-        self.prune_block_state_record(to_be_pruned_block_number)
-    }
-
-    pub(crate) fn prune_block_state_record(&self, block_number: u64) -> Result<(), Error> {
-        let iter = self.iter_block_state_record(block_number);
-        for record_key in iter {
-            self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
-        }
-        Ok(())
-    }
-
-    pub(crate) fn clear_block_state(&self, block_number: u64) -> Result<(), Error> {
-        let iter = self.iter_block_state_record(block_number);
-        for record_key in iter {
-            let column = record_key.get_column();
-            self.delete(column, record_key.state_key())?;
-            self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
-        }
-        Ok(())
-    }
-
-    fn iter_block_state_record(
-        &self,
-        block_number: u64,
-    ) -> impl Iterator<Item = BlockStateRecordKey> + '_ {
-        let start_key = BlockStateRecordKey::new(block_number, 0u32, 0u8, &[]);
-        self.get_iter(
-            COLUMN_BLOCK_STATE_RECORD,
-            IteratorMode::From(start_key.as_slice(), Forward),
-        )
-        .map(|(key, _value)| BlockStateRecordKey::from_vec(key.to_vec()))
-        .take_while(move |key| key.is_same_block(block_number))
-    }
-}
-
-// block_number(8 bytes) | tx_index(4 bytes) | col (1 byte) | key (n bytes)
-struct BlockStateRecordKey(Vec<u8>);
-
-impl BlockStateRecordKey {
-    fn new(block_number: u64, tx_index: u32, col: Col, key: &[u8]) -> Self {
-        let mut record_key = Vec::new();
-        record_key.resize(13 + key.len(), 0);
-        record_key[..8].copy_from_slice(&block_number.to_be_bytes());
-        record_key[8..12].copy_from_slice(&tx_index.to_be_bytes());
-        record_key[12] = col;
-        record_key[13..].copy_from_slice(key);
-        BlockStateRecordKey(record_key)
-    }
-
-    fn state_key(&self) -> &[u8] {
-        &self.0[13..]
-    }
-
-    fn from_vec(record_key: Vec<u8>) -> Self {
-        BlockStateRecordKey(record_key)
-    }
-
-    fn get_column(&self) -> u8 {
-        self.0[12]
-    }
-
-    fn is_same_block(&self, block_number: u64) -> bool {
-        self.0[..8] == block_number.to_be_bytes()
-    }
-
-    fn as_slice(&self) -> &[u8] {
-        self.0.as_slice()
     }
 }

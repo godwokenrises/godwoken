@@ -644,7 +644,18 @@ impl Chain {
                     );
 
                     let rollup_config = &self.generator().rollup_context().rollup_config;
-                    db.detach_block(&l2block, rollup_config)?;
+                    // detach block from DB
+                    db.detach_block(&l2block)?;
+                    // detach block state from state tree
+                    {
+                        let state_db = StateDBTransaction::from_checkpoint(
+                            db,
+                            CheckPoint::from_block_hash(db, parent_block_hash, SubState::Block)?,
+                            StateDBMode::ReadOnly,
+                        )?;
+                        let tree = state_db.state_tree()?;
+                        tree.detach_block_state()?;
+                    }
 
                     // Check local tip block
                     let local_tip = db.get_tip_block()?;
