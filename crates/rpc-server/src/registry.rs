@@ -2,8 +2,16 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
-use gw_challenge::offchain::OffChainMockContext;
-use gw_common::{blake2b::new_blake2b, state::State, H256};
+// use gw_challenge::offchain::OffChainMockContext;
+use gw_common::{
+    blake2b::new_blake2b,
+    h256_ext::H256Ext,
+    state::{
+        build_account_field_key, build_account_key, State, GW_ACCOUNT_NONCE_TYPE,
+        SUDT_KEY_FLAG_BALANCE,
+    },
+    H256,
+};
 use gw_config::{DebugConfig, MemPoolConfig, NodeMode};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
@@ -18,10 +26,7 @@ use gw_jsonrpc_types::{
 };
 use gw_mem_pool::batch::{BatchError, MemPoolBatch};
 use gw_store::{
-    chain_view::ChainView,
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
-    transaction::{mem_pool_store::MemPoolStore, StoreTransaction},
-    Store,
+    chain_view::ChainView, state::state_db::StateContext, transaction::StoreTransaction, Store,
 };
 use gw_traits::CodeStore;
 use gw_types::{
@@ -89,44 +94,12 @@ fn to_jsonh256(v: H256) -> JsonH256 {
     h.into()
 }
 
-#[allow(clippy::needless_lifetimes)]
-fn get_state_db_at_block<'a>(
-    db: &'a StoreTransaction,
-    block_number: Option<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64>,
-    is_mem_pool_enabled: bool,
-) -> Result<StateDBTransaction<'a>, RpcError> {
-    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
-    match block_number.map(|n| n.value()) {
-        Some(block_number) => {
-            if block_number > tip_block_number {
-                return Err(header_not_found_err());
-            }
-            StateDBTransaction::from_checkpoint(
-                db,
-                CheckPoint::new(block_number, SubState::Block),
-                StateDBMode::ReadOnly,
-            )
-            .map_err(Into::into)
-        }
-        None => {
-            let checkpoint = if is_mem_pool_enabled {
-                CheckPoint::new(tip_block_number, SubState::MemBlock)
-            } else {
-                // fallback to db
-                CheckPoint::new(tip_block_number, SubState::Block)
-            };
-            StateDBTransaction::from_checkpoint(db, checkpoint, StateDBMode::ReadOnly)
-                .map_err(Into::into)
-        }
-    }
-}
-
 pub struct Registry {
     generator: Arc<Generator>,
     store: Store,
     tests_rpc_impl: Option<Arc<BoxedTestsRPCImpl>>,
     chain: Arc<Mutex<Chain>>,
-    offchain_mock_context: Option<OffChainMockContext>,
+    // offchain_mock_context: Option<OffChainMockContext>,
     rollup_config: RollupConfig,
     debug_config: DebugConfig,
     mem_pool_config: MemPoolConfig,
@@ -144,7 +117,7 @@ impl Registry {
         rollup_config: RollupConfig,
         debug_config: DebugConfig,
         chain: Arc<Mutex<Chain>>,
-        offchain_mock_context: Option<OffChainMockContext>,
+        // offchain_mock_context: Option<OffChainMockContext>,
         mem_pool_config: MemPoolConfig,
         node_mode: NodeMode,
         mem_pool_batch: Option<MemPoolBatch>,
@@ -161,7 +134,7 @@ impl Registry {
             rollup_config,
             debug_config,
             chain,
-            offchain_mock_context,
+            // offchain_mock_context,
             mem_pool_config,
             backend_info,
             node_mode,
@@ -224,13 +197,13 @@ impl Registry {
 
         // Debug
         if self.debug_config.enable_debug_rpc {
-            server = server
-                .with_data(Data::new(self.chain))
-                .with_data(Data::new(self.offchain_mock_context))
-                .with_method(
-                    "debug_dump_cancel_challenge_tx",
-                    debug_dump_cancel_challenge_tx,
-                );
+            // server = server
+            //     .with_data(Data::new(self.chain))
+            //     .with_data(Data::new(self.offchain_mock_context))
+            //     .with_method(
+            //         "debug_dump_cancel_challenge_tx",
+            //         debug_dump_cancel_challenge_tx,
+            //     );
         }
 
         Ok(server.finish())
@@ -535,21 +508,33 @@ async fn execute_raw_l2transaction(
 
     // execute tx in task
     let task: smol::Task<Result<_>> = smol::spawn(async move {
-        let state_db = get_state_db_at_block(&db, block_number_opt.map(Into::into), true)
-            .map_err(|_err| anyhow!("get state db error"))?;
-        let state = state_db.state_tree()?;
         let chain_view = {
             let tip_block_hash = db.get_tip_block_hash()?;
             ChainView::new(&db, tip_block_hash)
         };
         // execute tx
-        let run_result = generator.unchecked_execute_transaction(
-            &chain_view,
-            &state,
-            &block_info,
-            &raw_l2tx,
-            execute_l2tx_max_cycles,
-        )?;
+        let run_result = match block_number_opt {
+            Some(block_number) => {
+                let state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
+                generator.unchecked_execute_transaction(
+                    &chain_view,
+                    &state,
+                    &block_info,
+                    &raw_l2tx,
+                    execute_l2tx_max_cycles,
+                )?
+            }
+            None => {
+                let state = db.mem_pool_state_tree()?;
+                generator.unchecked_execute_transaction(
+                    &chain_view,
+                    &state,
+                    &block_info,
+                    &raw_l2tx,
+                    execute_l2tx_max_cycles,
+                )?
+            }
+        };
         Ok(run_result)
     });
 
@@ -589,8 +574,7 @@ async fn submit_l2transaction(
     {
         // fetch mem-pool state
         let db = store.begin_transaction();
-        let state_db = get_state_db_at_block(&db, None, true)?;
-        let tree = state_db.state_tree()?;
+        let tree = db.mem_pool_state_tree()?;
         // sender_id
         let sender_id = tx.raw().from_id().unpack();
         let sender_nonce: u32 = tree.get_nonce(sender_id)?;
@@ -665,7 +649,6 @@ enum GetBalanceParams {
 
 async fn get_balance(
     Params(params): Params<GetBalanceParams>,
-    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<Uint128, RpcError> {
     let (short_address, sudt_id, block_number) = match params {
@@ -674,9 +657,16 @@ async fn get_balance(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, block_number, mem_pool_batch.is_some())?;
-    let tree = state_db.state_tree()?;
-    let balance = tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?;
+    let balance = match block_number {
+        Some(block_number) => {
+            let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
+            tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?
+        }
+        None => {
+            let tree = db.mem_pool_state_tree()?;
+            tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?
+        }
+    };
     Ok(balance.into())
 }
 
@@ -690,7 +680,6 @@ enum GetStorageAtParams {
 
 async fn get_storage_at(
     Params(params): Params<GetStorageAtParams>,
-    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<JsonH256, RpcError> {
     let (account_id, key, block_number) = match params {
@@ -699,11 +688,18 @@ async fn get_storage_at(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, block_number, mem_pool_batch.is_some())?;
-
-    let tree = state_db.state_tree()?;
-    let key: H256 = to_h256(key);
-    let value = tree.get_value(account_id.into(), &key)?;
+    let value = match block_number {
+        Some(block_number) => {
+            let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
+            let key: H256 = to_h256(key);
+            tree.get_value(account_id.into(), &key)?
+        }
+        None => {
+            let tree = db.mem_pool_state_tree()?;
+            let key: H256 = to_h256(key);
+            tree.get_value(account_id.into(), &key)?
+        }
+    };
 
     let json_value = to_jsonh256(value);
     Ok(json_value)
@@ -711,12 +707,10 @@ async fn get_storage_at(
 
 async fn get_account_id_by_script_hash(
     Params((script_hash,)): Params<(JsonH256,)>,
-    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<Option<AccountID>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, None, mem_pool_batch.is_some())?;
-    let tree = state_db.state_tree()?;
+    let tree = db.mem_pool_state_tree()?;
 
     let script_hash = to_h256(script_hash);
 
@@ -737,7 +731,6 @@ enum GetNonceParams {
 
 async fn get_nonce(
     Params(params): Params<GetNonceParams>,
-    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<Uint32, RpcError> {
     let (account_id, block_number) = match params {
@@ -746,22 +739,26 @@ async fn get_nonce(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, block_number, mem_pool_batch.is_some())?;
-    let tree = state_db.state_tree()?;
-
-    let nonce = tree.get_nonce(account_id.into())?;
+    let nonce = match block_number {
+        Some(block_number) => {
+            let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
+            tree.get_nonce(account_id.into())?
+        }
+        None => {
+            let tree = db.mem_pool_state_tree()?;
+            tree.get_nonce(account_id.into())?
+        }
+    };
 
     Ok(nonce.into())
 }
 
 async fn get_script(
     Params((script_hash,)): Params<(JsonH256,)>,
-    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<Option<Script>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, None, mem_pool_batch.is_some())?;
-    let tree = state_db.state_tree()?;
+    let tree = db.mem_pool_state_tree()?;
 
     let script_hash = to_h256(script_hash);
     let script_opt = tree.get_script(&script_hash).map(Into::into);
@@ -771,12 +768,10 @@ async fn get_script(
 
 async fn get_script_hash(
     Params((account_id,)): Params<(AccountID,)>,
-    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<JsonH256, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, None, mem_pool_batch.is_some())?;
-    let tree = state_db.state_tree()?;
+    let tree = db.mem_pool_state_tree()?;
 
     let script_hash = tree.get_script_hash(account_id.into())?;
     Ok(to_jsonh256(script_hash))
@@ -784,12 +779,10 @@ async fn get_script_hash(
 
 async fn get_script_hash_by_short_address(
     Params((short_address,)): Params<(JsonBytes,)>,
-    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<Option<JsonH256>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, None, mem_pool_batch.is_some())?;
-    let tree = state_db.state_tree()?;
+    let tree = db.mem_pool_state_tree()?;
     let script_hash_opt = tree.get_script_hash_by_short_address(&short_address.into_bytes());
     Ok(script_hash_opt.map(to_jsonh256))
 }
@@ -804,7 +797,6 @@ enum GetDataParams {
 
 async fn get_data(
     Params(params): Params<GetDataParams>,
-    mem_pool_batch: Data<Option<MemPoolBatch>>,
     store: Data<Store>,
 ) -> Result<Option<JsonBytes>, RpcError> {
     let (data_hash, block_number) = match params {
@@ -813,8 +805,7 @@ async fn get_data(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, block_number, mem_pool_batch.is_some())?;
-    let tree = state_db.state_tree()?;
+    let tree = db.mem_pool_state_tree()?;
 
     let data_opt = tree
         .get_data(&to_h256(data_hash))
@@ -856,65 +847,65 @@ async fn tests_should_produce_block(
     tests_rpc_impl.should_produce_block().await
 }
 
-async fn debug_dump_cancel_challenge_tx(
-    Params((target,)): Params<(DumpChallengeTarget,)>,
-    chain: Data<Arc<Mutex<Chain>>>,
-    offchain_mock_context: Data<Option<OffChainMockContext>>,
-) -> Result<ReprMockTransaction, RpcError> {
-    let offchain_mock_context = match *offchain_mock_context {
-        Some(ref ctx) => ctx,
-        None => {
-            return Err(RpcError::Provided {
-                code: INTERNAL_ERROR_ERR_CODE,
-                message: "offchain validator is not enable, unable to dump cancel challenge tx",
-            })
-        }
-    };
+// async fn debug_dump_cancel_challenge_tx(
+//     Params((target,)): Params<(DumpChallengeTarget,)>,
+//     chain: Data<Arc<Mutex<Chain>>>,
+//     offchain_mock_context: Data<Option<OffChainMockContext>>,
+// ) -> Result<ReprMockTransaction, RpcError> {
+//     let offchain_mock_context = match *offchain_mock_context {
+//         Some(ref ctx) => ctx,
+//         None => {
+//             return Err(RpcError::Provided {
+//                 code: INTERNAL_ERROR_ERR_CODE,
+//                 message: "offchain validator is not enable, unable to dump cancel challenge tx",
+//             })
+//         }
+//     };
 
-    let to_block_hash = |chain: &Chain, block_number: u64| -> Result<H256, RpcError> {
-        let db = chain.store().begin_transaction();
-        match db.get_block_hash_by_number(block_number) {
-            Ok(Some(hash)) => Ok(hash),
-            Ok(None) => Err(RpcError::Provided {
-                code: INVALID_PARAM_ERR_CODE,
-                message: "block hash not found",
-            }),
-            Err(err) => Err(RpcError::Full {
-                code: INTERNAL_ERROR_ERR_CODE,
-                message: err.to_string(),
-                data: None,
-            }),
-        }
-    };
+//     let to_block_hash = |chain: &Chain, block_number: u64| -> Result<H256, RpcError> {
+//         let db = chain.store().begin_transaction();
+//         match db.get_block_hash_by_number(block_number) {
+//             Ok(Some(hash)) => Ok(hash),
+//             Ok(None) => Err(RpcError::Provided {
+//                 code: INVALID_PARAM_ERR_CODE,
+//                 message: "block hash not found",
+//             }),
+//             Err(err) => Err(RpcError::Full {
+//                 code: INTERNAL_ERROR_ERR_CODE,
+//                 message: err.to_string(),
+//                 data: None,
+//             }),
+//         }
+//     };
 
-    let chain = chain.lock().await;
-    let (block_hash, target_index, target_type) = match target {
-        DumpChallengeTarget::ByBlockHash {
-            block_hash,
-            target_index,
-            target_type,
-        } => (to_h256(block_hash), target_index, target_type),
-        DumpChallengeTarget::ByBlockNumber {
-            block_number,
-            target_index,
-            target_type,
-        } => (
-            to_block_hash(&chain, block_number.into())?,
-            target_index,
-            target_type,
-        ),
-    };
+//     let chain = chain.lock().await;
+//     let (block_hash, target_index, target_type) = match target {
+//         DumpChallengeTarget::ByBlockHash {
+//             block_hash,
+//             target_index,
+//             target_type,
+//         } => (to_h256(block_hash), target_index, target_type),
+//         DumpChallengeTarget::ByBlockNumber {
+//             block_number,
+//             target_index,
+//             target_type,
+//         } => (
+//             to_block_hash(&chain, block_number.into())?,
+//             target_index,
+//             target_type,
+//         ),
+//     };
 
-    let target = gw_types::packed::ChallengeTarget::new_builder()
-        .block_hash(Into::<[u8; 32]>::into(block_hash).pack())
-        .target_index(target_index.value().pack())
-        .target_type(target_type.into())
-        .build();
+//     let target = gw_types::packed::ChallengeTarget::new_builder()
+//         .block_hash(Into::<[u8; 32]>::into(block_hash).pack())
+//         .target_index(target_index.value().pack())
+//         .target_type(target_type.into())
+//         .build();
 
-    let maybe_tx = chain.dump_cancel_challenge_tx(offchain_mock_context, target);
-    maybe_tx.map_err(|err| RpcError::Full {
-        code: INTERNAL_ERROR_ERR_CODE,
-        message: err.to_string(),
-        data: None,
-    })
-}
+//     let maybe_tx = chain.dump_cancel_challenge_tx(offchain_mock_context, target);
+//     maybe_tx.map_err(|err| RpcError::Full {
+//         code: INTERNAL_ERROR_ERR_CODE,
+//         message: err.to_string(),
+//         data: None,
+//     })
+// }

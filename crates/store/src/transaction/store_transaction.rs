@@ -1,18 +1,19 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::{smt_store_impl::SMTStore, traits::KVStore};
+use crate::{smt::smt_store::SMTStore, traits::KVStore};
 use gw_common::h256_ext::H256Ext;
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
 use gw_db::schema::{
     Col, COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
     COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH,
-    COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD, COLUMN_CHECKPOINT, COLUMN_INDEX,
-    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_BRANCH,
-    COLUMN_REVERTED_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION,
-    COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, META_BLOCK_SMT_ROOT_KEY,
-    META_CHAIN_ID_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY,
+    COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD, COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO,
+    COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF,
+    COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
+    COLUMN_TRANSACTION_RECEIPT, META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY,
+    META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY,
     META_MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY, META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
+use gw_db::ReadOptions;
 use gw_db::{
     error::Error, iter::DBIter, DBIterator, Direction::Forward, IteratorMode, RocksDBTransaction,
 };
@@ -42,6 +43,12 @@ impl KVStore for StoreTransaction {
     fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
         self.inner
             .iter(col, mode)
+            .expect("db operation should be ok")
+    }
+
+    fn get_iter_opts(&self, col: Col, mode: IteratorMode, opts: &ReadOptions) -> DBIter {
+        self.inner
+            .iter_opt(col, mode, opts)
             .expect("db operation should be ok")
     }
 
@@ -300,17 +307,17 @@ impl StoreTransaction {
             }))
     }
 
-    pub fn get_checkpoint_post_state(
-        &self,
-        checkpoint: &Byte32,
-    ) -> Result<Option<packed::AccountMerkleState>, Error> {
-        Ok(self
-            .get(COLUMN_CHECKPOINT, checkpoint.as_slice())
-            .map(|slice| {
-                packed::AccountMerkleStateReader::from_slice_should_be_ok(slice.as_ref())
-                    .to_entity()
-            }))
-    }
+    // pub fn get_checkpoint_post_state(
+    //     &self,
+    //     checkpoint: &Byte32,
+    // ) -> Result<Option<packed::AccountMerkleState>, Error> {
+    //     Ok(self
+    //         .get(COLUMN_CHECKPOINT, checkpoint.as_slice())
+    //         .map(|slice| {
+    //             packed::AccountMerkleStateReader::from_slice_should_be_ok(slice.as_ref())
+    //                 .to_entity()
+    //         }))
+    // }
 
     pub fn get_l2block_committed_info(
         &self,
@@ -562,11 +569,11 @@ impl StoreTransaction {
                 return Err(Error::from("unexpected no tx post state".to_string()));
             }
 
-            self.insert_raw(
-                COLUMN_CHECKPOINT,
-                checkpoint.as_slice(),
-                prev_txs_state.as_slice(),
-            )?;
+            // self.insert_raw(
+            //     COLUMN_CHECKPOINT,
+            //     checkpoint.as_slice(),
+            //     prev_txs_state.as_slice(),
+            // )?;
         }
 
         for (index, (tx, tx_receipt)) in block
@@ -594,13 +601,13 @@ impl StoreTransaction {
         if post_states.len() != state_checkpoint_list.len() {
             return Err(Error::from("unexpected block post state length".to_owned()));
         }
-        for (checkpoint, post_state) in state_checkpoint_list.zip(post_states) {
-            self.insert_raw(
-                COLUMN_CHECKPOINT,
-                checkpoint.as_slice(),
-                post_state.as_slice(),
-            )?;
-        }
+        // for (checkpoint, post_state) in state_checkpoint_list.zip(post_states) {
+        //     self.insert_raw(
+        //         COLUMN_CHECKPOINT,
+        //         checkpoint.as_slice(),
+        //         post_state.as_slice(),
+        //     )?;
+        // }
 
         Ok(())
     }

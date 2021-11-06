@@ -1,7 +1,7 @@
 #![allow(clippy::mutable_key_type)]
 
 use anyhow::{anyhow, Context, Result};
-use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
+// use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
 use gw_common::{sparse_merkle_tree, state::State, H256};
 use gw_config::ChainConfig;
 use gw_generator::{
@@ -261,40 +261,40 @@ impl Chain {
         Ok(())
     }
 
-    pub fn dump_cancel_challenge_tx(
-        &self,
-        offchain_mock_context: &OffChainMockContext,
-        target: ChallengeTarget,
-    ) -> Result<ReprMockTransaction> {
-        let db = self.store().begin_transaction();
+    // pub fn dump_cancel_challenge_tx(
+    //     &self,
+    //     offchain_mock_context: &OffChainMockContext,
+    //     target: ChallengeTarget,
+    // ) -> Result<ReprMockTransaction> {
+    //     let db = self.store().begin_transaction();
 
-        let verify_context =
-            gw_challenge::context::build_verify_context(Arc::clone(&self.generator), &db, &target)
-                .with_context(|| "dump cancel challenge tx from chain")?;
+    //     let verify_context =
+    //         gw_challenge::context::build_verify_context(Arc::clone(&self.generator), &db, &target)
+    //             .with_context(|| "dump cancel challenge tx from chain")?;
 
-        let global_state = {
-            let get_state = db.get_block_post_global_state(&target.block_hash().unpack())?;
-            let state = get_state
-                .ok_or_else(|| anyhow!("post global state for challenge target {:?}", target))?;
-            let to_builder = state.as_builder().status((Status::Halting as u8).into());
-            to_builder.build()
-        };
+    //     let global_state = {
+    //         let get_state = db.get_block_post_global_state(&target.block_hash().unpack())?;
+    //         let state = get_state
+    //             .ok_or_else(|| anyhow!("post global state for challenge target {:?}", target))?;
+    //         let to_builder = state.as_builder().status((Status::Halting as u8).into());
+    //         to_builder.build()
+    //     };
 
-        let mock_output = gw_challenge::offchain::mock_cancel_challenge_tx(
-            &offchain_mock_context.mock_rollup,
-            &offchain_mock_context.mock_poa,
-            global_state,
-            target,
-            verify_context,
-            None,
-        )
-        .with_context(|| "dump cancel challenge tx from chain")?;
+    //     let mock_output = gw_challenge::offchain::mock_cancel_challenge_tx(
+    //         &offchain_mock_context.mock_rollup,
+    //         &offchain_mock_context.mock_poa,
+    //         global_state,
+    //         target,
+    //         verify_context,
+    //         None,
+    //     )
+    //     .with_context(|| "dump cancel challenge tx from chain")?;
 
-        gw_challenge::offchain::dump_tx(
-            &offchain_mock_context.rollup_cell_deps,
-            TxWithContext::from(mock_output),
-        )
-    }
+    //     gw_challenge::offchain::dump_tx(
+    //         &offchain_mock_context.rollup_cell_deps,
+    //         TxWithContext::from(mock_output),
+    //     )
+    // }
 
     /// update a layer1 action
     fn update_l1action(&mut self, db: &StoreTransaction, action: L1Action) -> Result<()> {
@@ -358,8 +358,9 @@ impl Chain {
 
                         self.local_state.tip = l2block;
 
-                        let context =
-                            gw_challenge::context::build_challenge_context(db, target.to_owned())?;
+                        // let context =
+                        //     gw_challenge::context::build_challenge_context(db, target.to_owned())?;
+                        let context = panic!("build challenge context");
                         return Ok(SyncEvent::BadBlock { context });
                     }
 
@@ -389,8 +390,9 @@ impl Chain {
                         self.challenge_target = Some(challenge_target.clone());
                         self.local_state.tip = l2block;
 
-                        let context =
-                            gw_challenge::context::build_challenge_context(db, challenge_target)?;
+                        // let context =
+                        //     gw_challenge::context::build_challenge_context(db, challenge_target)?;
+                        let context = unimplemented!();
                         Ok(SyncEvent::BadBlock { context })
                     } else {
                         let block_number = l2block.raw().number().unpack();
@@ -433,11 +435,12 @@ impl Chain {
                         log::info!("challenge cancelable, build verify context");
 
                         let generator = Arc::clone(&self.generator);
-                        let context = Box::new(gw_challenge::context::build_verify_context(
-                            generator, db, &target,
-                        )?);
+                        // let context = Box::new(gw_challenge::context::build_verify_context(
+                        //     generator, db, &target,
+                        // )?);
+                        let context = unimplemented!();
 
-                        return Ok(SyncEvent::BadChallenge { cell, context });
+                        // return Ok(SyncEvent::BadChallenge { cell, context });
                     }
 
                     if self.challenge_target.is_none()
@@ -451,7 +454,8 @@ impl Chain {
                     // If block is same, we don't care about target index and type, just want this
                     // bad block to be reverted anyway.
                     let revert_blocks = package_bad_blocks(db, &target.block_hash().unpack())?;
-                    let context = gw_challenge::context::build_revert_context(db, &revert_blocks)?;
+                    // let context = gw_challenge::context::build_revert_context(db, &revert_blocks)?;
+                    let context = unimplemented!();
                     // NOTE: Ensure db is rollback. build_revert_context will modify reverted_block_smt
                     // to compute merkle proof and root, so must rollback changes.
                     db.rollback()?;
@@ -467,11 +471,17 @@ impl Chain {
                     match self.challenge_target {
                         // Previous challenge miss right target, we should challenge it
                         Some(ref target) => {
-                            let context = gw_challenge::context::build_challenge_context(
-                                db,
-                                target.to_owned(),
-                            )?;
-                            Ok(SyncEvent::BadBlock { context })
+                            // let context = gw_challenge::context::build_challenge_context(
+                            //     db,
+                            //     target.to_owned(),
+                            // )?;
+                            panic!(
+                                "found bad block after challenge cancelled: {}, index: {}, type: {:?}",
+                                target.block_hash(),
+                                target.target_index(),
+                                target.target_type()
+                            );
+                            // Ok(SyncEvent::BadBlock { context })
                         }
                         None => Ok(SyncEvent::Success),
                     }
@@ -568,11 +578,17 @@ impl Chain {
                     // If our bad block isn't reverted, just challenge it
                     match self.challenge_target {
                         Some(ref target) => {
-                            let context = gw_challenge::context::build_challenge_context(
-                                db,
-                                target.to_owned(),
-                            )?;
-                            Ok(SyncEvent::BadBlock { context })
+                            // let context = gw_challenge::context::build_challenge_context(
+                            //     db,
+                            //     target.to_owned(),
+                            // )?;
+                            panic!(
+                                "found bad block: {}, index: {}, type: {:?}",
+                                target.block_hash(),
+                                target.target_index(),
+                                target.target_type()
+                            );
+                            // Ok(SyncEvent::BadBlock { context })
                         }
                         None => Ok(SyncEvent::Success),
                     }
@@ -647,7 +663,7 @@ impl Chain {
                     db.detach_block(&l2block)?;
                     // detach block state from state tree
                     {
-                        let tree = db.state_tree(StateContext::DetachBlock(
+                        let mut tree = db.state_tree(StateContext::DetachBlock(
                             l2block.raw().number().unpack(),
                         ))?;
                         tree.detach_block_state()?;
@@ -697,12 +713,7 @@ impl Chain {
 
                     // Check current state
                     let expected_state = l2block.raw().prev_account();
-                    let state_db = StateDBTransaction::from_checkpoint(
-                        db,
-                        CheckPoint::from_block_hash(db, parent_block_hash, SubState::Block)?,
-                        StateDBMode::ReadOnly,
-                    )?;
-                    let tree = state_db.state_tree()?;
+                    let tree = db.state_tree(StateContext::ReadOnly)?;
                     let expected_root: H256 = expected_state.merkle_root().unpack();
                     let expected_count: u32 = expected_state.count().unpack();
                     assert_eq!(tree.calculate_root()?, expected_root);
@@ -842,19 +853,13 @@ impl Chain {
             raw_block.post_account().merkle_root().unpack()
         };
 
-        let state_db = StateDBTransaction::from_checkpoint(
-            &db,
-            CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block)?,
-            StateDBMode::ReadOnly,
-        )?;
-
         assert_eq!(
-            state_db.account_smt().unwrap().root(),
+            db.account_smt().unwrap().root(),
             &expected_account_root,
             "account root consistent in DB"
         );
 
-        let tree = state_db.state_tree()?;
+        let tree = db.state_tree(StateContext::ReadOnly)?;
         let current_account_root = tree.calculate_root().unwrap();
 
         assert_eq!(
@@ -894,19 +899,16 @@ impl Chain {
         let tip_block_hash = self.local_state.tip().hash().into();
         let chain_view = ChainView::new(db, tip_block_hash);
 
-        let state_db = StateDBTransaction::from_checkpoint(
-            db,
-            CheckPoint::new(block_number.saturating_sub(1), SubState::Block),
-            StateDBMode::ReadOnly,
-        )?;
-        let tree = state_db.state_tree()?;
+        {
+            let tree = db.state_tree(StateContext::ReadOnly)?;
 
-        let prev_merkle_root: H256 = l2block.raw().prev_account().merkle_root().unpack();
-        assert_eq!(
-            tree.calculate_root()?,
-            prev_merkle_root,
-            "prev account merkle root must be consistent"
-        );
+            let prev_merkle_root: H256 = l2block.raw().prev_account().merkle_root().unpack();
+            assert_eq!(
+                tree.calculate_root()?,
+                prev_merkle_root,
+                "prev account merkle root must be consistent"
+            );
+        }
 
         // process transactions
         // TODO: run offchain validator before send challenge, to make sure the block is bad
