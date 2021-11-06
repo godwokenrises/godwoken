@@ -13,7 +13,7 @@ gw-config = { path = "../config" }
 gw-db = { path = "../db" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
-gw-generator = { path = "../generator" }
+gw-generator = { path = "../generator", features = ["enable-always-success-lock"] }
 gw-chain = { path = "../chain" }
 gw-mem-pool = { path = "../mem-pool" }
 gw-block-producer = { path = "../block-producer" }
