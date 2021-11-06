@@ -12,8 +12,11 @@ use gw_common::{
     state::{to_short_address, State},
     H256,
 };
-use gw_generator::{error::DepositError, Error};
-use gw_store::state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState};
+use gw_generator::{
+    error::{DepositError, WithdrawalError},
+    Error,
+};
+use gw_store::state::state_db::StateContext;
 use gw_types::{
     core::ScriptHashType,
     packed::{CellOutput, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest},
@@ -132,15 +135,9 @@ fn test_deposit_and_withdrawal() {
     )
     .unwrap();
     let (user_id, user_script_hash, ckb_balance) = {
-        let tip_block_hash = chain.store().get_tip_block_hash().unwrap();
         let db = chain.store().begin_transaction();
-        let state_db = StateDBTransaction::from_checkpoint(
-            &db,
-            CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block).unwrap(),
-            StateDBMode::ReadOnly,
-        )
-        .unwrap();
-        let tree = state_db.state_tree().unwrap();
+        // let tree = db.state_tree(StateContext::ReadOnly).unwrap();
+        let tree = db.mem_pool_state_tree().unwrap();
         // check user account
         assert_eq!(
             tree.get_account_count().unwrap(),
@@ -166,11 +163,8 @@ fn test_deposit_and_withdrawal() {
     }
     // check tx pool state
     {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mem_pool = smol::block_on(mem_pool.lock());
         let db = chain.store().begin_transaction();
-        let state_db = mem_pool.fetch_state_db(&db).unwrap();
-        let state = state_db.state_tree().unwrap();
+        let state = db.mem_pool_state_tree().unwrap();
         assert_eq!(
             state
                 .get_account_id_by_script_hash(&user_script_hash)
@@ -199,13 +193,7 @@ fn test_deposit_and_withdrawal() {
     // check status
     let tip_block_hash = chain.store().get_tip_block_hash().unwrap();
     let db = chain.store().begin_transaction();
-    let state_db = StateDBTransaction::from_checkpoint(
-        &db,
-        CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block).unwrap(),
-        StateDBMode::ReadOnly,
-    )
-    .unwrap();
-    let tree = state_db.state_tree().unwrap();
+    let tree = db.state_tree(StateContext::ReadOnly).unwrap();
     let ckb_balance2 = tree
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&user_script_hash))
         .unwrap();
@@ -216,8 +204,7 @@ fn test_deposit_and_withdrawal() {
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mem_pool = smol::block_on(mem_pool.lock());
-        let state_db = mem_pool.fetch_state_db(&db).unwrap();
-        let state = state_db.state_tree().unwrap();
+        let state = db.mem_pool_state_tree().unwrap();
         assert_eq!(
             state
                 .get_account_id_by_script_hash(&user_script_hash)
@@ -268,23 +255,25 @@ fn test_overdraft() {
 
     // withdrawal
     let withdraw_capacity = 600_00000000u64;
-    let result = withdrawal_from_chain(
+    let err = withdrawal_from_chain(
         &mut chain,
         rollup_cell,
         user_script_hash.into(),
         withdraw_capacity,
         H256::zero(),
         0,
+    )
+    .unwrap_err();
+    assert_eq!(
+        err.downcast::<gw_generator::Error>().unwrap(),
+        gw_generator::Error::from(WithdrawalError::Overdraft)
     );
-    assert!(result.unwrap_err().to_string().contains("Over withdrawal"));
-
     // check tx pool state
     {
         let db = chain.store().begin_transaction();
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mem_pool = smol::block_on(mem_pool.lock());
-        let state_db = mem_pool.fetch_state_db(&db).unwrap();
-        let state = state_db.state_tree().unwrap();
+        let state = db.mem_pool_state_tree().unwrap();
         assert_eq!(
             state
                 .get_sudt_balance(

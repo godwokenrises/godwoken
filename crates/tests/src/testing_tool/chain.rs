@@ -11,7 +11,7 @@ use gw_generator::{
     Generator,
 };
 use gw_mem_pool::pool::{MemPool, OutputParam};
-use gw_store::{transaction::mem_pool_store::MemPoolStore, Store};
+use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -140,7 +140,7 @@ pub fn setup_chain_with_account_lock_manage(
         store.clone(),
         Arc::clone(&generator),
         Box::new(provider),
-        None,
+        // None,
         None,
         Default::default(),
     )
@@ -277,11 +277,17 @@ pub fn construct_block(
     let provider = DummyMemPoolProvider {
         deposit_cells,
         fake_blocktime: Duration::from_millis(0),
-        collected_custodians,
+        collected_custodians: collected_custodians.clone(),
     };
     mem_pool.set_provider(Box::new(provider));
     // refresh mem block
     mem_pool.reset_mem_block()?;
+    let provider = DummyMemPoolProvider {
+        deposit_cells: Vec::default(),
+        fake_blocktime: Duration::from_millis(0),
+        collected_custodians,
+    };
+    mem_pool.set_provider(Box::new(provider));
 
     let (_custodians, block_param) = mem_pool.output_mem_block(&OutputParam::default()).unwrap();
     let param = ProduceBlockParam {
