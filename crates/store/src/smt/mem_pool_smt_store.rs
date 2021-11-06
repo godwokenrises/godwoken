@@ -12,12 +12,9 @@ use gw_common::{
 use gw_db::schema::Col;
 use gw_types::{packed, prelude::*};
 
-const DELETED_FLAG: u8 = 0;
+use super::Columns;
 
-pub struct Columns {
-    pub leaf_col: Col,
-    pub branch_col: Col,
-}
+const DELETED_FLAG: u8 = 0;
 
 /// MemPool SMTStore
 /// This is a mem-pool layer build upon SMTStore

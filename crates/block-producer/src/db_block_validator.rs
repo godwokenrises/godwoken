@@ -1,12 +1,12 @@
 use anyhow::{anyhow, bail, Context, Result};
 use gw_challenge::{
     cancel_challenge::LoadDataStrategy,
-    context::build_verify_context,
-    offchain::{
-        dump_tx, mock_cancel_challenge_tx,
-        verify_tx::{verify_tx, TxWithContext},
-        OffChainMockContext,
-    },
+    // context::build_verify_context,
+    // offchain::{
+    //     dump_tx, mock_cancel_challenge_tx,
+    //     verify_tx::{verify_tx, TxWithContext},
+    //     OffChainMockContext,
+    // },
 };
 use gw_common::H256;
 use gw_config::{Config, DBBlockValidatorConfig, DebugConfig};
@@ -241,102 +241,102 @@ impl DBBlockCancelChallengeValidator {
         Ok(())
     }
 
-    fn verify(
-        &self,
-        dump_context: DumpContext,
-        global_state: GlobalState,
-        challenge_target: ChallengeTarget,
-    ) -> Result<()> {
-        let db = self.store.begin_transaction();
-        let verify_context =
-            build_verify_context(Arc::clone(&self.generator), &db, &challenge_target)?;
+    // fn verify(
+    //     &self,
+    //     dump_context: DumpContext,
+    //     global_state: GlobalState,
+    //     challenge_target: ChallengeTarget,
+    // ) -> Result<()> {
+    //     let db = self.store.begin_transaction();
+    //     let verify_context =
+    //         build_verify_context(Arc::clone(&self.generator), &db, &challenge_target)?;
 
-        let verify_with_strategy = |load_data_strategy: LoadDataStrategy| -> Result<()> {
-            let mock_output = mock_cancel_challenge_tx(
-                &self.mock_ctx.mock_rollup,
-                &self.mock_ctx.mock_poa,
-                global_state.clone(),
-                challenge_target.clone(),
-                verify_context.clone(),
-                Some(load_data_strategy),
-            )?;
+    //     let verify_with_strategy = |load_data_strategy: LoadDataStrategy| -> Result<()> {
+    //         let mock_output = mock_cancel_challenge_tx(
+    //             &self.mock_ctx.mock_rollup,
+    //             &self.mock_ctx.mock_poa,
+    //             global_state.clone(),
+    //             challenge_target.clone(),
+    //             verify_context.clone(),
+    //             Some(load_data_strategy),
+    //         )?;
 
-            let result = verify_tx(
-                &self.mock_ctx.rollup_cell_deps,
-                TxWithContext::from(mock_output.clone()),
-                u64::MAX,
-            );
+    //         let result = verify_tx(
+    //             &self.mock_ctx.rollup_cell_deps,
+    //             TxWithContext::from(mock_output.clone()),
+    //             u64::MAX,
+    //         );
 
-            match result {
-                Ok(used_cycles) if used_cycles > self.config.verify_max_cycles => {
-                    self.dump_tx_to_file(
-                        &dump_context,
-                        load_data_strategy,
-                        &format!("used-cycles-{}", used_cycles),
-                        TxWithContext::from(mock_output),
-                    );
+    //         match result {
+    //             Ok(used_cycles) if used_cycles > self.config.verify_max_cycles => {
+    //                 self.dump_tx_to_file(
+    //                     &dump_context,
+    //                     load_data_strategy,
+    //                     &format!("used-cycles-{}", used_cycles),
+    //                     TxWithContext::from(mock_output),
+    //                 );
 
-                    Err(anyhow!(
-                        "exceeded max cycles, used {} expect <= {}",
-                        used_cycles,
-                        self.config.verify_max_cycles
-                    ))
-                }
-                Err(err) => {
-                    self.dump_tx_to_file(
-                        &dump_context,
-                        load_data_strategy,
-                        "",
-                        TxWithContext::from(mock_output),
-                    );
-                    Err(err)
-                }
-                Ok(_) => Ok(()),
-            }
-        };
+    //                 Err(anyhow!(
+    //                     "exceeded max cycles, used {} expect <= {}",
+    //                     used_cycles,
+    //                     self.config.verify_max_cycles
+    //                 ))
+    //             }
+    //             Err(err) => {
+    //                 self.dump_tx_to_file(
+    //                     &dump_context,
+    //                     load_data_strategy,
+    //                     "",
+    //                     TxWithContext::from(mock_output),
+    //                 );
+    //                 Err(err)
+    //             }
+    //             Ok(_) => Ok(()),
+    //         }
+    //     };
 
-        if verify_with_strategy(LoadDataStrategy::Witness).is_err() {
-            if let Err(err) = verify_with_strategy(LoadDataStrategy::CellDep) {
-                if !err.to_string().contains("exceeded max cycles, used") {
-                    return Err(err);
-                }
-            }
-        }
+    //     if verify_with_strategy(LoadDataStrategy::Witness).is_err() {
+    //         if let Err(err) = verify_with_strategy(LoadDataStrategy::CellDep) {
+    //             if !err.to_string().contains("exceeded max cycles, used") {
+    //                 return Err(err);
+    //             }
+    //         }
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    fn dump_tx_to_file(
-        &self,
-        dump_context: &DumpContext,
-        load_data_strategy: LoadDataStrategy,
-        addition_text: &str,
-        tx_with_context: TxWithContext,
-    ) {
-        let dump = || -> Result<_> {
-            let debug_config = &self.debug_config;
-            let dir = debug_config.debug_tx_dump_path.as_path();
-            create_dir_all(&dir)?;
+    // fn dump_tx_to_file(
+    //     &self,
+    //     dump_context: &DumpContext,
+    //     load_data_strategy: LoadDataStrategy,
+    //     addition_text: &str,
+    //     tx_with_context: TxWithContext,
+    // ) {
+    //     let dump = || -> Result<_> {
+    //         let debug_config = &self.debug_config;
+    //         let dir = debug_config.debug_tx_dump_path.as_path();
+    //         create_dir_all(&dir)?;
 
-            let mut dump_path = PathBuf::new();
-            dump_path.push(dir);
+    //         let mut dump_path = PathBuf::new();
+    //         dump_path.push(dir);
 
-            let tx = dump_tx(&self.mock_ctx.rollup_cell_deps, tx_with_context)?;
-            let dump_info = dump_context.info_with_load_data_strategy(load_data_strategy);
-            let dump_filename = format!("{}-{}-offchain-cancel-tx.json", dump_info, addition_text);
-            dump_path.push(dump_filename);
+    //         let tx = dump_tx(&self.mock_ctx.rollup_cell_deps, tx_with_context)?;
+    //         let dump_info = dump_context.info_with_load_data_strategy(load_data_strategy);
+    //         let dump_filename = format!("{}-{}-offchain-cancel-tx.json", dump_info, addition_text);
+    //         dump_path.push(dump_filename);
 
-            let json_tx = serde_json::to_string_pretty(&tx)?;
-            log::info!("dump cancel tx from {:?} to {:?}", dump_info, dump_path);
-            write(dump_path, json_tx)?;
+    //         let json_tx = serde_json::to_string_pretty(&tx)?;
+    //         log::info!("dump cancel tx from {:?} to {:?}", dump_info, dump_path);
+    //         write(dump_path, json_tx)?;
 
-            Ok(())
-        };
+    //         Ok(())
+    //     };
 
-        if let Err(err) = dump() {
-            log::error!("unable to dump offchain cancel challenge tx {}", err);
-        }
-    }
+    //     if let Err(err) = dump() {
+    //         log::error!("unable to dump offchain cancel challenge tx {}", err);
+    //     }
+    // }
 }
 
 #[derive(Clone)]

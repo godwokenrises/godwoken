@@ -15,10 +15,7 @@ use ckb_hash::blake2b_256;
 use ckb_types::H256;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_common::state::State;
-use gw_store::{
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
-    Store,
-};
+use gw_store::{state::state_db::StateContext, Store};
 use gw_traits::CodeStore;
 use gw_types::packed::{
     L2Block, RollupAction, RollupActionReader, RollupActionUnion, Transaction, WitnessArgs,
@@ -519,13 +516,7 @@ impl Web3Indexer {
 
 async fn get_script_hash(store: Store, account_id: u32) -> Result<gw_common::H256> {
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_checkpoint(
-        &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
-        StateDBMode::ReadOnly,
-    )?;
-    let tree = state_db.state_tree()?;
+    let tree = db.state_tree(StateContext::ReadOnly)?;
 
     let script_hash = tree.get_script_hash(account_id)?;
     Ok(script_hash)
@@ -533,13 +524,7 @@ async fn get_script_hash(store: Store, account_id: u32) -> Result<gw_common::H25
 
 async fn get_script(store: Store, script_hash: gw_common::H256) -> Result<Option<Script>> {
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_checkpoint(
-        &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
-        StateDBMode::ReadOnly,
-    )?;
-    let tree = state_db.state_tree()?;
+    let tree = db.state_tree(StateContext::ReadOnly)?;
 
     let script_opt = tree.get_script(&script_hash);
     Ok(script_opt)

@@ -16,9 +16,12 @@ use gw_types::{
     prelude::*,
 };
 
+use super::state_tracker::StateTracker;
+
 pub struct MemPoolStateTree<'a> {
     tree: SMT<MemPoolSMTStore<'a>>,
     account_count: u32,
+    tracker: StateTracker,
 }
 
 impl<'a> MemPoolStateTree<'a> {
@@ -26,7 +29,12 @@ impl<'a> MemPoolStateTree<'a> {
         MemPoolStateTree {
             tree,
             account_count,
+            tracker: Default::default(),
         }
+    }
+
+    pub fn tracker_mut(&mut self) -> &mut StateTracker {
+        &mut self.tracker
     }
 
     pub fn get_merkle_state(&self) -> AccountMerkleState {
@@ -55,11 +63,13 @@ impl<'a> MemPoolStateTree<'a> {
 
 impl<'a> State for MemPoolStateTree<'a> {
     fn get_raw(&self, key: &H256) -> Result<H256, StateError> {
+        self.tracker.touch_key(key);
         let v = self.tree.get(key)?;
         Ok(v)
     }
 
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
+        self.tracker.touch_key(&key);
         self.tree.update(key, value)?;
         Ok(())
     }

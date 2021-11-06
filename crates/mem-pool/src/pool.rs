@@ -13,9 +13,9 @@ use arc_swap::{
     access::{DynAccess, DynGuard},
     ArcSwap,
 };
-use gw_challenge::offchain::{
-    OffChainCancelChallengeValidator, OffChainValidatorContext, RollBackSavePointError,
-};
+// use gw_challenge::offchain::{
+//     OffChainCancelChallengeValidator, OffChainValidatorContext, RollBackSavePointError,
+// };
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     state::{to_short_address, State},
@@ -26,10 +26,7 @@ use gw_generator::{
     constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
 };
 use gw_store::{
-    chain_view::ChainView,
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
-    transaction::{mem_pool_store::MemPoolStore, StoreTransaction},
-    Store,
+    chain_view::ChainView, state::state_db::StateContext, transaction::StoreTransaction, Store,
 };
 use gw_types::{
     offchain::{BlockParam, CollectedCustodianCells, DepositInfo, ErrorTxReceipt, RunResult},
@@ -132,28 +129,6 @@ impl Inner {
         self.provider.store(Arc::new(provider));
     }
 
-    pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
-        self.fetch_state_db_with_mode(db, MemBlockDBMode::NewBlock)
-    }
-
-    pub fn fetch_state_db_with_mode<'a>(
-        &self,
-        db: &'a StoreTransaction,
-        mode: MemBlockDBMode,
-    ) -> Result<StateDBTransaction<'a>> {
-        // Repackage offset must be smaller than NewBlock, so that it has clean state.
-        let db_mode = match mode {
-            MemBlockDBMode::NewBlock => StateDBMode::Write(WriteContext::new(u32::MAX)),
-            MemBlockDBMode::Package => StateDBMode::Write(WriteContext::new(0)),
-        };
-        StateDBTransaction::from_checkpoint(
-            db,
-            CheckPoint::new(self.current_tip().1, SubState::MemBlock),
-            db_mode,
-        )
-        .map_err(|err| anyhow!("err: {}", err))
-    }
-
     /// Execute tx without push it into pool and check exit code
     pub fn unchecked_execute_transaction(
         &self,
@@ -161,8 +136,7 @@ impl Inner {
         block_info: &BlockInfo,
     ) -> Result<RunResult> {
         let db = self.store.begin_transaction();
-        let state_db = self.fetch_state_db(&db)?;
-        let state = state_db.state_tree()?;
+        let state = db.mem_pool_state_tree()?;
         let tip_block_hash = self.store.get_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
         // verify tx signature
@@ -190,8 +164,7 @@ impl Inner {
         }
 
         let db = self.store.begin_transaction();
-        let state_db = self.fetch_state_db(&db)?;
-        let state = state_db.state_tree()?;
+        let state = db.mem_pool_state_tree()?;
         // verify withdrawal signature
         self.generator
             .check_withdrawal_request_signature(&state, withdrawal_request)?;
@@ -239,7 +212,7 @@ pub struct MemPool {
     /// memory block
     mem_block: MemBlock,
     /// Offchain cancel challenge validator
-    offchain_validator: Option<OffChainCancelChallengeValidator>,
+    // offchain_validator: Option<OffChainCancelChallengeValidator>,
     /// Config
     config: Arc<MemPoolConfig>,
 }
@@ -250,7 +223,7 @@ impl MemPool {
         generator: Arc<Generator>,
         provider: Box<dyn MemPoolProvider + Send + Sync>,
         error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
-        offchain_validator_context: Option<OffChainValidatorContext>,
+        // offchain_validator_context: Option<OffChainValidatorContext>,
         config: MemPoolConfig,
     ) -> Result<Self> {
         let pending = Default::default();
@@ -273,15 +246,15 @@ impl MemPool {
             let smt = db.reverted_block_smt()?;
             smt.root().to_owned()
         };
-        let offchain_validator = offchain_validator_context.map(|offchain_validator_context| {
-            OffChainCancelChallengeValidator::new(
-                offchain_validator_context,
-                mem_block.block_producer_id().pack(),
-                &tip_block,
-                mem_block.block_info().timestamp().unpack(),
-                reverted_block_root,
-            )
-        });
+        // let offchain_validator = offchain_validator_context.map(|offchain_validator_context| {
+        //     OffChainCancelChallengeValidator::new(
+        //         offchain_validator_context,
+        //         mem_block.block_producer_id().pack(),
+        //         &tip_block,
+        //         mem_block.block_info().timestamp().unpack(),
+        //         reverted_block_root,
+        //     )
+        // });
 
         let mut mem_pool = MemPool {
             inner,
@@ -290,7 +263,7 @@ impl MemPool {
             error_tx_handler,
             pending,
             mem_block,
-            offchain_validator,
+            // offchain_validator,
             config,
         };
 
@@ -313,18 +286,6 @@ impl MemPool {
 
     pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send + Sync>) {
         self.inner.set_provider(provider);
-    }
-
-    pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
-        self.inner.fetch_state_db(db)
-    }
-
-    pub fn fetch_state_db_with_mode<'a>(
-        &self,
-        db: &'a StoreTransaction,
-        mode: MemBlockDBMode,
-    ) -> Result<StateDBTransaction<'a>> {
-        self.inner.fetch_state_db_with_mode(db, mode)
     }
 
     /// Push a layer2 tx into pool
@@ -384,8 +345,7 @@ impl MemPool {
             return Err(anyhow!("tx over size"));
         }
 
-        let state_db = self.fetch_state_db(db)?;
-        let state = state_db.state_tree()?;
+        let state = db.mem_pool_state_tree()?;
         // verify transaction
         self.generator.verify_transaction(&state, tx)?;
         // verify signature
@@ -394,6 +354,7 @@ impl MemPool {
         Ok(())
     }
 
+    // >>>>>>> commit
     /// Execute tx without: a) push it into pool; 2) verify signature; 3) check nonce
     pub fn execute_raw_transaction(
         &self,
@@ -402,14 +363,7 @@ impl MemPool {
         block_number_opt: Option<u64>,
     ) -> Result<RunResult> {
         let db = self.store.begin_transaction();
-        let state_db = match block_number_opt {
-            Some(block_number) => {
-                let check_point = CheckPoint::new(block_number, SubState::Block);
-                StateDBTransaction::from_checkpoint(&db, check_point, StateDBMode::ReadOnly)?
-            }
-            None => self.fetch_state_db(&db)?,
-        };
-        let state = state_db.state_tree()?;
+        let state = db.mem_pool_state_tree()?;
         let tip_block_hash = self.store.get_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
         // execute tx
@@ -443,8 +397,7 @@ impl MemPool {
         // TODO
 
         let db = self.store.begin_transaction();
-        let state_db = self.fetch_state_db(&db)?;
-        let state = state_db.state_tree()?;
+        let state = db.mem_pool_state_tree()?;
         let account_script_hash: H256 = withdrawal.raw().account_script_hash().unpack();
         let account_id = state
             .get_account_id_by_script_hash(&account_script_hash)?
@@ -457,6 +410,44 @@ impl MemPool {
         Ok(())
     }
 
+    // <<<<<<< HEAD
+    // =======
+    //     /// Verify withdrawal request without push it into pool
+    //     pub fn verify_withdrawal_request(&self, withdrawal_request: &WithdrawalRequest) -> Result<()> {
+    //         let db = self.store.begin_transaction();
+    //         let state = db.mem_pool_state_tree()?;
+    //         // verify withdrawal signature
+    //         self.generator
+    //             .check_withdrawal_request_signature(&state, withdrawal_request)?;
+
+    //         // verify finalized custodian
+    //         let finalized_custodians = {
+    //             // query withdrawals from ckb-indexer
+    //             let last_finalized_block_number = self
+    //                 .generator
+    //                 .rollup_context()
+    //                 .last_finalized_block_number(self.current_tip.1);
+    //             let task = self.provider.query_available_custodians(
+    //                 vec![withdrawal_request.clone()],
+    //                 last_finalized_block_number,
+    //                 self.generator.rollup_context().to_owned(),
+    //             );
+    //             smol::block_on(task)?
+    //         };
+    //         let avaliable_custodians = AvailableCustodians::from(&finalized_custodians);
+    //         let withdrawal_generator =
+    //             WithdrawalGenerator::new(self.generator.rollup_context(), avaliable_custodians);
+    //         withdrawal_generator.verify_remained_amount(withdrawal_request)?;
+
+    //         // withdrawal basic verification
+    //         let asset_script =
+    //             db.get_asset_script(&withdrawal_request.raw().sudt_script_hash().unpack())?;
+    //         self.generator
+    //             .verify_withdrawal_request(&state, withdrawal_request, asset_script)
+    //             .map_err(Into::into)
+    //     }
+
+    // >>>>>>> commit
     /// Return pending contents
     fn pending(&self) -> &HashMap<u32, EntryList> {
         &self.pending
@@ -510,19 +501,14 @@ impl MemPool {
         let (mem_block, post_merkle_state) = self.package_mem_block(output_param)?;
 
         let db = self.store.begin_transaction();
-        let state_db = StateDBTransaction::from_checkpoint(
-            &db,
-            CheckPoint::new(self.current_tip().1, SubState::Block),
-            StateDBMode::ReadOnly,
-        )?;
         // generate kv state & merkle proof from tip state
-        let state = state_db.state_tree()?;
+        let chain_state = db.state_tree(StateContext::ReadOnly)?;
 
         let kv_state: Vec<(H256, H256)> = mem_block
             .touched_keys()
             .iter()
             .map(|k| {
-                state
+                chain_state
                     .get_raw(k)
                     .map(|v| (*k, v))
                     .map_err(|err| anyhow!("can't fetch value error: {:?}", err))
@@ -532,7 +518,7 @@ impl MemPool {
             // nothing need to prove
             Vec::new()
         } else {
-            let account_smt = state_db.account_smt()?;
+            let account_smt = db.account_smt()?;
 
             account_smt
                 .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
@@ -606,17 +592,17 @@ impl MemPool {
     ) -> Result<(MemBlock, AccountMerkleState)> {
         let db = self.store.begin_transaction();
         let retry_count = output_param.retry_count;
+
+        // first time package, return the whole mem block
         if retry_count == 0 {
             let mem_block = self.mem_block.clone();
-            let mem_db_state = self.fetch_state_db(&db)?;
-
-            return Ok((mem_block, mem_db_state.state_tree()?.merkle_state()?));
+            let state = db.mem_pool_state_tree()?;
+            return Ok((mem_block, state.merkle_state()?));
         }
+
+        // if first package failed, we should try to package less txs and withdrawals
         log::info!("[mem-pool] package mem block, retry count {}", retry_count);
-
         let mem_block = &self.mem_block;
-        let state_db = self.fetch_state_db_with_mode(&db, MemBlockDBMode::Package)?;
-
         let (withdrawal_hashes, deposits, tx_hashes) = {
             let total =
                 mem_block.withdrawals().len() + mem_block.deposits().len() + mem_block.txs().len();
@@ -638,19 +624,19 @@ impl MemPool {
             (withdrawal_hashes, deposits, tx_hashes)
         };
 
-        let mut repackage_block = MemBlock::new(
+        let mut new_mem_block = MemBlock::new(
             mem_block.block_info().to_owned(),
             mem_block.prev_merkle_state().to_owned(),
         );
 
-        assert!(repackage_block.state_checkpoints().is_empty());
-        assert!(repackage_block.withdrawals().is_empty());
-        assert!(repackage_block.finalized_custodians().is_none());
-        assert!(repackage_block.deposits().is_empty());
-        assert!(repackage_block.txs().is_empty());
+        assert!(new_mem_block.state_checkpoints().is_empty());
+        assert!(new_mem_block.withdrawals().is_empty());
+        assert!(new_mem_block.finalized_custodians().is_none());
+        assert!(new_mem_block.deposits().is_empty());
+        assert!(new_mem_block.txs().is_empty());
 
-        let mut state =
-            state_db.state_tree_with_merkle_state(mem_block.prev_merkle_state().to_owned())?;
+        // calculate block state in memory
+        let mut mem_state = db.in_mem_state_tree()?;
 
         // NOTE: Must have at least one tx to have correct post block state
         if withdrawal_hashes.len() == mem_block.withdrawals().len()
@@ -660,19 +646,19 @@ impl MemPool {
             // Simply reuse mem block withdrawals and depoist result
             assert!(mem_block.state_checkpoints().len() >= withdrawal_hashes.len());
             for (hash, checkpoint) in withdrawal_hashes.zip(mem_block.state_checkpoints().iter()) {
-                repackage_block.push_withdrawal(*hash, *checkpoint);
+                new_mem_block.push_withdrawal(*hash, *checkpoint);
             }
             if let Some(finalized_custodians) = mem_block.finalized_custodians() {
-                repackage_block.set_finalized_custodians(finalized_custodians.to_owned());
+                new_mem_block.set_finalized_custodians(finalized_custodians.to_owned());
             }
 
             let deposit_cells = mem_block.deposits().to_vec();
             let prev_state_checkpoint = mem_block
                 .txs_prev_state_checkpoint()
                 .ok_or_else(|| anyhow!("repackage mem block but no prev state checkpoint"))?;
-            repackage_block.push_deposits(deposit_cells, prev_state_checkpoint);
+            new_mem_block.push_deposits(deposit_cells, prev_state_checkpoint);
 
-            repackage_block.append_touched_keys(mem_block.touched_keys().clone().into_iter());
+            new_mem_block.append_touched_keys(mem_block.touched_keys().clone().into_iter());
         } else {
             assert_eq!(tx_hashes.len(), 0, "must drop txs first");
             log::info!(
@@ -681,7 +667,7 @@ impl MemPool {
                 deposits.len()
             );
 
-            state.tracker_mut().enable();
+            mem_state.tracker_mut().enable();
 
             // Repackage withdrawals
             let to_withdaral = |hash: &H256| -> Result<_> {
@@ -691,30 +677,33 @@ impl MemPool {
             let withdrawals: Vec<_> = withdrawal_hashes.map(to_withdaral).collect::<Result<_>>()?;
 
             for withdrawal in withdrawals.iter() {
-                state.apply_withdrawal_request(
+                mem_state.apply_withdrawal_request(
                     self.generator.rollup_context(),
                     mem_block.block_producer_id(),
                     withdrawal,
                 )?;
 
-                repackage_block.push_withdrawal(
+                new_mem_block.push_withdrawal(
                     withdrawal.hash().into(),
-                    state.calculate_state_checkpoint()?,
+                    mem_state.calculate_state_checkpoint()?,
                 );
             }
             if let Some(finalized_custodians) = mem_block.finalized_custodians() {
-                repackage_block.set_finalized_custodians(finalized_custodians.to_owned());
+                new_mem_block.set_finalized_custodians(finalized_custodians.to_owned());
             }
 
             // Repackage deposits
             let deposit_cells: Vec<_> = deposits.cloned().collect();
             let deposits: Vec<_> = deposit_cells.iter().map(|i| i.request.clone()).collect();
-            state.apply_deposit_requests(self.generator.rollup_context(), &deposits)?;
-            let prev_state_checkpoint = state.calculate_state_checkpoint()?;
-            repackage_block.push_deposits(deposit_cells, prev_state_checkpoint);
+            mem_state.apply_deposit_requests(self.generator.rollup_context(), &deposits)?;
+            let prev_state_checkpoint = mem_state.calculate_state_checkpoint()?;
+            new_mem_block.push_deposits(deposit_cells, prev_state_checkpoint);
 
-            let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
-            repackage_block.append_touched_keys(touched_keys.borrow().iter().cloned());
+            let touched_keys = mem_state
+                .tracker_mut()
+                .touched_keys()
+                .expect("touched keys");
+            new_mem_block.append_touched_keys(touched_keys.borrow().iter().cloned());
         }
 
         // Repackage txs
@@ -725,7 +714,7 @@ impl MemPool {
                 .get_mem_pool_transaction_receipt(tx_hash)?
                 .ok_or_else(|| anyhow!("tx {:?} receipt not found", tx_hash))?;
 
-            repackage_block.push_tx(*tx_hash, &tx_receipt);
+            new_mem_block.push_tx(*tx_hash, &tx_receipt);
 
             if idx + 1 == tx_len {
                 post_tx_merkle_state = Some(tx_receipt.post_state())
@@ -734,10 +723,10 @@ impl MemPool {
 
         let post_merkle_state = match post_tx_merkle_state {
             Some(state) => state,
-            None => state.merkle_state()?,
+            None => mem_state.merkle_state()?,
         };
 
-        Ok((repackage_block, post_merkle_state))
+        Ok((new_mem_block, post_merkle_state))
     }
 
     /// Reset
@@ -833,10 +822,10 @@ impl MemPool {
             let smt = db.reverted_block_smt()?;
             smt.root().to_owned()
         };
-        if let Some(ref mut offchain_validator) = self.offchain_validator {
-            let timestamp = self.mem_block.block_info().timestamp().unpack();
-            offchain_validator.reset(&new_tip_block, timestamp, reverted_block_root);
-        }
+        // if let Some(ref mut offchain_validator) = self.offchain_validator {
+        //     let timestamp = self.mem_block.block_info().timestamp().unpack();
+        //     offchain_validator.reset(&new_tip_block, timestamp, reverted_block_root);
+        // }
 
         // set tip
         self.inner
@@ -882,8 +871,7 @@ impl MemPool {
 
     /// Discard unexecutables from pending.
     fn remove_unexecutables(&mut self, db: &StoreTransaction) -> Result<()> {
-        let state_db = self.fetch_state_db(db)?;
-        let state = state_db.state_tree()?;
+        let state = db.mem_pool_state_tree()?;
         let mut remove_list = Vec::default();
         // iter pending accounts and demote any non-executable objects
         for (&account_id, list) in &mut self.pending {
@@ -985,8 +973,7 @@ impl MemPool {
         db: &StoreTransaction,
         deposit_cells: Vec<DepositInfo>,
     ) -> Result<()> {
-        let state_db = self.fetch_state_db(db)?;
-        let mut state = state_db.state_tree()?;
+        let mut state = db.mem_pool_state_tree()?;
         // update deposits
         let deposits: Vec<_> = deposit_cells.iter().map(|c| c.request.clone()).collect();
         state.tracker_mut().enable();
@@ -996,9 +983,9 @@ impl MemPool {
         self.mem_block
             .push_deposits(deposit_cells, prev_state_checkpoint);
         state.submit_tree_to_mem_block()?;
-        if let Some(ref mut offchain_validator) = self.offchain_validator {
-            offchain_validator.set_prev_txs_checkpoint(prev_state_checkpoint);
-        }
+        // if let Some(ref mut offchain_validator) = self.offchain_validator {
+        //     offchain_validator.set_prev_txs_checkpoint(prev_state_checkpoint);
+        // }
         let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
         self.mem_block
             .append_touched_keys(touched_keys.borrow().iter().cloned());
@@ -1048,8 +1035,7 @@ impl MemPool {
             sudt_value.map(|(_, script)| (script.hash().into(), script.to_owned()))
         }
         .collect();
-        let state_db = self.fetch_state_db(db)?;
-        let mut state = state_db.state_tree()?;
+        let mut state = db.mem_pool_state_tree()?;
         // verify the withdrawals
         let mut unused_withdrawals = Vec::with_capacity(withdrawals.len());
         let mut total_withdrawal_capacity: u128 = 0;
@@ -1108,26 +1094,26 @@ impl MemPool {
                 continue;
             }
 
-            if let Some(ref mut offchain_validator) = self.offchain_validator {
-                match offchain_validator.verify_withdrawal_request(
-                    db,
-                    &state_db,
-                    withdrawal.clone(),
-                ) {
-                    Ok(cycles) => log::debug!("[mem-pool] offchain withdrawal cycles {:?}", cycles),
-                    Err(err) => match err.downcast_ref::<RollBackSavePointError>() {
-                        Some(err) => bail!("{}", err),
-                        None => {
-                            log::info!(
-                                "[mem-pool] withdrawal contextual verification failed : {}",
-                                err
-                            );
-                            unused_withdrawals.push(withdrawal_hash);
-                            continue;
-                        }
-                    },
-                }
-            }
+            // if let Some(ref mut offchain_validator) = self.offchain_validator {
+            //     match offchain_validator.verify_withdrawal_request(
+            //         db,
+            //         &state_db,
+            //         withdrawal.clone(),
+            //     ) {
+            //         Ok(cycles) => log::debug!("[mem-pool] offchain withdrawal cycles {:?}", cycles),
+            //         Err(err) => match err.downcast_ref::<RollBackSavePointError>() {
+            //             Some(err) => bail!("{}", err),
+            //             None => {
+            //                 log::info!(
+            //                     "[mem-pool] withdrawal contextual verification failed : {}",
+            //                     err
+            //                 );
+            //                 unused_withdrawals.push(withdrawal_hash);
+            //                 continue;
+            //             }
+            //         },
+            //     }
+            // }
 
             // update the state
             match state.apply_withdrawal_request(
@@ -1166,8 +1152,7 @@ impl MemPool {
     /// Execute tx & update local state
     fn finalize_tx(&mut self, db: &StoreTransaction, tx: L2Transaction) -> Result<TxReceipt> {
         let t = Instant::now();
-        let state_db = self.fetch_state_db(db)?;
-        let mut state = state_db.state_tree()?;
+        let mut state = db.mem_pool_state_tree()?;
         let tip_block_hash = db.get_tip_block_hash()?;
         let chain_view = ChainView::new(db, tip_block_hash);
         let block_info = self.mem_block.block_info();
@@ -1191,15 +1176,15 @@ impl MemPool {
             t.elapsed().as_millis()
         );
 
-        if let Some(ref mut offchain_validator) = self.offchain_validator {
-            let maybe_cycles =
-                offchain_validator.verify_transaction(db, &state_db, tx.clone(), &run_result);
+        // if let Some(ref mut offchain_validator) = self.offchain_validator {
+        //     let maybe_cycles =
+        //         offchain_validator.verify_transaction(db, &state_db, tx.clone(), &run_result);
 
-            if 0 == run_result.exit_code {
-                let cycles = maybe_cycles?;
-                log::debug!("[mem-pool] offchain verify tx cycles {:?}", cycles);
-            }
-        }
+        //     if 0 == run_result.exit_code {
+        //         let cycles = maybe_cycles?;
+        //         log::debug!("[mem-pool] offchain verify tx cycles {:?}", cycles);
+        //     }
+        // }
 
         if run_result.exit_code != 0 {
             let tx_hash: H256 = tx.hash().into();

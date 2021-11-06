@@ -1,10 +1,7 @@
 use crate::genesis::{build_genesis, init_genesis};
 use gw_common::{sparse_merkle_tree::H256, state::State};
 use gw_config::GenesisConfig;
-use gw_store::{
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction},
-    Store,
-};
+use gw_store::{state::state_db::StateContext, Store};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
@@ -39,10 +36,7 @@ fn test_init_genesis() {
     let db = store.begin_transaction();
     // check init values
     assert_ne!(db.get_block_smt_root().unwrap(), H256::zero());
-    let state_db =
-        StateDBTransaction::from_checkpoint(&db, CheckPoint::from_genesis(), StateDBMode::Genesis)
-            .unwrap();
-    let tree = state_db.state_tree().unwrap();
+    let tree = db.state_tree(StateContext::ReadOnly).unwrap();
     assert!(tree.get_account_count().unwrap() > 0);
 
     // check prev txs state

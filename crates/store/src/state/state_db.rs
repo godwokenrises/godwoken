@@ -18,44 +18,12 @@ use gw_types::{
 };
 use std::{cell::RefCell, collections::HashSet, fmt, mem::size_of_val};
 
-pub struct StateTracker {
-    touched_keys: Option<RefCell<HashSet<H256>>>,
-}
+use super::state_tracker::StateTracker;
 
-impl Default for StateTracker {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl StateTracker {
-    pub fn new() -> Self {
-        StateTracker { touched_keys: None }
-    }
-
-    /// Enable state tracking
-    pub fn enable(&mut self) {
-        if self.touched_keys.is_none() {
-            self.touched_keys = Some(Default::default())
-        }
-    }
-
-    /// Return touched keys
-    pub fn touched_keys(&self) -> Option<&RefCell<HashSet<H256>>> {
-        self.touched_keys.as_ref()
-    }
-
-    /// Record a key in the tracker
-    pub fn touch_key(&self, key: &H256) {
-        if let Some(touched_keys) = self.touched_keys.as_ref() {
-            touched_keys.borrow_mut().insert(*key);
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum StateContext {
     ReadOnly,
+    ReadOnlyHistory(u64),
     AttachBlock(u64),
     DetachBlock(u64),
 }
@@ -64,7 +32,6 @@ pub struct StateTree<'a> {
     tree: SMT<SMTStore<'a, StoreTransaction>>,
     account_count: u32,
     context: StateContext,
-    tracker: StateTracker,
 }
 
 impl<'a> StateTree<'a> {
@@ -77,12 +44,7 @@ impl<'a> StateTree<'a> {
             tree,
             account_count,
             context,
-            tracker: StateTracker::new(),
         }
-    }
-
-    pub fn tracker_mut(&mut self) -> &mut StateTracker {
-        &mut self.tracker
     }
 
     pub fn get_merkle_state(&self) -> AccountMerkleState {
@@ -100,28 +62,26 @@ impl<'a> StateTree<'a> {
         };
 
         // reset states to previous value
-        for record_key in self.db().iter_block_state_record(block_number) {
-            let reverse_key =
-                BlockStateRecordKeyReverse::new(record_key.block_number(), &record_key.state_key());
-            let last_value = self.db().find_state_key_last_value(&reverse_key);
-            self.update_raw(record_key.state_key(), last_value.unwrap_or(H256::zero()))?;
+        let parent_block_number = block_number.saturating_sub(1);
+        let reverted_key_values: Vec<_> = self
+            .db()
+            .iter_block_state_record(block_number)
+            .map(|record_key| {
+                let state_key = record_key.state_key();
+                let last_value = self
+                    .db()
+                    .get_history_state(parent_block_number, &state_key)
+                    .unwrap_or(H256::zero());
+                (state_key, last_value)
+            })
+            .collect();
+        for (state_key, last_value) in reverted_key_values {
+            self.update_raw(state_key, last_value)?;
         }
 
         // remove block's state record
         self.db().remove_block_state_record(block_number)?;
 
-        Ok(())
-    }
-
-    /// submit tree changes into memory block
-    /// notice, this function do not commit the DBTransaction
-    pub fn submit_tree_to_mem_block(&self) -> Result<(), Error> {
-        self.db()
-            .set_mem_block_account_smt_root(*self.tree.root())
-            .expect("set smt root");
-        self.db()
-            .set_mem_block_account_count(self.account_count)
-            .expect("set smt root");
         Ok(())
     }
 
@@ -132,13 +92,17 @@ impl<'a> StateTree<'a> {
 
 impl<'a> State for StateTree<'a> {
     fn get_raw(&self, key: &H256) -> Result<H256, StateError> {
-        self.tracker.touch_key(key);
-        let v = self.tree.get(key)?;
+        let v = match self.context {
+            StateContext::ReadOnlyHistory(block_number) => self
+                .db()
+                .get_history_state(block_number, key)
+                .unwrap_or_default(),
+            _ => self.tree.get(key)?,
+        };
         Ok(v)
     }
 
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), StateError> {
-        self.tracker.touch_key(&key);
         self.tree.update(key, value)?;
         // record block's kv state
         match self.context {
