@@ -8,7 +8,7 @@ use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig, OffChainValidatorConfig};
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::{state_db::StateDBTransaction, transaction::StoreTransaction};
+use gw_store::{transaction::StoreTransaction};
 use gw_types::core::DepType;
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, RunResult};
 use gw_types::packed::{
@@ -300,7 +300,6 @@ impl OffChainCancelChallengeValidator {
     pub fn verify_transaction(
         &mut self,
         db: &StoreTransaction,
-        state_db: &StateDBTransaction<'_>,
         tx: L2Transaction,
         run_result: &RunResult,
     ) -> Result<Option<VerifyTxCycles>> {

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{App, Arg, SubCommand};
-use gw_block_producer::{db_block_validator, runner};
+use gw_block_producer::runner;
 use gw_config::Config;
 use gw_version::Version;
 use std::{fs, path::Path};
@@ -109,7 +109,8 @@ fn run_cli() -> Result<()> {
             let config = read_config(&config_path)?;
             let from_block: Option<u64> = m.value_of(ARG_FROM_BLOCK).map(str::parse).transpose()?;
             let to_block: Option<u64> = m.value_of(ARG_TO_BLOCK).map(str::parse).transpose()?;
-            db_block_validator::verify(config, from_block, to_block)?;
+            unimplemented!()
+            // db_block_validator::verify(config, from_block, to_block)?;
         }
         _ => {
             // default command: start a Godwoken node

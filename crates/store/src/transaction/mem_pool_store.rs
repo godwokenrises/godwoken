@@ -14,13 +14,27 @@ use gw_types::{packed, prelude::*};
 
 use super::StoreTransaction;
 use crate::{
-    smt::mem_pool_smt_store::{Columns, MemPoolSMTStore},
-    state::mem_pool_state_db::MemPoolStateTree,
+    smt::{mem_pool_smt_store::MemPoolSMTStore, mem_smt_store::MemSMTStore, Columns},
+    state::{mem_pool_state_db::MemPoolStateTree, mem_state_db::MemStateTree},
     traits::KVStore,
 };
 
 impl StoreTransaction {
-    fn mem_pool_state_tree(&self) -> Result<MemPoolStateTree, Error> {
+    /// Used for package new mem block
+    pub fn in_mem_state_tree(&self) -> Result<MemStateTree, Error> {
+        let under_layer_columns = Columns {
+            leaf_col: COLUMN_ACCOUNT_SMT_LEAF,
+            branch_col: COLUMN_ACCOUNT_SMT_BRANCH,
+        };
+        let block = self.get_tip_block()?;
+        let smt_store = MemSMTStore::new(under_layer_columns, self);
+        let merkle_root = block.raw().post_account();
+        let account_count = self.get_mem_block_account_count()?;
+        let tree = SMT::new(merkle_root.merkle_root().unpack(), smt_store);
+        Ok(MemStateTree::new(tree, account_count))
+    }
+
+    pub fn mem_pool_state_tree(&self) -> Result<MemPoolStateTree, Error> {
         let mem_pool_columns = Columns {
             leaf_col: COLUMN_MEM_POOL_ACCOUNT_SMT_LEAF,
             branch_col: COLUMN_MEM_POOL_ACCOUNT_SMT_BRANCH,
@@ -36,20 +50,22 @@ impl StoreTransaction {
         Ok(MemPoolStateTree::new(tree, account_count))
     }
 
-    fn clear_mem_block_state(&self) -> Result<(), Error> {
+    pub fn clear_mem_block_state(&self) -> Result<(), Error> {
         for col in [
             COLUMN_MEM_POOL_SCRIPT,
             COLUMN_MEM_POOL_DATA,
             COLUMN_MEM_POOL_SCRIPT_PREFIX,
+            COLUMN_MEM_POOL_ACCOUNT_SMT_LEAF,
+            COLUMN_MEM_POOL_ACCOUNT_SMT_BRANCH,
         ] {
             for (k, _v) in self.get_iter(col, IteratorMode::Start) {
-                self.delete(col, &k);
+                self.delete(col, &k)?;
             }
         }
         Ok(())
     }
 
-    fn insert_mem_pool_transaction(
+    pub fn insert_mem_pool_transaction(
         &self,
         tx_hash: &H256,
         tx: packed::L2Transaction,
@@ -61,7 +77,7 @@ impl StoreTransaction {
         )
     }
 
-    fn get_mem_pool_transaction(
+    pub fn get_mem_pool_transaction(
         &self,
         tx_hash: &H256,
     ) -> Result<Option<packed::L2Transaction>, Error> {
@@ -72,13 +88,13 @@ impl StoreTransaction {
             }))
     }
 
-    fn remove_mem_pool_transaction(&self, tx_hash: &H256) -> Result<(), Error> {
+    pub fn remove_mem_pool_transaction(&self, tx_hash: &H256) -> Result<(), Error> {
         self.delete(COLUMN_MEM_POOL_TRANSACTION, tx_hash.as_slice())?;
         self.delete(COLUMN_MEM_POOL_TRANSACTION_RECEIPT, tx_hash.as_slice())?;
         Ok(())
     }
 
-    fn insert_mem_pool_transaction_receipt(
+    pub fn insert_mem_pool_transaction_receipt(
         &self,
         tx_hash: &H256,
         tx_receipt: packed::TxReceipt,
@@ -90,7 +106,7 @@ impl StoreTransaction {
         )
     }
 
-    fn get_mem_pool_transaction_receipt(
+    pub fn get_mem_pool_transaction_receipt(
         &self,
         tx_hash: &H256,
     ) -> Result<Option<packed::TxReceipt>, Error> {
@@ -101,7 +117,7 @@ impl StoreTransaction {
             }))
     }
 
-    fn insert_mem_pool_withdrawal(
+    pub fn insert_mem_pool_withdrawal(
         &self,
         withdrawal_hash: &H256,
         withdrawal: packed::WithdrawalRequest,
@@ -113,7 +129,7 @@ impl StoreTransaction {
         )
     }
 
-    fn get_mem_pool_withdrawal(
+    pub fn get_mem_pool_withdrawal(
         &self,
         withdrawal_hash: &H256,
     ) -> Result<Option<packed::WithdrawalRequest>, Error> {
@@ -124,16 +140,16 @@ impl StoreTransaction {
             }))
     }
 
-    fn remove_mem_pool_withdrawal(&self, withdrawal_hash: &H256) -> Result<(), Error> {
+    pub fn remove_mem_pool_withdrawal(&self, withdrawal_hash: &H256) -> Result<(), Error> {
         self.delete(COLUMN_MEM_POOL_WITHDRAWAL, withdrawal_hash.as_slice())?;
         Ok(())
     }
 
-    fn update_mem_pool_block_info(&self, block_info: &packed::BlockInfo) -> Result<(), Error> {
+    pub fn update_mem_pool_block_info(&self, block_info: &packed::BlockInfo) -> Result<(), Error> {
         self.insert_raw(COLUMN_META, META_MEM_POOL_BLOCK_INFO, block_info.as_slice())
     }
 
-    fn get_mem_pool_block_info(&self) -> Result<Option<packed::BlockInfo>, Error> {
+    pub fn get_mem_pool_block_info(&self) -> Result<Option<packed::BlockInfo>, Error> {
         Ok(self
             .get(COLUMN_META, META_MEM_POOL_BLOCK_INFO)
             .map(|slice| {
