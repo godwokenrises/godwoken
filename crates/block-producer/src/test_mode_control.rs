@@ -258,8 +258,11 @@ impl TestModeControl {
 
         let db = self.store.begin_transaction();
         let block_hash = db.get_block_hash_by_number(block_number)?;
-        let block = db.get_block(&block_hash.ok_or_else(|| anyhow!("block {} not found"))?)?;
-        let raw_l2block = block.ok_or_else(|| anyhow!("block {} not found"))?.raw();
+        let block =
+            db.get_block(&block_hash.ok_or_else(|| anyhow!("block {} not found", block_number))?)?;
+        let raw_l2block = block
+            .ok_or_else(|| anyhow!("block {} not found", block_number))?
+            .raw();
 
         let block_proof = db
             .block_smt()?
