@@ -7,7 +7,7 @@ use gw_db::{
         COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
         META_MEM_POOL_BLOCK_INFO,
     },
-    DBRawIterator, Direction, IteratorMode,
+    DBRawIterator, Direction, IteratorMode, ReadOptions,
 };
 use gw_types::{
     packed::{self, AccountMerkleState},
@@ -30,7 +30,7 @@ impl StoreTransaction {
         Ok(smt_store)
     }
 
-    fn account_smt_with_merkle_state(
+    pub fn account_smt_with_merkle_state(
         &self,
         merkle_state: AccountMerkleState,
     ) -> Result<SMT<SMTStore<'_, Self>>, Error> {
@@ -40,10 +40,20 @@ impl StoreTransaction {
 
     // get state tree
     pub fn state_tree(&self, context: StateContext) -> Result<StateTree<'_>, Error> {
-        let block = self.get_tip_block()?;
+        let block = match context {
+            StateContext::ReadOnlyHistory(block_number) => {
+                let block_hash = self
+                    .get_block_hash_by_number(block_number)?
+                    .ok_or(Error::from(format!("can't find block")))?;
+                self.get_block(&block_hash)?
+                    .ok_or(format!("can't find block"))?
+            }
+            _ => self.get_tip_block()?,
+        };
         let merkle_state = block.raw().post_account();
+        let account_count = merkle_state.count().unpack();
         let tree = self.account_smt_with_merkle_state(merkle_state)?;
-        Ok(StateTree::new(tree, merkle_state.count().unpack(), context))
+        Ok(StateTree::new(tree, account_count, context))
     }
 
     // FIXME: This method may running into inconsistent state if current state is dirty.
@@ -104,12 +114,16 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub(crate) fn find_state_key_last_value(
-        &self,
-        key: &BlockStateRecordKeyReverse,
-    ) -> Option<H256> {
+    pub fn get_history_state(&self, block_number: u64, state_key: &H256) -> Option<H256> {
+        let key = BlockStateRecordKeyReverse::new(block_number, state_key);
+        let mut opts = ReadOptions::default();
+        opts.set_total_order_seek(false);
         let mut raw_iter: DBRawIterator = self
-            .get_iter(COLUMN_BLOCK_STATE_REVERSE_RECORD, IteratorMode::Start)
+            .get_iter_opts(
+                COLUMN_BLOCK_STATE_REVERSE_RECORD,
+                IteratorMode::Start,
+                &opts,
+            )
             .into();
         raw_iter.seek_for_prev(key.as_slice());
 
@@ -146,9 +160,12 @@ impl StoreTransaction {
         block_number: u64,
     ) -> impl Iterator<Item = BlockStateRecordKey> + '_ {
         let start_key = BlockStateRecordKey::new(block_number, &H256::zero());
-        self.get_iter(
+        let mut opts = ReadOptions::default();
+        opts.set_total_order_seek(false);
+        self.get_iter_opts(
             COLUMN_BLOCK_STATE_RECORD,
             IteratorMode::From(start_key.as_slice(), Direction::Forward),
+            &opts,
         )
         .map(|(key, _value)| BlockStateRecordKey::from_slice(&key))
         .take_while(move |key| key.block_number() == block_number)
@@ -156,7 +173,7 @@ impl StoreTransaction {
 }
 
 // block_number(8 bytes) | key (32 bytes)
-struct BlockStateRecordKey([u8; 40]);
+pub(crate) struct BlockStateRecordKey([u8; 40]);
 
 impl BlockStateRecordKey {
     pub fn new(block_number: u64, state_key: &H256) -> Self {
@@ -174,7 +191,7 @@ impl BlockStateRecordKey {
 
     pub fn block_number(&self) -> u64 {
         let mut inner = [0u8; 8];
-        inner.copy_from_slice(&self.0[8..]);
+        inner.copy_from_slice(&self.0[..8]);
         u64::from_be_bytes(inner)
     }
 

@@ -13,7 +13,6 @@ use gw_common::state::{
 };
 use gw_common::H256;
 use gw_generator::traits::StateExt;
-use gw_store::state_db::{StateDBTransaction, StateTree};
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::{ChallengeTargetType, Status};

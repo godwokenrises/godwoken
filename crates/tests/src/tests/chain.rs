@@ -9,7 +9,7 @@ use gw_common::{
     state::{to_short_address, State},
     H256,
 };
-use gw_store::state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState};
+use gw_store::state::state_db::StateContext;
 use gw_types::{
     core::ScriptHashType,
     packed::{CellOutput, DepositRequest, GlobalState, L2BlockCommittedInfo, Script},
@@ -120,13 +120,7 @@ fn test_produce_blocks() {
     {
         let db = chain.store().begin_transaction();
         let tip_block_hash = db.get_tip_block_hash().unwrap();
-        let state_db = StateDBTransaction::from_checkpoint(
-            &db,
-            CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block).unwrap(),
-            StateDBMode::ReadOnly,
-        )
-        .unwrap();
-        let tree = state_db.state_tree().unwrap();
+        let tree = db.state_tree(StateContext::ReadOnly).unwrap();
         let script_hash_a: H256 = user_script_a.hash().into();
         let script_hash_b: H256 = user_script_b.hash().into();
         let id_a = tree
@@ -326,13 +320,7 @@ fn test_layer1_fork() {
     // check account SMT, should be able to calculate account state root
     {
         let db = chain.store().begin_transaction();
-        let db = StateDBTransaction::from_checkpoint(
-            &db,
-            CheckPoint::from_block_hash(&db, tip_block.hash().into(), SubState::Block).unwrap(),
-            StateDBMode::ReadOnly,
-        )
-        .unwrap();
-        let tree = db.state_tree().unwrap();
+        let tree = db.state_tree(StateContext::ReadOnly).unwrap();
         let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
@@ -474,13 +462,7 @@ fn test_layer1_revert() {
     // check account SMT, should be able to calculate account state root
     {
         let db = chain.store().begin_transaction();
-        let db = StateDBTransaction::from_checkpoint(
-            &db,
-            CheckPoint::from_block_hash(&db, tip_block.hash().into(), SubState::Block).unwrap(),
-            StateDBMode::ReadOnly,
-        )
-        .unwrap();
-        let tree = db.state_tree().unwrap();
+        let tree = db.state_tree(StateContext::ReadOnly).unwrap();
         let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
@@ -523,13 +505,7 @@ fn test_layer1_revert() {
 
     {
         let db = chain.store().begin_transaction();
-        let db = StateDBTransaction::from_checkpoint(
-            &db,
-            CheckPoint::from_block_hash(&db, tip_block.hash().into(), SubState::Block).unwrap(),
-            StateDBMode::ReadOnly,
-        )
-        .unwrap();
-        let tree = db.state_tree().unwrap();
+        let tree = db.state_tree(StateContext::ReadOnly).unwrap();
         let current_account_root = tree.calculate_root().unwrap();
         let expected_account_root: H256 = tip_block.raw().post_account().merkle_root().unpack();
         assert_eq!(
@@ -636,13 +612,7 @@ fn test_sync_blocks() {
         assert_eq!(tip_block_hash, tip_block.hash().into());
         assert_eq!(tip_block_number, 3);
 
-        let state_db = StateDBTransaction::from_checkpoint(
-            &db,
-            CheckPoint::from_block_hash(&db, tip_block_hash, SubState::Block).unwrap(),
-            StateDBMode::ReadOnly,
-        )
-        .unwrap();
-        let tree = state_db.state_tree().unwrap();
+        let tree = db.state_tree(StateContext::ReadOnly).unwrap();
         let script_hash_a: H256 = user_script_a.hash().into();
         let id_a = tree
             .get_account_id_by_script_hash(&script_hash_a)
