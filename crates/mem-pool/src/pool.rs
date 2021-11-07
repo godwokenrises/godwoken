@@ -29,8 +29,7 @@ use gw_types::{
         BlockParam, CellStatus, CollectedCustodianCells, DepositInfo, ErrorTxReceipt, RunResult,
     },
     packed::{
-        AccountMerkleState, BlockInfo, L2Block, L2Transaction, RawL2Transaction, Script, TxReceipt,
-        WithdrawalRequest,
+        AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt, WithdrawalRequest,
     },
     prelude::{Entity, Pack, Unpack},
 };
@@ -82,7 +81,7 @@ pub struct MemPool {
     generator: Arc<Generator>,
     /// error tx handler,
     error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
-    /// pending queue, contains executable contents(can be pacakged into block)
+    /// pending queue, contains executable contents
     pending: HashMap<u32, EntryList>,
     /// memory block
     mem_block: MemBlock,
@@ -276,28 +275,6 @@ impl MemPool {
         self.generator.check_transaction_signature(&state, tx)?;
 
         Ok(())
-    }
-
-    /// Execute tx without: a) push it into pool; 2) verify signature; 3) check nonce
-    pub fn execute_raw_transaction(
-        &self,
-        raw_tx: RawL2Transaction,
-        block_info: &BlockInfo,
-        block_number_opt: Option<u64>,
-    ) -> Result<RunResult> {
-        let db = self.store.begin_transaction();
-        let state = db.mem_pool_state_tree()?;
-        let tip_block_hash = self.store.get_tip_block_hash()?;
-        let chain_view = ChainView::new(&db, tip_block_hash);
-        // execute tx
-        let run_result = self.generator.execute_transaction(
-            &chain_view,
-            &state,
-            block_info,
-            &raw_tx,
-            self.config.execute_l2tx_max_cycles,
-        )?;
-        Ok(run_result)
     }
 
     /// Push a withdrawal request into pool
@@ -558,7 +535,8 @@ impl MemPool {
         assert!(new_mem_block.txs().is_empty());
 
         // calculate block state in memory
-        let mut mem_state = db.in_mem_state_tree(MemStateContext::ChainTip)?;
+        let smt_store = db.account_smt_store()?;
+        let mut mem_state = db.in_mem_state_tree(smt_store, MemStateContext::Tip)?;
 
         // NOTE: Must have at least one tx to have correct post block state
         if withdrawal_hashes.len() == mem_block.withdrawals().len()
@@ -747,10 +725,6 @@ impl MemPool {
             let smt = db.reverted_block_smt()?;
             smt.root().to_owned()
         };
-        // if let Some(ref mut offchain_validator) = self.offchain_validator {
-        //     let timestamp = self.mem_block.block_info().timestamp().unpack();
-        //     offchain_validator.reset(&new_tip_block, timestamp, reverted_block_root);
-        // }
 
         // set tip
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
@@ -1108,27 +1082,6 @@ impl MemPool {
                 unused_withdrawals.push(withdrawal_hash);
                 continue;
             }
-
-            // if let Some(ref mut offchain_validator) = self.offchain_validator {
-            //     match offchain_validator.verify_withdrawal_request(
-            //         db,
-            //         &state_db,
-            //         withdrawal.clone(),
-            //     ) {
-            //         Ok(cycles) => log::debug!("[mem-pool] offchain withdrawal cycles {:?}", cycles),
-            //         Err(err) => match err.downcast_ref::<RollBackSavePointError>() {
-            //             Some(err) => bail!("{}", err),
-            //             None => {
-            //                 log::info!(
-            //                     "[mem-pool] withdrawal contextual verification failed : {}",
-            //                     err
-            //                 );
-            //                 unused_withdrawals.push(withdrawal_hash);
-            //                 continue;
-            //             }
-            //         },
-            //     }
-            // }
 
             // update the state
             match state.apply_withdrawal_request(

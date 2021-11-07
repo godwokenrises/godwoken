@@ -1,7 +1,7 @@
 #![allow(clippy::mutable_key_type)]
 
 use anyhow::{anyhow, Context, Result};
-// use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
+use gw_challenge::offchain::{verify_tx::TxWithContext, OffChainMockContext};
 use gw_common::{sparse_merkle_tree, state::State, H256};
 use gw_config::ChainConfig;
 use gw_generator::{
@@ -11,10 +11,7 @@ use gw_generator::{
 use gw_jsonrpc_types::debugger::ReprMockTransaction;
 use gw_mem_pool::pool::MemPool;
 use gw_store::{
-    chain_view::ChainView,
-    state::state_db::{StateContext, StateTree},
-    transaction::StoreTransaction,
-    Store,
+    chain_view::ChainView, state::state_db::StateContext, transaction::StoreTransaction, Store,
 };
 use gw_types::{
     bytes::Bytes,
@@ -261,40 +258,40 @@ impl Chain {
         Ok(())
     }
 
-    // pub fn dump_cancel_challenge_tx(
-    //     &self,
-    //     offchain_mock_context: &OffChainMockContext,
-    //     target: ChallengeTarget,
-    // ) -> Result<ReprMockTransaction> {
-    //     let db = self.store().begin_transaction();
+    pub fn dump_cancel_challenge_tx(
+        &self,
+        offchain_mock_context: &OffChainMockContext,
+        target: ChallengeTarget,
+    ) -> Result<ReprMockTransaction> {
+        let db = self.store().begin_transaction();
 
-    //     let verify_context =
-    //         gw_challenge::context::build_verify_context(Arc::clone(&self.generator), &db, &target)
-    //             .with_context(|| "dump cancel challenge tx from chain")?;
+        let verify_context =
+            gw_challenge::context::build_verify_context(Arc::clone(&self.generator), &db, &target)
+                .with_context(|| "dump cancel challenge tx from chain")?;
 
-    //     let global_state = {
-    //         let get_state = db.get_block_post_global_state(&target.block_hash().unpack())?;
-    //         let state = get_state
-    //             .ok_or_else(|| anyhow!("post global state for challenge target {:?}", target))?;
-    //         let to_builder = state.as_builder().status((Status::Halting as u8).into());
-    //         to_builder.build()
-    //     };
+        let global_state = {
+            let get_state = db.get_block_post_global_state(&target.block_hash().unpack())?;
+            let state = get_state
+                .ok_or_else(|| anyhow!("post global state for challenge target {:?}", target))?;
+            let to_builder = state.as_builder().status((Status::Halting as u8).into());
+            to_builder.build()
+        };
 
-    //     let mock_output = gw_challenge::offchain::mock_cancel_challenge_tx(
-    //         &offchain_mock_context.mock_rollup,
-    //         &offchain_mock_context.mock_poa,
-    //         global_state,
-    //         target,
-    //         verify_context,
-    //         None,
-    //     )
-    //     .with_context(|| "dump cancel challenge tx from chain")?;
+        let mock_output = gw_challenge::offchain::mock_cancel_challenge_tx(
+            &offchain_mock_context.mock_rollup,
+            &offchain_mock_context.mock_poa,
+            global_state,
+            target,
+            verify_context,
+            None,
+        )
+        .with_context(|| "dump cancel challenge tx from chain")?;
 
-    //     gw_challenge::offchain::dump_tx(
-    //         &offchain_mock_context.rollup_cell_deps,
-    //         TxWithContext::from(mock_output),
-    //     )
-    // }
+        gw_challenge::offchain::dump_tx(
+            &offchain_mock_context.rollup_cell_deps,
+            TxWithContext::from(mock_output),
+        )
+    }
 
     /// update a layer1 action
     fn update_l1action(&mut self, db: &StoreTransaction, action: L1Action) -> Result<()> {
@@ -358,9 +355,8 @@ impl Chain {
 
                         self.local_state.tip = l2block;
 
-                        // let context =
-                        //     gw_challenge::context::build_challenge_context(db, target.to_owned())?;
-                        let context = panic!("build challenge context");
+                        let context =
+                            gw_challenge::context::build_challenge_context(db, target.to_owned())?;
                         return Ok(SyncEvent::BadBlock { context });
                     }
 
@@ -415,12 +411,11 @@ impl Chain {
                         log::info!("challenge cancelable, build verify context");
 
                         let generator = Arc::clone(&self.generator);
-                        // let context = Box::new(gw_challenge::context::build_verify_context(
-                        //     generator, db, &target,
-                        // )?);
-                        let context = unimplemented!();
+                        let context = Box::new(gw_challenge::context::build_verify_context(
+                            generator, db, &target,
+                        )?);
 
-                        // return Ok(SyncEvent::BadChallenge { cell, context });
+                        return Ok(SyncEvent::BadChallenge { cell, context });
                     }
 
                     if self.challenge_target.is_none()
@@ -434,8 +429,7 @@ impl Chain {
                     // If block is same, we don't care about target index and type, just want this
                     // bad block to be reverted anyway.
                     let revert_blocks = package_bad_blocks(db, &target.block_hash().unpack())?;
-                    // let context = gw_challenge::context::build_revert_context(db, &revert_blocks)?;
-                    let context = unimplemented!();
+                    let context = gw_challenge::context::build_revert_context(db, &revert_blocks)?;
                     // NOTE: Ensure db is rollback. build_revert_context will modify reverted_block_smt
                     // to compute merkle proof and root, so must rollback changes.
                     db.rollback()?;
@@ -638,7 +632,6 @@ impl Chain {
                         "rewind to last valid tip first"
                     );
 
-                    let rollup_config = &self.generator().rollup_context().rollup_config;
                     // detach block from DB
                     db.detach_block(&l2block)?;
                     // detach block state from state tree
@@ -929,7 +922,6 @@ impl Chain {
         )?;
         db.insert_asset_scripts(deposit_asset_scripts)?;
 
-        let rollup_config = &self.generator.rollup_context().rollup_config;
         db.attach_block(l2block.clone())?;
 
         {

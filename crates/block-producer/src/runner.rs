@@ -1,16 +1,12 @@
 use crate::{
-    block_producer::BlockProducer,
-    // challenger::Challenger,
-    cleaner::Cleaner,
-    poller::ChainUpdater,
-    test_mode_control::TestModeControl,
-    types::ChainEvent,
+    block_producer::BlockProducer, challenger::Challenger, cleaner::Cleaner, poller::ChainUpdater,
+    test_mode_control::TestModeControl, types::ChainEvent,
 };
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use ckb_types::core::hardfork::HardForkSwitch;
 use gw_chain::chain::Chain;
-// use gw_challenge::offchain::{OffChainMockContext, OffChainValidatorContext};
+use gw_challenge::offchain::{OffChainMockContext, OffChainValidatorContext};
 use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION};
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
@@ -60,20 +56,20 @@ async fn poll_loop(
     rpc_client: RPCClient,
     chain_updater: ChainUpdater,
     block_producer: Option<BlockProducer>,
-    // challenger: Option<Challenger>,
+    challenger: Option<Challenger>,
     cleaner: Option<Arc<Cleaner>>,
     poll_interval: Duration,
 ) -> Result<()> {
     struct Inner {
         chain_updater: ChainUpdater,
         block_producer: Option<BlockProducer>,
-        // challenger: Option<Challenger>,
+        challenger: Option<Challenger>,
         cleaner: Option<Arc<Cleaner>>,
     }
 
     let inner = Arc::new(smol::lock::Mutex::new(Inner {
         chain_updater,
-        // challenger,
+        challenger,
         block_producer,
         cleaner,
     }));
@@ -128,18 +124,18 @@ async fn poll_loop(
                     )
                 })?;
 
-            // if let Some(ref mut challenger) = inner.challenger {
-            //     challenger
-            //         .handle_event(event.clone())
-            //         .await
-            //         .map_err(|err| {
-            //             anyhow!(
-            //                 "Error occured when polling challenger, event: {}, error: {}",
-            //                 event,
-            //                 err
-            //             )
-            //         })?;
-            // }
+            if let Some(ref mut challenger) = inner.challenger {
+                challenger
+                    .handle_event(event.clone())
+                    .await
+                    .map_err(|err| {
+                        anyhow!(
+                            "Error occured when polling challenger, event: {}, error: {}",
+                            event,
+                            err
+                        )
+                    })?;
+            }
 
             if let Some(ref mut block_producer) = inner.block_producer {
                 block_producer
@@ -357,30 +353,30 @@ impl BaseInitComponents {
         Arc::new(smol::lock::Mutex::new(poa))
     }
 
-    // pub async fn init_offchain_mock_context(
-    //     &self,
-    //     poa: &PoA,
-    //     block_producer_config: &BlockProducerConfig,
-    // ) -> Result<OffChainMockContext> {
-    //     let ckb_genesis_info = gw_challenge::offchain::CKBGenesisInfo {
-    //         sighash_dep: self.ckb_genesis_info.sighash_dep(),
-    //     };
-    //     let wallet = {
-    //         let config = &block_producer_config.wallet_config;
-    //         Wallet::from_config(config).with_context(|| "init wallet")?
-    //     };
+    pub async fn init_offchain_mock_context(
+        &self,
+        poa: &PoA,
+        block_producer_config: &BlockProducerConfig,
+    ) -> Result<OffChainMockContext> {
+        let ckb_genesis_info = gw_challenge::offchain::CKBGenesisInfo {
+            sighash_dep: self.ckb_genesis_info.sighash_dep(),
+        };
+        let wallet = {
+            let config = &block_producer_config.wallet_config;
+            Wallet::from_config(config).with_context(|| "init wallet")?
+        };
 
-    //     OffChainMockContext::build(
-    //         &self.rpc_client,
-    //         poa,
-    //         self.rollup_context.clone(),
-    //         wallet,
-    //         block_producer_config.clone(),
-    //         ckb_genesis_info,
-    //         self.builtin_load_data.clone(),
-    //     )
-    //     .await
-    // }
+        OffChainMockContext::build(
+            &self.rpc_client,
+            poa,
+            self.rollup_context.clone(),
+            wallet,
+            block_producer_config.clone(),
+            ckb_genesis_info,
+            self.builtin_load_data.clone(),
+        )
+        .await
+    }
 }
 
 pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
@@ -400,35 +396,32 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     );
 
     let base = BaseInitComponents::init(&config, skip_config_check)?;
-    let (
-        mem_pool,
-        wallet,
-        poa,
-        // offchain_mock_context,
-        pg_pool,
-    ) = match config.block_producer.clone() {
+    let (mem_pool, wallet, poa, offchain_mock_context, pg_pool) = match config
+        .block_producer
+        .clone()
+    {
         Some(block_producer_config) => {
             let wallet = Wallet::from_config(&block_producer_config.wallet_config)
                 .with_context(|| "init wallet")?;
             let poa = base.init_poa(&wallet, &block_producer_config);
-            // let offchain_mock_context = smol::block_on(async {
-            //     let poa = poa.lock().await;
-            //     base.init_offchain_mock_context(&poa, &block_producer_config)
-            //         .await
-            // })?;
+            let offchain_mock_context = smol::block_on(async {
+                let poa = poa.lock().await;
+                base.init_offchain_mock_context(&poa, &block_producer_config)
+                    .await
+            })?;
 
-            // let mut offchain_validator_context = None;
-            // if let Some(validator_config) = config.offchain_validator {
-            //     let debug_config = config.debug.clone();
+            let mut offchain_validator_context = None;
+            if let Some(validator_config) = config.offchain_validator {
+                let debug_config = config.debug.clone();
 
-            //     let context = OffChainValidatorContext::build(
-            //         &offchain_mock_context,
-            //         debug_config,
-            //         validator_config,
-            //     )?;
+                let context = OffChainValidatorContext::build(
+                    &offchain_mock_context,
+                    debug_config,
+                    validator_config,
+                )?;
 
-            //     offchain_validator_context = Some(context);
-            // }
+                offchain_validator_context = Some(context);
+            }
 
             let mem_pool_provider = DefaultMemPoolProvider::new(
                 base.rpc_client.clone(),
@@ -461,7 +454,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     base.generator.clone(),
                     Box::new(mem_pool_provider),
                     error_tx_handler,
-                    // offchain_validator_context,
                     config.mem_pool.clone(),
                 )
                 .with_context(|| "create mem-pool")?,
@@ -470,14 +462,11 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 Some(mem_pool),
                 Some(wallet),
                 Some(poa),
-                // Some(offchain_mock_context),
+                Some(offchain_mock_context),
                 pg_pool,
             )
         }
-        None => (
-            None, None, None, None,
-            //  None
-        ),
+        None => (None, None, None, None, None),
     };
 
     let BaseInitComponents {
@@ -538,16 +527,8 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         web3_indexer,
     );
 
-    let (
-        block_producer,
-        //  challenger,
-        test_mode_control,
-        cleaner,
-    ) = match config.node_mode {
-        NodeMode::ReadOnly => (
-            None, None, // None,
-            None,
-        ),
+    let (block_producer, challenger, test_mode_control, cleaner) = match config.node_mode {
+        NodeMode::ReadOnly => (None, None, None, None),
         mode => {
             let block_producer_config = config
                 .block_producer
@@ -559,11 +540,11 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             let wallet =
                 wallet.ok_or_else(|| anyhow!("wallet must be enabled in mode: {:?}", mode))?;
             let poa = poa.ok_or_else(|| anyhow!("poa must be enabled in mode: {:?}", mode))?;
-            // let offchain_mock_context = {
-            //     let ctx = offchain_mock_context.clone();
-            //     let msg = "offchain mock require block producer config, wallet and poa in mode: ";
-            //     ctx.ok_or_else(|| anyhow!("{} {:?}", msg, mode))?
-            // };
+            let offchain_mock_context = {
+                let ctx = offchain_mock_context.clone();
+                let msg = "offchain mock require block producer config, wallet and poa in mode: ";
+                ctx.ok_or_else(|| anyhow!("{} {:?}", msg, mode))?
+            };
             let tests_control = if let NodeMode::Test = config.node_mode {
                 Some(TestModeControl::new(
                     rpc_client.clone(),
@@ -584,20 +565,20 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 .with_context(|| "init wallet")?;
 
             // Challenger
-            // let challenger = Challenger::new(
-            //     rollup_context,
-            //     rpc_client.clone(),
-            //     wallet,
-            //     block_producer_config.clone(),
-            //     config.debug.clone(),
-            //     builtin_load_data,
-            //     ckb_genesis_info.clone(),
-            //     Arc::clone(&chain),
-            //     Arc::clone(&poa),
-            //     tests_control.clone(),
-            //     Arc::clone(&cleaner),
-            //     // offchain_mock_context,
-            // );
+            let challenger = Challenger::new(
+                rollup_context,
+                rpc_client.clone(),
+                wallet,
+                block_producer_config.clone(),
+                config.debug.clone(),
+                builtin_load_data,
+                ckb_genesis_info.clone(),
+                Arc::clone(&chain),
+                Arc::clone(&poa),
+                tests_control.clone(),
+                Arc::clone(&cleaner),
+                offchain_mock_context,
+            );
 
             // Block Producer
             let block_producer = BlockProducer::create(
@@ -616,7 +597,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
             (
                 Some(block_producer),
-                // Some(challenger),
+                Some(challenger),
                 tests_control,
                 Some(cleaner),
             )
@@ -632,7 +613,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         rollup_config,
         config.debug.clone(),
         Arc::clone(&chain),
-        // offchain_mock_context,
+        offchain_mock_context,
         config.mem_pool.clone(),
         config.node_mode,
         rpc_client.clone(),
@@ -679,7 +660,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 rpc_client,
                 chain_updater,
                 block_producer,
-                // challenger,
+                challenger,
                 cleaner,
                 Duration::from_secs(3),
             )

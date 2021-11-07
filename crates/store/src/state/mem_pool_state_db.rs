@@ -57,7 +57,7 @@ impl<'a> MemPoolStateTree<'a> {
     }
 
     fn db(&self) -> &StoreTransaction {
-        &self.tree.store().inner_store()
+        self.tree.store().inner_store()
     }
 }
 

@@ -1,17 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
-// use gw_challenge::offchain::OffChainMockContext;
-use gw_common::{
-    blake2b::new_blake2b,
-    h256_ext::H256Ext,
-    state::{
-        build_account_field_key, build_account_key, State, GW_ACCOUNT_NONCE_TYPE,
-        SUDT_KEY_FLAG_BALANCE,
-    },
-    H256,
-};
+use gw_challenge::offchain::OffChainMockContext;
+use gw_common::{blake2b::new_blake2b, state::State, H256};
 use gw_config::{DebugConfig, MemPoolConfig, NodeMode};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
@@ -120,7 +112,7 @@ pub struct Registry {
     store: Store,
     tests_rpc_impl: Option<Arc<BoxedTestsRPCImpl>>,
     chain: Arc<Mutex<Chain>>,
-    // offchain_mock_context: Option<OffChainMockContext>,
+    offchain_mock_context: Option<OffChainMockContext>,
     rollup_config: RollupConfig,
     debug_config: DebugConfig,
     mem_pool_config: MemPoolConfig,
@@ -140,7 +132,7 @@ impl Registry {
         rollup_config: RollupConfig,
         debug_config: DebugConfig,
         chain: Arc<Mutex<Chain>>,
-        // offchain_mock_context: Option<OffChainMockContext>,
+        offchain_mock_context: Option<OffChainMockContext>,
         mem_pool_config: MemPoolConfig,
         node_mode: NodeMode,
         rpc_client: RPCClient,
@@ -167,7 +159,7 @@ impl Registry {
             rollup_config,
             debug_config,
             chain,
-            // offchain_mock_context,
+            offchain_mock_context,
             mem_pool_config,
             backend_info,
             node_mode,
@@ -234,17 +226,6 @@ impl Registry {
                 .with_method("tests_produce_block", tests_produce_block)
                 .with_method("tests_should_produce_block", tests_should_produce_block)
                 .with_method("tests_get_global_state", tests_get_global_state);
-        }
-
-        // Debug
-        if self.debug_config.enable_debug_rpc {
-            // server = server
-            //     .with_data(Data::new(self.chain))
-            //     .with_data(Data::new(self.offchain_mock_context))
-            //     .with_method(
-            //         "debug_dump_cancel_challenge_tx",
-            //         debug_dump_cancel_challenge_tx,
-            //     );
         }
 
         Ok(server.finish())
@@ -1017,7 +998,7 @@ async fn get_data(
     Params(params): Params<GetDataParams>,
     store: Data<Store>,
 ) -> Result<Option<JsonBytes>, RpcError> {
-    let (data_hash, block_number) = match params {
+    let (data_hash, _block_number) = match params {
         GetDataParams::Tip(p) => (p.0, None),
         GetDataParams::Number(p) => p,
     };
