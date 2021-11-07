@@ -13,6 +13,7 @@ use gw_common::state::{
 };
 use gw_common::H256;
 use gw_generator::traits::StateExt;
+use gw_store::state::mem_state_db::MemStateTree;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::{ChallengeTargetType, Status};
@@ -95,26 +96,19 @@ impl MockBlockParam {
 
     pub fn push_withdrawal_request(
         &mut self,
-        db: &StoreTransaction,
-        state_db: &StateDBTransaction<'_>,
+        mem_tree: &mut MemStateTree<'_>,
         req: WithdrawalRequest,
     ) -> Result<()> {
         if self.withdrawals.contains(&req) {
             bail!("duplicate withdrawal {}", req.hash().pack());
         }
 
-        let apply = |state: &mut StateTree<'_, '_>| -> Result<AccountMerkleState> {
-            state.apply_withdrawal_request(
-                &self.rollup_context,
-                self.block_producer_id.unpack(),
-                &req,
-            )?;
-            let post_account = state.merkle_state()?;
-
-            Ok(post_account)
-        };
-
-        let post_account = build_post_account_and_rollback(db, state_db, apply)?;
+        mem_tree.apply_withdrawal_request(
+            &self.rollup_context,
+            self.block_producer_id.unpack(),
+            &req,
+        )?;
+        let post_account = mem_tree.merkle_state()?;
         let checkpoint = calculate_state_checkpoint(
             &post_account.merkle_root().unpack(),
             post_account.count().unpack(),
@@ -133,8 +127,7 @@ impl MockBlockParam {
 
     pub fn push_transaction(
         &mut self,
-        db: &StoreTransaction,
-        state_db: &StateDBTransaction<'_>,
+        mem_tree: &mut MemStateTree<'_>,
         tx: L2Transaction,
         run_result: &RunResult,
     ) -> Result<()> {
@@ -144,8 +137,7 @@ impl MockBlockParam {
 
         if self.transactions.inner.is_empty() {
             let checkpoint = {
-                let tree = state_db.state_tree()?;
-                let prev_txs_state = tree.get_merkle_state();
+                let prev_txs_state = mem_tree.get_merkle_state();
                 calculate_state_checkpoint(
                     &prev_txs_state.merkle_root().unpack(),
                     prev_txs_state.count().unpack(),
@@ -155,14 +147,8 @@ impl MockBlockParam {
             self.transactions.set_prev_txs_checkpoint(checkpoint);
         }
 
-        let apply = |state: &mut StateTree<'_, '_>| -> Result<AccountMerkleState> {
-            state.apply_run_result(run_result)?;
-            let post_account = state.merkle_state()?;
-
-            Ok(post_account)
-        };
-
-        let post_account = build_post_account_and_rollback(db, state_db, apply)?;
+        mem_tree.apply_run_result(run_result)?;
+        let post_account = mem_tree.merkle_state()?;
         let checkpoint = calculate_state_checkpoint(
             &post_account.merkle_root().unpack(),
             post_account.count().unpack(),
@@ -185,7 +171,7 @@ impl MockBlockParam {
     pub fn challenge_last_withdrawal(
         &self,
         db: &StoreTransaction,
-        state_db: &StateDBTransaction<'_>,
+        mem_tree: &MemStateTree<'_>,
     ) -> Result<MockChallengeOutput> {
         let target_index = self.withdrawals.inner.len().saturating_sub(1);
         let target_type = ChallengeTargetType::Withdrawal as u8;
@@ -198,9 +184,8 @@ impl MockBlockParam {
 
         let sender_script = {
             let req = self.withdrawals.inner.last().expect("should exists");
-            let state = state_db.state_tree()?;
             let sender_script_hash = req.raw().account_script_hash().unpack();
-            let get = state.get_script(&sender_script_hash);
+            let get = mem_tree.get_script(&sender_script_hash);
             get.ok_or_else(|| anyhow!("withdrawal sender script not found"))?
         };
 
@@ -223,7 +208,7 @@ impl MockBlockParam {
     pub fn challenge_last_tx_signature(
         &self,
         db: &StoreTransaction,
-        state_db: &StateDBTransaction<'_>,
+        mem_tree: &MemStateTree<'_>,
     ) -> Result<MockChallengeOutput> {
         let target_index = self.transactions.inner.len().saturating_sub(1);
         let target_type = ChallengeTargetType::TxSignature as u8;
@@ -244,7 +229,7 @@ impl MockBlockParam {
             .build();
 
         let verify_context =
-            self.build_transaction_signature_verify_context(state_db, tx, raw_block)?;
+            self.build_transaction_signature_verify_context(mem_tree, tx, raw_block)?;
 
         Ok(MockChallengeOutput {
             raw_block_size,
@@ -257,7 +242,7 @@ impl MockBlockParam {
     pub fn challenge_last_tx_execution(
         &self,
         db: &StoreTransaction,
-        state_db: &StateDBTransaction<'_>,
+        mem_tree: &MemStateTree<'_>,
         run_result: &RunResult,
     ) -> Result<MockChallengeOutput> {
         let target_index = self.transactions.inner.len().saturating_sub(1);
@@ -279,7 +264,7 @@ impl MockBlockParam {
             .build();
 
         let verify_context =
-            self.build_transaction_execution_verify_context(state_db, tx, raw_block, run_result)?;
+            self.build_transaction_execution_verify_context(mem_tree, tx, raw_block, run_result)?;
 
         Ok(MockChallengeOutput {
             raw_block_size,
@@ -384,16 +369,15 @@ impl MockBlockParam {
 
     fn build_transaction_signature_verify_context(
         &self,
-        state_db: &StateDBTransaction<'_>,
+        mem_tree: &MemStateTree<'_>,
         tx: L2Transaction,
         raw_block: RawL2Block,
     ) -> Result<VerifyContext> {
         let sender_id = tx.raw().from_id().unpack();
         let receiver_id = tx.raw().to_id().unpack();
 
-        let tree = state_db.state_tree()?;
-        let sender_script = get_script(&tree, sender_id)?;
-        let receiver_script = get_script(&tree, receiver_id)?;
+        let sender_script = get_script(&mem_tree, sender_id)?;
+        let receiver_script = get_script(&mem_tree, receiver_id)?;
 
         let kv_state: Vec<(H256, H256)> = vec![
             (
@@ -410,13 +394,13 @@ impl MockBlockParam {
             ),
         ];
         assert_eq!(
-            tree.get_nonce(sender_id)?,
+            mem_tree.get_nonce(sender_id)?,
             Unpack::<u32>::unpack(&tx.raw().nonce())
         );
 
         let touched_keys = kv_state.iter().map(|(key, _)| key.to_owned()).collect();
         let kv_state_proof = {
-            let smt = state_db.account_smt()?;
+            let smt = mem_tree.smt();
             smt.merkle_proof(touched_keys)?.compile(kv_state.clone())?
         };
 
@@ -425,7 +409,7 @@ impl MockBlockParam {
             .push(receiver_script.clone())
             .build();
 
-        let account_count = tree.get_account_count()?;
+        let account_count = mem_tree.get_account_count()?;
         let context = VerifyTransactionSignatureContext::new_builder()
             .account_count(account_count.pack())
             .kv_state(kv_state.pack())
@@ -455,7 +439,7 @@ impl MockBlockParam {
 
     fn build_transaction_execution_verify_context(
         &self,
-        state_db: &StateDBTransaction<'_>,
+        mem_tree: &MemStateTree<'_>,
         tx: L2Transaction,
         raw_block: RawL2Block,
         run_result: &RunResult,
@@ -463,9 +447,8 @@ impl MockBlockParam {
         let sender_id = tx.raw().from_id().unpack();
         let receiver_id = tx.raw().to_id().unpack();
 
-        let tree = state_db.state_tree()?;
-        let sender_script = get_script(&tree, sender_id)?;
-        let receiver_script = get_script(&tree, receiver_id)?;
+        let sender_script = get_script(&mem_tree, sender_id)?;
+        let receiver_script = get_script(&mem_tree, receiver_id)?;
 
         let mut kv_state: HashMap<H256, H256> = HashMap::new();
         kv_state.insert(
@@ -481,7 +464,7 @@ impl MockBlockParam {
             H256::from_u32(tx.raw().nonce().unpack()),
         );
         assert_eq!(
-            tree.get_nonce(sender_id)?,
+            mem_tree.get_nonce(sender_id)?,
             Unpack::<u32>::unpack(&tx.raw().nonce())
         );
 
@@ -490,7 +473,7 @@ impl MockBlockParam {
                 continue;
             }
 
-            let value = tree.get_raw(key)?;
+            let value = mem_tree.get_raw(key)?;
             kv_state.insert(key.to_owned(), value);
         }
 
@@ -499,14 +482,14 @@ impl MockBlockParam {
                 continue;
             }
 
-            let value = tree.get_raw(key)?;
+            let value = mem_tree.get_raw(key)?;
             kv_state.insert(key.to_owned(), value);
         }
 
         let touched_keys = kv_state.iter().map(|(key, _)| key.to_owned()).collect();
         let kv_state: Vec<(H256, H256)> = kv_state.into_iter().collect();
         let kv_state_proof = {
-            let smt = state_db.account_smt()?;
+            let smt = mem_tree.smt();
             smt.merkle_proof(touched_keys)?.compile(kv_state.clone())?
         };
 
@@ -551,7 +534,7 @@ impl MockBlockParam {
             return_data_hash.pack()
         };
 
-        let account_count = tree.get_account_count()?;
+        let account_count = mem_tree.get_account_count()?;
         let context = VerifyTransactionContext::new_builder()
             .account_count(account_count.pack())
             .kv_state(kv_state.pack())
@@ -694,26 +677,11 @@ impl RawBlockTransactions {
     }
 }
 
-fn get_script(state: &StateTree<'_, '_>, account_id: u32) -> Result<Script> {
+fn get_script(state: &MemStateTree<'_>, account_id: u32) -> Result<Script> {
     let script_hash = state.get_script_hash(account_id)?;
     state
         .get_script(&script_hash)
         .ok_or_else(|| anyhow!("tx script not found"))
-}
-
-fn build_post_account_and_rollback(
-    db: &StoreTransaction,
-    state_db: &StateDBTransaction<'_>,
-    mut apply_fn: impl FnMut(&mut StateTree<'_, '_>) -> Result<AccountMerkleState>,
-) -> Result<AccountMerkleState> {
-    let mut state = state_db.state_tree()?;
-
-    db.set_save_point();
-    let apply_result = apply_fn(&mut state);
-    db.rollback_to_save_point()
-        .map_err(RollBackSavePointError)?;
-
-    apply_result
 }
 
 fn build_cbmt_merkle_proof(leaves: &[H256], leaf_indices: &[u32]) -> Result<CKBMerkleProof> {
