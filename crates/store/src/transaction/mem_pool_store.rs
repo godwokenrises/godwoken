@@ -1,4 +1,7 @@
-use gw_common::{smt::SMT, H256};
+use gw_common::{
+    smt::{Store, SMT},
+    H256,
+};
 use gw_db::{
     error::Error,
     schema::{
@@ -24,20 +27,20 @@ use crate::{
 
 impl StoreTransaction {
     /// Used for package new mem block
-    pub fn in_mem_state_tree(&self, context: MemStateContext) -> Result<MemStateTree, Error> {
-        let under_layer_columns = Columns {
-            leaf_col: COLUMN_ACCOUNT_SMT_LEAF,
-            branch_col: COLUMN_ACCOUNT_SMT_BRANCH,
-        };
+    pub fn in_mem_state_tree<S: Store<H256>>(
+        &self,
+        smt_store: S,
+        context: MemStateContext,
+    ) -> Result<MemStateTree<S>, Error> {
         let block = self.get_tip_block()?;
-        let smt_store = MemSMTStore::new(under_layer_columns, self);
         let merkle_root = block.raw().post_account();
         let account_count = self.get_mem_block_account_count()?;
-        let tree = SMT::new(merkle_root.merkle_root().unpack(), smt_store);
-        Ok(MemStateTree::new(tree, account_count, context))
+        let mem_smt_store = MemSMTStore::new(smt_store);
+        let tree = SMT::new(merkle_root.merkle_root().unpack(), mem_smt_store);
+        Ok(MemStateTree::new(self, tree, account_count, context))
     }
 
-    pub fn mem_pool_state_tree(&self) -> Result<MemPoolStateTree, Error> {
+    pub fn mem_pool_account_smt(&self) -> Result<MemPoolSMTStore<'_>, Error> {
         let mem_pool_columns = Columns {
             leaf_col: COLUMN_MEM_POOL_ACCOUNT_SMT_LEAF,
             branch_col: COLUMN_MEM_POOL_ACCOUNT_SMT_BRANCH,
@@ -46,9 +49,17 @@ impl StoreTransaction {
             leaf_col: COLUMN_ACCOUNT_SMT_LEAF,
             branch_col: COLUMN_ACCOUNT_SMT_BRANCH,
         };
-        let smt_store = MemPoolSMTStore::new(mem_pool_columns, under_layer_columns, self);
+        Ok(MemPoolSMTStore::new(
+            mem_pool_columns,
+            under_layer_columns,
+            self,
+        ))
+    }
+
+    pub fn mem_pool_state_tree(&self) -> Result<MemPoolStateTree, Error> {
         let merkle_root = self.get_mem_block_account_smt_root()?;
         let account_count = self.get_mem_block_account_count()?;
+        let smt_store = self.mem_pool_account_smt()?;
         let tree = SMT::new(merkle_root, smt_store);
         Ok(MemPoolStateTree::new(tree, account_count))
     }
