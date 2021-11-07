@@ -1,3 +1,5 @@
+#![allow(warnings, unused)]
+
 use crate::types::{RevertContext, RevertWitness, VerifyContext, VerifyWitness};
 
 use anyhow::{anyhow, Result};
@@ -11,6 +13,8 @@ use gw_generator::constants::L2TX_MAX_CYCLES;
 use gw_generator::traits::StateExt;
 use gw_generator::{ChallengeContext, Generator};
 use gw_store::chain_view::ChainView;
+use gw_store::smt::mem_pool_smt_store::MemPoolSMTStore;
+use gw_store::smt::mem_smt_store::MemSMTStore;
 use gw_store::state::mem_state_db::MemStateTree;
 use gw_store::state::state_db::StateContext;
 use gw_store::transaction::StoreTransaction;
@@ -329,179 +333,182 @@ fn build_tx_kv_witness(
 
     // FIXME we need execute block until challenge point
 
-    let mut tree: MemStateTree<'_> = unimplemented!("fetch tx_index state");
-    let prev_tx_account_count = tree.get_account_count()?;
+    let mut tree: MemStateTree<'_, MemSMTStore<MemPoolSMTStore>> =
+        unimplemented!("fetch tx_index state");
+    // let prev_tx_account_count = tree.get_account_count()?;
 
-    // Check prev tx account state
-    {
-        let block_prev_tx_checkpoint = unimplemented!();
-        let local_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
-        // assert_eq!(local_checkpoint, block_prev_tx_checkpoint);
-    }
+    // // Check prev tx account state
+    // {
+    //     let block_prev_tx_checkpoint = unimplemented!();
+    //     let local_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
+    //     // assert_eq!(local_checkpoint, block_prev_tx_checkpoint);
+    // }
 
-    tree.tracker_mut().enable();
+    // tree.tracker_mut().enable();
 
-    let get_script = |state: &MemStateTree<'_>, account_id: u32| -> Result<Option<Script>> {
-        let script_hash = state.get_script_hash(account_id)?;
-        Ok(state.get_script(&script_hash))
-    };
+    // let get_script = |state: &MemStateTree<'_, MemSMTStore<MemPoolSMTStore>>,
+    //                   account_id: u32|
+    //  -> Result<Option<Script>> {
+    //     let script_hash = state.get_script_hash(account_id)?;
+    //     Ok(state.get_script(&script_hash))
+    // };
 
-    let sender_id = raw_tx.from_id().unpack();
-    let receiver_id = raw_tx.to_id().unpack();
+    // let sender_id = raw_tx.from_id().unpack();
+    // let receiver_id = raw_tx.to_id().unpack();
 
-    let sender_script =
-        get_script(&tree, sender_id)?.ok_or_else(|| anyhow!("sender script not found"))?;
-    let receiver_script =
-        get_script(&tree, receiver_id)?.ok_or_else(|| anyhow!("receiver script not found"))?;
+    // let sender_script =
+    //     get_script(&tree, sender_id)?.ok_or_else(|| anyhow!("sender script not found"))?;
+    // let receiver_script =
+    //     get_script(&tree, receiver_id)?.ok_or_else(|| anyhow!("receiver script not found"))?;
 
-    // To verify transaction signature
-    tree.get_nonce(sender_id)?;
+    // // To verify transaction signature
+    // tree.get_nonce(sender_id)?;
 
-    let opt_run_result = match tx_kv_state {
-        TxKvState::Execution { ref generator } => {
-            let parent_block_hash = db
-                .get_block_hash_by_number(raw_block.number().unpack())?
-                .ok_or_else(|| anyhow!("parent block not found"))?;
-            let chain_view = ChainView::new(db, parent_block_hash);
-            let block_info = BlockInfo::new_builder()
-                .number(raw_block.number().to_entity())
-                .timestamp(raw_block.timestamp().to_entity())
-                .block_producer_id(raw_block.block_producer_id().to_entity())
-                .build();
+    // let opt_run_result = match tx_kv_state {
+    //     TxKvState::Execution { ref generator } => {
+    //         let parent_block_hash = db
+    //             .get_block_hash_by_number(raw_block.number().unpack())?
+    //             .ok_or_else(|| anyhow!("parent block not found"))?;
+    //         let chain_view = ChainView::new(db, parent_block_hash);
+    //         let block_info = BlockInfo::new_builder()
+    //             .number(raw_block.number().to_entity())
+    //             .timestamp(raw_block.timestamp().to_entity())
+    //             .block_producer_id(raw_block.block_producer_id().to_entity())
+    //             .build();
 
-            let run_result = generator.execute_transaction(
-                &chain_view,
-                &tree,
-                &block_info,
-                raw_tx,
-                L2TX_MAX_CYCLES,
-            )?;
-            tree.apply_run_result(&run_result)?;
+    //         let run_result = generator.execute_transaction(
+    //             &chain_view,
+    //             &tree,
+    //             &block_info,
+    //             raw_tx,
+    //             L2TX_MAX_CYCLES,
+    //         )?;
+    //         tree.apply_run_result(&run_result)?;
 
-            Some(run_result)
-        }
-        TxKvState::Signature => None,
-    };
+    //         Some(run_result)
+    //     }
+    //     TxKvState::Signature => None,
+    // };
 
-    let block_post_tx_checkpoint: [u8; 32] = raw_block
-        .state_checkpoint_list()
-        .get((withdrawal_len + tx_index) as usize)
-        .ok_or_else(|| anyhow!("block tx checkpoint not found"))?
-        .unpack();
+    // let block_post_tx_checkpoint: [u8; 32] = raw_block
+    //     .state_checkpoint_list()
+    //     .get((withdrawal_len + tx_index) as usize)
+    //     .ok_or_else(|| anyhow!("block tx checkpoint not found"))?
+    //     .unpack();
 
-    if matches!(tx_kv_state, TxKvState::Execution { .. }) {
-        // Check post tx account state
-        let local_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
-        assert_eq!(local_checkpoint, block_post_tx_checkpoint);
-    }
+    // if matches!(tx_kv_state, TxKvState::Execution { .. }) {
+    //     // Check post tx account state
+    //     let local_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
+    //     assert_eq!(local_checkpoint, block_post_tx_checkpoint);
+    // }
 
-    let touched_keys: Vec<H256> = {
-        let opt_keys = tree.tracker_mut().touched_keys();
-        let keys = opt_keys.ok_or_else(|| anyhow!("no key touched"))?;
-        let clone_keys = keys.borrow().clone().into_iter();
-        clone_keys.collect()
-    };
-    let post_tx_account_count = tree.get_account_count()?;
-    let post_kv_state = {
-        let keys = touched_keys.iter();
-        let to_kv = keys.map(|k| {
-            let v = tree.get_raw(k)?;
-            Ok((*k, v))
-        });
-        to_kv.collect::<Result<Vec<(H256, H256)>>>()
-    }?;
+    // let touched_keys: Vec<H256> = {
+    //     let opt_keys = tree.tracker_mut().touched_keys();
+    //     let keys = opt_keys.ok_or_else(|| anyhow!("no key touched"))?;
+    //     let clone_keys = keys.borrow().clone().into_iter();
+    //     clone_keys.collect()
+    // };
+    // let post_tx_account_count = tree.get_account_count()?;
+    // let post_kv_state = {
+    //     let keys = touched_keys.iter();
+    //     let to_kv = keys.map(|k| {
+    //         let v = tree.get_raw(k)?;
+    //         Ok((*k, v))
+    //     });
+    //     to_kv.collect::<Result<Vec<(H256, H256)>>>()
+    // }?;
 
-    // Discard all changes
-    drop(tree);
-    db.rollback()?;
+    // // Discard all changes
+    // drop(tree);
+    // db.rollback()?;
 
-    tree = unimplemented!();
-    let prev_kv_state = {
-        let keys = touched_keys.iter();
-        let to_kv = keys.map(|k| {
-            let v = tree.get_raw(k)?;
-            Ok((*k, v))
-        });
-        to_kv.collect::<Result<Vec<(H256, H256)>>>()
-    }?;
+    // tree = unimplemented!();
+    // let prev_kv_state = {
+    //     let keys = touched_keys.iter();
+    //     let to_kv = keys.map(|k| {
+    //         let v = tree.get_raw(k)?;
+    //         Ok((*k, v))
+    //     });
+    //     to_kv.collect::<Result<Vec<(H256, H256)>>>()
+    // }?;
 
-    let kv_state_proof = {
-        let smt = tree.smt();
-        let prev_kv_state = prev_kv_state.clone();
-        smt.merkle_proof(touched_keys)?.compile(prev_kv_state)?
-    };
-    log::debug!("build kv state proof");
+    // let kv_state_proof = {
+    //     let smt = tree.smt();
+    //     let prev_kv_state = prev_kv_state.clone();
+    //     smt.merkle_proof(touched_keys)?.compile(prev_kv_state)?
+    // };
+    // log::debug!("build kv state proof");
 
-    // Check proof
-    {
-        let proof_root = kv_state_proof.compute_root::<Blake2bHasher>(prev_kv_state.clone())?;
-        let proof_checkpoint = calculate_state_checkpoint(&proof_root, prev_tx_account_count);
-        // assert_eq!(proof_checkpoint, block_prev_tx_checkpoint.into());
+    // // Check proof
+    // {
+    //     let proof_root = kv_state_proof.compute_root::<Blake2bHasher>(prev_kv_state.clone())?;
+    //     let proof_checkpoint = calculate_state_checkpoint(&proof_root, prev_tx_account_count);
+    //     // assert_eq!(proof_checkpoint, block_prev_tx_checkpoint.into());
 
-        if matches!(tx_kv_state, TxKvState::Execution { .. }) {
-            let proof_root = kv_state_proof.compute_root::<Blake2bHasher>(post_kv_state)?;
-            let proof_checkpoint = calculate_state_checkpoint(&proof_root, post_tx_account_count);
-            assert_eq!(proof_checkpoint, block_post_tx_checkpoint.into());
-        }
-    }
+    //     if matches!(tx_kv_state, TxKvState::Execution { .. }) {
+    //         let proof_root = kv_state_proof.compute_root::<Blake2bHasher>(post_kv_state)?;
+    //         let proof_checkpoint = calculate_state_checkpoint(&proof_root, post_tx_account_count);
+    //         assert_eq!(proof_checkpoint, block_post_tx_checkpoint.into());
+    //     }
+    // }
 
-    let scripts = {
-        let mut builder = ScriptVec::new_builder()
-            .push(sender_script.clone())
-            .push(receiver_script.clone());
+    // let scripts = {
+    //     let mut builder = ScriptVec::new_builder()
+    //         .push(sender_script.clone())
+    //         .push(receiver_script.clone());
 
-        if let Some(ref run_result) = opt_run_result {
-            let sender_script_hash = sender_script.hash();
-            let receiver_script_hash = receiver_script.hash();
+    //     if let Some(ref run_result) = opt_run_result {
+    //         let sender_script_hash = sender_script.hash();
+    //         let receiver_script_hash = receiver_script.hash();
 
-            for slice in run_result.get_scripts.iter() {
-                let script = ScriptReader::from_slice_should_be_ok(slice);
+    //         for slice in run_result.get_scripts.iter() {
+    //             let script = ScriptReader::from_slice_should_be_ok(slice);
 
-                let script_hash = script.hash();
-                if script_hash == sender_script_hash || script_hash == receiver_script_hash {
-                    continue;
-                }
+    //             let script_hash = script.hash();
+    //             if script_hash == sender_script_hash || script_hash == receiver_script_hash {
+    //                 continue;
+    //             }
 
-                builder = builder.push(script.to_entity());
-            }
-        }
+    //             builder = builder.push(script.to_entity());
+    //         }
+    //     }
 
-        builder.build()
-    };
+    //     builder.build()
+    // };
 
-    let load_data = {
-        let to_read_data = opt_run_result.as_ref().map(|r| r.read_data.iter());
-        to_read_data.map(|d| d.map(|(k, v)| (*k, v.pack())).collect())
-    };
+    // let load_data = {
+    //     let to_read_data = opt_run_result.as_ref().map(|r| r.read_data.iter());
+    //     to_read_data.map(|d| d.map(|(k, v)| (*k, v.pack())).collect())
+    // };
 
-    let return_data_hash = opt_run_result.as_ref().map(|result| {
-        let return_data_hash: [u8; 32] = {
-            let mut hasher = new_blake2b();
-            hasher.update(result.return_data.as_slice());
-            let mut hash = [0u8; 32];
-            hasher.finalize(&mut hash);
-            hash
-        };
+    // let return_data_hash = opt_run_result.as_ref().map(|result| {
+    //     let return_data_hash: [u8; 32] = {
+    //         let mut hasher = new_blake2b();
+    //         hasher.update(result.return_data.as_slice());
+    //         let mut hash = [0u8; 32];
+    //         hasher.finalize(&mut hash);
+    //         hash
+    //     };
 
-        return_data_hash.pack()
-    });
-    log::debug!("return data hash {:?}", return_data_hash);
+    //     return_data_hash.pack()
+    // });
+    // log::debug!("return data hash {:?}", return_data_hash);
 
-    let recover_accounts = opt_run_result.map(|r| r.recover_accounts.into_iter().collect());
+    // let recover_accounts = opt_run_result.map(|r| r.recover_accounts.into_iter().collect());
 
-    let witness = TxKvWitness {
-        account_count: prev_tx_account_count.pack(),
-        scripts,
-        load_data,
-        recover_accounts,
-        sender_script,
-        receiver_script,
-        kv_state: prev_kv_state.pack(),
-        kv_state_proof,
-        return_data_hash,
-    };
+    // let witness = TxKvWitness {
+    //     account_count: prev_tx_account_count.pack(),
+    //     scripts,
+    //     load_data,
+    //     recover_accounts,
+    //     sender_script,
+    //     receiver_script,
+    //     kv_state: prev_kv_state.pack(),
+    //     kv_state_proof,
+    //     return_data_hash,
+    // };
 
-    Ok(witness)
+    // Ok(witness)
 }
 
 fn build_block_proof(

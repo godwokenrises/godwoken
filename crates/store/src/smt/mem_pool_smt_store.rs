@@ -9,7 +9,6 @@ use gw_common::{
     },
     H256,
 };
-use gw_db::schema::Col;
 use gw_types::{packed, prelude::*};
 
 use super::Columns;
@@ -38,7 +37,7 @@ impl<'a> MemPoolSMTStore<'a> {
     }
 
     pub fn inner_store(&self) -> &StoreTransaction {
-        &self.store
+        self.store
     }
 }
 
@@ -48,7 +47,7 @@ impl<'a> Store<H256> for MemPoolSMTStore<'a> {
         let opt = self
             .inner_store()
             .get(self.mem_pool_columns.branch_col, branch_key.as_slice())
-            .filter(|slice| slice.as_ref() != &[DELETED_FLAG])
+            .filter(|slice| slice.as_ref() != [DELETED_FLAG])
             .or_else(|| {
                 self.inner_store()
                     .get(self.under_layer_columns.branch_col, branch_key.as_slice())
@@ -64,7 +63,7 @@ impl<'a> Store<H256> for MemPoolSMTStore<'a> {
         match self
             .store
             .get(self.mem_pool_columns.leaf_col, leaf_key.as_slice())
-            .filter(|slice| slice.as_ref() != &[DELETED_FLAG])
+            .filter(|slice| slice.as_ref() != [DELETED_FLAG])
             .or_else(|| {
                 self.store
                     .get(self.under_layer_columns.leaf_col, leaf_key.as_slice())

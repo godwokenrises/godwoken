@@ -8,6 +8,7 @@ use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig, OffChainValidatorConfig};
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
+use gw_store::smt::mem_pool_smt_store::MemPoolSMTStore;
 use gw_store::state::mem_state_db::MemStateTree;
 use gw_store::transaction::StoreTransaction;
 use gw_types::core::DepType;
@@ -46,6 +47,8 @@ const MAX_TX_WITHDRAWAL_PROOF_SIZE: u64 = 100 * 1024;
 const MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES: u64 = 5_000_000;
 const MARGIN_OF_MOCK_BLOCK_SAFITY_TX_SIZE_LIMIT: u64 =
     MAX_BLOCK_BYTES - MAX_TX_WITHDRAWAL_PROOF_SIZE;
+
+type MemTree<'a> = MemStateTree<'a, MemPoolSMTStore<'a>>;
 
 #[derive(Debug, Clone)]
 pub struct CKBGenesisInfo {
@@ -224,7 +227,7 @@ impl OffChainCancelChallengeValidator {
     pub fn verify_withdrawal_request(
         &mut self,
         db: &StoreTransaction,
-        mem_tree: &mut MemStateTree<'_>,
+        mem_tree: &mut MemTree<'_>,
         req: WithdrawalRequest,
     ) -> Result<Option<u64>> {
         let block_param = &mut self.block_param;
@@ -301,7 +304,7 @@ impl OffChainCancelChallengeValidator {
     pub fn verify_transaction(
         &mut self,
         db: &StoreTransaction,
-        mem_tree: &mut MemStateTree<'_>,
+        mem_tree: &mut MemTree<'_>,
         tx: L2Transaction,
         run_result: &RunResult,
     ) -> Result<Option<VerifyTxCycles>> {
@@ -317,7 +320,8 @@ impl OffChainCancelChallengeValidator {
 
         let verify_signature = |tx_with_context: &mut Option<TxWithContext>,
                                 safe_margin: &mut MarginOfMockBlockSafity,
-                                raw_block_flag: &mut RawBlockFlag|
+                                raw_block_flag: &mut RawBlockFlag,
+                                mem_tree: &mut MemTree<'_>|
          -> Result<_> {
             let challenge = block_param.challenge_last_tx_signature(db, mem_tree)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
@@ -352,7 +356,8 @@ impl OffChainCancelChallengeValidator {
         let verify_execution = |tx_with_context: &mut Option<TxWithContext>,
                                 safe_margin: &mut MarginOfMockBlockSafity,
                                 raw_block_flag: &mut RawBlockFlag,
-                                load_data_strategy: LoadDataStrategy|
+                                load_data_strategy: LoadDataStrategy,
+                                mem_tree: &mut MemTree<'_>|
          -> Result<_> {
             let challenge = block_param.challenge_last_tx_execution(db, mem_tree, run_result)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
@@ -398,10 +403,14 @@ impl OffChainCancelChallengeValidator {
             execution_by_celldep: None,
         };
 
-        let verify = || -> Result<_> {
+        let verify = |mem_tree: &mut MemTree<'_>| -> Result<_> {
             if validator_config.verify_tx_signature {
-                cycles.signature =
-                    verify_signature(&mut tx_with_context, safe_margin, &mut raw_block_flag)?;
+                cycles.signature = verify_signature(
+                    &mut tx_with_context,
+                    safe_margin,
+                    &mut raw_block_flag,
+                    mem_tree,
+                )?;
             }
 
             if validator_config.verify_tx_execution {
@@ -412,6 +421,7 @@ impl OffChainCancelChallengeValidator {
                         safe_margin,
                         &mut raw_block_flag,
                         LoadDataStrategy::Witness,
+                        mem_tree,
                     )?;
 
                     Ok(())
@@ -439,13 +449,14 @@ impl OffChainCancelChallengeValidator {
                     safe_margin,
                     &mut raw_block_flag,
                     LoadDataStrategy::CellDep,
+                    mem_tree,
                 )?;
             }
 
             Ok(Some(cycles))
         };
 
-        let result = verify();
+        let result = verify(mem_tree);
         if matches!(result, Result::Err(_)) {
             block_param.pop_transaction();
 
