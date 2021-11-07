@@ -16,11 +16,18 @@ use gw_types::{
 
 use super::state_tracker::{self, StateTracker};
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum MemStateContext {
+    ChainTip,
+    History(u64),
+}
+
 /// MemStateTree
 /// This struct is used for calculate state in the memory
 pub struct MemStateTree<'a> {
     tree: SMT<MemSMTStore<'a>>,
     account_count: u32,
+    context: MemStateContext,
     tracker: StateTracker,
     scripts: HashMap<H256, packed::Script>,
     data: HashMap<H256, Bytes>,
@@ -28,7 +35,7 @@ pub struct MemStateTree<'a> {
 }
 
 impl<'a> MemStateTree<'a> {
-    pub fn new(tree: SMT<MemSMTStore<'a>>, account_count: u32) -> Self {
+    pub fn new(tree: SMT<MemSMTStore<'a>>, account_count: u32, context: MemStateContext) -> Self {
         MemStateTree {
             tree,
             account_count,
@@ -36,6 +43,7 @@ impl<'a> MemStateTree<'a> {
             data: Default::default(),
             scripts_hash_prefix: Default::default(),
             tracker: StateTracker::default(),
+            context,
         }
     }
 
@@ -50,6 +58,10 @@ impl<'a> MemStateTree<'a> {
             .build()
     }
 
+    pub fn smt(&self) -> &SMT<MemSMTStore> {
+        &self.tree
+    }
+
     fn db(&self) -> &StoreTransaction {
         &self.tree.store().inner_store()
     }
@@ -58,7 +70,13 @@ impl<'a> MemStateTree<'a> {
 impl<'a> State for MemStateTree<'a> {
     fn get_raw(&self, key: &H256) -> Result<H256, StateError> {
         self.tracker.touch_key(key);
-        let v = self.tree.get(key)?;
+        let v = match self.context {
+            MemStateContext::History(block_number) => self
+                .db()
+                .get_history_state(block_number, key)
+                .unwrap_or_default(),
+            MemStateContext::ChainTip => self.tree.get(key)?,
+        };
         Ok(v)
     }
 
