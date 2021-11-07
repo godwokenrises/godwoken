@@ -11,6 +11,8 @@ use gw_generator::constants::L2TX_MAX_CYCLES;
 use gw_generator::traits::StateExt;
 use gw_generator::{ChallengeContext, Generator};
 use gw_store::chain_view::ChainView;
+use gw_store::state::mem_state_db::MemStateTree;
+use gw_store::state::state_db::StateContext;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::ChallengeTargetType;
@@ -159,10 +161,9 @@ fn build_verify_withdrawal_witness(
     let sender_script_hash: [u8; 32] = withdrawal.raw().account_script_hash().unpack();
     let sender_script = {
         let raw_block = block.raw();
-        let check_point = CheckPoint::new(raw_block.number().unpack() - 1, SubState::Block);
-        let state_db = StateDBTransaction::from_checkpoint(db, check_point, StateDBMode::ReadOnly)?;
-        let tree = state_db.state_tree()?;
-
+        let tree = db.state_tree(StateContext::ReadOnlyHistory(
+            raw_block.number().unpack() - 1,
+        ))?;
         tree.get_script(&sender_script_hash.into())
             .ok_or_else(|| anyhow!("sender script not found"))?
     };
@@ -326,44 +327,21 @@ fn build_tx_kv_witness(
         withdrawals.withdrawal_count().unpack()
     };
 
-    let (local_prev_tx_checkpoint, block_prev_tx_checkpoint): (CheckPoint, [u8; 32]) = {
-        let block_number = raw_block.number().unpack();
-        match (tx_index).checked_sub(1) {
-            Some(prev_tx_index) => {
-                let local_prev_tx_checkpoint =
-                    CheckPoint::new(block_number, SubState::Tx(prev_tx_index));
+    // FIXME we need execute block until challenge point
 
-                let block_prev_tx_checkpoint = raw_block
-                    .state_checkpoint_list()
-                    .get((withdrawal_len + prev_tx_index) as usize)
-                    .ok_or_else(|| anyhow!("block prev tx checkpoint not found"))?;
-
-                (local_prev_tx_checkpoint, block_prev_tx_checkpoint.unpack())
-            }
-            None => {
-                let local_prev_tx_checkpoint = CheckPoint::new(block_number, SubState::PrevTxs);
-                let block_prev_tx_checkpoint =
-                    raw_block.submit_transactions().prev_state_checkpoint();
-
-                (local_prev_tx_checkpoint, block_prev_tx_checkpoint.unpack())
-            }
-        }
-    };
-
-    let state_db =
-        StateDBTransaction::from_checkpoint(db, local_prev_tx_checkpoint, StateDBMode::ReadOnly)?;
-    let mut tree = state_db.state_tree()?;
+    let mut tree: MemStateTree<'_> = unimplemented!("fetch tx_index state");
     let prev_tx_account_count = tree.get_account_count()?;
 
     // Check prev tx account state
     {
+        let block_prev_tx_checkpoint = unimplemented!();
         let local_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
-        assert_eq!(local_checkpoint, block_prev_tx_checkpoint);
+        // assert_eq!(local_checkpoint, block_prev_tx_checkpoint);
     }
 
     tree.tracker_mut().enable();
 
-    let get_script = |state: &StateTree<'_, '_>, account_id: u32| -> Result<Option<Script>> {
+    let get_script = |state: &MemStateTree<'_>, account_id: u32| -> Result<Option<Script>> {
         let script_hash = state.get_script_hash(account_id)?;
         Ok(state.get_script(&script_hash))
     };
@@ -437,7 +415,7 @@ fn build_tx_kv_witness(
     drop(tree);
     db.rollback()?;
 
-    tree = state_db.state_tree()?;
+    tree = unimplemented!();
     let prev_kv_state = {
         let keys = touched_keys.iter();
         let to_kv = keys.map(|k| {
@@ -448,7 +426,7 @@ fn build_tx_kv_witness(
     }?;
 
     let kv_state_proof = {
-        let smt = state_db.account_smt()?;
+        let smt = tree.smt();
         let prev_kv_state = prev_kv_state.clone();
         smt.merkle_proof(touched_keys)?.compile(prev_kv_state)?
     };
@@ -458,7 +436,7 @@ fn build_tx_kv_witness(
     {
         let proof_root = kv_state_proof.compute_root::<Blake2bHasher>(prev_kv_state.clone())?;
         let proof_checkpoint = calculate_state_checkpoint(&proof_root, prev_tx_account_count);
-        assert_eq!(proof_checkpoint, block_prev_tx_checkpoint.into());
+        // assert_eq!(proof_checkpoint, block_prev_tx_checkpoint.into());
 
         if matches!(tx_kv_state, TxKvState::Execution { .. }) {
             let proof_root = kv_state_proof.compute_root::<Blake2bHasher>(post_kv_state)?;
