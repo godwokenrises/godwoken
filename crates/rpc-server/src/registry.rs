@@ -1,17 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
-// use gw_challenge::offchain::OffChainMockContext;
-use gw_common::{
-    blake2b::new_blake2b,
-    h256_ext::H256Ext,
-    state::{
-        build_account_field_key, build_account_key, State, GW_ACCOUNT_NONCE_TYPE,
-        SUDT_KEY_FLAG_BALANCE,
-    },
-    H256,
-};
+use gw_challenge::offchain::OffChainMockContext;
+use gw_common::{blake2b::new_blake2b, state::State, H256};
 use gw_config::{DebugConfig, MemPoolConfig, NodeMode};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
@@ -25,9 +17,7 @@ use gw_jsonrpc_types::{
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
 use gw_mem_pool::batch::{BatchError, MemPoolBatch};
-use gw_store::{
-    chain_view::ChainView, state::state_db::StateContext, transaction::StoreTransaction, Store,
-};
+use gw_store::{chain_view::ChainView, state::state_db::StateContext, Store};
 use gw_traits::CodeStore;
 use gw_types::{
     packed::{self, BlockInfo, RawL2Block, RollupConfig},
@@ -99,7 +89,7 @@ pub struct Registry {
     store: Store,
     tests_rpc_impl: Option<Arc<BoxedTestsRPCImpl>>,
     chain: Arc<Mutex<Chain>>,
-    // offchain_mock_context: Option<OffChainMockContext>,
+    offchain_mock_context: Option<OffChainMockContext>,
     rollup_config: RollupConfig,
     debug_config: DebugConfig,
     mem_pool_config: MemPoolConfig,
@@ -117,7 +107,7 @@ impl Registry {
         rollup_config: RollupConfig,
         debug_config: DebugConfig,
         chain: Arc<Mutex<Chain>>,
-        // offchain_mock_context: Option<OffChainMockContext>,
+        offchain_mock_context: Option<OffChainMockContext>,
         mem_pool_config: MemPoolConfig,
         node_mode: NodeMode,
         mem_pool_batch: Option<MemPoolBatch>,
@@ -134,7 +124,7 @@ impl Registry {
             rollup_config,
             debug_config,
             chain,
-            // offchain_mock_context,
+            offchain_mock_context,
             mem_pool_config,
             backend_info,
             node_mode,
@@ -197,13 +187,13 @@ impl Registry {
 
         // Debug
         if self.debug_config.enable_debug_rpc {
-            // server = server
-            //     .with_data(Data::new(self.chain))
-            //     .with_data(Data::new(self.offchain_mock_context))
-            //     .with_method(
-            //         "debug_dump_cancel_challenge_tx",
-            //         debug_dump_cancel_challenge_tx,
-            //     );
+            server = server
+                .with_data(Data::new(self.chain))
+                .with_data(Data::new(self.offchain_mock_context))
+                .with_method(
+                    "debug_dump_cancel_challenge_tx",
+                    debug_dump_cancel_challenge_tx,
+                );
         }
 
         Ok(server.finish())
@@ -799,7 +789,7 @@ async fn get_data(
     Params(params): Params<GetDataParams>,
     store: Data<Store>,
 ) -> Result<Option<JsonBytes>, RpcError> {
-    let (data_hash, block_number) = match params {
+    let (data_hash, _block_number) = match params {
         GetDataParams::Tip(p) => (p.0, None),
         GetDataParams::Number(p) => p,
     };
@@ -847,65 +837,65 @@ async fn tests_should_produce_block(
     tests_rpc_impl.should_produce_block().await
 }
 
-// async fn debug_dump_cancel_challenge_tx(
-//     Params((target,)): Params<(DumpChallengeTarget,)>,
-//     chain: Data<Arc<Mutex<Chain>>>,
-//     offchain_mock_context: Data<Option<OffChainMockContext>>,
-// ) -> Result<ReprMockTransaction, RpcError> {
-//     let offchain_mock_context = match *offchain_mock_context {
-//         Some(ref ctx) => ctx,
-//         None => {
-//             return Err(RpcError::Provided {
-//                 code: INTERNAL_ERROR_ERR_CODE,
-//                 message: "offchain validator is not enable, unable to dump cancel challenge tx",
-//             })
-//         }
-//     };
+async fn debug_dump_cancel_challenge_tx(
+    Params((target,)): Params<(DumpChallengeTarget,)>,
+    chain: Data<Arc<Mutex<Chain>>>,
+    offchain_mock_context: Data<Option<OffChainMockContext>>,
+) -> Result<ReprMockTransaction, RpcError> {
+    let offchain_mock_context = match *offchain_mock_context {
+        Some(ref ctx) => ctx,
+        None => {
+            return Err(RpcError::Provided {
+                code: INTERNAL_ERROR_ERR_CODE,
+                message: "offchain validator is not enable, unable to dump cancel challenge tx",
+            })
+        }
+    };
 
-//     let to_block_hash = |chain: &Chain, block_number: u64| -> Result<H256, RpcError> {
-//         let db = chain.store().begin_transaction();
-//         match db.get_block_hash_by_number(block_number) {
-//             Ok(Some(hash)) => Ok(hash),
-//             Ok(None) => Err(RpcError::Provided {
-//                 code: INVALID_PARAM_ERR_CODE,
-//                 message: "block hash not found",
-//             }),
-//             Err(err) => Err(RpcError::Full {
-//                 code: INTERNAL_ERROR_ERR_CODE,
-//                 message: err.to_string(),
-//                 data: None,
-//             }),
-//         }
-//     };
+    let to_block_hash = |chain: &Chain, block_number: u64| -> Result<H256, RpcError> {
+        let db = chain.store().begin_transaction();
+        match db.get_block_hash_by_number(block_number) {
+            Ok(Some(hash)) => Ok(hash),
+            Ok(None) => Err(RpcError::Provided {
+                code: INVALID_PARAM_ERR_CODE,
+                message: "block hash not found",
+            }),
+            Err(err) => Err(RpcError::Full {
+                code: INTERNAL_ERROR_ERR_CODE,
+                message: err.to_string(),
+                data: None,
+            }),
+        }
+    };
 
-//     let chain = chain.lock().await;
-//     let (block_hash, target_index, target_type) = match target {
-//         DumpChallengeTarget::ByBlockHash {
-//             block_hash,
-//             target_index,
-//             target_type,
-//         } => (to_h256(block_hash), target_index, target_type),
-//         DumpChallengeTarget::ByBlockNumber {
-//             block_number,
-//             target_index,
-//             target_type,
-//         } => (
-//             to_block_hash(&chain, block_number.into())?,
-//             target_index,
-//             target_type,
-//         ),
-//     };
+    let chain = chain.lock().await;
+    let (block_hash, target_index, target_type) = match target {
+        DumpChallengeTarget::ByBlockHash {
+            block_hash,
+            target_index,
+            target_type,
+        } => (to_h256(block_hash), target_index, target_type),
+        DumpChallengeTarget::ByBlockNumber {
+            block_number,
+            target_index,
+            target_type,
+        } => (
+            to_block_hash(&chain, block_number.into())?,
+            target_index,
+            target_type,
+        ),
+    };
 
-//     let target = gw_types::packed::ChallengeTarget::new_builder()
-//         .block_hash(Into::<[u8; 32]>::into(block_hash).pack())
-//         .target_index(target_index.value().pack())
-//         .target_type(target_type.into())
-//         .build();
+    let target = gw_types::packed::ChallengeTarget::new_builder()
+        .block_hash(Into::<[u8; 32]>::into(block_hash).pack())
+        .target_index(target_index.value().pack())
+        .target_type(target_type.into())
+        .build();
 
-//     let maybe_tx = chain.dump_cancel_challenge_tx(offchain_mock_context, target);
-//     maybe_tx.map_err(|err| RpcError::Full {
-//         code: INTERNAL_ERROR_ERR_CODE,
-//         message: err.to_string(),
-//         data: None,
-//     })
-// }
+    let maybe_tx = chain.dump_cancel_challenge_tx(offchain_mock_context, target);
+    maybe_tx.map_err(|err| RpcError::Full {
+        code: INTERNAL_ERROR_ERR_CODE,
+        message: err.to_string(),
+        data: None,
+    })
+}

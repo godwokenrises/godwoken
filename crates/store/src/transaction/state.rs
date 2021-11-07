@@ -3,16 +3,11 @@ use gw_db::{
     error::Error,
     schema::{
         COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD,
-        COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_MEM_POOL_TRANSACTION,
-        COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
-        META_MEM_POOL_BLOCK_INFO,
+        COLUMN_BLOCK_STATE_REVERSE_RECORD,
     },
     DBRawIterator, Direction, IteratorMode, ReadOptions,
 };
-use gw_types::{
-    packed::{self, AccountMerkleState},
-    prelude::*,
-};
+use gw_types::{packed::AccountMerkleState, prelude::*};
 
 use super::StoreTransaction;
 use crate::{
@@ -44,9 +39,9 @@ impl StoreTransaction {
             StateContext::ReadOnlyHistory(block_number) => {
                 let block_hash = self
                     .get_block_hash_by_number(block_number)?
-                    .ok_or(Error::from(format!("can't find block")))?;
+                    .ok_or_else(|| Error::from("can't find block".to_string()))?;
                 self.get_block(&block_hash)?
-                    .ok_or(format!("can't find block"))?
+                    .ok_or_else(|| "can't find block".to_string())?
             }
             _ => self.get_tip_block()?,
         };
@@ -179,7 +174,7 @@ impl BlockStateRecordKey {
     pub fn new(block_number: u64, state_key: &H256) -> Self {
         let mut inner = [0u8; 40];
         inner[..8].copy_from_slice(&block_number.to_be_bytes());
-        inner[8..].copy_from_slice(&state_key.as_slice());
+        inner[8..].copy_from_slice(state_key.as_slice());
         BlockStateRecordKey(inner)
     }
 
@@ -212,7 +207,7 @@ pub(crate) struct BlockStateRecordKeyReverse([u8; 40]);
 impl BlockStateRecordKeyReverse {
     pub fn new(block_number: u64, state_key: &H256) -> Self {
         let mut inner = [0u8; 40];
-        inner[..32].copy_from_slice(&state_key.as_slice());
+        inner[..32].copy_from_slice(state_key.as_slice());
         inner[32..].copy_from_slice(&block_number.to_be_bytes());
         BlockStateRecordKeyReverse(inner)
     }

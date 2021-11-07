@@ -139,7 +139,7 @@ pub fn setup_chain_with_account_lock_manage(
         store.clone(),
         Arc::clone(&generator),
         Box::new(provider),
-        // None,
+        None,
         None,
         Default::default(),
     )
