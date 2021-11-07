@@ -19,7 +19,10 @@ use gw_generator::{
     constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
 };
 use gw_store::{
-    chain_view::ChainView, state::state_db::StateContext, transaction::StoreTransaction, Store,
+    chain_view::ChainView,
+    state::{mem_state_db::MemStateContext, state_db::StateContext},
+    transaction::StoreTransaction,
+    Store,
 };
 use gw_types::{
     offchain::{
@@ -555,7 +558,7 @@ impl MemPool {
         assert!(new_mem_block.txs().is_empty());
 
         // calculate block state in memory
-        let mut mem_state = db.in_mem_state_tree()?;
+        let mut mem_state = db.in_mem_state_tree(MemStateContext::ChainTip)?;
 
         // NOTE: Must have at least one tx to have correct post block state
         if withdrawal_hashes.len() == mem_block.withdrawals().len()

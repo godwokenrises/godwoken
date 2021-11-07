@@ -8,7 +8,8 @@ use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig, OffChainValidatorConfig};
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::{transaction::StoreTransaction};
+use gw_store::state::mem_state_db::MemStateTree;
+use gw_store::transaction::StoreTransaction;
 use gw_types::core::DepType;
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, RunResult};
 use gw_types::packed::{
@@ -223,7 +224,7 @@ impl OffChainCancelChallengeValidator {
     pub fn verify_withdrawal_request(
         &mut self,
         db: &StoreTransaction,
-        state_db: &StateDBTransaction<'_>,
+        mem_tree: &mut MemStateTree<'_>,
         req: WithdrawalRequest,
     ) -> Result<Option<u64>> {
         let block_param = &mut self.block_param;
@@ -233,14 +234,14 @@ impl OffChainCancelChallengeValidator {
         let withdrawal_hash: ckb_types::H256 = req.hash().into();
         let dump_prefix = "withdrawal-signature";
 
-        block_param.push_withdrawal_request(db, state_db, req)?;
+        block_param.push_withdrawal_request(mem_tree, req)?;
 
         let max_cycles = self.validator_context.validator_config.verify_max_cycles
             - MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES;
 
         let mut tx_with_context = None;
         let mut verify = || -> Result<_> {
-            let challenge = block_param.challenge_last_withdrawal(db, state_db)?;
+            let challenge = block_param.challenge_last_withdrawal(db, mem_tree)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
                 &validator_ctx.mock_rollup,
                 &validator_ctx.mock_poa,
@@ -300,6 +301,7 @@ impl OffChainCancelChallengeValidator {
     pub fn verify_transaction(
         &mut self,
         db: &StoreTransaction,
+        mem_tree: &mut MemStateTree<'_>,
         tx: L2Transaction,
         run_result: &RunResult,
     ) -> Result<Option<VerifyTxCycles>> {
@@ -308,7 +310,7 @@ impl OffChainCancelChallengeValidator {
         let validator_ctx = &self.validator_context;
 
         let tx_hash: ckb_types::H256 = tx.hash().into();
-        block_param.push_transaction(db, state_db, tx, run_result)?;
+        block_param.push_transaction(mem_tree, tx, run_result)?;
 
         let max_cycles = self.validator_context.validator_config.verify_max_cycles
             - MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES;
@@ -317,7 +319,7 @@ impl OffChainCancelChallengeValidator {
                                 safe_margin: &mut MarginOfMockBlockSafity,
                                 raw_block_flag: &mut RawBlockFlag|
          -> Result<_> {
-            let challenge = block_param.challenge_last_tx_signature(db, state_db)?;
+            let challenge = block_param.challenge_last_tx_signature(db, mem_tree)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
                 &validator_ctx.mock_rollup,
                 &validator_ctx.mock_poa,
@@ -352,7 +354,7 @@ impl OffChainCancelChallengeValidator {
                                 raw_block_flag: &mut RawBlockFlag,
                                 load_data_strategy: LoadDataStrategy|
          -> Result<_> {
-            let challenge = block_param.challenge_last_tx_execution(db, state_db, run_result)?;
+            let challenge = block_param.challenge_last_tx_execution(db, mem_tree, run_result)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
                 &validator_ctx.mock_rollup,
                 &validator_ctx.mock_poa,
