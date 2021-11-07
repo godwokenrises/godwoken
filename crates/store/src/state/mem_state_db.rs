@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use crate::smt::mem_smt_store::MemSMTStore;
 use crate::{traits::KVStore, transaction::StoreTransaction};
 use anyhow::Result;
+use gw_common::smt::Store;
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT, COLUMN_SCRIPT_PREFIX};
 use gw_traits::CodeStore;
@@ -14,18 +15,19 @@ use gw_types::{
     prelude::*,
 };
 
-use super::state_tracker::{self, StateTracker};
+use super::state_tracker::StateTracker;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum MemStateContext {
-    ChainTip,
+    Tip,
     History(u64),
 }
 
 /// MemStateTree
 /// This struct is used for calculate state in the memory
-pub struct MemStateTree<'a> {
-    tree: SMT<MemSMTStore<'a>>,
+pub struct MemStateTree<'a, S> {
+    tree: SMT<MemSMTStore<S>>,
+    db: &'a StoreTransaction,
     account_count: u32,
     context: MemStateContext,
     tracker: StateTracker,
@@ -34,9 +36,15 @@ pub struct MemStateTree<'a> {
     scripts_hash_prefix: HashMap<Bytes, H256>,
 }
 
-impl<'a> MemStateTree<'a> {
-    pub fn new(tree: SMT<MemSMTStore<'a>>, account_count: u32, context: MemStateContext) -> Self {
+impl<'a, S: Store<H256>> MemStateTree<'a, S> {
+    pub fn new(
+        db: &'a StoreTransaction,
+        tree: SMT<MemSMTStore<S>>,
+        account_count: u32,
+        context: MemStateContext,
+    ) -> Self {
         MemStateTree {
+            db,
             tree,
             account_count,
             scripts: Default::default(),
@@ -58,16 +66,16 @@ impl<'a> MemStateTree<'a> {
             .build()
     }
 
-    pub fn smt(&self) -> &SMT<MemSMTStore> {
+    pub fn smt(&self) -> &SMT<MemSMTStore<S>> {
         &self.tree
     }
 
     fn db(&self) -> &StoreTransaction {
-        &self.tree.store().inner_store()
+        self.db
     }
 }
 
-impl<'a> State for MemStateTree<'a> {
+impl<'a, S: Store<H256>> State for MemStateTree<'a, S> {
     fn get_raw(&self, key: &H256) -> Result<H256, StateError> {
         self.tracker.touch_key(key);
         let v = match self.context {
@@ -75,7 +83,7 @@ impl<'a> State for MemStateTree<'a> {
                 .db()
                 .get_history_state(block_number, key)
                 .unwrap_or_default(),
-            MemStateContext::ChainTip => self.tree.get(key)?,
+            MemStateContext::Tip => self.tree.get(key)?,
         };
         Ok(v)
     }
@@ -101,7 +109,7 @@ impl<'a> State for MemStateTree<'a> {
     }
 }
 
-impl<'a> CodeStore for MemStateTree<'a> {
+impl<'a, S: Store<H256>> CodeStore for MemStateTree<'a, S> {
     fn insert_script(&mut self, script_hash: H256, script: packed::Script) {
         self.scripts.insert(script_hash, script);
         // build script_hash prefix search index

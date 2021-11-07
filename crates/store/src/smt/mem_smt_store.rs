@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 
-use crate::{traits::KVStore, transaction::StoreTransaction};
 use gw_common::{
     sparse_merkle_tree::{
         error::Error as SMTError,
@@ -11,10 +10,6 @@ use gw_common::{
     },
     H256,
 };
-use gw_types::{packed, prelude::*};
-
-use super::Columns;
-
 #[derive(Debug, PartialEq, Eq)]
 enum Value<V> {
     Deleted,
@@ -27,62 +22,34 @@ struct MemStore {
     leaves: HashMap<H256, Value<H256>>,
 }
 
-pub struct MemSMTStore<'a> {
-    under_layer_columns: Columns,
-    store: &'a StoreTransaction,
+pub struct MemSMTStore<S> {
+    store: S,
     mem_store: MemStore,
 }
 
-impl<'a> MemSMTStore<'a> {
-    pub fn new(under_layer_columns: Columns, store: &'a StoreTransaction) -> Self {
+impl<S: Store<H256>> MemSMTStore<S> {
+    pub fn new(store: S) -> Self {
         MemSMTStore {
-            under_layer_columns,
             store,
             mem_store: Default::default(),
         }
     }
-
-    pub fn inner_store(&self) -> &StoreTransaction {
-        &self.store
-    }
 }
 
-impl<'a> Store<H256> for MemSMTStore<'a> {
+impl<S: Store<H256>> Store<H256> for MemSMTStore<S> {
     fn get_branch(&self, branch_key: &BranchKey) -> Result<Option<BranchNode>, SMTError> {
-        match self.mem_store.branches.get(&branch_key) {
+        match self.mem_store.branches.get(branch_key) {
             Some(Value::Deleted) => Ok(None),
             Some(Value::Exist(v)) => Ok(Some(v.to_owned())),
-            None => {
-                let branch_key: packed::SMTBranchKey = branch_key.pack();
-                let opt = self
-                    .store
-                    .get(self.under_layer_columns.branch_col, branch_key.as_slice())
-                    .map(|slice| {
-                        let branch =
-                            packed::SMTBranchNodeReader::from_slice_should_be_ok(slice.as_ref());
-                        branch.to_entity().unpack()
-                    });
-                Ok(opt)
-            }
+            None => self.store.get_branch(branch_key),
         }
     }
 
     fn get_leaf(&self, leaf_key: &H256) -> Result<Option<H256>, SMTError> {
-        match self.mem_store.leaves.get(&leaf_key) {
+        match self.mem_store.leaves.get(leaf_key) {
             Some(Value::Deleted) => Ok(None),
             Some(Value::Exist(v)) => Ok(Some(v.to_owned())),
-            None => {
-                let opt = self
-                    .store
-                    .get(self.under_layer_columns.leaf_col, leaf_key.as_slice())
-                    .map(|slice| {
-                        assert_eq!(slice.len(), 32, "corrupted smt leaf");
-                        let mut leaf = [0u8; 32];
-                        leaf.copy_from_slice(slice.as_ref());
-                        H256::from(leaf)
-                    });
-                Ok(opt)
-            }
+            None => self.store.get_leaf(leaf_key),
         }
     }
 
