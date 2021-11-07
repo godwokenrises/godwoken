@@ -216,7 +216,6 @@ pub fn init_genesis(
         Vec::new(),
         Vec::new(),
     )?;
-    let rollup_config: gw_types::packed::RollupConfig = config.rollup_config.to_owned().into();
     db.attach_block(genesis)?;
     db.commit()?;
     Ok(())

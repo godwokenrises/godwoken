@@ -15,13 +15,16 @@ use gw_types::{packed, prelude::*};
 use super::StoreTransaction;
 use crate::{
     smt::{mem_pool_smt_store::MemPoolSMTStore, mem_smt_store::MemSMTStore, Columns},
-    state::{mem_pool_state_db::MemPoolStateTree, mem_state_db::MemStateTree},
+    state::{
+        mem_pool_state_db::MemPoolStateTree,
+        mem_state_db::{MemStateContext, MemStateTree},
+    },
     traits::KVStore,
 };
 
 impl StoreTransaction {
     /// Used for package new mem block
-    pub fn in_mem_state_tree(&self) -> Result<MemStateTree, Error> {
+    pub fn in_mem_state_tree(&self, context: MemStateContext) -> Result<MemStateTree, Error> {
         let under_layer_columns = Columns {
             leaf_col: COLUMN_ACCOUNT_SMT_LEAF,
             branch_col: COLUMN_ACCOUNT_SMT_BRANCH,
@@ -31,7 +34,7 @@ impl StoreTransaction {
         let merkle_root = block.raw().post_account();
         let account_count = self.get_mem_block_account_count()?;
         let tree = SMT::new(merkle_root.merkle_root().unpack(), smt_store);
-        Ok(MemStateTree::new(tree, account_count))
+        Ok(MemStateTree::new(tree, account_count, context))
     }
 
     pub fn mem_pool_state_tree(&self) -> Result<MemPoolStateTree, Error> {
