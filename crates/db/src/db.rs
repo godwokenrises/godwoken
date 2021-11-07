@@ -27,9 +27,10 @@ impl RocksDB {
         let cf_names: Vec<_> = (0..columns).map(|c| c.to_string()).collect();
 
         let (mut opts, cf_descriptors) = if let Some(ref file) = config.options_file {
-            let mut full_opts = FullOptions::load_from_file(file, None, false).map_err(|err| {
-                internal_error(format!("failed to load the options file: {}", err))
-            })?;
+            let mut full_opts = FullOptions::load_from_file(file, config.cache_size, false)
+                .map_err(|err| {
+                    internal_error(format!("failed to load the options file: {}", err))
+                })?;
             let cf_names_str: Vec<&str> = cf_names.iter().map(|s| s.as_str()).collect();
             full_opts
                 .complete_column_families(&cf_names_str, false)
@@ -247,6 +248,7 @@ mod tests {
                 opts
             },
             options_file: None,
+            cache_size: None,
         };
         RocksDB::open(&config, 2); // no panic
     }
@@ -261,6 +263,7 @@ mod tests {
             path: tmp_dir.as_ref().to_path_buf(),
             options: HashMap::new(),
             options_file: None,
+            cache_size: None,
         };
         RocksDB::open(&config, 2); // no panic
     }
@@ -280,6 +283,7 @@ mod tests {
                 opts
             },
             options_file: None,
+            cache_size: None,
         };
         RocksDB::open(&config, 2); // panic
     }
