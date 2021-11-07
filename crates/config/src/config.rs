@@ -232,4 +232,6 @@ pub struct StoreConfig {
     pub options: HashMap<String, String>,
     #[serde(default)]
     pub options_file: Option<PathBuf>,
+    #[serde(default)]
+    pub cache_size: Option<usize>,
 }

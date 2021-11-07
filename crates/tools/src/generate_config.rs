@@ -253,6 +253,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         path: "".into(),
         options: HashMap::new(),
         options_file: None,
+        cache_size: None
     };
     let genesis_committed_info = L2BlockCommittedInfo {
         block_hash,
