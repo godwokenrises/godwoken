@@ -1,25 +1,15 @@
 //! State DB
 
-use crate::transaction::state::BlockStateRecordKeyReverse;
 use crate::{smt::smt_store::SMTStore, traits::KVStore, transaction::StoreTransaction};
 use anyhow::{anyhow, Result};
-use gw_common::merkle_utils::calculate_state_checkpoint;
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
-use gw_db::schema::{
-    Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_DATA, COLUMN_SCRIPT,
-    COLUMN_SCRIPT_PREFIX,
-};
-use gw_db::{error::Error, iter::DBIter, DBRawIterator, IteratorMode};
+use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT, COLUMN_SCRIPT_PREFIX};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
-    packed::{self, AccountMerkleState, L2Block},
+    packed::{self, AccountMerkleState},
     prelude::*,
 };
-use std::{cell::RefCell, collections::HashSet, fmt, mem::size_of_val};
-
-use super::state_tracker::StateTracker;
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum StateContext {
     ReadOnly,
@@ -71,7 +61,7 @@ impl<'a> StateTree<'a> {
                 let last_value = self
                     .db()
                     .get_history_state(parent_block_number, &state_key)
-                    .unwrap_or(H256::zero());
+                    .unwrap_or_else(H256::zero);
                 (state_key, last_value)
             })
             .collect();
@@ -86,7 +76,7 @@ impl<'a> StateTree<'a> {
     }
 
     fn db(&self) -> &StoreTransaction {
-        &self.tree.store().inner_store()
+        self.tree.store().inner_store()
     }
 }
 

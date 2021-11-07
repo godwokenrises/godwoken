@@ -3,8 +3,7 @@ use anyhow::Result;
 use gw_common::{
     blake2b::new_blake2b,
     builtins::{CKB_SUDT_ACCOUNT_ID, RESERVED_ACCOUNT_ID},
-    smt::{H256, SMT},
-    sparse_merkle_tree::default_store::DefaultStore,
+    smt::H256,
     state::State,
     CKB_SUDT_SCRIPT_ARGS,
 };

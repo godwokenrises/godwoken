@@ -28,7 +28,7 @@ impl<'a, DB: KVStore> SMTStore<'a, DB> {
     }
 
     pub fn inner_store(&self) -> &DB {
-        &self.store
+        self.store
     }
 }
 

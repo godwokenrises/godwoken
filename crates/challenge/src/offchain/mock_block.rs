@@ -6,13 +6,14 @@ use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::{
     calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash, CBMT,
 };
-use gw_common::smt::{Blake2bHasher, SMT};
+use gw_common::smt::{Blake2bHasher, Store, SMT};
 use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::state::{
     build_account_field_key, State, GW_ACCOUNT_NONCE_TYPE, GW_ACCOUNT_SCRIPT_HASH_TYPE,
 };
 use gw_common::H256;
 use gw_generator::traits::StateExt;
+use gw_store::smt::mem_pool_smt_store::MemPoolSMTStore;
 use gw_store::state::mem_state_db::MemStateTree;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
@@ -28,6 +29,8 @@ use gw_types::packed::{
 use gw_types::prelude::*;
 
 use std::collections::HashMap;
+
+type MemTree<'a> = MemStateTree<'a, MemPoolSMTStore<'a>>;
 
 #[derive(thiserror::Error, Debug)]
 #[error("{:?}", {0})]
@@ -96,7 +99,7 @@ impl MockBlockParam {
 
     pub fn push_withdrawal_request(
         &mut self,
-        mem_tree: &mut MemStateTree<'_>,
+        mem_tree: &mut MemTree<'_>,
         req: WithdrawalRequest,
     ) -> Result<()> {
         if self.withdrawals.contains(&req) {
@@ -127,7 +130,7 @@ impl MockBlockParam {
 
     pub fn push_transaction(
         &mut self,
-        mem_tree: &mut MemStateTree<'_>,
+        mem_tree: &mut MemTree<'_>,
         tx: L2Transaction,
         run_result: &RunResult,
     ) -> Result<()> {
@@ -171,7 +174,7 @@ impl MockBlockParam {
     pub fn challenge_last_withdrawal(
         &self,
         db: &StoreTransaction,
-        mem_tree: &MemStateTree<'_>,
+        mem_tree: &mut MemTree<'_>,
     ) -> Result<MockChallengeOutput> {
         let target_index = self.withdrawals.inner.len().saturating_sub(1);
         let target_type = ChallengeTargetType::Withdrawal as u8;
@@ -208,7 +211,7 @@ impl MockBlockParam {
     pub fn challenge_last_tx_signature(
         &self,
         db: &StoreTransaction,
-        mem_tree: &MemStateTree<'_>,
+        mem_tree: &mut MemTree<'_>,
     ) -> Result<MockChallengeOutput> {
         let target_index = self.transactions.inner.len().saturating_sub(1);
         let target_type = ChallengeTargetType::TxSignature as u8;
@@ -242,7 +245,7 @@ impl MockBlockParam {
     pub fn challenge_last_tx_execution(
         &self,
         db: &StoreTransaction,
-        mem_tree: &MemStateTree<'_>,
+        mem_tree: &mut MemTree<'_>,
         run_result: &RunResult,
     ) -> Result<MockChallengeOutput> {
         let target_index = self.transactions.inner.len().saturating_sub(1);
@@ -369,15 +372,15 @@ impl MockBlockParam {
 
     fn build_transaction_signature_verify_context(
         &self,
-        mem_tree: &MemStateTree<'_>,
+        mem_tree: &mut MemTree<'_>,
         tx: L2Transaction,
         raw_block: RawL2Block,
     ) -> Result<VerifyContext> {
         let sender_id = tx.raw().from_id().unpack();
         let receiver_id = tx.raw().to_id().unpack();
 
-        let sender_script = get_script(&mem_tree, sender_id)?;
-        let receiver_script = get_script(&mem_tree, receiver_id)?;
+        let sender_script = get_script(mem_tree, sender_id)?;
+        let receiver_script = get_script(mem_tree, receiver_id)?;
 
         let kv_state: Vec<(H256, H256)> = vec![
             (
@@ -439,7 +442,7 @@ impl MockBlockParam {
 
     fn build_transaction_execution_verify_context(
         &self,
-        mem_tree: &MemStateTree<'_>,
+        mem_tree: &mut MemTree<'_>,
         tx: L2Transaction,
         raw_block: RawL2Block,
         run_result: &RunResult,
@@ -447,8 +450,8 @@ impl MockBlockParam {
         let sender_id = tx.raw().from_id().unpack();
         let receiver_id = tx.raw().to_id().unpack();
 
-        let sender_script = get_script(&mem_tree, sender_id)?;
-        let receiver_script = get_script(&mem_tree, receiver_id)?;
+        let sender_script = get_script(mem_tree, sender_id)?;
+        let receiver_script = get_script(mem_tree, receiver_id)?;
 
         let mut kv_state: HashMap<H256, H256> = HashMap::new();
         kv_state.insert(
@@ -677,7 +680,7 @@ impl RawBlockTransactions {
     }
 }
 
-fn get_script(state: &MemStateTree<'_>, account_id: u32) -> Result<Script> {
+fn get_script<S: Store<H256>>(state: &MemStateTree<'_, S>, account_id: u32) -> Result<Script> {
     let script_hash = state.get_script_hash(account_id)?;
     state
         .get_script(&script_hash)
