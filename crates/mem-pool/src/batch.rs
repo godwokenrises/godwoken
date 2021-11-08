@@ -7,6 +7,7 @@ use smol::lock::Mutex;
 use crate::pool::{Inner, MemPool};
 
 use std::sync::Arc;
+use std::time::Instant;
 
 #[derive(thiserror::Error, Debug)]
 pub enum BatchError {
@@ -147,23 +148,53 @@ impl BatchTxWithdrawalInBackground {
             }
 
             {
+                let total_batch_time = Instant::now();
                 let mut mem_pool = self.mem_pool.lock().await;
+                log::info!(
+                    "[mem-pool batch] wait {}ms to unlock mem-pool",
+                    total_batch_time.elapsed().as_millis()
+                );
+                let db = mem_pool.inner().store().begin_transaction();
                 for req in batch.drain(..) {
                     let req_hash = req.hash();
                     let req_kind = req.kind();
 
+                    db.set_save_point();
                     if let Err(err) = match req {
-                        BatchRequest::Transaction(tx) => mem_pool.push_transaction(tx),
-                        BatchRequest::Withdrawal(w) => mem_pool.push_withdrawal_request(w),
+                        BatchRequest::Transaction(tx) => {
+                            let t = Instant::now();
+                            let ret = mem_pool.push_transaction_with_db(&db, tx);
+                            if ret.is_ok() {
+                                log::info!(
+                                    "[mem-pool batch] push tx total time {}ms",
+                                    t.elapsed().as_millis()
+                                );
+                            }
+                            ret
+                        }
+                        BatchRequest::Withdrawal(w) => {
+                            mem_pool.push_withdrawal_request_with_db(&db, w)
+                        }
                     } {
+                        db.rollback_to_save_point().expect("rollback state error");
                         log::info!(
-                            "[mem-pool packager] fail to push {} {:?} into mem-pool, err: {}",
+                            "[mem-pool batch] fail to push {} {:?} into mem-pool, err: {}",
                             req_kind,
                             faster_hex::hex_string(&req_hash),
                             err
                         )
                     }
                 }
+
+                let t = Instant::now();
+                if let Err(err) = db.commit() {
+                    log::error!("[mem-pool batch] fail to db commit, err: {}", err);
+                }
+                log::info!(
+                    "[mem-pool batch] done, batch total time: {}ms, commit time: {}ms",
+                    total_batch_time.elapsed().as_millis(),
+                    t.elapsed().as_millis(),
+                );
             }
         }
     }

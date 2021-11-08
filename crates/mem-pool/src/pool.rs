@@ -115,6 +115,10 @@ impl Inner {
         &self.config
     }
 
+    pub fn store(&self) -> &Store {
+        &self.store
+    }
+
     pub fn current_tip(&self) -> (H256, u64) {
         *self.current_tip.load_full()
     }
@@ -298,7 +302,11 @@ impl MemPool {
     }
 
     /// Push a layer2 tx into pool
-    fn push_transaction_with_db(&mut self, db: &StoreTransaction, tx: L2Transaction) -> Result<()> {
+    pub(crate) fn push_transaction_with_db(
+        &mut self,
+        db: &StoreTransaction,
+        tx: L2Transaction,
+    ) -> Result<()> {
         // check duplication
         let tx_hash: H256 = tx.raw().hash().into();
         if self.mem_block.txs_set().contains(&tx_hash) {
@@ -355,6 +363,18 @@ impl MemPool {
 
     /// Push a withdrawal request into pool
     pub fn push_withdrawal_request(&mut self, withdrawal: WithdrawalRequest) -> Result<()> {
+        let db = self.store.begin_transaction();
+        self.push_withdrawal_request_with_db(&db, withdrawal)?;
+        db.commit()?;
+        Ok(())
+    }
+
+    /// Push a withdrawal request into pool
+    pub fn push_withdrawal_request_with_db(
+        &mut self,
+        db: &StoreTransaction,
+        withdrawal: WithdrawalRequest,
+    ) -> Result<()> {
         // check withdrawal size
         if withdrawal.as_slice().len() > MAX_WITHDRAWAL_SIZE {
             return Err(anyhow!("withdrawal over size"));
@@ -372,7 +392,6 @@ impl MemPool {
         // Check replace-by-fee
         // TODO
 
-        let db = self.store.begin_transaction();
         let state = db.mem_pool_state_tree()?;
         let account_script_hash: H256 = withdrawal.raw().account_script_hash().unpack();
         let account_id = state
@@ -382,7 +401,6 @@ impl MemPool {
         entry_list.withdrawals.push(withdrawal.clone());
         // Add to pool
         db.insert_mem_pool_withdrawal(&withdrawal_hash, withdrawal)?;
-        db.commit()?;
         Ok(())
     }
 
