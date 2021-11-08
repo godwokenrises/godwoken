@@ -18,9 +18,7 @@ use gw_common::{
     H256,
 };
 use gw_config::MemPoolConfig;
-use gw_generator::{
-    constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
-};
+use gw_generator::{error::TransactionError, traits::StateExt, Generator};
 use gw_store::{
     chain_view::ChainView,
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
@@ -1075,7 +1073,7 @@ impl MemPool {
             &state,
             block_info,
             &raw_tx,
-            L2TX_MAX_CYCLES,
+            self.config.submit_l2tx_max_cycles,
         )?;
 
         if let Some(ref mut offchain_validator) = self.offchain_validator {
@@ -1084,7 +1082,7 @@ impl MemPool {
 
             if 0 == run_result.exit_code {
                 let cycles = maybe_cycles?;
-                log::debug!("[mem-pool] offchain verify tx cycles {:?}", cycles);
+                log::info!("[mem-pool] offchain verify tx cycles {:?}", cycles);
             }
         }
 

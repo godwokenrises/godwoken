@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
-    constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
+    constants::{MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
     erc20_creator_allowlist::SUDTProxyAccountAllowlist,
     error::{BlockError, TransactionValidateError, WithdrawalError},
     vm_cost_model::instruction_cycles,
@@ -96,6 +96,7 @@ pub struct Generator {
     rollup_context: RollupContext,
     sudt_proxy_account_whitelist: SUDTProxyAccountAllowlist,
     polyjuice_contract_creator_allowlist: Option<PolyjuiceContractCreatorAllowList>,
+    default_l2tx_max_cycles: u64,
 }
 
 impl Generator {
@@ -104,6 +105,7 @@ impl Generator {
         account_lock_manage: AccountLockManage,
         rollup_context: RollupContext,
         rpc_config: RPCConfig,
+        default_l2tx_max_cycles: u64,
     ) -> Self {
         let polyjuice_contract_creator_allowlist =
             PolyjuiceContractCreatorAllowList::from_rpc_config(&rpc_config);
@@ -123,6 +125,7 @@ impl Generator {
             rollup_context,
             sudt_proxy_account_whitelist,
             polyjuice_contract_creator_allowlist,
+            default_l2tx_max_cycles,
         }
     }
 
@@ -513,23 +516,26 @@ impl Generator {
 
             // build call context
             // NOTICE users only allowed to send HandleMessage CallType txs
-            let run_result =
-                match self.execute_transaction(chain, state, &block_info, &raw_tx, L2TX_MAX_CYCLES)
-                {
-                    Ok(run_result) => run_result,
-                    Err(err) => {
-                        let target = build_challenge_target(
-                            block_hash.into(),
-                            ChallengeTargetType::TxExecution,
-                            tx_index as u32,
-                        );
+            let run_result = match self.execute_transaction_with_default_max_cycles(
+                chain,
+                state,
+                &block_info,
+                &raw_tx,
+            ) {
+                Ok(run_result) => run_result,
+                Err(err) => {
+                    let target = build_challenge_target(
+                        block_hash.into(),
+                        ChallengeTargetType::TxExecution,
+                        tx_index as u32,
+                    );
 
-                        return ApplyBlockResult::Challenge {
-                            target,
-                            error: Error::Transaction(err),
-                        };
-                    }
-                };
+                    return ApplyBlockResult::Challenge {
+                        target,
+                        error: Error::Transaction(err),
+                    };
+                }
+            };
 
             {
                 if let Err(err) = state.apply_run_result(&run_result) {
@@ -615,6 +621,28 @@ impl Generator {
             .cloned()
     }
 
+    /// execute a l2tx with default_l2tx_max_cycles
+    pub fn execute_transaction_with_default_max_cycles<S: State + CodeStore, C: ChainStore>(
+        &self,
+        chain: &C,
+        state: &S,
+        block_info: &BlockInfo,
+        raw_tx: &RawL2Transaction,
+    ) -> Result<RunResult, TransactionError> {
+        let run_result = self.unchecked_execute_transaction(
+            chain,
+            state,
+            block_info,
+            raw_tx,
+            self.default_l2tx_max_cycles,
+        )?;
+        if 0 != run_result.exit_code {
+            return Err(TransactionError::InvalidExitCode(run_result.exit_code));
+        }
+
+        Ok(run_result)
+    }
+
     /// execute a layer2 tx
     pub fn execute_transaction<S: State + CodeStore, C: ChainStore>(
         &self,
@@ -665,7 +693,6 @@ impl Generator {
         let used_cycles;
         let exit_code;
         {
-            // let core_machine = AsmCoreMachine::new_with_max_cycles(L2TX_MAX_CYCLES);
             let global_vm_version = smol::block_on(async { *GLOBAL_VM_VERSION.lock().await });
             let params = AsmCoreMachineParams::with_version(global_vm_version)?;
             let core_machine = AsmCoreMachine::new(params.vm_isa, params.vm_version, max_cycles);

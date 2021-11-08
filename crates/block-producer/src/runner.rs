@@ -302,6 +302,7 @@ impl BaseInitComponents {
                 account_lock_manage,
                 rollup_context.clone(),
                 config.rpc.clone(),
+                config.mem_pool.submit_l2tx_max_cycles,
             ))
         };
 
