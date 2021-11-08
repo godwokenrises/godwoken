@@ -147,6 +147,8 @@ impl BatchTxWithdrawalInBackground {
                 }
             }
 
+            let batch_size = batch.len();
+
             {
                 let total_batch_time = Instant::now();
                 let mut mem_pool = self.mem_pool.lock().await;
@@ -191,7 +193,8 @@ impl BatchTxWithdrawalInBackground {
                     log::error!("[mem-pool batch] fail to db commit, err: {}", err);
                 }
                 log::info!(
-                    "[mem-pool batch] done, batch total time: {}ms, commit time: {}ms",
+                    "[mem-pool batch] done, batch size: {}, total time: {}ms, DB commit time: {}ms",
+                    batch_size,
                     total_batch_time.elapsed().as_millis(),
                     t.elapsed().as_millis(),
                 );
