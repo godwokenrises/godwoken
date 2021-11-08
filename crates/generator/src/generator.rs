@@ -10,6 +10,7 @@ use crate::{
     erc20_creator_allowlist::SUDTProxyAccountAllowlist,
     error::{BlockError, TransactionValidateError, WithdrawalError},
     vm_cost_model::instruction_cycles,
+    Machine, VMVersion,
 };
 use crate::{
     backend_manage::Backend,
@@ -43,33 +44,13 @@ use gw_types::{
     prelude::*,
 };
 
-use ckb_vm::{
-    machine::asm::{AsmCoreMachine, AsmMachine},
-    DefaultMachineBuilder, Error as VMError, SupportMachine,
-};
+use ckb_vm::{DefaultMachineBuilder, SupportMachine};
 
-struct AsmCoreMachineParams {
-    pub vm_isa: u8,
-    pub vm_version: u32,
-}
+#[cfg(has_asm)]
+use ckb_vm::machine::asm::AsmMachine;
 
-impl AsmCoreMachineParams {
-    pub fn with_version(vm_version: u32) -> Result<AsmCoreMachineParams, VMError> {
-        if vm_version == 0 {
-            Ok(AsmCoreMachineParams {
-                vm_isa: ckb_vm::ISA_IMC,
-                vm_version: ckb_vm::machine::VERSION0,
-            })
-        } else if vm_version == 1 {
-            Ok(AsmCoreMachineParams {
-                vm_isa: ckb_vm::ISA_IMC | ckb_vm::ISA_B | ckb_vm::ISA_MOP,
-                vm_version: ckb_vm::machine::VERSION1,
-            })
-        } else {
-            Err(VMError::InvalidVersion)
-        }
-    }
-}
+#[cfg(not(has_asm))]
+use ckb_vm::TraceMachine;
 
 pub struct ApplyBlockArgs {
     pub l2block: L2Block,
@@ -135,6 +116,44 @@ impl Generator {
 
     pub fn account_lock_manage(&self) -> &AccountLockManage {
         &self.account_lock_manage
+    }
+
+    fn build_machine<'a, S: State + CodeStore, C: ChainStore>(
+        &'a self,
+        run_result: &'a mut RunResult,
+        chain: &'a C,
+        state: &'a S,
+        block_info: &'a BlockInfo,
+        raw_tx: &'a RawL2Transaction,
+        max_cycles: u64,
+    ) -> Machine<'a> {
+        let global_vm_version = smol::block_on(async { *GLOBAL_VM_VERSION.lock().await });
+        let vm_version = match global_vm_version {
+            0 => VMVersion::V0,
+            1 => VMVersion::V1,
+            ver => panic!("Unsupport VMVersion: {}", ver),
+        };
+        let core_machine = vm_version.init_core_machine(max_cycles);
+        let machine_builder = DefaultMachineBuilder::new(core_machine)
+            .syscall(Box::new(L2Syscalls {
+                chain,
+                state,
+                block_info,
+                raw_tx,
+                rollup_context: &self.rollup_context,
+                account_lock_manage: &self.account_lock_manage,
+                result: run_result,
+                code_store: state,
+            }))
+            .instruction_cycle_func(Box::new(instruction_cycles));
+        let default_machine = machine_builder.build();
+
+        #[cfg(has_asm)]
+        let machine = AsmMachine::new(default_machine, None);
+        #[cfg(not(has_asm))]
+        let machine = TraceMachine::new(default_machine);
+
+        machine
     }
 
     /// Verify withdrawal request
@@ -638,22 +657,14 @@ impl Generator {
         let used_cycles;
         let exit_code;
         {
-            let global_vm_version = smol::block_on(async { *GLOBAL_VM_VERSION.lock().await });
-            let params = AsmCoreMachineParams::with_version(global_vm_version)?;
-            let core_machine = AsmCoreMachine::new(params.vm_isa, params.vm_version, max_cycles);
-            let machine_builder = DefaultMachineBuilder::new(core_machine)
-                .syscall(Box::new(L2Syscalls {
-                    chain,
-                    state,
-                    block_info,
-                    raw_tx,
-                    rollup_context: &self.rollup_context,
-                    account_lock_manage: &self.account_lock_manage,
-                    result: &mut run_result,
-                    code_store: state,
-                }))
-                .instruction_cycle_func(Box::new(instruction_cycles));
-            let mut machine = AsmMachine::new(machine_builder.build(), None);
+            let mut machine = self.build_machine(
+                &mut run_result,
+                chain,
+                state,
+                block_info,
+                raw_tx,
+                max_cycles,
+            );
             let account_id = raw_tx.to_id().unpack();
             let script_hash = state.get_script_hash(account_id)?;
             let backend = self
