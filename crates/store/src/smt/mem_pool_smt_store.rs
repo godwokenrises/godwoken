@@ -54,7 +54,6 @@ impl<'a> Store<H256> for MemPoolSMTStore<'a> {
                 .inner_store()
                 .get(self.under_layer_columns.branch_col, branch_key.as_slice())
             {
-                Some(slice) if slice.as_ref() == [DELETED_FLAG] => return Ok(None),
                 Some(slice) => slice,
                 None => return Ok(None),
             },
@@ -75,7 +74,6 @@ impl<'a> Store<H256> for MemPoolSMTStore<'a> {
                 .inner_store()
                 .get(self.under_layer_columns.leaf_col, leaf_key.as_slice())
             {
-                Some(slice) if slice.as_ref() == [DELETED_FLAG] => return Ok(None),
                 Some(slice) => slice,
                 None => return Ok(None),
             },
