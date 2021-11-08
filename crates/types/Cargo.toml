@@ -17,3 +17,4 @@ gw-hash = { path = "../hash", default-features = false }
 ckb-fixed-hash = { version = "0.100.0", optional = true }
 sparse-merkle-tree = { git = "https://github.com/nervosnetwork/sparse-merkle-tree", branch = "update-all", default-features = false }
 ckb-types = { version = "0.100.0", default-features = false, optional = true }
+anyhow = "1.0"

@@ -9,6 +9,7 @@ mod extension;
 mod generated;
 pub mod prelude;
 mod std_traits;
+pub mod store;
 
 pub use generated::packed;
 pub use molecule::bytes;
