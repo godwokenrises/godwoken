@@ -111,6 +111,27 @@ impl<'a> State for StateTree<'a> {
         Ok(())
     }
 
+    fn update_multi_raws(&mut self, pairs: Vec<(H256, H256)>) -> Result<(), StateError> {
+        self.tree.update_all(pairs.clone())?;
+        // record block's kv state
+        match self.context {
+            StateContext::AttachBlock(block_number) => {
+                for (key, value) in pairs {
+                    self.db()
+                        .record_block_state(block_number, key, value)
+                        .expect("record block state");
+                }
+            }
+            StateContext::DetachBlock(_) => {
+                // ignore
+            }
+            ctx => {
+                panic!("wrong ctx: {:?}", ctx);
+            }
+        }
+        Ok(())
+    }
+
     fn get_account_count(&self) -> Result<u32, StateError> {
         Ok(self.account_count)
     }

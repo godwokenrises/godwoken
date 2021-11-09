@@ -94,6 +94,12 @@ impl<'a, S: Store<H256>> State for MemStateTree<'a, S> {
         Ok(())
     }
 
+    fn update_multi_raws(&mut self, pairs: Vec<(H256, H256)>) -> Result<(), StateError> {
+        self.tracker.touch_keys(pairs.iter().map(|(k, _)| k));
+        self.tree.update_all(pairs)?;
+        Ok(())
+    }
+
     fn get_account_count(&self) -> Result<u32, StateError> {
         Ok(self.account_count)
     }
