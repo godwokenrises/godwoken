@@ -94,9 +94,11 @@ impl<S: State + CodeStore> StateExt for S {
 
     fn apply_run_result(&mut self, run_result: &RunResult) -> Result<(), Error> {
         let t = Instant::now();
-        for (k, v) in &run_result.write_values {
-            self.update_raw(*k, *v)?;
-        }
+        let pairs = run_result.write_values.iter().map(|(k, v)| (*k, *v));
+        self.update_multi_raws(pairs.collect())?;
+        // for (k, v) in &run_result.write_values {
+        //     self.update_raw(*k, *v)?;
+        // }
         log::debug!(
             "[apply run result] apply writes: {}ms, write_values: {}",
             t.elapsed().as_millis(),
