@@ -145,16 +145,9 @@ impl SyncEvent {
 /// concrete type aliases
 pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
 
-/// Represent fast path state: synced from local block producer, so we do not have L2BlockCommittedInfo
-#[derive(Debug, Clone)]
-pub struct LocalPendingBlock {
-    block: L2Block,
-    prev_global_state: GlobalState,
-}
-
 pub struct LocalState {
     tip: L2Block,
-    last_synced: L2BlockCommittedInfo,
+    last_synced: Option<L2BlockCommittedInfo>,
     last_global_state: GlobalState,
 }
 
@@ -168,12 +161,16 @@ impl LocalState {
         Status::try_from(status).expect("invalid status")
     }
 
-    pub fn last_synced(&self) -> &L2BlockCommittedInfo {
+    pub fn last_synced(&self) -> &Option<L2BlockCommittedInfo> {
         &self.last_synced
     }
 
     pub fn last_global_state(&self) -> &GlobalState {
         &self.last_global_state
+    }
+
+    pub fn is_pending(&self) -> bool {
+        self.last_synced.is_none()
     }
 }
 
@@ -184,7 +181,6 @@ pub struct Chain {
     challenge_target: Option<ChallengeTarget>,
     last_sync_event: SyncEvent,
     local_state: LocalState,
-    local_pending_block: Option<LocalPendingBlock>,
     generator: Arc<Generator>,
     mem_pool: Option<Arc<Mutex<MemPool>>>,
     complete_initial_syncing: bool,
@@ -214,32 +210,8 @@ impl Chain {
         );
 
         // resume pending block
-        let mut tip = store.get_tip_block()?;
-        let mut local_pending_block = None;
-        let last_synced;
-        match store.get_l2block_committed_info(&tip.hash().into())? {
-            Some(committed_info) => {
-                last_synced = committed_info;
-            }
-            None => {
-                // tip is pending local block, use it's parent as tip
-                let pending_block = tip.clone();
-                tip = store
-                    .get_block(&tip.raw().parent_block_hash().unpack())?
-                    .expect("get block");
-                last_synced = store
-                    .get_l2block_committed_info(&tip.hash().into())?
-                    .ok_or(anyhow!("can't find last synced committed info"))?;
-                let prev_global_state = store
-                    .get_block_post_global_state(&tip.hash().into())?
-                    .expect("get pending block global state");
-                local_pending_block = Some(LocalPendingBlock {
-                    block: pending_block,
-                    prev_global_state,
-                });
-            }
-        };
-
+        let tip = store.get_tip_block()?;
+        let last_synced = store.get_l2block_committed_info(&tip.hash().into())?;
         let last_global_state = store
             .get_block_post_global_state(&tip.hash().into())?
             .ok_or_else(|| anyhow!("can't find last global state"))?;
@@ -263,7 +235,6 @@ impl Chain {
             challenge_target: None,
             last_sync_event: SyncEvent::Success,
             local_state,
-            local_pending_block,
             generator,
             mem_pool,
             rollup_type_script_hash,
@@ -369,7 +340,13 @@ impl Chain {
                         let number: u64 = l2block_committed_info.number().unpack();
                         number
                     } >= {
-                        let number: u64 = self.local_state.last_synced.number().unpack();
+                        let number: u64 = self
+                            .local_state
+                            .last_synced
+                            .as_ref()
+                            .expect("layer1 committed")
+                            .number()
+                            .unpack();
                         number
                     },
                     "must be greater than or equalled to last synced number"
@@ -709,16 +686,16 @@ impl Chain {
         };
 
         self.last_sync_event = apply_update()?;
+        self.local_state.last_global_state = global_state;
         match update {
             UpdateAction::L1(L1Action {
                 l2block_committed_info,
                 ..
             }) => {
-                self.local_state.last_global_state = global_state;
-                self.local_state.last_synced = l2block_committed_info;
+                self.local_state.last_synced = Some(l2block_committed_info);
             }
             UpdateAction::Local(..) => {
-                // ignores
+                self.local_state.last_synced = None;
             }
         }
         log::debug!("last sync event {:?}", self.last_sync_event);
@@ -739,7 +716,13 @@ impl Chain {
                         let number: u64 = l2block_committed_info.number().unpack();
                         number
                     } <= {
-                        let number: u64 = self.local_state.last_synced.number().unpack();
+                        let number: u64 = self
+                            .local_state
+                            .last_synced
+                            .as_ref()
+                            .expect("layer1 committed")
+                            .number()
+                            .unpack();
                         number
                     },
                     "must be smaller than or equalled to last synced number"
@@ -902,6 +885,7 @@ impl Chain {
                     // Rewind block smt to last valid tip in db
                     let mut current_block_hash: H256 =
                         local_state_global_state.tip_block_hash().unpack();
+
                     while current_block_hash != last_valid_tip_block_hash {
                         if current_block_hash == genesis_hash {
                             break;
@@ -930,9 +914,7 @@ impl Chain {
 
         self.local_state.last_global_state = prev_global_state;
         self.local_state.tip = db.get_tip_block()?;
-        self.local_state.last_synced = db
-            .get_l2block_committed_info(&db.get_tip_block_hash()?)?
-            .expect("last committed info");
+        self.local_state.last_synced = db.get_l2block_committed_info(&db.get_tip_block_hash()?)?;
         Ok(())
     }
 
@@ -944,31 +926,32 @@ impl Chain {
                 ..
             }) => {
                 // layer1 committed block
-                if let Some(LocalPendingBlock {
-                    block,
-                    prev_global_state,
-                }) = self.local_pending_block.clone()
-                {
+                if self.local_state.is_pending() {
                     // check fast path
                     if let L1ActionContext::SubmitBlock { l2block, .. } = context {
-                        let pending_block_hash = block.hash();
+                        let pending_block_hash = self.local_state.tip.hash();
                         if l2block.hash() == pending_block_hash {
+                            // fast sync
                             db.insert_block_committed_info(
                                 &pending_block_hash.into(),
                                 l2block_committed_info.to_owned(),
                             )?;
+                            self.local_state.last_synced = Some(l2block_committed_info.to_owned());
+                            return Ok(());
                         }
-                        // clear pending block
-                        self.local_pending_block = None;
-                        return Ok(());
                     }
                     // failed fast path, revert pending block
+                    let prev_global_state = db
+                        .get_block_post_global_state(
+                            &self.local_state.tip.raw().parent_block_hash().unpack(),
+                        )?
+                        .expect("parent global state");
                     self.revert_action(
                         db,
                         RevertedAction::Local(RevertedLocalAction {
-                            prev_global_state: prev_global_state.to_owned(),
+                            prev_global_state,
                             context: RevertL1ActionContext::SubmitValidBlock {
-                                l2block: block.to_owned(),
+                                l2block: self.local_state.tip.to_owned(),
                             },
                         }),
                     )?;
@@ -978,28 +961,16 @@ impl Chain {
                     // update
                     self.apply_action(db, update)?;
                 }
-                // clear
-                self.local_pending_block = None;
             }
-            UpdateAction::Local(action) => {
+            UpdateAction::Local(..) => {
                 // fast path - block from local block-producer
-                if self.local_pending_block.is_some() {
+                if self.local_state().is_pending() {
                     return Err(anyhow!(
                         "Already has a local pending block, waiting for it committed"
                     ));
                 }
-                let block = match &action.context {
-                    L1ActionContext::SubmitBlock { l2block, .. } => l2block.to_owned(),
-                    _ => {
-                        panic!("local action shouldn't be other than submit block")
-                    }
-                };
                 // layer1 update
                 self.apply_action(db, update)?;
-                self.local_pending_block = Some(LocalPendingBlock {
-                    block,
-                    prev_global_state: self.local_state().last_global_state().to_owned(),
-                });
             }
         }
         Ok(())

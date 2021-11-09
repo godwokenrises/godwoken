@@ -411,9 +411,10 @@ impl MemPool {
     /// this method update current state of mem pool
     pub fn notify_new_tip(&mut self, new_tip: H256) -> Result<()> {
         // reset pool state
+        log::info!("[mem-pool] handling notify_new_tip");
         let t = Instant::now();
         self.reset(Some(self.current_tip().0), Some(new_tip))?;
-        log::info!("[mem-pool] notify_now_tip ({}ms)", t.elapsed().as_millis());
+        log::info!("[mem-pool] notify_new_tip ({}ms)", t.elapsed().as_millis());
         Ok(())
     }
 
