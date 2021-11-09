@@ -58,6 +58,7 @@ pub fn bench(c: &mut Criterion) {
             || {
                 let config = StoreConfig {
                     path: "./smt_data/db".parse().unwrap(),
+                    options_file: Some("./smt_data/db.toml".parse().unwrap()),
                     ..Default::default()
                 };
                 let store = Store::new(RocksDB::open(&config, COLUMNS));
