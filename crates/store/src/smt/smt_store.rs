@@ -10,7 +10,7 @@ use gw_common::{
     H256,
 };
 use gw_db::schema::Col;
-use gw_types::{packed, prelude::*};
+use gw_types::{packed, prelude::*, store};
 
 pub struct SMTStore<'a, DB: KVStore> {
     leaf_col: Col,
@@ -37,8 +37,8 @@ impl<'a, DB: KVStore> Store<H256> for SMTStore<'a, DB> {
         let branch_key: packed::SMTBranchKey = branch_key.pack();
         match self.store.get(self.branch_col, branch_key.as_slice()) {
             Some(slice) => {
-                let branch = packed::SMTBranchNodeReader::from_slice_should_be_ok(slice.as_ref());
-                Ok(Some(branch.to_entity().unpack()))
+                let smt_branch = store::SMTBranchNode::uncheck_from_slice(slice.as_ref());
+                Ok(Some(BranchNode::from(&smt_branch)))
             }
             None => Ok(None),
         }
@@ -58,7 +58,7 @@ impl<'a, DB: KVStore> Store<H256> for SMTStore<'a, DB> {
 
     fn insert_branch(&mut self, branch_key: BranchKey, branch: BranchNode) -> Result<(), SMTError> {
         let branch_key: packed::SMTBranchKey = branch_key.pack();
-        let branch: packed::SMTBranchNode = branch.pack();
+        let branch = store::SMTBranchNode::from(&branch);
 
         self.store
             .insert_raw(self.branch_col, branch_key.as_slice(), branch.as_slice())

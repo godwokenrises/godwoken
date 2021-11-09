@@ -9,7 +9,7 @@ use gw_common::{
     },
     H256,
 };
-use gw_types::{packed, prelude::*};
+use gw_types::{packed, prelude::*, store};
 
 use super::Columns;
 
@@ -59,8 +59,8 @@ impl<'a> Store<H256> for MemPoolSMTStore<'a> {
             },
         };
 
-        let branch = packed::SMTBranchNodeReader::from_slice_should_be_ok(node_slice.as_ref());
-        Ok(Some(branch.to_entity().unpack()))
+        let branch = store::SMTBranchNode::uncheck_from_slice(node_slice.as_ref());
+        Ok(Some(BranchNode::from(&branch)))
     }
 
     fn get_leaf(&self, leaf_key: &H256) -> Result<Option<H256>, SMTError> {
@@ -90,7 +90,7 @@ impl<'a> Store<H256> for MemPoolSMTStore<'a> {
 
     fn insert_branch(&mut self, branch_key: BranchKey, branch: BranchNode) -> Result<(), SMTError> {
         let branch_key: packed::SMTBranchKey = branch_key.pack();
-        let branch: packed::SMTBranchNode = branch.pack();
+        let branch = store::SMTBranchNode::from(&branch);
 
         self.store
             .insert_raw(
