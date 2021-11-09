@@ -35,4 +35,10 @@ impl StateTracker {
             touched_keys.borrow_mut().insert(*key);
         }
     }
+
+    pub fn touch_keys<'a>(&self, keys: impl IntoIterator<Item = &'a H256>) {
+        if let Some(touched_keys) = self.touched_keys.as_ref() {
+            touched_keys.borrow_mut().extend(keys);
+        }
+    }
 }
