@@ -46,9 +46,6 @@ use gw_types::{
 
 use ckb_vm::{DefaultMachineBuilder, SupportMachine};
 
-#[cfg(has_asm)]
-use ckb_vm::machine::asm::AsmMachine;
-
 #[cfg(not(has_asm))]
 use ckb_vm::TraceMachine;
 
@@ -115,6 +112,84 @@ impl Generator {
         &self.account_lock_manage
     }
 
+    fn machine_run<'a, S: State + CodeStore, C: ChainStore>(
+        &'a self,
+        chain: &'a C,
+        state: &'a S,
+        block_info: &'a BlockInfo,
+        raw_tx: &'a RawL2Transaction,
+        max_cycles: u64,
+        code_bytes: Bytes,
+    ) -> Result<RunResult, TransactionError> {
+        let mut run_result = RunResult::default();
+        let used_cycles;
+        let exit_code;
+
+        {
+            let global_vm_version = smol::block_on(async { *GLOBAL_VM_VERSION.lock().await });
+            let vm_version = match global_vm_version {
+                0 => VMVersion::V0,
+                1 => VMVersion::V1,
+                ver => panic!("Unsupport VMVersion: {}", ver),
+            };
+            let core_machine = vm_version.init_core_machine(max_cycles);
+            let machine_builder = DefaultMachineBuilder::new(core_machine)
+                .syscall(Box::new(L2Syscalls {
+                    chain,
+                    state,
+                    block_info,
+                    raw_tx,
+                    rollup_context: &self.rollup_context,
+                    account_lock_manage: &self.account_lock_manage,
+                    result: &mut run_result,
+                    code_store: state,
+                }))
+                .instruction_cycle_func(Box::new(instruction_cycles));
+            let default_machine = machine_builder.build();
+
+            #[cfg(has_asm)]
+            #[cfg(feature = "aot")]
+            let aot_code = {
+                let mut aot_machine = ckb_vm::machine::aot::AotCompilingMachine::load(
+                    &code_bytes,
+                    Some(Box::new(instruction_cycles)),
+                    vm_version.vm_isa(),
+                    vm_version.vm_version(),
+                )
+                .unwrap();
+                aot_machine.compile().unwrap()
+            };
+
+            #[cfg(has_asm)]
+            #[cfg(feature = "aot")]
+            let mut machine =
+                ckb_vm::machine::asm::AsmMachine::new(default_machine, Some(&aot_code));
+
+            #[cfg(has_asm)]
+            #[cfg(not(feature = "aot"))]
+            let mut machine = ckb_vm::machine::asm::AsmMachine::new(default_machine, None);
+
+            #[cfg(not(has_asm))]
+            let machine = TraceMachine::new(default_machine);
+
+            machine.load_program(&code_bytes, &[])?;
+            used_cycles = machine.machine.cycles();
+            exit_code = machine.run()?;
+        }
+
+        let t = Instant::now();
+        log::debug!(
+            "[execute tx] VM run time: {}ms, exit code: {}",
+            t.elapsed().as_millis(),
+            exit_code
+        );
+        run_result.used_cycles = used_cycles;
+        run_result.exit_code = exit_code;
+
+        Ok(run_result)
+    }
+
+    #[allow(dead_code)]
     fn build_machine<'a, S: State + CodeStore, C: ChainStore>(
         &'a self,
         run_result: &'a mut RunResult,
@@ -146,7 +221,8 @@ impl Generator {
         let default_machine = machine_builder.build();
 
         #[cfg(has_asm)]
-        let machine = AsmMachine::new(default_machine, None);
+        let machine = ckb_vm::machine::asm::AsmMachine::new(default_machine, None);
+
         #[cfg(not(has_asm))]
         let machine = TraceMachine::new(default_machine);
 
@@ -629,38 +705,21 @@ impl Generator {
         let sender_id: u32 = raw_tx.from_id().unpack();
         let nonce_before_execution = state.get_nonce(sender_id)?;
 
-        let mut run_result = RunResult::default();
-        let used_cycles;
-        let exit_code;
-        {
-            let mut machine = self.build_machine(
-                &mut run_result,
-                chain,
-                state,
-                block_info,
-                raw_tx,
-                max_cycles,
-            );
-            let account_id = raw_tx.to_id().unpack();
-            let script_hash = state.get_script_hash(account_id)?;
-            let backend = self
-                .load_backend(state, &script_hash)
-                .ok_or(TransactionError::BackendNotFound { script_hash })?;
-            machine.load_program(&backend.generator, &[])?;
-            let t = Instant::now();
-            exit_code = machine.run()?;
-            log::debug!(
-                "[execute tx] VM run time: {}ms, exit code: {}",
-                t.elapsed().as_millis(),
-                exit_code
-            );
-            used_cycles = machine.machine.cycles();
-        }
-        // record used cycles
-        run_result.used_cycles = used_cycles;
-        run_result.exit_code = exit_code;
+        let account_id = raw_tx.to_id().unpack();
+        let script_hash = state.get_script_hash(account_id)?;
+        let backend = self
+            .load_backend(state, &script_hash)
+            .ok_or(TransactionError::BackendNotFound { script_hash })?;
+        let run_result: RunResult = self.machine_run(
+            chain,
+            state,
+            block_info,
+            raw_tx,
+            max_cycles,
+            backend.generator,
+        )?;
 
-        if 0 == exit_code {
+        if 0 == run_result.exit_code {
             // check nonce is increased by backends
             let nonce_after_execution = {
                 let nonce_raw_key = build_account_field_key(sender_id, GW_ACCOUNT_NONCE_TYPE);
