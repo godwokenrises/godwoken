@@ -155,6 +155,12 @@ mod tests {
             self.tree.update(key, value)?;
             Ok(())
         }
+
+        fn update_multi_raws(&mut self, pairs: Vec<(H256, H256)>) -> Result<(), Error> {
+            self.tree.update_all(pairs)?;
+            Ok(())
+        }
+
         fn calculate_root(&self) -> Result<H256, Error> {
             let root = *self.tree.root();
             Ok(root)

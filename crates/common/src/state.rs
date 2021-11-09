@@ -114,6 +114,7 @@ pub trait State {
     // KV interface
     fn get_raw(&self, key: &H256) -> Result<H256, Error>;
     fn update_raw(&mut self, key: H256, value: H256) -> Result<(), Error>;
+    fn update_multi_raws(&mut self, pairs: Vec<(H256, H256)>) -> Result<(), Error>;
     fn get_account_count(&self) -> Result<u32, Error>;
     fn set_account_count(&mut self, count: u32) -> Result<(), Error>;
     fn calculate_root(&self) -> Result<H256, Error>;
