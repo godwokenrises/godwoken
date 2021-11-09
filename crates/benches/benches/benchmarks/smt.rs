@@ -1,4 +1,4 @@
-use criterion::*;
+use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
 use gw_common::{
     blake2b::new_blake2b,
     builtins::CKB_SUDT_ACCOUNT_ID,
@@ -29,6 +29,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use pprof::criterion::{Output, PProfProfiler};
 
 // meta contract
 const META_VALIDATOR_PATH: &str =
@@ -50,26 +51,33 @@ const ROLLUP_TYPE_HASH: [u8; 32] = [4u8; 32];
 
 const CKB_BALANCE: u128 = 100_000_000;
 
-pub fn bench(c: &mut Criterion) {
-    let mut group = c.benchmark_group("smt");
-    group.throughput(Throughput::Elements(1u64));
-    group.bench_function("5000 ckb transfer txs", move |b| {
-        b.iter_batched(
-            || {
-                let config = StoreConfig {
-                    path: "./smt_data/db".parse().unwrap(),
-                    options_file: Some("./smt_data/db.toml".parse().unwrap()),
-                    ..Default::default()
-                };
-                let store = Store::new(RocksDB::open(&config, COLUMNS));
-                BenchExecutionEnvironment::new_with_accounts(store, 1000)
-            },
-            |ee| {
-                ee.accounts_transfer(1000, 5000);
-            },
-            BatchSize::SmallInput,
-        );
-    });
+criterion_group! {
+    name = smt;
+    config = Criterion::default()
+    .with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    targets = bench_ckb_transfer
+}
+
+pub fn bench_ckb_transfer(c: &mut Criterion) {
+    let config = StoreConfig {
+        path: "./smt_data/db".parse().unwrap(),
+        options_file: Some("./smt_data/db.toml".parse().unwrap()),
+        ..Default::default()
+    };
+    let store = Store::new(RocksDB::open(&config, COLUMNS));
+    let ee = BenchExecutionEnvironment::new_with_accounts(store, 1000);
+
+    let mut group = c.benchmark_group("ckb_transfer");
+    for txs in (500..=5000).step_by(500) {
+        group.sample_size(10);
+        group.throughput(Throughput::Elements(txs));
+        group.bench_with_input(BenchmarkId::from_parameter(txs), &txs, |b, txs| {
+            b.iter(|| {
+                ee.accounts_transfer(1000, *txs as usize);
+            });
+        });
+    }
+    group.finish();
 }
 
 #[allow(dead_code)]
@@ -389,10 +397,4 @@ impl BenchExecutionEnvironment {
         db.attach_block(genesis).unwrap();
         db.commit().unwrap();
     }
-}
-
-criterion_group! {
-    name = smt;
-    config = Criterion::default().sample_size(10);
-    targets = bench
 }
