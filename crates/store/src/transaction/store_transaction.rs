@@ -511,11 +511,22 @@ impl StoreTransaction {
         self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &parent_block_hash)
     }
 
+    pub fn insert_block_committed_info(
+        &self,
+        block_hash: &H256,
+        committed_info: packed::L2BlockCommittedInfo,
+    ) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_L2BLOCK_COMMITTED_INFO,
+            block_hash.as_slice(),
+            committed_info.as_slice(),
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn insert_block(
         &self,
         block: packed::L2Block,
-        committed_info: packed::L2BlockCommittedInfo,
         global_state: packed::GlobalState,
         withdrawal_receipts: Vec<WithdrawalReceipt>,
         prev_txs_state: AccountMerkleState,
@@ -525,11 +536,6 @@ impl StoreTransaction {
         debug_assert_eq!(block.transactions().len(), tx_receipts.len());
         let block_hash = block.hash();
         self.insert_raw(COLUMN_BLOCK, &block_hash, block.as_slice())?;
-        self.insert_raw(
-            COLUMN_L2BLOCK_COMMITTED_INFO,
-            &block_hash,
-            committed_info.as_slice(),
-        )?;
         self.insert_raw(
             COLUMN_BLOCK_GLOBAL_STATE,
             &block_hash,
@@ -563,12 +569,6 @@ impl StoreTransaction {
             if tx_receipts.is_empty() && prev_txs_state.as_slice() != block_post_state.as_slice() {
                 return Err(Error::from("unexpected no tx post state".to_string()));
             }
-
-            // self.insert_raw(
-            //     COLUMN_CHECKPOINT,
-            //     checkpoint.as_slice(),
-            //     prev_txs_state.as_slice(),
-            // )?;
         }
 
         for (index, (tx, tx_receipt)) in block
@@ -596,13 +596,6 @@ impl StoreTransaction {
         if post_states.len() != state_checkpoint_list.len() {
             return Err(Error::from("unexpected block post state length".to_owned()));
         }
-        // for (checkpoint, post_state) in state_checkpoint_list.zip(post_states) {
-        //     self.insert_raw(
-        //         COLUMN_CHECKPOINT,
-        //         checkpoint.as_slice(),
-        //         post_state.as_slice(),
-        //     )?;
-        // }
 
         Ok(())
     }

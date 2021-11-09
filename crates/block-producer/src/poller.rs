@@ -1,12 +1,15 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::{types::ChainEvent, utils::to_result};
+use crate::{
+    types::ChainEvent,
+    utils::{extract_deposit_requests, to_result},
+};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{Params as ClientParams, Transport};
 use ckb_fixed_hash::H256;
 use gw_chain::chain::{
-    Chain, ChallengeCell, L1Action, L1ActionContext, RevertL1ActionContext, RevertedL1Action,
-    SyncParam,
+    Chain, ChallengeCell, L1Action, L1ActionContext, RevertL1ActionContext, RevertedAction,
+    RevertedL1Action, SyncParam, UpdateAction,
 };
 use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, TransactionWithStatus, Uint32};
 use gw_rpc_client::{
@@ -121,7 +124,12 @@ impl ChainUpdater {
                 let global_state = global_state_from_slice(&rollup_cell.data)?;
                 Unpack::<u64>::unpack(&global_state.block().count()).saturating_sub(1)
             };
-            assert!(tip_block_number >= local_tip_block_number);
+            assert!(
+                tip_block_number >= local_tip_block_number,
+                "tip: {}, local tip: {}",
+                tip_block_number,
+                local_tip_block_number
+            );
 
             if local_tip_block_number.saturating_add(1) == tip_block_number {
                 log::info!("single update to latest l2 block {}", tip_block_number);
@@ -256,7 +264,8 @@ impl ChainUpdater {
         let rollup_action = self.extract_rollup_action(&tx)?;
         let context = match rollup_action.to_enum() {
             RollupActionUnion::RollupSubmitBlock(submitted) => {
-                let (requests, asset_type_scripts) = self.extract_deposit_requests(&tx).await?;
+                let (requests, asset_type_scripts) =
+                    extract_deposit_requests(&self.rpc_client, &self.rollup_context, &tx).await?;
 
                 L1ActionContext::SubmitBlock {
                     l2block: submitted.block(),
@@ -288,11 +297,10 @@ impl ChainUpdater {
             l2block_committed_info,
             context,
         };
-        let sync_param = SyncParam {
-            reverts: vec![],
-            updates: vec![update],
-        };
-        self.chain.lock().await.sync(sync_param)?;
+        self.chain
+            .lock()
+            .await
+            .sync(SyncParam::Update(UpdateAction::L1(update)))?;
 
         // TODO sync missed block
         match &self.web3_indexer {
@@ -375,10 +383,12 @@ impl ChainUpdater {
                 .expect("valid block should exists");
         }
 
-        self.chain.lock().await.sync(SyncParam {
-            reverts: revert_l1_actions,
-            updates: vec![],
-        })?;
+        for action in revert_l1_actions {
+            self.chain
+                .lock()
+                .await
+                .sync(SyncParam::Revert(RevertedAction::L1(action)))?;
+        }
 
         // Also revert last tx hash
         let local_tip_committed_info = db
@@ -470,98 +480,4 @@ impl ChainUpdater {
 
         unreachable!("challenge output not found");
     }
-
-    async fn extract_deposit_requests(
-        &self,
-        tx: &Transaction,
-    ) -> Result<(Vec<DepositRequest>, HashSet<Script>)> {
-        let mut results = vec![];
-        let mut asset_type_scripts = HashSet::new();
-        for input in tx.raw().inputs().into_iter() {
-            // Load cell denoted by the transaction input
-            let tx_hash: H256 = input.previous_output().tx_hash().unpack();
-            let index = input.previous_output().index().unpack();
-            let tx: Option<TransactionWithStatus> = to_result(
-                self.rpc_client
-                    .ckb
-                    .request(
-                        "get_transaction",
-                        Some(ClientParams::Array(vec![json!(tx_hash)])),
-                    )
-                    .await?,
-            )?;
-            let tx_with_status =
-                tx.ok_or_else(|| anyhow::anyhow!("Cannot locate transaction: {:x}", tx_hash))?;
-            let tx = {
-                let tx: ckb_types::packed::Transaction = tx_with_status.transaction.inner.into();
-                Transaction::new_unchecked(tx.as_bytes())
-            };
-            let cell_output = tx
-                .raw()
-                .outputs()
-                .get(index)
-                .ok_or_else(|| anyhow::anyhow!("OutPoint index out of bound"))?;
-            let cell_data = tx
-                .raw()
-                .outputs_data()
-                .get(index)
-                .ok_or_else(|| anyhow::anyhow!("OutPoint index out of bound"))?;
-
-            // Check if loaded cell is a deposit request
-            if let Some(deposit_request) =
-                try_parse_deposit_request(&cell_output, &cell_data.unpack(), &self.rollup_context)
-            {
-                results.push(deposit_request);
-                if let Some(type_) = &cell_output.type_().to_opt() {
-                    asset_type_scripts.insert(type_.clone());
-                }
-            }
-        }
-        Ok((results, asset_type_scripts))
-    }
-}
-
-fn try_parse_deposit_request(
-    cell_output: &CellOutput,
-    cell_data: &Bytes,
-    rollup_context: &RollupContext,
-) -> Option<DepositRequest> {
-    if cell_output.lock().code_hash() != rollup_context.rollup_config.deposit_script_type_hash()
-        || cell_output.lock().hash_type() != ScriptHashType::Type.into()
-    {
-        return None;
-    }
-    let args = cell_output.lock().args().raw_data();
-    if args.len() < 32 {
-        return None;
-    }
-    let rollup_type_script_hash: [u8; 32] = rollup_context.rollup_script_hash.into();
-    if args.slice(0..32) != rollup_type_script_hash[..] {
-        return None;
-    }
-    let lock_args = match DepositLockArgs::from_slice(&args.slice(32..)) {
-        Ok(lock_args) => lock_args,
-        Err(_) => return None,
-    };
-    // NOTE: In readoly mode, we are only loading on chain data here, timeout validation
-    // can be skipped. For generator part, timeout validation needs to be introduced.
-    let (amount, sudt_script_hash) = match cell_output.type_().to_opt() {
-        Some(script) => {
-            if cell_data.len() < 16 {
-                return None;
-            }
-            let mut data = [0u8; 16];
-            data.copy_from_slice(&cell_data[0..16]);
-            (u128::from_le_bytes(data), script.hash())
-        }
-        None => (0u128, [0u8; 32]),
-    };
-    let capacity: u64 = cell_output.capacity().unpack();
-    let deposit_request = DepositRequest::new_builder()
-        .capacity(capacity.pack())
-        .amount(amount.pack())
-        .sudt_script_hash(sudt_script_hash.pack())
-        .script(lock_args.layer2_lock())
-        .build();
-    Some(deposit_request)
 }
