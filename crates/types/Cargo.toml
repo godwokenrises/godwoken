@@ -15,5 +15,6 @@ molecule = { version = "0.7.2", default-features = false }
 cfg-if = "0.1"
 gw-hash = { path = "../hash", default-features = false }
 ckb-fixed-hash = { version = "0.100.0", optional = true }
-sparse-merkle-tree = { version = "0.5.2-rc1", default-features = false }
+# sparse-merkle-tree = { version = "0.5.2-rc1", default-features = false }
+sparse-merkle-tree = { git = "https://github.com/zeroqn/sparse-merkle-tree", branch = "pr-feat-add-update-all-function", default-features = false }
 ckb-types = { version = "0.100.0", default-features = false, optional = true }
