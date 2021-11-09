@@ -65,7 +65,7 @@ pub fn bench_ckb_transfer(c: &mut Criterion) {
         ..Default::default()
     };
     let store = Store::new(RocksDB::open(&config, COLUMNS));
-    let ee = BenchExecutionEnvironment::new_with_accounts(store, 1000);
+    let ee = BenchExecutionEnvironment::new_with_accounts(store, 7000);
 
     let mut group = c.benchmark_group("ckb_transfer");
     for txs in (500..=5000).step_by(500) {
@@ -73,7 +73,7 @@ pub fn bench_ckb_transfer(c: &mut Criterion) {
         group.throughput(Throughput::Elements(txs));
         group.bench_with_input(BenchmarkId::from_parameter(txs), &txs, |b, txs| {
             b.iter(|| {
-                ee.accounts_transfer(1000, *txs as usize);
+                ee.accounts_transfer(7000, *txs as usize);
             });
         });
     }
