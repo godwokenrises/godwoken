@@ -44,7 +44,7 @@ use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT: usize = 5;
@@ -270,6 +270,8 @@ impl BlockProducer {
             let (deposit_requests, deposit_asset_scripts) =
                 extract_deposit_requests(&self.rpc_client, &self.generator.rollup_context(), &tx)
                     .await?;
+            log::debug!("[block producer] fast path sync");
+            let t = Instant::now();
             chain.sync(SyncParam::Update(UpdateAction::Local(LocalAction {
                 transaction: tx,
                 context: L1ActionContext::SubmitBlock {
@@ -279,6 +281,10 @@ impl BlockProducer {
                     deposit_asset_scripts,
                 },
             })))?;
+            log::info!(
+                "[block produce] complete fast path sync {}ms",
+                t.elapsed().as_millis()
+            );
         }
         Ok(())
     }
