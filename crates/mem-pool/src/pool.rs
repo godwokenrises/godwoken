@@ -700,6 +700,7 @@ impl MemPool {
         };
         let new_tip_block = self.store.get_block(&new_tip)?.expect("new tip block");
 
+        let t = Instant::now();
         if old_tip.is_some() && old_tip != Some(new_tip_block.raw().parent_block_hash().unpack()) {
             let old_tip = old_tip.unwrap();
             let old_tip_block = self.store.get_block(&old_tip)?.expect("old tip block");
@@ -767,6 +768,10 @@ impl MemPool {
                 reinject_withdrawals = discarded_withdrawals;
             }
         }
+        log::debug!(
+            "[mem-pool reset] calculate reinjects {}ms",
+            t.elapsed().as_millis()
+        );
 
         // estimate next l2block timestamp
         let estimated_timestamp = smol::block_on(self.inner.provider().estimate_next_blocktime())?;
@@ -790,6 +795,7 @@ impl MemPool {
             .set_current_tip((new_tip, new_tip_block.raw().number().unpack()));
 
         // mem block withdrawals
+        let t = Instant::now();
         let mem_block_withdrawals: Vec<_> = {
             let mut withdrawals = Vec::with_capacity(mem_block_content.withdrawals.len());
             for withdrawal_hash in mem_block_content.withdrawals {
@@ -800,7 +806,14 @@ impl MemPool {
             withdrawals
         };
 
+        log::debug!(
+            "[mem-pool reset] process withdrawals: count {} {}ms",
+            mem_block_withdrawals.len(),
+            t.elapsed().as_millis()
+        );
+
         // Process txs
+        let t = Instant::now();
         let mem_block_txs: Vec<_> = {
             let mut txs = Vec::with_capacity(mem_block_content.txs.len());
             for tx_hash in mem_block_content.txs {
@@ -810,6 +823,11 @@ impl MemPool {
             }
             txs
         };
+        log::debug!(
+            "[mem-pool reset] process txs: count: {} {}ms",
+            mem_block_txs.len(),
+            t.elapsed().as_millis()
+        );
 
         // remove from pending
         self.remove_unexecutables(&db)?;
@@ -821,8 +839,18 @@ impl MemPool {
             .chain(mem_block_withdrawals);
         // re-inject txs
         let txs_iter = reinject_txs.into_iter().chain(mem_block_txs);
+        let t = Instant::now();
         self.prepare_next_mem_block(&db, withdrawals_iter, txs_iter)?;
+        log::debug!(
+            "[mem-pool reset] prepare next mem_block {}ms",
+            t.elapsed().as_millis()
+        );
+        let t = Instant::now();
         db.commit()?;
+        log::debug!(
+            "[mem-pool reset] commit to db {}ms",
+            t.elapsed().as_millis()
+        );
 
         Ok(())
     }
@@ -866,9 +894,14 @@ impl MemPool {
         db: &StoreTransaction,
         merkle_state: AccountMerkleState,
     ) -> Result<()> {
+        let t = Instant::now();
         db.clear_mem_block_state()?;
         db.set_mem_block_account_count(merkle_state.count().unpack())?;
         db.set_mem_block_account_smt_root(merkle_state.merkle_root().unpack())?;
+        log::debug!(
+            "[mem-pool reset-mem-block-state] {}ms",
+            t.elapsed().as_millis()
+        );
         Ok(())
     }
 
