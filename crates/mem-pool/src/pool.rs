@@ -42,7 +42,7 @@ use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use crate::{
@@ -411,8 +411,8 @@ impl MemPool {
 
     /// Notify new tip
     /// this method update current state of mem pool
-    pub fn notify_new_tip(&mut self, new_tip: H256) -> Result<()> {
-        if self.current_tip().0 == new_tip {
+    pub fn notify_new_tip(&mut self, new_tip: H256, force: bool) -> Result<()> {
+        if !force && self.current_tip().0 == new_tip {
             log::debug!("[mem-pool] fast return from notify_new_tip");
             return Ok(());
         }
@@ -778,7 +778,10 @@ impl MemPool {
         );
 
         // estimate next l2block timestamp
-        let estimated_timestamp = smol::block_on(self.inner.provider().estimate_next_blocktime())?;
+        let estimated_timestamp =
+            smol::block_on(self.inner.provider().estimate_next_blocktime(Some(
+                Duration::from_millis(self.mem_block.block_info().timestamp().unpack()),
+            )))?;
         // reset mem block state
         let merkle_state = new_tip_block.raw().post_account();
         let db = self.store.begin_transaction();

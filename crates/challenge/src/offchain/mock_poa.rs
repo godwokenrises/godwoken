@@ -45,7 +45,7 @@ impl MockPoA {
     }
 
     fn ensure_unlockable(mut context: PoAContext, poa: &PoA, median_time: Duration) -> PoAContext {
-        let next_round_start_time = poa.estimate_next_round_start_time(context.clone());
+        let next_round_start_time = poa.estimate_next_round_start_time(context.clone(), None);
         // Already unlocked
         if median_time >= next_round_start_time {
             return context;

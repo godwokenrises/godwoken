@@ -145,11 +145,32 @@ impl SyncEvent {
 /// concrete type aliases
 pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_merkle_tree::H256>;
 
+#[derive(Debug, Clone)]
+pub enum LocalSyncStatus {
+    Committed(L2BlockCommittedInfo),
+    Pending(H256),
+}
+
+impl LocalSyncStatus {
+    pub fn pending(&self) -> Option<&H256> {
+        match self {
+            Self::Committed(_commit_info) => None,
+            Self::Pending(tx_hash) => Some(tx_hash),
+        }
+    }
+
+    pub fn committed_info(&self) -> Option<&L2BlockCommittedInfo> {
+        match self {
+            Self::Committed(commit_info) => Some(commit_info),
+            Self::Pending(_tx_hash) => None,
+        }
+    }
+}
+
 pub struct LocalState {
     tip: L2Block,
-    last_synced: Option<L2BlockCommittedInfo>,
+    last_synced: LocalSyncStatus,
     last_global_state: GlobalState,
-    last_pending_commit: Option<H256>,
 }
 
 impl LocalState {
@@ -162,20 +183,12 @@ impl LocalState {
         Status::try_from(status).expect("invalid status")
     }
 
-    pub fn last_synced(&self) -> &Option<L2BlockCommittedInfo> {
+    pub fn last_synced(&self) -> &LocalSyncStatus {
         &self.last_synced
     }
 
     pub fn last_global_state(&self) -> &GlobalState {
         &self.last_global_state
-    }
-
-    pub fn last_pending_commit(&self) -> &Option<H256> {
-        &self.last_pending_commit
-    }
-
-    pub fn is_pending(&self) -> bool {
-        self.last_synced.is_none()
     }
 }
 
@@ -216,7 +229,13 @@ impl Chain {
 
         // resume pending block
         let tip = store.get_tip_block()?;
-        let last_synced = store.get_l2block_committed_info(&tip.hash().into())?;
+        let last_synced = match store.get_l2block_committed_info(&tip.hash().into())? {
+            Some(committed_info) => LocalSyncStatus::Committed(committed_info),
+            None => {
+                // dummy pending status
+                LocalSyncStatus::Pending(Default::default())
+            }
+        };
         let last_global_state = store
             .get_block_post_global_state(&tip.hash().into())?
             .ok_or_else(|| anyhow!("can't find last global state"))?;
@@ -224,7 +243,6 @@ impl Chain {
             tip,
             last_synced,
             last_global_state,
-            last_pending_commit: None,
         };
         let rollup_config_hash = rollup_config.hash();
         let skipped_invalid_block_list = config
@@ -290,7 +308,9 @@ impl Chain {
             if !self.complete_initial_syncing {
                 // Do first notify
                 let tip_block_hash: H256 = self.local_state.tip.hash().into();
-                smol::block_on(async { mem_pool.lock().await.notify_new_tip(tip_block_hash) })?;
+                smol::block_on(async {
+                    mem_pool.lock().await.notify_new_tip(tip_block_hash, true)
+                })?;
             }
         }
         self.complete_initial_syncing = true;
@@ -349,6 +369,7 @@ impl Chain {
                         let number: u64 = self
                             .local_state
                             .last_synced
+                            .committed_info()
                             .as_ref()
                             .expect("layer1 committed")
                             .number()
@@ -698,12 +719,10 @@ impl Chain {
                 l2block_committed_info,
                 ..
             }) => {
-                self.local_state.last_synced = Some(l2block_committed_info);
-                self.local_state.last_pending_commit = None;
+                self.local_state.last_synced = LocalSyncStatus::Committed(l2block_committed_info);
             }
             UpdateAction::Local(LocalAction { transaction, .. }) => {
-                self.local_state.last_synced = None;
-                self.local_state.last_pending_commit = Some(transaction.hash().into());
+                self.local_state.last_synced = LocalSyncStatus::Pending(transaction.hash().into());
             }
         }
         log::debug!("last sync event {:?}", self.last_sync_event);
@@ -727,6 +746,7 @@ impl Chain {
                         let number: u64 = self
                             .local_state
                             .last_synced
+                            .committed_info()
                             .as_ref()
                             .expect("layer1 committed")
                             .number()
@@ -922,8 +942,12 @@ impl Chain {
 
         self.local_state.last_global_state = prev_global_state;
         self.local_state.tip = db.get_tip_block()?;
-        self.local_state.last_synced = db.get_l2block_committed_info(&db.get_tip_block_hash()?)?;
-        self.local_state.last_pending_commit = None;
+        // expect to get committed info, since we already revert a block, the current tip is supposed committed
+        self.local_state.last_synced =
+            match db.get_l2block_committed_info(&db.get_tip_block_hash()?)? {
+                Some(committed_info) => LocalSyncStatus::Committed(committed_info),
+                None => LocalSyncStatus::Pending(H256::zero()),
+            };
         Ok(())
     }
 
@@ -935,7 +959,7 @@ impl Chain {
                 ..
             }) => {
                 // layer1 committed block
-                if self.local_state.is_pending() {
+                if self.local_state.last_synced().pending().is_some() {
                     // check fast path
                     if let L1ActionContext::SubmitBlock { l2block, .. } = context {
                         let pending_block_hash = self.local_state.tip.hash();
@@ -945,7 +969,12 @@ impl Chain {
                                 &pending_block_hash.into(),
                                 l2block_committed_info.to_owned(),
                             )?;
-                            self.local_state.last_synced = Some(l2block_committed_info.to_owned());
+                            log::debug!("[chain] fast confirm {}", {
+                                let number: u64 = self.local_state().tip().raw().number().unpack();
+                                number
+                            });
+                            self.local_state.last_synced =
+                                LocalSyncStatus::Committed(l2block_committed_info.to_owned());
                             return Ok(());
                         }
                     }
@@ -970,7 +999,7 @@ impl Chain {
             }
             UpdateAction::Local(..) => {
                 // fast path - block from local block-producer
-                if self.local_state().is_pending() {
+                if self.local_state().last_synced().pending().is_some() {
                     return Err(anyhow!(
                         "Already has a local pending block, waiting for it committed"
                     ));
@@ -1007,7 +1036,12 @@ impl Chain {
                 && (is_revert_happend || self.complete_initial_syncing)
             {
                 // update mem pool state
-                smol::block_on(async { mem_pool.lock().await.notify_new_tip(tip_block_hash) })?;
+                smol::block_on(async {
+                    mem_pool
+                        .lock()
+                        .await
+                        .notify_new_tip(tip_block_hash, is_revert_happend)
+                })?;
             }
         }
 
