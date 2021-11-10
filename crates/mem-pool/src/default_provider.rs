@@ -35,7 +35,7 @@ impl DefaultMemPoolProvider {
 }
 
 impl MemPoolProvider for DefaultMemPoolProvider {
-    fn estimate_next_blocktime(&self) -> Task<Result<Duration>> {
+    fn estimate_next_blocktime(&self, last_blocktime: Option<Duration>) -> Task<Result<Duration>> {
         // estimate next l2block timestamp
         let poa = Arc::clone(&self.poa);
         let rpc_client = self.rpc_client.clone();
@@ -53,7 +53,7 @@ impl MemPoolProvider for DefaultMemPoolProvider {
             };
             let ctx = poa.query_poa_context(&input_cell).await?;
             // TODO how to estimate a more accurate timestamp?
-            let timestamp = poa.estimate_next_round_start_time(ctx);
+            let timestamp = poa.estimate_next_round_start_time(ctx, last_blocktime);
             Ok(timestamp)
         })
     }
