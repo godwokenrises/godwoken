@@ -33,9 +33,17 @@ pub struct Config {
     pub store: StoreConfig,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum RPCMethods {
+    PProf,
+}
+
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RPCServerConfig {
     pub listen: String,
+    #[serde(default)]
+    pub enable_methods: HashSet<RPCMethods>,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]

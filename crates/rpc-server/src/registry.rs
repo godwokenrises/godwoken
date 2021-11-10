@@ -4,7 +4,7 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::OffChainMockContext;
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{DebugConfig, MemPoolConfig, NodeMode};
+use gw_config::{DebugConfig, MemPoolConfig, NodeMode, RPCMethods, RPCServerConfig};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
@@ -101,6 +101,7 @@ pub struct Registry {
     backend_info: Vec<BackendInfo>,
     node_mode: NodeMode,
     mem_pool_batch: Option<MemPoolBatch>,
+    server_config: RPCServerConfig,
 }
 
 impl Registry {
@@ -116,6 +117,7 @@ impl Registry {
         mem_pool_config: MemPoolConfig,
         node_mode: NodeMode,
         mem_pool_batch: Option<MemPoolBatch>,
+        server_config: RPCServerConfig,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -134,6 +136,7 @@ impl Registry {
             backend_info,
             node_mode,
             mem_pool_batch,
+            server_config,
         }
     }
 
@@ -174,9 +177,8 @@ impl Registry {
                 "gw_compute_l2_sudt_script_hash",
                 compute_l2_sudt_script_hash,
             )
-            .with_method("gw_get_node_info", get_node_info)
-            .with_method("gw_start_profiler", start_profiler)
-            .with_method("gw_report_pprof", report_pprof);
+            .with_method("gw_get_node_info", get_node_info);
+
         if self.node_mode != NodeMode::ReadOnly {
             server = server
                 .with_method("gw_submit_l2transaction", submit_l2transaction)
@@ -201,6 +203,16 @@ impl Registry {
                     "debug_dump_cancel_challenge_tx",
                     debug_dump_cancel_challenge_tx,
                 );
+        }
+
+        for enabled in self.server_config.enable_methods.iter() {
+            match enabled {
+                RPCMethods::PProf => {
+                    server = server
+                        .with_method("gw_start_profiler", start_profiler)
+                        .with_method("gw_report_pprof", report_pprof);
+                }
+            }
         }
 
         Ok(server.finish())
