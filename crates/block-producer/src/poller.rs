@@ -8,8 +8,8 @@ use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{Params as ClientParams, Transport};
 use ckb_fixed_hash::H256;
 use gw_chain::chain::{
-    Chain, ChallengeCell, L1Action, L1ActionContext, RevertL1ActionContext, RevertedAction,
-    RevertedL1Action, RevertedLocalAction, SyncParam, UpdateAction,
+    Chain, ChallengeCell, L1Action, L1ActionContext, LocalSyncStatus, RevertL1ActionContext,
+    RevertedAction, RevertedL1Action, RevertedLocalAction, SyncParam, UpdateAction,
 };
 use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, TransactionWithStatus, Uint32};
 use gw_rpc_client::{
@@ -74,19 +74,18 @@ impl ChainUpdater {
 
         // Check l1 fork
         let is_local_state_synced = {
-            let chain = self.chain.lock().await;
-            match chain.local_state().last_synced().to_owned() {
-                Some(last_synced) => {
-                    drop(chain);
+            match self
+                .chain
+                .lock()
+                .await
+                .local_state()
+                .last_synced()
+                .to_owned()
+            {
+                LocalSyncStatus::Committed(last_synced) => {
                     self.find_l2block_on_l1(last_synced).await?
                 }
-                None => {
-                    let pending_tx_hash = chain
-                        .local_state()
-                        .last_pending_commit()
-                        .expect("pending commit")
-                        .to_owned();
-                    drop(chain);
+                LocalSyncStatus::Pending(pending_tx_hash) => {
                     self.find_l2block_in_pool(pending_tx_hash).await?
                 }
             }
@@ -97,7 +96,8 @@ impl ChainUpdater {
             let (local_tip_block_number, local_tip_block_hash, local_tip_committed_info) = {
                 let chain = self.chain.lock().await;
                 let local_tip_block = chain.local_state().tip().raw();
-                let local_tip_committed_info = chain.local_state().last_synced().to_owned();
+                let local_tip_committed_info =
+                    chain.local_state().last_synced().committed_info().cloned();
                 (
                     Unpack::<u64>::unpack(&local_tip_block.number()),
                     Into::<ckb_types::H256>::into(local_tip_block.hash()),
@@ -122,7 +122,7 @@ impl ChainUpdater {
                 let chain = self.chain.lock().await;
                 (
                     chain.local_state().tip().raw().number().unpack(),
-                    chain.local_state().is_pending(),
+                    chain.local_state().last_synced().pending().is_some(),
                 )
             };
             let tip_block_number = {
@@ -175,8 +175,8 @@ impl ChainUpdater {
             let chain = self.chain.lock().await;
             let local_tip_block: u64 = chain.local_state().tip().raw().number().unpack();
             let local_committed_l1_block: u64 = match chain.local_state().last_synced() {
-                Some(last_synced) => last_synced.number().unpack(),
-                None => {
+                LocalSyncStatus::Committed(last_synced) => last_synced.number().unpack(),
+                LocalSyncStatus::Pending(_pending_tx_hash) => {
                     // pending block, return it's parent's committed info
                     let db = chain.store().begin_transaction();
                     let committed_info = db
