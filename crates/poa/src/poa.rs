@@ -19,13 +19,13 @@ use std::time::Duration;
 const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
 
 #[derive(Clone)]
-struct PoASetup {
-    identity_size: u8,
-    round_interval_uses_seconds: bool,
-    identities: Vec<Vec<u8>>,
-    block_producers_change_threshold: u8,
-    round_intervals: u32,
-    subblocks_per_round: u32,
+pub struct PoASetup {
+    pub identity_size: u8,
+    pub round_interval_uses_seconds: bool,
+    pub identities: Vec<Vec<u8>>,
+    pub block_producers_change_threshold: u8,
+    pub round_intervals: u32,
+    pub subblocks_per_round: u32,
 }
 
 impl PoASetup {
@@ -92,7 +92,7 @@ impl PoASetup {
 pub struct PoAContext {
     pub poa_data: PoAData,
     pub poa_data_cell: CellInfo,
-    poa_setup: PoASetup,
+    pub poa_setup: PoASetup,
     poa_setup_cell: CellInfo,
     block_producer_index: u16,
 }
@@ -199,7 +199,11 @@ impl PoA {
         self.owner_lock.hash().into()
     }
 
-    pub fn estimate_next_round_start_time(&self, ctx: PoAContext) -> Duration {
+    pub fn estimate_next_round_start_time(
+        &self,
+        ctx: PoAContext,
+        last_start_time: Option<Duration>,
+    ) -> Duration {
         let PoAContext {
             poa_data,
             poa_setup,
@@ -221,7 +225,20 @@ impl PoA {
 
         let initial_time: u64 = poa_data.round_initial_subtime().unpack();
         let seconds = initial_time + poa_setup.round_intervals as u64 * steps;
-        Duration::from_secs(seconds)
+        let estimated_time = Duration::from_secs(seconds);
+
+        // if estimated time equals to last start time, we need to skip a round
+        if let Some(last_start_time) = last_start_time {
+            if estimated_time <= last_start_time {
+                log::debug!("modify estimated time {} last_start_time {} round intervals {} identities_len: {}", estimated_time.as_secs(), last_start_time.as_secs(), poa_setup.round_intervals, identities_len);
+                return estimated_time
+                    .checked_add(Duration::from_secs(
+                        poa_setup.round_intervals as u64 * identities_len,
+                    ))
+                    .expect("next blocktime");
+            }
+        }
+        estimated_time
     }
 
     pub async fn should_issue_next_block(
@@ -244,7 +261,7 @@ impl PoA {
             }
         }
 
-        let next_start_time = self.estimate_next_round_start_time(poa_ctx);
+        let next_start_time = self.estimate_next_round_start_time(poa_ctx, None);
 
         // check next start time again
         if next_start_time <= median_time {

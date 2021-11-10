@@ -193,10 +193,23 @@ impl BlockProducer {
             }
         }
 
-        let last_sync_event = { self.chain.lock().await.last_sync_event().to_owned() };
+        let (last_sync_event, last_pending_commit) = {
+            let chain = self.chain.lock().await;
+            let sync_event = chain.last_sync_event().to_owned();
+            let last_pending_commit = chain.local_state().last_synced().pending().cloned();
+            (sync_event, last_pending_commit)
+        };
         match last_sync_event {
             SyncEvent::Success => (),
             _ => return Ok(()),
+        }
+
+        if let Some(tx_hash) = last_pending_commit {
+            log::info!(
+                "[block producer] skip produce block since chain has a pending commit tx: {}",
+                hex::encode(tx_hash.as_slice())
+            );
+            return Ok(());
         }
 
         // assume the chain is updated
@@ -263,28 +276,33 @@ impl BlockProducer {
 
             self.last_submitted_block = self.submit_block_tx(block_number, tx.clone()).await?;
 
-            // fast sync new tx to local chain
-            // insert to chain
-            let mut chain = self.chain.lock().await;
+            // fast sync if last submit is success
+            if self.last_submitted_block.is_some() {
+                // fast sync new tx to local chain
+                let mut chain = self.chain.lock().await;
 
-            let (deposit_requests, deposit_asset_scripts) =
-                extract_deposit_requests(&self.rpc_client, self.generator.rollup_context(), &tx)
-                    .await?;
-            log::debug!("[block producer] fast path sync");
-            let t = Instant::now();
-            chain.sync(SyncParam::Update(UpdateAction::Local(LocalAction {
-                transaction: tx,
-                context: L1ActionContext::SubmitBlock {
-                    /// deposit requests
-                    l2block: block,
-                    deposit_requests,
-                    deposit_asset_scripts,
-                },
-            })))?;
-            log::info!(
-                "[block produce] complete fast path sync {}ms",
-                t.elapsed().as_millis()
-            );
+                let (deposit_requests, deposit_asset_scripts) = extract_deposit_requests(
+                    &self.rpc_client,
+                    self.generator.rollup_context(),
+                    &tx,
+                )
+                .await?;
+                log::debug!("[block producer] fast path sync");
+                let t = Instant::now();
+                chain.sync(SyncParam::Update(UpdateAction::Local(LocalAction {
+                    transaction: tx,
+                    context: L1ActionContext::SubmitBlock {
+                        /// deposit requests
+                        l2block: block,
+                        deposit_requests,
+                        deposit_asset_scripts,
+                    },
+                })))?;
+                log::info!(
+                    "[block produce] complete fast path sync {}ms",
+                    t.elapsed().as_millis()
+                );
+            }
         }
         Ok(())
     }
