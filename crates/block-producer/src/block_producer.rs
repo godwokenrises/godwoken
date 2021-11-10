@@ -4,13 +4,13 @@ use crate::{
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
     test_mode_control::TestModeControl,
     types::ChainEvent,
-    utils,
+    utils::{self, extract_deposit_requests},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use ckb_types::prelude::Unpack as CKBUnpack;
 use futures::{future::select_all, FutureExt};
-use gw_chain::chain::{Chain, SyncEvent};
+use gw_chain::chain::{Chain, L1ActionContext, LocalAction, SyncEvent, SyncParam, UpdateAction};
 use gw_common::{h256_ext::H256Ext, H256};
 use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::Generator;
@@ -44,7 +44,7 @@ use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT: usize = 5;
@@ -254,13 +254,37 @@ impl BlockProducer {
                 }
             }
 
-            let (block_number, tx) = self.produce_next_block(median_time, rollup_cell).await?;
+            let (block_number, block, tx) =
+                self.produce_next_block(median_time, rollup_cell).await?;
             if expected_next_block_number != block_number {
                 log::warn!("produce unexpected next block, expect {} produce {}, wait until chain is synced to latest block", expected_next_block_number, block_number);
                 return Ok(());
             }
 
-            self.last_submitted_block = self.submit_block_tx(block_number, tx).await?;
+            self.last_submitted_block = self.submit_block_tx(block_number, tx.clone()).await?;
+
+            // fast sync new tx to local chain
+            // insert to chain
+            let mut chain = self.chain.lock().await;
+
+            let (deposit_requests, deposit_asset_scripts) =
+                extract_deposit_requests(&self.rpc_client, &self.generator.rollup_context(), &tx)
+                    .await?;
+            log::debug!("[block producer] fast path sync");
+            let t = Instant::now();
+            chain.sync(SyncParam::Update(UpdateAction::Local(LocalAction {
+                transaction: tx,
+                context: L1ActionContext::SubmitBlock {
+                    /// deposit requests
+                    l2block: block,
+                    deposit_requests,
+                    deposit_asset_scripts,
+                },
+            })))?;
+            log::info!(
+                "[block produce] complete fast path sync {}ms",
+                t.elapsed().as_millis()
+            );
         }
         Ok(())
     }
@@ -269,7 +293,7 @@ impl BlockProducer {
         &mut self,
         median_time: Duration,
         rollup_cell: CellInfo,
-    ) -> Result<(u64, Transaction)> {
+    ) -> Result<(u64, L2Block, Transaction)> {
         if let Some(ref tests_control) = self.tests_control {
             match tests_control.payload().await {
                 Some(TestModePayload::None) => tests_control.clear_none().await?,
@@ -337,7 +361,7 @@ impl BlockProducer {
                 .complete_tx_skeleton(
                     deposit_cells,
                     finalized_custodians,
-                    block,
+                    block.clone(),
                     global_state,
                     median_time,
                     rollup_cell.clone(),
@@ -356,7 +380,7 @@ impl BlockProducer {
             };
 
             if tx.as_slice().len() <= MAX_BLOCK_BYTES as usize {
-                return Ok((number, tx));
+                return Ok((number, block, tx));
             }
 
             retry_count += 1;

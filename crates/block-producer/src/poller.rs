@@ -1,12 +1,15 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::{types::ChainEvent, utils::to_result};
+use crate::{
+    types::ChainEvent,
+    utils::{extract_deposit_requests, to_result},
+};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{Params as ClientParams, Transport};
 use ckb_fixed_hash::H256;
 use gw_chain::chain::{
-    Chain, ChallengeCell, L1Action, L1ActionContext, RevertL1ActionContext, RevertedL1Action,
-    SyncParam,
+    Chain, ChallengeCell, L1Action, L1ActionContext, RevertL1ActionContext, RevertedAction,
+    RevertedL1Action, RevertedLocalAction, SyncParam, UpdateAction,
 };
 use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, TransactionWithStatus, Uint32};
 use gw_rpc_client::{
@@ -71,40 +74,38 @@ impl ChainUpdater {
         }
 
         // Check l1 fork
-        let local_tip_committed_info = {
-            self.chain
-                .lock()
-                .await
-                .local_state()
-                .last_synced()
-                .to_owned()
+        let local_last_committed_info = {
+            let chain = self.chain.lock().await;
+            match chain.local_state().last_synced().to_owned() {
+                Some(last_synced) => last_synced,
+                None => {
+                    let db = chain.store().begin_transaction();
+                    db.get_l2block_committed_info(
+                        &chain.local_state().tip().raw().parent_block_hash().unpack(),
+                    )?
+                    .expect("last committed info")
+                }
+            }
         };
-        if !self.find_l2block_on_l1(local_tip_committed_info).await? {
+        if !self.find_l2block_on_l1(local_last_committed_info).await? {
             self.revert_to_valid_tip_on_l1().await?;
 
-            let (
-                local_tip_block_number,
-                local_tip_block_hash,
-                committed_l1_block_number,
-                committed_l1_block_hash,
-            ) = {
+            let (local_tip_block_number, local_tip_block_hash, local_tip_committed_info) = {
                 let chain = self.chain.lock().await;
                 let local_tip_block = chain.local_state().tip().raw();
-                let local_tip_committed_info = chain.local_state().last_synced();
+                let local_tip_committed_info = chain.local_state().last_synced().to_owned();
                 (
                     Unpack::<u64>::unpack(&local_tip_block.number()),
                     Into::<ckb_types::H256>::into(local_tip_block.hash()),
-                    Unpack::<u64>::unpack(&local_tip_committed_info.number()),
-                    ckb_types::H256(local_tip_committed_info.block_hash().unpack()),
+                    local_tip_committed_info,
                 )
             };
 
             log::warn!(
-                "revert to l2 block number {} hash {} on l1 block number {} hash {}",
+                "revert to l2 block number {} hash {} on l1 {:?}",
                 local_tip_block_number,
                 local_tip_block_hash,
-                committed_l1_block_number,
-                committed_l1_block_hash
+                local_tip_committed_info
             );
         }
 
@@ -113,21 +114,47 @@ impl ChainUpdater {
         // Double check that we are synced to latest block
         // TODO: remove
         if let Some(rollup_cell) = self.rpc_client.query_rollup_cell().await? {
-            let local_tip_block_number: u64 = {
+            let (local_tip_block_number, is_pending): (u64, bool) = {
                 let chain = self.chain.lock().await;
-                chain.local_state().tip().raw().number().unpack()
+                (
+                    chain.local_state().tip().raw().number().unpack(),
+                    chain.local_state().is_pending(),
+                )
             };
             let tip_block_number = {
                 let global_state = global_state_from_slice(&rollup_cell.data)?;
                 Unpack::<u64>::unpack(&global_state.block().count()).saturating_sub(1)
             };
-            assert!(tip_block_number >= local_tip_block_number);
 
-            if local_tip_block_number.saturating_add(1) == tip_block_number {
-                log::info!("single update to latest l2 block {}", tip_block_number);
+            if is_pending {
+                assert!(
+                    tip_block_number >= local_tip_block_number.saturating_sub(1),
+                    "tip: {}, local tip: {}",
+                    tip_block_number,
+                    local_tip_block_number
+                );
 
-                let tx_hash = rollup_cell.out_point.tx_hash().unpack();
-                self.update_single(&tx_hash).await?;
+                // the new block is potentially a pending block
+                if local_tip_block_number == tip_block_number {
+                    log::info!("single update to latest l2 block {}", tip_block_number);
+
+                    let tx_hash = rollup_cell.out_point.tx_hash().unpack();
+                    self.update_single(&tx_hash).await?;
+                }
+            } else {
+                assert!(
+                    tip_block_number >= local_tip_block_number,
+                    "tip: {}, local tip: {}",
+                    tip_block_number,
+                    local_tip_block_number
+                );
+
+                if local_tip_block_number.saturating_add(1) == tip_block_number {
+                    log::info!("single update to latest l2 block {}", tip_block_number);
+
+                    let tx_hash = rollup_cell.out_point.tx_hash().unpack();
+                    self.update_single(&tx_hash).await?;
+                }
             }
         }
 
@@ -143,7 +170,19 @@ impl ChainUpdater {
         let valid_tip_l1_block_number = {
             let chain = self.chain.lock().await;
             let local_tip_block: u64 = chain.local_state().tip().raw().number().unpack();
-            let local_committed_l1_block: u64 = chain.local_state().last_synced().number().unpack();
+            let local_committed_l1_block: u64 = match chain.local_state().last_synced() {
+                Some(last_synced) => last_synced.number().unpack(),
+                None => {
+                    // pending block, return it's parent's committed info
+                    let db = chain.store().begin_transaction();
+                    let committed_info = db
+                        .get_l2block_committed_info(
+                            &chain.local_state().tip().raw().parent_block_hash().unpack(),
+                        )?
+                        .expect("get parent committed info");
+                    committed_info.number().unpack()
+                }
+            };
 
             log::debug!(
                 "try sync from l2 block {} (l1 block {})",
@@ -256,7 +295,8 @@ impl ChainUpdater {
         let rollup_action = self.extract_rollup_action(&tx)?;
         let context = match rollup_action.to_enum() {
             RollupActionUnion::RollupSubmitBlock(submitted) => {
-                let (requests, asset_type_scripts) = self.extract_deposit_requests(&tx).await?;
+                let (requests, asset_type_scripts) =
+                    extract_deposit_requests(&self.rpc_client, &self.rollup_context, &tx).await?;
 
                 L1ActionContext::SubmitBlock {
                     l2block: submitted.block(),
@@ -288,11 +328,10 @@ impl ChainUpdater {
             l2block_committed_info,
             context,
         };
-        let sync_param = SyncParam {
-            reverts: vec![],
-            updates: vec![update],
-        };
-        self.chain.lock().await.sync(sync_param)?;
+        self.chain
+            .lock()
+            .await
+            .sync(SyncParam::Update(UpdateAction::L1(update)))?;
 
         // TODO sync missed block
         match &self.web3_indexer {
@@ -331,23 +370,29 @@ impl ChainUpdater {
         let last_valid_tip_global_state = db
             .get_block_post_global_state(&last_valid_tip_block_hash)?
             .expect("valid tip global status should exists");
-        let last_valid_tip_committed_info = db
-            .get_l2block_committed_info(&last_valid_tip_block_hash)?
-            .expect("valid tip committed info should exists");
-        let rewind_to_last_valid_tip = RevertedL1Action {
-            prev_global_state: last_valid_tip_global_state,
-            l2block_committed_info: last_valid_tip_committed_info.clone(),
-            context: RevertL1ActionContext::RewindToLastValidTip,
+        let last_valid_tip_committed_info_opt =
+            db.get_l2block_committed_info(&last_valid_tip_block_hash)?;
+        let rewind_to_last_valid_tip = match last_valid_tip_committed_info_opt.clone() {
+            Some(last_valid_tip_committed_info) => RevertedAction::L1(RevertedL1Action {
+                prev_global_state: last_valid_tip_global_state,
+                l2block_committed_info: last_valid_tip_committed_info.clone(),
+                context: RevertL1ActionContext::RewindToLastValidTip,
+            }),
+            None => RevertedAction::Local(RevertedLocalAction {
+                prev_global_state: last_valid_tip_global_state,
+                context: RevertL1ActionContext::RewindToLastValidTip,
+            }),
         };
         revert_l1_actions.push(rewind_to_last_valid_tip);
 
         // Revert until last valid block on l1 found
-        let mut local_valid_committed_info = last_valid_tip_committed_info;
+        let mut local_valid_committed_info_opt = last_valid_tip_committed_info_opt;
         let mut local_valid_block = db.get_last_valid_tip_block()?;
         loop {
-            if self
-                .find_l2block_on_l1(local_valid_committed_info.clone())
-                .await?
+            if local_valid_committed_info_opt.is_some()
+                && self
+                    .find_l2block_on_l1(local_valid_committed_info_opt.clone().unwrap())
+                    .await?
             {
                 break;
             }
@@ -360,25 +405,38 @@ impl ChainUpdater {
             let parent_valid_committed_info = db
                 .get_l2block_committed_info(&parent_valid_block_hash.into())?
                 .expect("valid block l2 committed info should exists");
-            let revert_submit_valid_block = RevertedL1Action {
-                prev_global_state: parent_valid_global_state,
-                l2block_committed_info: parent_valid_committed_info.clone(),
-                context: RevertL1ActionContext::SubmitValidBlock {
-                    l2block: local_valid_block,
-                },
+
+            let block_is_committed = local_valid_committed_info_opt.is_some();
+
+            let revert_submit_valid_block = if block_is_committed {
+                // revert committed block
+                RevertedAction::L1(RevertedL1Action {
+                    prev_global_state: parent_valid_global_state,
+                    l2block_committed_info: parent_valid_committed_info.clone(),
+                    context: RevertL1ActionContext::SubmitValidBlock {
+                        l2block: local_valid_block,
+                    },
+                })
+            } else {
+                // revert pending block
+                RevertedAction::Local(RevertedLocalAction {
+                    prev_global_state: parent_valid_global_state,
+                    context: RevertL1ActionContext::SubmitValidBlock {
+                        l2block: local_valid_block,
+                    },
+                })
             };
             revert_l1_actions.push(revert_submit_valid_block);
 
-            local_valid_committed_info = parent_valid_committed_info;
+            local_valid_committed_info_opt = Some(parent_valid_committed_info);
             local_valid_block = db
                 .get_block(&parent_valid_block_hash.into())?
                 .expect("valid block should exists");
         }
 
-        self.chain.lock().await.sync(SyncParam {
-            reverts: revert_l1_actions,
-            updates: vec![],
-        })?;
+        for action in revert_l1_actions {
+            self.chain.lock().await.sync(SyncParam::Revert(action))?;
+        }
 
         // Also revert last tx hash
         let local_tip_committed_info = db
@@ -470,98 +528,4 @@ impl ChainUpdater {
 
         unreachable!("challenge output not found");
     }
-
-    async fn extract_deposit_requests(
-        &self,
-        tx: &Transaction,
-    ) -> Result<(Vec<DepositRequest>, HashSet<Script>)> {
-        let mut results = vec![];
-        let mut asset_type_scripts = HashSet::new();
-        for input in tx.raw().inputs().into_iter() {
-            // Load cell denoted by the transaction input
-            let tx_hash: H256 = input.previous_output().tx_hash().unpack();
-            let index = input.previous_output().index().unpack();
-            let tx: Option<TransactionWithStatus> = to_result(
-                self.rpc_client
-                    .ckb
-                    .request(
-                        "get_transaction",
-                        Some(ClientParams::Array(vec![json!(tx_hash)])),
-                    )
-                    .await?,
-            )?;
-            let tx_with_status =
-                tx.ok_or_else(|| anyhow::anyhow!("Cannot locate transaction: {:x}", tx_hash))?;
-            let tx = {
-                let tx: ckb_types::packed::Transaction = tx_with_status.transaction.inner.into();
-                Transaction::new_unchecked(tx.as_bytes())
-            };
-            let cell_output = tx
-                .raw()
-                .outputs()
-                .get(index)
-                .ok_or_else(|| anyhow::anyhow!("OutPoint index out of bound"))?;
-            let cell_data = tx
-                .raw()
-                .outputs_data()
-                .get(index)
-                .ok_or_else(|| anyhow::anyhow!("OutPoint index out of bound"))?;
-
-            // Check if loaded cell is a deposit request
-            if let Some(deposit_request) =
-                try_parse_deposit_request(&cell_output, &cell_data.unpack(), &self.rollup_context)
-            {
-                results.push(deposit_request);
-                if let Some(type_) = &cell_output.type_().to_opt() {
-                    asset_type_scripts.insert(type_.clone());
-                }
-            }
-        }
-        Ok((results, asset_type_scripts))
-    }
-}
-
-fn try_parse_deposit_request(
-    cell_output: &CellOutput,
-    cell_data: &Bytes,
-    rollup_context: &RollupContext,
-) -> Option<DepositRequest> {
-    if cell_output.lock().code_hash() != rollup_context.rollup_config.deposit_script_type_hash()
-        || cell_output.lock().hash_type() != ScriptHashType::Type.into()
-    {
-        return None;
-    }
-    let args = cell_output.lock().args().raw_data();
-    if args.len() < 32 {
-        return None;
-    }
-    let rollup_type_script_hash: [u8; 32] = rollup_context.rollup_script_hash.into();
-    if args.slice(0..32) != rollup_type_script_hash[..] {
-        return None;
-    }
-    let lock_args = match DepositLockArgs::from_slice(&args.slice(32..)) {
-        Ok(lock_args) => lock_args,
-        Err(_) => return None,
-    };
-    // NOTE: In readoly mode, we are only loading on chain data here, timeout validation
-    // can be skipped. For generator part, timeout validation needs to be introduced.
-    let (amount, sudt_script_hash) = match cell_output.type_().to_opt() {
-        Some(script) => {
-            if cell_data.len() < 16 {
-                return None;
-            }
-            let mut data = [0u8; 16];
-            data.copy_from_slice(&cell_data[0..16]);
-            (u128::from_le_bytes(data), script.hash())
-        }
-        None => (0u128, [0u8; 32]),
-    };
-    let capacity: u64 = cell_output.capacity().unpack();
-    let deposit_request = DepositRequest::new_builder()
-        .capacity(capacity.pack())
-        .amount(amount.pack())
-        .sudt_script_hash(sudt_script_hash.pack())
-        .script(lock_args.layer2_lock())
-        .build();
-    Some(deposit_request)
 }

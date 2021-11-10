@@ -24,7 +24,7 @@ use gw_types::{
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
 use smol::lock::Mutex;
-use std::{collections::HashSet, convert::TryFrom, sync::Arc};
+use std::{collections::HashSet, convert::TryFrom, hash::Hash, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub struct ChallengeCell {
@@ -35,11 +35,11 @@ pub struct ChallengeCell {
 
 /// sync params
 #[derive(Clone)]
-pub struct SyncParam {
-    /// contains transitions from tip to fork point
-    pub reverts: Vec<RevertedL1Action>,
+pub enum SyncParam {
     /// contains transitions from fork point to new tips
-    pub updates: Vec<L1Action>,
+    Update(UpdateAction),
+    /// contains transitions from tip to fork point
+    Revert(RevertedAction),
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +61,21 @@ pub enum L1ActionContext {
     },
 }
 
+#[derive(Clone)]
+pub enum UpdateAction {
+    // layer1 update
+    L1(L1Action),
+    // local fast update
+    Local(LocalAction),
+}
+
+#[derive(Debug, Clone)]
+pub struct LocalAction {
+    /// transaction
+    pub transaction: Transaction,
+    pub context: L1ActionContext,
+}
+
 #[derive(Debug, Clone)]
 pub struct L1Action {
     /// transaction
@@ -74,6 +89,21 @@ pub struct L1Action {
 pub enum RevertL1ActionContext {
     SubmitValidBlock { l2block: L2Block },
     RewindToLastValidTip,
+}
+
+#[derive(Clone)]
+pub enum RevertedAction {
+    // layer1 update
+    L1(RevertedL1Action),
+    // local fast update
+    Local(RevertedLocalAction),
+}
+
+#[derive(Debug, Clone)]
+pub struct RevertedLocalAction {
+    /// input global state
+    pub prev_global_state: GlobalState,
+    pub context: RevertL1ActionContext,
 }
 
 #[derive(Debug, Clone)]
@@ -117,7 +147,7 @@ pub type StateStore = sparse_merkle_tree::default_store::DefaultStore<sparse_mer
 
 pub struct LocalState {
     tip: L2Block,
-    last_synced: L2BlockCommittedInfo,
+    last_synced: Option<L2BlockCommittedInfo>,
     last_global_state: GlobalState,
 }
 
@@ -131,12 +161,16 @@ impl LocalState {
         Status::try_from(status).expect("invalid status")
     }
 
-    pub fn last_synced(&self) -> &L2BlockCommittedInfo {
+    pub fn last_synced(&self) -> &Option<L2BlockCommittedInfo> {
         &self.last_synced
     }
 
     pub fn last_global_state(&self) -> &GlobalState {
         &self.last_global_state
+    }
+
+    pub fn is_pending(&self) -> bool {
+        self.last_synced.is_none()
     }
 }
 
@@ -174,10 +208,10 @@ impl Chain {
             chain_id, rollup_type_script_hash,
             "Database chain_id must equals to rollup_script_hash"
         );
+
+        // resume pending block
         let tip = store.get_tip_block()?;
-        let last_synced = store
-            .get_l2block_committed_info(&tip.hash().into())?
-            .ok_or_else(|| anyhow!("can't find last synced committed info"))?;
+        let last_synced = store.get_l2block_committed_info(&tip.hash().into())?;
         let last_global_state = store
             .get_block_post_global_state(&tip.hash().into())?
             .ok_or_else(|| anyhow!("can't find last global state"))?;
@@ -293,30 +327,44 @@ impl Chain {
         )
     }
 
-    /// update a layer1 action
-    fn update_l1action(&mut self, db: &StoreTransaction, action: L1Action) -> Result<()> {
-        let L1Action {
-            transaction,
-            l2block_committed_info,
-            context,
-        } = action;
+    /// apply an action
+    fn apply_action(&mut self, db: &StoreTransaction, update: UpdateAction) -> Result<()> {
+        let (transaction, context) = match &update {
+            UpdateAction::L1(L1Action {
+                transaction,
+                l2block_committed_info,
+                context,
+            }) => {
+                assert!(
+                    {
+                        let number: u64 = l2block_committed_info.number().unpack();
+                        number
+                    } >= {
+                        let number: u64 = self
+                            .local_state
+                            .last_synced
+                            .as_ref()
+                            .expect("layer1 committed")
+                            .number()
+                            .unpack();
+                        number
+                    },
+                    "must be greater than or equalled to last synced number"
+                );
+                (transaction, context)
+            }
+            UpdateAction::Local(LocalAction {
+                transaction,
+                context,
+            }) => (transaction, context),
+        };
         let global_state = parse_global_state(&transaction, &self.rollup_type_script_hash)?;
-        assert!(
-            {
-                let number: u64 = l2block_committed_info.number().unpack();
-                number
-            } >= {
-                let number: u64 = self.local_state.last_synced.number().unpack();
-                number
-            },
-            "must be greater than or equalled to last synced number"
-        );
         let status = {
             let status: u8 = self.local_state.last_global_state.status().into();
             Status::try_from(status).expect("invalid status")
         };
 
-        let update = || -> Result<SyncEvent> {
+        let mut apply_update = || -> Result<SyncEvent> {
             match (status, context) {
                 (
                     Status::Running,
@@ -345,55 +393,103 @@ impl Chain {
                         self.challenge_target = challenge_target;
                     }
 
-                    if let Some(ref target) = self.challenge_target {
-                        db.insert_bad_block(&l2block, &l2block_committed_info, &global_state)?;
-                        log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
+                    match &update {
+                        UpdateAction::L1(L1Action {
+                            l2block_committed_info,
+                            ..
+                        }) => {
+                            if let Some(ref target) = self.challenge_target {
+                                db.insert_bad_block(
+                                    &l2block,
+                                    &l2block_committed_info,
+                                    &global_state,
+                                )?;
+                                log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
 
-                        let global_block_root: H256 = global_state.block().merkle_root().unpack();
-                        let local_block_root = db.get_block_smt_root()?;
-                        assert_eq!(local_block_root, global_block_root, "block root fork");
+                                let global_block_root: H256 =
+                                    global_state.block().merkle_root().unpack();
+                                let local_block_root = db.get_block_smt_root()?;
+                                assert_eq!(local_block_root, global_block_root, "block root fork");
 
-                        self.local_state.tip = l2block;
+                                self.local_state.tip = l2block.to_owned();
 
-                        let context =
-                            gw_challenge::context::build_challenge_context(db, target.to_owned())?;
-                        return Ok(SyncEvent::BadBlock { context });
+                                let context = gw_challenge::context::build_challenge_context(
+                                    db,
+                                    target.to_owned(),
+                                )?;
+                                return Ok(SyncEvent::BadBlock { context });
+                            }
+                        }
+                        UpdateAction::Local(LocalAction { .. }) => {
+                            assert!(
+                                self.challenge_target.is_none(),
+                                "Shouldn't produce new local block if a bad block is found"
+                            );
+                        }
                     }
 
-                    if let Some(challenge_target) = self.process_block(
+                    match self.process_block(
                         db,
                         l2block.clone(),
-                        l2block_committed_info.clone(),
                         global_state.clone(),
-                        deposit_requests,
-                        deposit_asset_scripts,
+                        deposit_requests.to_owned(),
+                        deposit_asset_scripts.to_owned(),
                     )? {
-                        db.rollback()?;
-                        log::warn!("bad block found, rollback db");
+                        Some(challenge_target) => {
+                            db.rollback()?;
+                            log::warn!("bad block found, rollback db");
 
-                        db.insert_bad_block(&l2block, &l2block_committed_info, &global_state)?;
-                        log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
+                            let l2block_committed_info = match &update {
+                                UpdateAction::L1(L1Action {
+                                    l2block_committed_info,
+                                    ..
+                                }) => l2block_committed_info,
+                                UpdateAction::Local(..) => {
+                                    panic!("Local block is bad");
+                                }
+                            };
 
-                        let global_block_root: H256 = global_state.block().merkle_root().unpack();
-                        let local_block_root = db.get_block_smt_root()?;
-                        assert_eq!(local_block_root, global_block_root, "block root fork");
+                            db.insert_bad_block(&l2block, &l2block_committed_info, &global_state)?;
+                            log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
 
-                        assert!(self.challenge_target.is_none());
-                        db.set_bad_block_challenge_target(
-                            &l2block.hash().into(),
-                            &challenge_target,
-                        )?;
-                        self.challenge_target = Some(challenge_target.clone());
-                        self.local_state.tip = l2block;
+                            let global_block_root: H256 =
+                                global_state.block().merkle_root().unpack();
+                            let local_block_root = db.get_block_smt_root()?;
+                            assert_eq!(local_block_root, global_block_root, "block root fork");
 
-                        let context =
-                            gw_challenge::context::build_challenge_context(db, challenge_target)?;
-                        Ok(SyncEvent::BadBlock { context })
-                    } else {
-                        let block_number = l2block.raw().number().unpack();
-                        log::info!("sync new block #{} success", block_number);
+                            assert!(self.challenge_target.is_none());
+                            db.set_bad_block_challenge_target(
+                                &l2block.hash().into(),
+                                &challenge_target,
+                            )?;
+                            self.challenge_target = Some(challenge_target.clone());
+                            self.local_state.tip = l2block.to_owned();
 
-                        Ok(SyncEvent::Success)
+                            let context = gw_challenge::context::build_challenge_context(
+                                db,
+                                challenge_target,
+                            )?;
+                            Ok(SyncEvent::BadBlock { context })
+                        }
+                        None => {
+                            // process is successed
+                            self.local_state.tip = l2block.to_owned();
+                            // insert block committed info if update is from layer1
+                            if let UpdateAction::L1(L1Action {
+                                l2block_committed_info,
+                                ..
+                            }) = &update
+                            {
+                                db.insert_block_committed_info(
+                                    &l2block.hash().into(),
+                                    l2block_committed_info.to_owned(),
+                                )?;
+                            }
+                            let block_number = l2block.raw().number().unpack();
+                            log::info!("sync new block #{} success", block_number);
+
+                            Ok(SyncEvent::Success)
+                        }
                     }
                 }
                 (
@@ -434,7 +530,10 @@ impl Chain {
                             generator, db, &target,
                         )?);
 
-                        return Ok(SyncEvent::BadChallenge { cell, context });
+                        return Ok(SyncEvent::BadChallenge {
+                            cell: cell.to_owned(),
+                            context,
+                        });
                     }
 
                     if self.challenge_target.is_none()
@@ -454,7 +553,10 @@ impl Chain {
                     db.rollback()?;
                     log::info!("rollback db after prepare context for revert");
 
-                    Ok(SyncEvent::WaitChallenge { cell, context })
+                    Ok(SyncEvent::WaitChallenge {
+                        cell: cell.to_owned(),
+                        context,
+                    })
                 }
                 (Status::Halting, L1ActionContext::CancelChallenge) => {
                     let status: u8 = global_state.status().into();
@@ -464,17 +566,11 @@ impl Chain {
                     match self.challenge_target {
                         // Previous challenge miss right target, we should challenge it
                         Some(ref target) => {
-                            // let context = gw_challenge::context::build_challenge_context(
-                            //     db,
-                            //     target.to_owned(),
-                            // )?;
-                            panic!(
-                                "found bad block after challenge cancelled: {}, index: {}, type: {:?}",
-                                target.block_hash(),
-                                target.target_index(),
-                                target.target_type()
-                            );
-                            // Ok(SyncEvent::BadBlock { context })
+                            let context = gw_challenge::context::build_challenge_context(
+                                db,
+                                target.to_owned(),
+                            )?;
+                            Ok(SyncEvent::BadBlock { context })
                         }
                         None => Ok(SyncEvent::Success),
                     }
@@ -571,17 +667,11 @@ impl Chain {
                     // If our bad block isn't reverted, just challenge it
                     match self.challenge_target {
                         Some(ref target) => {
-                            // let context = gw_challenge::context::build_challenge_context(
-                            //     db,
-                            //     target.to_owned(),
-                            // )?;
-                            panic!(
-                                "found bad block: {}, index: {}, type: {:?}",
-                                target.block_hash(),
-                                target.target_index(),
-                                target.target_type()
-                            );
-                            // Ok(SyncEvent::BadBlock { context })
+                            let context = gw_challenge::context::build_challenge_context(
+                                db,
+                                target.to_owned(),
+                            )?;
+                            Ok(SyncEvent::BadBlock { context })
                         }
                         None => Ok(SyncEvent::Success),
                     }
@@ -595,31 +685,55 @@ impl Chain {
             }
         };
 
-        self.last_sync_event = update()?;
+        self.last_sync_event = apply_update()?;
         self.local_state.last_global_state = global_state;
-        self.local_state.last_synced = l2block_committed_info;
+        match update {
+            UpdateAction::L1(L1Action {
+                l2block_committed_info,
+                ..
+            }) => {
+                self.local_state.last_synced = Some(l2block_committed_info);
+            }
+            UpdateAction::Local(..) => {
+                self.local_state.last_synced = None;
+            }
+        }
         log::debug!("last sync event {:?}", self.last_sync_event);
 
         Ok(())
     }
 
     /// revert a layer1 action
-    fn revert_l1action(&mut self, db: &StoreTransaction, action: RevertedL1Action) -> Result<()> {
-        let RevertedL1Action {
-            prev_global_state,
-            l2block_committed_info,
-            context,
-        } = action;
-        assert!(
-            {
-                let number: u64 = l2block_committed_info.number().unpack();
-                number
-            } <= {
-                let number: u64 = self.local_state.last_synced.number().unpack();
-                number
-            },
-            "must be smaller than or equalled to last synced number"
-        );
+    fn revert_action(&mut self, db: &StoreTransaction, action: RevertedAction) -> Result<()> {
+        let (prev_global_state, context) = match action {
+            RevertedAction::L1(RevertedL1Action {
+                prev_global_state,
+                l2block_committed_info,
+                context,
+            }) => {
+                assert!(
+                    {
+                        let number: u64 = l2block_committed_info.number().unpack();
+                        number
+                    } <= {
+                        let number: u64 = self
+                            .local_state
+                            .last_synced
+                            .as_ref()
+                            .expect("layer1 committed")
+                            .number()
+                            .unpack();
+                        number
+                    },
+                    "must be smaller than or equalled to last synced number"
+                );
+                (prev_global_state, context)
+            }
+            RevertedAction::Local(RevertedLocalAction {
+                prev_global_state,
+                context,
+            }) => (prev_global_state, context),
+        };
 
         let revert = || -> Result<()> {
             match context {
@@ -771,6 +885,7 @@ impl Chain {
                     // Rewind block smt to last valid tip in db
                     let mut current_block_hash: H256 =
                         local_state_global_state.tip_block_hash().unpack();
+
                     while current_block_hash != last_valid_tip_block_hash {
                         if current_block_hash == genesis_hash {
                             break;
@@ -799,30 +914,81 @@ impl Chain {
 
         self.local_state.last_global_state = prev_global_state;
         self.local_state.tip = db.get_tip_block()?;
-        self.local_state.last_synced = db
-            .get_l2block_committed_info(&db.get_tip_block_hash()?)?
-            .expect("last committed info");
+        self.local_state.last_synced = db.get_l2block_committed_info(&db.get_tip_block_hash()?)?;
+        Ok(())
+    }
+
+    fn update(&mut self, db: &StoreTransaction, update: UpdateAction) -> Result<()> {
+        match &update {
+            UpdateAction::L1(L1Action {
+                l2block_committed_info,
+                context,
+                ..
+            }) => {
+                // layer1 committed block
+                if self.local_state.is_pending() {
+                    // check fast path
+                    if let L1ActionContext::SubmitBlock { l2block, .. } = context {
+                        let pending_block_hash = self.local_state.tip.hash();
+                        if l2block.hash() == pending_block_hash {
+                            // fast sync
+                            db.insert_block_committed_info(
+                                &pending_block_hash.into(),
+                                l2block_committed_info.to_owned(),
+                            )?;
+                            self.local_state.last_synced = Some(l2block_committed_info.to_owned());
+                            return Ok(());
+                        }
+                    }
+                    // failed fast path, revert pending block
+                    let prev_global_state = db
+                        .get_block_post_global_state(
+                            &self.local_state.tip.raw().parent_block_hash().unpack(),
+                        )?
+                        .expect("parent global state");
+                    self.revert_action(
+                        db,
+                        RevertedAction::Local(RevertedLocalAction {
+                            prev_global_state,
+                            context: RevertL1ActionContext::SubmitValidBlock {
+                                l2block: self.local_state.tip.to_owned(),
+                            },
+                        }),
+                    )?;
+                    // then apply new l1 block
+                    self.apply_action(db, update)?;
+                } else {
+                    // update
+                    self.apply_action(db, update)?;
+                }
+            }
+            UpdateAction::Local(..) => {
+                // fast path - block from local block-producer
+                if self.local_state().is_pending() {
+                    return Err(anyhow!(
+                        "Already has a local pending block, waiting for it committed"
+                    ));
+                }
+                // layer1 update
+                self.apply_action(db, update)?;
+            }
+        }
         Ok(())
     }
 
     /// Sync chain from layer1
     pub fn sync(&mut self, param: SyncParam) -> Result<()> {
         let db = self.store.begin_transaction();
-        let is_revert_happend = !param.reverts.is_empty();
-        // revert layer1 actions
-        if !param.reverts.is_empty() {
-            // revert
-            for reverted_action in param.reverts {
-                self.revert_l1action(&db, reverted_action)?;
+        let mut is_revert_happend = false;
+        match param {
+            SyncParam::Update(action) => {
+                // update layer1 actions
+                self.update(&db, action)?;
             }
-        }
-
-        // update layer1 actions
-        for action in param.updates {
-            self.update_l1action(&db, action)?;
-            match self.last_sync_event() {
-                SyncEvent::Success => (),
-                _ => db.commit()?,
+            SyncParam::Revert(reverted_action) => {
+                // revert layer1 actions
+                self.revert_action(&db, reverted_action)?;
+                is_revert_happend = true;
             }
         }
 
@@ -866,7 +1032,6 @@ impl Chain {
         &mut self,
         db: &StoreTransaction,
         l2block: L2Block,
-        l2block_committed_info: L2BlockCommittedInfo,
         global_state: GlobalState,
         deposit_requests: Vec<DepositRequest>,
         deposit_asset_scripts: HashSet<Script>,
@@ -932,7 +1097,6 @@ impl Chain {
         // update chain
         db.insert_block(
             l2block.clone(),
-            l2block_committed_info,
             global_state,
             withdrawal_receipts,
             prev_txs_state,
@@ -953,7 +1117,6 @@ impl Chain {
                 "post account merkle root must be consistent"
             );
         }
-        self.local_state.tip = l2block;
         Ok(None)
     }
 }
