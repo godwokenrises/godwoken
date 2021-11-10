@@ -30,7 +30,7 @@ use std::{fs, io::Read, path::PathBuf, sync::Arc};
 
 use super::mem_pool_provider::DummyMemPoolProvider;
 
-const SCRIPT_DIR: &str = "../../tests-deps/godwoken-scripts/build/debug";
+const SCRIPT_DIR: &str = "../../.tmp/binaries/godwoken-scripts";
 const ALWAYS_SUCCESS_PATH: &str = "always-success";
 
 lazy_static! {
@@ -54,14 +54,14 @@ lazy_static! {
 
 // meta contract
 pub const META_VALIDATOR_PATH: &str =
-    "../../tests-deps/godwoken-scripts/c/build/meta-contract-validator";
+    "../../.tmp/binaries/godwoken-scripts/meta-contract-validator";
 pub const META_GENERATOR_PATH: &str =
-    "../../tests-deps/godwoken-scripts/c/build/meta-contract-generator";
+    "../../.tmp/binaries/godwoken-scripts/meta-contract-generator";
 pub const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
 
 // simple UDT
-pub const SUDT_VALIDATOR_PATH: &str = "../../tests-deps/godwoken-scripts/c/build/sudt-validator";
-pub const SUDT_GENERATOR_PATH: &str = "../../tests-deps/godwoken-scripts/c/build/sudt-generator";
+pub const SUDT_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-validator";
+pub const SUDT_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-generator";
 
 pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
 
