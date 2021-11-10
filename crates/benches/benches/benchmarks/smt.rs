@@ -378,6 +378,7 @@ impl BenchExecutionEnvironment {
         };
 
         let prev_txs_state = genesis.as_reader().raw().post_account().to_entity();
+
         db.set_mem_block_account_smt_root(prev_txs_state.merkle_root().unpack())
             .unwrap();
         db.set_mem_block_account_count(prev_txs_state.count().unpack())
@@ -385,7 +386,6 @@ impl BenchExecutionEnvironment {
 
         db.insert_block(
             genesis.clone(),
-            Default::default(),
             global_state,
             Vec::new(),
             prev_txs_state,
@@ -394,6 +394,8 @@ impl BenchExecutionEnvironment {
         )
         .unwrap();
 
+        db.insert_block_committed_info(&genesis.hash().into(), Default::default())
+            .unwrap();
         db.attach_block(genesis).unwrap();
         db.commit().unwrap();
     }
