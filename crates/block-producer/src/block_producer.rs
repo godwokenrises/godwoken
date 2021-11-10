@@ -268,7 +268,7 @@ impl BlockProducer {
             let mut chain = self.chain.lock().await;
 
             let (deposit_requests, deposit_asset_scripts) =
-                extract_deposit_requests(&self.rpc_client, &self.generator.rollup_context(), &tx)
+                extract_deposit_requests(&self.rpc_client, self.generator.rollup_context(), &tx)
                     .await?;
             log::debug!("[block producer] fast path sync");
             let t = Instant::now();

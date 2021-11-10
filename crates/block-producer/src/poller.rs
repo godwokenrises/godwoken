@@ -21,16 +21,15 @@ use gw_types::{
     core::ScriptHashType,
     offchain::{global_state_from_slice, RollupContext, TxStatus},
     packed::{
-        CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositLockArgs,
-        DepositRequest, L2BlockCommittedInfo, OutPoint, RollupAction, RollupActionUnion, Script,
-        Transaction, WitnessArgs, WitnessArgsReader,
+        CellInput, ChallengeLockArgs, ChallengeLockArgsReader, L2BlockCommittedInfo, OutPoint,
+        RollupAction, RollupActionUnion, Script, Transaction, WitnessArgs, WitnessArgsReader,
     },
     prelude::*,
 };
 use gw_web3_indexer::indexer::Web3Indexer;
 use serde_json::json;
 use smol::lock::Mutex;
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 pub struct ChainUpdater {
     chain: Arc<Mutex<Chain>>,
@@ -375,7 +374,7 @@ impl ChainUpdater {
         let rewind_to_last_valid_tip = match last_valid_tip_committed_info_opt.clone() {
             Some(last_valid_tip_committed_info) => RevertedAction::L1(RevertedL1Action {
                 prev_global_state: last_valid_tip_global_state,
-                l2block_committed_info: last_valid_tip_committed_info.clone(),
+                l2block_committed_info: last_valid_tip_committed_info,
                 context: RevertL1ActionContext::RewindToLastValidTip,
             }),
             None => RevertedAction::Local(RevertedLocalAction {

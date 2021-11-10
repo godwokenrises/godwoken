@@ -2,7 +2,8 @@ use crate::testing_tool::chain::{
     build_sync_tx, construct_block, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
 };
 use gw_chain::chain::{
-    Chain, L1Action, L1ActionContext, RevertL1ActionContext, RevertedL1Action, SyncParam,
+    Chain, L1Action, L1ActionContext, RevertL1ActionContext, RevertedAction, RevertedL1Action,
+    SyncParam, UpdateAction,
 };
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
@@ -44,10 +45,7 @@ fn produce_a_block(
         transaction,
         l2block_committed_info,
     };
-    let param = SyncParam {
-        updates: vec![update],
-        reverts: Default::default(),
-    };
+    let param = SyncParam::Update(UpdateAction::L1(update));
     chain.sync(param.clone()).unwrap();
     assert!(chain.last_sync_event().is_success());
 
@@ -219,10 +217,7 @@ fn test_layer1_fork() {
             .number(1u64.pack())
             .build(),
     };
-    let param = SyncParam {
-        updates: vec![action1],
-        reverts: Default::default(),
-    };
+    let param = SyncParam::Update(UpdateAction::L1(action1));
     chain.sync(param).unwrap();
     assert!(chain.last_sync_event().is_success());
     // update block 2
@@ -255,10 +250,7 @@ fn test_layer1_fork() {
             .number(2u64.pack())
             .build(),
     };
-    let param = SyncParam {
-        updates: vec![action2],
-        reverts: Default::default(),
-    };
+    let param = SyncParam::Update(UpdateAction::L1(action2));
     chain.sync(param).unwrap();
     assert!(chain.last_sync_event().is_success());
     let tip_block = chain.store().get_tip_block().unwrap();
@@ -304,13 +296,15 @@ fn test_layer1_fork() {
             context,
         }
     };
-    let forks = vec![fork_action];
-
-    let param = SyncParam {
-        updates: forks,
-        reverts: vec![revert_action2, revert_action1],
-    };
-    chain.sync(param).unwrap();
+    chain
+        .sync(SyncParam::Revert(RevertedAction::L1(revert_action2)))
+        .unwrap();
+    chain
+        .sync(SyncParam::Revert(RevertedAction::L1(revert_action1)))
+        .unwrap();
+    chain
+        .sync(SyncParam::Update(UpdateAction::L1(fork_action)))
+        .unwrap();
     assert!(chain.last_sync_event().is_success());
 
     let tip_block = chain.store().get_tip_block().unwrap();
@@ -377,10 +371,7 @@ fn test_layer1_revert() {
             .number(1u64.pack())
             .build(),
     };
-    let param = SyncParam {
-        updates: vec![action1],
-        reverts: Default::default(),
-    };
+    let param = SyncParam::Update(UpdateAction::L1(action1));
     chain.sync(param).unwrap();
     assert!(chain.last_sync_event().is_success());
     // update block 2
@@ -413,10 +404,7 @@ fn test_layer1_revert() {
             .number(2u64.pack())
             .build(),
     };
-    let param = SyncParam {
-        updates: vec![action2.clone()],
-        reverts: Default::default(),
-    };
+    let param = SyncParam::Update(UpdateAction::L1(action2.clone()));
     chain.sync(param).unwrap();
     assert!(chain.last_sync_event().is_success());
     let tip_block = chain.store().get_tip_block().unwrap();
@@ -448,11 +436,11 @@ fn test_layer1_revert() {
         })
         .collect::<Vec<_>>();
 
-    let param = SyncParam {
-        updates: Default::default(),
-        reverts,
-    };
-    chain.sync(param).unwrap();
+    for revert in reverts {
+        chain
+            .sync(SyncParam::Revert(RevertedAction::L1(revert)))
+            .unwrap();
+    }
     assert!(chain.last_sync_event().is_success());
 
     let tip_block = chain.store().get_tip_block().unwrap();
@@ -489,11 +477,7 @@ fn test_layer1_revert() {
     }
 
     // execute block2 agnain
-    let updates = vec![action2];
-    let param = SyncParam {
-        updates,
-        reverts: Default::default(),
-    };
+    let param = SyncParam::Update(UpdateAction::L1(action2));
     chain.sync(param).unwrap();
     assert!(chain.last_sync_event().is_success());
 
