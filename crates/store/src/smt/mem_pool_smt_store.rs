@@ -1,5 +1,7 @@
 //! Implement SMTStore trait
 
+use std::collections::HashMap;
+
 use crate::{traits::KVStore, transaction::StoreTransaction};
 use gw_common::{
     sparse_merkle_tree::{
@@ -10,6 +12,7 @@ use gw_common::{
     H256,
 };
 use gw_types::{packed, prelude::*};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use super::Columns;
 
@@ -86,6 +89,20 @@ impl<'a> Store<H256> for MemPoolSMTStore<'a> {
         let mut leaf = [0u8; 32];
         leaf.copy_from_slice(leaf_slice.as_ref());
         Ok(Some(H256::from(leaf)))
+    }
+
+    fn prefetch_branches<'b>(
+        &self,
+        branch_keys: impl Iterator<Item = &'b BranchKey>,
+    ) -> Result<HashMap<BranchKey, BranchNode>, SMTError> {
+        let branch_keys = branch_keys.collect::<Vec<_>>();
+        let maybe_branches = branch_keys.par_iter().filter_map(|k| {
+            self.get_branch(k)
+                .transpose()
+                .map(|maybe| maybe.map(|n| ((*k).to_owned(), n)))
+        });
+        let branches = maybe_branches.collect::<Result<_, _>>()?;
+        Ok(branches)
     }
 
     fn insert_branch(&mut self, branch_key: BranchKey, branch: BranchNode) -> Result<(), SMTError> {
