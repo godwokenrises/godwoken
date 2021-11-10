@@ -2257,6 +2257,7 @@ dependencies = [
  "gw-traits",
  "gw-types",
  "log",
+ "rayon",
  "thiserror",
 ]
 
@@ -4337,7 +4338,7 @@ dependencies = [
 [[package]]
 name = "sparse-merkle-tree"
 version = "0.5.2"
-source = "git+https://github.com/zeroqn/sparse-merkle-tree?branch=pr-feat-add-update-all-function#e9d4be78a772b5c861b0c1ed73887064943da648"
+source = "git+https://github.com/zeroqn/sparse-merkle-tree?branch=pr-feat-add-update-all-function#82ed89b49b9220c6c25e9457ce873fe1f17c9ed6"
 dependencies = [
  "cfg-if 0.1.10",
 ]
