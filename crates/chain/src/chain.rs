@@ -149,6 +149,7 @@ pub struct LocalState {
     tip: L2Block,
     last_synced: Option<L2BlockCommittedInfo>,
     last_global_state: GlobalState,
+    last_pending_commit: Option<H256>,
 }
 
 impl LocalState {
@@ -167,6 +168,10 @@ impl LocalState {
 
     pub fn last_global_state(&self) -> &GlobalState {
         &self.last_global_state
+    }
+
+    pub fn last_pending_commit(&self) -> &Option<H256> {
+        &self.last_pending_commit
     }
 
     pub fn is_pending(&self) -> bool {
@@ -219,6 +224,7 @@ impl Chain {
             tip,
             last_synced,
             last_global_state,
+            last_pending_commit: None,
         };
         let rollup_config_hash = rollup_config.hash();
         let skipped_invalid_block_list = config
@@ -693,9 +699,11 @@ impl Chain {
                 ..
             }) => {
                 self.local_state.last_synced = Some(l2block_committed_info);
+                self.local_state.last_pending_commit = None;
             }
-            UpdateAction::Local(..) => {
+            UpdateAction::Local(LocalAction { transaction, .. }) => {
                 self.local_state.last_synced = None;
+                self.local_state.last_pending_commit = Some(transaction.hash().into());
             }
         }
         log::debug!("last sync event {:?}", self.last_sync_event);
@@ -915,6 +923,7 @@ impl Chain {
         self.local_state.last_global_state = prev_global_state;
         self.local_state.tip = db.get_tip_block()?;
         self.local_state.last_synced = db.get_l2block_committed_info(&db.get_tip_block_hash()?)?;
+        self.local_state.last_pending_commit = None;
         Ok(())
     }
 

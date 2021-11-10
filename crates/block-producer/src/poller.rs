@@ -73,20 +73,25 @@ impl ChainUpdater {
         }
 
         // Check l1 fork
-        let local_last_committed_info = {
+        let is_local_state_synced = {
             let chain = self.chain.lock().await;
             match chain.local_state().last_synced().to_owned() {
-                Some(last_synced) => last_synced,
+                Some(last_synced) => {
+                    drop(chain);
+                    self.find_l2block_on_l1(last_synced).await?
+                }
                 None => {
-                    let db = chain.store().begin_transaction();
-                    db.get_l2block_committed_info(
-                        &chain.local_state().tip().raw().parent_block_hash().unpack(),
-                    )?
-                    .expect("last committed info")
+                    let pending_tx_hash = chain
+                        .local_state()
+                        .last_pending_commit()
+                        .expect("pending commit")
+                        .to_owned();
+                    drop(chain);
+                    self.find_l2block_in_pool(pending_tx_hash).await?
                 }
             }
         };
-        if !self.find_l2block_on_l1(local_last_committed_info).await? {
+        if !is_local_state_synced {
             self.revert_to_valid_tip_on_l1().await?;
 
             let (local_tip_block_number, local_tip_block_hash, local_tip_committed_info) = {
@@ -344,6 +349,12 @@ impl ChainUpdater {
         }
 
         Ok(())
+    }
+
+    async fn find_l2block_in_pool(&self, tx_hash: gw_common::H256) -> Result<bool> {
+        let rpc_client = &self.rpc_client;
+        let tx_status = rpc_client.get_transaction_status(tx_hash).await?;
+        Ok(tx_status.is_some())
     }
 
     async fn find_l2block_on_l1(&self, committed_info: L2BlockCommittedInfo) -> Result<bool> {
