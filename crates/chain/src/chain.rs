@@ -24,7 +24,7 @@ use gw_types::{
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
 use smol::lock::Mutex;
-use std::{collections::HashSet, convert::TryFrom, hash::Hash, sync::Arc};
+use std::{collections::HashSet, convert::TryFrom, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub struct ChallengeCell {
@@ -358,7 +358,7 @@ impl Chain {
                 context,
             }) => (transaction, context),
         };
-        let global_state = parse_global_state(&transaction, &self.rollup_type_script_hash)?;
+        let global_state = parse_global_state(transaction, &self.rollup_type_script_hash)?;
         let status = {
             let status: u8 = self.local_state.last_global_state.status().into();
             Status::try_from(status).expect("invalid status")
@@ -400,8 +400,8 @@ impl Chain {
                         }) => {
                             if let Some(ref target) = self.challenge_target {
                                 db.insert_bad_block(
-                                    &l2block,
-                                    &l2block_committed_info,
+                                    l2block,
+                                    l2block_committed_info,
                                     &global_state,
                                 )?;
                                 log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
@@ -449,7 +449,7 @@ impl Chain {
                                 }
                             };
 
-                            db.insert_bad_block(&l2block, &l2block_committed_info, &global_state)?;
+                            db.insert_bad_block(l2block, l2block_committed_info, &global_state)?;
                             log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
 
                             let global_block_root: H256 =
@@ -527,7 +527,7 @@ impl Chain {
 
                         let generator = Arc::clone(&self.generator);
                         let context = Box::new(gw_challenge::context::build_verify_context(
-                            generator, db, &target,
+                            generator, db, target,
                         )?);
 
                         return Ok(SyncEvent::BadChallenge {
@@ -955,12 +955,9 @@ impl Chain {
                             },
                         }),
                     )?;
-                    // then apply new l1 block
-                    self.apply_action(db, update)?;
-                } else {
-                    // update
-                    self.apply_action(db, update)?;
                 }
+                // update
+                self.apply_action(db, update)?;
             }
             UpdateAction::Local(..) => {
                 // fast path - block from local block-producer
