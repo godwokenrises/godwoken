@@ -1,7 +1,7 @@
 #![allow(clippy::mutable_key_type)]
 
 use gw_block_producer::produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult};
-use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
+use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam, UpdateAction};
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BackendConfig, ChainConfig, GenesisConfig};
 use gw_generator::{
@@ -201,10 +201,7 @@ pub fn apply_block_result(
         transaction,
         l2block_committed_info,
     };
-    let param = SyncParam {
-        updates: vec![update],
-        reverts: Default::default(),
-    };
+    let param = SyncParam::Update(UpdateAction::L1(update));
     chain.sync(param).unwrap();
     assert!(chain.last_sync_event().is_success());
 }

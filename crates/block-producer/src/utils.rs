@@ -1,36 +1,23 @@
+#![allow(clippy::mutable_key_type)]
+
 use crate::debugger;
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::Output;
 use async_jsonrpc_client::{Params as ClientParams, Transport};
 use ckb_fixed_hash::H256;
-use gw_chain::chain::{
-    Chain, ChallengeCell, L1Action, L1ActionContext, RevertL1ActionContext, RevertedAction,
-    RevertedL1Action, SyncParam, UpdateAction,
-};
 use gw_config::DebugConfig;
 use gw_jsonrpc_types::ckb_jsonrpc_types::TransactionWithStatus;
-use gw_jsonrpc_types::ckb_jsonrpc_types::{BlockNumber, HeaderView, Uint32};
-use gw_rpc_client::indexer_types::{Order, Pagination, ScriptType, SearchKey, SearchKeyFilter, Tx};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::packed::{CellOutput, DepositRequest, Script, Transaction};
 use gw_types::{
-    bytes::Bytes,
-    core::ScriptHashType,
-    offchain::{global_state_from_slice, RollupContext, TxStatus},
-    packed::{
-        CellInput, ChallengeLockArgs, ChallengeLockArgsReader, DepositLockArgs,
-        L2BlockCommittedInfo, OutPoint, RollupAction, RollupActionUnion, WitnessArgs,
-        WitnessArgsReader,
-    },
+    bytes::Bytes, core::ScriptHashType, offchain::RollupContext, packed::DepositLockArgs,
     prelude::*,
 };
-use gw_web3_indexer::indexer::Web3Indexer;
 use serde::de::DeserializeOwned;
 use serde_json::from_value;
 use serde_json::json;
-use smol::lock::Mutex;
+use std::collections::HashSet;
 use std::path::Path;
-use std::{collections::HashSet, sync::Arc};
 
 // convert json output to result
 pub fn to_result<T: DeserializeOwned>(output: Output) -> Result<T> {
@@ -117,7 +104,7 @@ pub async fn extract_deposit_requests(
 
         // Check if loaded cell is a deposit request
         if let Some(deposit_request) =
-            try_parse_deposit_request(&cell_output, &cell_data.unpack(), &rollup_context)
+            try_parse_deposit_request(&cell_output, &cell_data.unpack(), rollup_context)
         {
             results.push(deposit_request);
             if let Some(type_) = &cell_output.type_().to_opt() {
