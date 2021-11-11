@@ -230,12 +230,20 @@ impl PoA {
         // if estimated time equals to last start time, we need to skip a round
         if let Some(last_start_time) = last_start_time {
             if estimated_time <= last_start_time {
-                log::debug!("modify estimated time {} last_start_time {} round intervals {} identities_len: {}", estimated_time.as_secs(), last_start_time.as_secs(), poa_setup.round_intervals, identities_len);
-                return estimated_time
+                let skip_rounds = (last_start_time
+                    .as_secs()
+                    .saturating_sub(estimated_time.as_secs())
+                    / poa_setup.round_intervals as u64)
+                    + 1;
+
+                let adjusted_time = estimated_time
                     .checked_add(Duration::from_secs(
-                        poa_setup.round_intervals as u64 * identities_len,
+                        poa_setup.round_intervals as u64 * identities_len * skip_rounds,
                     ))
                     .expect("next blocktime");
+                log::debug!("modify estimated time {} adjusted time {} skip rounds {} last_start_time {} round intervals {} identities_len: {}",
+                     estimated_time.as_secs(), adjusted_time.as_secs(), skip_rounds, last_start_time.as_secs(), poa_setup.round_intervals, identities_len);
+                return adjusted_time;
             }
         }
         estimated_time
