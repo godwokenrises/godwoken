@@ -200,12 +200,13 @@ impl BatchTxWithdrawalInBackground {
                         )
                     }
                 }
-                drop(mem_pool);
 
                 let t = Instant::now();
                 if let Err(err) = db.commit() {
                     log::error!("[mem-pool batch] fail to db commit, err: {}", err);
                 }
+                // hold mem pool to prevent DB write confliction
+                drop(mem_pool);
                 log::info!(
                     "[mem-pool batch] done, batch size: {}, total time: {}ms, DB commit time: {}ms",
                     batch_size,
