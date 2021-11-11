@@ -16,7 +16,7 @@ pub struct DummyMemPoolProvider {
 }
 
 impl MemPoolProvider for DummyMemPoolProvider {
-    fn estimate_next_blocktime(&self) -> Task<Result<Duration>> {
+    fn estimate_next_blocktime(&self, _: Option<Duration>) -> Task<Result<Duration>> {
         let fake_blocktime = self.fake_blocktime;
         smol::spawn(async move { Ok(fake_blocktime) })
     }
