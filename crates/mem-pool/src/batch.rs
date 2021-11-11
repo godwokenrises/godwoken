@@ -7,7 +7,7 @@ use smol::lock::Mutex;
 use crate::pool::{Inner, MemPool};
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[derive(thiserror::Error, Debug)]
 pub enum BatchError {
@@ -125,6 +125,19 @@ impl BatchTxWithdrawalInBackground {
         let mut batch = Vec::with_capacity(self.batch_size);
 
         loop {
+            // check mem block empty slots
+            loop {
+                if !self.batch_rx.is_empty() {
+                    let mem_pool = self.mem_pool.lock().await;
+                    // continue to batch process if we have enough mem block slots
+                    if !mem_pool.is_mem_txs_full(self.batch_size) {
+                        break;
+                    }
+                }
+                // sleep and try again
+                smol::Timer::after(Duration::from_millis(300)).await;
+            }
+
             // Wait until we have tx
             match self.batch_rx.recv().await {
                 Ok(tx) => batch.push(tx),
@@ -187,6 +200,7 @@ impl BatchTxWithdrawalInBackground {
                         )
                     }
                 }
+                drop(mem_pool);
 
                 let t = Instant::now();
                 if let Err(err) = db.commit() {
