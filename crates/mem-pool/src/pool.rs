@@ -494,8 +494,12 @@ impl MemPool {
             .txs()
             .iter()
             .map(|tx_hash| {
-                db.get_mem_pool_transaction(tx_hash)?
-                    .ok_or_else(|| anyhow!("can't find tx_hash from mem pool"))
+                db.get_mem_pool_transaction(tx_hash)?.ok_or_else(|| {
+                    anyhow!(
+                        "can't find tx_hash from mem pool {}",
+                        hex::encode(tx_hash.as_slice())
+                    )
+                })
             })
             .collect::<Result<_>>()?;
         let deposits = mem_block.deposits().to_vec();
