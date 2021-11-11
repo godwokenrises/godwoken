@@ -776,10 +776,19 @@ impl MemPool {
         );
 
         // estimate next l2block timestamp
-        let estimated_timestamp =
-            smol::block_on(self.inner.provider().estimate_next_blocktime(Some(
-                Duration::from_millis(self.mem_block.block_info().timestamp().unpack()),
-            )))?;
+        let previous_timestamp =
+            Duration::from_millis(self.mem_block.block_info().timestamp().unpack());
+        let estimated_timestamp = smol::block_on(
+            self.inner
+                .provider()
+                .estimate_next_blocktime(Some(previous_timestamp)),
+        )?;
+        assert!(
+            estimated_timestamp > previous_timestamp,
+            "estimated timestamp: {} previous timestamp: {}",
+            estimated_timestamp.as_millis(),
+            previous_timestamp.as_millis()
+        );
         // reset mem block state
         let merkle_state = new_tip_block.raw().post_account();
         let db = self.store.begin_transaction();
