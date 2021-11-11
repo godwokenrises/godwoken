@@ -125,6 +125,7 @@ pub fn setup_chain_with_account_lock_manage(
         account_lock_manage,
         rollup_context,
         Default::default(),
+        7000_0000,
     ));
     init_genesis(
         &store,
