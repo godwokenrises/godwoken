@@ -287,6 +287,10 @@ impl MemPool {
         self.inner.clone()
     }
 
+    pub fn is_mem_txs_full(&self, expect_slots: usize) -> bool {
+        self.mem_block.txs().len().saturating_add(expect_slots) > MAX_MEM_BLOCK_TXS
+    }
+
     pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send + Sync>) {
         self.inner.set_provider(provider);
     }
@@ -315,7 +319,7 @@ impl MemPool {
 
         // reject if mem block is full
         // TODO: we can use the pool as a buffer
-        if self.mem_block.txs().len() >= MAX_MEM_BLOCK_TXS {
+        if self.is_mem_txs_full(1) {
             return Err(anyhow!(
                 "Mem block is full, MAX_MEM_BLOCK_TXS: {}",
                 MAX_MEM_BLOCK_TXS
