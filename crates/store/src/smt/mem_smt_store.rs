@@ -53,20 +53,6 @@ impl<S: Store<H256>> Store<H256> for MemSMTStore<S> {
         }
     }
 
-    fn prefetch_branches<'b>(
-        &self,
-        branch_keys: impl Iterator<Item = &'b BranchKey>,
-    ) -> Result<HashMap<BranchKey, BranchNode>, SMTError> {
-        let branch_keys = branch_keys.collect::<Vec<_>>();
-        let maybe_branches = branch_keys.iter().filter_map(|k| {
-            self.get_branch(k)
-                .transpose()
-                .map(|maybe| maybe.map(|n| ((*k).to_owned(), n)))
-        });
-        let branches = maybe_branches.collect::<Result<_, _>>()?;
-        Ok(branches)
-    }
-
     fn insert_branch(&mut self, branch_key: BranchKey, branch: BranchNode) -> Result<(), SMTError> {
         self.mem_store
             .branches

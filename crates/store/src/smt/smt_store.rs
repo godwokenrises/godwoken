@@ -1,7 +1,5 @@
 //! Implement SMTStore trait
 
-use std::collections::HashMap;
-
 use crate::traits::KVStore;
 use gw_common::{
     sparse_merkle_tree::{
@@ -56,20 +54,6 @@ impl<'a, DB: KVStore> Store<H256> for SMTStore<'a, DB> {
             Some(_) => Err(SMTError::Store("get corrupted leaf".to_string())),
             None => Ok(None),
         }
-    }
-
-    fn prefetch_branches<'b>(
-        &self,
-        branch_keys: impl Iterator<Item = &'b BranchKey>,
-    ) -> Result<HashMap<BranchKey, BranchNode>, SMTError> {
-        let branch_keys = branch_keys.collect::<Vec<_>>();
-        let maybe_branches = branch_keys.iter().filter_map(|k| {
-            self.get_branch(k)
-                .transpose()
-                .map(|maybe| maybe.map(|n| ((*k).to_owned(), n)))
-        });
-        let branches = maybe_branches.collect::<Result<_, _>>()?;
-        Ok(branches)
     }
 
     fn insert_branch(&mut self, branch_key: BranchKey, branch: BranchNode) -> Result<(), SMTError> {
