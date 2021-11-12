@@ -1188,8 +1188,9 @@ impl MemPool {
             self.config.submit_l2tx_max_cycles,
         )?;
         log::debug!(
-            "[finalize tx] execute tx time: {}ms",
-            t.elapsed().as_millis()
+            "[finalize tx] execute tx time: {}ms cycles: {}",
+            t.elapsed().as_millis(),
+            run_result.used_cycles
         );
 
         if let Some(ref mut offchain_validator) = self.offchain_validator {
