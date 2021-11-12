@@ -23,7 +23,7 @@ max_write_buffer_size_to_maintain=-1
 
 [TableOptions/BlockBasedTable "default"]
 pin_l0_filter_and_index_blocks_in_cache=true
-block_size=16384
+cache_index_and_filter_blocks=true
 ```
 
 use db.toml in the godwoken config:
@@ -31,6 +31,5 @@ use db.toml in the godwoken config:
 [store]
 path = 'tuning_db/store.db'
 options_file = 'db.toml'
+cache_size = 1073741824
 ```
-
-Do not set **cache_index_and_filter_blocks=true**. That will cause a performance degradation.
