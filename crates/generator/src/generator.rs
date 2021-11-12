@@ -719,6 +719,7 @@ impl Generator {
             used_cycles = machine.machine.cycles();
         }
         // record used cycles
+        log::info!("run_result.used_cycles = {}", used_cycles);
         run_result.used_cycles = used_cycles;
         run_result.exit_code = exit_code;
 
