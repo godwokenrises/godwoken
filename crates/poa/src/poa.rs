@@ -229,22 +229,38 @@ impl PoA {
 
         // if estimated time equals to last start time, we need to skip a round
         if let Some(last_start_time) = last_start_time {
-            if estimated_time <= last_start_time {
-                let skip_rounds = (last_start_time
-                    .as_secs()
-                    .saturating_sub(estimated_time.as_secs())
-                    / poa_setup.round_intervals as u64)
-                    + 1;
+            if estimated_time > last_start_time {
+                // no need to adjust
+                return estimated_time;
+            }
 
-                let adjusted_time = estimated_time
+            let mut adjusted_time = estimated_time;
+
+            // padding rounds if estimated time is less than last
+            if estimated_time < last_start_time {
+                adjusted_time = estimated_time
                     .checked_add(Duration::from_secs(
-                        poa_setup.round_intervals as u64 * identities_len * skip_rounds,
+                        poa_setup.round_intervals as u64 * identities_len,
                     ))
                     .expect("next blocktime");
-                log::debug!("modify estimated time {} adjusted time {} skip rounds {} last_start_time {} round intervals {} identities_len: {}",
-                     estimated_time.as_secs(), adjusted_time.as_secs(), skip_rounds, last_start_time.as_secs(), poa_setup.round_intervals, identities_len);
-                return adjusted_time;
+
+                log::debug!("[POA] adjust estimate time estimated time {} adjusted time {} last_start_time {} round intervals {} identities_len: {}",
+                     estimated_time.as_secs(), adjusted_time.as_secs(), last_start_time.as_secs(), poa_setup.round_intervals, identities_len);
             }
+
+            // the adjusted time is expected newer than the last start time
+            // however, we add an error handling
+            if adjusted_time <= last_start_time {
+                log::warn!(
+                    "[POA] adjusted time ({}) <= last start time ({}), offset time by 1 sec",
+                    adjusted_time.as_millis(),
+                    last_start_time.as_millis()
+                );
+                adjusted_time = last_start_time
+                    .checked_add(Duration::from_secs(1))
+                    .expect("offset adjusted time by 1 sec");
+            }
+            return adjusted_time;
         }
         estimated_time
     }
