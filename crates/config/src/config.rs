@@ -184,7 +184,7 @@ impl Default for MemPoolConfig {
     fn default() -> Self {
         Self {
             execute_l2tx_max_cycles: 100_000_000,
-            submit_l2tx_max_cycles: 90_000_000,
+            submit_l2tx_max_cycles: 70_000_000,
         }
     }
 }
