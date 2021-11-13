@@ -20,10 +20,6 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
     - name: Install moleculec v0.7.2
       run: CARGO_TARGET_DIR=target/ cargo install moleculec --version 0.7.2
-    - name: Install capsule
-      env:
-        CAPSULE_VERSION: v0.7.0
-      run: curl -OL https://github.com/nervosnetwork/capsule/releases/download/${CAPSULE_VERSION}/capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz && tar xf capsule_${CAPSULE_VERSION}_x86_64-linux.tar.gz && echo `pwd`/capsule_${CAPSULE_VERSION}_x86_64-linux >> $GITHUB_PATH
     - name: Check format
       run: cargo fmt -- --check
     - name: Cargo clippy check
