@@ -61,11 +61,15 @@ impl SMTBranchNode {
         let flag = SMTMergeValueFlag::try_from(slice[0])?;
         let len = slice.len();
         match flag {
-            SMTMergeValueFlag::BothMergeWithZero if len == MAX_SMT_BRANCH_LEN => {}
-            SMTMergeValueFlag::BothValue if len == 1 + MERGE_VALUE_LEN * 2 => {}
-            SMTMergeValueFlag::RightValue | SMTMergeValueFlag::LeftValue
-                if len == 1 + MERGE_VALUE_LEN + MERGE_WITH_ZERO_LEN => {}
-            _ => bail!("invalid smt branch node slice"),
+            SMTMergeValueFlag::BothMergeWithZero => {
+                assert_eq!(len, MAX_SMT_BRANCH_LEN);
+            }
+            SMTMergeValueFlag::BothValue => {
+                assert_eq!(len, 1 + MERGE_VALUE_LEN * 2);
+            }
+            SMTMergeValueFlag::RightValue | SMTMergeValueFlag::LeftValue => {
+                assert_eq!(len, 1 + MERGE_VALUE_LEN + MERGE_WITH_ZERO_LEN);
+            }
         };
 
         let mut buf = [0u8; MAX_SMT_BRANCH_LEN];
@@ -154,7 +158,8 @@ impl From<&SMTBranchNode> for BranchNode {
 
         let branch_buf = &branch.buf[1..]; // trim first flag
         match branch.flag {
-            SMTMergeValueFlag::BothMergeWithZero if branch.len == MAX_SMT_BRANCH_LEN => {
+            SMTMergeValueFlag::BothMergeWithZero => {
+                assert_eq!(branch.len, MAX_SMT_BRANCH_LEN);
                 BranchNode {
                     left: parse_merge_with_zero(&branch_buf[0..MERGE_WITH_ZERO_LEN]),
                     right: parse_merge_with_zero(
@@ -162,9 +167,8 @@ impl From<&SMTBranchNode> for BranchNode {
                     ),
                 }
             }
-            SMTMergeValueFlag::RightValue
-                if branch.len == 1 + MERGE_WITH_ZERO_LEN + MERGE_VALUE_LEN =>
-            {
+            SMTMergeValueFlag::RightValue => {
+                assert_eq!(branch.len, 1 + MERGE_WITH_ZERO_LEN + MERGE_VALUE_LEN);
                 BranchNode {
                     left: parse_merge_with_zero(&branch_buf[0..MERGE_WITH_ZERO_LEN]),
                     right: parse_value(
@@ -172,9 +176,8 @@ impl From<&SMTBranchNode> for BranchNode {
                     ),
                 }
             }
-            SMTMergeValueFlag::LeftValue
-                if branch.len == 1 + MERGE_VALUE_LEN + MERGE_WITH_ZERO_LEN =>
-            {
+            SMTMergeValueFlag::LeftValue => {
+                assert_eq!(branch.len, 1 + MERGE_VALUE_LEN + MERGE_WITH_ZERO_LEN);
                 BranchNode {
                     left: parse_value(&branch_buf[0..MERGE_VALUE_LEN]),
                     right: parse_merge_with_zero(
@@ -182,11 +185,13 @@ impl From<&SMTBranchNode> for BranchNode {
                     ),
                 }
             }
-            SMTMergeValueFlag::BothValue if branch.len == 1 + MERGE_VALUE_LEN * 2 => BranchNode {
-                left: parse_value(&branch_buf[0..MERGE_VALUE_LEN]),
-                right: parse_value(&branch_buf[MERGE_VALUE_LEN..MERGE_VALUE_LEN * 2]),
-            },
-            _ => unreachable!("invalid smt branch node"),
+            SMTMergeValueFlag::BothValue => {
+                assert_eq!(branch.len, 1 + MERGE_VALUE_LEN * 2);
+                BranchNode {
+                    left: parse_value(&branch_buf[0..MERGE_VALUE_LEN]),
+                    right: parse_value(&branch_buf[MERGE_VALUE_LEN..MERGE_VALUE_LEN * 2]),
+                }
+            }
         }
     }
 }
