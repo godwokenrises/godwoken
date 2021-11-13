@@ -27,6 +27,6 @@ jobs:
         RUSTFLAGS: -D warnings
       run: cargo clippy
     - name: Copy contracts from prebuild docker images
-      run: crates/tools/fetch-binaries.sh
+      run: devtools/fetch-binaries.sh
     - name: Tests
       run: cargo test --all-targets
