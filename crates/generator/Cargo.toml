@@ -10,6 +10,7 @@ edition = "2018"
 default = ["detect-asm"]
 detect-asm = ["ckb-vm/detect-asm"]
 enable-always-success-lock = []
+generate-genesis-accounts-for-test = []
 
 [dependencies]
 gw-types = { path = "../types" }
