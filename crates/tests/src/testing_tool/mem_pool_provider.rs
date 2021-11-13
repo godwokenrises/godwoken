@@ -10,14 +10,16 @@ use smol::Task;
 
 #[derive(Debug, Default)]
 pub struct DummyMemPoolProvider {
-    pub fake_blocktime: Duration,
     pub deposit_cells: Vec<DepositInfo>,
     pub collected_custodians: CollectedCustodianCells,
 }
 
 impl MemPoolProvider for DummyMemPoolProvider {
-    fn estimate_next_blocktime(&self, _: Option<Duration>) -> Task<Result<Duration>> {
-        let fake_blocktime = self.fake_blocktime;
+    fn estimate_next_blocktime(&self, last: Option<Duration>) -> Task<Result<Duration>> {
+        let fake_blocktime = last
+            .unwrap_or(Duration::from_secs(0))
+            .checked_add(Duration::from_secs(1))
+            .unwrap();
         smol::spawn(async move { Ok(fake_blocktime) })
     }
     fn collect_deposit_cells(&self) -> Task<Result<Vec<DepositInfo>>> {
