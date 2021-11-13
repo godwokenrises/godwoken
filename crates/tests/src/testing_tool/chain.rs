@@ -25,7 +25,7 @@ use gw_types::{
 use lazy_static::lazy_static;
 use smol::lock::Mutex;
 
-use std::{collections::HashSet, time::Duration};
+use std::collections::HashSet;
 use std::{fs, io::Read, path::PathBuf, sync::Arc};
 
 use super::mem_pool_provider::DummyMemPoolProvider;
@@ -261,16 +261,14 @@ pub fn construct_block(
         .collect();
     let provider = DummyMemPoolProvider {
         deposit_cells,
-        fake_blocktime: Duration::from_millis(0),
         collected_custodians: collected_custodians.clone(),
     };
     mem_pool.set_provider(Box::new(provider));
     // refresh mem block
     mem_pool.reset_mem_block()?;
     let provider = DummyMemPoolProvider {
-        deposit_cells: Vec::default(),
-        fake_blocktime: Duration::from_millis(0),
         collected_custodians,
+        ..Default::default()
     };
     mem_pool.set_provider(Box::new(provider));
 
