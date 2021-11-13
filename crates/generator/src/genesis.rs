@@ -91,8 +91,7 @@ pub fn build_genesis_from_store(
         "ckb simple UDT account id"
     );
 
-    #[cfg(feature = "generate-genesis-accounts-for-test")]
-    {
+    if cfg!(feature = "generate-genesis-accounts-for-test") {
         use crate::genesis_accounts::GENESIS_ACCOUNT_SKS;
 
         // Setup accounts for benchmark
