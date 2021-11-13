@@ -468,10 +468,7 @@ impl BlockProducer {
                         tx.clone(),
                     )
                     .await;
-                    self.mem_pool
-                        .lock()
-                        .await
-                        .try_to_recovery_from_invalid_state()?;
+                    panic!("Produce a block cause CKB transaction script error");
                 } else {
                     log::debug!("Skip dumping non-script-error tx");
                 }
