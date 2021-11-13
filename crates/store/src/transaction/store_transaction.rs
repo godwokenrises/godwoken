@@ -302,18 +302,6 @@ impl StoreTransaction {
             }))
     }
 
-    // pub fn get_checkpoint_post_state(
-    //     &self,
-    //     checkpoint: &Byte32,
-    // ) -> Result<Option<packed::AccountMerkleState>, Error> {
-    //     Ok(self
-    //         .get(COLUMN_CHECKPOINT, checkpoint.as_slice())
-    //         .map(|slice| {
-    //             packed::AccountMerkleStateReader::from_slice_should_be_ok(slice.as_ref())
-    //                 .to_entity()
-    //         }))
-    // }
-
     pub fn get_l2block_committed_info(
         &self,
         block_hash: &H256,
