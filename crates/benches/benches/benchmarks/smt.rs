@@ -10,7 +10,6 @@ use gw_db::{schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
-    constants::L2TX_MAX_CYCLES,
     genesis::build_genesis_from_store,
     traits::StateExt,
     Generator,
@@ -50,6 +49,7 @@ const ALWAYS_SUCCESS_LOCK_HASH: [u8; 32] = [3u8; 32];
 const ROLLUP_TYPE_HASH: [u8; 32] = [4u8; 32];
 
 const CKB_BALANCE: u128 = 100_000_000;
+const L2TX_MAX_CYCLES: u64 = 7000_0000;
 
 criterion_group! {
     name = smt;
@@ -154,6 +154,7 @@ impl BenchExecutionEnvironment {
             account_lock_manage,
             rollup_context,
             Default::default(),
+            L2TX_MAX_CYCLES,
         );
 
         Self::init_genesis(&store, &genesis_config, accounts);
@@ -231,7 +232,12 @@ impl BenchExecutionEnvironment {
 
             let run_result = self
                 .generator
-                .execute_transaction(&self.chain, &state, &block_info, &raw_tx, L2TX_MAX_CYCLES)
+                .execute_transaction_with_default_max_cycles(
+                    &self.chain,
+                    &state,
+                    &block_info,
+                    &raw_tx,
+                )
                 .unwrap();
 
             state.apply_run_result(&run_result).unwrap();
