@@ -39,5 +39,5 @@ Then edit the generated config files according to the in-line comments.
 execute_l2tx_max_cycles = 100000000
 # Maximum allowed cycles to execute a transaction came from
 # `submit_l2transaction` RPC interface
-submit_l2tx_max_cycles  = 90000000
+submit_l2tx_max_cycles  = 70000000
 ```
