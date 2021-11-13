@@ -859,6 +859,10 @@ impl MemPool {
     /// Discard unexecutables from pending.
     fn remove_unexecutables(&mut self, db: &StoreTransaction) -> Result<()> {
         let state = db.mem_pool_state_tree()?;
+        log::trace!(
+            "[mem-pool] remove_unexecutables pending entries {}",
+            self.pending.len()
+        );
         let mut remove_list = Vec::default();
         // iter pending accounts and demote any non-executable objects
         for (&account_id, list) in &mut self.pending {
@@ -866,6 +870,13 @@ impl MemPool {
 
             // drop txs if tx.nonce lower than nonce
             let deprecated_txs = list.remove_lower_nonce_txs(nonce);
+            log::trace!(
+                "[mem-pool] remove_unexecutables account_id {} remove {} txs, txs: {} withdrawals: {}",
+                account_id,
+                deprecated_txs.len(),
+                list.txs.len(),
+                list.withdrawals.len()
+            );
             for tx in deprecated_txs {
                 let tx_hash = tx.hash().into();
                 db.remove_mem_pool_transaction(&tx_hash)?;
