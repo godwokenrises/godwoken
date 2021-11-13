@@ -3,10 +3,26 @@ name: Rust
 on: [push, pull_request]
 
 jobs:
-  build:
-
+  prepare-scripts:
     runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Copy contracts from prebuild docker images
+      run: devtools/fetch-binaries.sh
+    - name: Upload godwoken scripts
+      uses: actions/upload-artifact@v2
+      with:
+        name: binaries
+        path: .tmp/binaries
+        retention-days: 1
 
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    needs: prepare-scripts
     steps:
     - uses: actions/checkout@v1
     - name: Install Rust components
@@ -26,7 +42,10 @@ jobs:
       env:
         RUSTFLAGS: -D warnings
       run: cargo clippy
-    - name: Copy contracts from prebuild docker images
-      run: devtools/fetch-binaries.sh
+    - name: Download binaries
+      uses: actions/download-artifact@v2
+      with:
+        name: binaries
+        path: .tmp/binaries
     - name: Tests
       run: cargo test --all-targets
