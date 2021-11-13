@@ -23,3 +23,4 @@ gw-config = { path = "../config" }
 [[bench]]
 name = "bench_main"
 harness = false
+bench = false
