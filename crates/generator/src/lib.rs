@@ -15,6 +15,9 @@ pub mod traits;
 pub mod types;
 pub mod vm_cost_model;
 
+#[cfg(feature = "generate-genesis-accounts")]
+mod genesis_accounts;
+
 #[cfg(test)]
 mod tests;
 

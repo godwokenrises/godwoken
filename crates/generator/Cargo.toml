@@ -10,6 +10,7 @@ edition = "2018"
 default = ["detect-asm"]
 detect-asm = ["ckb-vm/detect-asm"]
 enable-always-success-lock = []
+generate-genesis-accounts = []
 
 [dependencies]
 gw-types = { path = "../types" }
@@ -25,7 +26,7 @@ ckb-vm = { version = "=0.20.0-rc5", features = ["detect-asm"] }
 thiserror = "1.0"
 lazy_static = "1.4"
 rlp = "0.5.0"
-secp256k1 = { version = "0.20", features = ["recovery", "rand"] }
+secp256k1 = { version = "0.20", features = ["recovery", "rand-std"] }
 sha3 = "0.9.1"
 log = "0.4"
 hex = "0.4"
