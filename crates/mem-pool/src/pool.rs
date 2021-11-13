@@ -1175,7 +1175,7 @@ impl MemPool {
             &state,
             block_info,
             &raw_tx,
-            self.config.submit_l2tx_max_cycles,
+            self.inner.config.submit_l2tx_max_cycles,
         )?;
         log::debug!(
             "[finalize tx] execute tx time: {}ms cycles: {}",
