@@ -299,7 +299,7 @@ impl MemPool {
         let db = self.store.begin_transaction();
         self.push_transaction_with_db(&db, tx)?;
         db.commit()?;
-        log::info!("push tx total time {}ms", t.elapsed().as_millis());
+        log::debug!("push tx total time {}ms", t.elapsed().as_millis());
         Ok(())
     }
 
@@ -419,16 +419,16 @@ impl MemPool {
             return Ok(());
         }
         // reset pool state
-        log::info!("[mem-pool] handling notify_new_tip");
+        log::debug!("[mem-pool] handling notify_new_tip");
         let t = Instant::now();
         self.reset(Some(self.current_tip().0), Some(new_tip))?;
-        log::info!("[mem-pool] notify_new_tip ({}ms)", t.elapsed().as_millis());
+        log::debug!("[mem-pool] notify_new_tip ({}ms)", t.elapsed().as_millis());
         Ok(())
     }
 
     /// Clear mem block state and recollect deposits
     pub fn reset_mem_block(&mut self) -> Result<()> {
-        log::info!("[mem-pool] reset mem block");
+        log::debug!("[mem-pool] reset mem block");
         // reset pool state
         self.reset(Some(self.current_tip().0), Some(self.current_tip().0))?;
         Ok(())
@@ -547,7 +547,7 @@ impl MemPool {
         }
 
         // if first package failed, we should try to package less txs and withdrawals
-        log::info!("[mem-pool] package mem block, retry count {}", retry_count);
+        log::debug!("[mem-pool] package mem block, retry count {}", retry_count);
         let mem_block = &self.mem_block;
         let (withdrawal_hashes, deposits, tx_hashes) = {
             let total =
@@ -608,7 +608,7 @@ impl MemPool {
             new_mem_block.append_touched_keys(mem_block.touched_keys().clone().into_iter());
         } else {
             assert_eq!(tx_hashes.len(), 0, "must drop txs first");
-            log::info!(
+            log::debug!(
                 "[mem-pool] repackage withdrawals {} and deposits {}",
                 withdrawal_hashes.len(),
                 deposits.len()
@@ -833,7 +833,7 @@ impl MemPool {
         // remove from pending
         self.remove_unexecutables(&db)?;
 
-        log::info!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
+        log::debug!("[mem-pool] reset reinject txs: {} mem-block txs: {} reinject withdrawals: {} mem-block withdrawals: {}", reinject_txs.len(), mem_block_txs.len(), reinject_withdrawals.len(), mem_block_withdrawals.len());
         // re-inject withdrawals
         let withdrawals_iter = reinject_withdrawals
             .into_iter()
@@ -1055,7 +1055,7 @@ impl MemPool {
                 .generator
                 .check_withdrawal_request_signature(&state, &withdrawal)
             {
-                log::info!("[mem-pool] withdrawal signature error: {:?}", err);
+                log::debug!("[mem-pool] withdrawal signature error: {:?}", err);
                 unused_withdrawals.push(withdrawal_hash);
                 continue;
             }
@@ -1066,7 +1066,7 @@ impl MemPool {
                 self.generator
                     .verify_withdrawal_request(&state, &withdrawal, asset_script)
             {
-                log::info!("[mem-pool] withdrawal verification error: {:?}", err);
+                log::debug!("[mem-pool] withdrawal verification error: {:?}", err);
                 unused_withdrawals.push(withdrawal_hash);
                 continue;
             }
@@ -1076,7 +1076,7 @@ impl MemPool {
                 .ok_or_else(|| anyhow!("total withdrawal capacity overflow"))?;
             // skip package withdrwal if overdraft the Rollup capacity
             if new_total_withdrwal_capacity > max_withdrawal_capacity {
-                log::info!(
+                log::warn!(
                     "[mem-pool] max_withdrawal_capacity({}) is not enough to withdraw({})",
                     max_withdrawal_capacity,
                     new_total_withdrwal_capacity
@@ -1089,7 +1089,7 @@ impl MemPool {
             if let Err(err) =
                 withdrawal_verifier.include_and_verify(&withdrawal, &L2Block::default())
             {
-                log::info!(
+                log::warn!(
                     "[mem-pool] withdrawal contextual verification failed : {}",
                     err
                 );
@@ -1110,7 +1110,7 @@ impl MemPool {
                     Err(err) => match err.downcast_ref::<RollBackSavePointError>() {
                         Some(err) => bail!("{}", err),
                         None => {
-                            log::info!(
+                            log::warn!(
                                 "[mem-pool] withdrawal contextual verification failed : {}",
                                 err
                             );
@@ -1134,7 +1134,7 @@ impl MemPool {
                     );
                 }
                 Err(err) => {
-                    log::info!("[mem-pool] withdrawal execution failed : {}", err);
+                    log::debug!("[mem-pool] withdrawal execution failed : {}", err);
                     unused_withdrawals.push(withdrawal_hash);
                 }
             }
@@ -1147,7 +1147,7 @@ impl MemPool {
             .set_finalized_custodians(finalized_custodians);
 
         // remove unused withdrawals
-        log::info!(
+        log::debug!(
             "[mem-pool] finalize withdrawals: {} staled withdrawals: {}",
             self.mem_block.withdrawals().len(),
             unused_withdrawals.len()
