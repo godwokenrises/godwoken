@@ -171,7 +171,7 @@ impl<S: State + CodeStore> StateExt for S {
         {
             self.insert_script(account_script_hash, request.script());
             let new_id = self.create_account(account_script_hash)?;
-            log::info!(
+            log::debug!(
                 "[generator] create new account: {} id: {}",
                 hex::encode(account_script_hash.as_slice()),
                 new_id
