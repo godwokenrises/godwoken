@@ -960,7 +960,7 @@ impl MemPool {
         for tx in txs {
             if let Err(err) = self.push_transaction_with_db(db, tx.clone()) {
                 let tx_hash = tx.hash();
-                log::info!(
+                log::debug!(
                     "[mem pool] fail to re-inject tx {}, error: {}",
                     hex::encode(&tx_hash),
                     err

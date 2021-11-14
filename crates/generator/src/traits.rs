@@ -183,7 +183,7 @@ impl<S: State + CodeStore> StateExt for S {
             to_short_address(&account_script_hash),
             capacity.into(),
         )?;
-        log::info!(
+        log::debug!(
             "[generator] mint {} shannons CKB to account {}",
             capacity,
             hex::encode(account_script_hash.as_slice()),
@@ -207,7 +207,7 @@ impl<S: State + CodeStore> StateExt for S {
             }
             // mint SUDT
             self.mint_sudt(sudt_id, to_short_address(&account_script_hash), amount)?;
-            log::info!(
+            log::debug!(
                 "[generator] mint {} amount sUDT {} to account {}",
                 amount,
                 sudt_id,
