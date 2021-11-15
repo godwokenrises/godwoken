@@ -17,7 +17,7 @@ pub struct DummyMemPoolProvider {
 impl MemPoolProvider for DummyMemPoolProvider {
     fn estimate_next_blocktime(&self, last: Option<Duration>) -> Task<Result<Duration>> {
         let fake_blocktime = last
-            .unwrap_or(Duration::from_secs(0))
+            .unwrap_or_else(|| Duration::from_secs(0))
             .checked_add(Duration::from_secs(1))
             .unwrap();
         smol::spawn(async move { Ok(fake_blocktime) })
