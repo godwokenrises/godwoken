@@ -49,6 +49,14 @@ impl MemBlock {
         }
     }
 
+    /// Initialize MemBlock with block producer
+    pub fn with_block_producer(block_producer_id: u32) -> Self {
+        MemBlock {
+            block_producer_id,
+            ..Default::default()
+        }
+    }
+
     pub fn block_info(&self) -> &BlockInfo {
         &self.block_info
     }

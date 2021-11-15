@@ -221,6 +221,7 @@ pub struct MemPool {
 
 impl MemPool {
     pub fn create(
+        block_producer_id: u32,
         store: Store,
         generator: Arc<Generator>,
         provider: Box<dyn MemPoolProvider + Send + Sync>,
@@ -242,7 +243,7 @@ impl MemPool {
             Arc::clone(&config),
         );
 
-        let mem_block: MemBlock = Default::default();
+        let mem_block = MemBlock::with_block_producer(block_producer_id);
         let reverted_block_root = {
             let db = store.begin_transaction();
             let smt = db.reverted_block_smt()?;
