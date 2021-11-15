@@ -6,6 +6,7 @@ use std::{collections::HashMap, fs};
 
 #[derive(Clone)]
 pub struct Backend {
+    pub name: String,
     pub validator: Bytes,
     pub generator: Bytes,
     pub validator_script_type_hash: H256,
@@ -14,6 +15,19 @@ pub struct Backend {
 #[derive(Clone)]
 pub struct BackendManage {
     backends: HashMap<H256, Backend>,
+}
+
+/// Get backend name from the validator path
+fn get_backend_name(validator_path: &str) -> String {
+    if validator_path.contains("meta") {
+        String::from("meta")
+    } else if validator_path.contains("sudt") {
+        String::from("sudt")
+    } else if validator_path.contains("polyjuice") {
+        String::from("polyjuice")
+    } else {
+        String::new()
+    }
 }
 
 impl BackendManage {
@@ -35,6 +49,7 @@ impl BackendManage {
             generator_path,
             validator_script_type_hash,
         } = config;
+        let name = get_backend_name(validator_path.to_str().unwrap());
         let validator = fs::read(validator_path)?.into();
         let generator = fs::read(generator_path)?.into();
         let validator_script_type_hash = {
@@ -42,6 +57,7 @@ impl BackendManage {
             hash.into()
         };
         let backend = Backend {
+            name,
             validator,
             generator,
             validator_script_type_hash,

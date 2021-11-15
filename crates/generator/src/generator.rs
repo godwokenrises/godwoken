@@ -561,6 +561,34 @@ impl Generator {
         }
     }
 
+    /// Get backend name by script_hash
+    pub fn get_backend_name<S: State + CodeStore>(
+        &self,
+        state: &S,
+        script_hash: &H256,
+    ) -> Option<String> {
+        log::debug!(
+            "get_backend_name for script_hash: {}",
+            hex::encode(script_hash.as_slice())
+        );
+        state.get_script(script_hash).and_then(|script| {
+            // only accept type script hash type for now
+            if script.hash_type() == ScriptHashType::Type.into() {
+                let code_hash: [u8; 32] = script.code_hash().unpack();
+                log::debug!("load_backend by code_hash: {}", hex::encode(code_hash));
+                self.backend_manage
+                    .get_backend(&code_hash.into())
+                    .map(|backend| backend.name.clone())
+            } else {
+                log::error!(
+                    "Found a invalid account script which hash_type is data: {:?}",
+                    script
+                );
+                None
+            }
+        })
+    }
+
     fn load_backend<S: State + CodeStore>(&self, state: &S, script_hash: &H256) -> Option<Backend> {
         log::debug!(
             "load_backend for script_hash: {}",
