@@ -136,6 +136,7 @@ pub fn setup_chain_with_account_lock_manage(
     .unwrap();
     let provider = DummyMemPoolProvider::default();
     let mem_pool = MemPool::create(
+        0,
         store.clone(),
         Arc::clone(&generator),
         Box::new(provider),

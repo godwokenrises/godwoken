@@ -451,6 +451,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             });
             let mem_pool = Arc::new(Mutex::new(
                 MemPool::create(
+                    block_producer_config.account_id,
                     base.store.clone(),
                     base.generator.clone(),
                     Box::new(mem_pool_provider),
