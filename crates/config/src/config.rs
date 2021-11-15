@@ -184,6 +184,45 @@ impl Default for OffChainValidatorConfig {
     }
 }
 
+/// Fee rules:
+///   TODO
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FeeConfig {
+    /// known as gasPrice in Ethereum
+    fee_rate: u128,
+    meta_contract_fee_weight: u8,
+    sudt_transfer_fee_weight: u8,
+    withdraw_fee_weight: u8,
+}
+impl FeeConfig {
+    /// Get the base fee of meta contract
+    pub fn meta_contract_base_fee(&self) -> u128 {
+        self.fee_rate * u128::from(self.meta_contract_fee_weight)
+    }
+    /// Get the base fee of meta contract
+    pub fn sudt_transfer_base_fee(&self) -> u128 {
+        self.fee_rate * u128::from(self.sudt_transfer_fee_weight)
+    }
+    /// Get the base fee of a withdrawal request
+    pub fn withdrawal_base_fee(&self) -> u128 {
+        self.fee_rate * u128::from(self.withdraw_fee_weight)
+    }
+    /// Get the base gasPrice of Polyjuice contract
+    pub fn polyjuice_base_gas_price(&self) -> u128 {
+        self.fee_rate
+    }
+}
+impl Default for FeeConfig {
+    fn default() -> Self {
+        Self {
+            fee_rate: 1,
+            meta_contract_fee_weight: 1,
+            sudt_transfer_fee_weight: 1,
+            withdraw_fee_weight: 1,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MemPoolConfig {
     pub execute_l2tx_max_cycles: u64,
@@ -192,6 +231,8 @@ pub struct MemPoolConfig {
     pub max_batch_tx_withdrawal_size: usize,
     #[serde(default = "default_restore_path")]
     pub restore_path: PathBuf,
+    #[serde(default)]
+    pub fee_config: FeeConfig,
 }
 
 // Field default value for backward config file compitability
@@ -209,6 +250,7 @@ impl Default for MemPoolConfig {
             max_batch_channel_buffer_size: 2000,
             max_batch_tx_withdrawal_size: 200,
             restore_path: default_restore_path(),
+            fee_config: Default::default(),
         }
     }
 }
