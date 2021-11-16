@@ -184,41 +184,43 @@ impl Default for OffChainValidatorConfig {
     }
 }
 
-/// Fee rules:
-///   TODO
+/// Config the base/minimal fee rules
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FeeConfig {
     /// known as gasPrice in Ethereum
-    fee_rate: u128,
+    ///
+    ///   denoted in shannons, which itself is a fractional denomination of CKBytes.
+    ///   1 CKByte = 100,000,000 Shannons
+    fee_rate: u64,
     meta_contract_fee_weight: u8,
     sudt_transfer_fee_weight: u8,
     withdraw_fee_weight: u8,
 }
 impl FeeConfig {
-    /// Get the base fee of meta contract
+    /// Get the minimal fee of meta contract
     pub fn meta_contract_base_fee(&self) -> u128 {
-        self.fee_rate * u128::from(self.meta_contract_fee_weight)
+        self.fee_rate as u128 * u128::from(self.meta_contract_fee_weight)
     }
-    /// Get the base fee of meta contract
+    /// Get the minimal fee of a native sudt transfer transaction
     pub fn sudt_transfer_base_fee(&self) -> u128 {
-        self.fee_rate * u128::from(self.sudt_transfer_fee_weight)
+        self.fee_rate as u128 * u128::from(self.sudt_transfer_fee_weight)
     }
-    /// Get the base fee of a withdrawal request
+    /// Get the minimal fee of a withdrawal request
     pub fn withdrawal_base_fee(&self) -> u128 {
-        self.fee_rate * u128::from(self.withdraw_fee_weight)
+        self.fee_rate as u128 * u128::from(self.withdraw_fee_weight)
     }
-    /// Get the base gasPrice of Polyjuice contract
+    /// Get the minimal gasPrice of Polyjuice contract
     pub fn polyjuice_base_gas_price(&self) -> u128 {
-        self.fee_rate
+        self.fee_rate as u128
     }
 }
 impl Default for FeeConfig {
     fn default() -> Self {
         Self {
-            fee_rate: 1,
-            meta_contract_fee_weight: 1,
-            sudt_transfer_fee_weight: 1,
-            withdraw_fee_weight: 1,
+            fee_rate: 500, // Shannons
+            meta_contract_fee_weight: 2,
+            sudt_transfer_fee_weight: 2,
+            withdraw_fee_weight: 2,
         }
     }
 }
