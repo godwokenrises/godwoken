@@ -726,6 +726,7 @@ async fn submit_withdrawal_request(
     };
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequest::from_slice(&withdrawal_bytes)?;
+    log::debug!("{}", withdrawal);
 
     // Check Fee
     let fee = withdrawal.raw().fee().amount().unpack();
