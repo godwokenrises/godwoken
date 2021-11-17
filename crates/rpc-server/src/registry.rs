@@ -4,7 +4,7 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::OffChainMockContext;
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{DebugConfig, MemPoolConfig, NodeMode, RPCMethods, RPCServerConfig};
+use gw_config::{DebugConfig, FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCServerConfig};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
@@ -180,7 +180,8 @@ impl Registry {
                 "gw_compute_l2_sudt_script_hash",
                 compute_l2_sudt_script_hash,
             )
-            .with_method("gw_get_node_info", get_node_info);
+            .with_method("gw_get_node_info", get_node_info)
+            .with_method("gw_get_fee_config", get_fee_config);
 
         if self.node_mode != NodeMode::ReadOnly {
             server = server
@@ -944,6 +945,10 @@ async fn get_node_info(backend_info: Data<Vec<BackendInfo>>) -> Result<NodeInfo>
         version: Version::current().to_string(),
         backends: backend_info.clone(),
     })
+}
+
+async fn get_fee_config(mem_pool_config: Data<MemPoolConfig>) -> Result<FeeConfig> {
+    Ok(mem_pool_config.fee_config.clone())
 }
 
 async fn tests_produce_block(
