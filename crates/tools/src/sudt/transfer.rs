@@ -3,10 +3,10 @@ use crate::account::{
     short_address_to_account_id,
 };
 use crate::godwoken_rpc::GodwokenRpcClient;
-use crate::hasher::{CkbHasher, EthHasher};
 use crate::types::ScriptsDeploymentResult;
+use crate::utils::message::generate_transaction_message_to_sign;
 use crate::utils::transaction::{read_config, wait_for_l2_tx};
-use ckb_fixed_hash::H256;
+use anyhow::Result;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
 use gw_types::packed::{L2Transaction, RawL2Transaction, SUDTArgs, SUDTTransfer};
@@ -24,14 +24,13 @@ pub fn transfer(
     fee: &str,
     config_path: &Path,
     scripts_deployment_path: &Path,
-) -> Result<(), String> {
+) -> Result<()> {
     let amount: u128 = amount.parse().expect("sUDT amount format error");
     let fee: u128 = fee.parse().expect("fee format error");
 
-    let scripts_deployment_content =
-        std::fs::read_to_string(scripts_deployment_path).map_err(|err| err.to_string())?;
+    let scripts_deployment_content = std::fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =
-        serde_json::from_str(&scripts_deployment_content).map_err(|err| err.to_string())?;
+        serde_json::from_str(&scripts_deployment_content)?;
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
@@ -85,38 +84,11 @@ pub fn transfer(
     let bytes = JsonBytes::from_bytes(l2_transaction.as_bytes());
     let tx_hash = godwoken_rpc_client.submit_l2transaction(bytes)?;
 
-    log::info!(
-        "tx_hash: 0x{}",
-        faster_hex::hex_string(tx_hash.as_bytes()).map_err(|err| err.to_string())?
-    );
+    log::info!("tx_hash: 0x{}", faster_hex::hex_string(tx_hash.as_bytes())?);
 
-    wait_for_l2_tx(&mut godwoken_rpc_client, &tx_hash, 300)?;
+    wait_for_l2_tx(&mut godwoken_rpc_client, &tx_hash, 300, false)?;
 
     log::info!("transfer success!");
 
     Ok(())
-}
-
-pub fn generate_transaction_message_to_sign(
-    raw_l2transaction: &RawL2Transaction,
-    rollup_type_hash: &H256,
-    sender_script_hash: &H256,
-    receiver_script_hash: &H256,
-) -> H256 {
-    let raw_data = raw_l2transaction.as_slice();
-    let rollup_type_hash_data = rollup_type_hash.as_bytes();
-
-    let digest = CkbHasher::new()
-        .update(rollup_type_hash_data)
-        .update(sender_script_hash.as_bytes())
-        .update(receiver_script_hash.as_bytes())
-        .update(raw_data)
-        .finalize();
-
-    let message = EthHasher::new()
-        .update("\x19Ethereum Signed Message:\n32")
-        .update(digest.as_bytes())
-        .finalize();
-
-    message
 }

@@ -1,5 +1,6 @@
 use crate::godwoken_rpc::GodwokenRpcClient;
 
+use anyhow::Result;
 use ckb_fixed_hash::H256;
 use gw_jsonrpc_types::{debugger::DumpChallengeTarget, godwoken::ChallengeTargetType};
 
@@ -31,7 +32,7 @@ pub fn dump_tx(
     target_index: u32,
     target_type: ChallengeTargetType,
     output: &Path,
-) -> Result<(), String> {
+) -> Result<()> {
     let challenge_target = match block {
         ChallengeBlock::Number(block_number) => DumpChallengeTarget::ByBlockNumber {
             block_number: block_number.into(),
@@ -48,8 +49,8 @@ pub fn dump_tx(
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
     let dump_tx = godwoken_rpc_client.debug_dump_cancel_challenge_tx(challenge_target)?;
 
-    let json_tx = serde_json::to_string_pretty(&dump_tx).map_err(|err| err.to_string())?;
-    write(output, json_tx).map_err(|err| err.to_string())?;
+    let json_tx = serde_json::to_string_pretty(&dump_tx)?;
+    write(output, json_tx)?;
 
     Ok(())
 }
