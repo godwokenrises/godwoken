@@ -154,6 +154,7 @@ pub fn build_genesis_from_store(
             .status((Status::Running as u8).into())
             .rollup_config_hash(rollup_config_hash.pack())
             .tip_block_hash(genesis.hash().pack())
+            .version(1.into())
             .build()
     };
 
