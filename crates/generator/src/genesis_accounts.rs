@@ -1,19 +1,22 @@
+use std::env;
+
 use crate::traits::StateExt;
+use anyhow::Result;
 use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, smt::H256, state::State};
 use gw_traits::CodeStore;
 use gw_types::{core::ScriptHashType, offchain::RollupContext, packed::Script, prelude::*};
 use secp256k1::{rand::rngs::OsRng, Secp256k1};
 use sha3::{Digest, Keccak256};
 
-pub const GENESIS_ACCOUNT_SKS: &str = "/code/workspace/account_sks";
-pub const GENESIS_ACCOUNTS: &str = "/code/workspace/accounts";
+pub const GENESIS_ACCOUNT_PATH: &str = "GENESIS_ACCOUNT_PATH";
+pub const GENESIS_ACCOUNT_NUMBER: &str = "GENESIS_ACCOUNT_NUMBER";
 
 pub fn load_and_generate_genesis_accounts(
     state: &mut (impl State + StateExt + CodeStore),
     rollup_context: &RollupContext,
 ) {
     // Setup accounts for benchmark
-    if std::fs::File::open(GENESIS_ACCOUNT_SKS).is_err() {
+    if env::var(GENESIS_ACCOUNT_PATH).is_err() {
         generate_genesis_account_sks();
     }
     let allowed_eoa_type_hashes = rollup_context.rollup_config.allowed_eoa_type_hashes();
@@ -33,11 +36,8 @@ struct Account {
     script: Script,
 }
 
-fn generate_genesis_account_sks() {
-    let accounts: u64 = {
-        let accounts = std::fs::read_to_string(GENESIS_ACCOUNTS).unwrap();
-        accounts.parse().unwrap()
-    };
+fn generate_genesis_account_sks() -> Result<()> {
+    let accounts: u64 = env::var(GENESIS_ACCOUNT_NUMBER)?.parse()?;
 
     let private_keys = (0..accounts)
         .map(|_| {
@@ -46,13 +46,11 @@ fn generate_genesis_account_sks() {
         })
         .collect::<Vec<_>>();
 
-    std::fs::write(
-        std::path::Path::new(GENESIS_ACCOUNT_SKS),
-        private_keys.join("\n").as_bytes(),
-    )
-    .unwrap();
+    let path = env::var(GENESIS_ACCOUNT_PATH)?;
+    std::fs::write(&path, private_keys.join("\n").as_bytes())?;
 
-    log::info!("write account sks to {}", GENESIS_ACCOUNT_SKS);
+    log::info!("write account sks to {}", path);
+    Ok(())
 }
 
 fn generate_genesis_accounts_with_state(
@@ -105,6 +103,6 @@ fn generate_genesis_accounts_with_state(
         }
     };
 
-    let sks = std::fs::read_to_string(GENESIS_ACCOUNT_SKS).unwrap();
+    let sks = std::fs::read_to_string(GENESIS_ACCOUNT_PATH).unwrap();
     sks.split('\n').map(build_account).collect()
 }

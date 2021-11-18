@@ -180,7 +180,7 @@ impl TxActor {
                     return;
                 }
             };
-            if let Ok(_) = wait_receipt(&tx, &mut rpc_client, timeout).await {
+            if wait_receipt(&tx, &mut rpc_client, timeout).await.is_ok() {
                 let _ = stats_handler.send_tx_stats(TxStatus::PendingCommit).await;
             } else {
                 let _ = stats_handler.send_tx_stats(TxStatus::Timeout).await;

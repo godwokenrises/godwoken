@@ -40,7 +40,7 @@ impl Plan {
         batch_handler: BatchHandler,
         batch_res_receiver: mpsc::Receiver<BatchResMsg>,
     ) -> Self {
-        let mut rpc_client = GodwokenRpcClient::new(gw_config.url.clone().as_str());
+        let mut rpc_client = GodwokenRpcClient::new(gw_config.url.as_str());
         let accounts: Vec<Account> = pks
             .into_iter()
             .map(|pk| {
@@ -140,7 +140,7 @@ pub(crate) fn to_account(
             .map_err(|err| anyhow!(err))?;
     let account_id = gw_tools::account::short_address_to_account_id(rpc_client, &short_address)
         .map_err(|err| anyhow!(err))?
-        .ok_or(anyhow!("No account"))?;
+        .ok_or_else(|| anyhow!("No account"))?;
     let short_address = JsonBytes::from_bytes(short_address);
     let balance = rpc_client
         .get_balance(short_address, 1)
