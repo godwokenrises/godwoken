@@ -2,6 +2,7 @@ use crate::{
     types::{BuildScriptsResult, DeployItem, Programs, ScriptsDeploymentResult},
     utils::transaction::{get_network_type, run_cmd, wait_for_tx, TYPE_ID_CODE_HASH},
 };
+use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::{CellDep, DepType, OutPoint, Script};
 use ckb_sdk::{Address, AddressPayload, HttpRpcClient, HumanCapacity};
@@ -28,13 +29,11 @@ pub fn deploy_program(
     binary_path: &Path,
     target_lock: &packed::Script,
     target_address: &Address,
-) -> Result<DeployItem, String> {
+) -> Result<DeployItem> {
     log::info!("deploy binary {:?}", binary_path);
-    let file_size = fs::metadata(binary_path)
-        .map_err(|err| err.to_string())?
-        .len();
+    let file_size = fs::metadata(binary_path)?.len();
     let min_output_capacity = {
-        let data_capacity = Capacity::bytes(file_size as usize).map_err(|err| err.to_string())?;
+        let data_capacity = Capacity::bytes(file_size as usize)?;
         let type_script = packed::Script::new_builder()
             .code_hash(TYPE_ID_CODE_HASH.pack())
             .hash_type(ScriptHashType::Type.into())
@@ -44,10 +43,7 @@ pub fn deploy_program(
             .lock(target_lock.clone())
             .type_(Some(type_script).pack())
             .build();
-        output
-            .occupied_capacity(data_capacity)
-            .map_err(|err| err.to_string())?
-            .as_u64()
+        output.occupied_capacity(data_capacity)?.as_u64()
     };
     let capacity_string = HumanCapacity(min_output_capacity).to_string();
     let target_address_string = target_address.to_string();
@@ -87,8 +83,7 @@ pub fn deploy_program(
         "--type-id",
         "--skip-check-to-address",
     ])?;
-    let tx_hash =
-        H256::from_str(output.trim().trim_start_matches("0x")).map_err(|err| err.to_string())?;
+    let tx_hash = H256::from_str(output.trim().trim_start_matches("0x"))?;
     log::info!("tx_hash: {:#x}", tx_hash);
 
     let tx = wait_for_tx(rpc_client, &tx_hash, 300)?;
@@ -113,9 +108,9 @@ pub fn deploy_scripts(
     privkey_path: &Path,
     ckb_rpc_url: &str,
     scripts_result: &BuildScriptsResult,
-) -> Result<ScriptsDeploymentResult, String> {
+) -> Result<ScriptsDeploymentResult> {
     if let Err(err) = run_cmd(vec!["--version"]) {
-        return Err(format!(
+        return Err(anyhow!(
             "Please install ckb-cli (cargo install ckb-cli) first: {}",
             err
         ));
@@ -146,13 +141,13 @@ pub fn deploy_scripts(
         match fs::metadata(path).map_err(|err| err.to_string()) {
             Ok(metadata) => {
                 if !metadata.is_file() {
-                    return Err(format!("binary path is not a file: {:?}", path));
+                    return Err(anyhow!("binary path is not a file: {:?}", path));
                 }
                 total_file_size += metadata.len();
                 log::info!("cost {:>6} CKBytes for file: {:?}", metadata.len(), path);
             }
             Err(err) => {
-                return Err(format!("error read metadata of {:?}, error: {}", path, err));
+                return Err(anyhow!("error read metadata of {:?}, error: {}", path, err));
             }
         }
     }

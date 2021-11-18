@@ -15,13 +15,14 @@ mod polyjuice;
 mod prepare_scripts;
 mod setup;
 mod stat;
-mod transfer;
+mod sudt;
 pub(crate) mod types;
 mod update_cell;
 mod utils;
 mod withdraw;
 
-use anyhow::Result;
+use account::read_privkey;
+use anyhow::{anyhow, Result};
 use async_jsonrpc_client::HttpClient;
 use ckb_sdk::constants::ONE_CKB;
 use ckb_types::prelude::Unpack;
@@ -29,6 +30,7 @@ use clap::{value_t, App, Arg, SubCommand};
 use deploy_genesis::DeployRollupCellArgs;
 use dump_tx::ChallengeBlock;
 use generate_config::GenerateNodeConfigArgs;
+use godwoken_rpc::GodwokenRpcClient;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use std::{
@@ -40,9 +42,9 @@ use types::{
     BuildScriptsResult, PoAConfig, RollupDeploymentResult, ScriptsDeploymentResult,
     UserRollupConfig,
 };
-use utils::cli_args;
+use utils::{cli_args, transaction::read_config};
 
-use crate::setup::SetupArgs;
+use crate::{setup::SetupArgs, sudt::account::build_l1_sudt_type_script};
 
 fn main() {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
@@ -472,6 +474,52 @@ fn run_cli() -> Result<()> {
                         .required(false)
                         .default_value("1")
                         .help("sudt id"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("create-sudt-account")
+                .about("Create Simple UDT account")
+                .arg(arg_privkey_path.clone())
+                .arg(arg_deployment_results_path.clone())
+                .arg(arg_config_path.clone())
+                .arg(arg_godwoken_rpc_url.clone())
+                .arg(
+                    Arg::with_name("fee")
+                        .short("f")
+                        .long("fee")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value("0")
+                        .help("transfer fee"),
+                )
+                .arg(
+                    Arg::with_name("l1-sudt-type-hash")
+                        .long("l1-sudt-type-hash")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Simple UDT type hash"),
+                )
+                .arg(
+                    Arg::with_name("l1-sudt-script-args")
+                        .long("l1-sudt-script-args")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Simple UDT script args"),
+                )
+                .arg(
+                    Arg::with_name("l1-sudt-script-code-hash")
+                        .long("l1-sudt-script-code-hash")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Simple UDT script code hash"),
+                )
+                .arg(
+                    Arg::with_name("quite")
+                        .short("q")
+                        .long("quite")
+                        .takes_value(false)
+                        .required(false)
+                        .help("quite"),
                 ),
         )
         .subcommand(
@@ -1023,7 +1071,7 @@ fn run_cli() -> Result<()> {
                 .parse()
                 .expect("sudt id format error");
 
-            if let Err(err) = transfer::transfer(
+            if let Err(err) = sudt::transfer::transfer(
                 godwoken_rpc_url,
                 privkey_path,
                 to.trim(),
@@ -1060,6 +1108,67 @@ fn run_cli() -> Result<()> {
                 log::error!("Create creator account error: {}", err);
                 std::process::exit(-1);
             };
+        }
+        ("create-sudt-account", Some(m)) => {
+            let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
+            let fee = m.value_of("fee").unwrap();
+            let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
+            let config_path = Path::new(m.value_of("config-path").unwrap());
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+            let l1_sudt_type_hash = match m.value_of("l1-sudt-type-hash") {
+                Some(value) => value
+                    .trim_start_matches("0x")
+                    .parse()
+                    .expect("l1 sudt type hash format error"),
+                None => {
+                    let err_msg = "Must provide either l1-sudt-type-hash or l1-sudt-script-args and l1-sudt-script-code-hash";
+                    let l1_sudt_script_args: ckb_fixed_hash::H256 = m
+                        .value_of("l1-sudt-script-args")
+                        .map(|s| s.trim_start_matches("0x").parse())
+                        .transpose()?
+                        .ok_or_else(|| anyhow!(err_msg))?;
+                    let l1_sudt_script_code_hash: ckb_fixed_hash::H256 = m
+                        .value_of("l1-sudt-script-code-hash")
+                        .map(|s| s.trim_start_matches("0x").parse())
+                        .transpose()?
+                        .ok_or_else(|| anyhow!(err_msg))?;
+                    let sudt_type_script =
+                        build_l1_sudt_type_script(&l1_sudt_script_args, &l1_sudt_script_code_hash);
+                    sudt_type_script.hash().into()
+                }
+            };
+            let quite = m.is_present("quite");
+            if !quite {
+                log::info!("l1 script hash: {}", l1_sudt_type_hash);
+            }
+
+            // parse args
+            let scripts_deployment_content = std::fs::read_to_string(scripts_deployment_path)?;
+            let scripts_deployment: ScriptsDeploymentResult =
+                serde_json::from_str(&scripts_deployment_content)?;
+            let mut rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
+            let config = read_config(config_path)?;
+            let pk = read_privkey(privkey_path)?;
+            let fee: u128 = fee.parse().expect("fee format error");
+
+            let account_id = match sudt::account::create_sudt_account(
+                &mut rpc_client,
+                &pk,
+                l1_sudt_type_hash,
+                fee,
+                &config,
+                &scripts_deployment,
+                quite,
+            ) {
+                Ok(account_id) => account_id,
+                Err(err) => {
+                    log::error!("Create Simple UDT account error: {}", err);
+                    std::process::exit(-1);
+                }
+            };
+            if quite {
+                println!("{}", account_id);
+            }
         }
         ("get-balance", Some(m)) => {
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
