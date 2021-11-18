@@ -1,3 +1,4 @@
+use anyhow::Result;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::prelude::{Builder, Entity};
 use gw_types::{
@@ -9,9 +10,11 @@ use std::path::Path;
 use crate::{
     account::{eth_sign, privkey_to_short_address, read_privkey, short_address_to_account_id},
     godwoken_rpc::GodwokenRpcClient,
-    transfer::generate_transaction_message_to_sign,
     types::ScriptsDeploymentResult,
-    utils::transaction::{read_config, wait_for_l2_tx},
+    utils::{
+        message::generate_transaction_message_to_sign,
+        transaction::{read_config, wait_for_l2_tx},
+    },
 };
 use gw_types::{bytes::Bytes as GwBytes, prelude::Pack as GwPack};
 
@@ -22,13 +25,12 @@ pub fn create_creator_account(
     fee_amount: &str,
     config_path: &Path,
     scripts_deployment_path: &Path,
-) -> Result<(), String> {
+) -> Result<()> {
     let fee: u128 = fee_amount.parse().expect("fee format error");
 
-    let scripts_deployment_content =
-        std::fs::read_to_string(scripts_deployment_path).map_err(|err| err.to_string())?;
+    let scripts_deployment_content = std::fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =
-        serde_json::from_str(&scripts_deployment_content).map_err(|err| err.to_string())?;
+        serde_json::from_str(&scripts_deployment_content)?;
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
@@ -101,7 +103,7 @@ pub fn create_creator_account(
     let tx_hash = godwoken_rpc_client.submit_l2transaction(json_bytes)?;
     log::info!("tx hash: 0x{}", hex::encode(tx_hash.as_bytes()));
 
-    wait_for_l2_tx(&mut godwoken_rpc_client, &tx_hash, 180)?;
+    wait_for_l2_tx(&mut godwoken_rpc_client, &tx_hash, 180, false)?;
 
     let account_id = godwoken_rpc_client
         .get_account_id_by_script_hash(l2_script_hash.into())?

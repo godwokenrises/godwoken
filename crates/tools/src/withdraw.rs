@@ -5,6 +5,7 @@ use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::hasher::{CkbHasher, EthHasher};
 use crate::types::ScriptsDeploymentResult;
 use crate::utils::transaction::read_config;
+use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_sdk::{Address, HumanCapacity};
@@ -31,16 +32,14 @@ pub fn withdraw(
     owner_ckb_address: &str,
     config_path: &Path,
     scripts_deployment_path: &Path,
-) -> Result<(), String> {
-    let sudt_script_hash = H256::from_str(sudt_script_hash.trim().trim_start_matches("0x"))
-        .map_err(|err| err.to_string())?;
+) -> Result<()> {
+    let sudt_script_hash = H256::from_str(sudt_script_hash.trim().trim_start_matches("0x"))?;
     let capacity = parse_capacity(capacity)?;
     let amount: u128 = amount.parse().expect("sUDT amount format error");
 
-    let scripts_deployment_content =
-        fs::read_to_string(scripts_deployment_path).map_err(|err| err.to_string())?;
+    let scripts_deployment_content = fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =
-        serde_json::from_str(&scripts_deployment_content).map_err(|err| err.to_string())?;
+        serde_json::from_str(&scripts_deployment_content)?;
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
@@ -52,7 +51,7 @@ pub fn withdraw(
     let is_sudt = sudt_script_hash != H256([0u8; 32]);
     let minimal_capacity = minimal_withdrawal_capacity(is_sudt)?;
     if capacity < minimal_capacity {
-        let msg = format!(
+        let msg = anyhow!(
             "Withdrawal required {} CKB at least, provided {}.",
             HumanCapacity::from(minimal_capacity).to_string(),
             HumanCapacity::from(capacity).to_string()
@@ -64,7 +63,7 @@ pub fn withdraw(
 
     // owner_ckb_address -> owner_lock_hash
     let owner_lock_hash: H256 = {
-        let address = Address::from_str(owner_ckb_address)?;
+        let address = Address::from_str(owner_ckb_address).map_err(|err| anyhow!(err))?;
         let payload = address.payload();
         let owner_lock_script = ckb_types::packed::Script::from(payload);
 
@@ -129,7 +128,7 @@ fn create_raw_withdrawal_request(
     sell_amount: &u128,
     owner_lock_hash: &H256,
     payment_lock_hash: &H256,
-) -> Result<RawWithdrawalRequest, String> {
+) -> Result<RawWithdrawalRequest> {
     let raw = RawWithdrawalRequest::new_builder()
         .nonce(GwPack::pack(nonce))
         .capacity(GwPack::pack(capacity))
@@ -145,8 +144,8 @@ fn create_raw_withdrawal_request(
     Ok(raw)
 }
 
-fn h256_to_byte32(hash: &H256) -> Result<Byte32, String> {
-    let value = Byte32::from_slice(hash.as_bytes()).map_err(|err| err.to_string())?;
+fn h256_to_byte32(hash: &H256) -> Result<Byte32> {
+    let value = Byte32::from_slice(hash.as_bytes())?;
     Ok(value)
 }
 
@@ -175,7 +174,7 @@ fn wait_for_balance_change(
     from_address: GwBytes,
     init_balance: u128,
     timeout_secs: u64,
-) -> Result<(), String> {
+) -> Result<()> {
     let retry_timeout = Duration::from_secs(timeout_secs);
     let start_time = Instant::now();
     while start_time.elapsed() < retry_timeout {
@@ -194,15 +193,15 @@ fn wait_for_balance_change(
             return Ok(());
         }
     }
-    Err(format!("Timeout: {:?}", retry_timeout))
+    Err(anyhow!("Timeout: {:?}", retry_timeout))
 }
 
-fn parse_capacity(capacity: &str) -> Result<u64, String> {
-    let human_capacity = HumanCapacity::from_str(capacity)?;
+fn parse_capacity(capacity: &str) -> Result<u64> {
+    let human_capacity = HumanCapacity::from_str(capacity).map_err(|err| anyhow!("{}", err))?;
     Ok(human_capacity.into())
 }
 
-fn minimal_withdrawal_capacity(is_sudt: bool) -> Result<u64, String> {
+fn minimal_withdrawal_capacity(is_sudt: bool) -> Result<u64> {
     // fixed size, the specific value is not important.
     let dummy_hash = gw_types::core::H256::zero();
     let dummy_block_number = 0u64;
@@ -251,8 +250,6 @@ fn minimal_withdrawal_capacity(is_sudt: bool) -> Result<u64, String> {
 
     let data_capacity = if is_sudt { 16 } else { 0 };
 
-    let capacity = output
-        .occupied_capacity(data_capacity)
-        .map_err(|err| err.to_string())?;
+    let capacity = output.occupied_capacity(data_capacity)?;
     Ok(capacity)
 }

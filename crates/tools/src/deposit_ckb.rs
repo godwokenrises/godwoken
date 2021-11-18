@@ -3,6 +3,7 @@ use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::hasher::CkbHasher;
 use crate::types::ScriptsDeploymentResult;
 use crate::utils::transaction::{get_network_type, read_config, run_cmd, wait_for_tx};
+use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_sdk::{Address, AddressPayload, HttpRpcClient, HumanCapacity, SECP256K1};
@@ -32,11 +33,10 @@ pub fn deposit_ckb(
     ckb_rpc_url: &str,
     eth_address: Option<&str>,
     godwoken_rpc_url: &str,
-) -> Result<(), String> {
-    let scripts_deployment_content =
-        std::fs::read_to_string(scripts_deployment_path).map_err(|err| err.to_string())?;
+) -> Result<()> {
+    let scripts_deployment_content = std::fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =
-        serde_json::from_str(&scripts_deployment_content).map_err(|err| err.to_string())?;
+        serde_json::from_str(&scripts_deployment_content)?;
 
     let config = read_config(&config_path)?;
 
@@ -45,8 +45,7 @@ pub fn deposit_ckb(
     // Using private key to calculate eth address when eth_address not provided.
     let eth_address_bytes = match eth_address {
         Some(addr) => {
-            let addr_vec = hex::decode(&addr.trim_start_matches("0x").as_bytes())
-                .map_err(|err| err.to_string())?;
+            let addr_vec = hex::decode(&addr.trim_start_matches("0x").as_bytes())?;
             CKBBytes::from(addr_vec)
         }
         None => privkey_to_eth_address(&privkey)?,
@@ -55,8 +54,7 @@ pub fn deposit_ckb(
 
     let rollup_type_hash = &config.genesis.rollup_type_hash;
 
-    let owner_lock_hash = Byte32::from_slice(privkey_to_lock_hash(&privkey)?.as_bytes())
-        .map_err(|err| err.to_string())?;
+    let owner_lock_hash = Byte32::from_slice(privkey_to_lock_hash(&privkey)?.as_bytes())?;
 
     // build layer2 lock
     let l2_code_hash = &scripts_deployment.eth_account_lock.script_type_hash;
@@ -66,17 +64,14 @@ pub fn deposit_ckb(
     let l2_lock_args = GwPack::pack(&GwBytes::from(l2_args_vec));
 
     let l2_lock = Script::new_builder()
-        .code_hash(Byte32::from_slice(l2_code_hash.as_bytes()).map_err(|err| err.to_string())?)
+        .code_hash(Byte32::from_slice(l2_code_hash.as_bytes())?)
         .hash_type(ScriptHashType::Type.into())
         .args(l2_lock_args)
         .build();
 
     let l2_lock_hash = CkbHasher::new().update(l2_lock.as_slice()).finalize();
 
-    let l2_lock_hash_str = format!(
-        "0x{}",
-        faster_hex::hex_string(l2_lock_hash.as_bytes()).map_err(|err| err.to_string())?
-    );
+    let l2_lock_hash_str = format!("0x{}", faster_hex::hex_string(l2_lock_hash.as_bytes())?);
     log::info!("layer2 script hash: {}", l2_lock_hash_str);
 
     // cancel_timeout default to 2 days
@@ -89,7 +84,7 @@ pub fn deposit_ckb(
     let minimal_capacity = minimal_deposit_capacity(&deposit_lock_args)?;
     let capacity_in_shannons = parse_capacity(capacity)?;
     if capacity_in_shannons < minimal_capacity {
-        let msg = format!(
+        let msg = anyhow!(
             "Deposit CKB required {} CKB at least, provided {}.",
             HumanCapacity::from(minimal_capacity).to_string(),
             HumanCapacity::from(capacity_in_shannons).to_string()
@@ -133,8 +128,7 @@ pub fn deposit_ckb(
         fee,
         "--skip-check-to-address",
     ])?;
-    let tx_hash =
-        H256::from_str(output.trim().trim_start_matches("0x")).map_err(|err| err.to_string())?;
+    let tx_hash = H256::from_str(output.trim().trim_start_matches("0x"))?;
     log::info!("tx_hash: {:#x}", tx_hash);
 
     wait_for_tx(&mut rpc_client, &tx_hash, 180u64)?;
@@ -149,9 +143,8 @@ pub fn deposit_ckb(
     Ok(())
 }
 
-fn privkey_to_lock_hash(privkey: &H256) -> Result<H256, String> {
-    let privkey = secp256k1::SecretKey::from_slice(privkey.as_bytes())
-        .map_err(|err| format!("Invalid secp256k1 secret key format, error: {}", err))?;
+fn privkey_to_lock_hash(privkey: &H256) -> Result<H256> {
+    let privkey = secp256k1::SecretKey::from_slice(privkey.as_bytes())?;
     let pubkey = secp256k1::PublicKey::from_secret_key(&SECP256K1, &privkey);
     let address_payload = AddressPayload::from_pubkey(&pubkey);
 
@@ -166,7 +159,7 @@ fn wait_for_balance_change(
     from_script_hash: &H256,
     init_balance: u128,
     timeout_secs: u64,
-) -> Result<(), String> {
+) -> Result<()> {
     let retry_timeout = Duration::from_secs(timeout_secs);
     let start_time = Instant::now();
     while start_time.elapsed() < retry_timeout {
@@ -189,20 +182,20 @@ fn wait_for_balance_change(
             return Ok(());
         }
     }
-    Err(format!("Timeout: {:?}", retry_timeout))
+    Err(anyhow!("Timeout: {:?}", retry_timeout))
 }
 
 fn get_balance_by_short_address(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     short_address: Vec<u8>,
-) -> Result<u128, String> {
+) -> Result<u128> {
     let bytes = JsonBytes::from_vec(short_address);
     let balance = godwoken_rpc_client.get_balance(bytes, 1)?;
     Ok(balance)
 }
 
 // only for CKB
-fn minimal_deposit_capacity(deposit_lock_args: &DepositLockArgs) -> Result<u64, String> {
+fn minimal_deposit_capacity(deposit_lock_args: &DepositLockArgs) -> Result<u64> {
     // fixed size, the specific value is not important.
     let dummy_hash = gw_types::core::H256::zero();
     let dummy_block_number = 0u64;
@@ -233,11 +226,11 @@ fn minimal_deposit_capacity(deposit_lock_args: &DepositLockArgs) -> Result<u64, 
         .lock(lock_script)
         .build();
 
-    let capacity = output.occupied_capacity(0).map_err(|err| err.to_string())?;
+    let capacity = output.occupied_capacity(0)?;
     Ok(capacity)
 }
 
-fn parse_capacity(capacity: &str) -> Result<u64, String> {
-    let human_capacity = HumanCapacity::from_str(capacity)?;
+fn parse_capacity(capacity: &str) -> Result<u64> {
+    let human_capacity = HumanCapacity::from_str(capacity).map_err(|err| anyhow!(err))?;
     Ok(human_capacity.into())
 }

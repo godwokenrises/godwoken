@@ -2,6 +2,7 @@ use std::ops::Deref;
 use std::path::Path;
 use std::str::FromStr;
 
+use anyhow::{anyhow, Result};
 use tempfile::NamedTempFile;
 
 use ckb_fixed_hash::H256;
@@ -94,7 +95,7 @@ impl<'a> DeployContext<'a> {
         mut deps: Vec<ckb_packed::CellDep>,
         first_cell_input: Option<&ckb_packed::CellInput>,
         witness_0: ckb_packed::WitnessArgs,
-    ) -> Result<H256, String> {
+    ) -> Result<H256> {
         let tx_fee = ONE_CKB;
         let total_output_capacity: u64 = outputs
             .iter()
@@ -104,7 +105,9 @@ impl<'a> DeployContext<'a> {
             })
             .sum();
         let total_capacity = total_output_capacity + tx_fee;
-        let tip_number = rpc_client.get_tip_block_number()?;
+        let tip_number = rpc_client
+            .get_tip_block_number()
+            .map_err(|err| anyhow!(err))?;
         let max_mature_number = get_max_mature_number(rpc_client)?;
         let (inputs, total_input_capacity) = collect_live_cells(
             rpc_client.url(),
@@ -115,7 +118,7 @@ impl<'a> DeployContext<'a> {
         )?;
         if let Some(first_input) = first_cell_input {
             if inputs[0].as_slice() != first_input.as_slice() {
-                return Err("first input cell changed".to_string());
+                return Err(anyhow!("first input cell changed"));
             }
         }
         // collect_live_cells will ensure `total_input_capacity >= total_capacity`.
@@ -153,7 +156,7 @@ impl<'a> DeployContext<'a> {
             .build();
 
         // 7. build ckb-cli tx and sign
-        let tx_file = NamedTempFile::new().map_err(|err| err.to_string())?;
+        let tx_file = NamedTempFile::new()?;
         let tx_path_str = tx_file.path().to_str().unwrap();
         let _output = run_cmd(&[
             "--url",
@@ -169,7 +172,7 @@ impl<'a> DeployContext<'a> {
         let mut cli_tx: serde_json::Value = serde_json::from_str(&cli_tx_content).unwrap();
         cli_tx["transaction"] = tx_body;
         let cli_tx_content = serde_json::to_string_pretty(&cli_tx).unwrap();
-        std::fs::write(tx_path_str, cli_tx_content.as_bytes()).map_err(|err| err.to_string())?;
+        std::fs::write(tx_path_str, cli_tx_content.as_bytes())?;
         let _output = run_cmd(&[
             "--url",
             rpc_client.url(),
@@ -194,8 +197,7 @@ impl<'a> DeployContext<'a> {
             max_tx_fee_str,
             "--skip-check",
         ])?;
-        let tx_hash = H256::from_str(send_output.trim().trim_start_matches("0x"))
-            .map_err(|err| err.to_string())?;
+        let tx_hash = H256::from_str(send_output.trim().trim_start_matches("0x"))?;
         log::info!("tx_hash: {:#x}", tx_hash);
         wait_for_tx(rpc_client, &tx_hash, 120)?;
         Ok(tx_hash)
@@ -212,7 +214,7 @@ pub struct DeployRollupCellArgs<'a> {
     pub skip_config_check: bool,
 }
 
-pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeploymentResult, String> {
+pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeploymentResult> {
     let DeployRollupCellArgs {
         privkey_path,
         ckb_rpc_url,
@@ -238,7 +240,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         let expected_burn_lock_hash: [u8; 32] =
             expected_burn_lock_script.calc_script_hash().unpack();
         if H256(expected_burn_lock_hash) != H256(burn_lock_hash) {
-            return Err(format!(
+            return Err(anyhow!(
                 "The burn lock hash: 0x{} is not default, we suggest to use default burn lock \
                 0x{} (code_hash: 0x, hash_type: Data, args: empty)",
                 hex::encode(&burn_lock_hash),
@@ -246,32 +248,31 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
             ));
         }
         if poa_setup.round_intervals == 0 {
-            return Err("round intervals value must be greater than 0".to_string());
+            return Err(anyhow!("round intervals value must be greater than 0"));
         }
     }
 
     let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
     let network_type = get_network_type(&mut rpc_client)?;
-    let privkey_string = std::fs::read_to_string(privkey_path)
-        .map_err(|err| err.to_string())?
+    let privkey_string = std::fs::read_to_string(privkey_path)?
         .split_whitespace()
         .next()
         .map(ToOwned::to_owned)
-        .ok_or_else(|| "File is empty".to_string())?;
-    let privkey_data = H256::from_str(privkey_string.trim().trim_start_matches("0x"))
-        .map_err(|err| err.to_string())?;
+        .ok_or_else(|| anyhow!("File is empty"))?;
+    let privkey_data = H256::from_str(privkey_string.trim().trim_start_matches("0x"))?;
     let privkey = secp256k1::SecretKey::from_slice(privkey_data.as_bytes())
-        .map_err(|err| format!("Invalid secp256k1 secret key format, error: {}", err))?;
+        .map_err(|err| anyhow!("Invalid secp256k1 secret key format, error: {}", err))?;
     let pubkey = secp256k1::PublicKey::from_secret_key(&SECP256K1, &privkey);
     let owner_address_payload = AddressPayload::from_pubkey(&pubkey);
     let owner_address = Address::new(network_type, owner_address_payload);
     let owner_address_string = owner_address.to_string();
     let max_mature_number = get_max_mature_number(&mut rpc_client)?;
     let genesis_block: BlockView = rpc_client
-        .get_block_by_number(0)?
+        .get_block_by_number(0)
+        .map_err(|err| anyhow!(err))?
         .expect("Can not get genesis block?")
         .into();
-    let genesis_info = GenesisInfo::from_block(&genesis_block)?;
+    let genesis_info = GenesisInfo::from_block(&genesis_block).map_err(|err| anyhow!(err))?;
 
     // deploy rollup config cell
     let allowed_contract_type_hashes: Vec<gw_packed::Byte32> = vec![
@@ -375,7 +376,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     .into_iter()
     .next()
     .map(|(input, _)| input)
-    .ok_or_else(|| format!("No live cell found for address: {}", owner_address_string))?;
+    .ok_or_else(|| anyhow!("No live cell found for address: {}", owner_address_string))?;
 
     let rollup_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 0);
     let poa_setup_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 1);
@@ -402,8 +403,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         rollup_config: rollup_config.clone().into(),
         secp_data_dep,
     };
-    let genesis_with_global_state =
-        build_genesis(&genesis_config, secp_data).map_err(|err| err.to_string())?;
+    let genesis_with_global_state = build_genesis(&genesis_config, secp_data)?;
 
     // 2. build rollup cell (with type id)
     let (rollup_output, rollup_data): (ckb_packed::CellOutput, Bytes) = {
@@ -455,7 +455,12 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     };
     // 4. build PoA data cell (with type id)
     let (poa_data_output, poa_data_data): (ckb_packed::CellOutput, Bytes) = {
-        let median_time = rpc_client.get_blockchain_info()?.median_time.0 / 1000;
+        let median_time = rpc_client
+            .get_blockchain_info()
+            .map_err(|err| anyhow!(err))?
+            .median_time
+            .0
+            / 1000;
         let poa_data = PoAData {
             round_initial_subtime: median_time,
             subblock_subtime: median_time,
@@ -543,7 +548,7 @@ fn collect_live_cells(
     max_mature_number: u64,
     tip_number: u64,
     total_capacity: u64,
-) -> Result<(Vec<ckb_packed::CellInput>, u64), String> {
+) -> Result<(Vec<ckb_packed::CellInput>, u64)> {
     let number_step = 10000;
     let limit = Some(usize::max_value());
     let mut from_number = 0;
@@ -552,7 +557,7 @@ fn collect_live_cells(
     let mut inputs = Vec::new();
     while total_input_capacity < total_capacity {
         if from_number > tip_number {
-            return Err(format!(
+            return Err(anyhow!(
                 "not enough capacity from {}, expected: {}, found: {}",
                 owner_address_str,
                 HumanCapacity(total_capacity),
@@ -588,7 +593,7 @@ fn get_live_cells(
     from_number: Option<u64>,
     to_number: Option<u64>,
     limit: Option<usize>,
-) -> Result<Vec<(ckb_packed::CellInput, u64)>, String> {
+) -> Result<Vec<(ckb_packed::CellInput, u64)>> {
     let from_number_string = from_number.map(|value| value.to_string());
     let to_number_string = to_number.map(|value| value.to_string());
     let mut actual_limit = limit.unwrap_or(20);
@@ -619,8 +624,7 @@ fn get_live_cells(
         args.push(limit_string.as_str());
 
         let live_cells_output = run_cmd(args)?;
-        let live_cells: serde_json::Value =
-            serde_json::from_str(&live_cells_output).map_err(|err| err.to_string())?;
+        let live_cells: serde_json::Value = serde_json::from_str(&live_cells_output)?;
         cells = live_cells["live_cells"]
             .as_array()
             .expect("josn live cells")
@@ -701,18 +705,20 @@ fn get_live_cells(
 }
 
 // Get max mature block number
-pub fn get_max_mature_number(rpc_client: &mut HttpRpcClient) -> Result<u64, String> {
+pub fn get_max_mature_number(rpc_client: &mut HttpRpcClient) -> Result<u64> {
     let tip_epoch = rpc_client
         .get_tip_header()
-        .map(|header| EpochNumberWithFraction::from_full_value(header.inner.epoch.0))?;
+        .map(|header| EpochNumberWithFraction::from_full_value(header.inner.epoch.0))
+        .map_err(|err| anyhow!(err))?;
     let tip_epoch_number = tip_epoch.number();
     if tip_epoch_number < 4 {
         // No cellbase live cell is mature
         Ok(0)
     } else {
         let max_mature_epoch = rpc_client
-            .get_epoch_by_number(tip_epoch_number - 4)?
-            .ok_or_else(|| "Can not get epoch less than current epoch number".to_string())?;
+            .get_epoch_by_number(tip_epoch_number - 4)
+            .map_err(|err| anyhow!(err))?
+            .ok_or_else(|| anyhow!("Can not get epoch less than current epoch number"))?;
         let start_number = max_mature_epoch.start_number;
         let length = max_mature_epoch.length;
         Ok(calc_max_mature_number(
@@ -733,10 +739,11 @@ pub fn is_mature(number: u64, tx_index: u64, max_mature_number: u64) -> bool {
 
 pub fn get_secp_data(
     rpc_client: &mut HttpRpcClient,
-) -> Result<(Bytes, gw_jsonrpc_types::blockchain::CellDep), String> {
+) -> Result<(Bytes, gw_jsonrpc_types::blockchain::CellDep)> {
     let mut cell_dep = None;
     rpc_client
-        .get_block_by_number(0)?
+        .get_block_by_number(0)
+        .map_err(|err| anyhow!(err))?
         .expect("get CKB genesis block")
         .transactions
         .iter()
@@ -762,5 +769,5 @@ pub fn get_secp_data(
                     }
                 });
         });
-    cell_dep.ok_or_else(|| "Can not found secp data cell in CKB genesis block".to_string())
+    cell_dep.ok_or_else(|| anyhow!("Can not found secp data cell in CKB genesis block"))
 }
