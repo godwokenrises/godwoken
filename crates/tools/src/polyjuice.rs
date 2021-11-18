@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result};
 use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::prelude::{Builder, Entity};
@@ -10,9 +11,11 @@ use crate::{
         privkey_to_l2_script_hash, read_privkey, short_address_to_account_id,
     },
     godwoken_rpc::GodwokenRpcClient,
-    transfer::generate_transaction_message_to_sign,
     types::ScriptsDeploymentResult,
-    utils::transaction::{read_config, wait_for_l2_tx},
+    utils::{
+        message::generate_transaction_message_to_sign,
+        transaction::{read_config, wait_for_l2_tx},
+    },
 };
 use gw_types::{bytes::Bytes as GwBytes, prelude::Pack as GwPack};
 
@@ -29,15 +32,12 @@ pub fn deploy(
     gas_price: u128,
     data: &str,
     value: u128,
-) -> Result<(), String> {
-    let data = GwBytes::from(
-        hex::decode(data.trim_start_matches("0x").as_bytes()).map_err(|err| err.to_string())?,
-    );
+) -> Result<()> {
+    let data = GwBytes::from(hex::decode(data.trim_start_matches("0x").as_bytes())?);
 
-    let scripts_deployment_string =
-        std::fs::read_to_string(scripts_deployment_path).map_err(|err| err.to_string())?;
+    let scripts_deployment_string = std::fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =
-        serde_json::from_str(&scripts_deployment_string).map_err(|err| err.to_string())?;
+        serde_json::from_str(&scripts_deployment_string)?;
 
     let config = read_config(config_path)?;
     let rollup_type_hash = &config.genesis.rollup_type_hash;
@@ -74,15 +74,12 @@ pub fn send_transaction(
     data: &str,
     value: u128,
     to_address: &str,
-) -> Result<(), String> {
-    let data = GwBytes::from(
-        hex::decode(data.trim_start_matches("0x").as_bytes()).map_err(|err| err.to_string())?,
-    );
+) -> Result<()> {
+    let data = GwBytes::from(hex::decode(data.trim_start_matches("0x").as_bytes())?);
 
-    let scripts_deployment_string =
-        std::fs::read_to_string(scripts_deployment_path).map_err(|err| err.to_string())?;
+    let scripts_deployment_string = std::fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =
-        serde_json::from_str(&scripts_deployment_string).map_err(|err| err.to_string())?;
+        serde_json::from_str(&scripts_deployment_string)?;
 
     let config = read_config(config_path)?;
     let rollup_type_hash = &config.genesis.rollup_type_hash;
@@ -91,10 +88,7 @@ pub fn send_transaction(
 
     let privkey = read_privkey(privkey_path)?;
 
-    let to_address = GwBytes::from(
-        hex::decode(to_address.trim_start_matches("0x").as_bytes())
-            .map_err(|err| err.to_string())?,
-    );
+    let to_address = GwBytes::from(hex::decode(to_address.trim_start_matches("0x").as_bytes())?);
 
     send(
         &mut godwoken_rpc_client,
@@ -121,18 +115,15 @@ pub fn polyjuice_call(
     value: u128,
     to_address: &str,
     from: &str,
-) -> Result<(), String> {
-    let data = GwBytes::from(
-        hex::decode(data.trim_start_matches("0x").as_bytes()).map_err(|err| err.to_string())?,
-    );
+) -> Result<()> {
+    let data = GwBytes::from(hex::decode(data.trim_start_matches("0x").as_bytes())?);
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
     let to_address_str = to_address;
-    let to_address = GwBytes::from(
-        hex::decode(to_address_str.trim_start_matches("0x").as_bytes())
-            .map_err(|err| err.to_string())?,
-    );
+    let to_address = GwBytes::from(hex::decode(
+        to_address_str.trim_start_matches("0x").as_bytes(),
+    )?);
 
     let from_address = parse_account_short_address(&mut godwoken_rpc_client, from)?;
     let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
@@ -144,7 +135,7 @@ pub fn polyjuice_call(
     {
         Some(h) => h,
         None => {
-            return Err(format!(
+            return Err(anyhow!(
                 "script hash by short address {} not found",
                 to_address_str
             ))
@@ -169,7 +160,7 @@ pub fn polyjuice_call(
     let run_result = godwoken_rpc_client
         .execute_raw_l2transaction(JsonBytes::from_bytes(raw_l2transaction.as_bytes()))?;
 
-    let j = serde_json::to_value(run_result).map_err(|err| err.to_string())?;
+    let j = serde_json::to_value(run_result)?;
     log::info!("run result: {}", serde_json::to_string_pretty(&j).unwrap());
 
     Ok(())
@@ -187,7 +178,7 @@ fn send(
     value: u128,
     rollup_type_hash: &H256,
     scripts_deployment: &ScriptsDeploymentResult,
-) -> Result<(), String> {
+) -> Result<()> {
     let to_address = if to_address == [0u8; 20][..] || to_address.is_empty() {
         None
     } else {
@@ -242,14 +233,14 @@ fn send(
         godwoken_rpc_client.submit_l2transaction(JsonBytes::from_bytes(l2_tx.as_bytes()))?;
     log::info!("tx hash: 0x{}", hex::encode(tx_hash.as_bytes()));
 
-    let tx_receipt = wait_for_l2_tx(godwoken_rpc_client, &tx_hash, 180)?;
+    let tx_receipt = wait_for_l2_tx(godwoken_rpc_client, &tx_hash, 180, false)?;
 
     if let (None, Some(receipt)) = (to_address, tx_receipt) {
         let polyjuice_system_log = receipt
             .logs
             .into_iter()
             .find(|item| item.service_flag.value() as u8 == GW_LOG_POLYJUICE_SYSTEM)
-            .ok_or("no system logs")?;
+            .ok_or_else(|| anyhow!("no system logs"))?;
         let data = polyjuice_system_log.data.as_bytes();
         let mut contract_address = [0u8; 20];
         contract_address.copy_from_slice(&data[16..36]);

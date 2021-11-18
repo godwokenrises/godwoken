@@ -1,6 +1,7 @@
 //! Transaction related utils
 //! NOTICE: Some functions should be moved to a more proper module than this.
 
+use anyhow::anyhow;
 use anyhow::Result;
 use ckb_fixed_hash::{h256, H256};
 use ckb_jsonrpc_types::Status;
@@ -52,7 +53,7 @@ where
     }
 }
 
-pub fn run_cmd<I, S>(args: I) -> Result<String, String>
+pub fn run_cmd<I, S>(args: I) -> Result<String>
 where
     I: IntoIterator<Item = S> + std::fmt::Debug,
     S: AsRef<OsStr>,
@@ -66,10 +67,10 @@ where
         .expect("Run command failed");
 
     if !init_output.status.success() {
-        Err(format!(
-            "{}",
-            String::from_utf8_lossy(init_output.stderr.as_slice())
-        ))
+        Err(anyhow!(String::from_utf8_lossy(
+            init_output.stderr.as_slice()
+        )
+        .to_string()))
     } else {
         let stdout = String::from_utf8_lossy(init_output.stdout.as_slice()).to_string();
         log::debug!("stdout: {}", stdout);
@@ -81,13 +82,16 @@ pub fn wait_for_tx(
     rpc_client: &mut HttpRpcClient,
     tx_hash: &H256,
     timeout_secs: u64,
-) -> Result<TransactionView, String> {
+) -> Result<TransactionView> {
     log::info!("waiting tx {}", hex::encode(&tx_hash));
     let retry_timeout = Duration::from_secs(timeout_secs);
     let start_time = Instant::now();
     while start_time.elapsed() < retry_timeout {
         std::thread::sleep(Duration::from_secs(5));
-        match rpc_client.get_transaction(tx_hash.clone())? {
+        match rpc_client
+            .get_transaction(tx_hash.clone())
+            .map_err(|err| anyhow!(err))?
+        {
             Some(tx_with_status) if tx_with_status.tx_status.status == Status::Pending => {
                 log::info!("tx pending");
             }
@@ -103,16 +107,18 @@ pub fn wait_for_tx(
             }
         }
     }
-    Err(format!("Timeout: {:?}", retry_timeout))
+    Err(anyhow!("Timeout: {:?}", retry_timeout))
 }
 
-pub fn get_network_type(rpc_client: &mut HttpRpcClient) -> Result<NetworkType, String> {
-    let chain_info = rpc_client.get_blockchain_info()?;
+pub fn get_network_type(rpc_client: &mut HttpRpcClient) -> Result<NetworkType> {
+    let chain_info = rpc_client
+        .get_blockchain_info()
+        .map_err(|err| anyhow!(err))?;
     NetworkType::from_raw_str(chain_info.chain.as_str())
-        .ok_or_else(|| format!("Unexpected network type: {}", chain_info.chain))
+        .ok_or_else(|| anyhow!("Unexpected network type: {}", chain_info.chain))
 }
 
-pub fn run_in_output_mode<I, S>(bin: &str, args: I) -> Result<(String, String), String>
+pub fn run_in_output_mode<I, S>(bin: &str, args: I) -> Result<(String, String)>
 where
     I: IntoIterator<Item = S> + std::fmt::Debug,
     S: AsRef<OsStr>,
@@ -125,7 +131,7 @@ where
         .expect("Run command failed");
 
     if !init_output.status.success() {
-        Err(format!(
+        Err(anyhow!(
             "{}",
             String::from_utf8_lossy(init_output.stderr.as_slice())
         ))
@@ -139,9 +145,9 @@ where
 }
 
 // Read config.toml
-pub fn read_config<P: AsRef<Path>>(path: P) -> Result<Config, String> {
-    let content = fs::read(&path).map_err(|err| err.to_string())?;
-    let config = toml::from_slice(&content).map_err(|err| err.to_string())?;
+pub fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
+    let content = fs::read(&path)?;
+    let config = toml::from_slice(&content)?;
     Ok(config)
 }
 
@@ -149,7 +155,8 @@ pub fn wait_for_l2_tx(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     tx_hash: &H256,
     timeout_secs: u64,
-) -> Result<Option<TxReceipt>, String> {
+    quite: bool,
+) -> Result<Option<TxReceipt>> {
     let retry_timeout = Duration::from_secs(timeout_secs);
     let start_time = Instant::now();
     while start_time.elapsed() < retry_timeout {
@@ -159,13 +166,17 @@ pub fn wait_for_l2_tx(
 
         match receipt {
             Some(_) => {
-                log::info!("tx committed");
+                if !quite {
+                    log::info!("tx committed");
+                }
                 return Ok(receipt);
             }
             None => {
-                log::info!("waiting for {} secs.", start_time.elapsed().as_secs());
+                if !quite {
+                    log::info!("waiting for {} secs.", start_time.elapsed().as_secs());
+                }
             }
         }
     }
-    Err(format!("Timeout: {:?}", retry_timeout))
+    Err(anyhow!("Timeout: {:?}", retry_timeout))
 }
