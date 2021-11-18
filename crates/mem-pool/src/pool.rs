@@ -764,8 +764,7 @@ impl MemPool {
         );
 
         // estimate next l2block timestamp
-        let previous_timestamp =
-            Duration::from_millis(self.mem_block.block_info().timestamp().unpack());
+        let previous_timestamp = Duration::from_millis(new_tip_block.raw().timestamp().unpack());
         let estimated_timestamp = smol::block_on(
             self.inner
                 .provider()
