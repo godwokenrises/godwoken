@@ -19,13 +19,14 @@ pub fn load_and_generate_genesis_accounts(
     let path = env::var(GENESIS_ACCOUNT_PATH)?;
     let path = Path::new(&path);
     if !path.exists() {
-        generate_genesis_account_sks();
+        generate_genesis_account_sks()?;
     }
     let allowed_eoa_type_hashes = rollup_context.rollup_config.allowed_eoa_type_hashes();
     let accounts = generate_genesis_accounts_with_state(
         state,
         &rollup_context.rollup_script_hash,
         &allowed_eoa_type_hashes.get(0).unwrap().unpack(),
+        path,
     );
     log::info!("generate genesis accounts {}", accounts.len());
     Ok(())
@@ -60,6 +61,7 @@ fn generate_genesis_accounts_with_state(
     state: &mut (impl State + StateExt + CodeStore),
     rollup_type_hash: &H256,
     eth_account_lock_hash: &H256,
+    accounts_path: &Path,
 ) -> Vec<Account> {
     const BENCH_GENESIS_ACCOUNT_CKB_BALANCE: u128 = 100_000_000;
 
@@ -106,6 +108,6 @@ fn generate_genesis_accounts_with_state(
         }
     };
 
-    let sks = std::fs::read_to_string(GENESIS_ACCOUNT_PATH).unwrap();
+    let sks = std::fs::read_to_string(accounts_path).unwrap();
     sks.split('\n').map(build_account).collect()
 }

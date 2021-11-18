@@ -93,7 +93,7 @@ pub fn build_genesis_from_store(
 
     #[cfg(feature = "generate-genesis-accounts")]
     {
-        crate::genesis_accounts::load_and_generate_genesis_accounts(&mut tree, &rollup_context);
+        crate::genesis_accounts::load_and_generate_genesis_accounts(&mut tree, &rollup_context)?;
     }
 
     let prev_state_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
