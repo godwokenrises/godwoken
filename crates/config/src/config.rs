@@ -195,8 +195,8 @@ impl Default for MemPoolConfig {
         Self {
             execute_l2tx_max_cycles: 100_000_000,
             submit_l2tx_max_cycles: 70_000_000,
-            max_batch_channel_buffer_size: 5000,
-            max_batch_tx_withdrawal_size: 500,
+            max_batch_channel_buffer_size: 2000,
+            max_batch_tx_withdrawal_size: 200,
         }
     }
 }
