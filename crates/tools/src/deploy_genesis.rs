@@ -36,8 +36,6 @@ use crate::types::{
 };
 use crate::utils::transaction::{get_network_type, run_cmd, wait_for_tx, TYPE_ID_CODE_HASH};
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 pub fn serialize_poa_setup(setup: &PoASetup) -> Bytes {
     let mut buffer = BytesMut::new();
     if setup.round_interval_uses_seconds {
@@ -357,13 +355,14 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
             .build()
     };
 
-    // millisecond
-    let timestamp = timestamp.unwrap_or_else(|| {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("timestamp")
-            .as_millis() as u64
-    });
+    // genesis timestamp is forced to 0
+    if timestamp.is_some() {
+        log::warn!(
+            "genesis timestamp is forced to 0, ignore the value: {:?}",
+            timestamp
+        );
+    }
+    let timestamp = 0;
 
     let first_cell_input: ckb_packed::CellInput = get_live_cells(
         rpc_client.url(),
