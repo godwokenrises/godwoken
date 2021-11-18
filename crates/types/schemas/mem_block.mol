@@ -1,0 +1,28 @@
+import blockchain;
+import godwoken;
+
+table CellInfo {
+    out_point: OutPoint,
+    output: CellOutput,
+    data: Bytes,
+}
+
+table DepositInfo {
+    request: DepositRequest,
+    cell: CellInfo,
+}
+
+vector DepositInfoVec <DepositInfo>;
+option Byte32Opt (Byte32);
+
+table MemBlock {
+    block_producer_id: Uint32,
+    txs: Byte32Vec,
+    withdrawals: Byte32Vec,
+    deposits: DepositInfoVec,
+    state_checkpoints: Byte32Vec,
+    txs_prev_state_checkpoint: Byte32Opt,
+    block_info: BlockInfo,
+    prev_merkle_state: AccountMerkleState,
+    touched_keys: Byte32Vec,
+}
