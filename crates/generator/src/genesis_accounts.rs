@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, path::Path};
 
 use crate::traits::StateExt;
 use anyhow::Result;
@@ -14,9 +14,11 @@ pub const GENESIS_ACCOUNT_NUMBER: &str = "GENESIS_ACCOUNT_NUMBER";
 pub fn load_and_generate_genesis_accounts(
     state: &mut (impl State + StateExt + CodeStore),
     rollup_context: &RollupContext,
-) {
+) -> Result<()> {
     // Setup accounts for benchmark
-    if env::var(GENESIS_ACCOUNT_PATH).is_err() {
+    let path = env::var(GENESIS_ACCOUNT_PATH)?;
+    let path = Path::new(&path);
+    if !path.exists() {
         generate_genesis_account_sks();
     }
     let allowed_eoa_type_hashes = rollup_context.rollup_config.allowed_eoa_type_hashes();
@@ -26,6 +28,7 @@ pub fn load_and_generate_genesis_accounts(
         &allowed_eoa_type_hashes.get(0).unwrap().unpack(),
     );
     log::info!("generate genesis accounts {}", accounts.len());
+    Ok(())
 }
 
 #[allow(dead_code)]
