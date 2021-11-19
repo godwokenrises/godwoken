@@ -15,10 +15,28 @@ table DepositInfo {
 vector DepositInfoVec <DepositInfo>;
 option Byte32Opt (Byte32);
 
+table SudtCustodian {
+    script_hash: Byte32,
+    amount: Uint128,
+    script: Script,
+}
+
+vector SudtCustodianVec <SudtCustodian>;
+vector CellInfoVec <CellInfo>;
+
+table CollectedCustodianCells {
+    cells_info: CellInfoVec,
+    capacity: Uint128,
+    sudt: SudtCustodianVec,
+}
+
+option CollectedCustodianCellsOpt (CollectedCustodianCells);
+
 table MemBlock {
     block_producer_id: Uint32,
     txs: Byte32Vec,
     withdrawals: Byte32Vec,
+    finalized_custodians: CollectedCustodianCellsOpt,
     deposits: DepositInfoVec,
     state_checkpoints: Byte32Vec,
     txs_prev_state_checkpoint: Byte32Opt,
