@@ -47,6 +47,7 @@ use crate::{
     constants::{MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS, MAX_TX_SIZE, MAX_WITHDRAWAL_SIZE},
     custodian::AvailableCustodians,
     mem_block::MemBlock,
+    save_restore::SaveRestore,
     traits::{MemPoolErrorTxHandler, MemPoolProvider},
     types::EntryList,
     withdrawal::Generator as WithdrawalGenerator,
@@ -217,6 +218,8 @@ pub struct MemPool {
     mem_block: MemBlock,
     /// Offchain cancel challenge validator
     offchain_validator: Option<OffChainCancelChallengeValidator>,
+    /// Mem block save and restore
+    save_restore: SaveRestore,
 }
 
 impl MemPool {
@@ -243,7 +246,11 @@ impl MemPool {
             Arc::clone(&config),
         );
 
-        let mem_block = MemBlock::with_block_producer(block_producer_id);
+        let save_restore = SaveRestore::build(&config.save_restore_path)?;
+        let mem_block = match save_restore.restore_from_latest() {
+            Ok(Some(restored)) => MemBlock::unpack(restored),
+            _ => MemBlock::with_block_producer(block_producer_id),
+        };
         let reverted_block_root = {
             let db = store.begin_transaction();
             let smt = db.reverted_block_smt()?;
@@ -267,10 +274,73 @@ impl MemPool {
             pending,
             mem_block,
             offchain_validator,
+            save_restore,
         };
 
         // set tip
-        mem_pool.reset(None, Some(tip.0))?;
+        let db = mem_pool.store.begin_transaction();
+        let mem_block = &mut mem_pool.mem_block;
+        let is_mem_block_state_matched = || -> Result<bool> {
+            // Check prev merkle state
+            if mem_block.prev_merkle_state().as_slice() != tip_block.raw().post_account().as_slice()
+            {
+                return Ok(false);
+            }
+
+            // Check block number
+            if mem_block.block_info().number().unpack() != tip.1 + 1 {
+                return Ok(false);
+            }
+
+            // Check block info
+            let db_block_info = db.get_mem_pool_block_info()?;
+            if db_block_info.map(|i| i.as_slice().to_vec())
+                != Some(mem_block.block_info().as_slice().to_vec())
+            {
+                return Ok(false);
+            }
+
+            // Check mem block merkle state
+            if db.get_mem_block_account_smt_root()?
+                != mem_block.post_merkle_state().merkle_root().unpack()
+                || db.get_mem_block_account_count()?
+                    != Unpack::<u32>::unpack(&mem_block.post_merkle_state().count())
+            {
+                return Ok(false);
+            }
+
+            Ok(true)
+        };
+        if !is_mem_block_state_matched()? {
+            mem_pool.reset(None, Some(tip.0))?;
+        } else {
+            let finalized_custodians = {
+                // query withdrawals from ckb-indexer
+                let last_finalized_block_number = mem_pool
+                    .generator
+                    .rollup_context()
+                    .last_finalized_block_number(tip.1);
+                let withdrawals: Vec<_> = {
+                    let mut withdrawals = Vec::with_capacity(mem_block.withdrawals().len());
+                    for withdrawal_hash in mem_block.withdrawals() {
+                        if let Some(withdrawal) = db.get_mem_pool_withdrawal(withdrawal_hash)? {
+                            withdrawals.push(withdrawal);
+                        }
+                    }
+                    withdrawals
+                };
+                let task = mem_pool.inner.provider().query_available_custodians(
+                    withdrawals,
+                    last_finalized_block_number,
+                    mem_pool.generator.rollup_context().to_owned(),
+                );
+                smol::block_on(task)?
+            };
+            mem_pool
+                .mem_block
+                .set_finalized_custodians(finalized_custodians);
+        }
+
         Ok(mem_pool)
     }
 
