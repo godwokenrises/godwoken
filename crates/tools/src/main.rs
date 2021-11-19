@@ -4,6 +4,7 @@ mod create_creator_account;
 mod deploy_genesis;
 mod deploy_scripts;
 mod deposit_ckb;
+mod dump_mem_block;
 mod dump_tx;
 mod generate_config;
 mod get_balance;
@@ -667,6 +668,19 @@ fn run_cli() -> Result<()> {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("dump-mem-block")
+                .about("Dump mem pool mem block")
+                .arg(arg_godwoken_rpc_url.clone())
+                .arg(
+                    Arg::with_name("output")
+                        .short("o")
+                        .long("output")
+                        .takes_value(true)
+                        .required(true)
+                        .help("output file"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("dump-cancel-challenge-tx")
                 .about("Dump offchain cancel challenge tx")
                 .arg(arg_godwoken_rpc_url.clone())
@@ -1158,6 +1172,15 @@ fn run_cli() -> Result<()> {
                 log::error!("To eth address error: {}", err);
                 std::process::exit(-1);
             };
+        }
+        ("dump-mem-bock", Some(m)) => {
+            let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
+            let output = Path::new(m.value_of("output").unwrap());
+
+            if let Err(err) = dump_mem_block::dump_mem_block(godwoken_rpc_url, output) {
+                log::error!("Dump mem block: {}", err);
+                std::process::exit(-1);
+            }
         }
         ("dump-cancel-challenge-tx", Some(m)) => {
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();

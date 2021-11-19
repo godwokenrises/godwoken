@@ -1,5 +1,5 @@
 use ckb_jsonrpc_types::Script;
-use ckb_types::H256;
+use ckb_types::{bytes::Bytes, H256};
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
     debugger::{DumpChallengeTarget, ReprMockTransaction},
@@ -116,6 +116,11 @@ impl GodwokenRpcClient {
         let params = serde_json::to_value((challenge_target,)).map_err(|err| err.to_string())?;
         self.raw_rpc::<ReprMockTransaction>("debug_dump_cancel_challenge_tx", params)
             .map(Into::into)
+    }
+
+    pub fn dump_mem_block(&mut self) -> Result<Bytes, String> {
+        let params = serde_json::Value::Null;
+        self.rpc::<Bytes>("dump_mem_block", params).map(Into::into)
     }
 
     fn rpc<SuccessResponse: serde::de::DeserializeOwned>(
