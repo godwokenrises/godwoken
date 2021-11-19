@@ -248,12 +248,12 @@ impl MemPool {
         );
 
         let save_restore = SaveRestore::build(&config.save_restore_path)?;
-        let mem_block = match save_restore.restore_from_latest() {
+        let (is_restored, mem_block) = match save_restore.restore_from_latest() {
             Ok(Some((restored, timestamp))) => {
                 log::info!("[mem-pool] restore mem block from timestamp {}", timestamp);
-                MemBlock::unpack(restored)
+                (true, MemBlock::unpack(restored))
             }
-            _ => MemBlock::with_block_producer(block_producer_id),
+            _ => (false, MemBlock::with_block_producer(block_producer_id)),
         };
         let reverted_block_root = {
             let db = store.begin_transaction();
@@ -319,7 +319,7 @@ impl MemPool {
 
             Ok(true)
         };
-        if !is_mem_block_state_matched()? {
+        if !is_restored || is_restored && !is_mem_block_state_matched()? {
             mem_pool.reset(None, Some(tip.0))?;
         }
 
