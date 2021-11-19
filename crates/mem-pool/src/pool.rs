@@ -249,7 +249,10 @@ impl MemPool {
 
         let save_restore = SaveRestore::build(&config.save_restore_path)?;
         let mem_block = match save_restore.restore_from_latest() {
-            Ok(Some(restored)) => MemBlock::unpack(restored),
+            Ok(Some((restored, timestamp))) => {
+                log::info!("[mem-pool] restore mem block from timestamp {}", timestamp);
+                MemBlock::unpack(restored)
+            }
             _ => MemBlock::with_block_producer(block_producer_id),
         };
         let reverted_block_root = {
