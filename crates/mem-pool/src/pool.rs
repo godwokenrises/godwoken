@@ -275,7 +275,7 @@ impl MemPool {
             pending,
             mem_block,
             offchain_validator,
-            save_restore,
+            save_restore: save_restore.clone(),
         };
 
         // set tip
@@ -319,6 +319,11 @@ impl MemPool {
         if !is_mem_block_state_matched()? {
             mem_pool.reset(None, Some(tip.0))?;
         }
+
+        smol::spawn(async move {
+            save_restore.delete_before_one_hour();
+        })
+        .detach();
 
         Ok(mem_pool)
     }

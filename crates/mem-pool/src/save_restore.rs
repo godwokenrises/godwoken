@@ -12,6 +12,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 const MEM_BLOCK_FILENAME_PREFIX: &str = "mem_block_timestamp_";
 const ONE_HOUR: Duration = Duration::from_secs(60 * 60);
 
+#[derive(Clone)]
 pub struct SaveRestore {
     save_path: PathBuf,
 }
