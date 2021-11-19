@@ -693,12 +693,20 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     });
 
-    smol::block_on(async {
+    smol::block_on(async move {
         let _ = exit_recv.recv().await;
         log::info!("Exiting...");
 
         rpc_task.cancel().await;
         chain_task.cancel().await;
+
+        if let Some(mem_pool) = mem_pool.as_ref() {
+            let mem_pool = mem_pool.lock().await;
+            log::info!("Save mem block to {:?}", mem_pool.save_mem_block_path());
+            if let Err(err) = mem_pool.save_mem_block() {
+                log::error!("save mem block error {}", err);
+            }
+        }
     });
 
     Ok(())
