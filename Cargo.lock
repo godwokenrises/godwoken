@@ -2126,6 +2126,7 @@ dependencies = [
  "ckb-fixed-hash 0.100.0",
  "gw-jsonrpc-types",
  "serde",
+ "tempfile",
 ]
 
 [[package]]
