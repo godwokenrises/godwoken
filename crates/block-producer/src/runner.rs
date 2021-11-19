@@ -119,7 +119,7 @@ async fn poll_loop(
                 .await
                 .map_err(|err| {
                     anyhow!(
-                        "Error occured when polling chain_updater, event: {}, error: {}",
+                        "Error occurred when polling chain_updater, event: {}, error: {}",
                         event,
                         err
                     )
@@ -131,7 +131,7 @@ async fn poll_loop(
                     .await
                     .map_err(|err| {
                         anyhow!(
-                            "Error occured when polling challenger, event: {}, error: {}",
+                            "Error occurred when polling challenger, event: {}, error: {}",
                             event,
                             err
                         )
@@ -144,7 +144,7 @@ async fn poll_loop(
                     .await
                     .map_err(|err| {
                         anyhow!(
-                            "Error occured when polling block_producer, event: {}, error: {}",
+                            "Error occurred when polling block_producer, event: {}, error: {}",
                             event,
                             err
                         )
@@ -154,7 +154,7 @@ async fn poll_loop(
             if let Some(ref cleaner) = inner.cleaner {
                 cleaner.handle_event(event.clone()).await.map_err(|err| {
                     anyhow!(
-                        "Error occured when polling block_producer, event: {}, error: {}",
+                        "Error occurred when polling block_producer, event: {}, error: {}",
                         event,
                         err
                     )
@@ -629,6 +629,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         config.node_mode,
         mem_pool_batch,
         config.rpc_server.clone(),
+        mem_pool.clone(),
     );
 
     let (exit_sender, exit_recv) = async_channel::bounded(100);
