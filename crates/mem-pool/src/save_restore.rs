@@ -44,7 +44,7 @@ impl SaveRestore {
         Ok(())
     }
 
-    pub fn restore_from_latest(&self) -> Result<Option<packed::MemBlock>> {
+    pub fn restore_from_latest(&self) -> Result<Option<(packed::MemBlock, u128)>> {
         let mut dir = read_dir(self.save_path.clone())?;
         let mut opt_latest_timestamp = None;
         while let Some(Ok(file)) = dir.next() {
@@ -62,13 +62,14 @@ impl SaveRestore {
             }
         }
 
-        let file_path = match opt_latest_timestamp {
-            Some(timestamp) => self.block_file_path(timestamp),
+        let timestamp = match opt_latest_timestamp {
+            Some(timestamp) => timestamp,
             None => return Ok(None),
         };
+        let file_path = self.block_file_path(timestamp);
 
         let block = packed::MemBlock::from_slice(&read(file_path)?)?;
-        Ok(Some(block))
+        Ok(Some((block, timestamp)))
     }
 
     pub fn restore_from_timestamp(&self, timestamp: u128) -> Result<Option<packed::MemBlock>> {
@@ -178,7 +179,7 @@ mod tests {
         let mem_block = MemBlock::with_block_producer(666);
         let expected_packed = mem_block.pack();
         save_restore.save(&mem_block).unwrap();
-        let restored_packed = save_restore.restore_from_latest().unwrap().expect("saved");
+        let (restored_packed, _) = save_restore.restore_from_latest().unwrap().expect("saved");
         assert_eq!(expected_packed.as_slice(), restored_packed.as_slice());
 
         // Should restore latest mem block
@@ -191,7 +192,7 @@ mod tests {
         save_restore
             .save_with_timestamp(&earlier_mem_block, earlier_timestamp)
             .unwrap();
-        let restored_packed = save_restore.restore_from_latest().unwrap().expect("saved");
+        let (restored_packed, _) = save_restore.restore_from_latest().unwrap().expect("saved");
         assert_eq!(expected_packed.as_slice(), restored_packed.as_slice());
 
         // Should able to delete earlier mem block
