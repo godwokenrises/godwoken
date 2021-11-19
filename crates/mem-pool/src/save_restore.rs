@@ -37,6 +37,7 @@ impl SaveRestore {
 
     pub fn save_with_timestamp(&self, mem_block: &MemBlock, timestamp: u128) -> Result<()> {
         let file_path = self.block_file_path(timestamp);
+        log::info!("[mem-pool] save restore save mem block {:?}", file_path);
 
         let packed = mem_block.pack();
         write(file_path, packed.as_slice())?;
