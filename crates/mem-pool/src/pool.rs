@@ -39,7 +39,6 @@ use gw_types::{
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
-    path::Path,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -319,7 +318,7 @@ impl MemPool {
 
             Ok(true)
         };
-        if !is_restored || is_restored && !is_mem_block_state_matched()? {
+        if !is_restored || !is_mem_block_state_matched()? {
             mem_pool.reset(None, Some(tip.0))?;
         }
 
@@ -335,12 +334,12 @@ impl MemPool {
         &self.mem_block
     }
 
-    pub fn save_mem_block(&self) -> Result<()> {
-        self.save_restore.save(self.mem_block())
+    pub fn save_restore(&self) -> &SaveRestore {
+        &self.save_restore
     }
 
-    pub fn save_mem_block_path(&self) -> &Path {
-        self.save_restore.path()
+    pub fn save_mem_block(&self) -> Result<()> {
+        self.save_restore.save(self.mem_block())
     }
 
     pub fn current_tip(&self) -> (H256, u64) {

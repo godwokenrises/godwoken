@@ -693,21 +693,40 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     });
 
+    let opt_mem_pool = mem_pool.clone();
+    std::panic::set_hook(Box::new(move |_info: &std::panic::PanicInfo| {
+        if let Some(mem_pool) = opt_mem_pool.as_ref() {
+            smol::block_on(async move {
+                let mem_pool = mem_pool.lock().await;
+                log::info!(
+                    "Catch panic, save mem block to {:?}",
+                    mem_pool.save_restore().path()
+                );
+                if let Err(err) = mem_pool.save_mem_block() {
+                    log::error!("save mem block error {}", err);
+                }
+                mem_pool.save_restore().delete_before_one_hour();
+            })
+        }
+    }));
+
     smol::block_on(async move {
         let _ = exit_recv.recv().await;
         log::info!("Exiting...");
 
         rpc_task.cancel().await;
         chain_task.cancel().await;
+    });
 
-        if let Some(mem_pool) = mem_pool.as_ref() {
+    if let Some(mem_pool) = mem_pool.as_ref() {
+        smol::block_on(async move {
             let mem_pool = mem_pool.lock().await;
-            log::info!("Save mem block to {:?}", mem_pool.save_mem_block_path());
+            log::info!("Save mem block to {:?}", mem_pool.save_restore().path());
             if let Err(err) = mem_pool.save_mem_block() {
                 log::error!("save mem block error {}", err);
             }
-        }
-    });
+        });
+    }
 
     Ok(())
 }
