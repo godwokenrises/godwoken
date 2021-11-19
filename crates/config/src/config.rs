@@ -188,7 +188,15 @@ pub struct MemPoolConfig {
     pub submit_l2tx_max_cycles: u64,
     pub max_batch_channel_buffer_size: usize,
     pub max_batch_tx_withdrawal_size: usize,
+    #[serde(default = "default_save_restore_path")]
     pub save_restore_path: PathBuf,
+}
+
+// Field default value for backward config file compitability
+fn default_save_restore_path() -> PathBuf {
+    const DEFAULT_SAVE_RESTORE_PATH: &str = "mem_block";
+
+    DEFAULT_SAVE_RESTORE_PATH.into()
 }
 
 impl Default for MemPoolConfig {
@@ -198,9 +206,7 @@ impl Default for MemPoolConfig {
             submit_l2tx_max_cycles: 70_000_000,
             max_batch_channel_buffer_size: 2000,
             max_batch_tx_withdrawal_size: 200,
-            save_restore_path: tempfile::TempDir::new()
-                .expect("mem block save path")
-                .into_path(),
+            save_restore_path: default_save_restore_path(),
         }
     }
 }
