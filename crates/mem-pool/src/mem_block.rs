@@ -35,6 +35,8 @@ pub struct MemBlock {
     block_info: BlockInfo,
     /// Mem block prev merkle state
     prev_merkle_state: AccountMerkleState,
+    /// Mem block post merkle state
+    post_merkle_state: AccountMerkleState,
     /// touched keys
     touched_keys: HashSet<H256>,
 }
@@ -177,6 +179,14 @@ impl MemBlock {
         &self.prev_merkle_state
     }
 
+    pub fn set_post_merkle_state(&mut self, state: AccountMerkleState) {
+        self.post_merkle_state = state;
+    }
+
+    pub fn post_merkle_state(&self) -> &AccountMerkleState {
+        &self.post_merkle_state
+    }
+
     pub fn pack(&self) -> packed::MemBlock {
         let touched_keys = self.touched_keys().iter().cloned().collect::<Vec<_>>();
 
@@ -187,8 +197,9 @@ impl MemBlock {
             .deposits(self.deposits.pack())
             .state_checkpoints(self.state_checkpoints.pack())
             .txs_prev_state_checkpoint(self.txs_prev_state_checkpoint.pack())
-            .block_info(self.block_info.to_owned())
-            .prev_merkle_state(self.prev_merkle_state.to_owned())
+            .block_info(self.block_info.clone())
+            .prev_merkle_state(self.prev_merkle_state.clone())
+            .post_merkle_state(self.post_merkle_state.clone())
             .touched_keys(touched_keys.pack())
             .build()
     }
@@ -212,6 +223,7 @@ impl MemBlock {
             txs_prev_state_checkpoint: mem_block.txs_prev_state_checkpoint().unpack(),
             block_info: mem_block.block_info(),
             prev_merkle_state: mem_block.prev_merkle_state(),
+            post_merkle_state: mem_block.post_merkle_state(),
             touched_keys: touched_keys.collect(),
         }
     }

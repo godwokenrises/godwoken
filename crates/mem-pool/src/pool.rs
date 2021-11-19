@@ -337,6 +337,8 @@ impl MemPool {
 
         // save tx receipt in mem pool
         self.mem_block.push_tx(tx_hash, &tx_receipt);
+        self.mem_block
+            .set_post_merkle_state(tx_receipt.post_state());
         db.insert_mem_pool_transaction_receipt(&tx_hash, tx_receipt)?;
 
         // Add to pool
@@ -985,6 +987,8 @@ impl MemPool {
         let prev_state_checkpoint = state.calculate_state_checkpoint()?;
         self.mem_block
             .push_deposits(deposit_cells, prev_state_checkpoint);
+        self.mem_block
+            .set_post_merkle_state(state.get_merkle_state());
         state.submit_tree_to_mem_block()?;
         // if let Some(ref mut offchain_validator) = self.offchain_validator {
         //     offchain_validator.set_prev_txs_checkpoint(prev_state_checkpoint);
@@ -1132,6 +1136,8 @@ impl MemPool {
                         withdrawal.hash().into(),
                         state.calculate_state_checkpoint()?,
                     );
+                    self.mem_block
+                        .set_post_merkle_state(state.get_merkle_state())
                 }
                 Err(err) => {
                     log::debug!("[mem-pool] withdrawal execution failed : {}", err);
