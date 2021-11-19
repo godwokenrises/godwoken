@@ -1173,7 +1173,7 @@ fn run_cli() -> Result<()> {
                 std::process::exit(-1);
             };
         }
-        ("dump-mem-bock", Some(m)) => {
+        ("dump-mem-block", Some(m)) => {
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
             let output = Path::new(m.value_of("output").unwrap());
 
