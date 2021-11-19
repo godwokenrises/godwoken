@@ -194,6 +194,7 @@ impl MemBlock {
             .block_producer_id(self.block_producer_id.pack())
             .txs(self.txs.pack())
             .withdrawals(self.withdrawals.pack())
+            .finalized_custodians(self.finalized_custodians.pack())
             .deposits(self.deposits.pack())
             .state_checkpoints(self.state_checkpoints.pack())
             .txs_prev_state_checkpoint(self.txs_prev_state_checkpoint.pack())
@@ -217,7 +218,7 @@ impl MemBlock {
             txs_set,
             withdrawals,
             withdrawals_set,
-            finalized_custodians: None,
+            finalized_custodians: mem_block.finalized_custodians().unpack(),
             deposits: mem_block.deposits().unpack(),
             state_checkpoints: mem_block.state_checkpoints().unpack(),
             txs_prev_state_checkpoint: mem_block.txs_prev_state_checkpoint().unpack(),

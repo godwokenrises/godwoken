@@ -318,32 +318,6 @@ impl MemPool {
         };
         if !is_mem_block_state_matched()? {
             mem_pool.reset(None, Some(tip.0))?;
-        } else {
-            let finalized_custodians = {
-                // query withdrawals from ckb-indexer
-                let last_finalized_block_number = mem_pool
-                    .generator
-                    .rollup_context()
-                    .last_finalized_block_number(tip.1);
-                let withdrawals: Vec<_> = {
-                    let mut withdrawals = Vec::with_capacity(mem_block.withdrawals().len());
-                    for withdrawal_hash in mem_block.withdrawals() {
-                        if let Some(withdrawal) = db.get_mem_pool_withdrawal(withdrawal_hash)? {
-                            withdrawals.push(withdrawal);
-                        }
-                    }
-                    withdrawals
-                };
-                let task = mem_pool.inner.provider().query_available_custodians(
-                    withdrawals,
-                    last_finalized_block_number,
-                    mem_pool.generator.rollup_context().to_owned(),
-                );
-                smol::block_on(task)?
-            };
-            mem_pool
-                .mem_block
-                .set_finalized_custodians(finalized_custodians);
         }
 
         Ok(mem_pool)
