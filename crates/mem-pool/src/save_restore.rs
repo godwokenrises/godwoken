@@ -25,6 +25,10 @@ impl SaveRestore {
         })
     }
 
+    pub fn path(&self) -> &Path {
+        self.save_path.as_path()
+    }
+
     pub fn save(&self, mem_block: &MemBlock) -> Result<()> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
         self.save_with_timestamp(mem_block, now)
