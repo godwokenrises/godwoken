@@ -34,7 +34,7 @@ pub struct Config {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum RPCMethods {
     PProf,
     DumpMemBlock,
