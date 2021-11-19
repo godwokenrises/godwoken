@@ -460,8 +460,8 @@ fn run_cli() -> Result<()> {
                         .long("fee")
                         .takes_value(true)
                         .required(false)
-                        .default_value("0")
-                        .help("transfer fee"),
+                        .default_value("10000")
+                        .help("transfer fee (unit: Shannon)"),
                 )
                 .arg(
                     Arg::with_name("sudt-id")
