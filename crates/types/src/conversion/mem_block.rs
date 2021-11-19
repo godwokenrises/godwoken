@@ -6,8 +6,8 @@ use crate::{packed, prelude::*, vec::Vec};
 impl Pack<packed::CellInfo> for CellInfo {
     fn pack(&self) -> packed::CellInfo {
         packed::CellInfo::new_builder()
-            .out_point(self.out_point.to_owned())
-            .output(self.output.to_owned())
+            .out_point(self.out_point.clone())
+            .output(self.output.clone())
             .data(self.data.pack())
             .build()
     }
@@ -26,7 +26,7 @@ impl<'r> Unpack<CellInfo> for packed::CellInfoReader<'r> {
 impl Pack<packed::DepositInfo> for DepositInfo {
     fn pack(&self) -> packed::DepositInfo {
         packed::DepositInfo::new_builder()
-            .request(self.request.to_owned())
+            .request(self.request.clone())
             .cell(self.cell.pack())
             .build()
     }

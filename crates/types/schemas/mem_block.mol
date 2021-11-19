@@ -24,5 +24,6 @@ table MemBlock {
     txs_prev_state_checkpoint: Byte32Opt,
     block_info: BlockInfo,
     prev_merkle_state: AccountMerkleState,
+    post_merkle_state: AccountMerkleState,
     touched_keys: Byte32Vec,
 }

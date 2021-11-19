@@ -26,7 +26,6 @@ pub mod packed {
     pub use super::mem_block::*;
     #[cfg(feature = "std")]
     pub use super::poa::*;
-
     #[cfg(feature = "std")]
     pub use super::store::*;
 }
