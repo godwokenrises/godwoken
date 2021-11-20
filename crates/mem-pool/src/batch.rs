@@ -1,11 +1,12 @@
 use anyhow::Result;
 use gw_types::offchain::RunResult;
-use gw_types::packed::{BlockInfo, L2Transaction, WithdrawalRequest};
+use gw_types::packed::{self, BlockInfo, L2Transaction, WithdrawalRequest};
 use smol::channel::{Receiver, Sender, TryRecvError, TrySendError};
 use smol::lock::Mutex;
 
 use crate::pool::{Inner, MemPool};
 
+use std::future::Future;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -71,6 +72,16 @@ impl MemPoolBatch {
         Ok(())
     }
 
+    pub fn dump_mem_block(
+        &self,
+    ) -> Result<impl Future<Output = Result<packed::MemBlock>>, BatchError> {
+        let (tx, rx) = smol::channel::bounded(1);
+        self.background_batch_tx
+            .try_send(BatchRequest::DumpMemBlock(tx))?;
+
+        Ok(async move { Ok(rx.recv().await?) })
+    }
+
     pub fn unchecked_execute_transaction(
         &self,
         tx: &L2Transaction,
@@ -83,6 +94,7 @@ impl MemPoolBatch {
 enum BatchRequest {
     Transaction(L2Transaction),
     Withdrawal(WithdrawalRequest),
+    DumpMemBlock(Sender<packed::MemBlock>),
 }
 
 impl BatchRequest {
@@ -90,6 +102,7 @@ impl BatchRequest {
         match self {
             BatchRequest::Transaction(ref tx) => tx.hash(),
             BatchRequest::Withdrawal(ref w) => w.hash(),
+            BatchRequest::DumpMemBlock(_) => [1u8; 32],
         }
     }
 
@@ -97,6 +110,7 @@ impl BatchRequest {
         match self {
             BatchRequest::Transaction(_) => "tx",
             BatchRequest::Withdrawal(_) => "withdrawal",
+            BatchRequest::DumpMemBlock(_) => "dump_mem_block",
         }
     }
 }
@@ -189,6 +203,15 @@ impl BatchTxWithdrawalInBackground {
                         }
                         BatchRequest::Withdrawal(w) => {
                             mem_pool.push_withdrawal_request_with_db(&db, w)
+                        }
+                        BatchRequest::DumpMemBlock(resp_tx) => {
+                            if resp_tx.is_closed() {
+                                continue;
+                            }
+                            if let Err(err) = resp_tx.try_send(mem_pool.mem_block().pack()) {
+                                log::info!("[mem-pool batch] response mem block error {}", err);
+                            }
+                            Ok(())
                         }
                     } {
                         db.rollback_to_save_point().expect("rollback state error");

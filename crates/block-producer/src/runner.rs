@@ -629,7 +629,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         config.node_mode,
         mem_pool_batch,
         config.rpc_server.clone(),
-        mem_pool.clone(),
     );
 
     let (exit_sender, exit_recv) = async_channel::bounded(100);
