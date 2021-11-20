@@ -49,3 +49,11 @@ jobs:
         path: .tmp/binaries
     - name: Tests
       run: cargo test --all-targets
+
+  done:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v1
+    - name: Done
+      run: echo 'Done!'
