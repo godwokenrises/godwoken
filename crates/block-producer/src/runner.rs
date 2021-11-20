@@ -700,12 +700,12 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 let mem_pool = mem_pool.lock().await;
                 log::info!(
                     "Catch panic, save mem block to {:?}",
-                    mem_pool.save_restore().path()
+                    mem_pool.restore_manager().path()
                 );
                 if let Err(err) = mem_pool.save_mem_block() {
                     log::error!("save mem block error {}", err);
                 }
-                mem_pool.save_restore().delete_before_one_hour();
+                mem_pool.restore_manager().delete_before_one_hour();
             })
         }
     }));
@@ -721,10 +721,11 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     if let Some(mem_pool) = mem_pool.as_ref() {
         smol::block_on(async move {
             let mem_pool = mem_pool.lock().await;
-            log::info!("Save mem block to {:?}", mem_pool.save_restore().path());
+            log::info!("Save mem block to {:?}", mem_pool.restore_manager().path());
             if let Err(err) = mem_pool.save_mem_block() {
                 log::error!("save mem block error {}", err);
             }
+            mem_pool.restore_manager().delete_before_one_hour();
         });
     }
 

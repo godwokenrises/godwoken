@@ -212,7 +212,7 @@ impl Registry {
                         .with_method("gw_start_profiler", start_profiler)
                         .with_method("gw_report_pprof", report_pprof);
                 }
-                RPCMethods::DumpMemBlock => {
+                RPCMethods::Test => {
                     server = server.with_method("gw_dump_mem_block", dump_mem_block);
                 }
             }

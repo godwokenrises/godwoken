@@ -47,7 +47,7 @@ use crate::{
     constants::{MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS, MAX_TX_SIZE, MAX_WITHDRAWAL_SIZE},
     custodian::AvailableCustodians,
     mem_block::MemBlock,
-    save_restore::SaveRestore,
+    restore_manager::RestoreManager,
     traits::{MemPoolErrorTxHandler, MemPoolProvider},
     types::EntryList,
     withdrawal::Generator as WithdrawalGenerator,
@@ -219,7 +219,7 @@ pub struct MemPool {
     /// Offchain cancel challenge validator
     offchain_validator: Option<OffChainCancelChallengeValidator>,
     /// Mem block save and restore
-    save_restore: SaveRestore,
+    restore_manager: RestoreManager,
 }
 
 impl MemPool {
@@ -246,8 +246,8 @@ impl MemPool {
             Arc::clone(&config),
         );
 
-        let save_restore = SaveRestore::build(&config.save_restore_path)?;
-        let (is_restored, mem_block) = match save_restore.restore_from_latest() {
+        let restore_manager = RestoreManager::build(&config.restore_path)?;
+        let (is_restored, mem_block) = match restore_manager.restore_from_latest() {
             Ok(Some((restored, timestamp))) => {
                 log::info!("[mem-pool] restore mem block from timestamp {}", timestamp);
                 (true, MemBlock::unpack(restored))
@@ -277,7 +277,7 @@ impl MemPool {
             pending,
             mem_block,
             offchain_validator,
-            save_restore: save_restore.clone(),
+            restore_manager: restore_manager.clone(),
         };
 
         // set tip
@@ -323,7 +323,7 @@ impl MemPool {
         }
 
         smol::spawn(async move {
-            save_restore.delete_before_one_hour();
+            restore_manager.delete_before_one_hour();
         })
         .detach();
 
@@ -334,12 +334,12 @@ impl MemPool {
         &self.mem_block
     }
 
-    pub fn save_restore(&self) -> &SaveRestore {
-        &self.save_restore
+    pub fn restore_manager(&self) -> &RestoreManager {
+        &self.restore_manager
     }
 
     pub fn save_mem_block(&self) -> Result<()> {
-        self.save_restore.save(self.mem_block())
+        self.restore_manager.save(self.mem_block())
     }
 
     pub fn current_tip(&self) -> (H256, u64) {
