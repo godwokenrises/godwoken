@@ -10,7 +10,7 @@ pub mod default_provider;
 mod deposit;
 mod mem_block;
 pub mod pool;
-pub mod save_restore;
+pub mod restore_manager;
 pub mod traits;
 mod types;
 pub mod withdrawal;

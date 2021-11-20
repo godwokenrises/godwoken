@@ -38,7 +38,7 @@ pub struct Config {
 pub enum RPCMethods {
     #[serde(rename = "pprof")]
     PProf,
-    DumpMemBlock,
+    Test,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -190,15 +190,15 @@ pub struct MemPoolConfig {
     pub submit_l2tx_max_cycles: u64,
     pub max_batch_channel_buffer_size: usize,
     pub max_batch_tx_withdrawal_size: usize,
-    #[serde(default = "default_save_restore_path")]
-    pub save_restore_path: PathBuf,
+    #[serde(default = "default_restore_path")]
+    pub restore_path: PathBuf,
 }
 
 // Field default value for backward config file compitability
-fn default_save_restore_path() -> PathBuf {
-    const DEFAULT_SAVE_RESTORE_PATH: &str = "mem_block";
+fn default_restore_path() -> PathBuf {
+    const DEFAULT_RESTORE_PATH: &str = "mem_block";
 
-    DEFAULT_SAVE_RESTORE_PATH.into()
+    DEFAULT_RESTORE_PATH.into()
 }
 
 impl Default for MemPoolConfig {
@@ -208,7 +208,7 @@ impl Default for MemPoolConfig {
             submit_l2tx_max_cycles: 70_000_000,
             max_batch_channel_buffer_size: 2000,
             max_batch_tx_withdrawal_size: 200,
-            save_restore_path: default_save_restore_path(),
+            restore_path: default_restore_path(),
         }
     }
 }

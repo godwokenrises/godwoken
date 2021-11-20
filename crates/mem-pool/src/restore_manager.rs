@@ -13,21 +13,21 @@ const MEM_BLOCK_FILENAME_PREFIX: &str = "mem_block_timestamp_";
 const ONE_HOUR: Duration = Duration::from_secs(60 * 60);
 
 #[derive(Clone)]
-pub struct SaveRestore {
-    save_path: PathBuf,
+pub struct RestoreManager {
+    restore_path: PathBuf,
 }
 
-impl SaveRestore {
-    pub fn build<P: AsRef<Path>>(save_path: &P) -> Result<Self> {
-        create_dir_all(save_path.as_ref())?;
+impl RestoreManager {
+    pub fn build<P: AsRef<Path>>(restore_path: &P) -> Result<Self> {
+        create_dir_all(restore_path.as_ref())?;
 
-        Ok(SaveRestore {
-            save_path: save_path.as_ref().to_owned(),
+        Ok(RestoreManager {
+            restore_path: restore_path.as_ref().to_owned(),
         })
     }
 
     pub fn path(&self) -> &Path {
-        self.save_path.as_path()
+        self.restore_path.as_path()
     }
 
     pub fn save(&self, mem_block: &MemBlock) -> Result<()> {
@@ -46,7 +46,7 @@ impl SaveRestore {
     }
 
     pub fn restore_from_latest(&self) -> Result<Option<(packed::MemBlock, u128)>> {
-        let mut dir = read_dir(self.save_path.clone())?;
+        let mut dir = read_dir(self.restore_path.clone())?;
         let mut opt_latest_timestamp = None;
         while let Some(Ok(file)) = dir.next() {
             let file_path = file.path();
@@ -74,7 +74,7 @@ impl SaveRestore {
     }
 
     pub fn restore_from_timestamp(&self, timestamp: u128) -> Result<Option<packed::MemBlock>> {
-        let mut dir = read_dir(self.save_path.clone())?;
+        let mut dir = read_dir(self.restore_path.clone())?;
         let mut opt_timestamp_found = None;
         while let Some(Ok(file)) = dir.next() {
             let file_path = file.path();
@@ -115,12 +115,12 @@ impl SaveRestore {
     }
 
     pub fn delete_before_timestamp(&self, before_timestamp: u128) {
-        let mut dir = match read_dir(self.save_path.clone()) {
+        let mut dir = match read_dir(self.restore_path.clone()) {
             Ok(dir) => dir,
             Err(err) => {
                 log::warn!(
                     "[mem-pool] save restore open {:?} error {}",
-                    self.save_path,
+                    self.restore_path,
                     err
                 );
                 return;
@@ -155,7 +155,7 @@ impl SaveRestore {
 
     fn block_file_path(&self, timestamp: u128) -> PathBuf {
         let file_name = format!("{}{}", MEM_BLOCK_FILENAME_PREFIX, timestamp);
-        let mut file_path = self.save_path.to_owned();
+        let mut file_path = self.restore_path.to_owned();
         file_path.push(file_name);
         file_path
     }
@@ -169,18 +169,21 @@ mod tests {
 
     use crate::mem_block::MemBlock;
 
-    use super::SaveRestore;
+    use super::RestoreManager;
 
     #[test]
-    fn test_save_restore() {
+    fn test_restore_manager() {
         let tmp_dir = tempfile::TempDir::new().unwrap();
-        let save_restore = SaveRestore::build(&tmp_dir).unwrap();
+        let restore_manager = RestoreManager::build(&tmp_dir).unwrap();
 
         // Should able to save and restore packed mem block
         let mem_block = MemBlock::with_block_producer(666);
         let expected_packed = mem_block.pack();
-        save_restore.save(&mem_block).unwrap();
-        let (restored_packed, _) = save_restore.restore_from_latest().unwrap().expect("saved");
+        restore_manager.save(&mem_block).unwrap();
+        let (restored_packed, _) = restore_manager
+            .restore_from_latest()
+            .unwrap()
+            .expect("saved");
         assert_eq!(expected_packed.as_slice(), restored_packed.as_slice());
 
         // Should restore latest mem block
@@ -190,14 +193,17 @@ mod tests {
             .unwrap()
             .saturating_sub(Duration::from_secs(233))
             .as_millis();
-        save_restore
+        restore_manager
             .save_with_timestamp(&earlier_mem_block, earlier_timestamp)
             .unwrap();
-        let (restored_packed, _) = save_restore.restore_from_latest().unwrap().expect("saved");
+        let (restored_packed, _) = restore_manager
+            .restore_from_latest()
+            .unwrap()
+            .expect("saved");
         assert_eq!(expected_packed.as_slice(), restored_packed.as_slice());
 
         // Should able to delete earlier mem block
-        let earlier_packed = save_restore
+        let earlier_packed = restore_manager
             .restore_from_timestamp(earlier_timestamp)
             .unwrap()
             .expect("earlier timestamp");
@@ -205,8 +211,8 @@ mod tests {
             earlier_mem_block.pack().as_slice(),
             earlier_packed.as_slice()
         );
-        save_restore.delete_before_timestamp(earlier_timestamp.saturating_add(1000));
-        let opt_restored = save_restore
+        restore_manager.delete_before_timestamp(earlier_timestamp.saturating_add(1000));
+        let opt_restored = restore_manager
             .restore_from_timestamp(earlier_timestamp)
             .unwrap();
         assert!(opt_restored.is_none());
