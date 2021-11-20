@@ -103,7 +103,11 @@ impl From<ErrorTxReceipt> for ErrorReceiptRecord {
             cumulative_gas_used: 0,
             gas_used: 0,
             status_code: 0,
-            status_reason: receipt.return_data[..MAX_RETURN_DATA].to_vec(),
+            status_reason: {
+                let mut reason = receipt.return_data.to_vec();
+                reason.truncate(MAX_RETURN_DATA);
+                reason
+            },
         };
 
         let gw_log = match receipt.last_log.map(|log| parse_log(&log)).transpose() {
