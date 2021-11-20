@@ -16,10 +16,7 @@ use gw_jsonrpc_types::{
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
-use gw_mem_pool::{
-    batch::{BatchError, MemPoolBatch},
-    pool::MemPool,
-};
+use gw_mem_pool::batch::{BatchError, MemPoolBatch};
 use gw_store::{chain_view::ChainView, state::state_db::StateContext, Store};
 use gw_traits::CodeStore;
 use gw_types::{
@@ -105,7 +102,6 @@ pub struct Registry {
     node_mode: NodeMode,
     mem_pool_batch: Option<MemPoolBatch>,
     server_config: RPCServerConfig,
-    mem_pool: Option<Arc<Mutex<MemPool>>>, // For dump mem block only
 }
 
 impl Registry {
@@ -122,7 +118,6 @@ impl Registry {
         node_mode: NodeMode,
         mem_pool_batch: Option<MemPoolBatch>,
         server_config: RPCServerConfig,
-        mem_pool: Option<Arc<Mutex<MemPool>>>,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -142,7 +137,6 @@ impl Registry {
             node_mode,
             mem_pool_batch,
             server_config,
-            mem_pool,
         }
     }
 
@@ -219,9 +213,7 @@ impl Registry {
                         .with_method("gw_report_pprof", report_pprof);
                 }
                 RPCMethods::DumpMemBlock => {
-                    server = server
-                        .with_data(Data::new(self.mem_pool.clone()))
-                        .with_method("gw_dump_mem_block", dump_mem_block);
+                    server = server.with_method("gw_dump_mem_block", dump_mem_block);
                 }
             }
         }
@@ -951,20 +943,15 @@ async fn report_pprof() -> Result<()> {
     Ok(())
 }
 
-async fn dump_mem_block(
-    mem_pool: Data<Option<Arc<Mutex<MemPool>>>>,
-) -> Result<JsonBytes, RpcError> {
-    let mem_pool = match &*mem_pool {
-        Some(mem_pool) => mem_pool,
+async fn dump_mem_block(mem_pool_batch: Data<Option<MemPoolBatch>>) -> Result<JsonBytes, RpcError> {
+    let mem_pool_batch = match &*mem_pool_batch {
+        Some(mem_pool_batch) => mem_pool_batch,
         None => {
             return Err(mem_pool_is_disabled_err());
         }
     };
 
-    let mem_block = {
-        let mem_pool = mem_pool.lock().await;
-        mem_pool.mem_block().pack()
-    };
+    let mem_block = mem_pool_batch.dump_mem_block()?.await?;
 
     Ok(JsonBytes::from_bytes(mem_block.as_bytes()))
 }
