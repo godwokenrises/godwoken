@@ -514,12 +514,12 @@ fn run_cli() -> Result<()> {
                         .help("Simple UDT script code hash"),
                 )
                 .arg(
-                    Arg::with_name("quite")
+                    Arg::with_name("quiet")
                         .short("q")
-                        .long("quite")
+                        .long("quiet")
                         .takes_value(false)
                         .required(false)
-                        .help("quite"),
+                        .help("quiet"),
                 ),
         )
         .subcommand(
@@ -1137,8 +1137,8 @@ fn run_cli() -> Result<()> {
                     sudt_type_script.hash().into()
                 }
             };
-            let quite = m.is_present("quite");
-            if !quite {
+            let quiet = m.is_present("quiet");
+            if !quiet {
                 log::info!("l1 script hash: {}", l1_sudt_type_hash);
             }
 
@@ -1158,7 +1158,7 @@ fn run_cli() -> Result<()> {
                 fee,
                 &config,
                 &scripts_deployment,
-                quite,
+                quiet,
             ) {
                 Ok(account_id) => account_id,
                 Err(err) => {
@@ -1166,7 +1166,7 @@ fn run_cli() -> Result<()> {
                     std::process::exit(-1);
                 }
             };
-            if quite {
+            if quiet {
                 println!("{}", account_id);
             }
         }
