@@ -1,6 +1,14 @@
-name: Rust
+name: unit_tests_macos
+concurrency:
+  group: unit_tests_macos-${{ github.ref }}
+  cancel-in-progress: true
 
 on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  RUSTFLAGS: -D warnings
 
 jobs:
   prepare-scripts:
@@ -17,11 +25,7 @@ jobs:
         retention-days: 1
 
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-
+    runs-on: macos-latest
     needs: prepare-scripts
     steps:
     - uses: actions/checkout@v1
@@ -39,8 +43,6 @@ jobs:
     - name: Check format
       run: cargo fmt -- --check
     - name: Cargo clippy check
-      env:
-        RUSTFLAGS: -D warnings
       run: cargo clippy
     - name: Download binaries
       uses: actions/download-artifact@v2
