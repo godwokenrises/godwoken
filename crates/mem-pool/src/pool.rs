@@ -287,13 +287,13 @@ impl MemPool {
             // Check prev merkle state
             if mem_block.prev_merkle_state().as_slice() != tip_block.raw().post_account().as_slice()
             {
-                log::info!("restored mem block prev merkle state not matched");
+                log::warn!("restored mem block prev merkle state not matched");
                 return Ok(false);
             }
 
             // Check block number
             if mem_block.block_info().number().unpack() != tip.1 + 1 {
-                log::info!("restored mem block number not matched");
+                log::warn!("restored mem block number not matched");
                 return Ok(false);
             }
 
@@ -302,7 +302,7 @@ impl MemPool {
             if db_block_info.map(|i| i.as_slice().to_vec())
                 != Some(mem_block.block_info().as_slice().to_vec())
             {
-                log::info!("restored mem block info not matched");
+                log::warn!("restored mem block info not matched");
                 return Ok(false);
             }
 
@@ -312,7 +312,7 @@ impl MemPool {
                 || db.get_mem_block_account_count()?
                     != Unpack::<u32>::unpack(&mem_block.post_merkle_state().count())
             {
-                log::info!("restored mem block post merkle state not matched");
+                log::warn!("restored mem block post merkle state not matched");
                 return Ok(false);
             }
 
