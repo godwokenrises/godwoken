@@ -65,7 +65,7 @@ pub fn create_sudt_account(
     fee: u128,
     config: &Config,
     deployment: &ScriptsDeploymentResult,
-    quite: bool,
+    quiet: bool,
 ) -> Result<u32> {
     let rollup_type_hash = &config.genesis.rollup_type_hash;
 
@@ -80,7 +80,7 @@ pub fn create_sudt_account(
         build_l2_sudt_script(rollup_type_hash, l2_validator_script_hash, &sudt_type_hash)
     };
     let l2_script_hash = l2_script.hash();
-    if !quite {
+    if !quiet {
         log::info!("l2 script hash: 0x{}", hex::encode(l2_script_hash));
     }
 
@@ -88,7 +88,7 @@ pub fn create_sudt_account(
         .get_account_id_by_script_hash(l2_script_hash.into())
         .map_err(|err| anyhow!("{}", err))?;
     if let Some(id) = account_id {
-        if !quite {
+        if !quiet {
             log::info!("Simple UDT account id already exists: {}", id);
         }
         return Ok(id);
@@ -137,18 +137,18 @@ pub fn create_sudt_account(
     let tx_hash = rpc_client
         .submit_l2transaction(json_bytes)
         .map_err(|err| anyhow!("{}", err))?;
-    if !quite {
+    if !quiet {
         log::info!("tx hash: 0x{}", hex::encode(tx_hash.as_bytes()));
     }
 
-    wait_for_l2_tx(rpc_client, &tx_hash, 180, quite).map_err(|err| anyhow!("{}", err))?;
+    wait_for_l2_tx(rpc_client, &tx_hash, 180, quiet).map_err(|err| anyhow!("{}", err))?;
 
     let account_id = rpc_client
         .get_account_id_by_script_hash(l2_script_hash.into())
         .map_err(|err| anyhow!("{}", err))?
         .expect("Simple UDT account id not exist!");
 
-    if !quite {
+    if !quiet {
         log::info!("Simple UDT account id: {}", account_id);
     }
 
