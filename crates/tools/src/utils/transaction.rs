@@ -155,7 +155,7 @@ pub fn wait_for_l2_tx(
     godwoken_rpc_client: &mut GodwokenRpcClient,
     tx_hash: &H256,
     timeout_secs: u64,
-    quite: bool,
+    quiet: bool,
 ) -> Result<Option<TxReceipt>> {
     let retry_timeout = Duration::from_secs(timeout_secs);
     let start_time = Instant::now();
@@ -166,13 +166,13 @@ pub fn wait_for_l2_tx(
 
         match receipt {
             Some(_) => {
-                if !quite {
+                if !quiet {
                     log::info!("tx committed");
                 }
                 return Ok(receipt);
             }
             None => {
-                if !quite {
+                if !quiet {
                     log::info!("waiting for {} secs.", start_time.elapsed().as_secs());
                 }
             }

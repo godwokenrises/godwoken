@@ -110,7 +110,7 @@ impl GodwokenRpcClient {
             .map(Into::into)
     }
 
-    pub fn dump_mem_block(&mut self) -> Result<Bytes, String> {
+    pub fn dump_mem_block(&mut self) -> Result<Bytes> {
         let params = serde_json::Value::Null;
         self.rpc::<Bytes>("dump_mem_block", params).map(Into::into)
     }
