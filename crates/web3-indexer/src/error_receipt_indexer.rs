@@ -104,9 +104,8 @@ impl From<ErrorTxReceipt> for ErrorReceiptRecord {
             gas_used: 0,
             status_code: 0,
             status_reason: {
-                let mut reason = receipt.return_data.to_vec();
-                reason.truncate(MAX_RETURN_DATA);
-                reason
+                let len = std::cmp::min(receipt.return_data.len(), MAX_RETURN_DATA);
+                receipt.return_data[..len].to_vec()
             },
         };
 
