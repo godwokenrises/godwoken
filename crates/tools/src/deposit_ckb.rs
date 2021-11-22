@@ -74,10 +74,10 @@ pub fn deposit_ckb(
     let l2_lock_hash_str = format!("0x{}", faster_hex::hex_string(l2_lock_hash.as_bytes())?);
     log::info!("layer2 script hash: {}", l2_lock_hash_str);
 
-    // cancel_timeout default to 2 days
+    // cancel_timeout default to 20 minutes
     let deposit_lock_args = DepositLockArgs::new_builder()
         .owner_lock_hash(owner_lock_hash)
-        .cancel_timeout(GwPack::pack(&0xc00000000002a300u64))
+        .cancel_timeout(GwPack::pack(&0xc0000000000004b0u64))
         .layer2_lock(l2_lock)
         .build();
 
