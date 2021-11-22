@@ -2101,6 +2101,7 @@ dependencies = [
  "gw-store",
  "gw-traits",
  "gw-types",
+ "gw-utils",
  "hex",
  "log",
  "smol",

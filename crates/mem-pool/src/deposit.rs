@@ -4,12 +4,14 @@ use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
     offchain::{DepositInfo, RollupContext},
+    packed::DepositLockArgs,
     prelude::*,
 };
+use gw_utils::since::{LockValue, Since};
 
 use crate::custodian::to_custodian_cell;
 
-/// check deposit cells again to prevent upstream components errors.
+/// check and reject invalid deposit cells
 pub fn sanitize_deposit_cells(
     ctx: &RollupContext,
     unsanitize_deposits: Vec<DepositInfo>,
@@ -25,6 +27,59 @@ pub fn sanitize_deposit_cells(
         deposit_cells.push(cell);
     }
     deposit_cells
+}
+
+/// we only package deposit cells with valid cancel timeout, to prevent conflict with user's unlock
+fn check_deposit_cell_cancel_timeout(deposit_args: &DepositLockArgs) -> Result<()> {
+    const BLOCK_TIMEOUT: u64 = 150; // 150 blocks, about 20 minutes
+    const TIMESTAMP_TIMEOUT: u64 = 1_200_000; // 20 minutes
+    const EPOCH_TIMEOUT: u64 = 1; // 1 epoch, about 4 hours, this option is supposed not actually used, so we simply set a value
+
+    let cancel_timeout = Since::new(deposit_args.cancel_timeout().unpack());
+    if cancel_timeout.flags_is_valid() {
+        // reject non relative flag
+        if !cancel_timeout.is_relative() {
+            return Err(anyhow!(
+                "Invalid deposit cancel_time: {}, invalid relative flag",
+                deposit_args.cancel_timeout()
+            ));
+        }
+
+        match cancel_timeout.extract_lock_value().expect("since value") {
+            LockValue::BlockNumber(block) if block < BLOCK_TIMEOUT => {
+                return Err(anyhow!(
+                    "Invalid deposit cancel_time: {}, invalid block timeout, block: {}, required: {}",
+                    deposit_args.cancel_timeout(),
+                    block,
+                    BLOCK_TIMEOUT
+                ));
+            }
+            LockValue::Timestamp(timestamp) if timestamp < TIMESTAMP_TIMEOUT => {
+                return Err(anyhow!(
+                    "Invalid deposit cancel_time: {}, invalid block timeout, timestamp: {}ms, required: {}ms",
+                    deposit_args.cancel_timeout(),
+                    timestamp,
+                    TIMESTAMP_TIMEOUT
+                ));
+            }
+            LockValue::EpochNumberWithFraction(epoch) if epoch.number() < EPOCH_TIMEOUT => {
+                return Err(anyhow!(
+                    "Invalid deposit cancel_time: {}, invalid epoch timeout, epoch: {}, required: {}",
+                    deposit_args.cancel_timeout(),
+                    epoch.number(),
+                    EPOCH_TIMEOUT
+                ));
+            }
+            _ => {}
+        }
+    } else {
+        // cancel timeout is invalid, which means user can't unlock it, so we can safely use this cell
+        log::debug!(
+            "Invalid deposit cancel_time: {}, invalid flag, the deposit is still can be packaged",
+            deposit_args.cancel_timeout()
+        );
+    }
+    Ok(())
 }
 
 // check deposit cell
@@ -59,6 +114,10 @@ fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo) -> Result<()> {
                 hex::encode(&args[..32])
             ));
         }
+
+        // check deposit args
+        let deposit_args = DepositLockArgs::from_slice(&args[32..])?;
+        check_deposit_cell_cancel_timeout(&deposit_args)?;
     }
 
     // check sUDT
