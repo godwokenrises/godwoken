@@ -95,11 +95,6 @@ mod tests {
     use super::PolymanClient;
 
     #[tokio::test]
-    pub async fn test() -> Result<()> {
-        Ok(())
-    }
-
-    #[tokio::test]
     pub async fn test_build_deploy() -> Result<()> {
         let url = reqwest::Url::parse("http://localhost:6101")?;
         let client = PolymanClient::new(url);

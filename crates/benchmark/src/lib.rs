@@ -5,20 +5,13 @@ pub(crate) mod polyman;
 pub mod stats;
 pub mod tx;
 
-use std::{
-    cmp,
-    env::current_dir,
-    fs::{self, File},
-    io::{BufRead, BufReader},
-    path::Path,
-    str::FromStr,
-    time::Duration,
-};
+use std::fs;
+use std::{cmp, env::current_dir, path::Path, str::FromStr, time::Duration};
 
+use anyhow::anyhow;
 use anyhow::Result;
 use ckb_fixed_hash::H256;
-use gw_tools::account::read_privkey;
-use tokio::{fs::read_dir, sync::mpsc, time};
+use tokio::{sync::mpsc, time};
 
 use crate::{plan::GodwokenConfig, stats::StatsHandler};
 
@@ -43,22 +36,19 @@ fn read_config(path: impl AsRef<Path>) -> Result<config::Config> {
 pub async fn run(path: Option<&str>) -> Result<()> {
     let path = path.unwrap_or(GENERATE_CONFIG_FILE_PATH);
     let config = read_config(path)?;
-    let mut dir = read_dir(config.account_path).await?;
-    let mut pks = Vec::new();
+    let pks: Vec<H256> = std::fs::read_to_string(config.account_path)?
+        .split('\n')
+        .map(|line| {
+            H256::from_str(line.trim().trim_start_matches("0x"))
+                .map_err(|err| anyhow!("parse private key with error: {:?}", err))
+        })
+        .collect::<Result<Vec<H256>>>()?;
+    log::info!("Read private keys: {}", pks.len());
     let gw_rpc_url = reqwest::Url::parse(&config.gw_rpc_url)?;
     let polyman_url = reqwest::Url::parse(&config.polyman_url)?;
     let scripts_deployment_content = std::fs::read_to_string(&config.scripts_deploy_path)?;
     let scripts_deployment = serde_json::from_str(&scripts_deployment_content)?;
     let rollup_type_hash = H256::from_str(&config.rollup_type_hash)?;
-    while let Some(f) = dir.next_entry().await? {
-        let file = File::open(f.path())?;
-        let reader = BufReader::new(file);
-        if let Some(Ok(pk)) = reader.lines().next() {
-            if let Ok(pk) = read_privkey(Path::new(&pk)) {
-                pks.push(pk);
-            }
-        }
-    }
 
     let stats_handler = StatsHandler::new();
 
