@@ -12,6 +12,7 @@ mod hasher;
 mod polyjuice;
 mod prepare_scripts;
 mod setup;
+mod stat;
 mod transfer;
 pub(crate) mod types;
 mod update_cell;
@@ -19,11 +20,14 @@ mod utils;
 mod withdraw;
 
 use anyhow::Result;
+use async_jsonrpc_client::HttpClient;
+use ckb_sdk::constants::ONE_CKB;
 use clap::{value_t, App, Arg, SubCommand};
 use deploy_genesis::DeployRollupCellArgs;
 use dump_tx::ChallengeBlock;
 use generate_config::GenerateNodeConfigArgs;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
+use gw_rpc_client::indexer_client::CKBIndexerClient;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -703,6 +707,25 @@ fn run_cli() -> Result<()> {
                         .required(true)
                         .help("output file"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("stat-custodian-ckb")
+                .about("Output amount of layer2 custodian CKB")
+                .arg(arg_indexer_rpc.clone())
+                .arg(
+                    Arg::with_name("rollup-type-hash")
+                        .long("rollup-type-hash")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Rollup type hash"),
+                )
+                .arg(
+                    Arg::with_name("custodian-script-type-hash")
+                        .long("custodian-script-type-hash")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Custodian script type hash"),
+                )
         );
 
     let matches = app.clone().get_matches();
@@ -1175,6 +1198,24 @@ fn run_cli() -> Result<()> {
                 log::error!("Dump offchain cancel challenge tx: {}", err);
                 std::process::exit(-1);
             };
+        }
+        ("stat-custodian-ckb", Some(m)) => {
+            let indexer_rpc_url = m.value_of("indexer-rpc-url").unwrap();
+            let rollup_type_hash = cli_args::to_h256(m.value_of("rollup-type-hash").unwrap())?;
+            let custodian_script_type_hash =
+                cli_args::to_h256(m.value_of("custodian-script-type-hash").unwrap())?;
+            let rpc_client = CKBIndexerClient::new(HttpClient::new(indexer_rpc_url)?);
+
+            let total_capacity = stat::query_custodian_ckb(
+                &rpc_client,
+                &rollup_type_hash.into(),
+                &custodian_script_type_hash.into(),
+            )?;
+
+            let ckb = total_capacity / ONE_CKB as u128;
+            let shannon = total_capacity - (ckb * ONE_CKB as u128);
+            log::debug!("Total capacity: {}", total_capacity);
+            println!("Total custodian: {}.{:0>8} CKB", ckb, shannon);
         }
         _ => {
             app.print_help().expect("print help");
