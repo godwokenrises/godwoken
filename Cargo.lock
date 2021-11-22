@@ -2350,6 +2350,7 @@ name = "gw-tools"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-jsonrpc-client",
  "bech32",
  "ckb-crypto 0.100.0",
  "ckb-fixed-hash 0.100.0",

@@ -114,4 +114,46 @@ impl CKBIndexerClient {
         }
         Ok(collected_cells)
     }
+
+    pub async fn query_custodian_ckb(&self, lock: Script) -> Result<u128> {
+        let search_key = SearchKey {
+            script: {
+                let lock = ckb_types::packed::Script::new_unchecked(lock.as_bytes());
+                lock.into()
+            },
+            script_type: ScriptType::Lock,
+            filter: None,
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut total_capacity = 0u128;
+        let mut cursor = None;
+        loop {
+            let cells: Pagination<Cell> = to_result(
+                self.0
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            if cells.last_cursor.is_empty() {
+                break;
+            }
+            cursor = Some(cells.last_cursor);
+
+            for cell in cells.objects.into_iter() {
+                let capacity: u64 = cell.output.capacity.into();
+                total_capacity += capacity as u128;
+            }
+        }
+        Ok(total_capacity)
+    }
 }
