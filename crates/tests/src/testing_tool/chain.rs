@@ -17,8 +17,9 @@ use gw_types::{
     core::ScriptHashType,
     offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext},
     packed::{
-        CellOutput, DepositRequest, L2BlockCommittedInfo, RawTransaction, RollupAction,
-        RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, Transaction, WitnessArgs,
+        CellOutput, DepositLockArgs, DepositRequest, L2BlockCommittedInfo, RawTransaction,
+        RollupAction, RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, Transaction,
+        WitnessArgs,
     },
     prelude::*,
 };
@@ -241,6 +242,17 @@ pub fn construct_block(
         .deposit_script_type_hash();
     let rollup_script_hash = generator.rollup_context().rollup_script_hash;
 
+    let lock_args = {
+        let cancel_timeout = 0xc0000000000004b0u64;
+        let mut buf: Vec<u8> = Vec::new();
+        let deposit_args = DepositLockArgs::new_builder()
+            .cancel_timeout(cancel_timeout.pack())
+            .build();
+        buf.extend(rollup_script_hash.as_slice());
+        buf.extend(deposit_args.as_slice());
+        buf
+    };
+
     let deposit_cells = deposit_requests
         .into_iter()
         .map(|deposit| DepositInfo {
@@ -251,7 +263,7 @@ pub fn construct_block(
                         Script::new_builder()
                             .code_hash(deposit_lock_type_hash.clone())
                             .hash_type(ScriptHashType::Type.into())
-                            .args(rollup_script_hash.as_slice().to_vec().pack())
+                            .args(lock_args.pack())
                             .build(),
                     )
                     .capacity(deposit.capacity())
