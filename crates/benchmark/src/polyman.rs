@@ -87,29 +87,3 @@ pub enum Status {
     Ok,
     Failed,
 }
-
-#[cfg(test)]
-mod tests {
-    use anyhow::Result;
-
-    use super::PolymanClient;
-
-    #[tokio::test]
-    pub async fn test_build_deploy() -> Result<()> {
-        let url = reqwest::Url::parse("http://localhost:6101")?;
-        let client = PolymanClient::new(url);
-        let res = client.deploy().await?;
-        println!("res: {:?}", res);
-        Ok(())
-    }
-
-    #[tokio::test]
-    pub async fn test_build_erc20() -> Result<()> {
-        let url = reqwest::Url::parse("http://localhost:6101")?;
-        let client = PolymanClient::new(url);
-        let res = client.build_erc20(18, 19, 20000000000).await?;
-        println!("res: {:?}", res);
-
-        Ok(())
-    }
-}

@@ -1,7 +1,10 @@
 use anyhow::Result;
 use ckb_jsonrpc_types::{JsonBytes, Script, Uint128, Uint32};
 use ckb_types::H256;
-use gw_jsonrpc_types::godwoken::{L2TransactionWithStatus, RunResult, TxReceipt};
+use gw_jsonrpc_types::{
+    debugger::{DumpChallengeTarget, ReprMockTransaction},
+    godwoken::{L2TransactionWithStatus, RunResult, TxReceipt},
+};
 use std::{io::ErrorKind, u128, u32};
 
 type AccountID = Uint32;
@@ -99,11 +102,11 @@ impl GodwokenRpcClient {
         self.rpc::<RunResult>("execute_l2transaction", params).await
     }
 
-    // pub fn execute_raw_l2transaction(&mut self, raw_l2tx: JsonBytes) -> Result<RunResult, String> {
-    //     let params = serde_json::to_value((raw_l2tx,)).map_err(|err| err.to_string())?;
-    //     self.rpc::<RunResult>("execute_raw_l2transaction", params)
-    //         .map(Into::into)
-    // }
+    pub async fn execute_raw_l2transaction(&mut self, raw_l2tx: JsonBytes) -> Result<RunResult> {
+        let params = serde_json::to_value((raw_l2tx,))?;
+        self.rpc::<RunResult>("execute_raw_l2transaction", params)
+            .await
+    }
 
     pub async fn get_transaction(
         &mut self,
@@ -122,14 +125,14 @@ impl GodwokenRpcClient {
             .map(|opt| opt.map(Into::into))
     }
 
-    // pub fn debug_dump_cancel_challenge_tx(
-    //     &mut self,
-    //     challenge_target: DumpChallengeTarget,
-    // ) -> Result<ReprMockTransaction, String> {
-    //     let params = serde_json::to_value((challenge_target,)).map_err(|err| err.to_string())?;
-    //     self.raw_rpc::<ReprMockTransaction>("debug_dump_cancel_challenge_tx", params)
-    //         .map(Into::into)
-    // }
+    pub async fn debug_dump_cancel_challenge_tx(
+        &mut self,
+        challenge_target: DumpChallengeTarget,
+    ) -> Result<ReprMockTransaction> {
+        let params = serde_json::to_value((challenge_target,))?;
+        self.rpc::<ReprMockTransaction>("debug_dump_cancel_challenge_tx", params)
+            .await
+    }
 
     async fn rpc<SuccessResponse: serde::de::DeserializeOwned>(
         &mut self,
