@@ -72,7 +72,7 @@ impl GodwokenRpcClient {
         short_address: JsonBytes,
     ) -> Result<Option<H256>> {
         let params = serde_json::to_value((short_address,))?;
-
+        dbg!("get_script_hash_by_short_address");
         self.rpc::<Option<H256>>("get_script_hash_by_short_address", params)
             .map(|opt| opt.map(Into::into))
     }

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::{App, Arg, SubCommand};
 use gw_benchmark::generate_config_file;
+
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));

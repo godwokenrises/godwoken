@@ -103,7 +103,8 @@ pub fn short_address_to_account_id(
     short_address: &GwBytes,
 ) -> Result<Option<u32>> {
     let bytes = JsonBytes::from_bytes(short_address.clone());
-    let script_hash = match godwoken_rpc_client.get_script_hash_by_short_address(bytes)? {
+    let res = godwoken_rpc_client.get_script_hash_by_short_address(bytes);
+    let script_hash = match res? {
         Some(h) => h,
         None => {
             return Err(anyhow!(

@@ -8,16 +8,18 @@ use ckb_fixed_hash::H256;
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::prelude::Builder;
 use gw_jsonrpc_types::godwoken::L2TransactionStatus;
-use gw_tools::godwoken_rpc::GodwokenRpcClient;
 use gw_types::packed::{L2Transaction, RawL2Transaction};
 use gw_types::{prelude::Entity as GwEntity, prelude::Pack as GwPack};
 use reqwest::Url;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::polyman::{self, BuildDeployResponse, BuildErc20Response, PolymanClient};
 use crate::stats::{ApiStatus, StatsHandler};
 
 const API_SUBMIT_TX: &str = "submit_tx";
+const API_GET_RECEIPT: &str = "get_receipt";
+const API_GET_TX: &str = "get_tx";
 
 pub enum TxStatus {
     Failure,
@@ -81,14 +83,12 @@ impl TxMsg {
         }
     }
 
-    fn build_tx(
+    async fn build_tx(
         &self,
         rpc_client: &mut GodwokenRpcClient,
         rollup_type_hash: &H256,
     ) -> Result<L2Transaction> {
-        let nonce = rpc_client
-            .get_nonce(self.from_id)
-            .map_err(|err| anyhow!(err))?;
+        let nonce = rpc_client.get_nonce(self.from_id).await?;
         let raw_l2transaction = RawL2Transaction::new_builder()
             .from_id(GwPack::pack(&self.from_id))
             .to_id(GwPack::pack(&self.to_id))
@@ -96,9 +96,7 @@ impl TxMsg {
             .args(GwPack::pack(&Bytes::from(self.args.clone())))
             .build();
 
-        let sender_script_hash = rpc_client
-            .get_script_hash(self.from_id)
-            .map_err(|err| anyhow!(err))?;
+        let sender_script_hash = rpc_client.get_script_hash(self.from_id).await?;
 
         let message = generate_transaction_message_to_sign(
             &raw_l2transaction,
@@ -153,16 +151,15 @@ impl TxActor {
         let timeout = self.timeout;
         let stats_handler = self.stats_handler.clone();
         tokio::spawn(async move {
-            let mut rpc_client = GodwokenRpcClient::new(url.as_str());
+            let mut rpc_client = GodwokenRpcClient::new(url);
             let timer = Instant::now();
-            let tx = match tx_msg
-                .build_tx(&mut rpc_client, &rollup_type_hash)
-                .and_then(|tx| {
-                    let bytes = JsonBytes::from_bytes(tx.as_bytes());
-                    rpc_client
-                        .submit_l2transaction(bytes)
-                        .map_err(|err| anyhow!(err))
-                }) {
+            let tx = if let Ok(tx) = tx_msg.build_tx(&mut rpc_client, &rollup_type_hash).await {
+                let bytes = JsonBytes::from_bytes(tx.as_bytes());
+                rpc_client.submit_l2transaction(bytes).await
+            } else {
+                return;
+            };
+            let tx = match tx {
                 Ok(tx) => {
                     log::debug!("submit tx: {}", hex::encode(&tx));
                     let _ = stats_handler
@@ -180,7 +177,10 @@ impl TxActor {
                     return;
                 }
             };
-            if wait_receipt(&tx, &mut rpc_client, timeout).await.is_ok() {
+            if wait_receipt(&tx, &mut rpc_client, timeout, stats_handler.clone())
+                .await
+                .is_ok()
+            {
                 let _ = stats_handler.send_tx_stats(TxStatus::PendingCommit).await;
             } else {
                 let _ = stats_handler.send_tx_stats(TxStatus::Timeout).await;
@@ -259,7 +259,7 @@ impl TxHandler {
         let msg = TxMsg::new_submit(
             pk_from,
             from_id,
-            to_id,
+            self.proxy_contract_id,
             args,
             self.proxy_contract_script_hash.clone(),
             callback,
@@ -269,12 +269,26 @@ impl TxHandler {
         Ok(())
     }
 }
-async fn wait_receipt(tx: &H256, rpc_client: &mut GodwokenRpcClient, timeout: u64) -> Result<()> {
+async fn wait_receipt(
+    tx: &H256,
+    rpc_client: &mut GodwokenRpcClient,
+    timeout: u64,
+    stats_handler: StatsHandler,
+) -> Result<()> {
     let ts = Instant::now();
     let mut interval = tokio::time::interval(Duration::from_secs(5));
     loop {
         interval.tick().await;
-        if let Ok(res) = rpc_client.get_transaction_receipt(tx) {
+        let ticker = Instant::now();
+        let res = rpc_client.get_transaction_receipt(tx).await;
+        let api_status = match &res {
+            Ok(_) => ApiStatus::Success,
+            Err(_) => ApiStatus::Failure,
+        };
+        stats_handler
+            .send_api_stats(String::from(API_GET_RECEIPT), ticker.elapsed(), api_status)
+            .await;
+        if let Ok(res) = res {
             match res {
                 Some(_) => {
                     log::debug!("pending commit tx: {}", hex::encode(tx));
@@ -290,12 +304,26 @@ async fn wait_receipt(tx: &H256, rpc_client: &mut GodwokenRpcClient, timeout: u6
     }
 }
 
-async fn wait_committed(tx: &H256, rpc_client: &mut GodwokenRpcClient, timeout: u64) -> Result<()> {
+async fn wait_committed(
+    tx: &H256,
+    rpc_client: &mut GodwokenRpcClient,
+    timeout: u64,
+    stats_handler: StatsHandler,
+) -> Result<()> {
     let ts = Instant::now();
     let mut interval = tokio::time::interval(Duration::from_secs(5));
     loop {
         interval.tick().await;
-        if let Ok(Some(tx_status)) = rpc_client.get_transaction(tx) {
+        let ticker = Instant::now();
+        let res = rpc_client.get_transaction(tx).await;
+        let api_status = match &res {
+            Ok(_) => ApiStatus::Success,
+            Err(_) => ApiStatus::Failure,
+        };
+        stats_handler
+            .send_api_stats(String::from(API_GET_TX), ticker.elapsed(), api_status)
+            .await;
+        if let Ok(Some(tx_status)) = res {
             if tx_status.status == L2TransactionStatus::Committed {
                 log::debug!("committed tx: {}", hex::encode(tx));
                 return Ok(());
@@ -314,7 +342,7 @@ fn spawn_wait_committed_task(
     timeout: u64,
 ) {
     tokio::spawn(async move {
-        match wait_committed(&tx, &mut rpc_client, timeout).await {
+        match wait_committed(&tx, &mut rpc_client, timeout, stats_handler.clone()).await {
             Ok(_) => {
                 let _ = stats_handler.send_tx_stats(TxStatus::Committed).await;
             }

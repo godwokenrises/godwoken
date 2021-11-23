@@ -1,5 +1,7 @@
 pub(crate) mod batch;
 pub mod config;
+#[allow(dead_code)]
+pub(crate) mod godwoken_rpc;
 pub(crate) mod plan;
 pub(crate) mod polyman;
 pub mod stats;
@@ -38,9 +40,17 @@ pub async fn run(path: Option<&str>) -> Result<()> {
     let config = read_config(path)?;
     let pks: Vec<H256> = std::fs::read_to_string(config.account_path)?
         .split('\n')
-        .map(|line| {
-            H256::from_str(line.trim().trim_start_matches("0x"))
-                .map_err(|err| anyhow!("parse private key with error: {:?}", err))
+        .enumerate()
+        .filter(|(_, line)| !line.is_empty())
+        .map(|(idx, line)| {
+            H256::from_str(line.trim().trim_start_matches("0x")).map_err(|err| {
+                anyhow!(
+                    "parse line: {}, private key: {}, with error: {:?}",
+                    idx,
+                    line,
+                    err
+                )
+            })
         })
         .collect::<Result<Vec<H256>>>()?;
     log::info!("Read private keys: {}", pks.len());
@@ -61,6 +71,13 @@ pub async fn run(path: Option<&str>) -> Result<()> {
     )
     .await?;
 
+    let gw_config = GodwokenConfig {
+        scripts_deployment,
+        url: gw_rpc_url,
+        rollup_type_hash,
+    };
+    let accounts = plan::get_accounts(pks, &gw_config).await?;
+
     let stats_fut = async move {
         let mut interval = time::interval(Duration::from_secs(10));
         loop {
@@ -72,24 +89,18 @@ pub async fn run(path: Option<&str>) -> Result<()> {
     };
 
     let req_batch_cnt = config.batch as usize;
-    let buffer = cmp::max(pks.len() / req_batch_cnt, 200);
+    let buffer = cmp::max(accounts.len() / req_batch_cnt, 200);
     log::info!("batch channel buffer: {}", buffer);
     let (batch_res_sender, batch_res_receiver) = mpsc::channel(buffer);
     let batch_handler = batch::BatchHandler::new(transfer_handler, batch_res_sender);
-    let gw_config = GodwokenConfig {
-        scripts_deployment,
-        url: gw_rpc_url,
-        rollup_type_hash,
-    };
     let mut plan = plan::Plan::new(
         config.interval,
-        pks,
-        gw_config,
+        accounts,
         req_batch_cnt,
         batch_handler,
         batch_res_receiver,
     )
-    .await;
+    .await?;
     tokio::spawn(stats_fut);
     plan.run().await;
     Ok(())
