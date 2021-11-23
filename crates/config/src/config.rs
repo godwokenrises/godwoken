@@ -187,6 +187,7 @@ impl Default for OffChainValidatorConfig {
 /// Config the base/minimal fee rules
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FeeConfig {
+    supported_fee_sudt_ids: Vec<u32>,
     /// known as gasPrice in Ethereum
     ///
     ///   denoted in shannons, which itself is a fractional denomination of CKBytes.
@@ -197,6 +198,9 @@ pub struct FeeConfig {
     withdraw_fee_weight: u8,
 }
 impl FeeConfig {
+    pub fn is_supported_sudt(&self, sudt_id: u32) -> bool {
+        self.supported_fee_sudt_ids.contains(&sudt_id)
+    }
     /// Get the minimal fee of meta contract
     pub fn meta_contract_base_fee(&self) -> u128 {
         self.fee_rate as u128 * u128::from(self.meta_contract_fee_weight)
@@ -217,6 +221,7 @@ impl FeeConfig {
 impl Default for FeeConfig {
     fn default() -> Self {
         Self {
+            supported_fee_sudt_ids: vec![gw_common::builtins::CKB_SUDT_ACCOUNT_ID],
             fee_rate: 500, // Shannons
             meta_contract_fee_weight: 2,
             sudt_transfer_fee_weight: 2,

@@ -2124,6 +2124,7 @@ name = "gw-config"
 version = "0.1.0"
 dependencies = [
  "ckb-fixed-hash 0.100.0",
+ "gw-common",
  "gw-jsonrpc-types",
  "serde",
 ]
@@ -2282,6 +2283,7 @@ dependencies = [
  "gw-store",
  "gw-traits",
  "gw-types",
+ "gw-utils",
  "gw-version",
  "hyper",
  "jsonrpc-v2",
@@ -2428,9 +2430,11 @@ dependencies = [
  "faster-hex 0.4.1",
  "gw-common",
  "gw-config",
+ "gw-generator",
  "gw-poa",
  "gw-rpc-client",
  "gw-types",
+ "log",
 ]
 
 [[package]]

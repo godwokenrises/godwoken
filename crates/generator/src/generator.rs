@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     account_lock_manage::AccountLockManage,
-    backend_manage::BackendManage,
+    backend_manage::{BackendManage, BackendName},
     constants::{MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
     erc20_creator_allowlist::SUDTProxyAccountAllowlist,
     error::{BlockError, TransactionValidateError, WithdrawalError},
@@ -566,7 +566,7 @@ impl Generator {
         &self,
         state: &S,
         script_hash: &H256,
-    ) -> Option<String> {
+    ) -> Option<Option<BackendName>> {
         log::debug!(
             "get_backend_name for script_hash: {}",
             hex::encode(script_hash.as_slice())
@@ -578,7 +578,7 @@ impl Generator {
                 log::debug!("load_backend by code_hash: {}", hex::encode(code_hash));
                 self.backend_manage
                     .get_backend(&code_hash.into())
-                    .map(|backend| backend.name.clone())
+                    .map(|backend| backend.name)
             } else {
                 log::error!(
                     "Found a invalid account script which hash_type is data: {:?}",
