@@ -20,10 +20,7 @@ use gw_mem_pool::batch::{BatchError, MemPoolBatch};
 use gw_store::{chain_view::ChainView, state::state_db::StateContext, Store};
 use gw_traits::CodeStore;
 use gw_types::{
-    packed::{
-        self, BlockInfo, MetaContractArgs, MetaContractArgsReader, MetaContractArgsUnion,
-        RawL2Block, RollupConfig, SUDTArgs, SUDTArgsReader, SUDTArgsUnion,
-    },
+    packed::{self, BlockInfo, RawL2Block, RollupConfig},
     prelude::*,
 };
 use gw_version::Version;
@@ -573,19 +570,11 @@ async fn execute_raw_l2transaction(
     Ok(run_result.into())
 }
 
-/// check if the fee or fee_rate/gasPrice of the L2Transaction is enough
-/// - check the fee of MetaContract::CreateAccount
-/// - check the fee of SUDTTransfer
-/// - check the gasPrice of Polyjuice L2TX
-///     gasPrice: Value of the gas for a transaction
-///
-/// @return if the fee is too low for acceptance, return invalid_param_err
-fn check_fee(
+fn get_backend_name(
     state: gw_store::state::mem_pool_state_db::MemPoolStateTree,
     generator: Data<Generator>,
-    mem_pool_config: Data<MemPoolConfig>,
     raw_l2tx: &packed::RawL2Transaction,
-) -> Result<(), RpcError> {
+) -> Result<Option<gw_generator::backend_manage::BackendName>, RpcError> {
     let to_id = raw_l2tx.to_id().unpack();
     let script_hash = state.get_script_hash(to_id)?;
     let backend_name = generator
@@ -595,63 +584,8 @@ fn check_fee(
             message: TransactionError::BackendNotFound { script_hash }.to_string(),
             data: Some(Box::new("Please check to_id")),
         })?;
-    log::debug!("backend name: {}", backend_name);
-
-    // parse args
-    let raw_l2tx_args = raw_l2tx.args().raw_data();
-    match backend_name.as_str() {
-        // TODO: use map_err style
-        "meta" => match MetaContractArgsReader::verify(raw_l2tx_args.as_ref(), false) {
-            Ok(_) => {
-                let meta_contract_args = MetaContractArgs::new_unchecked(raw_l2tx.args().unpack());
-                let fee: u128 = match meta_contract_args.to_enum() {
-                    MetaContractArgsUnion::CreateAccount(args) => args.fee().amount().unpack(),
-                };
-                let meta_contract_base_fee = mem_pool_config.fee_config.meta_contract_base_fee();
-                if fee < meta_contract_base_fee {
-                    log::warn!(
-                        "The fee is too low for acceptance, should more than meta_contract_base_fee({} shannons).",
-                        meta_contract_base_fee);
-                    return Err(invalid_param_err("The fee is too low for acceptance, should more than meta_contract_base_fee."));
-                }
-            }
-            Err(_) => return Err(invalid_param_err("invalid MetaContractArgs")),
-        },
-        "sudt" => match SUDTArgsReader::verify(raw_l2tx_args.as_ref(), false) {
-            Ok(_) => {
-                let sudt_args = SUDTArgs::new_unchecked(raw_l2tx.args().unpack());
-                let fee: u128 = match sudt_args.to_enum() {
-                    SUDTArgsUnion::SUDTQuery(_) => return Ok(()),
-                    SUDTArgsUnion::SUDTTransfer(args) => args.fee().unpack(),
-                };
-                let sudt_transfer_base_fee = mem_pool_config.fee_config.sudt_transfer_base_fee();
-                if fee < sudt_transfer_base_fee {
-                    log::warn!(
-                        "The fee is too low for acceptance, should more than sudt_transfer_base_fee({} shannons).",
-                        sudt_transfer_base_fee);
-                    return Err(invalid_param_err("The fee is too low for acceptance, should more than sudt_transfer_base_fee."));
-                }
-            }
-            Err(_) => return Err(invalid_param_err("invalid SUDTArgs")),
-        },
-        "polyjuice" => {
-            // verify the args of a polyjuice L2TX
-            // https://github.com/nervosnetwork/godwoken-polyjuice/blob/aee95c0/README.md#polyjuice-arguments
-            if raw_l2tx_args.len() < (8 + 8 + 16 + 16 + 4) {
-                return Err(invalid_param_err("invalid PolyjuiceArgs"));
-            }
-            let poly_args = raw_l2tx_args.as_ref();
-            let gas_price = u128::from_le_bytes(poly_args[16..32].try_into()?);
-            let min_gas_price = mem_pool_config.fee_config.polyjuice_base_gas_price();
-            if gas_price < min_gas_price {
-                log::warn!(
-                    "Gas Price too low for acceptance, should more than polyjuice_base_gas_price({} shannons).",
-                    min_gas_price);
-            }
-        }
-        _ => log::warn!("backend not found"),
-    };
-    Ok(())
+    log::debug!("backend_name: {:?}", backend_name);
+    Ok(backend_name)
 }
 
 async fn submit_l2transaction(
@@ -695,9 +629,19 @@ async fn submit_l2transaction(
         });
     }
 
-    // check tx fee or gasPrice
+    // check tx fee or gasPrice of the l2tx
     let raw_l2tx = tx.raw();
-    check_fee(tree, generator, mem_pool_config, &raw_l2tx)?;
+    let backend_name = get_backend_name(tree, generator, &raw_l2tx)?;
+    gw_utils::fee::check_l2tx_fee(&mem_pool_config.fee_config, &raw_l2tx, backend_name).map_err(
+        |err| {
+            log::warn!("check_fee_ret err: {}", err);
+            RpcError::Full {
+                code: INVALID_PARAM_ERR_CODE,
+                message: err.to_string(),
+                data: None,
+            }
+        },
+    )?;
 
     let tx_hash = to_jsonh256(tx.hash().into());
     match mem_pool_batch.try_push_transaction(tx) {

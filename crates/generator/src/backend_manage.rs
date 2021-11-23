@@ -4,9 +4,16 @@ use gw_config::BackendConfig;
 use gw_types::bytes::Bytes;
 use std::{collections::HashMap, fs};
 
+#[derive(Debug, Clone, Copy)]
+pub enum BackendName {
+    Meta,
+    Sudt,
+    Polyjuice,
+}
+
 #[derive(Clone)]
 pub struct Backend {
-    pub name: String,
+    pub name: Option<BackendName>,
     pub validator: Bytes,
     pub generator: Bytes,
     pub validator_script_type_hash: H256,
@@ -18,15 +25,15 @@ pub struct BackendManage {
 }
 
 /// Get backend name from the validator path
-fn get_backend_name(validator_path: &str) -> String {
+fn get_backend_name(validator_path: &str) -> Option<BackendName> {
     if validator_path.contains("meta") {
-        String::from("meta")
+        Some(BackendName::Meta)
     } else if validator_path.contains("sudt") {
-        String::from("sudt")
+        Some(BackendName::Sudt)
     } else if validator_path.contains("polyjuice") {
-        String::from("polyjuice")
+        Some(BackendName::Polyjuice)
     } else {
-        String::new()
+        None
     }
 }
 
