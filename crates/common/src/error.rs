@@ -17,7 +17,7 @@ cfg_if::cfg_if! {
             Store,
             #[error("Invalid short address error")]
             InvalidShortAddress,
-            #[error("The sudt is not supported to used as fee")]
+            #[error("Do not support pay fee with the current Simple UDT")]
             UnsupportedFeeSudt,
         }
     } else {
