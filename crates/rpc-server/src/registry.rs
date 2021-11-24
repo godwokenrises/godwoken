@@ -579,7 +579,8 @@ fn get_backend_type(
     let to_id = raw_l2tx.to_id().unpack();
     let script_hash = state.get_script_hash(to_id)?;
     let backend_type = generator
-        .get_backend_type(&state, &script_hash)
+        .load_backend(&state, &script_hash)
+        .map(|backend| backend.backend_type)
         .ok_or(RpcError::Full {
             code: INVALID_PARAM_ERR_CODE,
             message: TransactionError::BackendNotFound { script_hash }.to_string(),
