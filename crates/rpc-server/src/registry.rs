@@ -4,15 +4,16 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::OffChainMockContext;
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{DebugConfig, FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCServerConfig};
+use gw_config::{DebugConfig, MemPoolConfig, NodeMode, RPCMethods, RPCServerConfig};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
     debugger::{DumpChallengeTarget, ReprMockTransaction},
     godwoken::{
-        BackendInfo, ErrorTxReceipt, GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus,
-        L2TransactionStatus, L2TransactionWithStatus, NodeInfo, RunResult, TxReceipt,
+        BackendInfo, ErrorTxReceipt, FeeConfig, GlobalState, L2BlockStatus, L2BlockView,
+        L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, NodeInfo, RunResult,
+        TxReceipt,
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
@@ -892,7 +893,7 @@ async fn get_node_info(backend_info: Data<Vec<BackendInfo>>) -> Result<NodeInfo>
 }
 
 async fn get_fee_config(mem_pool_config: Data<MemPoolConfig>) -> Result<FeeConfig> {
-    Ok(mem_pool_config.fee_config.clone())
+    Ok(FeeConfig::from(mem_pool_config.fee_config.clone()))
 }
 
 async fn tests_produce_block(

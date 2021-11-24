@@ -187,45 +187,82 @@ impl Default for OffChainValidatorConfig {
 /// Config the base/minimal fee rules
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FeeConfig {
-    supported_fee_sudt_ids: Vec<u32>,
-    /// known as gasPrice in Ethereum
+    /// HashMap<fee_sudt_id, fee_rate>
     ///
-    ///   denoted in shannons, which itself is a fractional denomination of CKBytes.
+    /// fee_rate is known as gasPrice in Ethereum.
+    ///
+    /// The defaut fee_sudt_id is 1, which is CKB, and the ckb_fee_rate is denoted in shannons,
+    /// which itself is a fractional denomination of CKBytes.
     ///   1 CKByte = 100,000,000 Shannons
-    fee_rate: u64,
+    fee_rates: HashMap<u32, u64>,
     meta_contract_fee_weight: u8,
     sudt_transfer_fee_weight: u8,
     withdraw_fee_weight: u8,
 }
+const DEFAULT_CKB_FEE_RATE: u64 = 500;
 impl FeeConfig {
     pub fn is_supported_sudt(&self, sudt_id: u32) -> bool {
-        self.supported_fee_sudt_ids.contains(&sudt_id)
+        self.fee_rates.contains_key(&sudt_id)
+    }
+    /// The defaut fee_sudt_id is 1, which is CKB
+    fn default_fee_rate(&self) -> u128 {
+        self.fee_rates
+            .get(&gw_common::builtins::CKB_SUDT_ACCOUNT_ID)
+            .unwrap_or(&DEFAULT_CKB_FEE_RATE)
+            .to_owned()
+            .into()
     }
     /// Get the minimal fee of meta contract
     pub fn meta_contract_base_fee(&self) -> u128 {
-        self.fee_rate as u128 * u128::from(self.meta_contract_fee_weight)
+        self.default_fee_rate() * u128::from(self.meta_contract_fee_weight)
     }
     /// Get the minimal fee of a native sudt transfer transaction
     pub fn sudt_transfer_base_fee(&self) -> u128 {
-        self.fee_rate as u128 * u128::from(self.sudt_transfer_fee_weight)
+        self.default_fee_rate() * u128::from(self.sudt_transfer_fee_weight)
     }
     /// Get the minimal fee of a withdrawal request
     pub fn withdrawal_base_fee(&self) -> u128 {
-        self.fee_rate as u128 * u128::from(self.withdraw_fee_weight)
+        self.default_fee_rate() * u128::from(self.withdraw_fee_weight)
     }
     /// Get the minimal gasPrice of Polyjuice contract
     pub fn polyjuice_base_gas_price(&self) -> u128 {
-        self.fee_rate as u128
+        self.default_fee_rate()
     }
 }
 impl Default for FeeConfig {
     fn default() -> Self {
+        let mut fee_rates = HashMap::new();
+        // CKB_SUDT_ID -> 500 shannons
+        fee_rates.insert(
+            gw_common::builtins::CKB_SUDT_ACCOUNT_ID,
+            DEFAULT_CKB_FEE_RATE,
+        );
         Self {
-            supported_fee_sudt_ids: vec![gw_common::builtins::CKB_SUDT_ACCOUNT_ID],
-            fee_rate: 500, // Shannons
+            fee_rates,
             meta_contract_fee_weight: 2,
             sudt_transfer_fee_weight: 2,
             withdraw_fee_weight: 2,
+        }
+    }
+}
+
+impl From<FeeConfig> for gw_jsonrpc_types::godwoken::FeeConfig {
+    fn from(fee_config: FeeConfig) -> gw_jsonrpc_types::godwoken::FeeConfig {
+        let FeeConfig {
+            fee_rates,
+            meta_contract_fee_weight,
+            sudt_transfer_fee_weight,
+            withdraw_fee_weight,
+        } = fee_config;
+        let fee_rates = fee_rates
+            .into_iter()
+            .map(|(id, fee_rate)| (id.into(), fee_rate.into()))
+            .collect();
+        gw_jsonrpc_types::godwoken::FeeConfig {
+            fee_rates,
+            meta_contract_fee_weight: u32::from(meta_contract_fee_weight).into(),
+            sudt_transfer_fee_weight: u32::from(sudt_transfer_fee_weight).into(),
+            withdraw_fee_weight: u32::from(withdraw_fee_weight).into(),
         }
     }
 }
