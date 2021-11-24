@@ -3,7 +3,7 @@
 use crate::transaction_skeleton::TransactionSkeleton;
 use anyhow::{anyhow, Result};
 use gw_config::FeeConfig;
-use gw_generator::backend_manage::BackendName;
+use gw_generator::backend_manage::BackendType;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use gw_types::{
     offchain::InputCellInfo,
@@ -25,11 +25,11 @@ use std::convert::TryInto;
 pub fn check_l2tx_fee(
     fee_config: &FeeConfig,
     raw_l2tx: &gw_types::packed::RawL2Transaction,
-    backend_name: Option<BackendName>,
+    backend_type: BackendType,
 ) -> Result<()> {
     let raw_l2tx_args = raw_l2tx.args().raw_data();
-    match backend_name {
-        Some(BackendName::Meta) => {
+    match backend_type {
+        BackendType::Meta => {
             let meta_contract_args = MetaContractArgs::from_slice(raw_l2tx_args.as_ref())?;
             let fee_struct = match meta_contract_args.to_enum() {
                 MetaContractArgsUnion::CreateAccount(args) => args.fee(),
@@ -46,7 +46,7 @@ pub fn check_l2tx_fee(
             }
             Ok(())
         }
-        Some(BackendName::Sudt) => {
+        BackendType::Sudt => {
             let sudt_id = raw_l2tx.to_id();
             if !fee_config.is_supported_sudt(sudt_id.unpack()) {
                 return Err(anyhow!("Only support using CKB to pay fee. Please use SudtERC20Proxy to transfer sUDT instead."));
@@ -65,7 +65,7 @@ pub fn check_l2tx_fee(
             }
             Ok(())
         }
-        Some(BackendName::Polyjuice) => {
+        BackendType::Polyjuice => {
             // verify the args of a polyjuice L2TX
             // https://github.com/nervosnetwork/godwoken-polyjuice/blob/aee95c0/README.md#polyjuice-arguments
             if raw_l2tx_args.len() < (8 + 8 + 16 + 16 + 4) {
@@ -82,10 +82,6 @@ pub fn check_l2tx_fee(
                 return Err(anyhow!("Gas Price too low for acceptance, should more than polyjuice_base_gas_price({} shannons).",
                 min_gas_price));
             }
-            Ok(())
-        }
-        None => {
-            log::warn!("Found backend without name, new fee rules should be considered.");
             Ok(())
         }
     }
