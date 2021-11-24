@@ -1,7 +1,8 @@
 use crate::blockchain::Script;
 use anyhow::{anyhow, Error as JsonError};
 use ckb_fixed_hash::H256;
-use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
+pub use ckb_jsonrpc_types::Uint32;
+use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint64};
 use gw_types::{bytes::Bytes, offchain, packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
