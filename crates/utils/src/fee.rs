@@ -2,8 +2,7 @@
 
 use crate::transaction_skeleton::TransactionSkeleton;
 use anyhow::{anyhow, Result};
-use gw_config::FeeConfig;
-use gw_generator::backend_manage::BackendType;
+use gw_config::{BackendType, FeeConfig};
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use gw_types::{
     offchain::InputCellInfo,
@@ -83,6 +82,7 @@ pub fn check_l2tx_fee(
             }
             Ok(())
         }
+        BackendType::Unknown => Err(anyhow!("Found Unknown BackendType")),
     }
 }
 

@@ -4,7 +4,7 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::OffChainMockContext;
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{DebugConfig, MemPoolConfig, NodeMode, RPCMethods, RPCServerConfig};
+use gw_config::{BackendType, DebugConfig, MemPoolConfig, NodeMode, RPCMethods, RPCServerConfig};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
@@ -575,7 +575,7 @@ fn get_backend_type(
     state: gw_store::state::mem_pool_state_db::MemPoolStateTree,
     generator: Data<Generator>,
     raw_l2tx: &packed::RawL2Transaction,
-) -> Result<gw_generator::backend_manage::BackendType, RpcError> {
+) -> Result<BackendType, RpcError> {
     let to_id = raw_l2tx.to_id().unpack();
     let script_hash = state.get_script_hash(to_id)?;
     let backend_type = generator

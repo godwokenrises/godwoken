@@ -120,9 +120,24 @@ pub struct BlockProducerConfig {
     pub wallet_config: WalletConfig,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BackendType {
+    Meta,
+    Sudt,
+    Polyjuice,
+    Unknown,
+}
+
+impl Default for BackendType {
+    fn default() -> Self {
+        BackendType::Unknown
+    }
+}
+
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BackendConfig {
-    pub backend_type: String,
+    pub backend_type: BackendType,
     pub validator_path: PathBuf,
     pub generator_path: PathBuf,
     pub validator_script_type_hash: H256,
