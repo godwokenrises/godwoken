@@ -1,6 +1,9 @@
 use anyhow::anyhow;
 use bytes::Bytes;
-use std::{cmp, time::Duration};
+use std::{
+    cmp,
+    time::{Duration, Instant},
+};
 
 use ckb_fixed_hash::H256;
 
@@ -11,7 +14,9 @@ use rand::prelude::*;
 use reqwest::Url;
 use tokio::{sync::mpsc, time};
 
-use crate::{batch::BatchResMsg, godwoken_rpc::GodwokenRpcClient, tx::TxMethod};
+use crate::{
+    batch::BatchResMsg, godwoken_rpc::GodwokenRpcClient, stats::StatsHandler, tx::TxMethod,
+};
 
 use super::batch::BatchHandler;
 
@@ -30,21 +35,27 @@ pub struct Plan {
     batch_res_receiver: mpsc::Receiver<BatchResMsg>,
     accounts: Vec<Account>,
     rng: ThreadRng,
+    time_to_stop: Option<u64>,
+    stats_handler: StatsHandler,
 }
 
 impl Plan {
     pub(crate) async fn new(
         interval: u64,
+        time_to_stop: Option<u64>,
         accounts: Vec<Account>,
         req_batch_cnt: usize,
         batch_handler: BatchHandler,
         batch_res_receiver: mpsc::Receiver<BatchResMsg>,
+        stats_handler: StatsHandler,
     ) -> Result<Self> {
         Ok(Self {
             interval,
+            time_to_stop,
             accounts,
             req_batch_cnt,
             batch_handler,
+            stats_handler,
             batch_res_receiver,
             rng: rand::thread_rng(),
         })
@@ -52,11 +63,18 @@ impl Plan {
 
     pub(crate) async fn run(&mut self) {
         log::info!("Plan running...");
+        let tick = Instant::now();
         let req_freq = Duration::from_millis(self.interval);
         let mut interval = time::interval(req_freq);
         let mut wait_pk_interval = time::interval(Duration::from_secs(5));
 
         loop {
+            if let Some(time_to_stop) = &self.time_to_stop {
+                if *time_to_stop > tick.elapsed().as_secs() {
+                    log::info!("Last stats: {:?}", self.stats_handler.get_stats().await);
+                    break;
+                }
+            }
             if let Some(pks) = self.next_batch() {
                 log::debug!("run next batch: {} requests", pks.len());
                 let batch_handler = self.batch_handler.clone();

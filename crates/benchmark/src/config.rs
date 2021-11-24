@@ -11,6 +11,7 @@ pub struct Config {
     pub polyman_url: String,
     pub scripts_deploy_path: PathBuf,
     pub rollup_type_hash: String,
+    pub time_to_stop: Option<u64>, // in second
 }
 
 impl Default for Config {
@@ -24,6 +25,7 @@ impl Default for Config {
             polyman_url: String::from("http://localhost:6102"),
             scripts_deploy_path: PathBuf::from("./scripts_deploy_results.json"),
             rollup_type_hash: String::from("0x"),
+            time_to_stop: None,
         }
     }
 }

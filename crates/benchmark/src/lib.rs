@@ -78,6 +78,21 @@ pub async fn run(path: Option<&str>) -> Result<()> {
     };
     let accounts = plan::get_accounts(pks, &gw_config).await?;
 
+    let req_batch_cnt = config.batch as usize;
+    let buffer = cmp::max(accounts.len() / req_batch_cnt, 200);
+    log::info!("batch channel buffer: {}", buffer);
+    let (batch_res_sender, batch_res_receiver) = mpsc::channel(buffer);
+    let batch_handler = batch::BatchHandler::new(transfer_handler, batch_res_sender);
+    let mut plan = plan::Plan::new(
+        config.interval,
+        config.time_to_stop,
+        accounts,
+        req_batch_cnt,
+        batch_handler,
+        batch_res_receiver,
+        stats_handler.clone(),
+    )
+    .await?;
     let stats_fut = async move {
         let mut interval = time::interval(Duration::from_secs(10));
         loop {
@@ -87,20 +102,6 @@ pub async fn run(path: Option<&str>) -> Result<()> {
             }
         }
     };
-
-    let req_batch_cnt = config.batch as usize;
-    let buffer = cmp::max(accounts.len() / req_batch_cnt, 200);
-    log::info!("batch channel buffer: {}", buffer);
-    let (batch_res_sender, batch_res_receiver) = mpsc::channel(buffer);
-    let batch_handler = batch::BatchHandler::new(transfer_handler, batch_res_sender);
-    let mut plan = plan::Plan::new(
-        config.interval,
-        accounts,
-        req_batch_cnt,
-        batch_handler,
-        batch_res_receiver,
-    )
-    .await?;
     tokio::spawn(stats_fut);
     plan.run().await;
     Ok(())
