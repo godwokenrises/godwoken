@@ -121,6 +121,7 @@ pub struct BlockProducerConfig {
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BackendConfig {
+    pub backend_type: String,
     pub validator_path: PathBuf,
     pub generator_path: PathBuf,
     pub validator_script_type_hash: H256,

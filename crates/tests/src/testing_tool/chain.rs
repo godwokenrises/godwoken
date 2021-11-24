@@ -71,11 +71,13 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
         rollup_config.l2_sudt_validator_script_type_hash().unpack();
     let configs = vec![
         BackendConfig {
+            backend_type: "meta".to_string(),
             validator_path: META_VALIDATOR_PATH.into(),
             generator_path: META_GENERATOR_PATH.into(),
             validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
         },
         BackendConfig {
+            backend_type: "sudt".to_string(),
             validator_path: SUDT_VALIDATOR_PATH.into(),
             generator_path: SUDT_GENERATOR_PATH.into(),
             validator_script_type_hash: sudt_validator_script_type_hash.into(),

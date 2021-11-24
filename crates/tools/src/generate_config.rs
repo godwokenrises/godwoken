@@ -224,6 +224,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
 
     let backends: Vec<BackendConfig> = vec![
         BackendConfig {
+            backend_type: "meta".to_string(),
             validator_path: build_scripts_result.built_scripts["meta_contract_validator"].clone(),
             generator_path: build_scripts_result.built_scripts["meta_contract_generator"].clone(),
             validator_script_type_hash: scripts_deployment
@@ -232,6 +233,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
                 .clone(),
         },
         BackendConfig {
+            backend_type: "sudt".to_string(),
             validator_path: build_scripts_result.built_scripts["l2_sudt_validator"].clone(),
             generator_path: build_scripts_result.built_scripts["l2_sudt_generator"].clone(),
             validator_script_type_hash: scripts_deployment
@@ -240,6 +242,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
                 .clone(),
         },
         BackendConfig {
+            backend_type: "polyjuice".to_string(),
             validator_path: build_scripts_result.built_scripts["polyjuice_validator"].clone(),
             generator_path: build_scripts_result.built_scripts["polyjuice_generator"].clone(),
             validator_script_type_hash: scripts_deployment

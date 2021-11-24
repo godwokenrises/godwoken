@@ -1,11 +1,11 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use gw_common::H256;
 use gw_config::BackendConfig;
 use gw_types::bytes::Bytes;
 use std::{collections::HashMap, fs};
 
 #[derive(Debug, Clone, Copy)]
-pub enum BackendName {
+pub enum BackendType {
     Meta,
     Sudt,
     Polyjuice,
@@ -13,7 +13,7 @@ pub enum BackendName {
 
 #[derive(Clone)]
 pub struct Backend {
-    pub name: Option<BackendName>,
+    pub backend_type: BackendType,
     pub validator: Bytes,
     pub generator: Bytes,
     pub validator_script_type_hash: H256,
@@ -24,16 +24,12 @@ pub struct BackendManage {
     backends: HashMap<H256, Backend>,
 }
 
-/// Get backend name from the validator path
-fn get_backend_name(validator_path: &str) -> Option<BackendName> {
-    if validator_path.contains("meta") {
-        Some(BackendName::Meta)
-    } else if validator_path.contains("sudt") {
-        Some(BackendName::Sudt)
-    } else if validator_path.contains("polyjuice") {
-        Some(BackendName::Polyjuice)
-    } else {
-        None
+fn get_backend_type(validator_path: &str) -> Result<BackendType> {
+    match validator_path {
+        "meta" => Ok(BackendType::Meta),
+        "sudt" => Ok(BackendType::Sudt),
+        "polyjuice" => Ok(BackendType::Polyjuice),
+        _ => Err(anyhow!("Unsupported Backend")),
     }
 }
 
@@ -52,11 +48,12 @@ impl BackendManage {
 
     pub fn register_backend_config(&mut self, config: BackendConfig) -> Result<()> {
         let BackendConfig {
+            backend_type,
             validator_path,
             generator_path,
             validator_script_type_hash,
         } = config;
-        let name = get_backend_name(validator_path.to_str().unwrap());
+        let backend_type = get_backend_type(&backend_type)?;
         let validator = fs::read(validator_path)?.into();
         let generator = fs::read(generator_path)?.into();
         let validator_script_type_hash = {
@@ -64,7 +61,7 @@ impl BackendManage {
             hash.into()
         };
         let backend = Backend {
-            name,
+            backend_type,
             validator,
             generator,
             validator_script_type_hash,

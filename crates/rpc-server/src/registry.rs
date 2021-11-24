@@ -571,22 +571,21 @@ async fn execute_raw_l2transaction(
     Ok(run_result.into())
 }
 
-fn get_backend_name(
+fn get_backend_type(
     state: gw_store::state::mem_pool_state_db::MemPoolStateTree,
     generator: Data<Generator>,
     raw_l2tx: &packed::RawL2Transaction,
-) -> Result<Option<gw_generator::backend_manage::BackendName>, RpcError> {
+) -> Result<gw_generator::backend_manage::BackendType, RpcError> {
     let to_id = raw_l2tx.to_id().unpack();
     let script_hash = state.get_script_hash(to_id)?;
-    let backend_name = generator
-        .get_backend_name(&state, &script_hash)
+    let backend_type = generator
+        .get_backend_type(&state, &script_hash)
         .ok_or(RpcError::Full {
             code: INVALID_PARAM_ERR_CODE,
             message: TransactionError::BackendNotFound { script_hash }.to_string(),
             data: Some(Box::new("Please check to_id")),
         })?;
-    log::debug!("backend_name: {:?}", backend_name);
-    Ok(backend_name)
+    Ok(backend_type)
 }
 
 async fn submit_l2transaction(
@@ -632,8 +631,8 @@ async fn submit_l2transaction(
 
     // check tx fee or gasPrice of the l2tx
     let raw_l2tx = tx.raw();
-    let backend_name = get_backend_name(tree, generator, &raw_l2tx)?;
-    gw_utils::fee::check_l2tx_fee(&mem_pool_config.fee_config, &raw_l2tx, backend_name).map_err(
+    let backend_type = get_backend_type(tree, generator, &raw_l2tx)?;
+    gw_utils::fee::check_l2tx_fee(&mem_pool_config.fee_config, &raw_l2tx, backend_type).map_err(
         |err| {
             log::warn!("check_fee_ret err: {}", err);
             RpcError::Full {
