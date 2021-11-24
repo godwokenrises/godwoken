@@ -864,6 +864,15 @@ impl From<packed::Fee> for Fee {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct FeeConfig {
+    pub fee_rates: std::collections::HashMap<Uint32, Uint64>,
+    pub meta_contract_fee_weight: Uint32,
+    pub sudt_transfer_fee_weight: Uint32,
+    pub withdraw_fee_weight: Uint32,
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct L2BlockCommittedInfo {
