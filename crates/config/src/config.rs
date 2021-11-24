@@ -2,7 +2,7 @@ use ckb_fixed_hash::{H160, H256};
 use gw_common::error::Error;
 use gw_jsonrpc_types::{
     blockchain::{CellDep, Script},
-    godwoken::{ChallengeTargetType, L2BlockCommittedInfo, RollupConfig},
+    godwoken::{ChallengeTargetType, L2BlockCommittedInfo, RollupConfig, Uint32},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -189,6 +189,9 @@ impl Default for OffChainValidatorConfig {
 /// Config the base/minimal fee rules
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FeeConfig {
+    meta_contract_fee_weight: u8,
+    sudt_transfer_fee_weight: u8,
+    withdraw_fee_weight: u8,
     /// HashMap<fee_sudt_id, fee_rate>
     ///
     /// fee_rate is known as gasPrice in Ethereum.
@@ -196,17 +199,16 @@ pub struct FeeConfig {
     /// The defaut fee_sudt_id is 1, which is CKB, and the ckb_fee_rate is denoted in shannons,
     /// which itself is a fractional denomination of CKBytes.
     ///   1 CKByte = 100,000,000 Shannons
-    fee_rates: HashMap<u32, u64>,
-    meta_contract_fee_weight: u8,
-    sudt_transfer_fee_weight: u8,
-    withdraw_fee_weight: u8,
+    ///
+    /// Note: The key of all TOML maps must be strings.
+    fee_rates: HashMap<Uint32, u64>,
 }
 impl FeeConfig {
     pub fn is_supported_sudt(&self, sudt_id: u32) -> bool {
         if self.fee_rates.is_empty() {
             return true;
         }
-        self.fee_rates.contains_key(&sudt_id)
+        self.fee_rates.contains_key(&sudt_id.into())
     }
     pub fn get_fee_rate(&self, sudt_id: u32) -> Result<u128, Error> {
         if self.fee_rates.is_empty() {
@@ -214,7 +216,7 @@ impl FeeConfig {
         }
         let fee_rate = self
             .fee_rates
-            .get(&sudt_id)
+            .get(&sudt_id.into())
             .ok_or(Error::UnsupportedFeeSudt)?;
         Ok(fee_rate.to_owned().into())
     }
@@ -239,14 +241,23 @@ impl FeeConfig {
     }
 }
 impl Default for FeeConfig {
+    /// The suggested configs:
+    /// ```toml
+    /// [mem_pool.fee_config]
+    /// meta_contract_fee_weight = 2
+    /// sudt_transfer_fee_weight = 2
+    /// withdraw_fee_weight = 2
+    ///
+    /// [mem_pool.fee_config.fee_rates]
+    /// 0x1 = 500
+    /// ```
     fn default() -> Self {
         Self {
-            // suggested config is (CKB_SUDT_ID -> 500 shannons)
-            // const DEFAULT_CKB_FEE_RATE: u64 = 500;
-            fee_rates: Default::default(),
             meta_contract_fee_weight: 2,
             sudt_transfer_fee_weight: 2,
             withdraw_fee_weight: 2,
+            /// The suggested default config is (CKB_SUDT_ID -> 500 shannons)
+            fee_rates: Default::default(),
         }
     }
 }
@@ -261,7 +272,7 @@ impl From<FeeConfig> for gw_jsonrpc_types::godwoken::FeeConfig {
         } = fee_config;
         let fee_rates = fee_rates
             .into_iter()
-            .map(|(id, fee_rate)| (id.into(), fee_rate.into()))
+            .map(|(id, fee_rate)| (id, fee_rate.into()))
             .collect();
         gw_jsonrpc_types::godwoken::FeeConfig {
             fee_rates,
