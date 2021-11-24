@@ -202,7 +202,7 @@ impl Default for OffChainValidatorConfig {
 }
 
 /// Config the base/minimal fee rules
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct FeeConfig {
     meta_contract_fee_weight: u8,
     sudt_transfer_fee_weight: u8,
@@ -253,27 +253,6 @@ impl FeeConfig {
     /// Get the minimal gasPrice of Polyjuice contract
     pub fn polyjuice_base_gas_price(&self, sudt_id: u32) -> Result<u128, Error> {
         self.get_fee_rate(sudt_id)
-    }
-}
-impl Default for FeeConfig {
-    /// The suggested configs:
-    /// ```toml
-    /// [mem_pool.fee_config]
-    /// meta_contract_fee_weight = 2
-    /// sudt_transfer_fee_weight = 2
-    /// withdraw_fee_weight = 2
-    ///
-    /// [mem_pool.fee_config.fee_rates]
-    /// 0x1 = 500
-    /// ```
-    fn default() -> Self {
-        Self {
-            meta_contract_fee_weight: 2,
-            sudt_transfer_fee_weight: 2,
-            withdraw_fee_weight: 2,
-            /// The suggested default config is (CKB_SUDT_ID -> 500 shannons)
-            fee_rates: Default::default(),
-        }
     }
 }
 
