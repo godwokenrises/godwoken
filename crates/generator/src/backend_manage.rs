@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use gw_common::H256;
 use gw_config::BackendConfig;
 use gw_types::bytes::Bytes;
@@ -9,6 +9,17 @@ pub enum BackendType {
     Meta,
     Sudt,
     Polyjuice,
+}
+
+impl From<&str> for BackendType {
+    fn from(backend_type_str: &str) -> Self {
+        match backend_type_str {
+            "meta" => Self::Meta,
+            "sudt" => Self::Sudt,
+            "polyjuice" => Self::Polyjuice,
+            _ => panic!("Unsupported Backend"),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -22,15 +33,6 @@ pub struct Backend {
 #[derive(Clone)]
 pub struct BackendManage {
     backends: HashMap<H256, Backend>,
-}
-
-fn get_backend_type(validator_path: &str) -> Result<BackendType> {
-    match validator_path {
-        "meta" => Ok(BackendType::Meta),
-        "sudt" => Ok(BackendType::Sudt),
-        "polyjuice" => Ok(BackendType::Polyjuice),
-        _ => Err(anyhow!("Unsupported Backend")),
-    }
 }
 
 impl BackendManage {
@@ -53,7 +55,6 @@ impl BackendManage {
             generator_path,
             validator_script_type_hash,
         } = config;
-        let backend_type = get_backend_type(&backend_type)?;
         let validator = fs::read(validator_path)?.into();
         let generator = fs::read(generator_path)?.into();
         let validator_script_type_hash = {
@@ -61,7 +62,7 @@ impl BackendManage {
             hash.into()
         };
         let backend = Backend {
-            backend_type,
+            backend_type: BackendType::from(backend_type.as_str()),
             validator,
             generator,
             validator_script_type_hash,

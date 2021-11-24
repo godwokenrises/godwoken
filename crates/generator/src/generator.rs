@@ -561,7 +561,7 @@ impl Generator {
         }
     }
 
-    /// Get backend name by script_hash
+    /// Get backend type by script_hash
     pub fn get_backend_type<S: State + CodeStore>(
         &self,
         state: &S,
