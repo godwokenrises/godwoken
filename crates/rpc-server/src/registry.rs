@@ -673,8 +673,11 @@ async fn submit_withdrawal_request(
     let withdrawal = packed::WithdrawalRequest::from_slice(&withdrawal_bytes)?;
 
     // Check Fee
+    let fee_sudt_id = withdrawal.raw().fee().sudt_id().unpack();
     let fee = withdrawal.raw().fee().amount().unpack();
-    let withdrawal_base_fee = mem_pool_config.fee_config.withdrawal_base_fee();
+    let withdrawal_base_fee = mem_pool_config
+        .fee_config
+        .withdrawal_base_fee(fee_sudt_id)?;
     if fee < withdrawal_base_fee {
         log::warn!(
             "The fee is too low for acceptance, should more than withdrawal_base_fee({} shannons).",

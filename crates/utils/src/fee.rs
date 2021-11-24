@@ -34,10 +34,8 @@ pub fn check_l2tx_fee(
             let fee_struct = match meta_contract_args.to_enum() {
                 MetaContractArgsUnion::CreateAccount(args) => args.fee(),
             };
-            if !fee_config.is_supported_sudt(fee_struct.sudt_id().unpack()) {
-                return Err(anyhow!("Only support using CKB to pay fee."));
-            }
-            let meta_contract_base_fee = fee_config.meta_contract_base_fee();
+            let sudt_id = fee_struct.sudt_id().unpack();
+            let meta_contract_base_fee = fee_config.meta_contract_base_fee(sudt_id)?;
             if fee_struct.amount().unpack() < meta_contract_base_fee {
                 let err_msg = format!("The fee is too low for acceptance, should more than meta_contract_base_fee({} shannons).",
                 meta_contract_base_fee);
@@ -47,16 +45,16 @@ pub fn check_l2tx_fee(
             Ok(())
         }
         BackendType::Sudt => {
-            let sudt_id = raw_l2tx.to_id();
-            if !fee_config.is_supported_sudt(sudt_id.unpack()) {
-                return Err(anyhow!("Only support using CKB to pay fee. Please use SudtERC20Proxy to transfer sUDT instead."));
+            let sudt_id = raw_l2tx.to_id().unpack();
+            if !fee_config.is_supported_sudt(sudt_id) {
+                return Err(anyhow!("This sudt is not supported to used as fee. Please use SudtERC20Proxy to transfer this sUDT instead."));
             }
+            let sudt_transfer_base_fee = fee_config.sudt_transfer_base_fee(sudt_id)?;
             let sudt_args = SUDTArgs::from_slice(raw_l2tx_args.as_ref())?;
             let fee_amount = match sudt_args.to_enum() {
                 SUDTArgsUnion::SUDTQuery(_) => 0u128,
                 SUDTArgsUnion::SUDTTransfer(args) => args.fee().unpack(),
             };
-            let sudt_transfer_base_fee = fee_config.sudt_transfer_base_fee();
             if fee_amount < sudt_transfer_base_fee {
                 let err_msg = format!("The fee is too low for acceptance, should more than sudt_transfer_base_fee({} shannons).",
                 sudt_transfer_base_fee);
@@ -74,7 +72,8 @@ pub fn check_l2tx_fee(
             // Note: Polyjuice use CKB_SUDT to pay fee by default
             let poly_args = raw_l2tx_args.as_ref();
             let gas_price = u128::from_le_bytes(poly_args[16..32].try_into()?);
-            let min_gas_price = fee_config.polyjuice_base_gas_price();
+            let min_gas_price =
+                fee_config.polyjuice_base_gas_price(gw_common::builtins::CKB_SUDT_ACCOUNT_ID)?;
             if gas_price < min_gas_price {
                 log::warn!(
                     "Gas Price too low for acceptance, should more than polyjuice_base_gas_price({} shannons).",

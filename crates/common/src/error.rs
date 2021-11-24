@@ -17,6 +17,8 @@ cfg_if::cfg_if! {
             Store,
             #[error("Invalid short address error")]
             InvalidShortAddress,
+            #[error("The sudt is not supported to used as fee")]
+            UnsupportedFeeSudt,
         }
     } else {
         #[derive(Debug, Eq, PartialEq, Clone)]
@@ -27,6 +29,7 @@ cfg_if::cfg_if! {
             MissingKey,
             Store,
             InvalidShortAddress,
+            UnsupportedFeeSudt,
         }
     }
 }
