@@ -1152,7 +1152,7 @@ fn run_cli() -> Result<()> {
                 }
             };
             if quiet {
-                println!("{}", account_id);
+                println!("[create-sudt-account] {}", account_id);
             }
         }
         ("get-balance", Some(m)) => {

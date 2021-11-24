@@ -41,7 +41,7 @@ pub fn check_l2tx_fee(
             if fee_struct.amount().unpack() < meta_contract_base_fee {
                 let err_msg = format!("The fee is too low for acceptance, should more than meta_contract_base_fee({} shannons).",
                 meta_contract_base_fee);
-                log::warn!("{}", err_msg);
+                log::warn!("[check_l2tx_fee] {}", err_msg);
                 return Err(anyhow!(err_msg));
             }
             Ok(())
@@ -60,7 +60,7 @@ pub fn check_l2tx_fee(
             if fee_amount < sudt_transfer_base_fee {
                 let err_msg = format!("The fee is too low for acceptance, should more than sudt_transfer_base_fee({} shannons).",
                 sudt_transfer_base_fee);
-                log::warn!("{}", err_msg);
+                log::warn!("[check_l2tx_fee] {}", err_msg);
                 return Err(anyhow!(err_msg));
             }
             Ok(())
