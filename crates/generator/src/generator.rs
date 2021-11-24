@@ -28,7 +28,7 @@ use gw_common::{
     state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE_TYPE},
     H256,
 };
-use gw_config::{BackendType, RPCConfig};
+use gw_config::RPCConfig;
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
 use gw_traits::{ChainStore, CodeStore};
 use gw_tx_filter::polyjuice_contract_creator_allowlist::PolyjuiceContractCreatorAllowList;
@@ -561,35 +561,11 @@ impl Generator {
         }
     }
 
-    /// Get backend type by script_hash
-    pub fn get_backend_type<S: State + CodeStore>(
+    pub fn load_backend<S: State + CodeStore>(
         &self,
         state: &S,
         script_hash: &H256,
-    ) -> Option<BackendType> {
-        log::debug!(
-            "get_backend_type for script_hash: {}",
-            hex::encode(script_hash.as_slice())
-        );
-        state.get_script(script_hash).and_then(|script| {
-            // only accept type script hash type for now
-            if script.hash_type() == ScriptHashType::Type.into() {
-                let code_hash: [u8; 32] = script.code_hash().unpack();
-                log::debug!("load_backend by code_hash: {}", hex::encode(code_hash));
-                self.backend_manage
-                    .get_backend(&code_hash.into())
-                    .map(|backend| backend.backend_type)
-            } else {
-                log::error!(
-                    "Found a invalid account script which hash_type is data: {:?}",
-                    script
-                );
-                None
-            }
-        })
-    }
-
-    fn load_backend<S: State + CodeStore>(&self, state: &S, script_hash: &H256) -> Option<Backend> {
+    ) -> Option<Backend> {
         log::debug!(
             "load_backend for script_hash: {}",
             hex::encode(script_hash.as_slice())
