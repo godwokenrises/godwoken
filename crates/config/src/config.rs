@@ -236,22 +236,22 @@ impl FeeConfig {
         Ok(fee_rate.to_owned().into())
     }
     /// Get the minimal fee of meta contract
-    pub fn meta_contract_base_fee(&self, sudt_id: u32) -> Result<u128, Error> {
+    pub fn meta_contract_minimum_fee(&self, sudt_id: u32) -> Result<u128, Error> {
         let fee_rate = self.get_fee_rate(sudt_id)?;
         Ok(fee_rate * u128::from(self.meta_contract_fee_weight))
     }
     /// Get the minimal fee of a native sudt transfer transaction
-    pub fn sudt_transfer_base_fee(&self, sudt_id: u32) -> Result<u128, Error> {
+    pub fn sudt_transfer_minimum_fee(&self, sudt_id: u32) -> Result<u128, Error> {
         let fee_rate = self.get_fee_rate(sudt_id)?;
         Ok(fee_rate * u128::from(self.sudt_transfer_fee_weight))
     }
     /// Get the minimal fee of a withdrawal request
-    pub fn withdrawal_base_fee(&self, sudt_id: u32) -> Result<u128, Error> {
+    pub fn withdrawal_minimum_fee(&self, sudt_id: u32) -> Result<u128, Error> {
         let fee_rate = self.get_fee_rate(sudt_id)?;
         Ok(fee_rate * u128::from(self.withdraw_fee_weight))
     }
     /// Get the minimal gasPrice of Polyjuice contract
-    pub fn polyjuice_base_gas_price(&self, sudt_id: u32) -> Result<u128, Error> {
+    pub fn polyjuice_minimum_gas_price(&self, sudt_id: u32) -> Result<u128, Error> {
         self.get_fee_rate(sudt_id)
     }
 }

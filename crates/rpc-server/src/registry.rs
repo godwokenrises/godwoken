@@ -676,17 +676,20 @@ async fn submit_withdrawal_request(
     // Check Fee
     let fee_sudt_id = withdrawal.raw().fee().sudt_id().unpack();
     let fee = withdrawal.raw().fee().amount().unpack();
-    let withdrawal_base_fee = mem_pool_config
+    let withdrawal_minimum_fee = mem_pool_config
         .fee_config
-        .withdrawal_base_fee(fee_sudt_id)?;
-    if fee < withdrawal_base_fee {
-        log::warn!(
-            "The fee is too low for acceptance, should more than withdrawal_base_fee({} shannons).",
-            withdrawal_base_fee
+        .withdrawal_minimum_fee(fee_sudt_id)?;
+    if fee < withdrawal_minimum_fee {
+        let err_msg = format!(
+            "The fee is too low for acceptance, should more than withdrawal_minimum_fee({}).",
+            withdrawal_minimum_fee
         );
-        return Err(invalid_param_err(
-            "The fee is too low for acceptance, should more than withdrawal_base_fee.",
-        ));
+        log::warn!("[check withdrawal_request fee] {}", err_msg);
+        return Err(RpcError::Full {
+            code: INVALID_PARAM_ERR_CODE,
+            message: err_msg,
+            data: None,
+        });
     }
 
     match mem_pool_batch.try_push_withdrawal_request(withdrawal) {
