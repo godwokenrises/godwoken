@@ -1,4 +1,5 @@
 use ckb_fixed_hash::{H160, H256};
+use gw_common::error::Error;
 use gw_jsonrpc_types::{
     blockchain::{CellDep, Script},
     godwoken::{ChallengeTargetType, L2BlockCommittedInfo, RollupConfig},
@@ -205,29 +206,31 @@ impl FeeConfig {
     pub fn is_supported_sudt(&self, sudt_id: u32) -> bool {
         self.fee_rates.contains_key(&sudt_id)
     }
-    /// The defaut fee_sudt_id is 1, which is CKB
-    fn default_fee_rate(&self) -> u128 {
-        self.fee_rates
-            .get(&gw_common::builtins::CKB_SUDT_ACCOUNT_ID)
-            .unwrap_or(&DEFAULT_CKB_FEE_RATE)
-            .to_owned()
-            .into()
+    pub fn get_fee_rate(&self, sudt_id: u32) -> Result<u128, Error> {
+        let fee_rate = self
+            .fee_rates
+            .get(&sudt_id)
+            .ok_or(Error::UnsupportedFeeSudt)?;
+        Ok(fee_rate.to_owned().into())
     }
     /// Get the minimal fee of meta contract
-    pub fn meta_contract_base_fee(&self) -> u128 {
-        self.default_fee_rate() * u128::from(self.meta_contract_fee_weight)
+    pub fn meta_contract_base_fee(&self, sudt_id: u32) -> Result<u128, Error> {
+        let fee_rate = self.get_fee_rate(sudt_id)?;
+        Ok(fee_rate * u128::from(self.meta_contract_fee_weight))
     }
     /// Get the minimal fee of a native sudt transfer transaction
-    pub fn sudt_transfer_base_fee(&self) -> u128 {
-        self.default_fee_rate() * u128::from(self.sudt_transfer_fee_weight)
+    pub fn sudt_transfer_base_fee(&self, sudt_id: u32) -> Result<u128, Error> {
+        let fee_rate = self.get_fee_rate(sudt_id)?;
+        Ok(fee_rate * u128::from(self.sudt_transfer_fee_weight))
     }
     /// Get the minimal fee of a withdrawal request
-    pub fn withdrawal_base_fee(&self) -> u128 {
-        self.default_fee_rate() * u128::from(self.withdraw_fee_weight)
+    pub fn withdrawal_base_fee(&self, sudt_id: u32) -> Result<u128, Error> {
+        let fee_rate = self.get_fee_rate(sudt_id)?;
+        Ok(fee_rate * u128::from(self.withdraw_fee_weight))
     }
     /// Get the minimal gasPrice of Polyjuice contract
-    pub fn polyjuice_base_gas_price(&self) -> u128 {
-        self.default_fee_rate()
+    pub fn polyjuice_base_gas_price(&self, sudt_id: u32) -> Result<u128, Error> {
+        self.get_fee_rate(sudt_id)
     }
 }
 impl Default for FeeConfig {
