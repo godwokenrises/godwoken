@@ -201,12 +201,17 @@ pub struct FeeConfig {
     sudt_transfer_fee_weight: u8,
     withdraw_fee_weight: u8,
 }
-const DEFAULT_CKB_FEE_RATE: u64 = 500;
 impl FeeConfig {
     pub fn is_supported_sudt(&self, sudt_id: u32) -> bool {
+        if self.fee_rates.is_empty() {
+            return true;
+        }
         self.fee_rates.contains_key(&sudt_id)
     }
     pub fn get_fee_rate(&self, sudt_id: u32) -> Result<u128, Error> {
+        if self.fee_rates.is_empty() {
+            return Ok(0);
+        }
         let fee_rate = self
             .fee_rates
             .get(&sudt_id)
@@ -235,14 +240,10 @@ impl FeeConfig {
 }
 impl Default for FeeConfig {
     fn default() -> Self {
-        let mut fee_rates = HashMap::new();
-        // CKB_SUDT_ID -> 500 shannons
-        fee_rates.insert(
-            gw_common::builtins::CKB_SUDT_ACCOUNT_ID,
-            DEFAULT_CKB_FEE_RATE,
-        );
         Self {
-            fee_rates,
+            // suggested config is (CKB_SUDT_ID -> 500 shannons)
+            // const DEFAULT_CKB_FEE_RATE: u64 = 500;
+            fee_rates: Default::default(),
             meta_contract_fee_weight: 2,
             sudt_transfer_fee_weight: 2,
             withdraw_fee_weight: 2,
