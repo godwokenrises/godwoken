@@ -88,7 +88,11 @@ pub async fn extract_deposit_requests(
         let tx_with_status =
             tx.ok_or_else(|| anyhow::anyhow!("Cannot locate transaction: {:x}", tx_hash))?;
         let tx = {
-            let tx: ckb_types::packed::Transaction = tx_with_status.transaction.inner.into();
+            let tx: ckb_types::packed::Transaction = tx_with_status
+                .transaction
+                .ok_or_else(|| anyhow::anyhow!("transaction is unknown"))?
+                .inner
+                .into();
             Transaction::new_unchecked(tx.as_bytes())
         };
         let cell_output = tx

@@ -58,6 +58,10 @@ pub enum TxStatus {
     Proposed,
     /// Status "committed". The transaction has been committed to the canonical chain.
     Committed,
+    /// Status "rejected". The transaction is rejected.
+    Rejected,
+    /// Status "unknown". The transaction is unknown.
+    Unknown,
 }
 
 #[derive(Debug, Clone)]

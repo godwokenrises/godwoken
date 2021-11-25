@@ -1156,13 +1156,18 @@ impl RPCClient {
             self.ckb
                 .request(
                     "get_transaction",
-                    Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
+                    Some(ClientParams::Array(vec![
+                        json!(to_jsonh256(tx_hash)),
+                        json!("0x2"), // verbose
+                    ])),
                 )
                 .await?,
         )?;
-        Ok(tx_with_status.map(|tx_with_status| {
-            let tx: ckb_types::packed::Transaction = tx_with_status.transaction.inner.into();
-            Transaction::new_unchecked(tx.as_bytes())
+        Ok(tx_with_status.and_then(|tx_with_status| {
+            tx_with_status.transaction.map(|tx| {
+                let tx: ckb_types::packed::Transaction = tx.inner.into();
+                Transaction::new_unchecked(tx.as_bytes())
+            })
         }))
     }
 
@@ -1171,7 +1176,10 @@ impl RPCClient {
             self.ckb
                 .request(
                     "get_transaction",
-                    Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
+                    Some(ClientParams::Array(vec![
+                        json!(to_jsonh256(tx_hash)),
+                        json!("0x2"), // verbose
+                    ])),
                 )
                 .await?,
         )?;
@@ -1181,6 +1189,8 @@ impl RPCClient {
                 ckb_jsonrpc_types::Status::Pending => TxStatus::Pending,
                 ckb_jsonrpc_types::Status::Committed => TxStatus::Committed,
                 ckb_jsonrpc_types::Status::Proposed => TxStatus::Proposed,
+                ckb_jsonrpc_types::Status::Unknown => TxStatus::Unknown,
+                ckb_jsonrpc_types::Status::Rejected => TxStatus::Rejected,
             }),
         )
     }

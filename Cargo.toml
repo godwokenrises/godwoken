@@ -15,7 +15,7 @@ members = [
   "crates/rpc-server",
   "crates/rpc-client",
   "crates/poa",
-  "crates/tools",
+  #"crates/tools",
   "crates/tests",
   "crates/web3-indexer",
   "crates/benches",

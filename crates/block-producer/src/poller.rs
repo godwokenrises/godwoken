@@ -273,7 +273,11 @@ impl ChainUpdater {
         let tx_with_status =
             tx.ok_or_else(|| anyhow::anyhow!("Cannot locate transaction: {:x}", tx_hash))?;
         let tx = {
-            let tx: ckb_types::packed::Transaction = tx_with_status.transaction.inner.into();
+            let tx: ckb_types::packed::Transaction = tx_with_status
+                .transaction
+                .ok_or_else(|| anyhow::anyhow!("transaction is unknown"))?
+                .inner
+                .into();
             Transaction::new_unchecked(tx.as_bytes())
         };
         let block_hash = tx_with_status.tx_status.block_hash.ok_or_else(|| {

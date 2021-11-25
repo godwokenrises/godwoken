@@ -16,7 +16,7 @@ gw-mem-pool = { path = "../mem-pool" }
 gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
-ckb-fixed-hash = "0.100.0"
+ckb-fixed-hash = "0.101.1"
 anyhow = "1.0"
 thiserror = "1.0"
 lazy_static = "1.4"

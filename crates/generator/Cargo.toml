@@ -22,7 +22,7 @@ gw-ckb-hardfork = { path = "../ckb-hardfork" }
 gw-tx-filter = { path = "../tx-filter" }
 anyhow = "1.0"
 blake2b-rs = "0.2"
-ckb-vm = { version = "=0.20.0-rc5", features = ["detect-asm"] }
+ckb-vm = { version = "=0.20.0-rc6", features = ["detect-asm"] }
 thiserror = "1.0"
 lazy_static = "1.4"
 rlp = "0.5.0"

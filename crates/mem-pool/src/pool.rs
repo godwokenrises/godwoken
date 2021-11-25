@@ -18,6 +18,8 @@ use gw_challenge::offchain::{
 };
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
+    smt::Blake2bHasher,
+    sparse_merkle_tree::CompiledMerkleProof,
     state::{to_short_address, State},
     H256,
 };
@@ -569,6 +571,26 @@ impl MemPool {
         let parent_block = db
             .get_block(&self.current_tip().0)?
             .ok_or_else(|| anyhow!("can't found tip block"))?;
+
+        {
+            assert_eq!(
+                prev_merkle_state,
+                parent_block.raw().post_account(),
+                "check mem block prev merkle state"
+            );
+
+            if !kv_state_proof.is_empty() {
+                log::debug!("[output mem-block] check merkle proof");
+                // check state merkle proof before output
+                let prev_kv_state_root = CompiledMerkleProof(kv_state_proof.clone())
+                    .compute_root::<Blake2bHasher>(kv_state.clone())?;
+                let expected_kv_state_root: H256 = prev_merkle_state.merkle_root().unpack();
+                assert_eq!(
+                    expected_kv_state_root, prev_kv_state_root,
+                    "check state merkle proof"
+                );
+            }
+        }
 
         let block_info = mem_block.block_info();
         let param = BlockParam {

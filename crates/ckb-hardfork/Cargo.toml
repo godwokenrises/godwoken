@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 lazy_static = "1.4"
 smol = "1.2.5"
-ckb-types = "0.100.0"
+ckb-types = "0.101.1"

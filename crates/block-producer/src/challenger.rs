@@ -688,6 +688,13 @@ impl Challenger {
             match self.rpc_client.get_transaction_status(tx_hash).await? {
                 Some(TxStatus::Proposed) | Some(TxStatus::Committed) => return Ok(()),
                 Some(TxStatus::Pending) => (),
+                Some(status) => {
+                    return Err(anyhow!(
+                        "unhandled status {:?} tx_hash {}",
+                        status,
+                        to_hex(&tx_hash)
+                    ))
+                }
                 None => return Err(anyhow!("tx hash {} not found", to_hex(&tx_hash))),
             }
 
@@ -707,6 +714,13 @@ impl Challenger {
             match self.rpc_client.get_transaction_status(tx_hash).await? {
                 Some(TxStatus::Committed) => return Ok(()),
                 Some(TxStatus::Proposed) | Some(TxStatus::Pending) => (),
+                Some(status) => {
+                    return Err(anyhow!(
+                        "unhandled tx status {:?} tx_hash {}",
+                        status,
+                        to_hex(&tx_hash)
+                    ));
+                }
                 None => return Err(anyhow!("tx hash {} not found", to_hex(&tx_hash))),
             }
 
