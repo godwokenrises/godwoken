@@ -17,7 +17,7 @@ use gw_jsonrpc_types::{
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
 use gw_mem_pool::batch::{BatchError, MemPoolBatch};
-use gw_store::{chain_view::ChainView, state::state_db::StateContext, Store};
+use gw_store::{chain_view::ChainView, state::state_db::StateContext, CfMemStat, Store};
 use gw_traits::CodeStore;
 use gw_types::{
     packed::{self, BlockInfo, RawL2Block, RollupConfig},
@@ -213,7 +213,9 @@ impl Registry {
                         .with_method("gw_report_pprof", report_pprof);
                 }
                 RPCMethods::Test => {
-                    server = server.with_method("gw_dump_mem_block", dump_mem_block);
+                    server = server
+                        .with_method("gw_dump_mem_block", dump_mem_block)
+                        .with_method("gw_get_rocksdb_mem_stats", get_rocksdb_memory_stats);
                 }
             }
         }
@@ -954,4 +956,8 @@ async fn dump_mem_block(mem_pool_batch: Data<Option<MemPoolBatch>>) -> Result<Js
     let mem_block = mem_pool_batch.dump_mem_block()?.await?;
 
     Ok(JsonBytes::from_bytes(mem_block.as_bytes()))
+}
+
+async fn get_rocksdb_memory_stats(store: Data<Store>) -> Result<Vec<CfMemStat>, RpcError> {
+    Ok(store.gather_mem_stats())
 }
