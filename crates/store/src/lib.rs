@@ -6,6 +6,7 @@ pub mod traits;
 pub mod transaction;
 mod write_batch;
 
+pub use gw_db::memory_stats::CfMemStat;
 pub use store_impl::Store;
 
 #[cfg(test)]

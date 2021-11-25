@@ -16,7 +16,8 @@ use gw_jsonrpc_types::{
 };
 use gw_mem_pool::custodian::AvailableCustodians;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::{chain_view::ChainView, state::state_db::StateContext, Store};
+// use gw_mem_pool::batch::{MemPoolBatch};
+use gw_store::{chain_view::ChainView, state::state_db::StateContext, CfMemStat, Store};
 use gw_traits::CodeStore;
 use gw_types::{
     packed::{self, BlockInfo, L2Transaction, RawL2Block, RollupConfig, WithdrawalRequest},
@@ -230,6 +231,11 @@ impl Registry {
                     server = server
                         .with_method("gw_start_profiler", start_profiler)
                         .with_method("gw_report_pprof", report_pprof);
+                }
+                RPCMethods::Test => {
+                    server = server
+                        // .with_method("gw_dump_mem_block", dump_mem_block)
+                        .with_method("gw_get_rocksdb_mem_stats", get_rocksdb_memory_stats);
                 }
             }
         }
@@ -1077,4 +1083,22 @@ async fn report_pprof() -> Result<()> {
         .detach()
     }
     Ok(())
+}
+
+
+// async fn dump_mem_block(mem_pool_batch: Data<Option<MemPoolBatch>>) -> Result<JsonBytes, RpcError> {
+//     let mem_pool_batch = match &*mem_pool_batch {
+//         Some(mem_pool_batch) => mem_pool_batch,
+//         None => {
+//             return Err(mem_pool_is_disabled_err());
+//         }
+//     };
+
+//     let mem_block = mem_pool_batch.dump_mem_block()?.await?;
+
+//     Ok(JsonBytes::from_bytes(mem_block.as_bytes()))
+// }
+
+async fn get_rocksdb_memory_stats(store: Data<Store>) -> Result<Vec<CfMemStat>, RpcError> {
+    Ok(store.gather_mem_stats())
 }

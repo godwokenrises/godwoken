@@ -10,7 +10,7 @@ use gw_db::{
         COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_TRANSACTION,
         COLUMN_TRANSACTION_RECEIPT, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
     },
-    DBPinnableSlice, RocksDB,
+    CfMemStat, DBPinnableSlice, RocksDB,
 };
 use gw_types::{
     offchain::global_state_from_slice,
@@ -47,6 +47,10 @@ impl<'a> Store {
         StoreTransaction {
             inner: self.db.transaction(),
         }
+    }
+
+    pub fn gather_mem_stats(&self) -> Vec<CfMemStat> {
+        self.db.gather_mem_stats()
     }
 
     pub fn new_write_batch(&self) -> StoreWriteBatch {
