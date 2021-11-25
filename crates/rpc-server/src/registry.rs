@@ -635,7 +635,7 @@ async fn submit_l2transaction(
     let backend_type = get_backend_type(tree, generator, &raw_l2tx)?;
     gw_utils::fee::check_l2tx_fee(&mem_pool_config.fee_config, &raw_l2tx, backend_type).map_err(
         |err| {
-            log::warn!("check_fee_ret err: {}", err);
+            log::debug!("check_fee_ret err: {}", err);
             RpcError::Full {
                 code: INVALID_PARAM_ERR_CODE,
                 message: err.to_string(),
@@ -684,7 +684,6 @@ async fn submit_withdrawal_request(
             "Fee isn't enough, required fee for withdrawal: {}.",
             withdrawal_minimum_fee
         );
-        log::warn!("[check withdrawal_request fee] {}", err_msg);
         return Err(RpcError::Full {
             code: INVALID_PARAM_ERR_CODE,
             message: err_msg,
