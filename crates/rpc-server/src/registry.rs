@@ -584,7 +584,7 @@ fn get_backend_type(
         .ok_or(RpcError::Full {
             code: INVALID_PARAM_ERR_CODE,
             message: TransactionError::BackendNotFound { script_hash }.to_string(),
-            data: Some(Box::new("Please check to_id")),
+            data: Some(Box::new("Can't find backend for receiver account")),
         })?;
     Ok(backend_type)
 }
@@ -681,7 +681,7 @@ async fn submit_withdrawal_request(
         .withdrawal_minimum_fee(fee_sudt_id)?;
     if fee < withdrawal_minimum_fee {
         let err_msg = format!(
-            "The fee is too low for acceptance, should more than withdrawal_minimum_fee({}).",
+            "Fee isn't enough, required fee for withdrawal: {}.",
             withdrawal_minimum_fee
         );
         log::warn!("[check withdrawal_request fee] {}", err_msg);
