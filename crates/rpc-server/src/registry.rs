@@ -235,7 +235,8 @@ impl Registry {
                 RPCMethods::Test => {
                     server = server
                         // .with_method("gw_dump_mem_block", dump_mem_block)
-                        .with_method("gw_get_rocksdb_mem_stats", get_rocksdb_memory_stats);
+                        .with_method("gw_get_rocksdb_mem_stats", get_rocksdb_memory_stats)
+                        .with_method("gw_dump_jemalloc_profiling", dump_jemalloc_profiling);
                 }
             }
         }
@@ -1085,7 +1086,6 @@ async fn report_pprof() -> Result<()> {
     Ok(())
 }
 
-
 // async fn dump_mem_block(mem_pool_batch: Data<Option<MemPoolBatch>>) -> Result<JsonBytes, RpcError> {
 //     let mem_pool_batch = match &*mem_pool_batch {
 //         Some(mem_pool_batch) => mem_pool_batch,
@@ -1101,4 +1101,31 @@ async fn report_pprof() -> Result<()> {
 
 async fn get_rocksdb_memory_stats(store: Data<Store>) -> Result<Vec<CfMemStat>, RpcError> {
     Ok(store.gather_mem_stats())
+}
+
+async fn dump_jemalloc_profiling() -> Result<()> {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let filename = format!("godwoken-jeprof-{}-heap", timestamp);
+
+    let mut filename0 = format!("{}\0", filename);
+    let opt_name = "prof.dump";
+    let opt_c_name = std::ffi::CString::new(opt_name).unwrap();
+    log::info!("jemalloc profiling dump: {}", filename);
+    unsafe {
+        let ret = jemalloc_sys::mallctl(
+            opt_c_name.as_ptr(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut filename0 as *mut _ as *mut _,
+            std::mem::size_of::<*mut std::ffi::c_void>(),
+        );
+        if ret != 0 {
+            log::error!("dump failure {:?}", errno::Errno(ret));
+        }
+    }
+
+    Ok(())
 }
