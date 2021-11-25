@@ -460,7 +460,7 @@ fn run_cli() -> Result<()> {
                         .long("fee")
                         .takes_value(true)
                         .required(false)
-                        .default_value("10000")
+                        .default_value("0")
                         .help("transfer fee (unit: Shannon)"),
                 )
                 .arg(

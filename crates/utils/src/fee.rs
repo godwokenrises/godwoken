@@ -36,9 +36,7 @@ pub fn check_l2tx_fee(
             let sudt_id = fee_struct.sudt_id().unpack();
             let meta_contract_base_fee = fee_config.meta_contract_minimum_fee(sudt_id)?;
             if fee_struct.amount().unpack() < meta_contract_base_fee {
-                let err_msg = format!("The fee is too low for acceptance, should more than meta_contract_minimum_fee({}).",
-                meta_contract_base_fee);
-                log::warn!("[check_l2tx_fee] {}", err_msg);
+                let err_msg = format!("Fee isn't enough, required meta_contract fee: {}.", meta_contract_base_fee);
                 return Err(anyhow!(err_msg));
             }
             Ok(())
@@ -46,7 +44,7 @@ pub fn check_l2tx_fee(
         BackendType::Sudt => {
             let sudt_id = raw_l2tx.to_id().unpack();
             if !fee_config.is_supported_sudt(sudt_id) {
-                return Err(anyhow!("This sudt is not supported to used as fee. Please use SudtERC20Proxy to transfer this sUDT instead."));
+                return Err(anyhow!("Simple UDT is unsupported. Please use ERC20 transfer to instead."));
             }
             let sudt_transfer_base_fee = fee_config.sudt_transfer_minimum_fee(sudt_id)?;
             let sudt_args = SUDTArgs::from_slice(raw_l2tx_args.as_ref())?;
@@ -55,9 +53,7 @@ pub fn check_l2tx_fee(
                 SUDTArgsUnion::SUDTTransfer(args) => args.fee().unpack(),
             };
             if fee_amount < sudt_transfer_base_fee {
-                let err_msg = format!("The fee is too low for acceptance, should more than sudt_transfer_minimum_fee({}).",
-                sudt_transfer_base_fee);
-                log::warn!("[check_l2tx_fee] {}", err_msg);
+                let err_msg = format!("Fee isn't enough, required sudt_transfer fee: {}.", sudt_transfer_base_fee);
                 return Err(anyhow!(err_msg));
             }
             Ok(())
@@ -74,9 +70,7 @@ pub fn check_l2tx_fee(
             let min_gas_price =
                 fee_config.polyjuice_minimum_gas_price(gw_common::builtins::CKB_SUDT_ACCOUNT_ID)?;
             if gas_price < min_gas_price {
-                let err_msg = format!("Gas Price too low for acceptance, should more than polyjuice_minimum_gas_price({} shannons).",
-                min_gas_price);
-                log::warn!("[check_l2tx_fee] {}", err_msg);
+                let err_msg = format!("Gas Price is too low, required gas_price {}.", min_gas_price);
                 return Err(anyhow!(err_msg));
             }
             Ok(())
