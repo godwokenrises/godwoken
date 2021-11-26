@@ -897,6 +897,17 @@ impl From<L2BlockCommittedInfo> for packed::L2BlockCommittedInfo {
     }
 }
 
+impl From<packed::L2BlockCommittedInfo> for L2BlockCommittedInfo {
+    fn from(data: packed::L2BlockCommittedInfo) -> L2BlockCommittedInfo {
+        let number: u64 = data.number().unpack();
+        L2BlockCommittedInfo {
+            number: number.into(),
+            block_hash: data.block_hash().unpack(),
+            transaction_hash: data.transaction_hash().unpack(),
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct RollupConfig {
