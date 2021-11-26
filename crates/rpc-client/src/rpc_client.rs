@@ -393,7 +393,7 @@ impl RPCClient {
     /// return all lived deposit requests
     /// NOTICE the returned cells may contains invalid cells.
     pub async fn query_deposit_cells(&self, count: usize) -> Result<Vec<DepositInfo>> {
-        const BLOCKS_TO_SEARCH: u64 = 100;
+        const BLOCKS_TO_SEARCH: u64 = 2000;
 
         let tip_number = self.get_tip().await?.number().unpack();
         let mut deposit_infos = Vec::new();
