@@ -22,9 +22,9 @@ max_write_buffer_number=2
 max_write_buffer_size_to_maintain=-1
 
 [CFOptions "18"]
-prefix_extractor=4
+prefix_extractor=8
 level_compaction_dynamic_level_bytes=true
-write_buffer_size=1073741824
+write_buffer_size=8388608
 min_write_buffer_number_to_merge=1
 max_write_buffer_number=2
 max_write_buffer_size_to_maintain=-1
@@ -32,7 +32,7 @@ max_write_buffer_size_to_maintain=-1
 [CFOptions "20"]
 prefix_extractor=32
 level_compaction_dynamic_level_bytes=true
-write_buffer_size=1073741824
+write_buffer_size=8388608
 min_write_buffer_number_to_merge=1
 max_write_buffer_number=2
 max_write_buffer_size_to_maintain=-1
@@ -47,5 +47,5 @@ use db.toml in the godwoken config:
 [store]
 path = 'tuning_db/store.db'
 options_file = 'db.toml'
-cache_size = 1073741824
+cache_size = 268435456
 ```
