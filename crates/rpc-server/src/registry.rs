@@ -11,8 +11,9 @@ use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
     debugger::{DumpChallengeTarget, ReprMockTransaction},
     godwoken::{
-        BackendInfo, ErrorTxReceipt, GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus,
-        L2TransactionStatus, L2TransactionWithStatus, NodeInfo, RunResult, TxReceipt,
+        BackendInfo, ErrorTxReceipt, GlobalState, L2BlockCommittedInfo, L2BlockStatus, L2BlockView,
+        L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, NodeInfo, RunResult,
+        TxReceipt,
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
@@ -183,6 +184,7 @@ impl Registry {
             .with_method("gw_get_block_hash", get_block_hash)
             .with_method("gw_get_block", get_block)
             .with_method("gw_get_block_by_number", get_block_by_number)
+            .with_method("gw_get_block_committed_info", get_block_committed_info)
             .with_method("gw_get_balance", get_balance)
             .with_method("gw_get_storage_at", get_storage_at)
             .with_method(
@@ -353,6 +355,20 @@ async fn get_transaction(
             status,
         },
     }))
+}
+
+async fn get_block_committed_info(
+    Params((block_hash,)): Params<(JsonH256,)>,
+    store: Data<Store>,
+) -> Result<Option<L2BlockCommittedInfo>> {
+    let block_hash = to_h256(block_hash);
+    let db = store.begin_transaction();
+    let committed_info = match db.get_l2block_committed_info(&block_hash)? {
+        Some(committed_info) => committed_info,
+        None => return Ok(None),
+    };
+
+    Ok(Some(committed_info.into()))
 }
 
 async fn get_block(
