@@ -10,7 +10,8 @@ use ckb_types::prelude::Entity;
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_jsonrpc_types::ckb_jsonrpc_types::{self, BlockNumber, Consensus, Uint32};
 use gw_types::offchain::{
-    CollectedCustodianCells, DepositInfo, RollupContext, TxStatus, WithdrawalsAmount,
+    CellStatus, CellWithStatus, CollectedCustodianCells, DepositInfo, RollupContext, TxStatus,
+    WithdrawalsAmount,
 };
 use gw_types::{
     bytes::Bytes,
@@ -290,41 +291,52 @@ impl RPCClient {
         Ok(cell)
     }
 
-    pub async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellInfo>> {
+    pub async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellWithStatus>> {
         let json_out_point: ckb_jsonrpc_types::OutPoint = {
             let out_point = ckb_types::packed::OutPoint::new_unchecked(out_point.as_bytes());
             out_point.into()
         };
-        let cell_with_status: Option<ckb_jsonrpc_types::CellWithStatus> = to_result(
-            self.ckb
-                .request(
-                    "get_live_cell",
-                    Some(ClientParams::Array(vec![
-                        json!(json_out_point),
-                        json!(true),
-                    ])),
-                )
-                .await?,
-        )?;
-        let cell_info = if let Some(cell_with_status) = cell_with_status {
-            cell_with_status.cell.map(|cell| {
-                let output: ckb_types::packed::CellOutput = cell.output.into();
-                let output = CellOutput::new_unchecked(output.as_bytes());
-                let data = cell
-                    .data
-                    .map(|cell_data| cell_data.content.into_bytes())
-                    .unwrap_or_else(Bytes::new);
-                let out_point = out_point.to_owned();
-                CellInfo {
-                    output,
-                    data,
-                    out_point,
-                }
-            })
-        } else {
-            None
+        let cell_with_status: Option<gw_jsonrpc_types::ckb_jsonrpc_types::CellWithStatus> =
+            to_result(
+                self.ckb
+                    .request(
+                        "get_live_cell",
+                        Some(ClientParams::Array(vec![
+                            json!(json_out_point),
+                            json!(true),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+        if cell_with_status.is_none() {
+            return Ok(None);
+        }
+        let cell_with_status = cell_with_status.unwrap();
+        let cell_info = cell_with_status.cell.map(|cell| {
+            let output: ckb_types::packed::CellOutput = cell.output.into();
+            let output = CellOutput::new_unchecked(output.as_bytes());
+            let data = cell
+                .data
+                .map(|cell_data| cell_data.content.into_bytes())
+                .unwrap_or_else(Bytes::new);
+            let out_point = out_point.to_owned();
+            CellInfo {
+                output,
+                data,
+                out_point,
+            }
+        });
+        let status = match cell_with_status.status.as_str() {
+            "live" => CellStatus::Live,
+            "dead" => CellStatus::Dead,
+            "unknown" => CellStatus::Unknown,
+            err => return Err(anyhow!("can't parse cell status: {}", err)),
         };
-        Ok(cell_info)
+        Ok(Some(CellWithStatus {
+            cell: cell_info,
+            status,
+        }))
     }
 
     pub async fn get_cell_from_mempool(&self, out_point: OutPoint) -> Result<Option<CellInfo>> {

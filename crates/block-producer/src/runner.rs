@@ -718,6 +718,7 @@ fn check_rollup_config_cell(
                 .into(),
         ),
     )?
+    .and_then(|cell_with_status| cell_with_status.cell)
     .ok_or_else(|| anyhow!("can't find rollup config cell"))?;
     let cell_data = RollupConfig::from_slice(&rollup_config_cell.data.to_vec())?;
     let eoa_set = rollup_config

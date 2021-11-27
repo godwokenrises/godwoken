@@ -65,7 +65,11 @@ pub async fn build_mock_transaction(
             return Ok(vec![]);
         }
         // parse dep group
-        let cell = match rpc_client.get_cell(dep.out_point()).await? {
+        let cell = match rpc_client
+            .get_cell(dep.out_point())
+            .await?
+            .and_then(|cell_status| cell_status.cell)
+        {
             Some(cell) => Some(cell),
             None => rpc_client.get_cell_from_mempool(dep.out_point()).await?,
         }
@@ -91,7 +95,11 @@ pub async fn build_mock_transaction(
 
     let mut inputs: Vec<ReprMockInput> = Vec::with_capacity(tx.raw().inputs().len());
     for input in tx.raw().inputs() {
-        let input_cell = match rpc_client.get_cell(input.previous_output()).await? {
+        let input_cell = match rpc_client
+            .get_cell(input.previous_output())
+            .await?
+            .and_then(|cell_status| cell_status.cell)
+        {
             Some(cell) => Some(cell),
             None => {
                 rpc_client
@@ -138,7 +146,11 @@ pub async fn build_mock_transaction(
 
     let mut cell_deps: Vec<ReprMockCellDep> = Vec::with_capacity(resolved_cell_deps.len());
     for cell_dep in resolved_cell_deps {
-        let dep_cell = match rpc_client.get_cell(cell_dep.out_point()).await? {
+        let dep_cell = match rpc_client
+            .get_cell(cell_dep.out_point())
+            .await?
+            .and_then(|cell_status| cell_status.cell)
+        {
             Some(cell) => Some(cell),
             None => {
                 rpc_client
