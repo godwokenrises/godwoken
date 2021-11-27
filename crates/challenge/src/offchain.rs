@@ -548,7 +548,9 @@ async fn resolve_cell_deps(
     for dep in flatten_deps {
         let dep_cell = {
             let query = rpc_client.get_cell(dep.out_point()).await?;
-            query.ok_or_else(|| anyhow!("can't find dep cell"))?
+            query
+                .and_then(|q| q.cell)
+                .ok_or_else(|| anyhow!("can't find dep cell"))?
         };
         resolved_deps.push(into_input_cell_info(dep_cell));
     }
@@ -565,7 +567,9 @@ async fn resolve_dep_group(rpc_client: &RPCClient, dep: &CellDep) -> Result<Vec<
     // parse dep group
     let cell = {
         let query = rpc_client.get_cell(dep.out_point()).await?;
-        query.ok_or_else(|| anyhow!("can't find dep group cell"))?
+        query
+            .and_then(|q| q.cell)
+            .ok_or_else(|| anyhow!("can't find dep group cell"))?
     };
 
     let out_points =

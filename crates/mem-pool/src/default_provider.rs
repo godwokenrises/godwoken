@@ -5,8 +5,10 @@ use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::Store;
 use gw_types::{
-    offchain::{CollectedCustodianCells, DepositInfo, InputCellInfo, RollupContext},
-    packed::{CellInput, WithdrawalRequest},
+    offchain::{
+        CellWithStatus, CollectedCustodianCells, DepositInfo, InputCellInfo, RollupContext,
+    },
+    packed::{CellInput, OutPoint, WithdrawalRequest},
     prelude::*,
 };
 use smol::{lock::Mutex, Task};
@@ -61,6 +63,11 @@ impl MemPoolProvider for DefaultMemPoolProvider {
     fn collect_deposit_cells(&self) -> Task<Result<Vec<DepositInfo>>> {
         let rpc_client = self.rpc_client.clone();
         smol::spawn(async move { rpc_client.query_deposit_cells(MAX_MEM_BLOCK_DEPOSITS).await })
+    }
+
+    fn get_cell(&self, out_point: OutPoint) -> Task<Result<Option<CellWithStatus>>> {
+        let rpc_client = self.rpc_client.clone();
+        smol::spawn(async move { rpc_client.get_cell(out_point).await })
     }
 
     fn query_available_custodians(

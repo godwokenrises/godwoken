@@ -3,8 +3,8 @@ use std::time::Duration;
 use anyhow::Result;
 use gw_mem_pool::traits::MemPoolProvider;
 use gw_types::{
-    offchain::{CollectedCustodianCells, DepositInfo, RollupContext},
-    packed::WithdrawalRequest,
+    offchain::{CellWithStatus, CollectedCustodianCells, DepositInfo, RollupContext},
+    packed::{OutPoint, WithdrawalRequest},
 };
 use smol::Task;
 
@@ -32,5 +32,8 @@ impl MemPoolProvider for DummyMemPoolProvider {
     ) -> Task<Result<CollectedCustodianCells>> {
         let collected_custodians = self.collected_custodians.clone();
         smol::spawn(async move { Ok(collected_custodians) })
+    }
+    fn get_cell(&self, _out_point: OutPoint) -> Task<Result<Option<CellWithStatus>>> {
+        smol::spawn(async { Ok(None) })
     }
 }

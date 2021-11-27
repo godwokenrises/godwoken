@@ -28,7 +28,9 @@ use gw_store::{
     Store,
 };
 use gw_types::{
-    offchain::{BlockParam, CollectedCustodianCells, DepositInfo, ErrorTxReceipt, RunResult},
+    offchain::{
+        BlockParam, CellStatus, CollectedCustodianCells, DepositInfo, ErrorTxReceipt, RunResult,
+    },
     packed::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, RawL2Transaction, Script, TxReceipt,
         WithdrawalRequest,
@@ -92,6 +94,8 @@ pub struct MemPool {
     offchain_validator: Option<OffChainCancelChallengeValidator>,
     /// Mem pool config
     config: MemPoolConfig,
+    /// Pending deposits
+    pending_deposits: Vec<DepositInfo>,
 }
 
 impl MemPool {
@@ -107,6 +111,15 @@ impl MemPool {
 
         let tip_block = store.get_tip_block()?;
         let tip = (tip_block.hash().into(), tip_block.raw().number().unpack());
+
+        // init mem pool if tip is genesis
+        if tip.1 == 0 {
+            let merkle_state = tip_block.raw().post_account();
+            let db = store.begin_transaction();
+            db.set_mem_block_account_count(merkle_state.count().unpack())?;
+            db.set_mem_block_account_smt_root(merkle_state.merkle_root().unpack())?;
+            db.commit()?;
+        }
 
         let mem_block: MemBlock = Default::default();
         let reverted_block_root = {
@@ -134,6 +147,7 @@ impl MemPool {
             provider,
             offchain_validator,
             config,
+            pending_deposits: Default::default(),
         };
 
         // set tip
@@ -718,11 +732,14 @@ impl MemPool {
             }
         }
 
+        let db = self.store.begin_transaction();
+        // check pending deposits
+        self.refresh_deposit_cells(&db, new_tip)?;
+
         // estimate next l2block timestamp
         let estimated_timestamp = smol::block_on(self.provider.estimate_next_blocktime())?;
         // reset mem block state
         let merkle_state = new_tip_block.raw().post_account();
-        let db = self.store.begin_transaction();
         self.reset_mem_block_state_db(&db, merkle_state)?;
         let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
         db.update_mem_pool_block_info(self.mem_block.block_info())?;
@@ -850,16 +867,11 @@ impl MemPool {
                 id_to_nonce.entry(id).or_insert(nonce);
             }
         }
-        // query deposit cells
-        let task = self.provider.collect_deposit_cells();
         // Handle state before txs
         // withdrawal
         self.finalize_withdrawals(db, withdrawals.collect())?;
         // deposits
-        let deposit_cells = {
-            let cells = smol::block_on(task)?;
-            crate::deposit::sanitize_deposit_cells(self.generator.rollup_context(), cells)
-        };
+        let deposit_cells = self.pending_deposits.clone();
         self.finalize_deposits(db, deposit_cells)?;
         // re-inject txs
         for tx in txs {
@@ -871,6 +883,86 @@ impl MemPool {
                     err
                 );
             }
+        }
+
+        Ok(())
+    }
+
+    /// expire if pending deposits is handled by new l2block
+    fn refresh_deposit_cells(&mut self, db: &StoreTransaction, new_block_hash: H256) -> Result<()> {
+        // get processed deposit requests
+        let processed_deposit_requests: HashSet<_> = db
+            .get_block_deposit_requests(&new_block_hash)?
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+
+        // check expire
+        let mut force_expired = false;
+        let mut tasks = Vec::with_capacity(self.pending_deposits.len());
+        for deposit in &self.pending_deposits {
+            // check is handled by current block
+            if processed_deposit_requests.contains(&deposit.request) {
+                force_expired = true;
+                break;
+            }
+
+            // query deposit live cell
+            tasks.push(self.provider.get_cell(deposit.cell.out_point.clone()));
+        }
+
+        // check cell is available
+        for task in tasks {
+            match smol::block_on(task)? {
+                Some(cell_with_status) => {
+                    if cell_with_status.status != CellStatus::Live {
+                        force_expired = true;
+                        break;
+                    }
+                }
+                None => {
+                    force_expired = true;
+                    break;
+                }
+            }
+        }
+
+        // refresh
+        let state_db = self.fetch_state_db(db)?;
+        let state = state_db.state_tree()?;
+        let mem_account_count = state.get_account_count()?;
+        let tip_account_count: u32 = self.mem_block.prev_merkle_state().count().unpack();
+        let safe_expired =
+            self.pending_deposits.is_empty() && mem_account_count == tip_account_count;
+        if safe_expired || force_expired {
+            if safe_expired {
+                log::debug!(
+                    "[mem-pool] safely refresh pending deposits, mem_account_count: {}, tip_account_count: {}",
+                    mem_account_count,
+                    tip_account_count
+                );
+            } else {
+                log::debug!(
+                    "[mem-pool] forced refresh pending deposits, mem_account_count: {}, tip_account_count: {}",
+                    mem_account_count,
+                    tip_account_count
+                );
+            }
+            let task = self.provider.collect_deposit_cells();
+            let cells = smol::block_on(task)?;
+            self.pending_deposits =
+                crate::deposit::sanitize_deposit_cells(self.generator.rollup_context(), cells);
+            log::debug!(
+                "[mem-pool] refreshed deposits: {}",
+                self.pending_deposits.len()
+            );
+        } else {
+            log::debug!(
+                    "[mem-pool] skip pending deposits, pending deposits: {}, mem_account_count: {}, tip_account_count: {}",
+                    self.pending_deposits.len(),
+                    mem_account_count,
+                    tip_account_count
+                );
         }
 
         Ok(())

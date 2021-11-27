@@ -12,6 +12,25 @@ pub struct CellInfo {
     pub data: Bytes,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CellStatus {
+    Live,
+    Dead,
+    Unknown,
+}
+
+impl Default for CellStatus {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct CellWithStatus {
+    pub cell: Option<CellInfo>,
+    pub status: CellStatus,
+}
+
 #[derive(Debug, Clone)]
 pub struct InputCellInfo {
     pub input: CellInput,

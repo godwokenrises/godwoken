@@ -76,6 +76,7 @@ async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Ve
         let cell = rpc_client
             .get_cell(dep.out_point())
             .await?
+            .and_then(|cell_status| cell_status.cell)
             .ok_or_else(|| anyhow!("can't find dep group cell"))?;
         let out_points =
             OutPointVec::from_slice(&cell.data).map_err(|_| anyhow!("invalid dep group"))?;
@@ -120,6 +121,7 @@ async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Ve
     for cell_fut in get_cell_futs {
         let cell = cell_fut
             .await?
+            .and_then(|cell_status| cell_status.cell)
             .ok_or_else(|| anyhow!("can't find dep cell"))?;
         cells.push(cell);
     }
