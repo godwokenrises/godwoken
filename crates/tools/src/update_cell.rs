@@ -33,7 +33,10 @@ pub fn update_cell<P: AsRef<Path>>(
         .get_transaction(tx_hash.into())
         .map_err(|err| anyhow!("{}", err))?
         .ok_or_else(|| anyhow!("can't found transaction"))?;
-    let tx = tx_with_status.transaction.inner;
+    let tx = tx_with_status
+        .transaction
+        .ok_or_else(|| anyhow!("response null transaction"))?
+        .inner;
     let existed_cell = tx
         .outputs
         .get(index as usize)

@@ -100,7 +100,9 @@ pub fn wait_for_tx(
             }
             Some(tx_with_status) if tx_with_status.tx_status.status == Status::Committed => {
                 log::info!("tx commited");
-                return Ok(tx_with_status.transaction);
+                return tx_with_status
+                    .transaction
+                    .ok_or_else(|| anyhow!("transaction is null"));
             }
             _ => {
                 log::error!("error")

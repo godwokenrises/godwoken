@@ -120,7 +120,7 @@ pub fn deploy_scripts(
     let network_type = get_network_type(&mut rpc_client)?;
     let target_lock = packed::Script::from(scripts_result.lock.clone());
     let address_payload = AddressPayload::from(target_lock.clone());
-    let target_address = Address::new(network_type, address_payload);
+    let target_address = Address::new(network_type, address_payload, false);
 
     let mut total_file_size = 0;
     for path in &[

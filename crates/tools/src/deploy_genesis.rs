@@ -264,7 +264,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         .map_err(|err| anyhow!("Invalid secp256k1 secret key format, error: {}", err))?;
     let pubkey = secp256k1::PublicKey::from_secret_key(&SECP256K1, &privkey);
     let owner_address_payload = AddressPayload::from_pubkey(&pubkey);
-    let owner_address = Address::new(network_type, owner_address_payload);
+    let owner_address = Address::new(network_type, owner_address_payload, false);
     let owner_address_string = owner_address.to_string();
     let max_mature_number = get_max_mature_number(&mut rpc_client)?;
     let genesis_block: BlockView = rpc_client

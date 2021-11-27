@@ -99,11 +99,12 @@ pub fn deposit_ckb(
 
     let mut rpc_client = HttpRpcClient::new(ckb_rpc_url.to_string());
     let network_type = get_network_type(&mut rpc_client)?;
-    let address_payload = AddressPayload::new_full_type(
+    let address_payload = AddressPayload::new_full(
+        ScriptHashType::Type,
         CKBPack::pack(deposit_lock_code_hash),
         GwBytes::from(l1_lock_args),
     );
-    let address: Address = Address::new(network_type, address_payload);
+    let address: Address = Address::new(network_type, address_payload, false);
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 

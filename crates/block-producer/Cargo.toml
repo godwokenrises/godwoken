@@ -29,10 +29,10 @@ gw-poa = { path = "../poa" }
 gw-utils = { path = "../utils" }
 gw-version = { path = "../version" }
 gw-ckb-hardfork = { path = "../ckb-hardfork" }
-ckb-crypto = "0.101.1"
-ckb-fixed-hash = "0.101.1"
-ckb-types = "0.101.1"
-ckb-chain-spec = "0.101.1"
+ckb-crypto = "0.101.0"
+ckb-fixed-hash = "0.101.0"
+ckb-types = "0.101.0"
+ckb-chain-spec = "0.101.0"
 toml = "0.5"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
