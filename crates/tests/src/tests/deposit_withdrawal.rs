@@ -265,17 +265,19 @@ fn test_overdraft() {
         0,
     )
     .unwrap();
+
     // withdrawal
     let withdraw_capacity = 600_00000000u64;
-    withdrawal_from_chain(
+    let result = withdrawal_from_chain(
         &mut chain,
         rollup_cell,
         user_script_hash.into(),
         withdraw_capacity,
         H256::zero(),
         0,
-    )
-    .unwrap();
+    );
+    assert!(result.unwrap_err().to_string().contains("Over withdrawal"));
+
     // check tx pool state
     {
         let db = chain.store().begin_transaction();
