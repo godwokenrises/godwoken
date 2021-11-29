@@ -950,8 +950,15 @@ impl MemPool {
             }
             let task = self.provider.collect_deposit_cells();
             let cells = smol::block_on(task)?;
-            self.pending_deposits =
-                crate::deposit::sanitize_deposit_cells(self.generator.rollup_context(), cells);
+            self.pending_deposits = {
+                let cells = cells
+                    .into_iter()
+                    .filter(|di| !processed_deposit_requests.contains(&di.request));
+                crate::deposit::sanitize_deposit_cells(
+                    self.generator.rollup_context(),
+                    cells.collect(),
+                )
+            };
             log::debug!(
                 "[mem-pool] refreshed deposits: {}",
                 self.pending_deposits.len()
