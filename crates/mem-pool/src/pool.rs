@@ -937,21 +937,18 @@ impl MemPool {
                 .ok_or_else(|| anyhow!("can't find new tip block"))?;
             new_tip_block.raw().post_account().count().unpack()
         };
-        let safe_expired = mem_account_count == tip_account_count;
-        if safe_expired || force_expired {
-            if safe_expired {
-                log::debug!(
+
+        // we can safely expire pending deposits if the number of account doesn't change or mem block txs is empty
+        // in these situation more deposits do not affects mem-pool account's id
+        let safe_expired = processed_deposit_requests.len() == self.pending_deposits.len()
+            && mem_account_count == tip_account_count
+            || self.mem_block.txs().is_empty();
+        if safe_expired {
+            log::debug!(
                     "[mem-pool] safely refresh pending deposits, mem_account_count: {}, tip_account_count: {}",
                     mem_account_count,
                     tip_account_count
                 );
-            } else {
-                log::debug!(
-                    "[mem-pool] forced refresh pending deposits, mem_account_count: {}, tip_account_count: {}",
-                    mem_account_count,
-                    tip_account_count
-                );
-            }
             let task = self.provider.collect_deposit_cells();
             let cells = smol::block_on(task)?;
             self.pending_deposits = {
@@ -967,6 +964,13 @@ impl MemPool {
                 "[mem-pool] refreshed deposits: {}",
                 self.pending_deposits.len()
             );
+        } else if force_expired {
+            log::debug!(
+                    "[mem-pool] forced clear pending deposits, mem_account_count: {}, tip_account_count: {}",
+                    mem_account_count,
+                    tip_account_count
+                );
+            self.pending_deposits.clear();
         } else {
             log::debug!(
                     "[mem-pool] skip pending deposits, pending deposits: {}, mem_account_count: {}, tip_account_count: {}",
