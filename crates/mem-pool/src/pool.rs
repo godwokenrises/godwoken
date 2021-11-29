@@ -931,9 +931,13 @@ impl MemPool {
         let state_db = self.fetch_state_db(db)?;
         let state = state_db.state_tree()?;
         let mem_account_count = state.get_account_count()?;
-        let tip_account_count: u32 = self.mem_block.prev_merkle_state().count().unpack();
-        let safe_expired =
-            self.pending_deposits.is_empty() && mem_account_count == tip_account_count;
+        let tip_account_count: u32 = {
+            let new_tip_block = db
+                .get_block(&new_block_hash)?
+                .ok_or_else(|| anyhow!("can't find new tip block"))?;
+            new_tip_block.raw().post_account().count().unpack()
+        };
+        let safe_expired = mem_account_count == tip_account_count;
         if safe_expired || force_expired {
             if safe_expired {
                 log::debug!(
