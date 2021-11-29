@@ -8,7 +8,7 @@ use sqlx::PgPool;
 
 use crate::helper::{hex, parse_log, GwLog};
 
-pub const MAX_RETURN_DATA: usize = 32;
+pub const MAX_RETURN_DATA: usize = 96;
 pub const MAX_ERROR_TX_RECEIPT_BLOCKS: u64 = 3;
 
 pub struct ErrorReceiptIndexer {
