@@ -72,7 +72,7 @@ impl PolyjuiceContractCreatorAllowList {
             let script_hash = state.get_script_hash(from_id)?;
             let args: Bytes = state
                 .get_script(&script_hash)
-                .ok_or_else(|| Error::ScriptHashNotFound)?
+                .ok_or(Error::ScriptHashNotFound)?
                 .args()
                 .unpack();
 
