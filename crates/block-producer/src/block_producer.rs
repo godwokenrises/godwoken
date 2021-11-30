@@ -361,7 +361,7 @@ impl BlockProducer {
                     "[produce_next_block] Failed to composite submitting transaction: {}",
                     err
                 );
-                self.mem_pool.lock().await.reset_mem_block()?;
+                // self.mem_pool.lock().await.reset_mem_block()?;
                 return Err(err);
             }
         };
