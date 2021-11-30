@@ -25,7 +25,7 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    packed::{self, BlockInfo, RawL2Block, RollupConfig},
+    packed::{self, BlockInfo, L2Transaction, RawL2Block, RollupConfig, WithdrawalRequest},
     prelude::*,
 };
 use gw_version::Version;
@@ -34,6 +34,7 @@ use smol::lock::Mutex;
 use std::{
     convert::{TryFrom, TryInto},
     sync::Arc,
+    time::Duration,
 };
 
 // type alias
@@ -50,6 +51,7 @@ const INTERNAL_ERROR_ERR_CODE: i64 = -32099;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
 const INVALID_PARAM_ERR_CODE: i64 = -32602;
 const INVALID_REQUEST: i64 = -32600;
+const BUSY_ERR_CODE: i64 = -32006;
 
 fn header_not_found_err() -> RpcError {
     RpcError::Provided {
@@ -133,6 +135,7 @@ pub struct Registry {
     mem_pool_config: MemPoolConfig,
     backend_info: Vec<BackendInfo>,
     node_mode: NodeMode,
+    submit_tx: smol::channel::Sender<Request>,
 }
 
 impl Registry {
@@ -153,6 +156,15 @@ impl Registry {
         T: TestModeRPC + Send + Sync + 'static,
     {
         let backend_info = get_backend_info(generator.clone());
+        let (submit_tx, submit_rx) = smol::channel::bounded(RequestSubmitter::MAX_CHANNEL_SIZE);
+        if let Some(mem_pool) = mem_pool.as_ref().to_owned() {
+            let submitter = RequestSubmitter {
+                mem_pool: Arc::clone(mem_pool),
+                submit_rx,
+            };
+            smol::spawn(submitter.in_background()).detach();
+        }
+
         Self {
             mem_pool,
             store,
@@ -166,6 +178,7 @@ impl Registry {
             mem_pool_config,
             backend_info,
             node_mode,
+            submit_tx,
         }
     }
 
@@ -179,6 +192,7 @@ impl Registry {
             .with_data(Data::new(self.rollup_config))
             .with_data(Data::new(self.mem_pool_config))
             .with_data(Data::new(self.backend_info))
+            .with_data(Data::new(self.submit_tx))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -235,6 +249,83 @@ impl Registry {
         }
 
         Ok(server.finish())
+    }
+}
+
+enum Request {
+    Tx(L2Transaction),
+    Withdrawal(WithdrawalRequest),
+}
+
+impl Request {
+    fn kind(&self) -> &'static str {
+        match self {
+            Request::Tx(_) => "tx",
+            Request::Withdrawal(_) => "withdrawal",
+        }
+    }
+
+    fn hash(&self) -> ckb_types::H256 {
+        match self {
+            Request::Tx(tx) => ckb_types::H256(tx.hash()),
+            Request::Withdrawal(withdrawal) => ckb_types::H256(withdrawal.hash()),
+        }
+    }
+}
+
+struct RequestSubmitter {
+    mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
+    submit_rx: smol::channel::Receiver<Request>,
+}
+
+impl RequestSubmitter {
+    const MAX_CHANNEL_SIZE: usize = 700;
+    const MAX_BATCH_SIZE: usize = 200;
+    const INTERVAL_MS: Duration = Duration::from_millis(100);
+
+    async fn in_background(self) {
+        loop {
+            let req = match self.submit_rx.recv().await {
+                Ok(req) => req,
+                Err(_) if self.submit_rx.is_closed() => {
+                    log::error!("rpc submit tx is closed");
+                    return;
+                }
+                Err(err) => {
+                    log::debug!("rpc submit rx err {}", err);
+                    async_std::task::sleep(Self::INTERVAL_MS).await;
+                    continue;
+                }
+            };
+
+            let mut batch = Vec::with_capacity(Self::MAX_BATCH_SIZE);
+            batch.push(req);
+            while batch.len() < Self::MAX_BATCH_SIZE {
+                if let Ok(req) = self.submit_rx.try_recv() {
+                    batch.push(req);
+                }
+            }
+
+            if !batch.is_empty() {
+                let mut mem_pool = self.mem_pool.lock().await;
+                for req in batch.drain(..) {
+                    let kind = req.kind();
+                    let hash = req.hash();
+
+                    let maybe_ok = match req {
+                        Request::Tx(tx) => mem_pool.push_transaction(tx),
+                        Request::Withdrawal(withdrawal) => {
+                            mem_pool.push_withdrawal_request(withdrawal)
+                        }
+                    };
+
+                    if let Err(err) = maybe_ok {
+                        log::info!("push {} {} failed {}", kind, hash, err);
+                    }
+                }
+            }
+            async_std::task::sleep(Self::INTERVAL_MS).await;
+        }
     }
 }
 
@@ -622,8 +713,9 @@ async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
     store: Data<Store>,
+    submit_tx: Data<smol::channel::Sender<Request>>,
 ) -> Result<JsonH256, RpcError> {
-    let mem_pool = match mem_pool.clone() {
+    let _mem_pool = match mem_pool.clone() {
         Some(mem_pool) => mem_pool,
         None => {
             return Err(mem_pool_is_disabled_err());
@@ -660,25 +752,31 @@ async fn submit_l2transaction(
             });
         }
     }
-    // run task in the background
-    smol::spawn(async move {
-        if let Err(err) = mem_pool.lock().await.push_transaction(tx.clone()) {
-            log::info!(
-                "[RPC] fail to push tx {:?} into mem-pool, err: {}",
-                faster_hex::hex_string(&tx.hash()),
-                err
-            );
+
+    if let Err(err) = submit_tx.try_send(Request::Tx(tx)) {
+        if err.is_full() {
+            return Err(RpcError::Provided {
+                code: BUSY_ERR_CODE,
+                message: "service busy",
+            });
         }
-    })
-    .detach();
+        if err.is_closed() {
+            return Err(RpcError::Provided {
+                code: INTERNAL_ERROR_ERR_CODE,
+                message: "internal error, unavailable",
+            });
+        }
+    }
+
     Ok(tx_hash)
 }
 
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
+    submit_tx: Data<smol::channel::Sender<Request>>,
 ) -> Result<(), RpcError> {
-    let mem_pool = match &*mem_pool {
+    let _mem_pool = match &*mem_pool {
         Some(mem_pool) => mem_pool,
         None => {
             return Err(mem_pool_is_disabled_err());
@@ -687,7 +785,21 @@ async fn submit_withdrawal_request(
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequest::from_slice(&withdrawal_bytes)?;
 
-    mem_pool.lock().await.push_withdrawal_request(withdrawal)?;
+    if let Err(err) = submit_tx.try_send(Request::Withdrawal(withdrawal)) {
+        if err.is_full() {
+            return Err(RpcError::Provided {
+                code: BUSY_ERR_CODE,
+                message: "service busy",
+            });
+        }
+        if err.is_closed() {
+            return Err(RpcError::Provided {
+                code: INTERNAL_ERROR_ERR_CODE,
+                message: "internal error, unavailable",
+            });
+        }
+    }
+
     Ok(())
 }
 
