@@ -68,7 +68,11 @@ impl PolyjuiceContractCreatorAllowList {
         // check allowed list
         {
             let script_hash = state.get_script_hash(from_id)?;
-            let args: Bytes = state.get_script(&script_hash).unwrap().args().unpack();
+            let args: Bytes = state
+                .get_script(&script_hash)
+                .ok_or_else(|| anyhow!("can't found script hash, state is reset"))?
+                .args()
+                .unpack();
 
             // check if the args is a valid eth lock's args
             if args.len() == 52 {
