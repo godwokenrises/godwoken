@@ -1,5 +1,5 @@
 /// MAX deposits in the mem block
-pub const MAX_MEM_BLOCK_DEPOSITS: usize = 10;
+pub const MAX_MEM_BLOCK_DEPOSITS: usize = 30;
 /// MAX withdrawals in the mem block
 pub const MAX_MEM_BLOCK_WITHDRAWALS: usize = 50;
 /// MAX withdrawals in the mem block
