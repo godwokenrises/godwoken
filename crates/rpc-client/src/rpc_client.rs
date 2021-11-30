@@ -734,6 +734,7 @@ impl RPCClient {
         custodian_change_capacity: u128,
         last_finalized_block_number: u64,
     ) -> Result<QueryResult<CollectedCustodianCells>> {
+        const MIN_CAPACITY: u64 = 5000 * 10u64.pow(8);
         let rollup_context = &self.rollup_context;
 
         let parse_sudt_amount = |cell: &Cell| -> Result<u128> {
@@ -794,6 +795,10 @@ impl RPCClient {
             cursor = Some(cells.last_cursor);
 
             for cell in cells.objects.into_iter() {
+                if cell.output.capacity.value() < MIN_CAPACITY {
+                    continue;
+                }
+
                 let args = cell.output.lock.args.clone().into_bytes();
                 let custodian_lock_args = match CustodianLockArgsReader::verify(&args[32..], false)
                 {
