@@ -280,7 +280,7 @@ struct RequestSubmitter {
 
 impl RequestSubmitter {
     const MAX_CHANNEL_SIZE: usize = 700;
-    const MAX_BATCH_SIZE: usize = 200;
+    const MAX_BATCH_SIZE: usize = 20;
     const INTERVAL_MS: Duration = Duration::from_millis(100);
 
     async fn in_background(self) {
@@ -300,9 +300,10 @@ impl RequestSubmitter {
 
             let mut batch = Vec::with_capacity(Self::MAX_BATCH_SIZE);
             batch.push(req);
-            while batch.len() < Self::MAX_BATCH_SIZE {
-                if let Ok(req) = self.submit_rx.try_recv() {
-                    batch.push(req);
+            while let Ok(req) = self.submit_rx.try_recv() {
+                batch.push(req);
+                if batch.len() >= Self::MAX_BATCH_SIZE {
+                    break;
                 }
             }
 
@@ -757,7 +758,7 @@ async fn submit_l2transaction(
         if err.is_full() {
             return Err(RpcError::Provided {
                 code: BUSY_ERR_CODE,
-                message: "service busy",
+                message: "mem pool service busy",
             });
         }
         if err.is_closed() {
@@ -789,7 +790,7 @@ async fn submit_withdrawal_request(
         if err.is_full() {
             return Err(RpcError::Provided {
                 code: BUSY_ERR_CODE,
-                message: "service busy",
+                message: "mem pool service busy",
             });
         }
         if err.is_closed() {
