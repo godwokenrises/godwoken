@@ -236,23 +236,52 @@ impl BlockProducer {
             .should_issue_next_block(median_time, &poa_cell_input)
             .await?
         {
-            let (block_number, tx) = self.produce_next_block(median_time, rollup_cell).await?;
+            let mut retry_count = 0;
+            while retry_count <= MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT {
+                let (block_number, tx) = match self
+                    .compose_next_block_submit_tx(median_time, rollup_cell.clone(), retry_count)
+                    .await
+                {
+                    Ok((block_number, tx)) => (block_number, tx),
+                    Err(err) => {
+                        retry_count += 1;
+                        log::warn!("[produce block] retry compose next block submit tx, retry: {}, reason: {}", retry_count, err);
+                        continue;
+                    }
+                };
 
-            let expected_next_block_number = global_state.block().count().unpack();
-            if expected_next_block_number != block_number {
-                log::warn!("produce unexpected next block, expect {} produce {}, wait until chain is synced to latest block", expected_next_block_number, block_number);
+                let expected_next_block_number = global_state.block().count().unpack();
+                if expected_next_block_number != block_number {
+                    log::warn!("produce unexpected next block, expect {} produce {}, wait until chain is synced to latest block", expected_next_block_number, block_number);
+                    return Ok(());
+                }
+
+                match self.submit_block_tx(block_number, tx).await {
+                    Ok(()) => {}
+                    Err(err) => {
+                        retry_count += 1;
+                        log::warn!(
+                            "[produce block] retry submit block tx , retry: {}, reason: {}",
+                            retry_count,
+                            err
+                        );
+                        continue;
+                    }
+                }
                 return Ok(());
             }
-
-            self.submit_block_tx(block_number, tx).await?;
+            return Err(anyhow!(
+                "[produce_next_block] produce block reach max retry"
+            ));
         }
         Ok(())
     }
 
-    pub async fn produce_next_block(
+    async fn compose_next_block_submit_tx(
         &mut self,
         median_time: Duration,
         rollup_cell: CellInfo,
+        retry_count: usize,
     ) -> Result<(u64, Transaction)> {
         if let Some(ref tests_control) = self.tests_control {
             match tests_control.payload().await {
@@ -262,91 +291,90 @@ impl BlockProducer {
             }
         }
 
-        let mut retry_count = 0;
-        while retry_count <= MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT {
-            // get txs & withdrawal requests from mem pool
-            let (opt_finalized_custodians, block_param) = {
-                let mem_pool = self.mem_pool.lock().await;
-                mem_pool.output_mem_block(&OutputParam::new(retry_count))?
-            };
-            let deposit_cells = block_param.deposits.clone();
+        // get txs & withdrawal requests from mem pool
+        let (opt_finalized_custodians, block_param) = {
+            let mem_pool = self.mem_pool.lock().await;
+            mem_pool.output_mem_block(&OutputParam::new(retry_count))?
+        };
+        let deposit_cells = block_param.deposits.clone();
 
-            // produce block
-            let reverted_block_root: H256 = {
-                let db = self.store.begin_transaction();
-                let smt = db.reverted_block_smt()?;
-                smt.root().to_owned()
-            };
-            let param = ProduceBlockParam {
-                stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
-                reverted_block_root,
-                rollup_config_hash: self.rollup_config_hash,
-                block_param,
-            };
+        // produce block
+        let reverted_block_root: H256 = {
             let db = self.store.begin_transaction();
-            let block_result = produce_block(&db, &self.generator, param)?;
-            let ProduceBlockResult {
-                mut block,
-                mut global_state,
-            } = block_result;
+            let smt = db.reverted_block_smt()?;
+            smt.root().to_owned()
+        };
+        let param = ProduceBlockParam {
+            stake_cell_owner_lock_hash: self.wallet.lock_script().hash().into(),
+            reverted_block_root,
+            rollup_config_hash: self.rollup_config_hash,
+            block_param,
+        };
+        let db = self.store.begin_transaction();
+        let block_result = produce_block(&db, &self.generator, param)?;
+        let ProduceBlockResult {
+            mut block,
+            mut global_state,
+        } = block_result;
 
-            let number: u64 = block.raw().number().unpack();
-            let block_txs = block.transactions().len();
-            let block_withdrawals = block.withdrawals().len();
-            log::info!(
-                "produce new block #{} (txs: {}, deposits: {}, withdrawals: {})",
-                number,
-                block_txs,
-                deposit_cells.len(),
-                block_withdrawals,
-            );
-            if !block.withdrawals().is_empty() && opt_finalized_custodians.is_none() {
-                bail!("unexpected none custodians for withdrawals ",);
+        let number: u64 = block.raw().number().unpack();
+        let block_txs = block.transactions().len();
+        let block_withdrawals = block.withdrawals().len();
+        log::info!(
+            "produce new block #{} (txs: {}, deposits: {}, withdrawals: {})",
+            number,
+            block_txs,
+            deposit_cells.len(),
+            block_withdrawals,
+        );
+        if !block.withdrawals().is_empty() && opt_finalized_custodians.is_none() {
+            bail!("unexpected none custodians for withdrawals ",);
+        }
+        let finalized_custodians = opt_finalized_custodians.unwrap_or_default();
+
+        if let Some(ref tests_control) = self.tests_control {
+            if let Some(TestModePayload::BadBlock { .. }) = tests_control.payload().await {
+                let (bad_block, bad_global_state) = tests_control
+                    .generate_a_bad_block(block, global_state)
+                    .await?;
+
+                block = bad_block;
+                global_state = bad_global_state;
             }
-            let finalized_custodians = opt_finalized_custodians.unwrap_or_default();
-
-            if let Some(ref tests_control) = self.tests_control {
-                if let Some(TestModePayload::BadBlock { .. }) = tests_control.payload().await {
-                    let (bad_block, bad_global_state) = tests_control
-                        .generate_a_bad_block(block, global_state)
-                        .await?;
-
-                    block = bad_block;
-                    global_state = bad_global_state;
-                }
-            }
-
-            // composite tx
-            let tx = match self
-                .complete_tx_skeleton(
-                    deposit_cells,
-                    finalized_custodians,
-                    block,
-                    global_state,
-                    median_time,
-                    rollup_cell.clone(),
-                )
-                .await
-            {
-                Ok(tx) => tx,
-                Err(err) => {
-                    log::error!(
-                        "[produce_next_block] Failed to composite submitting transaction: {}",
-                        err
-                    );
-                    self.mem_pool.lock().await.reset_mem_block()?;
-                    return Err(err);
-                }
-            };
-
-            if tx.as_slice().len() <= MAX_BLOCK_BYTES as usize {
-                return Ok((number, tx));
-            }
-
-            retry_count += 1;
         }
 
-        Err(anyhow!("[produce_next_block] package reach max retry"))
+        // composite tx
+        let tx = match self
+            .complete_tx_skeleton(
+                deposit_cells,
+                finalized_custodians,
+                block,
+                global_state,
+                median_time,
+                rollup_cell.clone(),
+            )
+            .await
+        {
+            Ok(tx) => tx,
+            Err(err) => {
+                log::error!(
+                    "[produce_next_block] Failed to composite submitting transaction: {}",
+                    err
+                );
+                self.mem_pool.lock().await.reset_mem_block()?;
+                return Err(err);
+            }
+        };
+
+        if tx.as_slice().len() <= MAX_BLOCK_BYTES as usize {
+            Ok((number, tx))
+        } else {
+            Err(anyhow!(
+                "l2 block submit tx exceeded max block bytes, tx size: {} max block bytes: {}",
+                tx.as_slice().len(),
+                MAX_BLOCK_BYTES
+            ))
+        }
     }
 
     async fn submit_block_tx(&mut self, block_number: u64, tx: Transaction) -> Result<()> {
@@ -399,14 +427,16 @@ impl BlockProducer {
                         tx.clone(),
                     )
                     .await;
-                    self.mem_pool
-                        .lock()
-                        .await
-                        .try_to_recovery_from_invalid_state()?;
+                    // self.mem_pool
+                    //     .lock()
+                    //     .await
+                    //     .try_to_recovery_from_invalid_state()?;
+                    return Err(anyhow!("Submitting l2 block error: {}", err));
                 } else {
+                    // ignore non script error
                     log::debug!("Skip dumping non-script-error tx");
                 }
-                self.mem_pool.lock().await.reset_mem_block()?;
+                // self.mem_pool.lock().await.reset_mem_block()?;
             }
         }
         Ok(())
