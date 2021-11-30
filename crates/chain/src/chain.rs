@@ -363,7 +363,7 @@ impl Chain {
                         return Ok(SyncEvent::BadBlock { context });
                     }
 
-                    if let Some(challenge_target) = self.process_block(
+                    if let Some(_challenge_target) = self.process_block(
                         db,
                         l2block.clone(),
                         l2block_committed_info.clone(),
