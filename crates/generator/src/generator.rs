@@ -707,7 +707,11 @@ impl Generator {
                 value.to_u32()
             };
             if nonce_after_execution > nonce_before_execution {
-                log::error!("nonce should increased by backends");
+                log::error!(
+                    "nonce should increased by backends nonce before: {}, nonce after: {}",
+                    nonce_before_execution,
+                    nonce_after_execution
+                );
                 return Err(TransactionError::BackendMustIncreaseNonce);
             }
         }
