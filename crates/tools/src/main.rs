@@ -796,6 +796,13 @@ fn run_cli() -> Result<()> {
                         .required(true)
                         .help("Custodian script type hash"),
                 )
+                .arg(
+                    Arg::with_name("min-capacity")
+                        .long("min-capacity")
+                        .takes_value(true)
+                        .default_value("0")
+                        .help("Query cells with min capacity(shannon)"),
+                )
         );
 
     let matches = app.clone().get_matches();
@@ -1346,17 +1353,20 @@ fn run_cli() -> Result<()> {
             let rollup_type_hash = cli_args::to_h256(m.value_of("rollup-type-hash").unwrap())?;
             let custodian_script_type_hash =
                 cli_args::to_h256(m.value_of("custodian-script-type-hash").unwrap())?;
+            let min_capacity: u64 = m.value_of("min-capacity").unwrap_or_default().parse()?;
             let rpc_client = CKBIndexerClient::new(HttpClient::new(indexer_rpc_url)?);
 
-            let total_capacity = stat::query_custodian_ckb(
+            let stat = stat::query_custodian_ckb(
                 &rpc_client,
                 &rollup_type_hash.into(),
                 &custodian_script_type_hash.into(),
+                Some(min_capacity),
             )?;
 
-            let ckb = total_capacity / ONE_CKB as u128;
-            let shannon = total_capacity - (ckb * ONE_CKB as u128);
-            log::debug!("Total capacity: {}", total_capacity);
+            let ckb = stat.total_capacity / ONE_CKB as u128;
+            let shannon = stat.total_capacity - (ckb * ONE_CKB as u128);
+            log::debug!("Cells count: {}", stat.cells_count);
+            log::debug!("Total capacity: {}", stat.total_capacity);
             println!("Total custodian: {}.{:0>8} CKB", ckb, shannon);
         }
         _ => {
