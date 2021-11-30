@@ -733,8 +733,8 @@ impl RPCClient {
         withdrawals_amount: &WithdrawalsAmount,
         custodian_change_capacity: u128,
         last_finalized_block_number: u64,
+        min_capacity: Option<u64>,
     ) -> Result<QueryResult<CollectedCustodianCells>> {
-        const MIN_CAPACITY: u64 = 5000 * 10u64.pow(8);
         let rollup_context = &self.rollup_context;
 
         let parse_sudt_amount = |cell: &Cell| -> Result<u128> {
@@ -752,11 +752,16 @@ impl RPCClient {
             .hash_type(ScriptHashType::Type.into())
             .args(rollup_context.rollup_script_hash.as_slice().pack())
             .build();
-
+        let filter = min_capacity.map(|min_capacity| SearchKeyFilter {
+            script: None,
+            block_range: None,
+            output_data_len_range: None,
+            output_capacity_range: Some([min_capacity.into(), u64::MAX.into()]),
+        });
         let search_key = SearchKey {
             script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
             script_type: ScriptType::Lock,
-            filter: None,
+            filter,
         };
         let order = Order::Desc;
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
@@ -795,10 +800,6 @@ impl RPCClient {
             cursor = Some(cells.last_cursor);
 
             for cell in cells.objects.into_iter() {
-                if cell.output.capacity.value() < MIN_CAPACITY {
-                    continue;
-                }
-
                 let args = cell.output.lock.args.clone().into_bytes();
                 let custodian_lock_args = match CustodianLockArgsReader::verify(&args[32..], false)
                 {

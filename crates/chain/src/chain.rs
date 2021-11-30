@@ -371,7 +371,7 @@ impl Chain {
                         deposit_requests,
                         deposit_asset_scripts,
                     )? {
-                        return Err(anyhow!("bad block found"));
+                        Err(anyhow!("bad block found"))
                         // db.rollback()?;
                         // log::warn!("bad block found, rollback db");
                         //
