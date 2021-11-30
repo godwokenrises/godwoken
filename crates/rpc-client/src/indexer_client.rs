@@ -1,11 +1,12 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey};
+use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
 use crate::utils::{to_result, DEFAULT_QUERY_LIMIT};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use ckb_types::prelude::Entity;
 use gw_jsonrpc_types::ckb_jsonrpc_types::Uint32;
+use gw_types::offchain::CustodianStat;
 use gw_types::{
     offchain::CellInfo,
     packed::{CellOutput, OutPoint, Script},
@@ -115,19 +116,30 @@ impl CKBIndexerClient {
         Ok(collected_cells)
     }
 
-    pub async fn query_custodian_ckb(&self, lock: Script) -> Result<u128> {
+    pub async fn query_custodian_ckb(
+        &self,
+        lock: Script,
+        min_capacity: Option<u64>,
+    ) -> Result<CustodianStat> {
+        let filter = min_capacity.map(|min_capacity| SearchKeyFilter {
+            output_capacity_range: Some([min_capacity.into(), u64::MAX.into()]),
+            script: None,
+            block_range: None,
+            output_data_len_range: None,
+        });
         let search_key = SearchKey {
             script: {
                 let lock = ckb_types::packed::Script::new_unchecked(lock.as_bytes());
                 lock.into()
             },
             script_type: ScriptType::Lock,
-            filter: None,
+            filter,
         };
         let order = Order::Desc;
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
 
         let mut total_capacity = 0u128;
+        let mut cells_count = 0;
         let mut cursor = None;
         loop {
             let cells: Pagination<Cell> = to_result(
@@ -149,11 +161,15 @@ impl CKBIndexerClient {
             }
             cursor = Some(cells.last_cursor);
 
+            cells_count += cells.objects.len();
             for cell in cells.objects.into_iter() {
                 let capacity: u64 = cell.output.capacity.into();
                 total_capacity += capacity as u128;
             }
         }
-        Ok(total_capacity)
+        Ok(CustodianStat {
+            cells_count,
+            total_capacity,
+        })
     }
 }
