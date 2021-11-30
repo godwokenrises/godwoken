@@ -3,7 +3,7 @@ use gw_common::H256;
 use serde::de::DeserializeOwned;
 use serde_json::from_value;
 
-pub(crate) const DEFAULT_QUERY_LIMIT: usize = 1000;
+pub(crate) const DEFAULT_QUERY_LIMIT: usize = 500;
 
 lazy_static::lazy_static! {
     /// CKB built-in type ID code hash

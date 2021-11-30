@@ -84,3 +84,9 @@ pub struct DepositInfo {
     pub request: DepositRequest,
     pub cell: CellInfo,
 }
+
+#[derive(Debug, Clone)]
+pub struct CustodianStat {
+    pub total_capacity: u128,
+    pub cells_count: usize,
+}
