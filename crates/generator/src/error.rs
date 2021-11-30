@@ -131,6 +131,10 @@ pub enum TransactionError {
         backend: &'static str,
         account_id: u32,
     },
+    #[error("Backend must update nonce")]
+    BackendMustIncreaseNonce,
+    #[error("ScriptHashNotFound")]
+    ScriptHashNotFound,
 }
 
 impl From<VMError> for TransactionError {

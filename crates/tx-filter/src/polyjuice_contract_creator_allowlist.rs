@@ -14,6 +14,8 @@ pub enum Error {
     PermissionDenied { account_id: u32 },
     #[error("{0}")]
     Common(gw_common::error::Error),
+    #[error("Script hash not found")]
+    ScriptHashNotFound,
 }
 
 impl From<gw_common::error::Error> for Error {
@@ -70,7 +72,7 @@ impl PolyjuiceContractCreatorAllowList {
             let script_hash = state.get_script_hash(from_id)?;
             let args: Bytes = state
                 .get_script(&script_hash)
-                .ok_or_else(|| anyhow!("can't found script hash, state is reset"))?
+                .ok_or_else(|| Error::ScriptHashNotFound)?
                 .args()
                 .unpack();
 

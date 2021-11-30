@@ -649,6 +649,7 @@ impl Generator {
             match polyjuice_contract_creator_allowlist.validate_with_state(state, raw_tx) {
                 Ok(_) => (),
                 Err(Error::Common(err)) => return Err(TransactionError::from(err)),
+                Err(Error::ScriptHashNotFound) => return Err(TransactionError::ScriptHashNotFound),
                 Err(Error::PermissionDenied { account_id }) => {
                     return Err(TransactionError::InvalidContractCreatorAccount {
                         backend: "polyjuice",
@@ -702,13 +703,13 @@ impl Generator {
                 let value = run_result
                     .write_values
                     .get(&nonce_raw_key)
-                    .expect("Backend must update nonce");
+                    .ok_or(TransactionError::BackendMustIncreaseNonce)?;
                 value.to_u32()
             };
-            assert!(
-                nonce_after_execution > nonce_before_execution,
-                "nonce should increased by backends"
-            );
+            if nonce_after_execution > nonce_before_execution {
+                log::error!("nonce should increased by backends");
+                return Err(TransactionError::BackendMustIncreaseNonce);
+            }
         }
 
         // check write data bytes
