@@ -14,7 +14,7 @@ use gw_types::{
 };
 use serde_json::json;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Clone)]
 pub struct CKBIndexerClient(HttpClient);
@@ -116,11 +116,13 @@ impl CKBIndexerClient {
         Ok(collected_cells)
     }
 
-    pub async fn query_custodian_ckb(
+    pub async fn stat_custodian_cells(
         &self,
         lock: Script,
         min_capacity: Option<u64>,
     ) -> Result<CustodianStat> {
+        let mut sudt_total_amount: HashMap<ckb_types::packed::Script, u128> = HashMap::default();
+
         let filter = min_capacity.map(|min_capacity| SearchKeyFilter {
             output_capacity_range: Some([min_capacity.into(), u64::MAX.into()]),
             script: None,
@@ -165,11 +167,25 @@ impl CKBIndexerClient {
             for cell in cells.objects.into_iter() {
                 let capacity: u64 = cell.output.capacity.into();
                 total_capacity += capacity as u128;
+
+                if let Some(type_) = cell.output.type_.as_ref() {
+                    assert_eq!(cell.output_data.len(), 16);
+
+                    let type_: ckb_types::packed::Script = type_.to_owned().into();
+                    let total_amount = sudt_total_amount.entry(type_).or_insert(0u128);
+                    let amount = {
+                        let mut buf = [0u8; 16];
+                        buf.copy_from_slice(cell.output_data.as_bytes());
+                        u128::from_le_bytes(buf)
+                    };
+                    *total_amount += amount
+                }
             }
         }
         Ok(CustodianStat {
             cells_count,
             total_capacity,
+            sudt_total_amount,
         })
     }
 }
