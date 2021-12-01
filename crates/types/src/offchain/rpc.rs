@@ -89,4 +89,5 @@ pub struct DepositInfo {
 pub struct CustodianStat {
     pub total_capacity: u128,
     pub cells_count: usize,
+    pub sudt_total_amount: HashMap<ckb_types::packed::Script, u128>,
 }
