@@ -302,7 +302,7 @@ impl RequestSubmitter {
                     }
                 }
                 // sleep and try again
-                smol::Timer::after(Duration::from_millis(Self::INTERVAL_MS)).await;
+                smol::Timer::after(Self::INTERVAL_MS).await;
             }
 
             let req = match self.submit_rx.recv().await {
