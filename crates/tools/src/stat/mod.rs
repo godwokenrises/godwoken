@@ -5,7 +5,7 @@ use gw_rpc_client::indexer_client::CKBIndexerClient;
 use gw_types::{core::ScriptHashType, offchain::CustodianStat, packed::Script, prelude::Pack};
 
 /// Query custodian ckb from ckb-indexer
-pub fn query_custodian_ckb(
+pub fn stat_custodian_cells(
     rpc_client: &CKBIndexerClient,
     rollup_type_hash: &H256,
     custodian_script_type_hash: &H256,
@@ -16,5 +16,5 @@ pub fn query_custodian_ckb(
         .hash_type(ScriptHashType::Type.into())
         .args(rollup_type_hash.as_slice().to_vec().pack())
         .build();
-    smol::block_on(rpc_client.query_custodian_ckb(script, min_capacity))
+    smol::block_on(rpc_client.stat_custodian_cells(script, min_capacity))
 }

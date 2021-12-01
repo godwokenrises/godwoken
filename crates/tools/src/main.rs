@@ -1,3 +1,5 @@
+#![allow(clippy::mutable_key_type)]
+
 mod account;
 mod address;
 mod create_creator_account;
@@ -24,6 +26,7 @@ use account::read_privkey;
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::HttpClient;
 use ckb_sdk::constants::ONE_CKB;
+use ckb_types::prelude::Unpack;
 use clap::{value_t, App, Arg, SubCommand};
 use deploy_genesis::DeployRollupCellArgs;
 use dump_tx::ChallengeBlock;
@@ -32,6 +35,7 @@ use godwoken_rpc::GodwokenRpcClient;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -1356,7 +1360,34 @@ fn run_cli() -> Result<()> {
             let min_capacity: u64 = m.value_of("min-capacity").unwrap_or_default().parse()?;
             let rpc_client = CKBIndexerClient::new(HttpClient::new(indexer_rpc_url)?);
 
-            let stat = stat::query_custodian_ckb(
+            let alias: HashMap<ckb_types::bytes::Bytes, String> = [
+                (
+                    "USDC",
+                    "5c4ac961a2428137f27271cf2af205e5c55156d26d9ac285ed3170e8c4cc1501",
+                ),
+                (
+                    "TAI",
+                    "08430183dda1cbd81912c4762a3006a59e2291d5bd43b48bb7fa7544cace9e4a",
+                ),
+                (
+                    "ETH",
+                    "9657b32fcdc463e13ec9205914fd91c443822a949937ae94add9869e7f2e1de8",
+                ),
+                (
+                    "dCKB",
+                    "e5451c05231e1df43e4b199b5d12dbed820dfbea2769943bb593f874526eeb55",
+                ),
+            ]
+            .iter()
+            .map(|(symbol, script_args)| {
+                (
+                    hex::decode(&script_args).unwrap().into(),
+                    symbol.to_string(),
+                )
+            })
+            .collect();
+
+            let stat = stat::stat_custodian_cells(
                 &rpc_client,
                 &rollup_type_hash.into(),
                 &custodian_script_type_hash.into(),
@@ -1365,9 +1396,24 @@ fn run_cli() -> Result<()> {
 
             let ckb = stat.total_capacity / ONE_CKB as u128;
             let shannon = stat.total_capacity - (ckb * ONE_CKB as u128);
-            log::debug!("Cells count: {}", stat.cells_count);
-            log::debug!("Total capacity: {}", stat.total_capacity);
+            println!("Cells count: {}", stat.cells_count);
             println!("Total custodian: {}.{:0>8} CKB", ckb, shannon);
+            if !stat.sudt_total_amount.is_empty() {
+                println!("========================================");
+            }
+            for (sudt_script, sudt_amount) in stat.sudt_total_amount {
+                let sudt_args: ckb_types::bytes::Bytes = sudt_script.args().unpack();
+                let alias_name = alias
+                    .get(&sudt_args)
+                    .cloned()
+                    .unwrap_or_else(|| "Unknown".to_string());
+                println!(
+                    "Simple UDT ({} {}) amount: {}",
+                    alias_name,
+                    sudt_script.args(),
+                    sudt_amount
+                );
+            }
         }
         _ => {
             app.print_help().expect("print help");
