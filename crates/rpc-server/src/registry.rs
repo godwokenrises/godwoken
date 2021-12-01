@@ -17,6 +17,8 @@ use gw_jsonrpc_types::{
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
+use gw_mem_pool::custodian::AvailableCustodians;
+use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{
     chain_view::ChainView,
     state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
@@ -47,11 +49,12 @@ type GwUint64 = gw_jsonrpc_types::ckb_jsonrpc_types::Uint64;
 
 const HEADER_NOT_FOUND_ERR_CODE: i64 = -32000;
 const INVALID_NONCE_ERR_CODE: i64 = -32001;
+const BUSY_ERR_CODE: i64 = -32006;
+const CUSTODIAN_NOT_ENOUGH_CODE: i64 = -32007;
 const INTERNAL_ERROR_ERR_CODE: i64 = -32099;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
 const INVALID_PARAM_ERR_CODE: i64 = -32602;
 const INVALID_REQUEST: i64 = -32600;
-const BUSY_ERR_CODE: i64 = -32006;
 
 fn header_not_found_err() -> RpcError {
     RpcError::Provided {
@@ -136,6 +139,7 @@ pub struct Registry {
     backend_info: Vec<BackendInfo>,
     node_mode: NodeMode,
     submit_tx: smol::channel::Sender<Request>,
+    rpc_client: RPCClient,
 }
 
 impl Registry {
@@ -151,6 +155,7 @@ impl Registry {
         offchain_mock_context: Option<OffChainMockContext>,
         mem_pool_config: MemPoolConfig,
         node_mode: NodeMode,
+        rpc_client: RPCClient,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -179,6 +184,7 @@ impl Registry {
             backend_info,
             node_mode,
             submit_tx,
+            rpc_client,
         }
     }
 
@@ -193,6 +199,7 @@ impl Registry {
             .with_data(Data::new(self.mem_pool_config))
             .with_data(Data::new(self.backend_info))
             .with_data(Data::new(self.submit_tx))
+            .with_data(Data::new(self.rpc_client))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -774,17 +781,49 @@ async fn submit_l2transaction(
 
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
-    mem_pool: Data<MemPool>,
+    generator: Data<Generator>,
+    store: Data<Store>,
     submit_tx: Data<smol::channel::Sender<Request>>,
+    rpc_client: Data<RPCClient>,
 ) -> Result<(), RpcError> {
-    let _mem_pool = match &*mem_pool {
-        Some(mem_pool) => mem_pool,
-        None => {
-            return Err(mem_pool_is_disabled_err());
-        }
-    };
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequest::from_slice(&withdrawal_bytes)?;
+
+    // verify finalized custodian
+    {
+        let finalized_custodians = {
+            let tip = store.get_tip_block()?;
+            let db = store.begin_transaction();
+            // query withdrawals from ckb-indexer
+            let last_finalized_block_number = generator
+                .rollup_context()
+                .last_finalized_block_number(tip.raw().number().unpack());
+            gw_mem_pool::custodian::query_finalized_custodians(
+                &rpc_client,
+                &db,
+                vec![withdrawal.clone()].into_iter(),
+                &generator.rollup_context(),
+                last_finalized_block_number,
+            )
+            .await?
+            .expect_any()
+        };
+        let available_custodians = AvailableCustodians::from(&finalized_custodians);
+        let withdrawal_generator = gw_mem_pool::withdrawal::Generator::new(
+            generator.rollup_context(),
+            available_custodians,
+        );
+        if let Err(err) = withdrawal_generator.verify_remained_amount(&withdrawal) {
+            return Err(RpcError::Full {
+                code: CUSTODIAN_NOT_ENOUGH_CODE,
+                message: format!(
+                    "Withdrawal fund are still finalizing, please try again later. error: {}",
+                    err
+                ),
+                data: None,
+            });
+        }
+    }
 
     if let Err(err) = submit_tx.try_send(Request::Withdrawal(withdrawal)) {
         if err.is_full() {
