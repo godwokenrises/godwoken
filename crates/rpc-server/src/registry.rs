@@ -288,10 +288,23 @@ struct RequestSubmitter {
 impl RequestSubmitter {
     const MAX_CHANNEL_SIZE: usize = 700;
     const MAX_BATCH_SIZE: usize = 20;
-    const INTERVAL_MS: Duration = Duration::from_millis(100);
+    const INTERVAL_MS: Duration = Duration::from_millis(300);
 
     async fn in_background(self) {
         loop {
+            // check mem block empty slots
+            loop {
+                if !self.submit_rx.is_empty() {
+                    let mem_pool = self.mem_pool.lock().await;
+                    // continue to batch process if we have enough mem block slots
+                    if !mem_pool.is_mem_txs_full(Self::MAX_BATCH_SIZE) {
+                        break;
+                    }
+                }
+                // sleep and try again
+                smol::Timer::after(Duration::from_millis(Self::INTERVAL_MS)).await;
+            }
+
             let req = match self.submit_rx.recv().await {
                 Ok(req) => req,
                 Err(_) if self.submit_rx.is_closed() => {
