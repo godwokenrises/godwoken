@@ -173,6 +173,17 @@ impl Generator {
             .get_account_id_by_script_hash(&account_script_hash)?
             .ok_or(AccountError::UnknownAccount)?; // find Simple UDT account
 
+        // check nonce
+        let expected_nonce = state.get_nonce(id)?;
+        let actual_nonce: u32 = raw.nonce().unpack();
+        if actual_nonce != expected_nonce {
+            return Err(WithdrawalError::Nonce {
+                expected: expected_nonce,
+                actual: actual_nonce,
+            }
+            .into());
+        }
+
         // check CKB balance
         let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, account_short_address)?;
         let required_ckb_capacity = {
@@ -219,16 +230,6 @@ impl Generator {
             }
         }
 
-        // check nonce
-        let expected_nonce = state.get_nonce(id)?;
-        let actual_nonce: u32 = raw.nonce().unpack();
-        if actual_nonce != expected_nonce {
-            return Err(WithdrawalError::Nonce {
-                expected: expected_nonce,
-                actual: actual_nonce,
-            }
-            .into());
-        }
         Ok(())
     }
 
