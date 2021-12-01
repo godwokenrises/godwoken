@@ -177,12 +177,22 @@ impl Default for OffChainValidatorConfig {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MemPoolConfig {
     pub execute_l2tx_max_cycles: u64,
+    #[serde(default = "default_restore_path")]
+    pub restore_path: PathBuf,
+}
+
+// Field default value for backward config file compitability
+fn default_restore_path() -> PathBuf {
+    const DEFAULT_RESTORE_PATH: &str = "mem_block";
+
+    DEFAULT_RESTORE_PATH.into()
 }
 
 impl Default for MemPoolConfig {
     fn default() -> Self {
         Self {
             execute_l2tx_max_cycles: 100_000_000,
+            restore_path: default_restore_path(),
         }
     }
 }

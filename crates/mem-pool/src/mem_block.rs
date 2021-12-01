@@ -3,7 +3,7 @@ use std::{collections::HashSet, time::Duration};
 use gw_common::{merkle_utils::calculate_state_checkpoint, H256};
 use gw_types::{
     offchain::{CollectedCustodianCells, DepositInfo},
-    packed::{AccountMerkleState, BlockInfo, L2Block, TxReceipt},
+    packed::{self, AccountMerkleState, BlockInfo, L2Block, TxReceipt},
     prelude::*,
 };
 
@@ -35,6 +35,8 @@ pub struct MemBlock {
     block_info: BlockInfo,
     /// Mem block prev merkle state
     prev_merkle_state: AccountMerkleState,
+    /// Mem block post merkle state
+    post_merkle_state: AccountMerkleState,
     /// touched keys
     touched_keys: HashSet<H256>,
 }
@@ -45,6 +47,14 @@ impl MemBlock {
             block_producer_id: block_info.block_producer_id().unpack(),
             block_info,
             prev_merkle_state,
+            ..Default::default()
+        }
+    }
+
+    /// Initialize MemBlock with block producer
+    pub fn with_block_producer(block_producer_id: u32) -> Self {
+        MemBlock {
+            block_producer_id,
             ..Default::default()
         }
     }
@@ -167,5 +177,55 @@ impl MemBlock {
 
     pub fn prev_merkle_state(&self) -> &AccountMerkleState {
         &self.prev_merkle_state
+    }
+
+    pub fn set_post_merkle_state(&mut self, state: AccountMerkleState) {
+        self.post_merkle_state = state;
+    }
+
+    pub fn post_merkle_state(&self) -> &AccountMerkleState {
+        &self.post_merkle_state
+    }
+
+    pub fn pack(&self) -> packed::MemBlock {
+        let touched_keys = self.touched_keys().iter().cloned().collect::<Vec<_>>();
+
+        packed::MemBlock::new_builder()
+            .block_producer_id(self.block_producer_id.pack())
+            .txs(self.txs.pack())
+            .withdrawals(self.withdrawals.pack())
+            .finalized_custodians(self.finalized_custodians.pack())
+            .deposits(self.deposits.pack())
+            .state_checkpoints(self.state_checkpoints.pack())
+            .txs_prev_state_checkpoint(self.txs_prev_state_checkpoint.pack())
+            .block_info(self.block_info.clone())
+            .prev_merkle_state(self.prev_merkle_state.clone())
+            .post_merkle_state(self.post_merkle_state.clone())
+            .touched_keys(touched_keys.pack())
+            .build()
+    }
+
+    pub fn unpack(mem_block: packed::MemBlock) -> Self {
+        let txs: Vec<_> = mem_block.txs().unpack();
+        let txs_set = txs.iter().cloned().collect();
+        let withdrawals: Vec<_> = mem_block.withdrawals().unpack();
+        let withdrawals_set = withdrawals.iter().cloned().collect();
+        let touched_keys = mem_block.touched_keys().into_iter().map(|h| h.unpack());
+
+        MemBlock {
+            block_producer_id: mem_block.block_producer_id().unpack(),
+            txs,
+            txs_set,
+            withdrawals,
+            withdrawals_set,
+            finalized_custodians: mem_block.finalized_custodians().unpack(),
+            deposits: mem_block.deposits().unpack(),
+            state_checkpoints: mem_block.state_checkpoints().unpack(),
+            txs_prev_state_checkpoint: mem_block.txs_prev_state_checkpoint().unpack(),
+            block_info: mem_block.block_info(),
+            prev_merkle_state: mem_block.prev_merkle_state(),
+            post_merkle_state: mem_block.post_merkle_state(),
+            touched_keys: touched_keys.collect(),
+        }
     }
 }

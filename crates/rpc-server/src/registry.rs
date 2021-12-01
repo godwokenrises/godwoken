@@ -265,10 +265,10 @@ impl Request {
         }
     }
 
-    fn hash(&self) -> ckb_types::H256 {
+    fn hash(&self) -> Option<ckb_types::H256> {
         match self {
-            Request::Tx(tx) => ckb_types::H256(tx.hash()),
-            Request::Withdrawal(withdrawal) => ckb_types::H256(withdrawal.hash()),
+            Request::Tx(tx) => Some(ckb_types::H256(tx.hash())),
+            Request::Withdrawal(withdrawal) => Some(ckb_types::H256(withdrawal.hash())),
         }
     }
 }
@@ -311,7 +311,7 @@ impl RequestSubmitter {
                 let mut mem_pool = self.mem_pool.lock().await;
                 for req in batch.drain(..) {
                     let kind = req.kind();
-                    let hash = req.hash();
+                    let hash = req.hash().unwrap_or_default();
 
                     let maybe_ok = match req {
                         Request::Tx(tx) => mem_pool.push_transaction(tx),
