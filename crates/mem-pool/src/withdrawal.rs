@@ -113,23 +113,29 @@ impl<'a> Generator<'a> {
     }
 
     pub fn verify_remained_amount(&self, req: &WithdrawalRequest) -> Result<()> {
-        // Verify remaind sudt
+        // Verify remained sudt
         let mut ckb_custodian = self.ckb_custodian.clone();
         let sudt_type_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
         let req_sudt: u128 = req.raw().amount().unpack();
         if 0 != req_sudt {
             let sudt_custodian = match self.sudt_custodians.get(&sudt_type_hash) {
                 Some(custodian) => custodian,
-                None => return Err(anyhow!("no finalized sudt custodian for {}", req)),
+                None => {
+                    return Err(anyhow!(
+                        "Finalized simple UDT custodian cell is not enough to withdraw"
+                    ))
+                }
             };
 
-            let remaind = sudt_custodian
+            let remained = sudt_custodian
                 .balance
                 .checked_sub(req_sudt)
-                .ok_or_else(|| anyhow!("no enough custodian sudt for {}", req))?;
+                .ok_or_else(|| {
+                    anyhow!("Finalized simple UDT custodian cell is not enough to withdraw")
+                })?;
 
-            // Consume all remaind sudt, give sudt custodian capacity back to ckb custodian
-            if 0 == remaind {
+            // Consume all remained sudt, give sudt custodian capacity back to ckb custodian
+            if 0 == remained {
                 // If ckb custodian is already consumed
                 if 0 == ckb_custodian.capacity {
                     ckb_custodian.capacity = sudt_custodian.capacity as u128;
@@ -142,17 +148,15 @@ impl<'a> Generator<'a> {
             }
         }
 
-        // Verify remaind ckb
+        // Verify remained ckb
         let req_ckb = req.raw().capacity().unpack() as u128;
         match ckb_custodian.balance.checked_sub(req_ckb) {
             Some(_) => Ok(()),
-            // Consume all remaind ckb
+            // Consume all remained ckb
             None if req_ckb == ckb_custodian.capacity => Ok(()),
             // No able to cover withdrawal cell and ckb custodian change
             None => Err(anyhow!(
-                "no enough finalized custodian capacity, custodian ckb: {}, required ckb: {}",
-                ckb_custodian.capacity,
-                req_ckb
+                "Finalized CKB custodian cell is not enough to withdraw"
             )),
         }
     }

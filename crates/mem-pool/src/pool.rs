@@ -426,9 +426,9 @@ impl MemPool {
             );
             smol::block_on(task)?
         };
-        let avaliable_custodians = AvailableCustodians::from(&finalized_custodians);
+        let available_custodians = AvailableCustodians::from(&finalized_custodians);
         let withdrawal_generator =
-            WithdrawalGenerator::new(self.generator.rollup_context(), avaliable_custodians);
+            WithdrawalGenerator::new(self.generator.rollup_context(), available_custodians);
         withdrawal_generator.verify_remained_amount(withdrawal_request)?;
 
         // withdrawal basic verification

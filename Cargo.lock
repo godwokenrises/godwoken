@@ -2178,6 +2178,7 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
+ "gw-rpc-client",
  "gw-store",
  "gw-traits",
  "gw-types",

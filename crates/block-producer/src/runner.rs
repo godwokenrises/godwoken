@@ -617,6 +617,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         offchain_mock_context,
         config.mem_pool.clone(),
         config.node_mode,
+        rpc_client.clone(),
     );
 
     let (exit_sender, exit_recv) = async_channel::bounded(100);
