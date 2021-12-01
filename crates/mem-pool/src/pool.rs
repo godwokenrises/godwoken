@@ -566,7 +566,20 @@ impl MemPool {
             kv_state,
             kv_state_proof,
         };
-        let finalized_custodians = mem_block.finalized_custodians().cloned();
+        let mut finalized_custodians = mem_block.finalized_custodians().cloned();
+        if finalized_custodians.is_none() {
+            // query withdrawals from ckb-indexer
+            let last_finalized_block_number = self
+                .generator
+                .rollup_context()
+                .last_finalized_block_number(self.current_tip.1);
+            let task = self.provider.query_available_custodians(
+                vec![],
+                last_finalized_block_number,
+                self.generator.rollup_context().to_owned(),
+            );
+            finalized_custodians = Some(smol::block_on(task)?);
+        }
 
         log::debug!(
             "output mem block, txs: {} tx withdrawals: {} state_checkpoints: {}",

@@ -328,7 +328,7 @@ impl BlockProducer {
             block_withdrawals,
         );
         if !block.withdrawals().is_empty() && opt_finalized_custodians.is_none() {
-            bail!("unexpected none custodians for withdrawals ",);
+            bail!("unexpected none custodians for withdrawals");
         }
         let finalized_custodians = opt_finalized_custodians.unwrap_or_default();
 

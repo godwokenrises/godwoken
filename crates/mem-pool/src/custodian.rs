@@ -123,17 +123,17 @@ pub async fn query_finalized_custodians<WithdrawalIter: Iterator<Item = Withdraw
     rollup_context: &RollupContext,
     last_finalized_block_number: u64,
 ) -> Result<QueryResult<CollectedCustodianCells>> {
-    const MIN_CAPACITY: u64 = 500000_00000000; // 500000 CKB
+    const MAX_FINALIZED_CUSTODIAN_CELLS: usize = 50;
 
     let total_withdrawal_amount = sum_withdrawals(withdrawals);
     let total_change_capacity = sum_change_capacity(db, rollup_context, &total_withdrawal_amount);
 
     rpc_client
-        .query_finalized_custodian_cells(
+        .query_finalized_custodian_capped_cells(
             &total_withdrawal_amount,
             total_change_capacity,
             last_finalized_block_number,
-            Some(MIN_CAPACITY),
+            MAX_FINALIZED_CUSTODIAN_CELLS,
         )
         .await
 }
