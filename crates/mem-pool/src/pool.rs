@@ -228,6 +228,10 @@ impl MemPool {
         self.provider = provider;
     }
 
+    pub fn is_mem_txs_full(&self, expect_slots: usize) -> bool {
+        self.mem_block.txs().len().saturating_add(expect_slots) > MAX_MEM_BLOCK_TXS
+    }
+
     pub fn fetch_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
         self.fetch_state_db_with_mode(db, MemBlockDBMode::NewBlock)
     }
