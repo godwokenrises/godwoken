@@ -47,6 +47,7 @@ use crate::{
     constants::{MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS, MAX_TX_SIZE, MAX_WITHDRAWAL_SIZE},
     custodian::AvailableCustodians,
     mem_block::MemBlock,
+    restore_manager::RestoreManager,
     traits::{MemPoolErrorTxHandler, MemPoolProvider},
     types::EntryList,
     withdrawal::Generator as WithdrawalGenerator,
@@ -96,10 +97,13 @@ pub struct MemPool {
     config: MemPoolConfig,
     /// Pending deposits
     pending_deposits: Vec<DepositInfo>,
+    /// Mem block save and restore
+    restore_manager: RestoreManager,
 }
 
 impl MemPool {
     pub fn create(
+        block_producer_id: u32,
         store: Store,
         generator: Arc<Generator>,
         provider: Box<dyn MemPoolProvider + Send>,
@@ -121,7 +125,14 @@ impl MemPool {
             db.commit()?;
         }
 
-        let mem_block: MemBlock = Default::default();
+        let restore_manager = RestoreManager::build(&config.restore_path)?;
+        let (is_restored, mem_block) = match restore_manager.restore_from_latest() {
+            Ok(Some((restored, timestamp))) => {
+                log::info!("[mem-pool] restore mem block from timestamp {}", timestamp);
+                (true, MemBlock::unpack(restored))
+            }
+            _ => (false, MemBlock::with_block_producer(block_producer_id)),
+        };
         let reverted_block_root = {
             let db = store.begin_transaction();
             let smt = db.reverted_block_smt()?;
@@ -148,15 +159,69 @@ impl MemPool {
             offchain_validator,
             config,
             pending_deposits: Default::default(),
+            restore_manager: restore_manager.clone(),
         };
 
         // set tip
-        mem_pool.reset(None, Some(tip.0))?;
+        let db = mem_pool.store.begin_transaction();
+        let mem_block = &mut mem_pool.mem_block;
+        let is_mem_block_state_matched = || -> Result<bool> {
+            // Check prev merkle state
+            if mem_block.prev_merkle_state().as_slice() != tip_block.raw().post_account().as_slice()
+            {
+                log::warn!("restored mem block prev merkle state not matched");
+                return Ok(false);
+            }
+
+            // Check block number
+            if mem_block.block_info().number().unpack() != tip.1 + 1 {
+                log::warn!("restored mem block number not matched");
+                return Ok(false);
+            }
+
+            // Check block info
+            let db_block_info = db.get_mem_pool_block_info()?;
+            if db_block_info.map(|i| i.as_slice().to_vec())
+                != Some(mem_block.block_info().as_slice().to_vec())
+            {
+                log::warn!("restored mem block info not matched");
+                return Ok(false);
+            }
+
+            // Check mem block merkle state
+            if db.get_mem_block_account_smt_root()?
+                != mem_block.post_merkle_state().merkle_root().unpack()
+                || db.get_mem_block_account_count()?
+                    != Unpack::<u32>::unpack(&mem_block.post_merkle_state().count())
+            {
+                log::warn!("restored mem block post merkle state not matched");
+                return Ok(false);
+            }
+
+            Ok(true)
+        };
+        if !is_restored || !is_mem_block_state_matched()? {
+            mem_pool.reset(None, Some(tip.0))?;
+        }
+
+        smol::spawn(async move {
+            restore_manager.delete_before_one_hour();
+        })
+        .detach();
+
         Ok(mem_pool)
     }
 
     pub fn mem_block(&self) -> &MemBlock {
         &self.mem_block
+    }
+
+    pub fn restore_manager(&self) -> &RestoreManager {
+        &self.restore_manager
+    }
+
+    pub fn save_mem_block(&self) -> Result<()> {
+        self.restore_manager.save(self.mem_block())
     }
 
     pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send>) {
@@ -218,6 +283,8 @@ impl MemPool {
 
         // save tx receipt in mem pool
         self.mem_block.push_tx(tx_hash, &tx_receipt);
+        self.mem_block
+            .set_post_merkle_state(tx_receipt.post_state());
         db.insert_mem_pool_transaction_receipt(&tx_hash, tx_receipt)?;
 
         // Add to pool
@@ -998,6 +1065,8 @@ impl MemPool {
         let prev_state_checkpoint = state.calculate_state_checkpoint()?;
         self.mem_block
             .push_deposits(deposit_cells, prev_state_checkpoint);
+        self.mem_block
+            .set_post_merkle_state(state.get_merkle_state());
         state.submit_tree_to_mem_block()?;
         if let Some(ref mut offchain_validator) = self.offchain_validator {
             offchain_validator.set_prev_txs_checkpoint(prev_state_checkpoint);
@@ -1143,6 +1212,8 @@ impl MemPool {
                         withdrawal.hash().into(),
                         state.calculate_state_checkpoint()?,
                     );
+                    self.mem_block
+                        .set_post_merkle_state(state.get_merkle_state())
                 }
                 Err(err) => {
                     log::info!("[mem-pool] withdrawal execution failed : {}", err);

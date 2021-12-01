@@ -30,7 +30,6 @@ async-jsonrpc-client = { version = "0.3.0", default-features = false, features =
 async-native-tls = "0.3.3"
 async-std = "1.9.0"
 clap = "2.33.3"
-ctrlc = "3.1.6"
 env_logger = "0.8.3"
 futures = "0.3.13"
 hyper = "0.14"

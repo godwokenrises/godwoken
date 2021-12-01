@@ -449,6 +449,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             });
             let mem_pool = Arc::new(Mutex::new(
                 MemPool::create(
+                    block_producer_config.account_id,
                     base.store.clone(),
                     base.generator.clone(),
                     Box::new(mem_pool_provider),
@@ -607,7 +608,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     // RPC registry
     let rpc_registry = Registry::new(
         store,
-        mem_pool,
+        mem_pool.clone(),
         generator,
         test_mode_control.map(Box::new),
         rollup_config,
@@ -622,6 +623,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     let handle = {
         let exit_sender = exit_sender.clone();
         move || {
+            log::warn!("Receive exit signal");
             exit_sender.try_send(()).ok();
         }
     };
@@ -680,6 +682,8 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     });
 
+    let mem_block_save_guard = MemBlockSaveGuard { mem_pool };
+
     smol::block_on(async {
         let _ = exit_recv.recv().await;
         log::info!("Exiting...");
@@ -688,7 +692,32 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         chain_task.cancel().await;
     });
 
+    drop(mem_block_save_guard);
+
     Ok(())
+}
+
+struct MemBlockSaveGuard {
+    mem_pool: Option<Arc<Mutex<MemPool>>>,
+}
+
+impl Drop for MemBlockSaveGuard {
+    fn drop(&mut self) {
+        if let Some(mem_pool) = self.mem_pool.as_ref() {
+            let mem_pool = mem_pool.clone();
+            smol::block_on(async move {
+                let mem_pool = mem_pool.lock().await;
+                log::info!(
+                    "Saving mem block to {:?}",
+                    mem_pool.restore_manager().path()
+                );
+                if let Err(err) = mem_pool.save_mem_block() {
+                    log::error!("Save mem block error {}", err);
+                }
+                mem_pool.restore_manager().delete_before_one_hour();
+            });
+        }
+    }
 }
 
 fn check_ckb_version(rpc_client: &RPCClient) -> Result<()> {
