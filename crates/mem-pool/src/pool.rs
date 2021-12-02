@@ -567,7 +567,12 @@ impl MemPool {
             kv_state_proof,
         };
         let mut finalized_custodians = mem_block.finalized_custodians().cloned();
+        log::info!(
+            "is finalized custodian none? : {}",
+            finalized_custodians.is_none()
+        );
         if finalized_custodians.is_none() {
+            log::info!("collect finalized custodian cells");
             // query withdrawals from ckb-indexer
             let last_finalized_block_number = self
                 .generator
@@ -1238,6 +1243,10 @@ impl MemPool {
         let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
         self.mem_block
             .append_touched_keys(touched_keys.borrow().iter().cloned());
+        log::info!(
+            "set finalized custodian count: {}",
+            finalized_custodians.cells_info.len()
+        );
         self.mem_block
             .set_finalized_custodians(finalized_custodians);
 
