@@ -16,14 +16,13 @@ keep_log_file_num=32
 
 [CFOptions "default"]
 level_compaction_dynamic_level_bytes=true
-write_buffer_size=8388608
+write_buffer_size=67108864
 min_write_buffer_number_to_merge=1
 max_write_buffer_number=2
 max_write_buffer_size_to_maintain=-1
 
 [TableOptions/BlockBasedTable "default"]
 pin_l0_filter_and_index_blocks_in_cache=true
-block_size=16384
 ```
 
 use db.toml in the godwoken config:
