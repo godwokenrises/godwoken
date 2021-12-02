@@ -14,7 +14,8 @@ use gw_types::{
 use smol::{lock::Mutex, Task};
 
 use crate::{
-    constants::MAX_MEM_BLOCK_DEPOSITS, custodian::query_finalized_custodians,
+    constants::{MAX_MEM_BLOCK_DEPOSITS, MIN_CKB_DEPOSIT_CAPACITY, MIN_SUDT_DEPOSIT_CAPACITY},
+    custodian::query_finalized_custodians,
     traits::MemPoolProvider,
 };
 
@@ -62,7 +63,15 @@ impl MemPoolProvider for DefaultMemPoolProvider {
 
     fn collect_deposit_cells(&self) -> Task<Result<Vec<DepositInfo>>> {
         let rpc_client = self.rpc_client.clone();
-        smol::spawn(async move { rpc_client.query_deposit_cells(MAX_MEM_BLOCK_DEPOSITS).await })
+        smol::spawn(async move {
+            rpc_client
+                .query_deposit_cells(
+                    MAX_MEM_BLOCK_DEPOSITS,
+                    MIN_CKB_DEPOSIT_CAPACITY,
+                    MIN_SUDT_DEPOSIT_CAPACITY,
+                )
+                .await
+        })
     }
 
     fn get_cell(&self, out_point: OutPoint) -> Task<Result<Option<CellWithStatus>>> {
