@@ -400,7 +400,12 @@ impl RPCClient {
 
     /// return all lived deposit requests
     /// NOTICE the returned cells may contains invalid cells.
-    pub async fn query_deposit_cells(&self, count: usize) -> Result<Vec<DepositInfo>> {
+    pub async fn query_deposit_cells(
+        &self,
+        count: usize,
+        min_ckb_deposit_capacity: u64,
+        min_sudt_deposit_capacity: u64,
+    ) -> Result<Vec<DepositInfo>> {
         const BLOCKS_TO_SEARCH: u64 = 2000;
 
         let tip_number = self.get_tip().await?.number().unpack();
@@ -430,7 +435,7 @@ impl RPCClient {
             filter: Some(SearchKeyFilter {
                 script: None,
                 output_data_len_range: None,
-                output_capacity_range: None,
+                output_capacity_range: Some([min_ckb_deposit_capacity.into(), u64::MAX.into()]),
                 block_range: Some([
                     BlockNumber::from(tip_number.saturating_sub(BLOCKS_TO_SEARCH)),
                     BlockNumber::from(u64::max_value()),
@@ -438,59 +443,80 @@ impl RPCClient {
             }),
         };
         let order = Order::Asc;
-        let limit = Uint32::from((count - deposit_infos.len()) as u32);
 
-        let cells: Pagination<Cell> = to_result(
-            self.indexer
-                .client()
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                    ])),
-                )
-                .await?,
-        )?;
+        let mut cursor = None;
 
-        let cells = cells.objects.into_iter().map(|cell| {
-            let out_point = {
-                let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
-                OutPoint::new_unchecked(out_point.as_bytes())
-            };
-            let output = {
-                let output: ckb_types::packed::CellOutput = cell.output.into();
-                CellOutput::new_unchecked(output.as_bytes())
-            };
-            let data = cell.output_data.into_bytes();
-            CellInfo {
-                out_point,
-                output,
-                data,
+        while deposit_infos.len() < count {
+            let limit = Uint32::from((count - deposit_infos.len()) as u32);
+
+            let cells: Pagination<Cell> = to_result(
+                self.indexer
+                    .client()
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            if cells.last_cursor.is_empty() {
+                break;
             }
-        });
+            cursor = Some(cells.last_cursor);
 
-        for cell in cells {
-            let args: Bytes = cell.output.lock().args().unpack();
-            let deposit_lock_args = match DepositLockArgsReader::verify(&args[32..], false) {
-                Ok(()) => DepositLockArgs::new_unchecked(args.slice(32..)),
-                Err(_) => {
-                    log::debug!("invalid deposit cell args: \n{:#x}", args);
+            let cells = cells.objects.into_iter().map(|cell| {
+                let out_point = {
+                    let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
+                    OutPoint::new_unchecked(out_point.as_bytes())
+                };
+                let output = {
+                    let output: ckb_types::packed::CellOutput = cell.output.into();
+                    CellOutput::new_unchecked(output.as_bytes())
+                };
+                let data = cell.output_data.into_bytes();
+                CellInfo {
+                    out_point,
+                    output,
+                    data,
+                }
+            });
+
+            for cell in cells {
+                let args: Bytes = cell.output.lock().args().unpack();
+                let deposit_lock_args = match DepositLockArgsReader::verify(&args[32..], false) {
+                    Ok(()) => DepositLockArgs::new_unchecked(args.slice(32..)),
+                    Err(_) => {
+                        log::debug!("invalid deposit cell args: \n{:#x}", args);
+                        continue;
+                    }
+                };
+                let request =
+                    match parse_deposit_request(&cell.output, &cell.data, &deposit_lock_args) {
+                        Some(r) => r,
+                        None => {
+                            log::debug!("invalid deposit cell: \n{:?}", cell);
+                            continue;
+                        }
+                    };
+
+                let cell_capacity = cell.output.capacity().unpack();
+                if cell.output.type_().is_some() && cell_capacity < min_sudt_deposit_capacity {
+                    log::debug!(
+                        "invalid sudt deposit cell, required capacity: {}, capacity: {}",
+                        min_sudt_deposit_capacity,
+                        cell_capacity
+                    );
                     continue;
                 }
-            };
-            let request = match parse_deposit_request(&cell.output, &cell.data, &deposit_lock_args)
-            {
-                Some(r) => r,
-                None => {
-                    log::debug!("invalid deposit cell: \n{:?}", cell);
-                    continue;
-                }
-            };
 
-            let info = DepositInfo { cell, request };
-            deposit_infos.push(info);
+                let info = DepositInfo { cell, request };
+                deposit_infos.push(info);
+            }
         }
 
         Ok(deposit_infos)
