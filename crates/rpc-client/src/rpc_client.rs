@@ -886,15 +886,11 @@ impl RPCClient {
                     }
 
                     // Check whether collected sudt amount fulfill withdrawal requests
-                    match withdrawals_amount.sudt.get(&type_hash.raw()) {
-                        Some(withdrawal_amount) => {
-                            // Mark withdrawal custodians
-                            custodians.withdrawal = true;
-                            if custodians.amount >= *withdrawal_amount {
-                                custodians.fulfilled = true;
-                            }
+                    if let Some(withdrawal_amount) = withdrawals_amount.sudt.get(&type_hash.raw()) {
+                        custodians.withdrawal = true;
+                        if custodians.amount >= *withdrawal_amount {
+                            custodians.fulfilled = true;
                         }
-                        None => continue,
                     }
                 }
             }
