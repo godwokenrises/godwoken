@@ -967,7 +967,10 @@ impl RPCClient {
         }
 
         'defragment_done: for (type_hash, (is_withdrawal, sudt_remains)) in sudt_remains_map {
-            if !is_withdrawal && sudt_remains.len() < 3 {
+            if !is_withdrawal
+                && (sudt_remains.len() < 3
+                    || (max_custodian_cells.saturating_sub(collected_cells) == 1))
+            {
                 continue;
             }
 
