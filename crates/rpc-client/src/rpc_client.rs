@@ -763,10 +763,9 @@ impl RPCClient {
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
 
         let mut ckb_candidates = CandidateCustodians::default();
-        let mut sudt_candidates = HashMap::new();
+        let mut sudt_candidates: HashMap<[u8; 32], CandidateCustodians<_>> = HashMap::new();
         let mut candidate_cells = 0usize;
         let mut candidate_capacity = 0u128;
-        let mut candidate_fulfilled_sudts = 0usize;
         let mut cursor = None;
 
         // withdrawal ckb + change custodian capacity
@@ -776,7 +775,8 @@ impl RPCClient {
         };
 
         while candidate_capacity < required_capacity
-            || candidate_fulfilled_sudts < withdrawals_amount.sudt.len()
+            || sudt_candidates.values().filter(|c| c.fulfilled).count()
+                < withdrawals_amount.sudt.len()
             || candidate_cells < max_custodian_cells
         {
             let cells: Pagination<Cell> = to_result(
@@ -827,25 +827,23 @@ impl RPCClient {
                     {
                         continue;
                     }
-
-                    if sudt_type_script.hash() != CKB_SUDT_SCRIPT_ARGS
-                        && parse_sudt_amount(&cell).is_err()
-                    {
-                        log::error!("invalid sudt amount, out_point: {:?}", cell.out_point);
-                        continue;
-                    }
                 }
 
                 let (sudt_amount, type_hash) = match opt_sudt_type_script.as_ref() {
-                    Some(h) if h.hash() != CKB_SUDT_SCRIPT_ARGS => {
-                        (parse_sudt_amount(&cell).expect("sudt amount"), h.hash())
-                    }
-                    _ => (0, CKB_SUDT_SCRIPT_ARGS),
+                    Some(h) => match parse_sudt_amount(&cell) {
+                        Ok(amount) => (amount, CustodianTypeHash::Sudt(h.hash())),
+                        Err(_) => {
+                            log::error!("invalid sudt amount, out_point: {:?}", cell.out_point);
+                            continue;
+                        }
+                    },
+                    _ => (0, CustodianTypeHash::Ckb),
                 };
 
-                // We'll try to cache up to max_custodian_cells different sudt custodians
-                if type_hash != CKB_SUDT_SCRIPT_ARGS
-                    && !withdrawals_amount.sudt.contains_key(&type_hash)
+                // Only cache up to `max_custodian_cells` different type of sudts(include withdrawal
+                // sudts)
+                if type_hash.is_sudt()
+                    && !withdrawals_amount.sudt.contains_key(&type_hash.raw())
                     && sudt_candidates.len() > max_custodian_cells
                 {
                     continue;
@@ -856,50 +854,51 @@ impl RPCClient {
                     capacity: info.output.capacity().unpack(),
                     amount: sudt_amount,
                     info,
-                    type_hash,
                 };
 
-                // Descend by sudt amount, then capacity
-                // NOTE: ckb custodian amount is always zero
+                // Store custodian cell in binary heap, sort by amount and capacity in reverse
+                // ordering. Minimal amount/capacity custodian cell get popped first.
                 let custodians = match type_hash {
-                    CKB_SUDT_SCRIPT_ARGS => &mut ckb_candidates,
-                    _ => sudt_candidates
-                        .entry(custodian_cell.type_hash)
+                    CustodianTypeHash::Ckb => &mut ckb_candidates,
+                    CustodianTypeHash::Sudt(raw_hash) => sudt_candidates
+                        .entry(raw_hash)
                         .or_insert_with(CandidateCustodians::<Reverse<_>>::default),
                 };
 
-                candidate_cells += 1;
-                candidate_capacity =
-                    candidate_capacity.saturating_add(custodian_cell.capacity as u128);
-                custodians.push(type_hash, Reverse(custodian_cell));
+                // For every custodian, we only cache to `max_custodian_cells` cells.
+                if custodians.cells.len() < max_custodian_cells {
+                    let custodian_capacity = custodian_cell.capacity as u128;
+                    if let Err(AmountOverflow) = custodians.push(type_hash, Reverse(custodian_cell))
+                    {
+                        continue;
+                    }
 
-                // Drop minimal amount/capacity custodian
-                if custodians.cells.len() > max_custodian_cells {
-                    let min = custodians.pop().expect("minimal custodian");
-                    candidate_cells -= 1;
-                    candidate_capacity = candidate_capacity.saturating_sub(min.capacity as u128);
-                }
+                    candidate_cells += 1;
+                    candidate_capacity = candidate_capacity.saturating_add(custodian_capacity);
 
-                // Already fulfilled
-                if custodians.fulfilled || custodians.type_hash == CKB_SUDT_SCRIPT_ARGS {
-                    continue;
-                }
+                    // Skip sudt fulfilled check if already fulfilled
+                    if custodians.fulfilled || custodians.type_hash.is_ckb() {
+                        continue;
+                    }
 
-                let withdrawal_amount = match withdrawals_amount.sudt.get(&type_hash) {
-                    Some(amount) => amount,
-                    None => continue,
-                };
-                custodians.withdrawal = true;
-
-                if custodians.amount >= *withdrawal_amount {
-                    custodians.fulfilled = true;
-                    candidate_fulfilled_sudts += 1;
+                    // Check whether collected sudt amount fulfill withdrawal requests
+                    match withdrawals_amount.sudt.get(&type_hash.raw()) {
+                        Some(withdrawal_amount) => {
+                            // Mark withdrawal custodians
+                            custodians.withdrawal = true;
+                            if custodians.amount >= *withdrawal_amount {
+                                custodians.fulfilled = true;
+                            }
+                        }
+                        None => continue,
+                    }
                 }
             }
         }
 
+        // Reverse ckb binary heap, sort by capacity, bigger one comes first.
         let ckb_candidates = ckb_candidates.reverse();
-        // Sort sudt custodians, descend by fulfilled, capacity, amount, cells
+        // Reverse sudt binary heap, sort by fulfilled, withdrawal, capacity, amount, cell_len.
         let sudt_candidates: BinaryHeap<CandidateCustodians<_>> = sudt_candidates
             .into_iter()
             .map(|(_, reverse_custodians)| reverse_custodians.reverse())
@@ -907,46 +906,45 @@ impl RPCClient {
 
         let mut collected = CollectedCustodianCells::default();
         let mut fulfilled_sudt = 0usize;
-        let mut collected_cells = 0usize;
 
         // Fill ckb custodians first since we need capacity everywhere
         let mut ckb_remain = ckb_candidates.cells.into_iter();
         for cell in &mut ckb_remain {
-            if collected_cells > max_custodian_cells || collected.capacity >= required_capacity {
+            if collected.cells_info.len() > max_custodian_cells
+                || collected.capacity >= required_capacity
+            {
                 break;
             }
 
             collected.capacity = collected.capacity.saturating_add(cell.capacity as u128);
             collected.cells_info.push(cell.info);
-            collected_cells += 1;
         }
 
-        let mut sudt_remains_map = HashMap::new();
-        'done: for custodians in sudt_candidates {
+        // Fill sudt custodians for withdrawal requests
+        let mut sudt_candidates = sudt_candidates.into_iter();
+        'fill_for_withdrawals: for mut custodians in &mut sudt_candidates {
             let mut sudt_remains = custodians.cells.into_iter();
             for cell in &mut sudt_remains {
-                if collected_cells > max_custodian_cells
+                if collected.cells_info.len() > max_custodian_cells
                     || (collected.capacity >= required_capacity
                         && fulfilled_sudt == withdrawals_amount.sudt.len())
                 {
-                    if sudt_remains.len() != 0 {
-                        sudt_remains_map
-                            .insert(custodians.type_hash, (custodians.withdrawal, sudt_remains));
-                    }
-                    break 'done;
+                    custodians.cells = sudt_remains.collect();
+                    break 'fill_for_withdrawals;
                 }
 
                 collected.capacity = collected.capacity.saturating_add(cell.capacity as u128);
                 collected.cells_info.push(cell.info.clone());
-                collected_cells += 1;
 
                 let (collected_amount, _) = {
-                    let sudt = collected.sudt.entry(custodians.type_hash);
+                    let sudt = collected.sudt.entry(custodians.type_hash.raw());
                     sudt.or_insert((0, cell.info.output.type_().to_opt().unwrap_or_default()))
                 };
-                *collected_amount = collected_amount.saturating_add(cell.amount);
+                *collected_amount = collected_amount
+                    .checked_add(cell.amount)
+                    .expect("already check overflow");
 
-                let withdrawal_amount = withdrawals_amount.sudt.get(&custodians.type_hash);
+                let withdrawal_amount = withdrawals_amount.sudt.get(&custodians.type_hash.raw());
                 if Some(&*collected_amount) >= withdrawal_amount {
                     fulfilled_sudt += 1;
                     break;
@@ -954,41 +952,46 @@ impl RPCClient {
             }
         }
 
-        // Defragment custodians
+        // Now if we still have room then fill remain custodians for defragment
         // Ckb first
         for cell in ckb_remain {
-            if collected_cells > max_custodian_cells {
+            if collected.cells_info.len() > max_custodian_cells {
                 break;
             }
 
             collected.capacity = collected.capacity.saturating_add(cell.capacity as u128);
             collected.cells_info.push(cell.info);
-            collected_cells += 1;
         }
 
-        'defragment_done: for (type_hash, (is_withdrawal, sudt_remains)) in sudt_remains_map {
-            if !is_withdrawal
-                && (sudt_remains.len() < 3
+        'fill_for_defragment: for custodians in &mut sudt_candidates {
+            let sudt_remains = custodians.cells.into_iter();
+            let collected_cells = collected.cells_info.len();
+
+            // Withdrawal sudt custodians should be filled through `fill_for_withdrawals`, so
+            // defragment them first.
+            if !custodians.withdrawal
+                && (sudt_remains.len() < 3 // Few custodians to combine
                     || (max_custodian_cells.saturating_sub(collected_cells) == 1))
             {
                 continue;
             }
 
             for cell in sudt_remains {
-                if collected_cells > max_custodian_cells {
-                    break 'defragment_done;
+                if collected.cells_info.len() > max_custodian_cells {
+                    break 'fill_for_defragment;
                 }
 
                 collected.capacity = collected.capacity.saturating_add(cell.capacity as u128);
                 collected.cells_info.push(cell.info.clone());
-                collected_cells += 1;
 
                 let (collected_amount, _) = {
-                    let sudt = collected.sudt.entry(type_hash);
+                    let sudt = collected.sudt.entry(custodians.type_hash.raw());
                     let script = cell.info.output.type_().to_opt().unwrap_or_default();
                     sudt.or_insert((0, script))
                 };
-                *collected_amount = collected_amount.saturating_add(cell.amount);
+                *collected_amount = collected_amount
+                    .checked_add(cell.amount)
+                    .expect("already check overflow");
             }
         }
 
@@ -1554,11 +1557,33 @@ impl RPCClient {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+enum CustodianTypeHash {
+    Ckb,
+    Sudt([u8; 32]),
+}
+
+impl CustodianTypeHash {
+    fn is_ckb(&self) -> bool {
+        matches!(self, CustodianTypeHash::Ckb)
+    }
+
+    fn is_sudt(&self) -> bool {
+        matches!(self, CustodianTypeHash::Sudt(_))
+    }
+
+    fn raw(&self) -> [u8; 32] {
+        match self {
+            CustodianTypeHash::Ckb => unreachable!("no hash for ckb"),
+            CustodianTypeHash::Sudt(hash) => *hash,
+        }
+    }
+}
+
 struct CustodianCell {
     capacity: u64,
     amount: u128,
     info: CellInfo,
-    type_hash: [u8; 32],
 }
 
 // Sort by amount, then capacity
@@ -1587,25 +1612,38 @@ impl PartialEq for CustodianCell {
 
 impl Eq for CustodianCell {}
 
+struct AmountOverflow;
+
 struct CandidateCustodians<T: Ord> {
     fulfilled: bool,
     withdrawal: bool,
     capacity: u128,
     amount: u128,
-    type_hash: [u8; 32],
+    type_hash: CustodianTypeHash,
     cell_len: usize,
     cells: BinaryHeap<T>,
 }
 
 impl CandidateCustodians<Reverse<CustodianCell>> {
-    fn push(&mut self, type_hash: [u8; 32], reverse_cell: Reverse<CustodianCell>) {
+    fn push(
+        &mut self,
+        type_hash: CustodianTypeHash,
+        reverse_cell: Reverse<CustodianCell>,
+    ) -> Result<(), AmountOverflow> {
+        self.amount = {
+            let amount = reverse_cell.0.amount;
+            self.amount.checked_add(amount).ok_or(AmountOverflow)?
+        };
+        self.capacity = {
+            let capacity = reverse_cell.0.capacity as u128;
+            self.capacity.saturating_add(capacity)
+        };
+
         self.type_hash = type_hash;
-        self.capacity = self
-            .capacity
-            .saturating_add(reverse_cell.0.capacity as u128);
-        self.amount = self.amount.saturating_add(reverse_cell.0.amount);
         self.cells.push(reverse_cell);
         self.cell_len = self.cells.len();
+
+        Ok(())
     }
 
     fn pop(&mut self) -> Option<CustodianCell> {
@@ -1640,7 +1678,7 @@ impl<T: Ord> Default for CandidateCustodians<T> {
             capacity: 0,
             amount: 0,
             cell_len: 0,
-            type_hash: [0u8; 32],
+            type_hash: CustodianTypeHash::Ckb,
             cells: BinaryHeap::new(),
         }
     }
@@ -1649,6 +1687,11 @@ impl<T: Ord> Default for CandidateCustodians<T> {
 impl<T: Ord> Ord for CandidateCustodians<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         let mut ordering = (self.fulfilled as u8).cmp(&(other.fulfilled as u8));
+        if !matches!(ordering, Ordering::Equal) {
+            return ordering;
+        }
+
+        ordering = (self.withdrawal as u8).cmp(&(other.withdrawal as u8));
         if !matches!(ordering, Ordering::Equal) {
             return ordering;
         }
@@ -1676,6 +1719,7 @@ impl<T: Ord> PartialOrd for CandidateCustodians<T> {
 impl<T: Ord> PartialEq for CandidateCustodians<T> {
     fn eq(&self, other: &Self) -> bool {
         self.fulfilled == other.fulfilled
+            && self.withdrawal == other.withdrawal
             && self.amount == other.amount
             && self.capacity == other.capacity
             && self.cell_len == other.cell_len
