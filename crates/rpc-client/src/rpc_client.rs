@@ -900,6 +900,17 @@ impl RPCClient {
             }
         }
 
+        // No withdrawals, check whether we have custodians to defragment
+        if withdrawals_amount.capacity == 0 {
+            sudt_candidates = sudt_candidates
+                .into_iter()
+                .filter(|(_, candidates)| candidates.cells.len() > 5)
+                .collect();
+            if sudt_candidates.is_empty() || ckb_candidates.cells.len() <= 5 {
+                return Ok(QueryResult::NotEnough(CollectedCustodianCells::default()));
+            }
+        }
+
         // Reverse ckb binary heap, sort by capacity, bigger one comes first.
         let ckb_candidates = ckb_candidates.reverse();
         // Reverse sudt binary heap, sort by fulfilled, withdrawal, capacity, amount, cell_len.
