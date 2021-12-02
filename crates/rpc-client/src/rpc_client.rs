@@ -730,6 +730,10 @@ impl RPCClient {
         Ok((collected, collected_block_hashes))
     }
 
+    // This function try to fulfilled custodians within given capped cell limit.
+    // It will cache up to `max_custodian_cells` different type of sudt custodians(include
+    // withdrawals). Then fill ckb and withdrawal sudt. If there are rooms for custodians
+    // to combine, it will fill ckb, withdrawal sudts, then remain cached sudts.
     pub async fn query_finalized_custodian_capped_cells(
         &self,
         withdrawals_amount: &WithdrawalsAmount,
