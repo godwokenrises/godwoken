@@ -28,6 +28,11 @@ pub async fn query_finalized_custodian_capped_cells(
     last_finalized_block_number: u64,
     max_custodian_cells: usize,
 ) -> Result<QueryResult<CollectedCustodianCells>> {
+    log::info!(
+        "[collect custodian cell] start max_custodian_cells: {}",
+        max_custodian_cells
+    );
+
     let parse_sudt_amount = |cell: &Cell| -> Result<u128> {
         if cell.output.type_.is_none() {
             return Err(anyhow!("no a sudt cell"));
@@ -57,6 +62,12 @@ pub async fn query_finalized_custodian_capped_cells(
         || candidate_cells < max_custodian_cells
     {
         let cells: Pagination<Cell> = collector.get_cells(&search_key, cursor)?;
+        log::info!(
+            "collect custodian cells from indexer {}, candidate cell {} max_cell {}",
+            cells.objects.len(),
+            candidate_cells,
+            max_custodian_cells
+        );
 
         if cells.last_cursor.is_empty() {
             break;
@@ -67,10 +78,14 @@ pub async fn query_finalized_custodian_capped_cells(
             let args = cell.output.lock.args.clone().into_bytes();
             let custodian_lock_args = match CustodianLockArgsReader::verify(&args[32..], false) {
                 Ok(()) => CustodianLockArgs::new_unchecked(args.slice(32..)),
-                Err(_) => continue,
+                Err(_) => {
+                    log::info!("cell fail to parse args");
+                    continue;
+                }
             };
 
             if custodian_lock_args.deposit_block_number().unpack() > last_finalized_block_number {
+                log::info!("cell fail to check finalize time");
                 continue;
             }
 
@@ -86,6 +101,7 @@ pub async fn query_finalized_custodian_capped_cells(
                 if sudt_type_script.code_hash() != l1_sudt_script_type_hash
                     || sudt_type_script.hash_type() != ScriptHashType::Type.into()
                 {
+                    log::info!("fail to check l1 sudt");
                     continue;
                 }
             }
@@ -107,6 +123,7 @@ pub async fn query_finalized_custodian_capped_cells(
                 && !withdrawals_amount.sudt.contains_key(&type_hash.raw())
                 && sudt_candidates.len() > max_custodian_cells
             {
+                log::info!("fail to check sudt candidates");
                 continue;
             }
 
@@ -128,6 +145,7 @@ pub async fn query_finalized_custodian_capped_cells(
 
             let custodian_capacity = custodian_cell.capacity as u128;
             if let Err(AmountOverflow) = custodians.push(type_hash, Reverse(custodian_cell)) {
+                log::info!("sudt amount overflow");
                 continue;
             }
             candidate_cells += 1;
@@ -143,6 +161,11 @@ pub async fn query_finalized_custodian_capped_cells(
 
             // Skip sudt fulfilled check if already fulfilled
             if custodians.fulfilled || custodians.type_hash.is_ckb() {
+                log::info!(
+                    "fulfilled {}, is_ckb {}",
+                    custodians.fulfilled,
+                    custodians.type_hash.is_ckb()
+                );
                 continue;
             }
 
@@ -156,6 +179,8 @@ pub async fn query_finalized_custodian_capped_cells(
             }
         }
     }
+
+    log::info!("phase 1, candidate cells: {}", candidate_cells);
 
     // No withdrawals, check whether we have custodians to defragment
     if withdrawals_amount.capacity == 0 {
@@ -272,8 +297,18 @@ pub async fn query_finalized_custodian_capped_cells(
     }
 
     if fulfilled_sudt == withdrawals_amount.sudt.len() && collected.capacity >= required_capacity {
+        log::info!(
+            "[collect custodian cell] collect enough cells, capacity: {}, cells: {}",
+            collected.capacity,
+            collected.cells_info.len()
+        );
         Ok(QueryResult::Full(collected))
     } else {
+        log::info!(
+            "[collect custodian cell] collect not enough cells, capacity: {}, cells: {}",
+            collected.capacity,
+            collected.cells_info.len()
+        );
         Ok(QueryResult::NotEnough(collected))
     }
 }
