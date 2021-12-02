@@ -869,28 +869,32 @@ impl RPCClient {
                         .or_insert_with(CandidateCustodians::<Reverse<_>>::default),
                 };
 
+                let custodian_capacity = custodian_cell.capacity as u128;
+                if let Err(AmountOverflow) = custodians.push(type_hash, Reverse(custodian_cell)) {
+                    continue;
+                }
+                candidate_cells += 1;
+                candidate_capacity = candidate_capacity.saturating_add(custodian_capacity);
+
                 // For every custodian, we only cache to `max_custodian_cells` cells.
-                if custodians.cells.len() < max_custodian_cells {
-                    let custodian_capacity = custodian_cell.capacity as u128;
-                    if let Err(AmountOverflow) = custodians.push(type_hash, Reverse(custodian_cell))
-                    {
-                        continue;
-                    }
+                // Replace minimal amount/capacity with bigger one.
+                if custodians.cells.len() > max_custodian_cells {
+                    let min = custodians.pop().expect("minimal custodian");
+                    candidate_cells -= 1;
+                    candidate_capacity = candidate_capacity.saturating_sub(min.capacity as u128);
+                }
 
-                    candidate_cells += 1;
-                    candidate_capacity = candidate_capacity.saturating_add(custodian_capacity);
+                // Skip sudt fulfilled check if already fulfilled
+                if custodians.fulfilled || custodians.type_hash.is_ckb() {
+                    continue;
+                }
 
-                    // Skip sudt fulfilled check if already fulfilled
-                    if custodians.fulfilled || custodians.type_hash.is_ckb() {
-                        continue;
-                    }
-
-                    // Check whether collected sudt amount fulfill withdrawal requests
-                    if let Some(withdrawal_amount) = withdrawals_amount.sudt.get(&type_hash.raw()) {
-                        custodians.withdrawal = true;
-                        if custodians.amount >= *withdrawal_amount {
-                            custodians.fulfilled = true;
-                        }
+                // Check whether collected sudt amount fulfill withdrawal requests
+                if let Some(withdrawal_amount) = withdrawals_amount.sudt.get(&type_hash.raw()) {
+                    // Mark withdrawal custodians
+                    custodians.withdrawal = true;
+                    if custodians.amount >= *withdrawal_amount {
+                        custodians.fulfilled = true;
                     }
                 }
             }
