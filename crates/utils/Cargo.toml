@@ -11,6 +11,8 @@ gw-poa = { path = "../poa" }
 gw-config = { path = "../config" }
 gw-common = { path = "../common" }
 gw-rpc-client = { path = "../rpc-client" }
+gw-generator = { path = "../generator" }
+log = "0.4"
 anyhow = "1.0"
 faster-hex = "0.4"
 ckb-crypto = "0.38.0"

@@ -127,11 +127,13 @@ impl BenchExecutionEnvironment {
         let backend_manage = {
             let configs = vec![
                 BackendConfig {
+                    backend_type: BackendType::Meta,
                     validator_path: META_VALIDATOR_PATH.into(),
                     generator_path: META_GENERATOR_PATH.into(),
                     validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
                 },
                 BackendConfig {
+                    backend_type: BackendType::Sudt,
                     validator_path: SUDT_VALIDATOR_PATH.into(),
                     generator_path: SUDT_GENERATOR_PATH.into(),
                     validator_script_type_hash: SUDT_VALIDATOR_SCRIPT_TYPE_HASH.into(),

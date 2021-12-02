@@ -1,7 +1,8 @@
 use crate::blockchain::Script;
 use anyhow::{anyhow, Error as JsonError};
 use ckb_fixed_hash::H256;
-use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32, Uint64};
+pub use ckb_jsonrpc_types::Uint32;
+use ckb_jsonrpc_types::{JsonBytes, Uint128, Uint64};
 use gw_types::{bytes::Bytes, offchain, packed, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
@@ -864,6 +865,15 @@ impl From<packed::Fee> for Fee {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct FeeConfig {
+    pub fee_rates: std::collections::HashMap<Uint32, Uint64>,
+    pub meta_contract_fee_weight: Uint32,
+    pub sudt_transfer_fee_weight: Uint32,
+    pub withdraw_fee_weight: Uint32,
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct L2BlockCommittedInfo {
@@ -884,6 +894,17 @@ impl From<L2BlockCommittedInfo> for packed::L2BlockCommittedInfo {
             .block_hash(block_hash.pack())
             .transaction_hash(transaction_hash.pack())
             .build()
+    }
+}
+
+impl From<packed::L2BlockCommittedInfo> for L2BlockCommittedInfo {
+    fn from(data: packed::L2BlockCommittedInfo) -> L2BlockCommittedInfo {
+        let number: u64 = data.number().unpack();
+        L2BlockCommittedInfo {
+            number: number.into(),
+            block_hash: data.block_hash().unpack(),
+            transaction_hash: data.transaction_hash().unpack(),
+        }
     }
 }
 

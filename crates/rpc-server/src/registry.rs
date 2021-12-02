@@ -4,15 +4,16 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::OffChainMockContext;
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{DebugConfig, MemPoolConfig, NodeMode, RPCMethods, RPCServerConfig};
+use gw_config::{BackendType, DebugConfig, MemPoolConfig, NodeMode, RPCMethods, RPCServerConfig};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
     debugger::{DumpChallengeTarget, ReprMockTransaction},
     godwoken::{
-        BackendInfo, ErrorTxReceipt, GlobalState, L2BlockStatus, L2BlockView, L2BlockWithStatus,
-        L2TransactionStatus, L2TransactionWithStatus, NodeInfo, RunResult, TxReceipt,
+        BackendInfo, ErrorTxReceipt, FeeConfig, GlobalState, L2BlockCommittedInfo, L2BlockStatus,
+        L2BlockView, L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, NodeInfo,
+        RunResult, TxReceipt,
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
@@ -155,6 +156,7 @@ impl Registry {
             .with_method("gw_get_block_hash", get_block_hash)
             .with_method("gw_get_block", get_block)
             .with_method("gw_get_block_by_number", get_block_by_number)
+            .with_method("gw_get_block_committed_info", get_block_committed_info)
             .with_method("gw_get_balance", get_balance)
             .with_method("gw_get_storage_at", get_storage_at)
             .with_method(
@@ -177,7 +179,8 @@ impl Registry {
                 "gw_compute_l2_sudt_script_hash",
                 compute_l2_sudt_script_hash,
             )
-            .with_method("gw_get_node_info", get_node_info);
+            .with_method("gw_get_node_info", get_node_info)
+            .with_method("gw_get_fee_config", get_fee_config);
 
         if self.node_mode != NodeMode::ReadOnly {
             server = server
@@ -325,6 +328,20 @@ async fn get_transaction(
             status,
         },
     }))
+}
+
+async fn get_block_committed_info(
+    Params((block_hash,)): Params<(JsonH256,)>,
+    store: Data<Store>,
+) -> Result<Option<L2BlockCommittedInfo>> {
+    let block_hash = to_h256(block_hash);
+    let db = store.begin_transaction();
+    let committed_info = match db.get_l2block_committed_info(&block_hash)? {
+        Some(committed_info) => committed_info,
+        None => return Ok(None),
+    };
+
+    Ok(Some(committed_info.into()))
 }
 
 async fn get_block(
@@ -569,10 +586,30 @@ async fn execute_raw_l2transaction(
     Ok(run_result.into())
 }
 
+fn get_backend_type(
+    state: gw_store::state::mem_pool_state_db::MemPoolStateTree,
+    generator: Data<Generator>,
+    raw_l2tx: &packed::RawL2Transaction,
+) -> Result<BackendType, RpcError> {
+    let to_id = raw_l2tx.to_id().unpack();
+    let script_hash = state.get_script_hash(to_id)?;
+    let backend_type = generator
+        .load_backend(&state, &script_hash)
+        .map(|backend| backend.backend_type)
+        .ok_or(RpcError::Full {
+            code: INVALID_PARAM_ERR_CODE,
+            message: TransactionError::BackendNotFound { script_hash }.to_string(),
+            data: Some(Box::new("Can't find backend for receiver account")),
+        })?;
+    Ok(backend_type)
+}
+
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     store: Data<Store>,
     mem_pool_batch: Data<Option<MemPoolBatch>>,
+    generator: Data<Generator>,
+    mem_pool_config: Data<MemPoolConfig>,
 ) -> Result<JsonH256, RpcError> {
     let mem_pool_batch = match &*mem_pool_batch {
         Some(mem_pool_batch) => mem_pool_batch,
@@ -581,35 +618,48 @@ async fn submit_l2transaction(
 
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
-    let tx_hash = to_jsonh256(tx.hash().into());
+
+    // fetch mem-pool state
+    let db = store.begin_transaction();
+    let tree = db.mem_pool_state_tree()?;
+
     // check sender's nonce
-    {
-        // fetch mem-pool state
-        let db = store.begin_transaction();
-        let tree = db.mem_pool_state_tree()?;
-        // sender_id
-        let sender_id = tx.raw().from_id().unpack();
-        let sender_nonce: u32 = tree.get_nonce(sender_id)?;
-        let tx_nonce: u32 = tx.raw().nonce().unpack();
-        if sender_nonce != tx_nonce {
-            let err = TransactionError::Nonce {
-                account_id: sender_id,
-                expected: sender_nonce,
-                actual: tx_nonce,
-            };
-            log::info!(
-                "[RPC] reject to submit tx {:?}, err: {}",
-                faster_hex::hex_string(&tx.hash()),
-                err
-            );
-            return Err(RpcError::Full {
-                code: INVALID_NONCE_ERR_CODE,
-                message: err.to_string(),
-                data: None,
-            });
-        }
+    let sender_id = tx.raw().from_id().unpack();
+    let sender_nonce: u32 = tree.get_nonce(sender_id)?;
+    let tx_nonce: u32 = tx.raw().nonce().unpack();
+    if sender_nonce != tx_nonce {
+        let err = TransactionError::Nonce {
+            account_id: sender_id,
+            expected: sender_nonce,
+            actual: tx_nonce,
+        };
+        log::info!(
+            "[RPC] reject to submit tx {:?}, err: {}",
+            faster_hex::hex_string(&tx.hash()),
+            err
+        );
+        return Err(RpcError::Full {
+            code: INVALID_NONCE_ERR_CODE,
+            message: err.to_string(),
+            data: None,
+        });
     }
 
+    // check tx fee or gasPrice of the l2tx
+    let raw_l2tx = tx.raw();
+    let backend_type = get_backend_type(tree, generator, &raw_l2tx)?;
+    gw_utils::fee::check_l2tx_fee(&mem_pool_config.fee_config, &raw_l2tx, backend_type).map_err(
+        |err| {
+            log::debug!("check_fee_ret err: {}", err);
+            RpcError::Full {
+                code: INVALID_PARAM_ERR_CODE,
+                message: err.to_string(),
+                data: None,
+            }
+        },
+    )?;
+
+    let tx_hash = to_jsonh256(tx.hash().into());
     match mem_pool_batch.try_push_transaction(tx) {
         Ok(_) => Ok(tx_hash),
         Err(BatchError::Shutdown) => Err(RpcError::Provided {
@@ -627,6 +677,7 @@ async fn submit_l2transaction(
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
     mem_pool_batch: Data<Option<MemPoolBatch>>,
+    mem_pool_config: Data<MemPoolConfig>,
 ) -> Result<(), RpcError> {
     let mem_pool_batch = match &*mem_pool_batch {
         Some(mem_pool_batch) => mem_pool_batch,
@@ -636,6 +687,24 @@ async fn submit_withdrawal_request(
     };
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequest::from_slice(&withdrawal_bytes)?;
+
+    // Check Fee
+    let fee_sudt_id = withdrawal.raw().fee().sudt_id().unpack();
+    let fee = withdrawal.raw().fee().amount().unpack();
+    let withdrawal_minimum_fee = mem_pool_config
+        .fee_config
+        .withdrawal_minimum_fee(fee_sudt_id)?;
+    if fee < withdrawal_minimum_fee {
+        let err_msg = format!(
+            "Fee isn't enough, required fee for withdrawal: {}.",
+            withdrawal_minimum_fee
+        );
+        return Err(RpcError::Full {
+            code: INVALID_PARAM_ERR_CODE,
+            message: err_msg,
+            data: None,
+        });
+    }
 
     match mem_pool_batch.try_push_withdrawal_request(withdrawal) {
         Ok(_) => Ok(()),
@@ -842,6 +911,10 @@ async fn get_node_info(backend_info: Data<Vec<BackendInfo>>) -> Result<NodeInfo>
     })
 }
 
+async fn get_fee_config(mem_pool_config: Data<MemPoolConfig>) -> Result<FeeConfig> {
+    Ok(FeeConfig::from(mem_pool_config.fee_config.clone()))
+}
+
 async fn tests_produce_block(
     Params((payload,)): Params<(TestModePayload,)>,
     tests_rpc_impl: Data<BoxedTestsRPCImpl>,
@@ -878,10 +951,7 @@ async fn debug_dump_cancel_challenge_tx(
         let db = chain.store().begin_transaction();
         match db.get_block_hash_by_number(block_number) {
             Ok(Some(hash)) => Ok(hash),
-            Ok(None) => Err(RpcError::Provided {
-                code: INVALID_PARAM_ERR_CODE,
-                message: "block hash not found",
-            }),
+            Ok(None) => Err(invalid_param_err("block hash not found")),
             Err(err) => Err(RpcError::Full {
                 code: INTERNAL_ERROR_ERR_CODE,
                 message: err.to_string(),

@@ -123,7 +123,7 @@ pub fn update_cell<P: AsRef<Path>>(
         hex::encode(tx.hash()),
         tx.as_slice().len()
     );
-    println!("{}", update_message);
+    println!("[update_cell] {}", update_message);
     // send transaction
     println!("Unlock cell {}", existed_cell.lock());
     let tx_hash = rpc_client
@@ -134,7 +134,7 @@ pub fn update_cell<P: AsRef<Path>>(
         .map_err(|err| anyhow!("{}", err))?;
     println!("Send tx...");
     wait_for_tx(&mut rpc_client, &tx_hash, 180).map_err(|err| anyhow!("{}", err))?;
-    println!("{}", update_message);
+    println!("[update_cell] {}", update_message);
     println!("Cell is updated!");
     Ok(())
 }

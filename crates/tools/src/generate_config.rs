@@ -7,8 +7,9 @@ use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_config::{
-    BackendConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config, GenesisConfig,
-    NodeMode, RPCClientConfig, RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
+    BackendConfig, BackendType, BlockProducerConfig, ChainConfig, ChallengerConfig, Config,
+    GenesisConfig, NodeMode, RPCClientConfig, RPCServerConfig, StoreConfig, WalletConfig,
+    Web3IndexerConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
@@ -224,6 +225,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
 
     let backends: Vec<BackendConfig> = vec![
         BackendConfig {
+            backend_type: BackendType::Meta,
             validator_path: build_scripts_result.built_scripts["meta_contract_validator"].clone(),
             generator_path: build_scripts_result.built_scripts["meta_contract_generator"].clone(),
             validator_script_type_hash: scripts_deployment
@@ -232,6 +234,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
                 .clone(),
         },
         BackendConfig {
+            backend_type: BackendType::Sudt,
             validator_path: build_scripts_result.built_scripts["l2_sudt_validator"].clone(),
             generator_path: build_scripts_result.built_scripts["l2_sudt_generator"].clone(),
             validator_script_type_hash: scripts_deployment
@@ -240,6 +243,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
                 .clone(),
         },
         BackendConfig {
+            backend_type: BackendType::Polyjuice,
             validator_path: build_scripts_result.built_scripts["polyjuice_validator"].clone(),
             generator_path: build_scripts_result.built_scripts["polyjuice_generator"].clone(),
             validator_script_type_hash: scripts_deployment

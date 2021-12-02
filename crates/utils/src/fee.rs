@@ -1,13 +1,94 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::transaction_skeleton::TransactionSkeleton;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use gw_config::{BackendType, FeeConfig};
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use gw_types::{
     offchain::InputCellInfo,
-    packed::{CellInput, CellOutput, Script},
+    packed::{
+        CellInput, CellOutput, MetaContractArgs, MetaContractArgsUnion, SUDTArgs, SUDTArgsUnion,
+        Script,
+    },
     prelude::*,
 };
+use std::convert::TryInto;
+
+/// check if the fee or fee_rate/gasPrice of the L2Transaction is enough
+/// - check the fee of MetaContract::CreateAccount
+/// - check the fee of SUDTTransfer
+/// - check the gasPrice of Polyjuice L2TX
+///     gasPrice: Value of the gas for a transaction
+///
+/// @return if the fee is too low for acceptance, return an anyhow ad-hoc Error
+pub fn check_l2tx_fee(
+    fee_config: &FeeConfig,
+    raw_l2tx: &gw_types::packed::RawL2Transaction,
+    backend_type: BackendType,
+) -> Result<()> {
+    let raw_l2tx_args = raw_l2tx.args().raw_data();
+    match backend_type {
+        BackendType::Meta => {
+            let meta_contract_args = MetaContractArgs::from_slice(raw_l2tx_args.as_ref())?;
+            let fee_struct = match meta_contract_args.to_enum() {
+                MetaContractArgsUnion::CreateAccount(args) => args.fee(),
+            };
+            let sudt_id = fee_struct.sudt_id().unpack();
+            let meta_contract_base_fee = fee_config.meta_contract_minimum_fee(sudt_id)?;
+            if fee_struct.amount().unpack() < meta_contract_base_fee {
+                let err_msg = format!(
+                    "Fee isn't enough, required meta_contract fee: {}.",
+                    meta_contract_base_fee
+                );
+                return Err(anyhow!(err_msg));
+            }
+            Ok(())
+        }
+        BackendType::Sudt => {
+            let sudt_id = raw_l2tx.to_id().unpack();
+            if !fee_config.is_supported_sudt(sudt_id) {
+                return Err(anyhow!(
+                    "Simple UDT is unsupported. Please use ERC20 transfer to instead."
+                ));
+            }
+            let sudt_transfer_base_fee = fee_config.sudt_transfer_minimum_fee(sudt_id)?;
+            let sudt_args = SUDTArgs::from_slice(raw_l2tx_args.as_ref())?;
+            let fee_amount = match sudt_args.to_enum() {
+                SUDTArgsUnion::SUDTQuery(_) => 0u128,
+                SUDTArgsUnion::SUDTTransfer(args) => args.fee().unpack(),
+            };
+            if fee_amount < sudt_transfer_base_fee {
+                let err_msg = format!(
+                    "Fee isn't enough, required sudt_transfer fee: {}.",
+                    sudt_transfer_base_fee
+                );
+                return Err(anyhow!(err_msg));
+            }
+            Ok(())
+        }
+        BackendType::Polyjuice => {
+            // verify the args of a polyjuice L2TX
+            // https://github.com/nervosnetwork/godwoken-polyjuice/blob/aee95c0/README.md#polyjuice-arguments
+            if raw_l2tx_args.len() < (8 + 8 + 16 + 16 + 4) {
+                return Err(anyhow!("invalid PolyjuiceArgs"));
+            }
+            // Note: Polyjuice use CKB_SUDT to pay fee by default
+            let poly_args = raw_l2tx_args.as_ref();
+            let gas_price = u128::from_le_bytes(poly_args[16..32].try_into()?);
+            let min_gas_price =
+                fee_config.polyjuice_minimum_gas_price(gw_common::builtins::CKB_SUDT_ACCOUNT_ID)?;
+            if gas_price < min_gas_price {
+                let err_msg = format!(
+                    "Gas Price is too low, required gas_price {}.",
+                    min_gas_price
+                );
+                return Err(anyhow!(err_msg));
+            }
+            Ok(())
+        }
+        BackendType::Unknown => Err(anyhow!("Found Unknown BackendType")),
+    }
+}
 
 /// Calculate tx fee
 /// TODO accept fee rate args

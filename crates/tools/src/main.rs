@@ -1,3 +1,5 @@
+#![allow(clippy::mutable_key_type)]
+
 mod account;
 mod address;
 mod create_creator_account;
@@ -24,6 +26,7 @@ use account::read_privkey;
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::HttpClient;
 use ckb_sdk::constants::ONE_CKB;
+use ckb_types::prelude::Unpack;
 use clap::{value_t, App, Arg, SubCommand};
 use deploy_genesis::DeployRollupCellArgs;
 use dump_tx::ChallengeBlock;
@@ -32,6 +35,7 @@ use godwoken_rpc::GodwokenRpcClient;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -271,7 +275,7 @@ fn run_cli() -> Result<()> {
                         .long("capacity")
                         .takes_value(true)
                         .required(true)
-                        .help("CKB capacity to deposit"),
+                        .help("CKB capacity to deposit (unit: CKB, format: 123.335)"),
                 )
                 .arg(
                     Arg::with_name("eth-address")
@@ -304,7 +308,7 @@ fn run_cli() -> Result<()> {
                         .long("capacity")
                         .takes_value(true)
                         .required(true)
-                        .help("CKB capacity to withdrawal"),
+                        .help("CKB capacity to withdrawal (unit: CKB, format: 123.335)"),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -331,6 +335,14 @@ fn run_cli() -> Result<()> {
                             "0x0000000000000000000000000000000000000000000000000000000000000000",
                         )
                         .help("l1 sudt script hash, default for withdrawal CKB"),
+                )
+                .arg(
+                    Arg::with_name("fee")
+                        .short("f")
+                        .long("fee")
+                        .takes_value(true)
+                        .default_value("0.0001")
+                        .help("The fee of withdrawal request, default to 0.0001 CKB.")
                 ),
         )
         .subcommand(
@@ -412,7 +424,7 @@ fn run_cli() -> Result<()> {
                         .long("amount")
                         .takes_value(true)
                         .default_value("0")
-                        .help("sUDT amount to transfer, CKB in shannon"),
+                        .help("sUDT amount to transfer (unit: Shannon)"),
                 )
                 .arg(
                     Arg::with_name("fee")
@@ -420,7 +432,7 @@ fn run_cli() -> Result<()> {
                         .long("fee")
                         .takes_value(true)
                         .required(true)
-                        .help("transfer fee"),
+                        .help("transfer fee (unit: Shannon)"),
                 )
                 .arg(
                     Arg::with_name("to")
@@ -453,7 +465,7 @@ fn run_cli() -> Result<()> {
                         .takes_value(true)
                         .required(false)
                         .default_value("0")
-                        .help("transfer fee"),
+                        .help("transfer fee (unit: Shannon)"),
                 )
                 .arg(
                     Arg::with_name("sudt-id")
@@ -788,6 +800,13 @@ fn run_cli() -> Result<()> {
                         .required(true)
                         .help("Custodian script type hash"),
                 )
+                .arg(
+                    Arg::with_name("min-capacity")
+                        .long("min-capacity")
+                        .takes_value(true)
+                        .default_value("0")
+                        .help("Query cells with min capacity(shannon)"),
+                )
         );
 
     let matches = app.clone().get_matches();
@@ -984,6 +1003,7 @@ fn run_cli() -> Result<()> {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let capacity = m.value_of("capacity").unwrap();
             let amount = m.value_of("amount").unwrap();
+            let fee = m.value_of("fee").unwrap();
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
@@ -995,6 +1015,7 @@ fn run_cli() -> Result<()> {
                 privkey_path,
                 capacity,
                 amount,
+                fee,
                 sudt_script_hash,
                 owner_ckb_address,
                 config_path,
@@ -1142,7 +1163,7 @@ fn run_cli() -> Result<()> {
                 }
             };
             if quiet {
-                println!("{}", account_id);
+                println!("[create-sudt-account] {}", account_id);
             }
         }
         ("get-balance", Some(m)) => {
@@ -1336,18 +1357,63 @@ fn run_cli() -> Result<()> {
             let rollup_type_hash = cli_args::to_h256(m.value_of("rollup-type-hash").unwrap())?;
             let custodian_script_type_hash =
                 cli_args::to_h256(m.value_of("custodian-script-type-hash").unwrap())?;
+            let min_capacity: u64 = m.value_of("min-capacity").unwrap_or_default().parse()?;
             let rpc_client = CKBIndexerClient::new(HttpClient::new(indexer_rpc_url)?);
 
-            let total_capacity = stat::query_custodian_ckb(
+            let alias: HashMap<ckb_types::bytes::Bytes, String> = [
+                (
+                    "USDC",
+                    "5c4ac961a2428137f27271cf2af205e5c55156d26d9ac285ed3170e8c4cc1501",
+                ),
+                (
+                    "TAI",
+                    "08430183dda1cbd81912c4762a3006a59e2291d5bd43b48bb7fa7544cace9e4a",
+                ),
+                (
+                    "ETH",
+                    "9657b32fcdc463e13ec9205914fd91c443822a949937ae94add9869e7f2e1de8",
+                ),
+                (
+                    "dCKB",
+                    "e5451c05231e1df43e4b199b5d12dbed820dfbea2769943bb593f874526eeb55",
+                ),
+            ]
+            .iter()
+            .map(|(symbol, script_args)| {
+                (
+                    hex::decode(&script_args).unwrap().into(),
+                    symbol.to_string(),
+                )
+            })
+            .collect();
+
+            let stat = stat::stat_custodian_cells(
                 &rpc_client,
                 &rollup_type_hash.into(),
                 &custodian_script_type_hash.into(),
+                Some(min_capacity),
             )?;
 
-            let ckb = total_capacity / ONE_CKB as u128;
-            let shannon = total_capacity - (ckb * ONE_CKB as u128);
-            log::debug!("Total capacity: {}", total_capacity);
+            let ckb = stat.total_capacity / ONE_CKB as u128;
+            let shannon = stat.total_capacity - (ckb * ONE_CKB as u128);
+            println!("Cells count: {}", stat.cells_count);
             println!("Total custodian: {}.{:0>8} CKB", ckb, shannon);
+            if !stat.sudt_total_amount.is_empty() {
+                println!("========================================");
+            }
+            for (sudt_script, sudt_amount) in stat.sudt_total_amount {
+                let sudt_args: ckb_types::bytes::Bytes = sudt_script.args().unpack();
+                let alias_name = alias
+                    .get(&sudt_args)
+                    .cloned()
+                    .unwrap_or_else(|| "Unknown".to_string());
+                println!(
+                    "Simple UDT ({} {}) amount: {}",
+                    alias_name,
+                    sudt_script.args(),
+                    sudt_amount
+                );
+            }
         }
         _ => {
             app.print_help().expect("print help");

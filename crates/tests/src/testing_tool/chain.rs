@@ -3,7 +3,7 @@
 use gw_block_producer::produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult};
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam, UpdateAction};
 use gw_common::{blake2b::new_blake2b, H256};
-use gw_config::{BackendConfig, ChainConfig, GenesisConfig};
+use gw_config::{BackendConfig, BackendType, ChainConfig, GenesisConfig};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
@@ -71,11 +71,13 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
         rollup_config.l2_sudt_validator_script_type_hash().unpack();
     let configs = vec![
         BackendConfig {
+            backend_type: BackendType::Meta,
             validator_path: META_VALIDATOR_PATH.into(),
             generator_path: META_GENERATOR_PATH.into(),
             validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
         },
         BackendConfig {
+            backend_type: BackendType::Sudt,
             validator_path: SUDT_VALIDATOR_PATH.into(),
             generator_path: SUDT_GENERATOR_PATH.into(),
             validator_script_type_hash: sudt_validator_script_type_hash.into(),
