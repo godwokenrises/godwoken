@@ -849,7 +849,7 @@ impl RPCClient {
             return Ok(QueryResult::NotEnough(collected));
         }
 
-        log::debug!("merge ckb custodians {}", collected_ckb_custodians.len());
+        log::info!("merge ckb custodians {}", collected_ckb_custodians.len());
         for info in collected_ckb_custodians {
             collected.capacity = collected
                 .capacity
@@ -931,7 +931,7 @@ impl RPCClient {
         let sudt_type_scripts = self
             .query_random_sudt_type_script(last_finalized_block_number, MAX_MERGE_SUDTS)
             .await?;
-        log::debug!("sudt merge type scripts {}", sudt_type_scripts.len());
+        log::info!("merge {} random sudt type scripts", sudt_type_scripts.len());
         let mut collected_set: HashSet<_> = {
             let cells = collected.cells_info.iter();
             cells.map(|i| i.out_point.clone()).collect()
@@ -939,7 +939,7 @@ impl RPCClient {
         for sudt_type_script in sudt_type_scripts {
             let query_result = self
                 .query_mergeable_sudt_custodians_cells_by_sudt_type_script(
-                    sudt_type_script,
+                    &sudt_type_script,
                     last_finalized_block_number,
                     remain,
                     &collected_set,
@@ -948,11 +948,19 @@ impl RPCClient {
 
             match query_result {
                 QueryResult::Full(cells_info) => {
-                    log::debug!("merge (full) sudt custodians {}", cells_info.len());
+                    log::info!(
+                        "merge (full) sudt custodians {} {}",
+                        ckb_types::H256(sudt_type_script.hash()),
+                        cells_info.len()
+                    );
                     merge(cells_info, &mut collected_set, &mut collected)
                 }
                 QueryResult::NotEnough(cells_info) if cells_info.len() > 1 => {
-                    log::debug!("merge (not enough) sudt custodians {}", cells_info.len());
+                    log::info!(
+                        "merge (not enough) sudt custodians {} {}",
+                        ckb_types::H256(sudt_type_script.hash()),
+                        cells_info.len()
+                    );
                     merge(cells_info, &mut collected_set, &mut collected)
                 }
                 _ => continue,
@@ -960,7 +968,10 @@ impl RPCClient {
 
             remain = max_cells.saturating_sub(collected.cells_info.len());
             if remain < MIN_MERGE_CELLS {
-                log::debug!("break `MIN_MERGE_CELLS` after merge");
+                log::debug!(
+                    "break `MIN_MERGE_CELLS` after sudt {} merge",
+                    ckb_types::H256(sudt_type_script.hash())
+                );
                 break;
             }
         }
@@ -1628,7 +1639,7 @@ impl RPCClient {
 
     async fn query_mergeable_sudt_custodians_cells_by_sudt_type_script(
         &self,
-        sudt_type_script: Script,
+        sudt_type_script: &Script,
         last_finalized_block_number: u64,
         max_cells: usize,
         exclusions: &HashSet<OutPoint>,
