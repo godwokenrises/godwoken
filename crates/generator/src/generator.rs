@@ -671,12 +671,9 @@ impl Generator {
             );
             let account_id = raw_tx.to_id().unpack();
             let script_hash = state.get_script_hash(account_id)?;
-            let backend = self.load_backend(state, &script_hash).ok_or_else(|| {
-                let script_hash: [u8; 32] = script_hash.into();
-                TransactionError::BackendNotFound {
-                    script_hash: hex::encode(&script_hash),
-                }
-            })?;
+            let backend = self
+                .load_backend(state, &script_hash)
+                .ok_or(TransactionError::BackendNotFound { script_hash })?;
             machine.load_program(&backend.generator, &[])?;
             let t = Instant::now();
             exit_code = machine.run()?;
