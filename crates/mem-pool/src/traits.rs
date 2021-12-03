@@ -19,6 +19,11 @@ pub trait MemPoolProvider {
         rollup_context: RollupContext,
     ) -> Task<Result<CollectedCustodianCells>>;
     fn get_cell(&self, out_point: OutPoint) -> Task<Result<Option<CellWithStatus>>>;
+    fn query_mergeable_custodians(
+        &self,
+        collected_custodians: CollectedCustodianCells,
+        last_finalized_block_number: u64,
+    ) -> Task<Result<CollectedCustodianCells>>;
 }
 
 pub trait MemPoolErrorTxHandler {

@@ -24,6 +24,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use rand::prelude::*;
 use serde_json::json;
 
 use std::{collections::HashSet, time::Duration};
@@ -754,12 +755,264 @@ impl RPCClient {
         Ok((collected, collected_block_hashes))
     }
 
+    pub async fn query_mergeable_ckb_custodians_cells(
+        &self,
+        mut collected: CollectedCustodianCells,
+        last_finalized_block_number: u64,
+        max_cells: usize,
+    ) -> Result<QueryResult<CollectedCustodianCells>> {
+        let rollup_context = &self.rollup_context;
+
+        let custodian_lock = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .build();
+        let filter = Some(SearchKeyFilter {
+            script: None,
+            block_range: None,
+            output_data_len_range: Some([0.into(), 0.into()]),
+            output_capacity_range: None,
+        });
+        let search_key = SearchKey {
+            script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
+            script_type: ScriptType::Lock,
+            filter,
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut collected_set: HashSet<_> = {
+            let cells = collected.cells_info.iter();
+            cells.map(|i| i.out_point.clone()).collect()
+        };
+
+        let mut cursor = None;
+        while collected.cells_info.len() < max_cells {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer
+                    .client()
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            if cells.last_cursor.is_empty() {
+                break;
+            }
+            cursor = Some(cells.last_cursor);
+
+            for cell in cells.objects.into_iter() {
+                if collected.cells_info.len() >= max_cells {
+                    return Ok(QueryResult::Full(collected));
+                }
+
+                let info = to_cell_info(cell);
+                if collected_set.contains(&info.out_point) {
+                    continue;
+                }
+
+                let args: Bytes = info.output.lock().args().unpack();
+                let custodian_lock_args = match CustodianLockArgsReader::verify(&args[32..], false)
+                {
+                    Ok(()) => CustodianLockArgs::new_unchecked(args.slice(32..)),
+                    Err(_) => continue,
+                };
+                if custodian_lock_args.deposit_block_number().unpack() > last_finalized_block_number
+                {
+                    continue;
+                }
+
+                // Collect capacity
+                collected_set.insert(info.out_point.clone());
+                collected.capacity = collected
+                    .capacity
+                    .saturating_add(info.output.capacity().unpack() as u128);
+                collected.cells_info.push(info);
+            }
+        }
+
+        if collected.cells_info.len() < max_cells {
+            Ok(QueryResult::NotEnough(collected))
+        } else {
+            Ok(QueryResult::Full(collected))
+        }
+    }
+
+    pub async fn query_mergeable_sudt_custodians_cells(
+        &self,
+        mut collected: CollectedCustodianCells,
+        last_finalized_block_number: u64,
+        max_cells: usize,
+    ) -> Result<QueryResult<CollectedCustodianCells>> {
+        const MAX_MERGE_SUDTS: usize = 3;
+
+        let rollup_context = &self.rollup_context;
+
+        let parse_sudt_amount = |info: &CellInfo| -> Result<u128> {
+            if info.output.type_().is_none() {
+                return Err(anyhow!("no a sudt cell"));
+            }
+
+            gw_types::packed::Uint128::from_slice(&info.data)
+                .map(|a| a.unpack())
+                .map_err(|e| anyhow!("invalid sudt amount {}", e))
+        };
+
+        let custodian_lock = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .build();
+        let l1_sudt_type = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.l1_sudt_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .build();
+        let filter = Some(SearchKeyFilter {
+            script: Some(ckb_types::packed::Script::new_unchecked(l1_sudt_type.as_bytes()).into()),
+            block_range: None,
+            output_data_len_range: Some([16.into(), u64::MAX.into()]),
+            output_capacity_range: None,
+        });
+        let search_key = SearchKey {
+            script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
+            script_type: ScriptType::Lock,
+            filter,
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut collected_set: HashSet<_> = {
+            let cells = collected.cells_info.iter();
+            cells.map(|i| i.out_point.clone()).collect()
+        };
+        let mut sudt_type_hash_set: HashSet<_> = {
+            let mut rng = rand::thread_rng();
+            let cells = collected.cells_info.iter();
+            let sudts_type = cells.filter_map(|i| i.output.type_().to_opt());
+            let mut sudt_hashes = sudts_type.map(|s| s.hash()).collect::<Vec<_>>();
+            sudt_hashes.shuffle(&mut rng);
+            sudt_hashes.into_iter().take(MAX_MERGE_SUDTS).collect()
+        };
+
+        let mut cursor = None;
+        while collected.cells_info.len() < max_cells {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer
+                    .client()
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            if cells.last_cursor.is_empty() {
+                break;
+            }
+            cursor = Some(cells.last_cursor);
+
+            for cell in cells.objects.into_iter() {
+                if collected.cells_info.len() >= max_cells {
+                    return Ok(QueryResult::Full(collected));
+                }
+
+                let info = to_cell_info(cell);
+                if collected_set.contains(&info.out_point) {
+                    continue;
+                }
+
+                let args: Bytes = info.output.lock().args().unpack();
+                let custodian_lock_args = match CustodianLockArgsReader::verify(&args[32..], false)
+                {
+                    Ok(()) => CustodianLockArgs::new_unchecked(args.slice(32..)),
+                    Err(_) => continue,
+                };
+
+                if custodian_lock_args.deposit_block_number().unpack() > last_finalized_block_number
+                {
+                    continue;
+                }
+
+                // Collect sudt
+                let sudt_type_script = match info.output.type_().to_opt() {
+                    Some(sudt_type_script) => sudt_type_script,
+                    None => continue,
+                };
+
+                // Double check invalid custodian type script
+                let l1_sudt_script_type_hash =
+                    rollup_context.rollup_config.l1_sudt_script_type_hash();
+                if sudt_type_script.code_hash() != l1_sudt_script_type_hash
+                    || sudt_type_script.hash_type() != ScriptHashType::Type.into()
+                {
+                    continue;
+                }
+
+                if sudt_type_hash_set.len() >= MAX_MERGE_SUDTS
+                    && !sudt_type_hash_set.contains(&sudt_type_script.hash())
+                {
+                    continue;
+                }
+
+                if max_cells.saturating_sub(collected.cells_info.len()) == 1 {
+                    continue;
+                }
+
+                let sudt_amount = match parse_sudt_amount(&info) {
+                    Ok(amount) => amount,
+                    Err(_) => {
+                        log::error!("invalid sudt amount, out_point: {:?}", info.out_point);
+                        continue;
+                    }
+                };
+
+                if sudt_type_hash_set.len() < MAX_MERGE_SUDTS && random::<u32>() % 2 == 0 {
+                    sudt_type_hash_set.insert(sudt_type_script.hash());
+                }
+
+                collected_set.insert(info.out_point.clone());
+
+                let (collected_amount, type_script) = {
+                    let sudt = collected.sudt.entry(sudt_type_script.hash());
+                    sudt.or_insert((0, Script::default()))
+                };
+                *collected_amount = collected_amount.saturating_add(sudt_amount);
+                *type_script = sudt_type_script;
+
+                collected.capacity = collected
+                    .capacity
+                    .saturating_add(info.output.capacity().unpack() as u128);
+                collected.cells_info.push(info);
+            }
+        }
+
+        if collected.cells_info.len() < max_cells {
+            Ok(QueryResult::NotEnough(collected))
+        } else {
+            Ok(QueryResult::Full(collected))
+        }
+    }
+
     pub async fn query_finalized_custodian_cells(
         &self,
         withdrawals_amount: &WithdrawalsAmount,
         custodian_change_capacity: u128,
         last_finalized_block_number: u64,
         min_capacity: Option<u64>,
+        max_cells: usize,
     ) -> Result<QueryResult<CollectedCustodianCells>> {
         let rollup_context = &self.rollup_context;
 
@@ -826,6 +1079,10 @@ impl RPCClient {
             cursor = Some(cells.last_cursor);
 
             for cell in cells.objects.into_iter() {
+                if collected.cells_info.len() >= max_cells {
+                    return Ok(QueryResult::NotEnough(collected));
+                }
+
                 let args = cell.output.lock.args.clone().into_bytes();
                 let custodian_lock_args = match CustodianLockArgsReader::verify(&args[32..], false)
                 {
