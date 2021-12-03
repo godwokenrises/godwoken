@@ -75,6 +75,24 @@ impl Default for OutputParam {
     }
 }
 
+pub fn fetch_state_db_with_mode<'a>(
+    db: &'a StoreTransaction,
+    mode: MemBlockDBMode,
+    block_number: u64,
+) -> Result<StateDBTransaction<'a>> {
+    // Repackage offset must be smaller than NewBlock, so that it has clean state.
+    let db_mode = match mode {
+        MemBlockDBMode::NewBlock => StateDBMode::Write(WriteContext::new(u32::MAX)),
+        MemBlockDBMode::Package => StateDBMode::Write(WriteContext::new(0)),
+    };
+    StateDBTransaction::from_checkpoint(
+        db,
+        CheckPoint::new(block_number, SubState::MemBlock),
+        db_mode,
+    )
+    .map_err(|err| anyhow!("err: {}", err))
+}
+
 /// MemPool
 pub struct MemPool {
     /// store
@@ -241,17 +259,7 @@ impl MemPool {
         db: &'a StoreTransaction,
         mode: MemBlockDBMode,
     ) -> Result<StateDBTransaction<'a>> {
-        // Repackage offset must be smaller than NewBlock, so that it has clean state.
-        let db_mode = match mode {
-            MemBlockDBMode::NewBlock => StateDBMode::Write(WriteContext::new(u32::MAX)),
-            MemBlockDBMode::Package => StateDBMode::Write(WriteContext::new(0)),
-        };
-        StateDBTransaction::from_checkpoint(
-            db,
-            CheckPoint::new(self.current_tip.1, SubState::MemBlock),
-            db_mode,
-        )
-        .map_err(|err| anyhow!("err: {}", err))
+        fetch_state_db_with_mode(db, mode, self.current_tip.1)
     }
 
     /// Push a layer2 tx into pool
