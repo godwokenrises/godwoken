@@ -189,6 +189,11 @@ pub async fn query_finalized_custodian_capped_cells(
             .filter(|(_, candidates)| candidates.cells.len() > 5)
             .collect();
         if sudt_candidates.is_empty() || ckb_candidates.cells.len() <= 5 {
+            log::info!(
+                "sudt candidates {} ckb candidates cells: {}",
+                sudt_candidates.len(),
+                ckb_candidates.cells.len()
+            );
             return Ok(QueryResult::NotEnough(CollectedCustodianCells::default()));
         }
     }
@@ -209,10 +214,18 @@ pub async fn query_finalized_custodian_capped_cells(
     let mut fulfilled_sudt = 0usize;
 
     // Fill ckb custodians first since we need capacity everywhere
+    log::info!("ckb remain {}", ckb_candidates.cells.len());
     while ckb_candidates.cells.peek().is_some() {
         if collected.cells_info.len() > max_custodian_cells
             || collected.capacity >= required_capacity
         {
+            log::info!(
+                    "collected.cells_info {} max_custodian_cells {}, collected.capacity {} required_capacity: {}",
+                    collected.cells_info.len(),
+                    max_custodian_cells,
+                    collected.capacity,
+                    required_capacity,
+                );
             break;
         }
 
@@ -223,12 +236,23 @@ pub async fn query_finalized_custodian_capped_cells(
     }
 
     // Fill sudt custodians for withdrawal requests
+    log::info!("sudt_candidates {}", sudt_candidates.len(),);
     'fill_for_withdrawals: for custodians in sudt_candidates.iter_mut() {
+        log::info!("sudt_remains {}", custodians.cells.len(),);
         while custodians.cells.peek().is_some() {
             if collected.cells_info.len() > max_custodian_cells
                 || (collected.capacity >= required_capacity
                     && fulfilled_sudt == withdrawals_amount.sudt.len())
             {
+                log::info!("collected cells_info.len() {} max_custodian_cells {}, collected.capacity {} required_cpacity: {} fulfilled_sudt {} withdrawals_amount.sudt.len(): {}",
+                    collected.cells_info.len(),
+                    max_custodian_cells,
+                    collected.capacity,
+                    required_capacity,
+                    fulfilled_sudt,
+                    withdrawals_amount.sudt.len()
+
+                    );
                 break 'fill_for_withdrawals;
             }
 
@@ -246,6 +270,11 @@ pub async fn query_finalized_custodian_capped_cells(
 
                 let withdrawal_amount = withdrawals_amount.sudt.get(&custodians.type_hash.raw());
                 if Some(&*collected_amount) >= withdrawal_amount {
+                    log::info!(
+                        "collected_amount: {} withdrawal_amount: {:?}",
+                        collected_amount,
+                        withdrawal_amount
+                    );
                     fulfilled_sudt += 1;
                     break;
                 }
@@ -257,6 +286,11 @@ pub async fn query_finalized_custodian_capped_cells(
     // Ckb first
     while let Some(cell) = ckb_candidates.cells.pop() {
         if collected.cells_info.len() > max_custodian_cells {
+            log::info!(
+                "collected.cells_info.len(): {} max_custodian_cells: {}",
+                collected.cells_info.len(),
+                max_custodian_cells
+            );
             break;
         }
 
@@ -274,11 +308,22 @@ pub async fn query_finalized_custodian_capped_cells(
             && (sudt_remains.len() < 3 // Few custodians to combine
                     || (max_custodian_cells.saturating_sub(collected_cells) == 1))
         {
+            log::info!(
+                "sudt_remains.len(): {} max_custodian_cells: {} collected_cells: {}",
+                sudt_remains.len(),
+                max_custodian_cells,
+                collected_cells
+            );
             continue;
         }
 
         while let Some(cell) = sudt_remains.pop() {
             if collected.cells_info.len() > max_custodian_cells {
+                log::info!(
+                    "collected.cells_info.len(): {} max_custodian_cells: {}",
+                    collected.cells_info.len(),
+                    max_custodian_cells,
+                );
                 break 'fill_for_merge;
             }
 
