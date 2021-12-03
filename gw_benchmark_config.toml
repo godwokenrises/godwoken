@@ -1,0 +1,7 @@
+interval = 1000
+batch = 10
+timeout = 120
+account_path = "./accounts"
+gw_rpc_url = "http://localhost:8119"
+scripts_deploy_path = "./scripts_deploy_results.json"
+rollup_tupe_hash = "0x"

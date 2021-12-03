@@ -1,51 +1,36 @@
-#![allow(clippy::mutable_key_type)]
-
-mod account;
-mod address;
-mod create_creator_account;
-mod deploy_genesis;
-mod deploy_scripts;
-mod deposit_ckb;
-mod dump_mem_block;
-mod dump_tx;
-mod generate_config;
-mod get_balance;
-pub mod godwoken_rpc;
-mod hasher;
-mod polyjuice;
-mod prepare_scripts;
-mod setup;
-mod stat;
-mod sudt;
-pub(crate) mod types;
-mod update_cell;
-mod utils;
-mod withdraw;
-
-use account::read_privkey;
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::HttpClient;
 use ckb_sdk::constants::ONE_CKB;
 use ckb_types::prelude::Unpack;
 use clap::{value_t, App, Arg, SubCommand};
-use deploy_genesis::DeployRollupCellArgs;
-use dump_tx::ChallengeBlock;
-use generate_config::GenerateNodeConfigArgs;
-use godwoken_rpc::GodwokenRpcClient;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
+use gw_tools::{
+    account::read_privkey,
+    address, create_creator_account,
+    deploy_genesis::{self, DeployRollupCellArgs},
+    deploy_scripts, deposit_ckb, dump_mem_block,
+    dump_tx::{self, ChallengeBlock},
+    generate_config::{self, GenerateNodeConfigArgs},
+    get_balance,
+    godwoken_rpc::GodwokenRpcClient,
+    polyjuice, prepare_scripts,
+    setup::{self, SetupArgs},
+    stat,
+    sudt::{self, account::build_l1_sudt_type_script},
+    types::{
+        BuildScriptsResult, PoAConfig, RollupDeploymentResult, ScriptsDeploymentResult,
+        UserRollupConfig,
+    },
+    update_cell,
+    utils::{cli_args, transaction::read_config},
+    withdraw,
+};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     str::FromStr,
 };
-use types::{
-    BuildScriptsResult, PoAConfig, RollupDeploymentResult, ScriptsDeploymentResult,
-    UserRollupConfig,
-};
-use utils::{cli_args, transaction::read_config};
-
-use crate::{setup::SetupArgs, sudt::account::build_l1_sudt_type_script};
 
 fn main() {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));

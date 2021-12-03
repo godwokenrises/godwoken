@@ -4,7 +4,7 @@ use ckb_types::{bytes::Bytes, H256};
 use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
     debugger::{DumpChallengeTarget, ReprMockTransaction},
-    godwoken::{RunResult, TxReceipt},
+    godwoken::{L2TransactionWithStatus, RunResult, TxReceipt},
 };
 use std::{u128, u32};
 
@@ -98,6 +98,12 @@ impl GodwokenRpcClient {
     pub fn get_transaction_receipt(&mut self, tx_hash: &H256) -> Result<Option<TxReceipt>> {
         let params = serde_json::to_value((tx_hash,))?;
         self.rpc::<Option<TxReceipt>>("get_transaction_receipt", params)
+            .map(|opt| opt.map(Into::into))
+    }
+
+    pub fn get_transaction(&mut self, tx_hash: &H256) -> Result<Option<L2TransactionWithStatus>> {
+        let params = serde_json::to_value((tx_hash,))?;
+        self.rpc::<Option<L2TransactionWithStatus>>("get_transaction", params)
             .map(|opt| opt.map(Into::into))
     }
 
