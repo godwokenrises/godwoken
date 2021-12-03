@@ -75,6 +75,7 @@ impl Default for OutputParam {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 pub fn fetch_state_db_with_mode<'a>(
     db: &'a StoreTransaction,
     mode: MemBlockDBMode,
