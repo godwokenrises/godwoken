@@ -85,9 +85,16 @@ pub struct DepositInfo {
     pub cell: CellInfo,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct SUDTStat {
+    pub amount: u128,
+    pub cells_count: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct CustodianStat {
     pub total_capacity: u128,
     pub cells_count: usize,
-    pub sudt_total_amount: HashMap<ckb_types::packed::Script, u128>,
+    pub ckb_cells_count: usize,
+    pub sudt_stat: HashMap<ckb_types::packed::Script, SUDTStat>,
 }
