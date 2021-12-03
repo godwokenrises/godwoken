@@ -815,7 +815,7 @@ async fn submit_withdrawal_request(
                 &rpc_client,
                 &db,
                 vec![withdrawal.clone()].into_iter(),
-                &generator.rollup_context(),
+                generator.rollup_context(),
                 last_finalized_block_number,
             )
             .await?
