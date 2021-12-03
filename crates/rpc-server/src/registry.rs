@@ -17,7 +17,7 @@ use gw_jsonrpc_types::{
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
-use gw_mem_pool::custodian::AvailableCustodians;
+use gw_mem_pool::{custodian::AvailableCustodians, pool::MemBlockDBMode};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{
     chain_view::ChainView,
@@ -407,7 +407,6 @@ impl TryFrom<u8> for GetTxVerbose {
 async fn get_transaction(
     Params(param): Params<GetTxParams>,
     store: Data<Store>,
-    mem_pool: Data<MemPool>,
 ) -> Result<Option<L2TransactionWithStatus>, RpcError> {
     let (tx_hash, verbose) = match param {
         GetTxParams::Default((tx_hash,)) => (to_h256(tx_hash), GetTxVerbose::TxWithStatus),
@@ -439,20 +438,7 @@ async fn get_transaction(
             status = L2TransactionStatus::Committed;
         }
         None => {
-            tx_opt = match db.get_mem_pool_transaction(&tx_hash)? {
-                Some(tx) => Some(tx),
-                None => {
-                    // the tx maybe in the mem-pool but not finalized
-                    // so we try to sync with mem-pool, then fetch from db again
-                    if let Some(mem_pool) = mem_pool.as_ref() {
-                        // we only need to sync with mem-pool, wait for tx get finalized.
-                        mem_pool.lock().await;
-                        db.get_mem_pool_transaction(&tx_hash)?.map(Into::into)
-                    } else {
-                        None
-                    }
-                }
-            };
+            tx_opt = db.get_mem_pool_transaction(&tx_hash)?;
             status = L2TransactionStatus::Pending;
         }
     };
@@ -555,7 +541,6 @@ async fn get_tip_block_hash(store: Data<Store>) -> Result<JsonH256> {
 async fn get_transaction_receipt(
     Params((tx_hash,)): Params<(JsonH256,)>,
     store: Data<Store>,
-    mem_pool: Data<MemPool>,
 ) -> Result<Option<TxReceipt>> {
     let tx_hash = to_h256(tx_hash);
     let db = store.begin_transaction();
@@ -567,31 +552,18 @@ async fn get_transaction_receipt(
         return Ok(Some(receipt));
     }
     // search from mem pool
-    match db.get_mem_pool_transaction_receipt(&tx_hash)? {
-        Some(receipt) => Ok(Some(receipt.into())),
-        None => {
-            // the tx maybe in the mem-pool but not finalized
-            // so we try to sync with mem-pool, then fetch from db again
-            if let Some(mem_pool) = mem_pool.as_ref() {
-                // we only need to sync with mem-pool, wait for tx get finalized.
-                mem_pool.lock().await;
-                let receipt_opt = db
-                    .get_mem_pool_transaction_receipt(&tx_hash)?
-                    .map(Into::into);
-                Ok(receipt_opt)
-            } else {
-                Ok(None)
-            }
-        }
-    }
+    Ok(db
+        .get_mem_pool_transaction_receipt(&tx_hash)?
+        .map(Into::into))
 }
 
 async fn execute_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     mem_pool: Data<MemPool>,
+    generator: Data<Generator>,
     store: Data<Store>,
 ) -> Result<RunResult, RpcError> {
-    let mem_pool = match &*mem_pool {
+    let _mem_pool = match &*mem_pool {
         Some(mem_pool) => mem_pool,
         None => {
             return Err(mem_pool_is_disabled_err());
@@ -615,8 +587,26 @@ async fn execute_l2transaction(
         .build();
 
     let mut run_result = {
-        let mem_pool = mem_pool.lock().await;
-        mem_pool.unchecked_execute_transaction(&tx, &block_info)?
+        let tip_block_hash = store.get_tip_block_hash()?;
+        let db = store.begin_transaction();
+        let state_db =
+            gw_mem_pool::pool::fetch_state_db_with_mode(&db, MemBlockDBMode::NewBlock, number)?;
+        let state = state_db.state_tree()?;
+        let chain_view = ChainView::new(&db, tip_block_hash);
+        // verify tx signature
+        generator.check_transaction_signature(&state, &tx)?;
+        // tx basic verification
+        generator.verify_transaction(&state, &tx)?;
+        // execute tx
+        let raw_tx = tx.raw();
+        let run_result = generator.unchecked_execute_transaction(
+            &chain_view,
+            &state,
+            &block_info,
+            &raw_tx,
+            100000000,
+        )?;
+        run_result
     };
 
     if run_result.exit_code != 0 {
