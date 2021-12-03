@@ -8,7 +8,7 @@ use sqlx::PgPool;
 
 use crate::helper::{hex, parse_log, GwLog};
 
-pub const MAX_RETURN_DATA: usize = 32;
+pub const MAX_RETURN_DATA: usize = 96;
 pub const MAX_ERROR_TX_RECEIPT_BLOCKS: u64 = 3;
 
 pub struct ErrorReceiptIndexer {
@@ -97,13 +97,14 @@ struct ErrorReceiptRecord {
 
 impl From<ErrorTxReceipt> for ErrorReceiptRecord {
     fn from(receipt: ErrorTxReceipt) -> Self {
+        let return_data_len = std::cmp::min(receipt.return_data.len(), MAX_RETURN_DATA);
         let basic_record = ErrorReceiptRecord {
             tx_hash: receipt.tx_hash,
             block_number: receipt.block_number,
             cumulative_gas_used: 0,
             gas_used: 0,
             status_code: 0,
-            status_reason: receipt.return_data[..MAX_RETURN_DATA].to_vec(),
+            status_reason: receipt.return_data[..return_data_len].to_vec(),
         };
 
         let gw_log = match receipt.last_log.map(|log| parse_log(&log)).transpose() {
