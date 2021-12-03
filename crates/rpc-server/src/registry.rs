@@ -32,11 +32,12 @@ use gw_types::{
 };
 use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
+use lru::LruCache;
 use smol::lock::Mutex;
 use std::{
     convert::{TryFrom, TryInto},
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 // type alias
@@ -52,9 +53,23 @@ const INVALID_NONCE_ERR_CODE: i64 = -32001;
 const BUSY_ERR_CODE: i64 = -32006;
 const CUSTODIAN_NOT_ENOUGH_CODE: i64 = -32007;
 const INTERNAL_ERROR_ERR_CODE: i64 = -32099;
+const INVALID_REQUEST: i64 = -32600;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
 const INVALID_PARAM_ERR_CODE: i64 = -32602;
-const INVALID_REQUEST: i64 = -32600;
+const RATE_LIMIT_ERR_CODE: i64 = -32603;
+
+// rate limit
+const MAX_SEND_TX_RATE_LIMIT_LRU_SIZE: usize = 128 * 1024 * 1024; // 128m
+const SEND_TX_RATE_LIMIT_SECONDS: u64 = 30;
+
+type SendTransactionRateLimiter = Mutex<LruCache<u32, Instant>>;
+
+fn rate_limit_err() -> RpcError {
+    RpcError::Provided {
+        code: RATE_LIMIT_ERR_CODE,
+        message: "Rate limit, please wait few seconds and try again",
+    }
+}
 
 fn header_not_found_err() -> RpcError {
     RpcError::Provided {
@@ -191,6 +206,9 @@ impl Registry {
     pub fn build_rpc_server(self) -> Result<RPCServer> {
         let mut server = JsonrpcServer::new();
 
+        let send_transaction_rate_limiter: SendTransactionRateLimiter =
+            Mutex::new(lru::LruCache::new(MAX_SEND_TX_RATE_LIMIT_LRU_SIZE));
+
         server = server
             .with_data(Data::new(self.mem_pool))
             .with_data(Data(self.generator.clone()))
@@ -200,6 +218,7 @@ impl Registry {
             .with_data(Data::new(self.backend_info))
             .with_data(Data::new(self.submit_tx))
             .with_data(Data::new(self.rpc_client))
+            .with_data(Data::new(send_transaction_rate_limiter))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -287,7 +306,7 @@ struct RequestSubmitter {
 
 impl RequestSubmitter {
     const MAX_CHANNEL_SIZE: usize = 700;
-    const MAX_BATCH_SIZE: usize = 5;
+    const MAX_BATCH_SIZE: usize = 20;
     const INTERVAL_MS: Duration = Duration::from_millis(300);
 
     async fn in_background(self) {
@@ -599,14 +618,13 @@ async fn execute_l2transaction(
         generator.verify_transaction(&state, &tx)?;
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = generator.unchecked_execute_transaction(
+        generator.unchecked_execute_transaction(
             &chain_view,
             &state,
             &block_info,
             &raw_tx,
             100000000,
-        )?;
-        run_result
+        )?
     };
 
     if run_result.exit_code != 0 {
@@ -722,19 +740,26 @@ async fn execute_raw_l2transaction(
 
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
-    mem_pool: Data<MemPool>,
     store: Data<Store>,
     submit_tx: Data<smol::channel::Sender<Request>>,
+    rate_limiter: Data<SendTransactionRateLimiter>,
 ) -> Result<JsonH256, RpcError> {
-    let _mem_pool = match mem_pool.clone() {
-        Some(mem_pool) => mem_pool,
-        None => {
-            return Err(mem_pool_is_disabled_err());
-        }
-    };
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
     let tx_hash = to_jsonh256(tx.hash().into());
+
+    // check rate limit
+    {
+        let mut rate_limiter = rate_limiter.lock().await;
+        let sender_id: u32 = tx.raw().from_id().unpack();
+        if let Some(last_touch) = rate_limiter.get(&sender_id) {
+            if last_touch.elapsed().as_secs() < SEND_TX_RATE_LIMIT_SECONDS {
+                return Err(rate_limit_err());
+            }
+        }
+        rate_limiter.put(sender_id, Instant::now());
+    }
+
     // check sender's nonce
     {
         // fetch mem-pool state
