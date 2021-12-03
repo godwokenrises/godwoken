@@ -1366,6 +1366,10 @@ fn run_cli() -> Result<()> {
                     "5c4ac961a2428137f27271cf2af205e5c55156d26d9ac285ed3170e8c4cc1501",
                 ),
                 (
+                    "USDT",
+                    "1b89ae72b96c4f02fa7667ab46febcedf9b495737752176303ddd215d66a615a",
+                ),
+                (
                     "TAI",
                     "08430183dda1cbd81912c4762a3006a59e2291d5bd43b48bb7fa7544cace9e4a",
                 ),
@@ -1398,20 +1402,22 @@ fn run_cli() -> Result<()> {
             let shannon = stat.total_capacity - (ckb * ONE_CKB as u128);
             println!("Cells count: {}", stat.cells_count);
             println!("Total custodian: {}.{:0>8} CKB", ckb, shannon);
-            if !stat.sudt_total_amount.is_empty() {
+            println!("CKB cells count: {}", stat.ckb_cells_count);
+            if !stat.sudt_stat.is_empty() {
                 println!("========================================");
             }
-            for (sudt_script, sudt_amount) in stat.sudt_total_amount {
+            for (sudt_script, sudt_stat) in stat.sudt_stat {
                 let sudt_args: ckb_types::bytes::Bytes = sudt_script.args().unpack();
                 let alias_name = alias
                     .get(&sudt_args)
                     .cloned()
                     .unwrap_or_else(|| "Unknown".to_string());
                 println!(
-                    "Simple UDT ({} {}) amount: {}",
+                    "Simple UDT ({} {}) amount: {} cells count: {}",
                     alias_name,
                     sudt_script.args(),
-                    sudt_amount
+                    sudt_stat.amount,
+                    sudt_stat.cells_count,
                 );
             }
         }
