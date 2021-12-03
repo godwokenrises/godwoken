@@ -287,7 +287,7 @@ struct RequestSubmitter {
 
 impl RequestSubmitter {
     const MAX_CHANNEL_SIZE: usize = 700;
-    const MAX_BATCH_SIZE: usize = 20;
+    const MAX_BATCH_SIZE: usize = 5;
     const INTERVAL_MS: Duration = Duration::from_millis(300);
 
     async fn in_background(self) {
