@@ -884,9 +884,9 @@ impl RPCClient {
                 .map_err(|e| anyhow!("invalid sudt amount {}", e))
         };
 
-        let push = |cells_info: Vec<CellInfo>,
-                    collected_set: &mut HashSet<_>,
-                    collected: &mut CollectedCustodianCells| {
+        let merge = |cells_info: Vec<CellInfo>,
+                     collected_set: &mut HashSet<_>,
+                     collected: &mut CollectedCustodianCells| {
             for info in cells_info {
                 let sudt_amount = match parse_sudt_amount(&info) {
                     Ok(sudt_amount) => sudt_amount,
@@ -937,10 +937,10 @@ impl RPCClient {
 
             match query_result {
                 QueryResult::Full(cells_info) => {
-                    push(cells_info, &mut collected_set, &mut collected)
+                    merge(cells_info, &mut collected_set, &mut collected)
                 }
                 QueryResult::NotEnough(cells_info) if cells_info.len() > 1 => {
-                    push(cells_info, &mut collected_set, &mut collected)
+                    merge(cells_info, &mut collected_set, &mut collected)
                 }
                 _ => continue,
             }
