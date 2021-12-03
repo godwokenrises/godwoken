@@ -2,7 +2,12 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
-use gw_rpc_client::rpc_client::{QueryResult, RPCClient};
+use gw_rpc_client::{
+    custodian_collector::{
+        custodian::query_finalized_custodian_capped_cells, indexer_collector::IndexerCollector,
+    },
+    rpc_client::{QueryResult, RPCClient},
+};
 use gw_store::transaction::StoreTransaction;
 use gw_types::{
     bytes::Bytes,
@@ -128,14 +133,16 @@ pub async fn query_finalized_custodians<WithdrawalIter: Iterator<Item = Withdraw
     let total_withdrawal_amount = sum_withdrawals(withdrawals);
     let total_change_capacity = sum_change_capacity(db, rollup_context, &total_withdrawal_amount);
 
-    rpc_client
-        .query_finalized_custodian_capped_cells(
-            &total_withdrawal_amount,
-            total_change_capacity,
-            last_finalized_block_number,
-            MAX_FINALIZED_CUSTODIAN_CELLS,
-        )
-        .await
+    let collector = IndexerCollector { rpc_client };
+
+    query_finalized_custodian_capped_cells(
+        collector,
+        &total_withdrawal_amount,
+        total_change_capacity,
+        last_finalized_block_number,
+        MAX_FINALIZED_CUSTODIAN_CELLS,
+    )
+    .await
 }
 
 pub fn calc_ckb_custodian_min_capacity(rollup_context: &RollupContext) -> u64 {
