@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use ckb_types::prelude::Entity;
 use gw_jsonrpc_types::ckb_jsonrpc_types::Uint32;
-use gw_types::offchain::CustodianStat;
+use gw_types::offchain::{CustodianStat, SUDTStat};
 use gw_types::{
     offchain::CellInfo,
     packed::{CellOutput, OutPoint, Script},
@@ -121,7 +121,7 @@ impl CKBIndexerClient {
         lock: Script,
         min_capacity: Option<u64>,
     ) -> Result<CustodianStat> {
-        let mut sudt_total_amount: HashMap<ckb_types::packed::Script, u128> = HashMap::default();
+        let mut sudt_stat: HashMap<ckb_types::packed::Script, SUDTStat> = HashMap::default();
 
         let filter = min_capacity.map(|min_capacity| SearchKeyFilter {
             output_capacity_range: Some([min_capacity.into(), u64::MAX.into()]),
@@ -142,6 +142,7 @@ impl CKBIndexerClient {
 
         let mut total_capacity = 0u128;
         let mut cells_count = 0;
+        let mut ckb_cells_count = 0;
         let mut cursor = None;
         loop {
             let cells: Pagination<Cell> = to_result(
@@ -172,20 +173,24 @@ impl CKBIndexerClient {
                     assert_eq!(cell.output_data.len(), 16);
 
                     let type_: ckb_types::packed::Script = type_.to_owned().into();
-                    let total_amount = sudt_total_amount.entry(type_).or_insert(0u128);
+                    let stat = sudt_stat.entry(type_).or_insert_with(Default::default);
                     let amount = {
                         let mut buf = [0u8; 16];
                         buf.copy_from_slice(cell.output_data.as_bytes());
                         u128::from_le_bytes(buf)
                     };
-                    *total_amount += amount
+                    stat.amount += amount;
+                    stat.cells_count += 1;
+                } else {
+                    ckb_cells_count += 1;
                 }
             }
         }
         Ok(CustodianStat {
             cells_count,
             total_capacity,
-            sudt_total_amount,
+            sudt_stat,
+            ckb_cells_count,
         })
     }
 }
