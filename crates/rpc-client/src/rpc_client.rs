@@ -912,64 +912,69 @@ impl RPCClient {
         }
 
         // Reverse ckb binary heap, sort by capacity, bigger one comes first.
-        let ckb_candidates = ckb_candidates.reverse();
-        // Reverse sudt binary heap, sort by fulfilled, withdrawal, capacity, amount, cell_len.
-        let sudt_candidates: BinaryHeap<CandidateCustodians<_>> = sudt_candidates
-            .into_iter()
-            .map(|(_, reverse_custodians)| reverse_custodians.reverse())
-            .collect();
+        let mut ckb_candidates = ckb_candidates.reverse();
+        let mut sudt_candidates: Vec<CandidateCustodians<_>> = {
+            // Reverse sudt binary heap, sort by fulfilled, withdrawal, capacity, amount, cell_len.
+            let binary_heap: BinaryHeap<CandidateCustodians<_>> = sudt_candidates
+                .into_iter()
+                .map(|(_, reverse_custodians)| reverse_custodians.reverse())
+                .collect();
+            // Collect sorted sudt candidate custodians into vec, so we can iter_mut()
+            binary_heap.into_sorted_vec()
+        };
 
         let mut collected = CollectedCustodianCells::default();
         let mut fulfilled_sudt = 0usize;
 
         // Fill ckb custodians first since we need capacity everywhere
-        let mut ckb_remain = ckb_candidates.cells.into_iter();
-        for cell in &mut ckb_remain {
+        while ckb_candidates.cells.peek().is_some() {
             if collected.cells_info.len() > max_custodian_cells
                 || collected.capacity >= required_capacity
             {
                 break;
             }
 
-            collected.capacity = collected.capacity.saturating_add(cell.capacity as u128);
-            collected.cells_info.push(cell.info);
+            if let Some(cell) = ckb_candidates.cells.pop() {
+                collected.capacity = collected.capacity.saturating_add(cell.capacity as u128);
+                collected.cells_info.push(cell.info);
+            }
         }
 
         // Fill sudt custodians for withdrawal requests
-        let mut sudt_candidates = sudt_candidates.into_iter();
-        'fill_for_withdrawals: for mut custodians in &mut sudt_candidates {
-            let mut sudt_remains = custodians.cells.into_iter();
-            for cell in &mut sudt_remains {
+        'fill_for_withdrawals: for custodians in sudt_candidates.iter_mut() {
+            while custodians.cells.peek().is_some() {
                 if collected.cells_info.len() > max_custodian_cells
                     || (collected.capacity >= required_capacity
                         && fulfilled_sudt == withdrawals_amount.sudt.len())
                 {
-                    custodians.cells = sudt_remains.collect();
                     break 'fill_for_withdrawals;
                 }
 
-                collected.capacity = collected.capacity.saturating_add(cell.capacity as u128);
-                collected.cells_info.push(cell.info.clone());
+                if let Some(cell) = custodians.cells.pop() {
+                    collected.capacity = collected.capacity.saturating_add(cell.capacity as u128);
+                    collected.cells_info.push(cell.info.clone());
 
-                let (collected_amount, _) = {
-                    let sudt = collected.sudt.entry(custodians.type_hash.raw());
-                    sudt.or_insert((0, cell.info.output.type_().to_opt().unwrap_or_default()))
-                };
-                *collected_amount = collected_amount
-                    .checked_add(cell.amount)
-                    .expect("already check overflow");
+                    let (collected_amount, _) = {
+                        let sudt = collected.sudt.entry(custodians.type_hash.raw());
+                        sudt.or_insert((0, cell.info.output.type_().to_opt().unwrap_or_default()))
+                    };
+                    *collected_amount = collected_amount
+                        .checked_add(cell.amount)
+                        .expect("already check overflow");
 
-                let withdrawal_amount = withdrawals_amount.sudt.get(&custodians.type_hash.raw());
-                if Some(&*collected_amount) >= withdrawal_amount {
-                    fulfilled_sudt += 1;
-                    break;
+                    let withdrawal_amount =
+                        withdrawals_amount.sudt.get(&custodians.type_hash.raw());
+                    if Some(&*collected_amount) >= withdrawal_amount {
+                        fulfilled_sudt += 1;
+                        break;
+                    }
                 }
             }
         }
 
         // Now if we still have room then fill remain custodians for defragment
         // Ckb first
-        for cell in ckb_remain {
+        while let Some(cell) = ckb_candidates.cells.pop() {
             if collected.cells_info.len() > max_custodian_cells {
                 break;
             }
@@ -978,8 +983,8 @@ impl RPCClient {
             collected.cells_info.push(cell.info);
         }
 
-        'fill_for_defragment: for custodians in &mut sudt_candidates {
-            let sudt_remains = custodians.cells.into_iter();
+        'fill_for_merge: for mut custodians in sudt_candidates {
+            let sudt_remains = &mut custodians.cells;
             let collected_cells = collected.cells_info.len();
 
             // Withdrawal sudt custodians should be filled through `fill_for_withdrawals`, so
@@ -991,9 +996,9 @@ impl RPCClient {
                 continue;
             }
 
-            for cell in sudt_remains {
+            while let Some(cell) = sudt_remains.pop() {
                 if collected.cells_info.len() > max_custodian_cells {
-                    break 'fill_for_defragment;
+                    break 'fill_for_merge;
                 }
 
                 collected.capacity = collected.capacity.saturating_add(cell.capacity as u128);
