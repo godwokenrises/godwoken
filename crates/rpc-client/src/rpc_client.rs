@@ -762,9 +762,11 @@ impl RPCClient {
         max_cells: usize,
     ) -> Result<QueryResult<CollectedCustodianCells>> {
         const MIN_MERGE_CELLS: usize = 5;
+        log::debug!("ckb merge MIN_MERGE_CELLS {}", MIN_MERGE_CELLS);
 
         let remain = max_cells.saturating_sub(collected.cells_info.len());
         if remain < MIN_MERGE_CELLS {
+            log::debug!("ckb merge break remain < `MIN_MERGE_CELLS`");
             return Ok(QueryResult::NotEnough(collected));
         }
 
@@ -843,9 +845,11 @@ impl RPCClient {
         }
 
         if collected_ckb_custodians.len() < MIN_MERGE_CELLS {
+            log::debug!("not enough `MIN_MERGE_CELLS` ckb custodians");
             return Ok(QueryResult::NotEnough(collected));
         }
 
+        log::debug!("merge ckb custodians {}", collected_ckb_custodians.len());
         for info in collected_ckb_custodians {
             collected.capacity = collected
                 .capacity
@@ -868,9 +872,15 @@ impl RPCClient {
     ) -> Result<QueryResult<CollectedCustodianCells>> {
         const MAX_MERGE_SUDTS: usize = 5;
         const MIN_MERGE_CELLS: usize = 5;
+        log::debug!(
+            "sudt merge MIN_MERGE_CELLS {} MAX_MERGE_SUDTS {}",
+            MIN_MERGE_CELLS,
+            MAX_MERGE_SUDTS
+        );
 
         let mut remain = max_cells.saturating_sub(collected.cells_info.len());
         if remain < MIN_MERGE_CELLS {
+            log::debug!("sudt merge break remain < `MIN_MERGE_CELLS`");
             return Ok(QueryResult::NotEnough(collected));
         }
 
@@ -921,6 +931,7 @@ impl RPCClient {
         let sudt_type_scripts = self
             .query_random_sudt_type_script(last_finalized_block_number, MAX_MERGE_SUDTS)
             .await?;
+        log::debug!("sudt merge type scripts {}", sudt_type_scripts.len());
         let mut collected_set: HashSet<_> = {
             let cells = collected.cells_info.iter();
             cells.map(|i| i.out_point.clone()).collect()
@@ -937,9 +948,11 @@ impl RPCClient {
 
             match query_result {
                 QueryResult::Full(cells_info) => {
+                    log::debug!("merge (full) sudt custodians {}", cells_info.len());
                     merge(cells_info, &mut collected_set, &mut collected)
                 }
                 QueryResult::NotEnough(cells_info) if cells_info.len() > 1 => {
+                    log::debug!("merge (not enough) sudt custodians {}", cells_info.len());
                     merge(cells_info, &mut collected_set, &mut collected)
                 }
                 _ => continue,
@@ -947,6 +960,7 @@ impl RPCClient {
 
             remain = max_cells.saturating_sub(collected.cells_info.len());
             if remain < MIN_MERGE_CELLS {
+                log::debug!("break `MIN_MERGE_CELLS` after merge");
                 break;
             }
         }
