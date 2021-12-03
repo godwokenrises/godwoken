@@ -28,9 +28,12 @@ pub async fn query_finalized_custodian_capped_cells(
     last_finalized_block_number: u64,
     max_custodian_cells: usize,
 ) -> Result<QueryResult<CollectedCustodianCells>> {
+    const MAX_CACHE_SUDT_TYPES: usize = 500;
+
     log::info!(
-        "[collect custodian cell] start max_custodian_cells: {}",
-        max_custodian_cells
+        "[collect custodian cell] start max_custodian_cells: {}, max_sudt_types: {}",
+        max_custodian_cells,
+        MAX_CACHE_SUDT_TYPES,
     );
 
     let parse_sudt_amount = |cell: &Cell| -> Result<u128> {
@@ -60,6 +63,11 @@ pub async fn query_finalized_custodian_capped_cells(
     while candidate_capacity < required_capacity
         || sudt_candidates.values().filter(|c| c.fulfilled).count() < withdrawals_amount.sudt.len()
         || candidate_cells < max_custodian_cells
+        || sudt_candidates
+            .values()
+            .filter(|c| c.cells.len() > 1)
+            .count()
+            < max_custodian_cells
     {
         let cells: Pagination<Cell> = collector.get_cells(&search_key, cursor)?;
         log::info!(
@@ -121,7 +129,7 @@ pub async fn query_finalized_custodian_capped_cells(
             // sudts)
             if type_hash.is_sudt()
                 && !withdrawals_amount.sudt.contains_key(&type_hash.raw())
-                && sudt_candidates.len() > max_custodian_cells
+                && sudt_candidates.len() > MAX_CACHE_SUDT_TYPES
             {
                 log::info!("fail to check sudt candidates");
                 continue;
@@ -507,7 +515,7 @@ impl<T: Ord> Ord for CandidateCustodians<T> {
             return ordering;
         }
 
-        self.cell_len.cmp(&other.cell_len).reverse()
+        self.cell_len.cmp(&other.cell_len)
     }
 }
 
