@@ -2255,6 +2255,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "log",
+ "rand 0.8.4",
  "semver 1.0.4",
  "serde",
  "serde_json",

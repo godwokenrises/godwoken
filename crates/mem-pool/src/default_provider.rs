@@ -15,7 +15,7 @@ use smol::{lock::Mutex, Task};
 
 use crate::{
     constants::{MAX_MEM_BLOCK_DEPOSITS, MIN_CKB_DEPOSIT_CAPACITY, MIN_SUDT_DEPOSIT_CAPACITY},
-    custodian::query_finalized_custodians,
+    custodian::{query_finalized_custodians, query_mergeable_custodians},
     traits::MemPoolProvider,
 };
 
@@ -93,6 +93,23 @@ impl MemPoolProvider for DefaultMemPoolProvider {
                 &db,
                 withdrawals.clone().into_iter(),
                 &rollup_context,
+                last_finalized_block_number,
+            )
+            .await?;
+            Ok(r.expect_any())
+        })
+    }
+
+    fn query_mergeable_custodians(
+        &self,
+        collected_custodians: CollectedCustodianCells,
+        last_finalized_block_number: u64,
+    ) -> Task<Result<CollectedCustodianCells>> {
+        let rpc_client = self.rpc_client.clone();
+        smol::spawn(async move {
+            let r = query_mergeable_custodians(
+                &rpc_client,
+                collected_custodians,
                 last_finalized_block_number,
             )
             .await?;

@@ -579,8 +579,26 @@ impl MemPool {
             kv_state,
             kv_state_proof,
         };
-        let finalized_custodians = mem_block.finalized_custodians().cloned();
 
+        let finalized_custodians = {
+            let collected = mem_block
+                .finalized_custodians()
+                .cloned()
+                .unwrap_or_default();
+            let last_finalized_block_number = self
+                .generator
+                .rollup_context()
+                .last_finalized_block_number(self.current_tip.1);
+            let task = self
+                .provider
+                .query_mergeable_custodians(collected, last_finalized_block_number);
+            Some(smol::block_on(task)?)
+        };
+
+        log::debug!(
+            "finalized custodians {:?}",
+            finalized_custodians.as_ref().map(|c| c.cells_info.len())
+        );
         log::debug!(
             "output mem block, txs: {} tx withdrawals: {} state_checkpoints: {}",
             mem_block.txs().len(),
