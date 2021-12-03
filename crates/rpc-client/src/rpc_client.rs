@@ -761,8 +761,14 @@ impl RPCClient {
         last_finalized_block_number: u64,
         max_cells: usize,
     ) -> Result<QueryResult<CollectedCustodianCells>> {
-        let rollup_context = &self.rollup_context;
+        const MIN_MERGE_CELLS: usize = 5;
 
+        let remain = max_cells.saturating_sub(collected.cells_info.len());
+        if remain < MIN_MERGE_CELLS {
+            return Ok(QueryResult::NotEnough(collected));
+        }
+
+        let rollup_context = &self.rollup_context;
         let custodian_lock = Script::new_builder()
             .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
             .hash_type(ScriptHashType::Type.into())
@@ -788,7 +794,8 @@ impl RPCClient {
         };
 
         let mut cursor = None;
-        while collected.cells_info.len() < max_cells {
+        let mut collected_ckb_custodians = Vec::<CellInfo>::with_capacity(remain);
+        while collected_ckb_custodians.len() < remain {
             let cells: Pagination<Cell> = to_result(
                 self.indexer
                     .client()
@@ -803,11 +810,6 @@ impl RPCClient {
                     )
                     .await?,
             )?;
-
-            if cells.last_cursor.is_empty() {
-                break;
-            }
-            cursor = Some(cells.last_cursor);
 
             for cell in cells.objects.into_iter() {
                 if collected.cells_info.len() >= max_cells {
@@ -830,13 +832,25 @@ impl RPCClient {
                     continue;
                 }
 
-                // Collect capacity
                 collected_set.insert(info.out_point.clone());
-                collected.capacity = collected
-                    .capacity
-                    .saturating_add(info.output.capacity().unpack() as u128);
-                collected.cells_info.push(info);
+                collected_ckb_custodians.push(info);
             }
+
+            if cells.last_cursor.is_empty() {
+                break;
+            }
+            cursor = Some(cells.last_cursor);
+        }
+
+        if collected_ckb_custodians.len() < MIN_MERGE_CELLS {
+            return Ok(QueryResult::NotEnough(collected));
+        }
+
+        for info in collected_ckb_custodians {
+            collected.capacity = collected
+                .capacity
+                .saturating_add(info.output.capacity().unpack() as u128);
+            collected.cells_info.push(info);
         }
 
         if collected.cells_info.len() < max_cells {
@@ -853,9 +867,10 @@ impl RPCClient {
         max_cells: usize,
     ) -> Result<QueryResult<CollectedCustodianCells>> {
         const MAX_MERGE_SUDTS: usize = 5;
+        const MIN_MERGE_CELLS: usize = 5;
 
         let mut remain = max_cells.saturating_sub(collected.cells_info.len());
-        if remain < 2 {
+        if remain < MIN_MERGE_CELLS {
             return Ok(QueryResult::NotEnough(collected));
         }
 
@@ -931,7 +946,7 @@ impl RPCClient {
             }
 
             remain = max_cells.saturating_sub(collected.cells_info.len());
-            if remain < 2 {
+            if remain < MIN_MERGE_CELLS {
                 break;
             }
         }
@@ -1638,6 +1653,7 @@ impl RPCClient {
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
 
         let mut collected = Vec::new();
+        let mut collected_set = exclusions.clone();
         let mut cursor = None;
         while collected.len() < max_cells {
             let cells: Pagination<Cell> = to_result(
@@ -1661,7 +1677,7 @@ impl RPCClient {
                 }
 
                 let info = to_cell_info(cell);
-                if exclusions.contains(&info.out_point) {
+                if collected_set.contains(&info.out_point) {
                     continue;
                 }
 
@@ -1688,6 +1704,7 @@ impl RPCClient {
                     continue;
                 }
 
+                collected_set.insert(info.out_point.clone());
                 collected.push(info);
             }
 
