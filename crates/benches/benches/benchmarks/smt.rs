@@ -17,7 +17,7 @@ use gw_generator::{
 };
 use gw_mem_pool::pool::MemBlockDBMode;
 use gw_store::{
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction},
+    state::state_db::{StateContext, StateTree},
     Store,
 };
 use gw_traits::{ChainStore, CodeStore};
@@ -166,9 +166,7 @@ impl BenchExecutionEnvironment {
 
     fn accounts_transfer(&self, accounts: u32, count: usize) {
         let db = self.store.begin_transaction();
-        let state_db =
-            gw_mem_pool::pool::fetch_state_db_with_mode(&db, MemBlockDBMode::NewBlock, 1).unwrap();
-        let mut state = state_db.state_tree().unwrap();
+        let mut state = db.mem_pool_state_tree().unwrap();
 
         let block_producer_script = Account::build_script(0);
         let block_producer_id = {
@@ -246,9 +244,7 @@ impl BenchExecutionEnvironment {
 
         db.commit().unwrap();
 
-        let state_db =
-            gw_mem_pool::pool::fetch_state_db_with_mode(&db, MemBlockDBMode::NewBlock, 1).unwrap();
-        let state = state_db.state_tree().unwrap();
+        let state = db.mem_pool_state_tree().unwrap();
         let post_block_producer_balance = state
             .get_sudt_balance(
                 CKB_SUDT_ACCOUNT_ID,
@@ -297,15 +293,12 @@ impl BenchExecutionEnvironment {
         db.setup_chain_id(ROLLUP_TYPE_HASH.into()).unwrap();
         let (db, genesis_state) = build_genesis_from_store(db, config, Default::default()).unwrap();
 
-        let state_db = StateDBTransaction::from_checkpoint(
-            &db,
-            CheckPoint::from_genesis(),
-            StateDBMode::Genesis,
-        )
-        .unwrap();
-        let mut state = state_db
-            .state_tree_with_merkle_state(genesis_state.genesis.raw().post_account())
+        let smt = db
+            .account_smt_with_merkle_state(genesis_state.genesis.raw().post_account())
             .unwrap();
+        let account_count = genesis_state.genesis.raw().post_account().count().unpack();
+        let mut state = { StateTree::new(smt, account_count, StateContext::AttachBlock(0)) };
+
         Self::generate_accounts(&mut state, accounts + 1); // Plus block producer
 
         let (genesis, global_state) = {
@@ -404,7 +397,7 @@ impl BenchExecutionEnvironment {
         .unwrap();
 
         let rollup_config: gw_types::packed::RollupConfig = config.rollup_config.to_owned().into();
-        db.attach_block(genesis, &rollup_config).unwrap();
+        db.attach_block(genesis).unwrap();
         db.commit().unwrap();
     }
 }
