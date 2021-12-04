@@ -50,6 +50,8 @@ use std::{
 const MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT: usize = 5;
 const TRANSACTION_SRIPT_ERROR: &str = "TransactionScriptError";
 const TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR: &str = "ExceededMaximumBlockBytes";
+/// 524_288 we choose this value because it is smaller than the MAX_BLOCK_BYTES which is 597K
+const MAX_ROLLUP_WITNESS_SIZE: usize = 1 << 19;
 
 fn generate_custodian_cells(
     rollup_context: &RollupContext,
@@ -361,12 +363,18 @@ impl BlockProducer {
                     "[produce_next_block] Failed to composite submitting transaction: {}",
                     err
                 );
-                // self.mem_pool.lock().await.reset_mem_block()?;
                 return Err(err);
             }
         };
-
-        if tx.as_slice().len() <= MAX_BLOCK_BYTES as usize {
+        if tx.as_slice().len() <= MAX_BLOCK_BYTES as usize
+            && tx
+                .witnesses()
+                .get(0)
+                .expect("rollup action")
+                .as_slice()
+                .len()
+                <= MAX_ROLLUP_WITNESS_SIZE
+        {
             Ok((number, tx))
         } else {
             Err(anyhow!(
