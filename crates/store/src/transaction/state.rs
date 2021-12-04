@@ -5,7 +5,7 @@ use gw_db::{
         COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD,
         COLUMN_BLOCK_STATE_REVERSE_RECORD,
     },
-    DBRawIterator, Direction, IteratorMode, ReadOptions,
+    DBRawIterator, Direction, IteratorMode,
 };
 use gw_types::{packed::AccountMerkleState, prelude::*};
 
@@ -111,14 +111,8 @@ impl StoreTransaction {
 
     pub fn get_history_state(&self, block_number: u64, state_key: &H256) -> Option<H256> {
         let key = BlockStateRecordKeyReverse::new(block_number, state_key);
-        let mut opts = ReadOptions::default();
-        opts.set_total_order_seek(false);
         let mut raw_iter: DBRawIterator = self
-            .get_iter_opts(
-                COLUMN_BLOCK_STATE_REVERSE_RECORD,
-                IteratorMode::Start,
-                &opts,
-            )
+            .get_iter(COLUMN_BLOCK_STATE_REVERSE_RECORD, IteratorMode::Start)
             .into();
         raw_iter.seek_for_prev(key.as_slice());
 
@@ -155,12 +149,9 @@ impl StoreTransaction {
         block_number: u64,
     ) -> impl Iterator<Item = BlockStateRecordKey> + '_ {
         let start_key = BlockStateRecordKey::new(block_number, &H256::zero());
-        let mut opts = ReadOptions::default();
-        opts.set_total_order_seek(false);
-        self.get_iter_opts(
+        self.get_iter(
             COLUMN_BLOCK_STATE_RECORD,
             IteratorMode::From(start_key.as_slice(), Direction::Forward),
-            &opts,
         )
         .map(|(key, _value)| BlockStateRecordKey::from_slice(&key))
         .take_while(move |key| key.block_number() == block_number)
