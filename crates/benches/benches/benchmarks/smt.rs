@@ -15,7 +15,6 @@ use gw_generator::{
     traits::StateExt,
     Generator,
 };
-use gw_mem_pool::pool::MemBlockDBMode;
 use gw_store::{
     state::state_db::{StateContext, StateTree},
     Store,

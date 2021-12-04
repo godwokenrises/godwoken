@@ -45,11 +45,6 @@ use crate::{
     withdrawal::Generator as WithdrawalGenerator,
 };
 
-pub enum MemBlockDBMode {
-    NewBlock,
-    Package,
-}
-
 #[derive(Debug)]
 pub struct OutputParam {
     pub retry_count: usize,

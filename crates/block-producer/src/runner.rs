@@ -6,7 +6,7 @@ use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use ckb_types::core::hardfork::HardForkSwitch;
 use gw_chain::chain::Chain;
-use gw_challenge::offchain::{OffChainMockContext, OffChainValidatorContext};
+use gw_challenge::offchain::OffChainMockContext;
 use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION};
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
@@ -396,7 +396,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     );
 
     let base = BaseInitComponents::init(&config, skip_config_check)?;
-    let (mem_pool, wallet, poa, offchain_mock_context, pg_pool) = match config
+    let (mem_pool, wallet, poa, _offchain_mock_context, pg_pool) = match config
         .block_producer
         .clone()
     {
@@ -409,19 +409,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 base.init_offchain_mock_context(&poa, &block_producer_config)
                     .await
             })?;
-
-            let mut offchain_validator_context = None;
-            if let Some(validator_config) = config.offchain_validator {
-                let debug_config = config.debug.clone();
-
-                let context = OffChainValidatorContext::build(
-                    &offchain_mock_context,
-                    debug_config,
-                    validator_config,
-                )?;
-
-                offchain_validator_context = Some(context);
-            }
 
             let mem_pool_provider = DefaultMemPoolProvider::new(
                 base.rpc_client.clone(),
@@ -474,7 +461,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         rollup_config_hash,
         rollup_context,
         rollup_type_script,
-        builtin_load_data,
+        builtin_load_data: _,
         ckb_genesis_info,
         rpc_client,
         store,
@@ -522,7 +509,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     let chain_updater = ChainUpdater::new(
         Arc::clone(&chain),
         rpc_client.clone(),
-        rollup_context.clone(),
+        rollup_context,
         rollup_type_script.clone(),
         web3_indexer,
     );
@@ -540,11 +527,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             let wallet =
                 wallet.ok_or_else(|| anyhow!("wallet must be enabled in mode: {:?}", mode))?;
             let poa = poa.ok_or_else(|| anyhow!("poa must be enabled in mode: {:?}", mode))?;
-            let offchain_mock_context = {
-                let ctx = offchain_mock_context.clone();
-                let msg = "offchain mock require block producer config, wallet and poa in mode: ";
-                ctx.ok_or_else(|| anyhow!("{} {:?}", msg, mode))?
-            };
             let tests_control = if let NodeMode::Test = config.node_mode {
                 Some(TestModeControl::new(
                     rpc_client.clone(),
@@ -561,25 +543,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 wallet,
             ));
 
-            let wallet = Wallet::from_config(&block_producer_config.wallet_config)
-                .with_context(|| "init wallet")?;
-
-            // Challenger
-            let challenger = Challenger::new(
-                rollup_context,
-                rpc_client.clone(),
-                wallet,
-                block_producer_config.clone(),
-                config.debug.clone(),
-                builtin_load_data,
-                ckb_genesis_info.clone(),
-                Arc::clone(&chain),
-                Arc::clone(&poa),
-                tests_control.clone(),
-                Arc::clone(&cleaner),
-                offchain_mock_context,
-            );
-
             // Block Producer
             let block_producer = BlockProducer::create(
                 rollup_config_hash,
@@ -595,12 +558,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             )
             .with_context(|| "init block producer")?;
 
-            (
-                Some(block_producer),
-                Some(challenger),
-                tests_control,
-                Some(cleaner),
-            )
+            (Some(block_producer), None, tests_control, Some(cleaner))
         }
     };
 
@@ -611,9 +569,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         generator,
         test_mode_control.map(Box::new),
         rollup_config,
-        config.debug.clone(),
-        Arc::clone(&chain),
-        offchain_mock_context,
         config.mem_pool.clone(),
         config.node_mode,
         rpc_client.clone(),

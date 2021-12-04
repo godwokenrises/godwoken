@@ -1,15 +1,12 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
-use gw_chain::chain::Chain;
-use gw_challenge::offchain::OffChainMockContext;
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{DebugConfig, MemPoolConfig, NodeMode, RPCRateLimit};
+use gw_config::{MemPoolConfig, NodeMode, RPCRateLimit};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
-    debugger::{DumpChallengeTarget, ReprMockTransaction},
     godwoken::{
         BackendInfo, ErrorTxReceipt, GlobalState, L2BlockCommittedInfo, L2BlockStatus, L2BlockView,
         L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, NodeInfo, RunResult,
@@ -17,11 +14,9 @@ use gw_jsonrpc_types::{
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
-use gw_mem_pool::{custodian::AvailableCustodians, pool::MemBlockDBMode};
+use gw_mem_pool::custodian::AvailableCustodians;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::{
-    chain_view::ChainView, state::state_db::StateContext, transaction::StoreTransaction, Store,
-};
+use gw_store::{chain_view::ChainView, state::state_db::StateContext, Store};
 use gw_traits::CodeStore;
 use gw_types::{
     packed::{self, BlockInfo, L2Transaction, RawL2Block, RollupConfig, WithdrawalRequest},
@@ -107,10 +102,7 @@ pub struct Registry {
     mem_pool: MemPool,
     store: Store,
     tests_rpc_impl: Option<Arc<BoxedTestsRPCImpl>>,
-    chain: Arc<Mutex<Chain>>,
-    offchain_mock_context: Option<OffChainMockContext>,
     rollup_config: RollupConfig,
-    debug_config: DebugConfig,
     mem_pool_config: MemPoolConfig,
     backend_info: Vec<BackendInfo>,
     node_mode: NodeMode,
@@ -127,9 +119,6 @@ impl Registry {
         generator: Arc<Generator>,
         tests_rpc_impl: Option<Box<T>>,
         rollup_config: RollupConfig,
-        debug_config: DebugConfig,
-        chain: Arc<Mutex<Chain>>,
-        offchain_mock_context: Option<OffChainMockContext>,
         mem_pool_config: MemPoolConfig,
         node_mode: NodeMode,
         rpc_client: RPCClient,
@@ -155,9 +144,6 @@ impl Registry {
             tests_rpc_impl: tests_rpc_impl
                 .map(|r| Arc::new(r as Box<dyn TestModeRPC + Sync + Send + 'static>)),
             rollup_config,
-            debug_config,
-            chain,
-            offchain_mock_context,
             mem_pool_config,
             backend_info,
             node_mode,
