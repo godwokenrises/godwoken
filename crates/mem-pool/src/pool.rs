@@ -8,7 +8,7 @@
 //! txs & withdrawals again.
 //!
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     state::{to_short_address, State},
@@ -25,13 +25,9 @@ use gw_store::{
     Store,
 };
 use gw_types::{
-    offchain::{
-        BlockParam, CellStatus, CollectedCustodianCells, DepositInfo, ErrorTxReceipt, RunResult,
-    },
-    packed::{
-        AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt, WithdrawalRequest,
-    },
-    prelude::{Entity, Pack, Unpack},
+    offchain::{BlockParam, CellStatus, CollectedCustodianCells, DepositInfo, ErrorTxReceipt},
+    packed::{AccountMerkleState, L2Block, L2Transaction, Script, TxReceipt, WithdrawalRequest},
+    prelude::{Entity, Unpack},
 };
 use std::{
     cmp::{max, min},
@@ -91,8 +87,6 @@ pub struct MemPool {
     pending_deposits: Vec<DepositInfo>,
     /// Mem block save and restore
     restore_manager: RestoreManager,
-    /// Config
-    config: Arc<MemPoolConfig>,
 }
 
 impl MemPool {
@@ -126,11 +120,6 @@ impl MemPool {
             }
             _ => (false, MemBlock::with_block_producer(block_producer_id)),
         };
-        let reverted_block_root = {
-            let db = store.begin_transaction();
-            let smt = db.reverted_block_smt()?;
-            smt.root().to_owned()
-        };
 
         let mut mem_pool = MemPool {
             store,
@@ -140,7 +129,6 @@ impl MemPool {
             pending,
             mem_block,
             provider,
-            config: Arc::new(config),
             pending_deposits: Default::default(),
             restore_manager: restore_manager.clone(),
         };
@@ -721,10 +709,6 @@ impl MemPool {
         self.reset_mem_block_state_db(&db, merkle_state)?;
         let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
         db.update_mem_pool_block_info(self.mem_block.block_info())?;
-        let reverted_block_root: H256 = {
-            let smt = db.reverted_block_smt()?;
-            smt.root().to_owned()
-        };
 
         // set tip
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());

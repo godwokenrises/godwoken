@@ -50,6 +50,13 @@ pub struct RPCConfig {
     pub sudt_proxy_code_hashes: Vec<H256>,
     pub allowed_polyjuice_contract_creator_address: Option<HashSet<H160>>,
     pub polyjuice_script_code_hash: Option<H256>,
+    pub send_tx_rate_limit: Option<RPCRateLimit>,
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RPCRateLimit {
+    pub seconds: u64,
+    pub lru_size: usize,
 }
 
 /// Onchain rollup cell config

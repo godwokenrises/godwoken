@@ -4,7 +4,7 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::OffChainMockContext;
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{DebugConfig, MemPoolConfig, NodeMode};
+use gw_config::{DebugConfig, MemPoolConfig, NodeMode, RPCRateLimit};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
@@ -54,10 +54,6 @@ const INVALID_REQUEST: i64 = -32600;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
 const INVALID_PARAM_ERR_CODE: i64 = -32602;
 const RATE_LIMIT_ERR_CODE: i64 = -32603;
-
-// rate limit
-const MAX_SEND_TX_RATE_LIMIT_LRU_SIZE: usize = 128 * 1024 * 1024; // 128m
-const SEND_TX_RATE_LIMIT_SECONDS: u64 = 10;
 
 type SendTransactionRateLimiter = Mutex<LruCache<u32, Instant>>;
 
@@ -120,6 +116,7 @@ pub struct Registry {
     node_mode: NodeMode,
     submit_tx: smol::channel::Sender<Request>,
     rpc_client: RPCClient,
+    send_tx_rate_limit: Option<RPCRateLimit>,
 }
 
 impl Registry {
@@ -136,6 +133,7 @@ impl Registry {
         mem_pool_config: MemPoolConfig,
         node_mode: NodeMode,
         rpc_client: RPCClient,
+        send_tx_rate_limit: Option<RPCRateLimit>,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -165,14 +163,17 @@ impl Registry {
             node_mode,
             submit_tx,
             rpc_client,
+            send_tx_rate_limit,
         }
     }
 
     pub fn build_rpc_server(self) -> Result<RPCServer> {
         let mut server = JsonrpcServer::new();
 
-        let send_transaction_rate_limiter: SendTransactionRateLimiter =
-            Mutex::new(lru::LruCache::new(MAX_SEND_TX_RATE_LIMIT_LRU_SIZE));
+        let send_transaction_rate_limiter: Option<SendTransactionRateLimiter> = self
+            .send_tx_rate_limit
+            .as_ref()
+            .map(|send_tx_rate_limit| Mutex::new(lru::LruCache::new(send_tx_rate_limit.lru_size)));
 
         server = server
             .with_data(Data::new(self.mem_pool))
@@ -183,7 +184,8 @@ impl Registry {
             .with_data(Data::new(self.backend_info))
             .with_data(Data::new(self.submit_tx))
             .with_data(Data::new(self.rpc_client))
-            .with_data(Data::new(send_transaction_rate_limiter))
+            .with_data(Data::new(self.send_tx_rate_limit))
+            .with_data(Data::new(Some(send_transaction_rate_limiter)))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -710,18 +712,24 @@ async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     store: Data<Store>,
     submit_tx: Data<smol::channel::Sender<Request>>,
-    rate_limiter: Data<SendTransactionRateLimiter>,
+    rate_limiter: Data<Option<SendTransactionRateLimiter>>,
+    rate_limit_config: Data<Option<RPCRateLimit>>,
 ) -> Result<JsonH256, RpcError> {
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
     let tx_hash = to_jsonh256(tx.hash().into());
 
     // check rate limit
-    {
+    if let Some(rate_limiter) = rate_limiter.as_ref() {
         let mut rate_limiter = rate_limiter.lock().await;
         let sender_id: u32 = tx.raw().from_id().unpack();
         if let Some(last_touch) = rate_limiter.get(&sender_id) {
-            if last_touch.elapsed().as_secs() < SEND_TX_RATE_LIMIT_SECONDS {
+            if last_touch.elapsed().as_secs()
+                < rate_limit_config
+                    .as_ref()
+                    .map(|c| c.seconds)
+                    .unwrap_or_default()
+            {
                 return Err(rate_limit_err());
             }
         }
