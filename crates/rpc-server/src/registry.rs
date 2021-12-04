@@ -171,7 +171,7 @@ impl Registry {
             .with_data(Data::new(self.submit_tx))
             .with_data(Data::new(self.rpc_client))
             .with_data(Data::new(self.send_tx_rate_limit))
-            .with_data(Data::new(Some(send_transaction_rate_limiter)))
+            .with_data(Data::new(send_transaction_rate_limiter))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
