@@ -33,7 +33,7 @@ use gw_types::{
 use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
 use lru::LruCache;
-use smol::lock::Mutex;
+use smol::{lock::Mutex, unblock};
 use std::{
     convert::{TryFrom, TryInto},
     sync::Arc,
@@ -605,7 +605,8 @@ async fn execute_l2transaction(
         .number(number.pack())
         .build();
 
-    let mut run_result = {
+    let tx_hash = tx.hash();
+    let mut run_result = unblock(move || {
         let tip_block_hash = store.get_tip_block_hash()?;
         let db = store.begin_transaction();
         let state_db =
@@ -618,18 +619,21 @@ async fn execute_l2transaction(
         generator.verify_transaction(&state, &tx)?;
         // execute tx
         let raw_tx = tx.raw();
-        generator.unchecked_execute_transaction(
+        let run_result = generator.unchecked_execute_transaction(
             &chain_view,
             &state,
             &block_info,
             &raw_tx,
             100000000,
-        )?
-    };
+        )?;
+
+        Result::<_, anyhow::Error>::Ok(run_result)
+    })
+    .await?;
 
     if run_result.exit_code != 0 {
         let receipt = gw_types::offchain::ErrorTxReceipt {
-            tx_hash: tx.hash().into(),
+            tx_hash: tx_hash.into(),
             block_number: number,
             return_data: run_result.return_data,
             last_log: run_result.logs.pop(),
@@ -700,7 +704,7 @@ async fn execute_raw_l2transaction(
     let block_number: u64 = block_info.number().unpack();
 
     // execute tx in task
-    let task: smol::Task<Result<_>> = smol::spawn(async move {
+    let mut run_result = unblock(move || {
         let state_db = get_state_db_at_block(&db, block_number_opt.map(Into::into), true)
             .map_err(|_err| anyhow!("get state db error"))?;
         let state = state_db.state_tree()?;
@@ -716,10 +720,11 @@ async fn execute_raw_l2transaction(
             &raw_l2tx,
             execute_l2tx_max_cycles,
         )?;
-        Ok(run_result)
-    });
 
-    let mut run_result = task.await?;
+        Result::<_, anyhow::Error>::Ok(run_result)
+    })
+    .await?;
+
     if run_result.exit_code != 0 {
         let receipt = gw_types::offchain::ErrorTxReceipt {
             tx_hash,
