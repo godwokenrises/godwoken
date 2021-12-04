@@ -4,6 +4,7 @@ use std::net::{Shutdown, TcpListener, TcpStream};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use anyhow::{Error, Result};
 use hyper::service::{make_service_fn, service_fn};
@@ -16,7 +17,15 @@ use crate::registry::Registry;
 
 pub async fn start_jsonrpc_server(listen_addr: SocketAddr, registry: Registry) -> Result<()> {
     let rpc_server = registry.build_rpc_server()?;
-    let listener = Async::<TcpListener>::bind(listen_addr)?;
+    let socket = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None)?;
+    let keepalive = socket2::TcpKeepalive::new().with_time(Duration::from_secs(10)); // Default 10s
+    socket.set_tcp_keepalive(&keepalive)?;
+
+    let listener = {
+        socket.bind(&listen_addr.into())?;
+        socket.listen(128)?; // Linux default, see /proc/sys/net/core/somaxconn
+        Async::new(Into::<TcpListener>::into(socket))?
+    };
 
     // Format the full address.
     let url = format!("http://{}", listener.get_ref().local_addr()?);
