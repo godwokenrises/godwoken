@@ -10,7 +10,8 @@ use gw_common::{
     H256,
 };
 use gw_db::schema::Col;
-use gw_types::{packed, prelude::*};
+
+use super::serde::{branch_key_to_vec, branch_node_to_vec, slice_to_branch_node};
 
 pub struct SMTStore<'a, DB: KVStore> {
     leaf_col: Col,
@@ -34,12 +35,11 @@ impl<'a, DB: KVStore> SMTStore<'a, DB> {
 
 impl<'a, DB: KVStore> Store<H256> for SMTStore<'a, DB> {
     fn get_branch(&self, branch_key: &BranchKey) -> Result<Option<BranchNode>, SMTError> {
-        let branch_key: packed::SMTBranchKey = branch_key.pack();
-        match self.store.get(self.branch_col, branch_key.as_slice()) {
-            Some(slice) => {
-                let branch = packed::SMTBranchNodeReader::from_slice_should_be_ok(slice.as_ref());
-                Ok(Some(branch.to_entity().unpack()))
-            }
+        match self
+            .store
+            .get(self.branch_col, &branch_key_to_vec(branch_key))
+        {
+            Some(slice) => Ok(Some(slice_to_branch_node(&slice))),
             None => Ok(None),
         }
     }
@@ -57,11 +57,12 @@ impl<'a, DB: KVStore> Store<H256> for SMTStore<'a, DB> {
     }
 
     fn insert_branch(&mut self, branch_key: BranchKey, branch: BranchNode) -> Result<(), SMTError> {
-        let branch_key: packed::SMTBranchKey = branch_key.pack();
-        let branch: packed::SMTBranchNode = branch.pack();
-
         self.store
-            .insert_raw(self.branch_col, branch_key.as_slice(), branch.as_slice())
+            .insert_raw(
+                self.branch_col,
+                &branch_key_to_vec(&branch_key),
+                &branch_node_to_vec(&branch),
+            )
             .map_err(|err| SMTError::Store(format!("insert error {}", err)))?;
 
         Ok(())
@@ -76,10 +77,8 @@ impl<'a, DB: KVStore> Store<H256> for SMTStore<'a, DB> {
     }
 
     fn remove_branch(&mut self, branch_key: &BranchKey) -> Result<(), SMTError> {
-        let branch_key: packed::SMTBranchKey = branch_key.pack();
-
         self.store
-            .delete(self.branch_col, branch_key.as_slice())
+            .delete(self.branch_col, &branch_key_to_vec(branch_key))
             .map_err(|err| SMTError::Store(format!("delete error {}", err)))?;
 
         Ok(())

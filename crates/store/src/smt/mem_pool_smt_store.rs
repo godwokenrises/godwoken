@@ -9,9 +9,11 @@ use gw_common::{
     },
     H256,
 };
-use gw_types::{packed, prelude::*};
 
-use super::Columns;
+use super::{
+    serde::{branch_key_to_vec, branch_node_to_vec, slice_to_branch_node},
+    Columns,
+};
 
 const DELETED_FLAG: u8 = 0;
 
@@ -43,7 +45,7 @@ impl<'a> MemPoolSMTStore<'a> {
 
 impl<'a> Store<H256> for MemPoolSMTStore<'a> {
     fn get_branch(&self, branch_key: &BranchKey) -> Result<Option<BranchNode>, SMTError> {
-        let branch_key: packed::SMTBranchKey = branch_key.pack();
+        let branch_key = branch_key_to_vec(branch_key);
         let opt = self
             .inner_store()
             .get(self.mem_pool_columns.branch_col, branch_key.as_slice())
@@ -52,10 +54,7 @@ impl<'a> Store<H256> for MemPoolSMTStore<'a> {
                 self.inner_store()
                     .get(self.under_layer_columns.branch_col, branch_key.as_slice())
             })
-            .map(|slice| {
-                let branch = packed::SMTBranchNodeReader::from_slice_should_be_ok(slice.as_ref());
-                branch.to_entity().unpack()
-            });
+            .map(|slice| slice_to_branch_node(slice.as_ref()));
         Ok(opt)
     }
 
@@ -79,8 +78,8 @@ impl<'a> Store<H256> for MemPoolSMTStore<'a> {
     }
 
     fn insert_branch(&mut self, branch_key: BranchKey, branch: BranchNode) -> Result<(), SMTError> {
-        let branch_key: packed::SMTBranchKey = branch_key.pack();
-        let branch: packed::SMTBranchNode = branch.pack();
+        let branch_key = branch_key_to_vec(&branch_key);
+        let branch = branch_node_to_vec(&branch);
 
         self.store
             .insert_raw(
@@ -106,7 +105,7 @@ impl<'a> Store<H256> for MemPoolSMTStore<'a> {
     }
 
     fn remove_branch(&mut self, branch_key: &BranchKey) -> Result<(), SMTError> {
-        let branch_key: packed::SMTBranchKey = branch_key.pack();
+        let branch_key = branch_key_to_vec(branch_key);
 
         self.store
             .insert_raw(
