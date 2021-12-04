@@ -92,10 +92,6 @@ impl StoreTransaction {
         self.remove_block_state_record(finalized_block_number)
     }
 
-    //     pub fn state_tree(&self) -> Result<StateTree<'_>, Error> {
-    //         let merkle_state = self.get_checkpoint_merkle_state()?;
-    //         self.state_tree_with_merkle_state(merkle_state)
-    //     }
     pub(crate) fn remove_block_state_record(&self, block_number: u64) -> Result<(), Error> {
         let iter = self.iter_block_state_record(block_number);
         for record_key in iter {
