@@ -37,6 +37,8 @@ impl ReplayBlock {
     ) -> Result<()> {
         let raw_block = block.raw();
         let block_info = get_block_info(&raw_block);
+        let block_number = raw_block.number().unpack();
+        log::info!("replay block {}", block_number);
 
         let parent_block_hash: H256 = raw_block.parent_block_hash().unpack();
         let parent_block = db
@@ -48,8 +50,8 @@ impl ReplayBlock {
             let smt = db.account_smt_store()?;
             let mem_smt_store = MemSMTStore::new(smt);
             let tree = SMT::new(parent_post_state.merkle_root().unpack(), mem_smt_store);
-            let context = MemStateContext::History(parent_block.raw().number().unpack());
-            MemStateTree::new(&db, tree, parent_post_state.count().unpack(), context)
+            let context = MemStateContext::Tip;
+            MemStateTree::new(db, tree, parent_post_state.count().unpack(), context)
         };
 
         // apply withdrawal to state
@@ -97,7 +99,7 @@ impl ReplayBlock {
         }
 
         // handle transactions
-        let chain_view = ChainView::new(&db, parent_block_hash);
+        let chain_view = ChainView::new(db, parent_block_hash);
         for (tx_index, tx) in block.transactions().into_iter().enumerate() {
             generator.check_transaction_signature(&state, &tx)?;
 
