@@ -13,8 +13,6 @@ use gw_generator::constants::L2TX_MAX_CYCLES;
 use gw_generator::traits::StateExt;
 use gw_generator::{ChallengeContext, Generator};
 use gw_store::chain_view::ChainView;
-use gw_store::smt::mem_pool_smt_store::MemPoolSMTStore;
-use gw_store::smt::mem_smt_store::MemSMTStore;
 use gw_store::state::mem_state_db::MemStateTree;
 use gw_store::state::state_db::StateContext;
 use gw_store::transaction::StoreTransaction;
@@ -333,8 +331,7 @@ fn build_tx_kv_witness(
 
     // FIXME we need execute block until challenge point
 
-    let mut tree: MemStateTree<'_, MemSMTStore<MemPoolSMTStore>> =
-        unimplemented!("fetch tx_index state");
+    let mut tree: MemStateTree<'_> = unimplemented!("fetch tx_index state");
     // let prev_tx_account_count = tree.get_account_count()?;
 
     // // Check prev tx account state

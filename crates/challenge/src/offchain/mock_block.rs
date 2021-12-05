@@ -6,14 +6,13 @@ use gw_common::h256_ext::H256Ext;
 use gw_common::merkle_utils::{
     calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash, CBMT,
 };
-use gw_common::smt::{Blake2bHasher, Store, SMT};
+use gw_common::smt::{Blake2bHasher, SMT};
 use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::state::{
     build_account_field_key, State, GW_ACCOUNT_NONCE_TYPE, GW_ACCOUNT_SCRIPT_HASH_TYPE,
 };
 use gw_common::H256;
 use gw_generator::traits::StateExt;
-use gw_store::smt::mem_pool_smt_store::MemPoolSMTStore;
 use gw_store::state::mem_state_db::MemStateTree;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
@@ -30,7 +29,7 @@ use gw_types::prelude::*;
 
 use std::collections::HashMap;
 
-type MemTree<'a> = MemStateTree<'a, MemPoolSMTStore<'a>>;
+type MemTree<'a> = MemStateTree<'a>;
 
 #[derive(thiserror::Error, Debug)]
 #[error("{:?}", {0})]
@@ -680,7 +679,7 @@ impl RawBlockTransactions {
     }
 }
 
-fn get_script<S: Store<H256>>(state: &MemStateTree<'_, S>, account_id: u32) -> Result<Script> {
+fn get_script(state: &MemStateTree<'_>, account_id: u32) -> Result<Script> {
     let script_hash = state.get_script_hash(account_id)?;
     state
         .get_script(&script_hash)

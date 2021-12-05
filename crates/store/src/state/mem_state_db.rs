@@ -1,11 +1,9 @@
 //! State DB
 
-use std::collections::HashMap;
-
-use crate::smt::mem_smt_store::MemSMTStore;
-use crate::{traits::KVStore, transaction::StoreTransaction};
+use crate::smt::smt_store::SMTStore;
+use crate::snapshot::StoreSnapshot;
+use crate::traits::KVStore;
 use anyhow::Result;
-use gw_common::smt::Store;
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT, COLUMN_SCRIPT_PREFIX};
 use gw_traits::CodeStore;
@@ -17,41 +15,18 @@ use gw_types::{
 
 use super::state_tracker::StateTracker;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum MemStateContext {
-    Tip,
-    History(u64),
-}
-
-/// MemStateTree
-/// This struct is used for calculate state in the memory
-pub struct MemStateTree<'a, S> {
-    tree: SMT<MemSMTStore<S>>,
-    db: &'a StoreTransaction,
+pub struct MemStateTree<'a> {
+    tree: SMT<SMTStore<'a, StoreSnapshot>>,
     account_count: u32,
-    context: MemStateContext,
     tracker: StateTracker,
-    scripts: HashMap<H256, packed::Script>,
-    data: HashMap<H256, Bytes>,
-    scripts_hash_prefix: HashMap<Bytes, H256>,
 }
 
-impl<'a, S: Store<H256>> MemStateTree<'a, S> {
-    pub fn new(
-        db: &'a StoreTransaction,
-        tree: SMT<MemSMTStore<S>>,
-        account_count: u32,
-        context: MemStateContext,
-    ) -> Self {
+impl<'a> MemStateTree<'a> {
+    pub fn new(tree: SMT<SMTStore<'a, StoreSnapshot>>, account_count: u32) -> Self {
         MemStateTree {
-            db,
             tree,
             account_count,
-            scripts: Default::default(),
-            data: Default::default(),
-            scripts_hash_prefix: Default::default(),
-            tracker: StateTracker::default(),
-            context,
+            tracker: Default::default(),
         }
     }
 
@@ -66,25 +41,30 @@ impl<'a, S: Store<H256>> MemStateTree<'a, S> {
             .build()
     }
 
-    pub fn smt(&self) -> &SMT<MemSMTStore<S>> {
+    pub fn smt(&self) -> &SMT<SMTStore<'a, StoreSnapshot>> {
         &self.tree
     }
 
-    fn db(&self) -> &StoreTransaction {
-        self.db
+    /// submit tree changes into memory block
+    /// notice, this function do not commit the DBTransaction
+    pub fn submit_tree_to_mem_block(&self) {
+        self.db()
+            .set_mem_block_account_smt_root(*self.tree.root())
+            .expect("set smt root");
+        self.db()
+            .set_mem_block_account_count(self.account_count)
+            .expect("set smt root");
+    }
+
+    fn db(&self) -> &StoreSnapshot {
+        self.tree.store().inner_store()
     }
 }
 
-impl<'a, S: Store<H256>> State for MemStateTree<'a, S> {
+impl<'a> State for MemStateTree<'a> {
     fn get_raw(&self, key: &H256) -> Result<H256, StateError> {
         self.tracker.touch_key(key);
-        let v = match self.context {
-            MemStateContext::History(block_number) => self
-                .db()
-                .get_history_state(block_number, key)
-                .unwrap_or_default(),
-            MemStateContext::Tip => self.tree.get(key)?,
-        };
+        let v = self.tree.get(key)?;
         Ok(v)
     }
 
@@ -109,49 +89,54 @@ impl<'a, S: Store<H256>> State for MemStateTree<'a, S> {
     }
 }
 
-impl<'a, S: Store<H256>> CodeStore for MemStateTree<'a, S> {
+impl<'a> CodeStore for MemStateTree<'a> {
     fn insert_script(&mut self, script_hash: H256, script: packed::Script) {
-        self.scripts.insert(script_hash, script);
+        self.db()
+            .insert_raw(COLUMN_SCRIPT, script_hash.as_slice(), script.as_slice())
+            .expect("insert script");
+
         // build script_hash prefix search index
-        self.scripts_hash_prefix
-            .insert(script_hash.as_slice()[..20].to_vec().into(), script_hash);
+        self.db()
+            .insert_raw(
+                COLUMN_SCRIPT_PREFIX,
+                &script_hash.as_slice()[..20],
+                script_hash.as_slice(),
+            )
+            .expect("insert script prefix");
     }
 
     fn get_script(&self, script_hash: &H256) -> Option<packed::Script> {
-        self.scripts.get(script_hash).cloned().or_else(|| {
-            self.db()
-                .get(COLUMN_SCRIPT, script_hash.as_slice())
-                .map(|slice| {
-                    packed::ScriptReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
-                })
-        })
+        self.db()
+            .get(COLUMN_SCRIPT, script_hash.as_slice())
+            .or_else(|| self.db().get(COLUMN_SCRIPT, script_hash.as_slice()))
+            .map(|slice| packed::ScriptReader::from_slice_should_be_ok(slice.as_ref()).to_entity())
     }
 
     fn get_script_hash_by_short_address(&self, script_hash_prefix: &[u8]) -> Option<H256> {
-        self.scripts_hash_prefix
-            .get(&Bytes::from(script_hash_prefix.to_vec()))
-            .cloned()
-            .or_else(
-                || match self.db().get(COLUMN_SCRIPT_PREFIX, script_hash_prefix) {
-                    Some(slice) => {
-                        let mut hash = [0u8; 32];
-                        hash.copy_from_slice(slice.as_ref());
-                        Some(hash.into())
-                    }
-                    None => None,
-                },
-            )
+        match self
+            .db()
+            .get(COLUMN_SCRIPT_PREFIX, script_hash_prefix)
+            .or_else(|| self.db().get(COLUMN_SCRIPT_PREFIX, script_hash_prefix))
+        {
+            Some(slice) => {
+                let mut hash = [0u8; 32];
+                hash.copy_from_slice(slice.as_ref());
+                Some(hash.into())
+            }
+            None => None,
+        }
     }
 
     fn insert_data(&mut self, data_hash: H256, code: Bytes) {
-        self.data.insert(data_hash, code);
+        self.db()
+            .insert_raw(COLUMN_DATA, data_hash.as_slice(), &code)
+            .expect("insert data");
     }
 
     fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
-        self.data.get(data_hash).cloned().or_else(|| {
-            self.db()
-                .get(COLUMN_DATA, data_hash.as_slice())
-                .map(|slice| Bytes::from(slice.to_vec()))
-        })
+        self.db()
+            .get(COLUMN_DATA, data_hash.as_slice())
+            .or_else(|| self.db().get(COLUMN_DATA, data_hash.as_slice()))
+            .map(|slice| Bytes::from(slice.to_vec()))
     }
 }

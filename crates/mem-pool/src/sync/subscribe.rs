@@ -28,10 +28,12 @@ impl SubscribeMemPoolService {
             hex::encode(&tx_hash),
             block_number
         );
-        let mut mem_pool = smol::block_on(self.mem_pool.lock());
-        if let Err(err) = mem_pool.append_tx(tx, block_number) {
-            log::error!("Sync tx from full node failed: {:?}", err);
-        }
+        smol::block_on(async {
+            let mut mem_pool = self.mem_pool.lock().await;
+            if let Err(err) = mem_pool.append_tx(tx, block_number).await {
+                log::error!("Sync tx from full node failed: {:?}", err);
+            }
+        });
         Ok(())
     }
 
@@ -44,8 +46,12 @@ impl SubscribeMemPoolService {
         let withdrawals = next_mem_block.withdrawals().into_iter().collect();
         let deposits = next_mem_block.deposits().unpack();
 
-        let mut mem_pool = smol::block_on(self.mem_pool.lock());
-        mem_pool.refresh_mem_block(block_info, withdrawals, deposits)
+        smol::block_on(async {
+            let mut mem_pool = self.mem_pool.lock().await;
+            mem_pool
+                .refresh_mem_block(block_info, withdrawals, deposits)
+                .await
+        })
     }
 }
 

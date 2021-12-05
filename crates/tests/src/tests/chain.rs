@@ -712,7 +712,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = smol::block_on(mem_pool.lock());
-        mem_pool.push_withdrawal_request(withdrawal).unwrap();
+        smol::block_on(mem_pool.push_withdrawal_request(withdrawal)).unwrap();
         construct_block(&chain, &mut mem_pool, Vec::default()).unwrap()
     };
     let bad_block_result = {

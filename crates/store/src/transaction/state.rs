@@ -17,7 +17,7 @@ use crate::{
 };
 
 impl StoreTransaction {
-    pub fn account_smt_store(&self) -> Result<SMTStore<'_, Self>, Error> {
+    pub fn account_smt_store(&self) -> Result<SMTStore<Self>, Error> {
         let smt_store = SMTStore::new(COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ACCOUNT_SMT_BRANCH, self);
         Ok(smt_store)
     }
@@ -25,13 +25,13 @@ impl StoreTransaction {
     pub fn account_smt_with_merkle_state(
         &self,
         merkle_state: AccountMerkleState,
-    ) -> Result<SMT<SMTStore<'_, Self>>, Error> {
+    ) -> Result<SMT<SMTStore<Self>>, Error> {
         let smt_store = self.account_smt_store()?;
         Ok(SMT::new(merkle_state.merkle_root().unpack(), smt_store))
     }
 
     // get state tree
-    pub fn state_tree(&self, context: StateContext) -> Result<StateTree<'_>, Error> {
+    pub fn state_tree(&self, context: StateContext) -> Result<StateTree, Error> {
         let block = match context {
             StateContext::ReadOnlyHistory(block_number) => {
                 let block_hash = self

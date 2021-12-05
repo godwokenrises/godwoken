@@ -255,7 +255,7 @@ impl Chain {
                 smol::block_on(async {
                     log::debug!("[complete_initial_syncing] acquire mem-pool",);
                     let t = Instant::now();
-                    mem_pool.lock().await.notify_new_tip(tip_block_hash)?;
+                    mem_pool.lock().await.notify_new_tip(tip_block_hash).await?;
                     log::debug!(
                         "[complete_initial_syncing] unlock mem-pool {}ms",
                         t.elapsed().as_millis()
@@ -841,7 +841,7 @@ impl Chain {
                 smol::block_on(async {
                     log::debug!("[sync] acquire mem-pool",);
                     let t = Instant::now();
-                    mem_pool.lock().await.notify_new_tip(tip_block_hash)?;
+                    mem_pool.lock().await.notify_new_tip(tip_block_hash).await?;
                     log::debug!("[sync] unlock mem-pool {}ms", t.elapsed().as_millis());
                     Ok::<(), anyhow::Error>(())
                 })?;
