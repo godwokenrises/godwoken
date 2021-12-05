@@ -665,6 +665,15 @@ impl StoreTransaction {
 
     /// Delete block from DB
     pub fn detach_block(&self, block: &packed::L2Block) -> Result<(), Error> {
+        // check
+        {
+            let tip = self.get_last_valid_tip_block_hash()?;
+            assert_eq!(
+                tip,
+                block.raw().parent_block_hash().unpack(),
+                "Must detach from tip"
+            );
+        }
         // remove transaction info
         for tx in block.transactions().into_iter() {
             let tx_hash = tx.hash();
