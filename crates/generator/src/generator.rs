@@ -493,6 +493,11 @@ impl Generator {
             );
         }
         for (tx_index, tx) in args.l2block.transactions().into_iter().enumerate() {
+            log::debug!(
+                "[apply block] execute tx index: {} hash: {}",
+                tx_index,
+                hex::encode(tx.hash())
+            );
             let state_db = state_db!(SubState::Tx(tx_index as u32));
             let state = &mut get_state!(state_db, account_state.clone());
 
