@@ -554,6 +554,22 @@ impl Generator {
             }
         }
 
+        // check post state
+        {
+            let post_merkle_root: H256 = raw_block.post_account().merkle_root().unpack();
+            let post_merkle_count: u32 = raw_block.post_account().count().unpack();
+            assert_eq!(
+                state.calculate_root().expect("check post root"),
+                post_merkle_root,
+                "post account merkle root must be consistent"
+            );
+            assert_eq!(
+                state.get_account_count().expect("check post count"),
+                post_merkle_count,
+                "post account merkle count must be consistent"
+            );
+        }
+
         ApplyBlockResult::Success {
             withdrawal_receipts,
             prev_txs_state,
