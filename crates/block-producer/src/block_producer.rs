@@ -354,13 +354,16 @@ impl BlockProducer {
         } = block_result;
 
         let number: u64 = block.raw().number().unpack();
-        let deposit_requests: Vec<_> = deposit_cells.iter().map(|i| i.request.clone()).collect();
-        if let Err(err) =
-            ReplayBlock::replay(&db, &self.generator, &block, deposit_requests.as_slice())
-        {
-            log::error!("replay block {} {}", number, err);
-            let mem_pool = self.mem_pool.lock().await;
-            mem_pool.save_mem_block_with_suffix(&format!("invalid_block_{}", number))?;
+        if self.config.check_mem_block_before_submit {
+            let deposit_requests: Vec<_> =
+                deposit_cells.iter().map(|i| i.request.clone()).collect();
+            if let Err(err) =
+                ReplayBlock::replay(&db, &self.generator, &block, deposit_requests.as_slice())
+            {
+                let mem_pool = self.mem_pool.lock().await;
+                mem_pool.save_mem_block_with_suffix(&format!("invalid_block_{}", number))?;
+                bail!("replay block {} {}", number, err);
+            }
         }
 
         let block_txs = block.transactions().len();
