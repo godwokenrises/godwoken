@@ -668,11 +668,7 @@ impl StoreTransaction {
         // check
         {
             let tip = self.get_last_valid_tip_block_hash()?;
-            assert_eq!(
-                tip,
-                block.raw().parent_block_hash().unpack(),
-                "Must detach from tip"
-            );
+            assert_eq!(tip, H256::from(block.raw().hash()), "Must detach from tip");
         }
         {
             let number: u64 = block.raw().number().unpack();
