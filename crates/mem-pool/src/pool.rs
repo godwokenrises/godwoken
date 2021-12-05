@@ -11,6 +11,7 @@
 use anyhow::{anyhow, Result};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
+    merkle_utils::calculate_state_checkpoint,
     smt::Blake2bHasher,
     sparse_merkle_tree::CompiledMerkleProof,
     state::{to_short_address, State},
@@ -660,6 +661,35 @@ impl MemPool {
             Some(state) => state,
             None => mem_state.merkle_state()?,
         };
+
+        // check state
+        {
+            let tip_block = db.get_tip_block()?;
+            let tip_block_post_account = tip_block.raw().post_account();
+            assert_eq!(
+                new_mem_block.prev_merkle_state(),
+                &tip_block_post_account,
+                "check mem block txs prev state"
+            );
+            if new_mem_block.withdrawals().is_empty() && new_mem_block.deposits().is_empty() {
+                let post_block_checkpoint = calculate_state_checkpoint(
+                    &tip_block_post_account.merkle_root().unpack(),
+                    tip_block_post_account.count().unpack(),
+                );
+                assert_eq!(
+                    new_mem_block.txs_prev_state_checkpoint().unwrap(),
+                    post_block_checkpoint,
+                    "check mem block txs prev state"
+                );
+                if new_mem_block.txs().is_empty() {
+                    assert_eq!(
+                        new_mem_block.post_merkle_state(),
+                        &tip_block_post_account,
+                        "check mem block post account"
+                    )
+                }
+            }
+        }
 
         Ok((new_mem_block, post_merkle_state))
     }
