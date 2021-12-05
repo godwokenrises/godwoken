@@ -33,15 +33,13 @@ use gw_types::{
 use pprof::criterion::{Output, PProfProfiler};
 
 // meta contract
-const META_VALIDATOR_PATH: &str =
-    "../../tests-deps/godwoken-scripts/c/build/meta-contract-validator";
-const META_GENERATOR_PATH: &str =
-    "../../tests-deps/godwoken-scripts/c/build/meta-contract-generator";
+const META_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/meta-contract-validator";
+const META_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/meta-contract-generator";
 const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
 
 // sudt contract
-const SUDT_VALIDATOR_PATH: &str = "../../tests-deps/godwoken-scripts/c/build/sudt-validator";
-const SUDT_GENERATOR_PATH: &str = "../../tests-deps/godwoken-scripts/c/build/sudt-generator";
+const SUDT_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-validator";
+const SUDT_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-generator";
 const SUDT_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [2u8; 32];
 
 // always success lock
