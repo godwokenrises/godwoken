@@ -35,6 +35,13 @@ impl StoreTransaction {
         let block = self.get_tip_block()?;
         let merkle_root = block.raw().post_account();
         let account_count = self.get_mem_block_account_count()?;
+        let block_post_count: u32 = block.raw().post_account().count().unpack();
+        log::info!(
+            "Start in mem state account {} block count {} is_same: {}",
+            account_count,
+            block_post_count,
+            account_count == block_post_count
+        );
         let mem_smt_store = MemSMTStore::new(smt_store);
         let tree = SMT::new(merkle_root.merkle_root().unpack(), mem_smt_store);
         Ok(MemStateTree::new(self, tree, account_count, context))
