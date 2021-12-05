@@ -1,6 +1,7 @@
 pub mod chain_view;
-pub mod mem_pool_store;
+pub mod mem_pool_state;
 pub mod smt;
+pub mod snapshot;
 pub mod state;
 mod store_impl;
 pub mod traits;

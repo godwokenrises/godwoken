@@ -1,3 +1,5 @@
+use std::sync::RwLock;
+
 use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
 use gw_common::{
     blake2b::new_blake2b,
@@ -16,6 +18,7 @@ use gw_generator::{
     Generator,
 };
 use gw_store::{
+    mem_pool_state::MemPoolState,
     state::state_db::{StateContext, StateTree},
     Store,
 };
@@ -105,6 +108,7 @@ struct BenchExecutionEnvironment {
     generator: Generator,
     chain: BenchChain,
     store: Store,
+    mem_pool_state: MemPoolState,
 }
 
 impl BenchExecutionEnvironment {
@@ -157,17 +161,18 @@ impl BenchExecutionEnvironment {
         );
 
         Self::init_genesis(&store, &genesis_config, accounts);
+        let mem_pool_state = MemPoolState::new(store.get_snapshot());
 
         BenchExecutionEnvironment {
             generator,
             chain: BenchChain,
             store,
+            mem_pool_state,
         }
     }
 
     fn accounts_transfer(&self, accounts: u32, count: usize) {
-        let db = self.store.begin_transaction();
-        let mut state = db.mem_pool_state_tree().unwrap();
+        let mut state = self.mem_pool_state.state().unwrap();
 
         let block_producer_script = Account::build_script(0);
         let block_producer_id = {
@@ -243,9 +248,7 @@ impl BenchExecutionEnvironment {
             transfer_count -= 1;
         }
 
-        db.commit().unwrap();
-
-        let state = db.mem_pool_state_tree().unwrap();
+        let state = self.mem_pool_state.state().unwrap();
         let post_block_producer_balance = state
             .get_sudt_balance(
                 CKB_SUDT_ACCOUNT_ID,
@@ -380,12 +383,6 @@ impl BenchExecutionEnvironment {
         };
 
         let prev_txs_state = genesis.as_reader().raw().post_account().to_entity();
-
-        db.set_mem_block_account_smt_root(prev_txs_state.merkle_root().unpack())
-            .unwrap();
-        db.set_mem_block_account_count(prev_txs_state.count().unpack())
-            .unwrap();
-
         db.insert_block(
             genesis.clone(),
             Default::default(),

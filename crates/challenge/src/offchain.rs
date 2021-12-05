@@ -8,7 +8,6 @@ use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig, OffChainValidatorConfig};
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::smt::mem_pool_smt_store::MemPoolSMTStore;
 use gw_store::state::mem_state_db::MemStateTree;
 use gw_store::transaction::StoreTransaction;
 use gw_types::core::DepType;
@@ -48,7 +47,7 @@ const MARGIN_OF_MOCK_BLOCK_SAFITY_CYCLES: u64 = 5_000_000;
 const MARGIN_OF_MOCK_BLOCK_SAFITY_TX_SIZE_LIMIT: u64 =
     MAX_BLOCK_BYTES - MAX_TX_WITHDRAWAL_PROOF_SIZE;
 
-type MemTree<'a> = MemStateTree<'a, MemPoolSMTStore<'a>>;
+type MemTree<'a> = MemStateTree<'a>;
 
 #[derive(Debug, Clone)]
 pub struct CKBGenesisInfo {

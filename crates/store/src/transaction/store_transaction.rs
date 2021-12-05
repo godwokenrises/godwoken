@@ -1,11 +1,6 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::mem_pool_store::{
-    MemPoolStore, Value, MEM_POOL_COL_META, META_MEM_POOL_SMT_COUNT_KEY, META_MEM_POOL_SMT_ROOT_KEY,
-};
 use crate::{smt::smt_store::SMTStore, traits::KVStore};
-use arc_swap::access::Access;
-use arc_swap::{ArcSwap, Guard};
 use gw_common::h256_ext::H256Ext;
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
 use gw_db::schema::{
@@ -18,7 +13,6 @@ use gw_db::schema::{
     META_CHAIN_ID_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_REVERTED_BLOCK_SMT_ROOT_KEY,
     META_TIP_BLOCK_HASH_KEY,
 };
-use gw_db::ReadOptions;
 use gw_db::{error::Error, iter::DBIter, DBIterator, IteratorMode, RocksDBTransaction};
 use gw_types::offchain::global_state_from_slice;
 use gw_types::packed::{Script, WithdrawalKey};
@@ -29,11 +23,9 @@ use gw_types::{
     prelude::*,
 };
 use std::collections::HashSet;
-use std::sync::Arc;
 
 pub struct StoreTransaction {
     pub(crate) inner: RocksDBTransaction,
-    pub(crate) mem_pool: Arc<ArcSwap<MemPoolStore>>,
 }
 
 impl KVStore for StoreTransaction {
@@ -42,18 +34,6 @@ impl KVStore for StoreTransaction {
             .get(col, key)
             .expect("db operation should be ok")
             .map(|v| Box::<[u8]>::from(v.as_ref()))
-    }
-
-    fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
-        self.inner
-            .iter(col, mode)
-            .expect("db operation should be ok")
-    }
-
-    fn get_iter_opts(&self, col: Col, mode: IteratorMode, opts: &ReadOptions) -> DBIter {
-        self.inner
-            .iter_opt(col, mode, opts)
-            .expect("db operation should be ok")
     }
 
     fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
@@ -74,15 +54,11 @@ impl StoreTransaction {
         self.inner.rollback()
     }
 
-    // /// TODO Remove this
-    // pub fn set_save_point(&self) {
-    //     self.inner.set_savepoint()
-    // }
-
-    // /// TODO Remove this
-    // pub fn rollback_to_save_point(&self) -> Result<(), Error> {
-    //     self.inner.rollback_to_savepoint()
-    // }
+    pub(crate) fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
+        self.inner
+            .iter(col, mode)
+            .expect("db operation should be ok")
+    }
 
     pub fn setup_chain_id(&self, chain_id: H256) -> Result<(), Error> {
         self.insert_raw(COLUMN_META, META_CHAIN_ID_KEY, chain_id.as_slice())?;
@@ -104,7 +80,7 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn block_smt(&self) -> Result<SMT<SMTStore<'_, Self>>, Error> {
+    pub fn block_smt(&self) -> Result<SMT<SMTStore<Self>>, Error> {
         let root = self.get_block_smt_root()?;
         let smt_store = SMTStore::new(COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_SMT_BRANCH, self);
         Ok(SMT::new(root, smt_store))
@@ -129,7 +105,7 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn reverted_block_smt(&self) -> Result<SMT<SMTStore<'_, Self>>, Error> {
+    pub fn reverted_block_smt(&self) -> Result<SMT<SMTStore<Self>>, Error> {
         let root = self.get_reverted_block_smt_root()?;
         let smt_store = SMTStore::new(
             COLUMN_REVERTED_BLOCK_SMT_LEAF,
@@ -137,50 +113,6 @@ impl StoreTransaction {
             self,
         );
         Ok(SMT::new(root, smt_store))
-    }
-
-    pub fn set_mem_block_account_smt_root(&self, root: H256) -> Result<(), Error> {
-        let mem_pool: Guard<Arc<MemPoolStore>> = Access::<Arc<MemPoolStore>>::load(&self.mem_pool);
-        mem_pool.insert(
-            MEM_POOL_COL_META,
-            META_MEM_POOL_SMT_ROOT_KEY.into(),
-            Value::Exist(root.as_slice().to_vec().into()),
-        );
-        Ok(())
-    }
-
-    pub fn set_mem_block_account_count(&self, count: u32) -> Result<(), Error> {
-        let mem_pool: Guard<Arc<MemPoolStore>> = Access::<Arc<MemPoolStore>>::load(&self.mem_pool);
-        let count: packed::Uint32 = count.pack();
-        mem_pool.insert(
-            MEM_POOL_COL_META,
-            META_MEM_POOL_SMT_COUNT_KEY.into(),
-            Value::Exist(count.as_slice().to_vec().into()),
-        );
-        Ok(())
-    }
-
-    pub fn get_mem_block_account_smt_root(&self) -> Result<Option<H256>, Error> {
-        let mem_pool: Guard<Arc<MemPoolStore>> = Access::<Arc<MemPoolStore>>::load(&self.mem_pool);
-        Ok(mem_pool
-            .get(MEM_POOL_COL_META, META_MEM_POOL_SMT_ROOT_KEY)
-            .and_then(|v| v.to_opt())
-            .map(|slice| {
-                let mut root = [0u8; 32];
-                root.copy_from_slice(&slice);
-                root.into()
-            }))
-    }
-
-    pub fn get_mem_block_account_count(&self) -> Result<Option<u32>, Error> {
-        let mem_pool: Guard<Arc<MemPoolStore>> = Access::<Arc<MemPoolStore>>::load(&self.mem_pool);
-        let opt = mem_pool
-            .get(MEM_POOL_COL_META, META_MEM_POOL_SMT_COUNT_KEY)
-            .and_then(|v| v.to_opt());
-        Ok(opt.map(|slice| {
-            let count = packed::Uint32Reader::from_slice_should_be_ok(slice.as_ref()).to_entity();
-            count.unpack()
-        }))
     }
 
     pub fn get_last_valid_tip_block(&self) -> Result<packed::L2Block, Error> {
@@ -592,11 +524,22 @@ impl StoreTransaction {
                 checkpoint.pack()
             };
             if checkpoint != prev_txs_state_checkpoint {
-                return Err(Error::from("unexpected prev tx state".to_string()));
+                let root: Byte32 = root.pack();
+                log::debug!("root: {} count: {}", root, count);
+                return Err(Error::from(format!(
+                    "unexpected prev tx state, checkpoint: {} prev_txs_state_checkpoint: {}",
+                    checkpoint, prev_txs_state_checkpoint
+                )));
             }
 
             let block_post_state = block.as_reader().raw().post_account();
             if tx_receipts.is_empty() && prev_txs_state.as_slice() != block_post_state.as_slice() {
+                log::debug!(
+                    "tx_receipts: {} prev_txs_state: {} post_state: {}",
+                    tx_receipts.len(),
+                    prev_txs_state,
+                    block_post_state
+                );
                 return Err(Error::from("unexpected no tx post state".to_string()));
             }
         }

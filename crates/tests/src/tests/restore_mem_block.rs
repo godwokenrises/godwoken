@@ -150,11 +150,11 @@ fn test_restore_mem_block() {
         };
         mem_pool.set_provider(Box::new(provider));
         for withdrawal in random_withdrawals.clone() {
-            mem_pool.push_withdrawal_request(withdrawal).unwrap();
+            smol::block_on(mem_pool.push_withdrawal_request(withdrawal)).unwrap();
         }
-        mem_pool.reset_mem_block().unwrap();
+        smol::block_on(mem_pool.reset_mem_block()).unwrap();
         for tx in random_txs.clone() {
-            mem_pool.push_transaction(tx).unwrap();
+            smol::block_on(mem_pool.push_transaction(tx)).unwrap();
         }
 
         let mem_block = mem_pool.mem_block();

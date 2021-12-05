@@ -95,7 +95,7 @@ fn withdrawal_from_chain(
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = smol::block_on(mem_pool.lock());
-        mem_pool.push_withdrawal_request(withdrawal)?;
+        smol::block_on(mem_pool.push_withdrawal_request(withdrawal))?;
         construct_block(chain, &mut mem_pool, Vec::default()).unwrap()
     };
 
@@ -106,6 +106,7 @@ fn withdrawal_from_chain(
 
 #[test]
 fn test_deposit_and_withdrawal() {
+    env_logger::init();
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
     let mut chain = setup_chain(rollup_type_script.clone());
@@ -135,9 +136,9 @@ fn test_deposit_and_withdrawal() {
     )
     .unwrap();
     let (user_id, user_script_hash, ckb_balance) = {
-        let db = chain.store().begin_transaction();
-        // let tree = db.state_tree(StateContext::ReadOnly).unwrap();
-        let tree = db.mem_pool_state_tree().unwrap();
+        let mem_pool = smol::block_on(chain.mem_pool().as_ref().unwrap().lock());
+        let snap = mem_pool.mem_pool_state().load();
+        let tree = snap.state().unwrap();
         // check user account
         assert_eq!(
             tree.get_account_count().unwrap(),
@@ -163,8 +164,9 @@ fn test_deposit_and_withdrawal() {
     }
     // check tx pool state
     {
-        let db = chain.store().begin_transaction();
-        let state = db.mem_pool_state_tree().unwrap();
+        let mem_pool = smol::block_on(chain.mem_pool().as_ref().unwrap().lock());
+        let snap = mem_pool.mem_pool_state().load();
+        let state = snap.state().unwrap();
         assert_eq!(
             state
                 .get_account_id_by_script_hash(&user_script_hash)
@@ -201,7 +203,10 @@ fn test_deposit_and_withdrawal() {
     assert_eq!(nonce, 1);
     // check tx pool state
     {
-        let state = db.mem_pool_state_tree().unwrap();
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mem_pool = smol::block_on(mem_pool.lock());
+        let snap = mem_pool.mem_pool_state().load();
+        let state = snap.state().unwrap();
         assert_eq!(
             state
                 .get_account_id_by_script_hash(&user_script_hash)
@@ -267,8 +272,10 @@ fn test_overdraft() {
     );
     // check tx pool state
     {
-        let db = chain.store().begin_transaction();
-        let state = db.mem_pool_state_tree().unwrap();
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mem_pool = smol::block_on(mem_pool.lock());
+        let snap = mem_pool.mem_pool_state().load();
+        let state = snap.state().unwrap();
         assert_eq!(
             state
                 .get_sudt_balance(

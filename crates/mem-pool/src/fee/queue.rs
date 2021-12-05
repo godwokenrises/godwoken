@@ -1,6 +1,5 @@
 use anyhow::Result;
 use gw_common::state::State;
-use gw_store::transaction::StoreTransaction;
 use std::collections::{BinaryHeap, HashMap};
 
 /// Max queue size
@@ -67,8 +66,7 @@ impl FeeQueue {
     }
 
     /// Fetch items by fee sort
-    pub fn fetch(&mut self, db: &StoreTransaction, count: usize) -> Result<Vec<FeeEntry>> {
-        let state = db.mem_pool_state_tree()?;
+    pub fn fetch(&mut self, state: &impl State, count: usize) -> Result<Vec<FeeEntry>> {
         // sorted fee items
         let mut fetched_items = Vec::with_capacity(count as usize);
         let mut fetched_senders: HashMap<u32, u32> = Default::default();
@@ -164,10 +162,6 @@ mod tests {
             let db = store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            db.set_mem_block_account_count(genesis.raw().post_account().count().unpack())
-                .unwrap();
-            db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack())
-                .unwrap();
             let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
 
             // create accounts
@@ -177,6 +171,7 @@ mod tests {
 
             db.commit().expect("commit");
         }
+        let snap = store.get_snapshot();
 
         let entry1 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
@@ -215,11 +210,11 @@ mod tests {
         queue.add(entry3);
         queue.add(entry4);
 
-        let db = store.begin_transaction();
+        let tree = snap.state().unwrap();
 
         // fetch 3
         {
-            let items = queue.fetch(&db, 3).expect("fetch");
+            let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 3);
             assert_eq!(items[0].sender, 3);
             assert_eq!(items[1].sender, 5);
@@ -227,13 +222,13 @@ mod tests {
         }
         // fetch 3
         {
-            let items = queue.fetch(&db, 3).expect("fetch");
+            let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 1);
             assert_eq!(items[0].sender, 4);
         }
         // fetch 3
         {
-            let items = queue.fetch(&db, 3).expect("fetch");
+            let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 0);
         }
     }
@@ -248,10 +243,6 @@ mod tests {
             let db = store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            db.set_mem_block_account_count(genesis.raw().post_account().count().unpack())
-                .unwrap();
-            db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack())
-                .unwrap();
             let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
 
             // create accounts
@@ -289,11 +280,12 @@ mod tests {
         queue.add(entry1);
         queue.add(entry2);
 
-        let db = store.begin_transaction();
+        let snap = store.get_snapshot();
+        let tree = snap.state().unwrap();
 
         // fetch
         {
-            let items = queue.fetch(&db, 3).expect("fetch");
+            let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 2);
             assert_eq!(items[0].item.nonce(), 0);
             assert_eq!(items[1].item.nonce(), 1);
@@ -309,10 +301,6 @@ mod tests {
             let db = store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            db.set_mem_block_account_count(genesis.raw().post_account().count().unpack())
-                .unwrap();
-            db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack())
-                .unwrap();
             let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
 
             // create accounts
@@ -350,15 +338,16 @@ mod tests {
         queue.add(entry1);
         queue.add(entry2);
 
-        let db = store.begin_transaction();
+        let snap = store.get_snapshot();
+        let tree = snap.state().unwrap();
 
         // fetch
         {
-            let items = queue.fetch(&db, 3).expect("fetch");
+            let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 1);
             assert_eq!(items[0].fee_rate, 101);
             // try fetch remain items
-            let items = queue.fetch(&db, 1).expect("fetch");
+            let items = queue.fetch(&tree, 1).expect("fetch");
             assert_eq!(items.len(), 0);
         }
     }
@@ -373,10 +362,6 @@ mod tests {
             let db = store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            db.set_mem_block_account_count(genesis.raw().post_account().count().unpack())
-                .unwrap();
-            db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack())
-                .unwrap();
             let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
 
             // create accounts

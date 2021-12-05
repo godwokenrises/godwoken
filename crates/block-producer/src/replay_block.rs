@@ -1,16 +1,13 @@
 use anyhow::{anyhow, bail, Result};
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::merkle_utils::calculate_state_checkpoint;
-use gw_common::smt::SMT;
 use gw_common::state::State;
 use gw_common::H256;
 use gw_generator::constants::L2TX_MAX_CYCLES;
 use gw_generator::traits::StateExt;
 use gw_generator::Generator;
 use gw_store::chain_view::ChainView;
-use gw_store::smt::mem_smt_store::MemSMTStore;
-use gw_store::state::mem_state_db::{MemStateContext, MemStateTree};
-use gw_store::transaction::StoreTransaction;
+use gw_store::Store;
 use gw_types::packed::{BlockInfo, DepositRequest, L2Block, RawL2Block};
 use gw_types::prelude::Unpack;
 
@@ -18,7 +15,7 @@ pub struct ReplayBlock;
 
 impl ReplayBlock {
     pub fn replay(
-        db: &StoreTransaction,
+        store: &Store,
         generator: &Generator,
         block: &L2Block,
         deposits: &[DepositRequest],
@@ -29,17 +26,19 @@ impl ReplayBlock {
         log::info!("replay block {}", block_number);
 
         let parent_block_hash: H256 = raw_block.parent_block_hash().unpack();
-        let parent_block = db
+        let snap = store.get_snapshot();
+        let parent_block = snap
             .get_block(&parent_block_hash)?
             .ok_or_else(|| anyhow!("replay parent block not found"))?;
 
-        let mut state = {
+        let mut state = snap.state()?;
+        {
             let parent_post_state = parent_block.raw().post_account();
-            let smt = db.account_smt_store()?;
-            let mem_smt_store = MemSMTStore::new(smt);
-            let tree = SMT::new(parent_post_state.merkle_root().unpack(), mem_smt_store);
-            let context = MemStateContext::Tip;
-            MemStateTree::new(db, tree, parent_post_state.count().unpack(), context)
+            assert_eq!(
+                parent_post_state,
+                state.merkle_state()?,
+                "merkle state should equals to parent block"
+            );
         };
 
         // apply withdrawal to state
@@ -87,7 +86,8 @@ impl ReplayBlock {
         }
 
         // handle transactions
-        let chain_view = ChainView::new(db, parent_block_hash);
+        let db = store.begin_transaction();
+        let chain_view = ChainView::new(&db, parent_block_hash);
         for (tx_index, tx) in block.transactions().into_iter().enumerate() {
             generator.check_transaction_signature(&state, &tx)?;
 

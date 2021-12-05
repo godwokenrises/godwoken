@@ -342,7 +342,7 @@ pub fn construct_block(
     };
     mem_pool.set_provider(Box::new(provider));
     // refresh mem block
-    mem_pool.reset_mem_block()?;
+    smol::block_on(mem_pool.reset_mem_block())?;
     let provider = DummyMemPoolProvider {
         deposit_cells: Vec::default(),
         fake_blocktime: Duration::from_millis(0),
@@ -350,7 +350,8 @@ pub fn construct_block(
     };
     mem_pool.set_provider(Box::new(provider));
 
-    let (_custodians, block_param) = mem_pool.output_mem_block(&OutputParam::default()).unwrap();
+    let (_custodians, block_param) =
+        smol::block_on(mem_pool.output_mem_block(&OutputParam::default())).unwrap();
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash,
         rollup_config_hash,

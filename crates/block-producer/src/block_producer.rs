@@ -375,7 +375,7 @@ impl BlockProducer {
                 t.elapsed().as_millis()
             );
             let t = Instant::now();
-            let output = mem_pool.output_mem_block(&OutputParam::new(retry_count))?;
+            let output = smol::block_on(mem_pool.output_mem_block(&OutputParam::new(retry_count)))?;
             log::debug!(
                 "[compose_next_block_submit_tx] output mem block {}ms",
                 t.elapsed().as_millis()
@@ -407,9 +407,12 @@ impl BlockProducer {
         if self.config.check_mem_block_before_submit {
             let deposit_requests: Vec<_> =
                 deposit_cells.iter().map(|i| i.request.clone()).collect();
-            if let Err(err) =
-                ReplayBlock::replay(&db, &self.generator, &block, deposit_requests.as_slice())
-            {
+            if let Err(err) = ReplayBlock::replay(
+                &self.store,
+                &self.generator,
+                &block,
+                deposit_requests.as_slice(),
+            ) {
                 let mut mem_pool = self.mem_pool.lock().await;
                 mem_pool.save_mem_block_with_suffix(&format!("invalid_block_{}", number))?;
                 bail!("replay block {} {}", number, err);

@@ -12,7 +12,6 @@ use gw_block_producer::{
 use gw_common::H256;
 use gw_generator::traits::StateExt;
 use gw_mem_pool::pool::OutputParam;
-use gw_store::state::mem_state_db::MemStateContext;
 use gw_types::{
     core::ScriptHashType,
     offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext},
@@ -54,25 +53,21 @@ fn test_repackage_mem_block() {
         collected_custodians: CollectedCustodianCells::default(),
     };
     mem_pool.set_provider(Box::new(provider));
-    mem_pool.reset_mem_block().unwrap();
+    smol::block_on(mem_pool.reset_mem_block()).unwrap();
 
     {
-        let db = chain.store().begin_transaction();
-        let smt_store = db.account_smt_store().unwrap();
-        let mem_state = db
-            .in_mem_state_tree(smt_store, MemStateContext::Tip)
-            .unwrap();
-        let tip_block = db.get_tip_block().unwrap();
+        let snap = chain.store().get_snapshot();
+        let state = snap.state().unwrap();
+        let tip_block = chain.store().get_tip_block().unwrap();
 
         assert_eq!(
-            mem_state.merkle_state().unwrap().as_slice(),
+            state.merkle_state().unwrap().as_slice(),
             tip_block.raw().post_account().as_slice()
         );
     }
 
-    let (_, block_param) = mem_pool
-        .output_mem_block(&OutputParam { retry_count: 1 })
-        .unwrap();
+    let (_, block_param) =
+        smol::block_on(mem_pool.output_mem_block(&OutputParam { retry_count: 1 })).unwrap();
 
     let deposit_cells = block_param.deposits.clone();
 
@@ -90,12 +85,13 @@ fn test_repackage_mem_block() {
         rollup_config_hash: rollup_context.rollup_config.hash().into(),
         block_param,
     };
-    let db = chain.store().begin_transaction();
+    let store = chain.store();
+    let db = store.begin_transaction();
     let block_result = produce_block(&db, chain.generator(), param).unwrap();
 
     let deposit_requests: Vec<_> = deposit_cells.iter().map(|i| i.request.clone()).collect();
     ReplayBlock::replay(
-        &db,
+        &store,
         chain.generator(),
         &block_result.block,
         deposit_requests.as_slice(),
