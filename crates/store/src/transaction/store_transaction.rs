@@ -673,6 +673,11 @@ impl StoreTransaction {
             let hash: Byte32 = block.hash().pack();
             log::warn!("detach block #{} {}", number, hash);
         }
+        {
+            let number: u64 = block.raw().number().unpack();
+            let hash: Byte32 = block.hash().pack();
+            log::warn!("detach block #{} {}", number, hash);
+        }
         // remove transaction info
         for tx in block.transactions().into_iter() {
             let tx_hash = tx.hash();
