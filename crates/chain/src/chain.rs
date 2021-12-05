@@ -928,10 +928,16 @@ impl Chain {
             let tree = db.state_tree(StateContext::ReadOnly)?;
 
             let post_merkle_root: H256 = l2block.raw().post_account().merkle_root().unpack();
+            let post_merkle_count: u32 = l2block.raw().post_account().count().unpack();
             assert_eq!(
                 tree.calculate_root()?,
                 post_merkle_root,
                 "post account merkle root must be consistent"
+            );
+            assert_eq!(
+                tree.get_account_count()?,
+                post_merkle_count,
+                "post account merkle count must be consistent"
             );
         }
         self.local_state.tip = l2block;
