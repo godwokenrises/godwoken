@@ -427,7 +427,7 @@ impl MemPool {
                 .0
         };
 
-        let txs = mem_block
+        let txs: Vec<_> = mem_block
             .txs()
             .iter()
             .map(|tx_hash| {
@@ -435,8 +435,8 @@ impl MemPool {
                     .ok_or_else(|| anyhow!("can't find tx_hash from mem pool"))
             })
             .collect::<Result<_>>()?;
-        let deposits = mem_block.deposits().to_vec();
-        let withdrawals = mem_block
+        let deposits: Vec<_> = mem_block.deposits().to_vec();
+        let withdrawals: Vec<_> = mem_block
             .withdrawals()
             .iter()
             .map(|withdrawal_hash| {
@@ -490,6 +490,28 @@ impl MemPool {
                     expected_kv_state_root, prev_kv_state_root,
                     "check state merkle proof"
                 );
+            }
+
+            let tip_block_post_account = tip_block.raw().post_account();
+            assert_eq!(
+                prev_merkle_state, tip_block_post_account,
+                "check output mem block txs prev state"
+            );
+            if withdrawals.is_empty() && deposits.is_empty() {
+                let post_block_checkpoint = calculate_state_checkpoint(
+                    &tip_block_post_account.merkle_root().unpack(),
+                    tip_block_post_account.count().unpack(),
+                );
+                assert_eq!(
+                    txs_prev_state_checkpoint, post_block_checkpoint,
+                    "check mem block txs prev state"
+                );
+                if txs.is_empty() {
+                    assert_eq!(
+                        post_merkle_state, tip_block_post_account,
+                        "check mem block post account"
+                    )
+                }
             }
         }
 
@@ -661,35 +683,6 @@ impl MemPool {
             Some(state) => state,
             None => mem_state.merkle_state()?,
         };
-
-        // check state
-        {
-            let tip_block = db.get_tip_block()?;
-            let tip_block_post_account = tip_block.raw().post_account();
-            assert_eq!(
-                new_mem_block.prev_merkle_state(),
-                &tip_block_post_account,
-                "check mem block txs prev state"
-            );
-            if new_mem_block.withdrawals().is_empty() && new_mem_block.deposits().is_empty() {
-                let post_block_checkpoint = calculate_state_checkpoint(
-                    &tip_block_post_account.merkle_root().unpack(),
-                    tip_block_post_account.count().unpack(),
-                );
-                assert_eq!(
-                    new_mem_block.txs_prev_state_checkpoint().unwrap(),
-                    post_block_checkpoint,
-                    "check mem block txs prev state"
-                );
-                if new_mem_block.txs().is_empty() {
-                    assert_eq!(
-                        new_mem_block.post_merkle_state(),
-                        &tip_block_post_account,
-                        "check mem block post account"
-                    )
-                }
-            }
-        }
 
         Ok((new_mem_block, post_merkle_state))
     }
