@@ -166,6 +166,15 @@ impl MemPool {
                 return Ok(false);
             }
 
+            log::info!(
+                "db mem block account count {}",
+                db.get_mem_block_account_count()?
+            );
+            log::info!(
+                "tip block post account count {}",
+                Unpack::<u32>::unpack(&db.get_tip_block()?.raw().post_account().count())
+            );
+
             Ok(true)
         };
         if !is_restored || !is_mem_block_state_matched()? {
