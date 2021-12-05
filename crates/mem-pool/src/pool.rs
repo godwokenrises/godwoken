@@ -192,6 +192,11 @@ impl MemPool {
         self.restore_manager.save(self.mem_block())
     }
 
+    pub fn save_mem_block_with_suffix(&self, suffix: &str) -> Result<()> {
+        self.restore_manager
+            .save_with_suffix(self.mem_block(), suffix)
+    }
+
     pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send>) {
         self.provider = provider;
     }

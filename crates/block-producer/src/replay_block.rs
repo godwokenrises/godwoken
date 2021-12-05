@@ -30,7 +30,7 @@ pub struct ReplayBlock;
 
 impl ReplayBlock {
     pub fn replay(
-        db: StoreTransaction,
+        db: &StoreTransaction,
         generator: &Generator,
         block: &L2Block,
         deposits: &[DepositRequest],

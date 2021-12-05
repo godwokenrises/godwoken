@@ -2,6 +2,7 @@
 
 use crate::{
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
+    replay_block::ReplayBlock,
     test_mode_control::TestModeControl,
     types::ChainEvent,
     utils,
@@ -353,6 +354,15 @@ impl BlockProducer {
         } = block_result;
 
         let number: u64 = block.raw().number().unpack();
+        let deposit_requests: Vec<_> = deposit_cells.iter().map(|i| i.request.clone()).collect();
+        if let Err(err) =
+            ReplayBlock::replay(&db, &self.generator, &block, deposit_requests.as_slice())
+        {
+            log::error!("replay block {} {}", number, err);
+            let mem_pool = self.mem_pool.lock().await;
+            mem_pool.save_mem_block_with_suffix(&format!("invalid_block_{}", number))?;
+        }
+
         let block_txs = block.transactions().len();
         let block_withdrawals = block.withdrawals().len();
         log::info!(
@@ -363,7 +373,7 @@ impl BlockProducer {
             block_withdrawals,
         );
         if !block.withdrawals().is_empty() && opt_finalized_custodians.is_none() {
-            bail!("unexpected none custodians for withdrawals ",);
+            bail!("unexpected none custodians for withdrawals");
         }
         let finalized_custodians = opt_finalized_custodians.unwrap_or_default();
 
