@@ -60,7 +60,7 @@ const RATE_LIMIT_ERR_CODE: i64 = -32603;
 
 // rate limit
 const MAX_SEND_TX_RATE_LIMIT_LRU_SIZE: usize = 128 * 1024 * 1024; // 128m
-const SEND_TX_RATE_LIMIT_SECONDS: u64 = 30;
+const SEND_TX_RATE_LIMIT_SECONDS: u64 = 10;
 
 type SendTransactionRateLimiter = Mutex<LruCache<u32, Instant>>;
 
