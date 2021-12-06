@@ -182,11 +182,11 @@ pub fn replay_chain(chain: &mut Chain, from_store: Store, local_store: Store) ->
             Default::default(),
         )?;
 
-        let process_block_ms = now.elapsed().as_micros();
+        let process_block_ms = now.elapsed().as_millis();
 
         let now = Instant::now();
         db.commit()?;
-        let db_commit_ms = now.elapsed().as_micros();
+        let db_commit_ms = now.elapsed().as_millis();
 
         println!(
             "Replay block: #{} {} (txs: {} deposits: {} process time: {}ms commit time: {}ms)",
