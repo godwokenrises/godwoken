@@ -6,9 +6,9 @@ use anyhow::Result;
 use gw_common::{error::Error, smt::H256};
 use gw_db::{
     schema::{
-        Col, COLUMNS, COLUMN_BLOCK, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_L2BLOCK_COMMITTED_INFO,
-        COLUMN_META, COLUMN_TRANSACTION, COLUMN_TRANSACTION_RECEIPT, META_CHAIN_ID_KEY,
-        META_TIP_BLOCK_HASH_KEY,
+        Col, COLUMNS, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
+        COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_TRANSACTION,
+        COLUMN_TRANSACTION_RECEIPT, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
     },
     DBPinnableSlice, RocksDB,
 };
@@ -144,6 +144,33 @@ impl<'a> Store {
         match self.get(COLUMN_TRANSACTION_RECEIPT, tx_hash.as_slice()) {
             Some(slice) => Ok(Some(
                 packed::TxReceiptReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
+            )),
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, Error> {
+        let block_number: packed::Uint64 = number.pack();
+        match self.get(COLUMN_INDEX, block_number.as_slice()) {
+            Some(slice) => Ok(Some(
+                packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref())
+                    .to_entity()
+                    .unpack(),
+            )),
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_block_deposit_requests(
+        &self,
+        block_hash: &H256,
+    ) -> Result<Option<Vec<packed::DepositRequest>>, Error> {
+        match self.get(COLUMN_BLOCK_DEPOSIT_REQUESTS, block_hash.as_slice()) {
+            Some(slice) => Ok(Some(
+                packed::DepositRequestVecReader::from_slice_should_be_ok(slice.as_ref())
+                    .to_entity()
+                    .into_iter()
+                    .collect(),
             )),
             None => Ok(None),
         }

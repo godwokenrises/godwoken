@@ -843,7 +843,7 @@ impl Chain {
         Ok(())
     }
 
-    fn process_block(
+    pub fn process_block(
         &mut self,
         db: &StoreTransaction,
         l2block: L2Block,

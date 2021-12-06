@@ -1,0 +1,33 @@
+[package]
+name = "gw-replay-chain"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+gw-chain = { path = "../chain" }
+gw-challenge = { path = "../challenge" }
+gw-types = { path = "../types" }
+gw-config = { path = "../config" }
+gw-common = { path = "../common" }
+gw-generator = { path = "../generator" }
+gw-mem-pool = { path = "../mem-pool" }
+gw-store = { path = "../store" }
+gw-db = { path = "../db" }
+gw-traits = { path = "../traits" }
+gw-jsonrpc-types = { path = "../jsonrpc-types" }
+gw-rpc-client = { path = "../rpc-client" }
+async-jsonrpc-client = { version = "0.3.0", default-features = false, features = ["http-async-std"] }
+clap = "2.33.3"
+ckb-fixed-hash = "0.100.0"
+ckb-types = "0.100.0"
+anyhow = "1.0"
+thiserror = "1.0"
+lazy_static = "1.4"
+smol = "1.2.5"
+crossbeam-channel = "0.5"
+toml = "0.5"
+log = "0.4"
+hex = "0.4"
+

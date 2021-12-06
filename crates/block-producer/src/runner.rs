@@ -301,7 +301,7 @@ impl BaseInitComponents {
                 backend_manage,
                 account_lock_manage,
                 rollup_context.clone(),
-                config.rpc.clone(),
+                Some(config.rpc.clone()),
             ))
         };
 

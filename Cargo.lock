@@ -2233,6 +2233,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "gw-replay-chain"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-jsonrpc-client",
+ "ckb-fixed-hash 0.100.0",
+ "ckb-types",
+ "clap",
+ "crossbeam-channel",
+ "gw-chain",
+ "gw-challenge",
+ "gw-common",
+ "gw-config",
+ "gw-db",
+ "gw-generator",
+ "gw-jsonrpc-types",
+ "gw-mem-pool",
+ "gw-rpc-client",
+ "gw-store",
+ "gw-traits",
+ "gw-types",
+ "hex",
+ "lazy_static",
+ "log",
+ "smol",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
 name = "gw-rpc-client"
 version = "0.1.0"
 dependencies = [

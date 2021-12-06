@@ -81,19 +81,29 @@ impl Generator {
         backend_manage: BackendManage,
         account_lock_manage: AccountLockManage,
         rollup_context: RollupContext,
-        rpc_config: RPCConfig,
+        rpc_config: Option<RPCConfig>,
     ) -> Self {
-        let polyjuice_contract_creator_allowlist =
-            PolyjuiceContractCreatorAllowList::from_rpc_config(&rpc_config);
+        let polyjuice_contract_creator_allowlist;
+        let sudt_proxy_account_whitelist;
+        match rpc_config {
+            Some(rpc_config) => {
+                polyjuice_contract_creator_allowlist =
+                    PolyjuiceContractCreatorAllowList::from_rpc_config(&rpc_config);
 
-        let sudt_proxy_account_whitelist = SUDTProxyAccountAllowlist::new(
-            rpc_config.allowed_sudt_proxy_creator_account_id,
-            rpc_config
-                .sudt_proxy_code_hashes
-                .into_iter()
-                .map(|hash| hash.0.into())
-                .collect(),
-        );
+                sudt_proxy_account_whitelist = SUDTProxyAccountAllowlist::new(
+                    rpc_config.allowed_sudt_proxy_creator_account_id,
+                    rpc_config
+                        .sudt_proxy_code_hashes
+                        .into_iter()
+                        .map(|hash| hash.0.into())
+                        .collect(),
+                );
+            }
+            None => {
+                polyjuice_contract_creator_allowlist = None;
+                sudt_proxy_account_whitelist = Default::default();
+            }
+        }
 
         Generator {
             backend_manage,
