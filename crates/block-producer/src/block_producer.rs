@@ -267,7 +267,7 @@ impl BlockProducer {
             .should_issue_next_block(median_time, &poa_cell_input)
             .await?
         {
-            let mut retry_count = 1;
+            let mut retry_count = 0;
             while retry_count <= MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT {
                 let (block_number, tx) = match self
                     .compose_next_block_submit_tx(median_time, rollup_cell.clone(), retry_count)
