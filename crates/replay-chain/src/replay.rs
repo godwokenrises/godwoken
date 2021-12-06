@@ -172,6 +172,8 @@ pub fn replay_chain(chain: &mut Chain, from_store: Store, local_store: Store) ->
         };
 
         let block = from_store.get_block(&block_hash)?.expect("block");
+        let block_number: u64 = block.raw().number().unpack();
+        assert_eq!(block_number, replay_number, "number should be consist");
         let block_committed_info = from_store
             .get_l2block_committed_info(&block_hash)?
             .expect("block");
