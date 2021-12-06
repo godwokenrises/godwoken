@@ -5,6 +5,7 @@ use replay::*;
 use anyhow::{anyhow, Context, Result};
 use clap::{App, Arg, SubCommand};
 use gw_config::Config;
+use gw_db::schema::COLUMNS;
 use std::{fs, path::Path};
 
 const ARG_CONFIG: &str = "config";
@@ -37,6 +38,12 @@ fn run_cli() -> Result<()> {
                         .required(true),
                 )
                 .arg(
+                    Arg::with_name("from-db-columns")
+                        .long("from-db-columns")
+                        .takes_value(true)
+                        .required(false),
+                )
+                .arg(
                     Arg::with_name("to-db-store")
                         .long("to-db-store")
                         .takes_value(true)
@@ -52,11 +59,17 @@ fn run_cli() -> Result<()> {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
             let from_db_store = m.value_of("from-db-store").unwrap().into();
+            let from_db_columns = m
+                .value_of("from-db-columns")
+                .map(|s| s.parse())
+                .transpose()?
+                .unwrap_or(COLUMNS);
             let to_db_store = m.value_of("to-db-store").unwrap().into();
             let args = ReplayArgs {
                 config,
                 from_db_store,
                 to_db_store,
+                from_db_columns
             };
             replay(args).expect("replay");
         }

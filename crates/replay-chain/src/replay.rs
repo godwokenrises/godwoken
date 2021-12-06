@@ -26,6 +26,7 @@ use gw_types::{
 
 pub struct ReplayArgs {
     pub from_db_store: PathBuf,
+    pub from_db_columns: u32,
     pub to_db_store: PathBuf,
     pub config: Config,
 }
@@ -35,6 +36,7 @@ pub fn replay(args: ReplayArgs) -> Result<()> {
         from_db_store,
         to_db_store,
         config,
+        from_db_columns,
     } = args;
 
     let store_config = StoreConfig {
@@ -127,7 +129,7 @@ pub fn replay(args: ReplayArgs) -> Result<()> {
             options_file: config.store.options_file.clone(),
             cache_size: config.store.cache_size.clone(),
         };
-        Store::new(RocksDB::open(&store_config, COLUMNS))
+        Store::new(RocksDB::open(&store_config, from_db_columns))
     };
 
     replay_chain(&mut chain, from_store, local_store)?;
