@@ -2242,6 +2242,7 @@ dependencies = [
  "ckb-types",
  "clap",
  "crossbeam-channel",
+ "env_logger",
  "gw-chain",
  "gw-challenge",
  "gw-common",

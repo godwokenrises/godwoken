@@ -18,6 +18,7 @@ fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
 }
 
 fn run_cli() -> Result<()> {
+    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     let app = App::new("gw-chain-replay")
         .about("The layer2 rollup built upon Nervos CKB.")
         .subcommand(
@@ -69,7 +70,7 @@ fn run_cli() -> Result<()> {
                 config,
                 from_db_store,
                 to_db_store,
-                from_db_columns
+                from_db_columns,
             };
             replay(args).expect("replay");
         }

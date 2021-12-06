@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Instant};
+use std::{collections::HashMap, convert::TryInto, path::PathBuf, sync::Arc, time::Instant};
 
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
@@ -19,6 +19,7 @@ use gw_generator::{
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{transaction::StoreTransaction, Store};
 use gw_types::{
+    core::ChallengeTargetType,
     offchain::RollupContext,
     packed::{Byte32, L2Block, RollupConfig},
     prelude::{Pack, Unpack},
@@ -189,16 +190,23 @@ pub fn replay_chain(chain: &mut Chain, from_store: Store, local_store: Store) ->
         let deposits_len = deposit_requests.len();
         let db = local_store.begin_transaction();
         let now = Instant::now();
-        chain
-            .process_block(
-                &db,
-                block,
-                block_committed_info,
-                global_state,
-                deposit_requests,
-                Default::default(),
-            )?
-            .expect("no challenge");
+        if let Some(challenge) = chain.process_block(
+            &db,
+            block,
+            block_committed_info,
+            global_state,
+            deposit_requests,
+            Default::default(),
+        )? {
+            let target_type: u8 = challenge.target_type().into();
+            let target_type: ChallengeTargetType = target_type.try_into().unwrap();
+            let target_index: u32 = challenge.target_index().unpack();
+            println!(
+                "Challenge found type: {:?} index: {}",
+                target_type, target_index
+            );
+            return Err(anyhow!("challenge found"));
+        }
 
         let process_block_ms = now.elapsed().as_millis();
 
