@@ -579,7 +579,7 @@ impl Generator {
         }
 
         // check post state
-        {
+        if !skip_checkpoint_check {
             let post_merkle_root: H256 = raw_block.post_account().merkle_root().unpack();
             let post_merkle_count: u32 = raw_block.post_account().count().unpack();
             assert_eq!(
