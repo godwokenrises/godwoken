@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Instant,
+};
 
 use crate::{
     account_lock_manage::AccountLockManage,
@@ -387,8 +390,12 @@ impl Generator {
         let block_producer_id: u32 = block_info.block_producer_id().unpack();
         let state_checkpoint_list: Vec<H256> = raw_block.state_checkpoint_list().unpack();
 
+        let mut check_signature_total_ms = 0;
+        let mut execute_tx_total_ms = 0;
+        let mut apply_state_total_ms = 0;
         let mut withdrawal_receipts = Vec::with_capacity(withdrawal_requests.len());
         for (wth_idx, request) in withdrawal_requests.into_iter().enumerate() {
+            let now = Instant::now();
             if let Err(error) = self.check_withdrawal_request_signature(&state, &request) {
                 let target = build_challenge_target(
                     block_hash.into(),
@@ -398,6 +405,7 @@ impl Generator {
 
                 return ApplyBlockResult::Challenge { target, error };
             }
+            check_signature_total_ms += now.elapsed().as_millis();
 
             let withdrawal_receipt = match state.apply_withdrawal_request(
                 &self.rollup_context,
@@ -453,6 +461,7 @@ impl Generator {
                 tx_index,
                 hex::encode(tx.hash())
             );
+            let now = Instant::now();
             if let Err(err) = self.check_transaction_signature(&state, &tx) {
                 let target = build_challenge_target(
                     block_hash.into(),
@@ -465,6 +474,7 @@ impl Generator {
                     error: err.into(),
                 };
             }
+            check_signature_total_ms += now.elapsed().as_millis();
 
             // check nonce
             let raw_tx = tx.raw();
@@ -490,6 +500,7 @@ impl Generator {
 
             // build call context
             // NOTICE users only allowed to send HandleMessage CallType txs
+            let now = Instant::now();
             let run_result = match self.execute_transaction(
                 chain,
                 &state,
@@ -511,11 +522,14 @@ impl Generator {
                     };
                 }
             };
+            execute_tx_total_ms += now.elapsed().as_millis();
 
             {
+                let now = Instant::now();
                 if let Err(err) = state.apply_run_result(&run_result) {
                     return ApplyBlockResult::Error(err);
                 }
+                apply_state_total_ms += now.elapsed().as_millis();
                 let account_state = state.get_merkle_state();
 
                 let expected_checkpoint = calculate_state_checkpoint(
@@ -579,6 +593,11 @@ impl Generator {
                 "post account merkle count must be consistent"
             );
         }
+
+        println!(
+            "signature {}ms execute tx {}ms apply state {}ms",
+            check_signature_total_ms, execute_tx_total_ms, apply_state_total_ms
+        );
 
         ApplyBlockResult::Success {
             withdrawal_receipts,

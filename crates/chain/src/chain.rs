@@ -24,7 +24,7 @@ use gw_types::{
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
 use smol::lock::Mutex;
-use std::{collections::HashSet, convert::TryFrom, sync::Arc};
+use std::{collections::HashSet, convert::TryFrom, sync::Arc, time::Instant};
 
 #[derive(Debug, Clone)]
 pub struct ChallengeCell {
@@ -921,9 +921,7 @@ impl Chain {
             deposit_requests,
         )?;
         db.insert_asset_scripts(deposit_asset_scripts)?;
-
         db.attach_block(l2block.clone())?;
-
         self.local_state.tip = l2block;
         Ok(None)
     }

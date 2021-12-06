@@ -39,9 +39,9 @@ pub fn replay(args: ReplayArgs) -> Result<()> {
 
     let store_config = StoreConfig {
         path: to_db_store,
-        options: HashMap::default(),
-        options_file: None,
-        cache_size: None,
+        options: config.store.options.clone(),
+        options_file: config.store.options_file.clone(),
+        cache_size: config.store.cache_size.clone(),
     };
     let local_store = Store::new(RocksDB::open(&store_config, COLUMNS));
     let rollup_type_script = {
@@ -123,9 +123,9 @@ pub fn replay(args: ReplayArgs) -> Result<()> {
     let from_store = {
         let store_config = StoreConfig {
             path: from_db_store,
-            options: HashMap::default(),
-            options_file: None,
-            cache_size: None,
+            options: config.store.options.clone(),
+            options_file: config.store.options_file.clone(),
+            cache_size: config.store.cache_size.clone(),
         };
         Store::new(RocksDB::open(&store_config, COLUMNS))
     };
@@ -150,6 +150,7 @@ pub fn replay_chain(chain: &mut Chain, from_store: Store, local_store: Store) ->
     let mut replay_number = number + 1;
 
     loop {
+        let now = Instant::now();
         let block_hash = match from_store.get_block_hash_by_number(replay_number)? {
             Some(block_hash) => block_hash,
             None => {
@@ -168,6 +169,7 @@ pub fn replay_chain(chain: &mut Chain, from_store: Store, local_store: Store) ->
         let deposit_requests = from_store
             .get_block_deposit_requests(&block_hash)?
             .expect("block deposit requests");
+        let load_block_ms = now.elapsed().as_millis();
 
         let txs_len = block.transactions().item_count();
         let deposits_len = deposit_requests.len();
@@ -189,7 +191,7 @@ pub fn replay_chain(chain: &mut Chain, from_store: Store, local_store: Store) ->
         let db_commit_ms = now.elapsed().as_millis();
 
         println!(
-            "Replay block: #{} {} (txs: {} deposits: {} process time: {}ms commit time: {}ms)",
+            "Replay block: #{} {} (txs: {} deposits: {} process time: {}ms commit time: {}ms load time: {}ms)",
             replay_number,
             {
                 let hash: Byte32 = block_hash.pack();
@@ -198,7 +200,8 @@ pub fn replay_chain(chain: &mut Chain, from_store: Store, local_store: Store) ->
             txs_len,
             deposits_len,
             process_block_ms,
-            db_commit_ms
+            db_commit_ms,
+            load_block_ms
         );
 
         replay_number += 1;
