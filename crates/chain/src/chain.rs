@@ -18,8 +18,9 @@ use gw_types::{
     core::Status,
     offchain::global_state_from_slice,
     packed::{
-        BlockMerkleState, CellInput, CellOutput, ChallengeTarget, ChallengeWitness, DepositRequest,
-        GlobalState, L2Block, L2BlockCommittedInfo, RawL2Block, RollupConfig, Script, Transaction,
+        BlockMerkleState, Byte32, CellInput, CellOutput, ChallengeTarget, ChallengeWitness,
+        DepositRequest, GlobalState, L2Block, L2BlockCommittedInfo, RawL2Block, RollupConfig,
+        Script, Transaction,
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
@@ -857,10 +858,13 @@ impl Chain {
         let block_number: u64 = l2block.raw().number().unpack();
         assert_eq!(
             {
-                let parent_block_hash: [u8; 32] = l2block.raw().parent_block_hash().unpack();
+                let parent_block_hash = l2block.raw().parent_block_hash();
                 (block_number, parent_block_hash)
             },
-            (tip_number + 1, tip_block_hash),
+            {
+                let tip_block_hash: Byte32 = tip_block_hash.pack();
+                (tip_number + 1, tip_block_hash)
+            },
             "new l2block must be the successor of the tip"
         );
 

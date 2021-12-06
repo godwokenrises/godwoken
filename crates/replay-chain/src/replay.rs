@@ -195,7 +195,7 @@ pub fn replay_chain(chain: &mut Chain, from_store: Store, local_store: Store) ->
                 global_state,
                 deposit_requests,
                 Default::default(),
-            )
+            )?
             .expect("no challenge");
 
         let process_block_ms = now.elapsed().as_millis();
