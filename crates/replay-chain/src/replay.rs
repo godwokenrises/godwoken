@@ -132,6 +132,8 @@ pub fn replay(args: ReplayArgs) -> Result<()> {
         Store::new(RocksDB::open(&store_config, from_db_columns))
     };
 
+    println!("Skip blocks: {:?}", config.chain.skipped_invalid_block_list);
+
     replay_chain(&mut chain, from_store, local_store)?;
 
     Ok(())
@@ -176,15 +178,21 @@ pub fn replay_chain(chain: &mut Chain, from_store: Store, local_store: Store) ->
         let txs_len = block.transactions().item_count();
         let deposits_len = deposit_requests.len();
         let db = local_store.begin_transaction();
+        println!("Process block: #{} {}", replay_number, {
+            let hash: Byte32 = block_hash.pack();
+            hash
+        });
         let now = Instant::now();
-        chain.process_block(
-            &db,
-            block,
-            block_committed_info,
-            global_state,
-            deposit_requests,
-            Default::default(),
-        )?;
+        chain
+            .process_block(
+                &db,
+                block,
+                block_committed_info,
+                global_state,
+                deposit_requests,
+                Default::default(),
+            )
+            .expect("no challenge");
 
         let process_block_ms = now.elapsed().as_millis();
 
