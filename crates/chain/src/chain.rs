@@ -6,6 +6,7 @@ use gw_common::{sparse_merkle_tree, state::State, H256};
 use gw_config::ChainConfig;
 use gw_generator::{
     generator::{ApplyBlockArgs, ApplyBlockResult},
+    traits::StateExt,
     ChallengeContext, Generator,
 };
 use gw_jsonrpc_types::debugger::ReprMockTransaction;
@@ -831,22 +832,20 @@ impl Chain {
         }
 
         // check consistency of account SMT
-        let expected_account_root: H256 = {
-            let raw_block = self.local_state.tip.raw();
-            raw_block.post_account().merkle_root().unpack()
-        };
+        let expected_account = self.local_state.tip.raw().post_account();
 
         assert_eq!(
             db.account_smt().unwrap().root(),
-            &expected_account_root,
+            &expected_account.merkle_root().unpack(),
             "account root consistent in DB"
         );
 
         let tree = db.state_tree(StateContext::ReadOnly)?;
-        let current_account_root = tree.calculate_root().unwrap();
+        let current_account = tree.merkle_state()?;
 
         assert_eq!(
-            current_account_root, expected_account_root,
+            current_account.as_slice(),
+            expected_account.as_slice(),
             "check account tree"
         );
 
@@ -888,11 +887,11 @@ impl Chain {
         {
             let tree = db.state_tree(StateContext::ReadOnly)?;
 
-            let prev_merkle_root: H256 = l2block.raw().prev_account().merkle_root().unpack();
+            let prev_merkle_state = l2block.raw().prev_account();
             assert_eq!(
-                tree.calculate_root()?,
-                prev_merkle_root,
-                "prev account merkle root must be consistent"
+                tree.merkle_state()?.as_slice(),
+                prev_merkle_state.as_slice(),
+                "prev account merkle state must be consistent"
             );
         }
 
