@@ -696,8 +696,15 @@ impl Generator {
                 .load_backend(state, &script_hash)
                 .ok_or(TransactionError::BackendNotFound { script_hash })?;
             machine.load_program(&backend.generator, &[])?;
+            let t = Instant::now();
             exit_code = machine.run()?;
             used_cycles = machine.machine.cycles();
+            log::debug!(
+                "[execute tx] VM run time: {}ms, exit code: {} used_cycles: {}",
+                t.elapsed().as_millis(),
+                exit_code,
+                used_cycles
+            );
         }
         // record used cycles
         run_result.used_cycles = used_cycles;

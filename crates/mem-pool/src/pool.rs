@@ -36,6 +36,7 @@ use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
     sync::Arc,
+    time::Instant,
 };
 
 use crate::{
@@ -244,7 +245,9 @@ impl MemPool {
         self.verify_tx(db, &tx)?;
 
         // instantly run tx in background & update local state
+        let t = Instant::now();
         let tx_receipt = self.finalize_tx(db, tx.clone())?;
+        log::debug!("[push tx] finalize tx time: {}ms", t.elapsed().as_millis());
 
         // save tx receipt in mem pool
         self.mem_block.push_tx(tx_hash, &tx_receipt);
@@ -1202,15 +1205,30 @@ impl MemPool {
                 last_log: run_result.logs.last().cloned(),
             };
             if let Some(ref mut error_tx_handler) = self.error_tx_handler {
+                let t = Instant::now();
                 error_tx_handler.handle_error_receipt(receipt).detach();
+                log::debug!(
+                    "[finalize tx] handle error tx: {}ms",
+                    t.elapsed().as_millis()
+                );
             }
 
             return Err(TransactionError::InvalidExitCode(run_result.exit_code).into());
         }
 
         // apply run result
+        let t = Instant::now();
         state.apply_run_result(&run_result)?;
+        log::debug!(
+            "[finalize tx] apply run result: {}ms",
+            t.elapsed().as_millis()
+        );
+        let t = Instant::now();
         state.submit_tree_to_mem_block()?;
+        log::debug!(
+            "[finalize tx] submit tree to mem_block: {}ms",
+            t.elapsed().as_millis()
+        );
 
         // generate tx receipt
         let merkle_state = state.merkle_state()?;
