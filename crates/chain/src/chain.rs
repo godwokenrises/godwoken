@@ -361,7 +361,7 @@ impl Chain {
                         return Ok(SyncEvent::BadBlock { context });
                     }
 
-                    if let Some(_challenge_target) = self.process_block(
+                    if let Some(challenge_target) = self.process_block(
                         db,
                         l2block.clone(),
                         l2block_committed_info.clone(),
@@ -369,8 +369,29 @@ impl Chain {
                         deposit_requests,
                         deposit_asset_scripts,
                     )? {
+                        db.rollback()?;
+
                         let block_number = l2block.raw().number().unpack();
-                        Err(anyhow!("Bad block found! #{}", block_number))
+                        log::warn!("bad block #{} found, rollback db", block_number,);
+
+                        db.insert_bad_block(&l2block, &l2block_committed_info, &global_state)?;
+                        log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
+
+                        let global_block_root: H256 = global_state.block().merkle_root().unpack();
+                        let local_block_root = db.get_block_smt_root()?;
+                        assert_eq!(local_block_root, global_block_root, "block root fork");
+
+                        assert!(self.challenge_target.is_none());
+                        db.set_bad_block_challenge_target(
+                            &l2block.hash().into(),
+                            &challenge_target,
+                        )?;
+                        self.challenge_target = Some(challenge_target.clone());
+                        self.local_state.tip = l2block;
+
+                        let context =
+                            gw_challenge::context::build_challenge_context(db, challenge_target)?;
+                        Ok(SyncEvent::BadBlock { context })
                     } else {
                         let block_number = l2block.raw().number().unpack();
                         log::info!("sync new block #{} success", block_number);
@@ -446,17 +467,11 @@ impl Chain {
                     match self.challenge_target {
                         // Previous challenge miss right target, we should challenge it
                         Some(ref target) => {
-                            // let context = gw_challenge::context::build_challenge_context(
-                            //     db,
-                            //     target.to_owned(),
-                            // )?;
-                            panic!(
-                                "found bad block after challenge cancelled: {}, index: {}, type: {:?}",
-                                target.block_hash(),
-                                target.target_index(),
-                                target.target_type()
-                            );
-                            // Ok(SyncEvent::BadBlock { context })
+                            let context = gw_challenge::context::build_challenge_context(
+                                db,
+                                target.to_owned(),
+                            )?;
+                            Ok(SyncEvent::BadBlock { context })
                         }
                         None => Ok(SyncEvent::Success),
                     }
@@ -553,17 +568,11 @@ impl Chain {
                     // If our bad block isn't reverted, just challenge it
                     match self.challenge_target {
                         Some(ref target) => {
-                            // let context = gw_challenge::context::build_challenge_context(
-                            //     db,
-                            //     target.to_owned(),
-                            // )?;
-                            panic!(
-                                "found bad block: {}, index: {}, type: {:?}",
-                                target.block_hash(),
-                                target.target_index(),
-                                target.target_type()
-                            );
-                            // Ok(SyncEvent::BadBlock { context })
+                            let context = gw_challenge::context::build_challenge_context(
+                                db,
+                                target.to_owned(),
+                            )?;
+                            Ok(SyncEvent::BadBlock { context })
                         }
                         None => Ok(SyncEvent::Success),
                     }
