@@ -241,3 +241,31 @@ pub struct StoreConfig {
     #[serde(default)]
     pub cache_size: Option<usize>,
 }
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct FeeConfig {
+    // fee_rate: fee / weight
+    pub meta_weight: u64,
+    // fee_rate: fee / weight
+    pub withdraw_weight: u64,
+    // fee_rate: fee / weight
+    pub default_fee_weight: u64,
+    /// HashMap<sudt_id, fee_weight>
+    ///
+    /// fee_rate: fee / weight
+    /// if sudt_id is not in the map, the default_fee_weight is used
+    pub sudt_fee_weights: HashMap<u32, u64>,
+}
+
+pub enum BackendType {
+    Meta,
+    Sudt,
+    Polyjuice,
+    Unknown,
+}
+
+impl Default for BackendType {
+    fn default() -> Self {
+        BackendType::Unknown
+    }
+}

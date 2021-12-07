@@ -116,6 +116,13 @@ pub fn setup_chain_with_account_lock_manage(
         secp_data_dep: Default::default(),
     };
     let genesis_committed_info = L2BlockCommittedInfo::default();
+    init_genesis(
+        &store,
+        &genesis_config,
+        genesis_committed_info,
+        Bytes::default(),
+    )
+    .unwrap();
     let backend_manage = build_backend_manage(&rollup_config);
     let rollup_context = RollupContext {
         rollup_script_hash: rollup_script_hash.into(),
@@ -127,13 +134,6 @@ pub fn setup_chain_with_account_lock_manage(
         rollup_context,
         Default::default(),
     ));
-    init_genesis(
-        &store,
-        &genesis_config,
-        genesis_committed_info,
-        Bytes::default(),
-    )
-    .unwrap();
     let provider = DummyMemPoolProvider::default();
     let mem_pool = MemPool::create(
         0,
