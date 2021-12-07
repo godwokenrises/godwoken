@@ -1,18 +1,29 @@
 use crate::testing_tool::chain::{
-    build_sync_tx, construct_block, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
+    build_sync_tx, construct_block, restart_chain, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
+    DEFAULT_FINALITY_BLOCKS,
 };
+
+use gw_block_producer::produce_block::ProduceBlockResult;
 use gw_chain::chain::{
-    Chain, L1Action, L1ActionContext, RevertL1ActionContext, RevertedL1Action, SyncParam,
+    Chain, ChallengeCell, L1Action, L1ActionContext, RevertL1ActionContext, RevertedL1Action,
+    SyncEvent, SyncParam,
 };
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
+    h256_ext::H256Ext,
+    merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash},
+    smt::Blake2bHasher,
     state::{to_short_address, State},
     H256,
 };
 use gw_store::state::state_db::StateContext;
 use gw_types::{
-    core::ScriptHashType,
-    packed::{CellOutput, DepositRequest, GlobalState, L2BlockCommittedInfo, Script},
+    bytes::Bytes,
+    core::{ScriptHashType, Status},
+    packed::{
+        BlockMerkleState, CellInput, CellOutput, DepositRequest, GlobalState, L2Block,
+        L2BlockCommittedInfo, RawWithdrawalRequest, Script, SubmitWithdrawals, WithdrawalRequest,
+    },
     prelude::*,
 };
 
@@ -636,4 +647,386 @@ fn test_sync_blocks() {
     }
 
     drop(chain2);
+}
+
+#[test]
+fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
+    let _ = env_logger::builder().is_test(true).try_init();
+
+    let rollup_type_script = Script::default();
+    let rollup_script_hash = rollup_type_script.hash();
+    let mut chain = setup_chain(rollup_type_script.clone());
+    let rollup_cell = CellOutput::new_builder()
+        .type_(Some(rollup_type_script.clone()).pack())
+        .build();
+
+    // update block 1
+    let alice_script = Script::new_builder()
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(42);
+            args.pack()
+        })
+        .build();
+    let deposit = DepositRequest::new_builder()
+        .capacity((4000u64 * CKB).pack())
+        .script(alice_script.clone())
+        .build();
+    let block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
+    };
+    let action1 = L1Action {
+        context: L1ActionContext::SubmitBlock {
+            l2block: block_result.block.clone(),
+            deposit_requests: vec![deposit],
+            deposit_asset_scripts: Default::default(),
+        },
+        transaction: build_sync_tx(rollup_cell.clone(), block_result),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number(1u64.pack())
+            .build(),
+    };
+    let param = SyncParam {
+        updates: vec![action1],
+        reverts: Default::default(),
+    };
+    chain.sync(param).unwrap();
+    assert!(chain.last_sync_event().is_success());
+
+    // with for deposit finalize
+    for _ in 0..DEFAULT_FINALITY_BLOCKS {
+        produce_empty_block(&mut chain, rollup_cell.clone());
+    }
+
+    // update bad block
+    let withdrawal = {
+        let raw = RawWithdrawalRequest::new_builder()
+            .capacity((1000 * CKB).pack())
+            .account_script_hash(alice_script.hash().pack())
+            .sudt_script_hash(H256::zero().pack())
+            .build();
+        WithdrawalRequest::new_builder().raw(raw).build()
+    };
+    let block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
+        mem_pool.push_withdrawal_request(withdrawal).unwrap();
+        construct_block(&chain, &mut mem_pool, Vec::default()).unwrap()
+    };
+    let bad_block_result = {
+        let ProduceBlockResult {
+            block,
+            global_state,
+        } = block_result;
+        let (bad_block, bad_global_state) = generate_bad_block(&chain, block, global_state);
+        ProduceBlockResult {
+            block: bad_block,
+            global_state: bad_global_state,
+        }
+    };
+
+    let update_bad_block = L1Action {
+        context: L1ActionContext::SubmitBlock {
+            l2block: bad_block_result.block.clone(),
+            deposit_requests: vec![],
+            deposit_asset_scripts: Default::default(),
+        },
+        transaction: build_sync_tx(rollup_cell.clone(), bad_block_result.clone()),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number((DEFAULT_FINALITY_BLOCKS + 2u64).pack())
+            .build(),
+    };
+    let param = SyncParam {
+        updates: vec![update_bad_block],
+        reverts: Default::default(),
+    };
+    chain.sync(param).unwrap();
+    assert!(matches!(
+        chain.last_sync_event(),
+        SyncEvent::BadBlock { .. }
+    ));
+
+    let tip_block = chain.store().get_tip_block().unwrap();
+    let tip_block_number: u64 = tip_block.raw().number().unpack();
+    assert_eq!(tip_block_number, 8);
+
+    // challenge bad block
+    let challenge_context = match chain.last_sync_event() {
+        SyncEvent::BadBlock { context } => context.to_owned(),
+        _ => unreachable!(),
+    };
+    let challenge_cell = ChallengeCell {
+        input: CellInput::default(),
+        output: CellOutput::default(),
+        output_data: Bytes::default(),
+    };
+
+    let bad_block_result = {
+        let ProduceBlockResult {
+            block,
+            global_state,
+        } = bad_block_result;
+
+        let global_state = global_state
+            .as_builder()
+            .status(Status::Halting.into())
+            .build();
+
+        ProduceBlockResult {
+            global_state,
+            block,
+        }
+    };
+
+    let challenge_bad_block = L1Action {
+        context: L1ActionContext::Challenge {
+            cell: challenge_cell,
+            target: challenge_context.target,
+            witness: challenge_context.witness,
+        },
+        transaction: build_sync_tx(rollup_cell.clone(), bad_block_result.clone()),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number((DEFAULT_FINALITY_BLOCKS + 3u64).pack())
+            .build(),
+    };
+    let param = SyncParam {
+        updates: vec![challenge_bad_block],
+        reverts: Default::default(),
+    };
+    chain.sync(param).unwrap();
+    assert!(matches!(
+        chain.last_sync_event(),
+        SyncEvent::WaitChallenge { .. }
+    ));
+
+    // Revert bad block
+    let reverted_block_smt_root = match chain.last_sync_event() {
+        SyncEvent::WaitChallenge { cell: _, context } => context.post_reverted_block_root,
+        _ => unreachable!(),
+    };
+    let db = chain.store().begin_transaction();
+    let last_valid_tip_block_hash = db.get_last_valid_tip_block_hash().unwrap();
+    let last_valid_tip_block = db.get_last_valid_tip_block().unwrap();
+    let block_smt = {
+        let global_state = db
+            .get_block_post_global_state(&last_valid_tip_block_hash)
+            .unwrap();
+        global_state.unwrap().block()
+    };
+    let reverted_block_result = {
+        let ProduceBlockResult {
+            block,
+            global_state,
+        } = bad_block_result;
+
+        let global_state = global_state
+            .as_builder()
+            .status(Status::Running.into())
+            .reverted_block_root(reverted_block_smt_root.pack())
+            .tip_block_hash(last_valid_tip_block_hash.pack())
+            .block(block_smt)
+            .account(last_valid_tip_block.raw().post_account())
+            .build();
+
+        ProduceBlockResult {
+            global_state,
+            block,
+        }
+    };
+
+    let revert_bad_block = L1Action {
+        context: L1ActionContext::Revert {
+            reverted_blocks: vec![reverted_block_result.block.raw()],
+        },
+        transaction: build_sync_tx(rollup_cell.clone(), reverted_block_result),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number((DEFAULT_FINALITY_BLOCKS + 3u64).pack())
+            .build(),
+    };
+    let param = SyncParam {
+        updates: vec![revert_bad_block],
+        reverts: Default::default(),
+    };
+    chain.sync(param).unwrap();
+    assert!(chain.last_sync_event().is_success());
+
+    let local_reverted_block_smt_root = db.get_reverted_block_smt_root().unwrap();
+    assert_eq!(local_reverted_block_smt_root, reverted_block_smt_root);
+
+    //  Rewind to last tip
+    //  IMPORTANT: simulate restart process
+    let mut chain = restart_chain(&chain, rollup_type_script);
+    let last_valid_tip_global_state = db
+        .get_block_post_global_state(&last_valid_tip_block_hash)
+        .unwrap();
+    let last_valid_tip_committed_info = db
+        .get_l2block_committed_info(&last_valid_tip_block_hash)
+        .unwrap();
+    let rewind = RevertedL1Action {
+        prev_global_state: last_valid_tip_global_state.unwrap(),
+        l2block_committed_info: last_valid_tip_committed_info.unwrap(),
+        context: RevertL1ActionContext::RewindToLastValidTip,
+    };
+    let param = SyncParam {
+        reverts: vec![rewind],
+        updates: vec![],
+    };
+    chain.sync(param).unwrap();
+
+    // Produce new block
+    let bob_script = Script::new_builder()
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(43);
+            args.pack()
+        })
+        .build();
+    let deposit = DepositRequest::new_builder()
+        .capacity((500u64 * CKB).pack())
+        .script(bob_script)
+        .build();
+    let block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
+    };
+    let new_block = L1Action {
+        context: L1ActionContext::SubmitBlock {
+            l2block: block_result.block.clone(),
+            deposit_requests: vec![deposit],
+            deposit_asset_scripts: Default::default(),
+        },
+        transaction: build_sync_tx(rollup_cell, block_result),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number((DEFAULT_FINALITY_BLOCKS + 4u64).pack())
+            .build(),
+    };
+    let param = SyncParam {
+        updates: vec![new_block],
+        reverts: Default::default(),
+    };
+    chain.sync(param).unwrap();
+    assert!(chain.last_sync_event().is_success());
+
+    let tip_block = chain.store().get_tip_block().unwrap();
+    let tip_block_number: u64 = tip_block.raw().number().unpack();
+    assert_eq!(tip_block_number, 8);
+}
+
+fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) {
+    let block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
+        construct_block(chain, &mut mem_pool, Default::default()).unwrap()
+    };
+    let db = chain.store().begin_transaction();
+    let tip_block_hash = db.get_tip_block_hash().unwrap();
+    let tip_committed_info = db.get_l2block_committed_info(&tip_block_hash).unwrap();
+    let l1_number = tip_committed_info.unwrap().number().unpack();
+
+    let l2block = block_result.block.clone();
+    let transaction = build_sync_tx(rollup_cell, block_result);
+    let l2block_committed_info = L2BlockCommittedInfo::new_builder()
+        .number((l1_number + 1).pack())
+        .build();
+
+    let update = L1Action {
+        context: L1ActionContext::SubmitBlock {
+            l2block,
+            deposit_requests: Default::default(),
+            deposit_asset_scripts: Default::default(),
+        },
+        transaction,
+        l2block_committed_info,
+    };
+    let param = SyncParam {
+        updates: vec![update],
+        reverts: Default::default(),
+    };
+    chain.sync(param).unwrap();
+    assert!(chain.last_sync_event().is_success());
+}
+
+fn generate_bad_block(
+    chain: &Chain,
+    block: L2Block,
+    global_state: GlobalState,
+) -> (L2Block, GlobalState) {
+    let block = {
+        let withdrawal = block.withdrawals().get_unchecked(0);
+        let raw_withdrawal = withdrawal
+            .raw()
+            .as_builder()
+            .account_script_hash([9u8; 32].pack())
+            .build();
+        let bad_withdrawal = withdrawal.as_builder().raw(raw_withdrawal).build();
+
+        let mut withdrawals: Vec<WithdrawalRequest> = block.withdrawals().into_iter().collect();
+        *withdrawals.get_mut(0).expect("exists") = bad_withdrawal;
+
+        let withdrawal_witness_root = {
+            let witnesses = withdrawals
+                .iter()
+                .enumerate()
+                .map(|(idx, t)| ckb_merkle_leaf_hash(idx as u32, &t.witness_hash().into()));
+            calculate_ckb_merkle_root(witnesses.collect()).unwrap()
+        };
+
+        let submit_withdrawals = SubmitWithdrawals::new_builder()
+            .withdrawal_witness_root(withdrawal_witness_root.pack())
+            .withdrawal_count((withdrawals.len() as u32).pack())
+            .build();
+
+        let raw_block = block
+            .raw()
+            .as_builder()
+            .submit_withdrawals(submit_withdrawals)
+            .build();
+
+        block
+            .as_builder()
+            .raw(raw_block)
+            .withdrawals(withdrawals.pack())
+            .build()
+    };
+
+    let block_number = block.raw().number().unpack();
+    let global_state = {
+        let db = chain.store().begin_transaction();
+
+        let bad_block_proof = db
+            .block_smt()
+            .unwrap()
+            .merkle_proof(vec![H256::from_u64(block_number)])
+            .unwrap()
+            .compile(vec![(H256::from_u64(block_number), H256::zero())])
+            .unwrap();
+
+        // Generate new block smt for global state
+        let bad_block_smt = {
+            let bad_block_root: [u8; 32] = bad_block_proof
+                .compute_root::<Blake2bHasher>(vec![(block.smt_key().into(), block.hash().into())])
+                .unwrap()
+                .into();
+
+            BlockMerkleState::new_builder()
+                .merkle_root(bad_block_root.pack())
+                .count((block_number + 1).pack())
+                .build()
+        };
+
+        global_state
+            .as_builder()
+            .block(bad_block_smt)
+            .tip_block_hash(block.hash().pack())
+            .build()
+    };
+
+    (block, global_state)
 }
