@@ -7,6 +7,7 @@ mod constants;
 pub mod custodian;
 pub mod default_provider;
 mod deposit;
+pub mod fee;
 mod mem_block;
 pub mod pool;
 pub mod restore_manager;
