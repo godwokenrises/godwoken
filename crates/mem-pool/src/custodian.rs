@@ -123,7 +123,7 @@ pub async fn query_finalized_custodians<WithdrawalIter: Iterator<Item = Withdraw
     rollup_context: &RollupContext,
     last_finalized_block_number: u64,
 ) -> Result<QueryResult<CollectedCustodianCells>> {
-    const MIN_CAPACITY: u64 = 500000_00000000; // 500000 CKB
+    const MIN_CAPACITY: u64 = 50_00000000; // 500000 CKB
 
     let total_withdrawal_amount = sum_withdrawals(withdrawals);
     let total_change_capacity = sum_change_capacity(db, rollup_context, &total_withdrawal_amount);

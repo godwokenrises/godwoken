@@ -1,34 +1,29 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::{smt_store_impl::SMTStore, traits::KVStore};
+use crate::{smt::smt_store::SMTStore, traits::KVStore};
 use gw_common::h256_ext::H256Ext;
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
 use gw_db::schema::{
     Col, COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
     COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH,
-    COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_STATE_RECORD, COLUMN_CHECKPOINT, COLUMN_INDEX,
-    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_REVERTED_BLOCK_SMT_BRANCH,
-    COLUMN_REVERTED_BLOCK_SMT_LEAF, COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION,
-    COLUMN_TRANSACTION_INFO, COLUMN_TRANSACTION_RECEIPT, META_BLOCK_SMT_ROOT_KEY,
-    META_CHAIN_ID_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY,
+    COLUMN_BLOCK_SMT_LEAF, COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META,
+    COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF,
+    COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
+    COLUMN_TRANSACTION_RECEIPT, META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY,
+    META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY,
     META_MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY, META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
-use gw_db::{
-    error::Error, iter::DBIter, DBIterator, Direction::Forward, IteratorMode, RocksDBTransaction,
-};
+use gw_db::ReadOptions;
+use gw_db::{error::Error, iter::DBIter, DBIterator, IteratorMode, RocksDBTransaction};
 use gw_types::offchain::global_state_from_slice;
 use gw_types::packed::Script;
 use gw_types::{
     packed::{
-        self, AccountMerkleState, Byte32, ChallengeTarget, RollupConfig, TransactionKey,
-        WithdrawalReceipt,
+        self, AccountMerkleState, Byte32, ChallengeTarget, TransactionKey, WithdrawalReceipt,
     },
     prelude::*,
 };
 use std::collections::HashSet;
-
-/// TODO use a variable instead of hardcode
-const NUMBER_OF_CONFIRMATION: u64 = 10000;
 
 pub struct StoreTransaction {
     pub(crate) inner: RocksDBTransaction,
@@ -45,6 +40,12 @@ impl KVStore for StoreTransaction {
     fn get_iter(&self, col: Col, mode: IteratorMode) -> DBIter {
         self.inner
             .iter(col, mode)
+            .expect("db operation should be ok")
+    }
+
+    fn get_iter_opts(&self, col: Col, mode: IteratorMode, opts: &ReadOptions) -> DBIter {
+        self.inner
+            .iter_opt(col, mode, opts)
             .expect("db operation should be ok")
     }
 
@@ -66,13 +67,15 @@ impl StoreTransaction {
         self.inner.rollback()
     }
 
-    pub fn set_save_point(&self) {
-        self.inner.set_savepoint()
-    }
+    // /// TODO Remove this
+    // pub fn set_save_point(&self) {
+    //     self.inner.set_savepoint()
+    // }
 
-    pub fn rollback_to_save_point(&self) -> Result<(), Error> {
-        self.inner.rollback_to_savepoint()
-    }
+    // /// TODO Remove this
+    // pub fn rollback_to_save_point(&self) -> Result<(), Error> {
+    //     self.inner.rollback_to_savepoint()
+    // }
 
     pub fn setup_chain_id(&self, chain_id: H256) -> Result<(), Error> {
         self.insert_raw(COLUMN_META, META_CHAIN_ID_KEY, chain_id.as_slice())?;
@@ -301,17 +304,17 @@ impl StoreTransaction {
             }))
     }
 
-    pub fn get_checkpoint_post_state(
-        &self,
-        checkpoint: &Byte32,
-    ) -> Result<Option<packed::AccountMerkleState>, Error> {
-        Ok(self
-            .get(COLUMN_CHECKPOINT, checkpoint.as_slice())
-            .map(|slice| {
-                packed::AccountMerkleStateReader::from_slice_should_be_ok(slice.as_ref())
-                    .to_entity()
-            }))
-    }
+    // pub fn get_checkpoint_post_state(
+    //     &self,
+    //     checkpoint: &Byte32,
+    // ) -> Result<Option<packed::AccountMerkleState>, Error> {
+    //     Ok(self
+    //         .get(COLUMN_CHECKPOINT, checkpoint.as_slice())
+    //         .map(|slice| {
+    //             packed::AccountMerkleStateReader::from_slice_should_be_ok(slice.as_ref())
+    //                 .to_entity()
+    //         }))
+    // }
 
     pub fn get_l2block_committed_info(
         &self,
@@ -563,11 +566,11 @@ impl StoreTransaction {
                 return Err(Error::from("unexpected no tx post state".to_string()));
             }
 
-            self.insert_raw(
-                COLUMN_CHECKPOINT,
-                checkpoint.as_slice(),
-                prev_txs_state.as_slice(),
-            )?;
+            // self.insert_raw(
+            //     COLUMN_CHECKPOINT,
+            //     checkpoint.as_slice(),
+            //     prev_txs_state.as_slice(),
+            // )?;
         }
 
         for (index, (tx, tx_receipt)) in block
@@ -595,13 +598,13 @@ impl StoreTransaction {
         if post_states.len() != state_checkpoint_list.len() {
             return Err(Error::from("unexpected block post state length".to_owned()));
         }
-        for (checkpoint, post_state) in state_checkpoint_list.zip(post_states) {
-            self.insert_raw(
-                COLUMN_CHECKPOINT,
-                checkpoint.as_slice(),
-                post_state.as_slice(),
-            )?;
-        }
+        // for (checkpoint, post_state) in state_checkpoint_list.zip(post_states) {
+        //     self.insert_raw(
+        //         COLUMN_CHECKPOINT,
+        //         checkpoint.as_slice(),
+        //         post_state.as_slice(),
+        //     )?;
+        // }
 
         Ok(())
     }
@@ -624,11 +627,7 @@ impl StoreTransaction {
     }
 
     /// Attach block to the rollup main chain
-    pub fn attach_block(
-        &self,
-        block: packed::L2Block,
-        _rollup_config: &RollupConfig,
-    ) -> Result<(), Error> {
+    pub fn attach_block(&self, block: packed::L2Block) -> Result<(), Error> {
         let raw = block.raw();
         let raw_number = raw.number();
         let block_hash = raw.hash();
@@ -664,11 +663,18 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn detach_block(
-        &self,
-        block: &packed::L2Block,
-        _rollup_config: &RollupConfig,
-    ) -> Result<(), Error> {
+    /// Delete block from DB
+    pub fn detach_block(&self, block: &packed::L2Block) -> Result<(), Error> {
+        // check
+        {
+            let tip = self.get_last_valid_tip_block_hash()?;
+            assert_eq!(tip, H256::from(block.raw().hash()), "Must detach from tip");
+        }
+        {
+            let number: u64 = block.raw().number().unpack();
+            let hash: Byte32 = block.hash().pack();
+            log::warn!("detach block #{} {}", number, hash);
+        }
         // remove transaction info
         for tx in block.transactions().into_iter() {
             let tx_hash = tx.hash();
@@ -702,98 +708,7 @@ impl StoreTransaction {
             parent_block_hash.as_slice(),
         )?;
         self.set_last_valid_tip_block_hash(&parent_block_hash)?;
-        // clear block state
-        self.clear_block_state(block_number)?;
 
         Ok(())
-    }
-
-    pub fn record_block_state(
-        &self,
-        block_number: u64,
-        tx_index: u32,
-        col: Col,
-        raw_key: &[u8],
-    ) -> Result<(), Error> {
-        let record_key = BlockStateRecordKey::new(block_number, tx_index, col, raw_key);
-        self.insert_raw(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice(), &[])
-    }
-
-    /// prune finalized block state record
-    fn prune_finalized_block_state_record(&self, tip_number: u64) -> Result<(), Error> {
-        if tip_number <= NUMBER_OF_CONFIRMATION {
-            return Ok(());
-        }
-        let to_be_pruned_block_number = tip_number - NUMBER_OF_CONFIRMATION - 1;
-        if to_be_pruned_block_number == 0 {
-            return Ok(());
-        }
-        self.prune_block_state_record(to_be_pruned_block_number)
-    }
-
-    pub(crate) fn prune_block_state_record(&self, block_number: u64) -> Result<(), Error> {
-        let iter = self.iter_block_state_record(block_number);
-        for record_key in iter {
-            self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
-        }
-        Ok(())
-    }
-
-    pub(crate) fn clear_block_state(&self, block_number: u64) -> Result<(), Error> {
-        let iter = self.iter_block_state_record(block_number);
-        for record_key in iter {
-            let column = record_key.get_column();
-            self.delete(column, record_key.state_key())?;
-            self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
-        }
-        Ok(())
-    }
-
-    fn iter_block_state_record(
-        &self,
-        block_number: u64,
-    ) -> impl Iterator<Item = BlockStateRecordKey> + '_ {
-        let start_key = BlockStateRecordKey::new(block_number, 0u32, 0u8, &[]);
-        self.get_iter(
-            COLUMN_BLOCK_STATE_RECORD,
-            IteratorMode::From(start_key.as_slice(), Forward),
-        )
-        .map(|(key, _value)| BlockStateRecordKey::from_vec(key.to_vec()))
-        .take_while(move |key| key.is_same_block(block_number))
-    }
-}
-
-// block_number(8 bytes) | tx_index(4 bytes) | col (1 byte) | key (n bytes)
-struct BlockStateRecordKey(Vec<u8>);
-
-impl BlockStateRecordKey {
-    fn new(block_number: u64, tx_index: u32, col: Col, key: &[u8]) -> Self {
-        let mut record_key = Vec::new();
-        record_key.resize(13 + key.len(), 0);
-        record_key[..8].copy_from_slice(&block_number.to_be_bytes());
-        record_key[8..12].copy_from_slice(&tx_index.to_be_bytes());
-        record_key[12] = col;
-        record_key[13..].copy_from_slice(key);
-        BlockStateRecordKey(record_key)
-    }
-
-    fn state_key(&self) -> &[u8] {
-        &self.0[13..]
-    }
-
-    fn from_vec(record_key: Vec<u8>) -> Self {
-        BlockStateRecordKey(record_key)
-    }
-
-    fn get_column(&self) -> u8 {
-        self.0[12]
-    }
-
-    fn is_same_block(&self, block_number: u64) -> bool {
-        self.0[..8] == block_number.to_be_bytes()
-    }
-
-    fn as_slice(&self) -> &[u8] {
-        self.0.as_slice()
     }
 }

@@ -58,6 +58,13 @@ pub struct RPCConfig {
     pub sudt_proxy_code_hashes: Vec<H256>,
     pub allowed_polyjuice_contract_creator_address: Option<HashSet<H160>>,
     pub polyjuice_script_code_hash: Option<H256>,
+    pub send_tx_rate_limit: Option<RPCRateLimit>,
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RPCRateLimit {
+    pub seconds: u64,
+    pub lru_size: usize,
 }
 
 /// Onchain rollup cell config
@@ -100,6 +107,8 @@ pub struct ChallengerConfig {
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockProducerConfig {
     pub account_id: u32,
+    #[serde(default = "default_check_mem_block_before_submit")]
+    pub check_mem_block_before_submit: bool,
     // cell deps
     pub rollup_cell_type_dep: CellDep,
     pub rollup_config_cell_dep: CellDep,
@@ -115,6 +124,10 @@ pub struct BlockProducerConfig {
     pub allowed_contract_deps: HashMap<H256, CellDep>,
     pub challenger_config: ChallengerConfig,
     pub wallet_config: WalletConfig,
+}
+
+fn default_check_mem_block_before_submit() -> bool {
+    false
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]

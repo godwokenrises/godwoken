@@ -761,6 +761,7 @@ impl RPCClient {
         last_finalized_block_number: u64,
         min_capacity: Option<u64>,
     ) -> Result<QueryResult<CollectedCustodianCells>> {
+        const MAX_CELLS: usize = 50;
         let rollup_context = &self.rollup_context;
 
         let parse_sudt_amount = |cell: &Cell| -> Result<u128> {
@@ -910,6 +911,14 @@ impl RPCClient {
                 };
 
                 collected.cells_info.push(info);
+
+                if collected.cells_info.len() >= MAX_CELLS {
+                    if collected.capacity >= required_capacity {
+                        break;
+                    } else {
+                        return Ok(QueryResult::NotEnough(collected));
+                    }
+                }
             }
         }
 
