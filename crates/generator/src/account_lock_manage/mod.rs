@@ -7,7 +7,7 @@ use gw_types::{
     packed::{L2Transaction, Script},
 };
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "enable-always-success-lock"))]
 pub mod always_success;
 pub mod secp256k1;
 

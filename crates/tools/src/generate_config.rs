@@ -253,6 +253,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         path: "".into(),
         options: HashMap::new(),
         options_file: None,
+        cache_size: None,
     };
     let genesis_committed_info = L2BlockCommittedInfo {
         block_hash,
@@ -268,7 +269,10 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         indexer_url,
         ckb_url,
     };
-    let rpc_server = RPCServerConfig { listen: server_url };
+    let rpc_server = RPCServerConfig {
+        listen: server_url,
+        ..Default::default()
+    };
     let block_producer: Option<BlockProducerConfig> = Some(BlockProducerConfig {
         account_id,
         // cell deps
@@ -286,6 +290,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         allowed_contract_deps,
         challenger_config,
         wallet_config,
+        check_mem_block_before_submit: false,
     });
     let genesis: GenesisConfig = GenesisConfig {
         timestamp: rollup_result.timestamp,

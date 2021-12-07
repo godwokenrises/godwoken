@@ -2,6 +2,7 @@
 
 use crate::{
     produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
+    replay_block::ReplayBlock,
     test_mode_control::TestModeControl,
     types::ChainEvent,
     utils,
@@ -44,12 +45,15 @@ use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT: usize = 5;
 const TRANSACTION_SRIPT_ERROR: &str = "TransactionScriptError";
 const TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR: &str = "ExceededMaximumBlockBytes";
+/// 524_288 we choose this value because it is smaller than the MAX_BLOCK_BYTES which is 597K
+const MAX_ROLLUP_WITNESS_SIZE: usize = 1 << 19;
+const WAIT_PRODUCE_BLOCK_SECONDS: u64 = 45;
 
 fn generate_custodian_cells(
     rollup_context: &RollupContext,
@@ -128,6 +132,11 @@ async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Ve
     Ok(cells)
 }
 
+struct LastCommittedL2Block {
+    committed_at: Instant,
+    committed_tip_block_hash: H256,
+}
+
 pub struct BlockProducer {
     rollup_config_hash: H256,
     store: Store,
@@ -141,6 +150,7 @@ pub struct BlockProducer {
     rpc_client: RPCClient,
     ckb_genesis_info: CKBGenesisInfo,
     tests_control: Option<TestModeControl>,
+    last_committed_l2_block: LastCommittedL2Block,
 }
 
 impl BlockProducer {
@@ -178,6 +188,10 @@ impl BlockProducer {
             config,
             debug_config,
             tests_control,
+            last_committed_l2_block: LastCommittedL2Block {
+                committed_at: Instant::now(),
+                committed_tip_block_hash: H256::zero(),
+            },
         };
         Ok(block_producer)
     }
@@ -197,6 +211,23 @@ impl BlockProducer {
         match last_sync_event {
             SyncEvent::Success => (),
             _ => return Ok(()),
+        }
+
+        // check l2 tip
+        let l2_tip_block_hash = self.store.get_tip_block_hash()?;
+
+        // skip produce new block unless:
+        // 1. local l2 tip updated
+        // 2. wait produce block seconds
+        if l2_tip_block_hash == self.last_committed_l2_block.committed_tip_block_hash
+            && self
+                .last_committed_l2_block
+                .committed_at
+                .elapsed()
+                .as_secs()
+                < WAIT_PRODUCE_BLOCK_SECONDS
+        {
+            return Ok(());
         }
 
         // assume the chain is updated
@@ -268,6 +299,11 @@ impl BlockProducer {
                         continue;
                     }
                 }
+
+                self.last_committed_l2_block = LastCommittedL2Block {
+                    committed_tip_block_hash: l2_tip_block_hash,
+                    committed_at: Instant::now(),
+                };
                 return Ok(());
             }
             return Err(anyhow!(
@@ -318,6 +354,18 @@ impl BlockProducer {
         } = block_result;
 
         let number: u64 = block.raw().number().unpack();
+        if self.config.check_mem_block_before_submit {
+            let deposit_requests: Vec<_> =
+                deposit_cells.iter().map(|i| i.request.clone()).collect();
+            if let Err(err) =
+                ReplayBlock::replay(&db, &self.generator, &block, deposit_requests.as_slice())
+            {
+                let mem_pool = self.mem_pool.lock().await;
+                mem_pool.save_mem_block_with_suffix(&format!("invalid_block_{}", number))?;
+                bail!("replay block {} {}", number, err);
+            }
+        }
+
         let block_txs = block.transactions().len();
         let block_withdrawals = block.withdrawals().len();
         log::info!(
@@ -328,7 +376,7 @@ impl BlockProducer {
             block_withdrawals,
         );
         if !block.withdrawals().is_empty() && opt_finalized_custodians.is_none() {
-            bail!("unexpected none custodians for withdrawals ",);
+            bail!("unexpected none custodians for withdrawals");
         }
         let finalized_custodians = opt_finalized_custodians.unwrap_or_default();
 
@@ -361,12 +409,18 @@ impl BlockProducer {
                     "[produce_next_block] Failed to composite submitting transaction: {}",
                     err
                 );
-                // self.mem_pool.lock().await.reset_mem_block()?;
                 return Err(err);
             }
         };
-
-        if tx.as_slice().len() <= MAX_BLOCK_BYTES as usize {
+        if tx.as_slice().len() <= MAX_BLOCK_BYTES as usize
+            && tx
+                .witnesses()
+                .get(0)
+                .expect("rollup action")
+                .as_slice()
+                .len()
+                <= MAX_ROLLUP_WITNESS_SIZE
+        {
             Ok((number, tx))
         } else {
             Err(anyhow!(

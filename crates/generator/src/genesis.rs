@@ -9,7 +9,7 @@ use gw_common::{
 };
 use gw_config::GenesisConfig;
 use gw_store::{
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction},
+    state::state_db::{StateContext, StateTree},
     transaction::StoreTransaction,
     Store,
 };
@@ -55,9 +55,11 @@ pub fn build_genesis_from_store(
     // initialize store
     db.set_block_smt_root(H256::zero())?;
     db.set_reverted_block_smt_root(H256::zero())?;
-    let state_db =
-        StateDBTransaction::from_checkpoint(&db, CheckPoint::from_genesis(), StateDBMode::Genesis)?;
-    let mut tree = state_db.state_tree()?;
+
+    let mut tree = {
+        let smt = db.account_smt_with_merkle_state(AccountMerkleState::default())?;
+        StateTree::new(smt, 0, StateContext::AttachBlock(0))
+    };
 
     // create a reserved account
     // this account is reserved for special use
@@ -213,8 +215,7 @@ pub fn init_genesis(
         Vec::new(),
         Vec::new(),
     )?;
-    let rollup_config: gw_types::packed::RollupConfig = config.rollup_config.to_owned().into();
-    db.attach_block(genesis, &rollup_config)?;
+    db.attach_block(genesis)?;
     db.commit()?;
     Ok(())
 }

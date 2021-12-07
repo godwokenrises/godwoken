@@ -11,8 +11,10 @@ description = "Godwoken benchmarks."
 
 [dev-dependencies]
 criterion = { version = "0.3", features = ["html_reports"] }
+pprof = { version = "0.6", features = ["flamegraph", "criterion"] }
 gw-store = { path = "../store" }
 gw-common = { path = "../common" }
+gw-mem-pool = { path = "../mem-pool" }
 gw-generator = { path = "../generator" }
 gw-types = { path = "../types" }
 gw-traits = { path = "../traits" }

@@ -11,7 +11,7 @@ use gw_generator::{
     Generator,
 };
 use gw_mem_pool::pool::{MemPool, OutputParam};
-use gw_store::{transaction::mem_pool_store::MemPoolStore, Store};
+use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -31,7 +31,7 @@ use std::{fs, io::Read, path::PathBuf, sync::Arc};
 
 use super::mem_pool_provider::DummyMemPoolProvider;
 
-const SCRIPT_DIR: &str = "../../tests-deps/godwoken-scripts/build/debug";
+const SCRIPT_DIR: &str = "../../.tmp/binaries/godwoken-scripts";
 const ALWAYS_SUCCESS_PATH: &str = "always-success";
 
 lazy_static! {
@@ -55,14 +55,14 @@ lazy_static! {
 
 // meta contract
 pub const META_VALIDATOR_PATH: &str =
-    "../../tests-deps/godwoken-scripts/c/build/meta-contract-validator";
+    "../../.tmp/binaries/godwoken-scripts/meta-contract-validator";
 pub const META_GENERATOR_PATH: &str =
-    "../../tests-deps/godwoken-scripts/c/build/meta-contract-generator";
+    "../../.tmp/binaries/godwoken-scripts/meta-contract-generator";
 pub const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
 
 // simple UDT
-pub const SUDT_VALIDATOR_PATH: &str = "../../tests-deps/godwoken-scripts/c/build/sudt-validator";
-pub const SUDT_GENERATOR_PATH: &str = "../../tests-deps/godwoken-scripts/c/build/sudt-generator";
+pub const SUDT_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-validator";
+pub const SUDT_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-generator";
 
 pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
 
@@ -140,7 +140,6 @@ pub fn setup_chain_with_account_lock_manage(
         store.clone(),
         Arc::clone(&generator),
         Box::new(provider),
-        None,
         None,
         Default::default(),
     )
@@ -277,11 +276,17 @@ pub fn construct_block(
     let provider = DummyMemPoolProvider {
         deposit_cells,
         fake_blocktime: Duration::from_millis(0),
-        collected_custodians,
+        collected_custodians: collected_custodians.clone(),
     };
     mem_pool.set_provider(Box::new(provider));
     // refresh mem block
     mem_pool.reset_mem_block()?;
+    let provider = DummyMemPoolProvider {
+        deposit_cells: Vec::default(),
+        fake_blocktime: Duration::from_millis(0),
+        collected_custodians,
+    };
+    mem_pool.set_provider(Box::new(provider));
 
     let (_custodians, block_param) = mem_pool.output_mem_block(&OutputParam::default()).unwrap();
     let param = ProduceBlockParam {
