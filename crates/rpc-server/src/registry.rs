@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{DebugConfig, MemPoolConfig, NodeMode, RPCMethods, RPCServerConfig, RPCRateLimit};
+use gw_config::{MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
