@@ -34,9 +34,9 @@ impl StoreTransaction {
     ) -> Result<MemStateTree<S>, Error> {
         let block = self.get_tip_block()?;
         let merkle_root = block.raw().post_account();
-        let account_count = self.get_mem_block_account_count()?;
+        let account_count = merkle_root.count().unpack();
         let block_post_count: u32 = block.raw().post_account().count().unpack();
-        log::info!(
+        log::debug!(
             "Start in mem state account {} block count {} is_same: {}",
             account_count,
             block_post_count,
