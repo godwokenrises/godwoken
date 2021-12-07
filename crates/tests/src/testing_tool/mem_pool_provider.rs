@@ -36,4 +36,11 @@ impl MemPoolProvider for DummyMemPoolProvider {
     fn get_cell(&self, _out_point: OutPoint) -> Task<Result<Option<CellWithStatus>>> {
         smol::spawn(async { Ok(None) })
     }
+    fn query_mergeable_custodians(
+        &self,
+        collected_custodians: CollectedCustodianCells,
+        _last_finalized_block_number: u64,
+    ) -> Task<Result<CollectedCustodianCells>> {
+        smol::spawn(async move { Ok(collected_custodians) })
+    }
 }

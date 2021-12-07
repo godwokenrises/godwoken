@@ -35,7 +35,7 @@ pub fn generate(
     block: &L2Block,
     block_producer_config: &BlockProducerConfig,
 ) -> Result<Option<GeneratedWithdrawals>> {
-    if block.withdrawals().is_empty() {
+    if block.withdrawals().is_empty() && finalized_custodians.cells_info.is_empty() {
         return Ok(None);
     }
     log::debug!("custodian inputs {:?}", finalized_custodians);
@@ -52,7 +52,7 @@ pub fn generate(
     let custodian_lock_dep = block_producer_config.custodian_cell_lock_dep.clone();
     let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
     let mut cell_deps = vec![custodian_lock_dep.into()];
-    if !total_withdrawal_amount.sudt.is_empty() {
+    if !total_withdrawal_amount.sudt.is_empty() || !finalized_custodians.sudt.is_empty() {
         cell_deps.push(sudt_type_dep.into());
     }
 

@@ -24,6 +24,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use rand::prelude::*;
 use serde_json::json;
 
 use std::{collections::HashSet, time::Duration};
@@ -754,12 +755,241 @@ impl RPCClient {
         Ok((collected, collected_block_hashes))
     }
 
+    pub async fn query_mergeable_ckb_custodians_cells(
+        &self,
+        mut collected: CollectedCustodianCells,
+        last_finalized_block_number: u64,
+        max_cells: usize,
+    ) -> Result<QueryResult<CollectedCustodianCells>> {
+        const MIN_MERGE_CELLS: usize = 5;
+        log::debug!("ckb merge MIN_MERGE_CELLS {}", MIN_MERGE_CELLS);
+
+        let remain = max_cells.saturating_sub(collected.cells_info.len());
+        if remain < MIN_MERGE_CELLS {
+            log::debug!("ckb merge break remain < `MIN_MERGE_CELLS`");
+            return Ok(QueryResult::NotEnough(collected));
+        }
+
+        let rollup_context = &self.rollup_context;
+        let custodian_lock = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .build();
+        let filter = Some(SearchKeyFilter {
+            script: None,
+            block_range: None,
+            output_data_len_range: Some([0.into(), 0.into()]),
+            output_capacity_range: None,
+        });
+        let search_key = SearchKey {
+            script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
+            script_type: ScriptType::Lock,
+            filter,
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut collected_set: HashSet<_> = {
+            let cells = collected.cells_info.iter();
+            cells.map(|i| i.out_point.clone()).collect()
+        };
+
+        let mut cursor = None;
+        let mut collected_ckb_custodians = Vec::<CellInfo>::with_capacity(remain);
+        while collected_ckb_custodians.len() < remain {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer
+                    .client()
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            for cell in cells.objects.into_iter() {
+                if collected.cells_info.len() >= max_cells {
+                    return Ok(QueryResult::Full(collected));
+                }
+
+                let info = to_cell_info(cell);
+                if collected_set.contains(&info.out_point) {
+                    continue;
+                }
+
+                let args: Bytes = info.output.lock().args().unpack();
+                let custodian_lock_args = match CustodianLockArgsReader::verify(&args[32..], false)
+                {
+                    Ok(()) => CustodianLockArgs::new_unchecked(args.slice(32..)),
+                    Err(_) => continue,
+                };
+                if custodian_lock_args.deposit_block_number().unpack() > last_finalized_block_number
+                {
+                    continue;
+                }
+
+                collected_set.insert(info.out_point.clone());
+                collected_ckb_custodians.push(info);
+            }
+
+            if cells.last_cursor.is_empty() {
+                break;
+            }
+            cursor = Some(cells.last_cursor);
+        }
+
+        if collected_ckb_custodians.len() < MIN_MERGE_CELLS {
+            log::debug!("not enough `MIN_MERGE_CELLS` ckb custodians");
+            return Ok(QueryResult::NotEnough(collected));
+        }
+
+        log::info!("merge ckb custodians {}", collected_ckb_custodians.len());
+        for info in collected_ckb_custodians {
+            collected.capacity = collected
+                .capacity
+                .saturating_add(info.output.capacity().unpack() as u128);
+            collected.cells_info.push(info);
+        }
+
+        if collected.cells_info.len() < max_cells {
+            Ok(QueryResult::NotEnough(collected))
+        } else {
+            Ok(QueryResult::Full(collected))
+        }
+    }
+
+    pub async fn query_mergeable_sudt_custodians_cells(
+        &self,
+        mut collected: CollectedCustodianCells,
+        last_finalized_block_number: u64,
+        max_cells: usize,
+    ) -> Result<QueryResult<CollectedCustodianCells>> {
+        const MAX_MERGE_SUDTS: usize = 5;
+        const MIN_MERGE_CELLS: usize = 5;
+        log::debug!(
+            "sudt merge MIN_MERGE_CELLS {} MAX_MERGE_SUDTS {}",
+            MIN_MERGE_CELLS,
+            MAX_MERGE_SUDTS
+        );
+
+        let mut remain = max_cells.saturating_sub(collected.cells_info.len());
+        if remain < MIN_MERGE_CELLS {
+            log::debug!("sudt merge break remain < `MIN_MERGE_CELLS`");
+            return Ok(QueryResult::NotEnough(collected));
+        }
+
+        let parse_sudt_amount = |info: &CellInfo| -> Result<u128> {
+            if info.output.type_().is_none() {
+                return Err(anyhow!("no a sudt cell"));
+            }
+
+            gw_types::packed::Uint128::from_slice(&info.data)
+                .map(|a| a.unpack())
+                .map_err(|e| anyhow!("invalid sudt amount {}", e))
+        };
+
+        let merge = |cells_info: Vec<CellInfo>,
+                     collected_set: &mut HashSet<_>,
+                     collected: &mut CollectedCustodianCells| {
+            for info in cells_info {
+                let sudt_amount = match parse_sudt_amount(&info) {
+                    Ok(sudt_amount) => sudt_amount,
+                    Err(_) => {
+                        log::error!("unexpected invalid sudt amount error !!!!"); // Should already checked
+                        continue;
+                    }
+                };
+                let sudt_type_script = match info.output.type_().to_opt() {
+                    Some(script) => script,
+                    None => {
+                        log::error!("unexpected none sudt type script !!!!"); // Should already checked
+                        continue;
+                    }
+                };
+
+                collected_set.insert(info.out_point.clone());
+
+                let (collected_amount, _) = {
+                    let sudt = collected.sudt.entry(sudt_type_script.hash());
+                    sudt.or_insert((0, sudt_type_script))
+                };
+                *collected_amount = collected_amount.saturating_add(sudt_amount);
+
+                collected.capacity = collected
+                    .capacity
+                    .saturating_add(info.output.capacity().unpack() as u128);
+                collected.cells_info.push(info);
+            }
+        };
+
+        let sudt_type_scripts = self
+            .query_random_sudt_type_script(last_finalized_block_number, MAX_MERGE_SUDTS)
+            .await?;
+        log::info!("merge {} random sudt type scripts", sudt_type_scripts.len());
+        let mut collected_set: HashSet<_> = {
+            let cells = collected.cells_info.iter();
+            cells.map(|i| i.out_point.clone()).collect()
+        };
+        for sudt_type_script in sudt_type_scripts {
+            let query_result = self
+                .query_mergeable_sudt_custodians_cells_by_sudt_type_script(
+                    &sudt_type_script,
+                    last_finalized_block_number,
+                    remain,
+                    &collected_set,
+                )
+                .await?;
+
+            match query_result {
+                QueryResult::Full(cells_info) => {
+                    log::info!(
+                        "merge (full) sudt custodians {} {}",
+                        ckb_types::H256(sudt_type_script.hash()),
+                        cells_info.len()
+                    );
+                    merge(cells_info, &mut collected_set, &mut collected)
+                }
+                QueryResult::NotEnough(cells_info) if cells_info.len() > 1 => {
+                    log::info!(
+                        "merge (not enough) sudt custodians {} {}",
+                        ckb_types::H256(sudt_type_script.hash()),
+                        cells_info.len()
+                    );
+                    merge(cells_info, &mut collected_set, &mut collected)
+                }
+                _ => continue,
+            }
+
+            remain = max_cells.saturating_sub(collected.cells_info.len());
+            if remain < MIN_MERGE_CELLS {
+                log::debug!(
+                    "break `MIN_MERGE_CELLS` after sudt {} merge",
+                    ckb_types::H256(sudt_type_script.hash())
+                );
+                break;
+            }
+        }
+
+        if collected.cells_info.len() < max_cells {
+            Ok(QueryResult::NotEnough(collected))
+        } else {
+            Ok(QueryResult::Full(collected))
+        }
+    }
+
     pub async fn query_finalized_custodian_cells(
         &self,
         withdrawals_amount: &WithdrawalsAmount,
         custodian_change_capacity: u128,
         last_finalized_block_number: u64,
         min_capacity: Option<u64>,
+        max_cells: usize,
     ) -> Result<QueryResult<CollectedCustodianCells>> {
         const MAX_CELLS: usize = 50;
         let rollup_context = &self.rollup_context;
@@ -827,6 +1057,10 @@ impl RPCClient {
             cursor = Some(cells.last_cursor);
 
             for cell in cells.objects.into_iter() {
+                if collected.cells_info.len() >= max_cells {
+                    return Ok(QueryResult::NotEnough(collected));
+                }
+
                 let args = cell.output.lock.args.clone().into_bytes();
                 let custodian_lock_args = match CustodianLockArgsReader::verify(&args[32..], false)
                 {
@@ -1313,5 +1547,211 @@ impl RPCClient {
         // if epoch_number is null, which means the fork will never going to happen
         let epoch_number: u64 = rfc_info.epoch_number.map(Into::into).unwrap_or(u64::MAX);
         Ok(epoch_number)
+    }
+
+    async fn query_random_sudt_type_script(
+        &self,
+        last_finalized_block_number: u64,
+        max: usize,
+    ) -> Result<HashSet<Script>> {
+        let rollup_context = &self.rollup_context;
+
+        let custodian_lock = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .build();
+        let l1_sudt_type = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.l1_sudt_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .build();
+        let filter = Some(SearchKeyFilter {
+            script: Some(ckb_types::packed::Script::new_unchecked(l1_sudt_type.as_bytes()).into()),
+            block_range: None,
+            output_data_len_range: Some([16.into(), u64::MAX.into()]),
+            output_capacity_range: None,
+        });
+        let search_key = SearchKey {
+            script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
+            script_type: ScriptType::Lock,
+            filter,
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut sudt_type_script_set = HashSet::new();
+        let mut cursor = None;
+        while sudt_type_script_set.len() < max {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer
+                    .client()
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            for cell in cells.objects.into_iter() {
+                if sudt_type_script_set.len() >= max {
+                    return Ok(sudt_type_script_set);
+                }
+
+                let info = to_cell_info(cell);
+                let sudt_type_script = match info.output.type_().to_opt() {
+                    Some(sudt_type_script) => sudt_type_script,
+                    None => continue,
+                };
+                if sudt_type_script_set.contains(&sudt_type_script) {
+                    continue;
+                }
+                if random::<u32>() % 2 != 0 {
+                    continue;
+                }
+
+                let args: Bytes = info.output.lock().args().unpack();
+                let custodian_lock_args = match CustodianLockArgsReader::verify(&args[32..], false)
+                {
+                    Ok(()) => CustodianLockArgs::new_unchecked(args.slice(32..)),
+                    Err(_) => continue,
+                };
+                if custodian_lock_args.deposit_block_number().unpack() > last_finalized_block_number
+                {
+                    continue;
+                }
+
+                // Double check invalid custodian type script
+                let l1_sudt_script_type_hash =
+                    rollup_context.rollup_config.l1_sudt_script_type_hash();
+                if sudt_type_script.code_hash() != l1_sudt_script_type_hash
+                    || sudt_type_script.hash_type() != ScriptHashType::Type.into()
+                {
+                    continue;
+                }
+
+                sudt_type_script_set.insert(sudt_type_script);
+            }
+
+            if cells.last_cursor.is_empty() {
+                break;
+            }
+            cursor = Some(cells.last_cursor);
+        }
+
+        Ok(sudt_type_script_set)
+    }
+
+    async fn query_mergeable_sudt_custodians_cells_by_sudt_type_script(
+        &self,
+        sudt_type_script: &Script,
+        last_finalized_block_number: u64,
+        max_cells: usize,
+        exclusions: &HashSet<OutPoint>,
+    ) -> Result<QueryResult<Vec<CellInfo>>> {
+        let rollup_context = &self.rollup_context;
+
+        let parse_sudt_amount = |info: &CellInfo| -> Result<u128> {
+            if info.output.type_().is_none() {
+                return Err(anyhow!("no a sudt cell"));
+            }
+
+            gw_types::packed::Uint128::from_slice(&info.data)
+                .map(|a| a.unpack())
+                .map_err(|e| anyhow!("invalid sudt amount {}", e))
+        };
+
+        let custodian_lock = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.custodian_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .build();
+        let filter = Some(SearchKeyFilter {
+            script: Some(
+                ckb_types::packed::Script::new_unchecked(sudt_type_script.as_bytes()).into(),
+            ),
+            block_range: None,
+            output_data_len_range: Some([16.into(), u64::MAX.into()]),
+            output_capacity_range: None,
+        });
+        let search_key = SearchKey {
+            script: ckb_types::packed::Script::new_unchecked(custodian_lock.as_bytes()).into(),
+            script_type: ScriptType::Lock,
+            filter,
+        };
+        let order = Order::Desc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut collected = Vec::new();
+        let mut collected_set = exclusions.clone();
+        let mut cursor = None;
+        while collected.len() < max_cells {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer
+                    .client()
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            for cell in cells.objects.into_iter() {
+                if collected.len() >= max_cells {
+                    return Ok(QueryResult::Full(collected));
+                }
+
+                let info = to_cell_info(cell);
+                if collected_set.contains(&info.out_point) {
+                    continue;
+                }
+
+                let args: Bytes = info.output.lock().args().unpack();
+                let custodian_lock_args = match CustodianLockArgsReader::verify(&args[32..], false)
+                {
+                    Ok(()) => CustodianLockArgs::new_unchecked(args.slice(32..)),
+                    Err(_) => continue,
+                };
+
+                if custodian_lock_args.deposit_block_number().unpack() > last_finalized_block_number
+                {
+                    continue;
+                }
+
+                match info.output.type_().to_opt() {
+                    Some(type_script) if type_script.hash() != sudt_type_script.hash() => continue,
+                    None => continue,
+                    _ => (),
+                };
+
+                if parse_sudt_amount(&info).is_err() {
+                    log::error!("invalid sudt amount, out_point: {:?}", info.out_point);
+                    continue;
+                }
+
+                collected_set.insert(info.out_point.clone());
+                collected.push(info);
+            }
+
+            if cells.last_cursor.is_empty() {
+                break;
+            }
+            cursor = Some(cells.last_cursor);
+        }
+
+        if collected.len() < max_cells {
+            Ok(QueryResult::NotEnough(collected))
+        } else {
+            Ok(QueryResult::Full(collected))
+        }
     }
 }
