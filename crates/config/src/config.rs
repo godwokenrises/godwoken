@@ -99,6 +99,8 @@ pub struct ChallengerConfig {
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockProducerConfig {
     pub account_id: u32,
+    #[serde(default = "default_check_mem_block_before_submit")]
+    pub check_mem_block_before_submit: bool,
     // cell deps
     pub rollup_cell_type_dep: CellDep,
     pub rollup_config_cell_dep: CellDep,
@@ -114,8 +116,6 @@ pub struct BlockProducerConfig {
     pub allowed_contract_deps: HashMap<H256, CellDep>,
     pub challenger_config: ChallengerConfig,
     pub wallet_config: WalletConfig,
-    #[serde(default = "default_check_mem_block_before_submit")]
-    pub check_mem_block_before_submit: bool,
 }
 
 fn default_check_mem_block_before_submit() -> bool {

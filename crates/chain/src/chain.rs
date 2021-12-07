@@ -25,7 +25,7 @@ use gw_types::{
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
 use smol::lock::Mutex;
-use std::{collections::HashSet, convert::TryFrom, sync::Arc, time::Instant};
+use std::{collections::HashSet, convert::TryFrom, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub struct ChallengeCell {

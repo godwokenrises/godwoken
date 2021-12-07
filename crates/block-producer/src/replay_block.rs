@@ -16,6 +16,7 @@ use gw_types::prelude::Unpack;
 
 use std::collections::HashMap;
 
+#[allow(dead_code)]
 pub struct InvalidState {
     tx: L2Transaction,
     kv: HashMap<H256, H256>,
