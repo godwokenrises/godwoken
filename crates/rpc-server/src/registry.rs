@@ -4,7 +4,7 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::OffChainMockContext;
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{DebugConfig, MemPoolConfig, NodeMode};
+use gw_config::{DebugConfig, MemPoolConfig, NodeMode, RPCMethods, RPCServerConfig};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
@@ -33,12 +33,17 @@ use gw_types::{
 use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
 use lru::LruCache;
+use once_cell::sync::Lazy;
+use pprof::ProfilerGuard;
 use smol::{lock::Mutex, unblock};
 use std::{
     convert::{TryFrom, TryInto},
     sync::Arc,
     time::{Duration, Instant},
 };
+
+static PROFILER_GUARD: Lazy<std::sync::Mutex<Option<ProfilerGuard>>> =
+    Lazy::new(|| std::sync::Mutex::new(None));
 
 // type alias
 type RPCServer = Arc<Server<MapRouter>>;
@@ -155,6 +160,7 @@ pub struct Registry {
     node_mode: NodeMode,
     submit_tx: smol::channel::Sender<Request>,
     rpc_client: RPCClient,
+    server_config: RPCServerConfig,
 }
 
 impl Registry {
@@ -171,6 +177,7 @@ impl Registry {
         mem_pool_config: MemPoolConfig,
         node_mode: NodeMode,
         rpc_client: RPCClient,
+        server_config: RPCServerConfig,
     ) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
@@ -200,6 +207,7 @@ impl Registry {
             node_mode,
             submit_tx,
             rpc_client,
+            server_config,
         }
     }
 
@@ -272,6 +280,16 @@ impl Registry {
                     "debug_dump_cancel_challenge_tx",
                     debug_dump_cancel_challenge_tx,
                 );
+        }
+
+        for enabled in self.server_config.enable_methods.iter() {
+            match enabled {
+                RPCMethods::PProf => {
+                    server = server
+                        .with_method("gw_start_profiler", start_profiler)
+                        .with_method("gw_report_pprof", report_pprof);
+                }
+            }
         }
 
         Ok(server.finish())
@@ -1138,4 +1156,25 @@ async fn debug_dump_cancel_challenge_tx(
         message: err.to_string(),
         data: None,
     })
+}
+
+async fn start_profiler() -> Result<()> {
+    log::info!("profiler started");
+    *PROFILER_GUARD.lock().unwrap() = Some(ProfilerGuard::new(100).unwrap());
+    Ok(())
+}
+
+async fn report_pprof() -> Result<()> {
+    if let Some(profiler) = PROFILER_GUARD.lock().unwrap().take() {
+        smol::spawn(async move {
+            if let Ok(report) = profiler.report().build() {
+                let file = std::fs::File::create("/code/workspace/flamegraph.svg").unwrap();
+                let mut options = pprof::flamegraph::Options::default();
+                options.image_width = Some(2500);
+                report.flamegraph_with_options(file, &mut options).unwrap();
+            }
+        })
+        .detach()
+    }
+    Ok(())
 }

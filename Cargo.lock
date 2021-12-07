@@ -2296,6 +2296,8 @@ dependencies = [
  "jsonrpc-v2",
  "log",
  "lru",
+ "once_cell",
+ "pprof",
  "serde",
  "serde_json",
  "smol",
