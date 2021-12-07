@@ -2364,6 +2364,7 @@ dependencies = [
  "ckb-types",
  "ckb-vm",
  "ckb-vm-definitions",
+ "env_logger",
  "gw-block-producer",
  "gw-chain",
  "gw-common",
