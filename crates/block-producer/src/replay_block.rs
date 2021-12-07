@@ -11,21 +11,8 @@ use gw_store::chain_view::ChainView;
 use gw_store::smt::mem_smt_store::MemSMTStore;
 use gw_store::state::mem_state_db::{MemStateContext, MemStateTree};
 use gw_store::transaction::StoreTransaction;
-use gw_types::packed::{BlockInfo, DepositRequest, L2Block, L2Transaction, RawL2Block};
+use gw_types::packed::{BlockInfo, DepositRequest, L2Block, RawL2Block};
 use gw_types::prelude::Unpack;
-
-use std::collections::HashMap;
-
-#[allow(dead_code)]
-pub struct InvalidState {
-    tx: L2Transaction,
-    kv: HashMap<H256, H256>,
-}
-
-pub enum ReplayError {
-    State(InvalidState),
-    Db(gw_db::error::Error),
-}
 
 pub struct ReplayBlock;
 
@@ -155,10 +142,4 @@ fn get_block_info(l2block: &RawL2Block) -> BlockInfo {
         .number(l2block.number())
         .timestamp(l2block.timestamp())
         .build()
-}
-
-impl From<gw_db::error::Error> for ReplayError {
-    fn from(db_err: gw_db::error::Error) -> Self {
-        ReplayError::Db(db_err)
-    }
 }
