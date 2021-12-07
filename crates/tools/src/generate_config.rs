@@ -269,7 +269,10 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         indexer_url,
         ckb_url,
     };
-    let rpc_server = RPCServerConfig { listen: server_url };
+    let rpc_server = RPCServerConfig {
+        listen: server_url,
+        ..Default::default()
+    };
     let block_producer: Option<BlockProducerConfig> = Some(BlockProducerConfig {
         account_id,
         // cell deps

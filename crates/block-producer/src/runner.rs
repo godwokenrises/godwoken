@@ -572,7 +572,11 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         config.mem_pool.clone(),
         config.node_mode,
         rpc_client.clone(),
+<<<<<<< HEAD
         config.rpc.send_tx_rate_limit.clone(),
+=======
+        config.rpc_server.clone(),
+>>>>>>> upstream/v0.7.x
     );
 
     let (exit_sender, exit_recv) = async_channel::bounded(100);
