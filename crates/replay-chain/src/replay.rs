@@ -1,11 +1,11 @@
-use std::{collections::HashMap, convert::TryInto, path::PathBuf, sync::Arc, time::Instant};
+use std::{convert::TryInto, path::PathBuf, sync::Arc, time::Instant};
 
 use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use ckb_types::{bytes::Bytes, prelude::Entity};
 use gw_chain::chain::Chain;
 use gw_common::H256;
-use gw_config::{ChainConfig, Config, StoreConfig};
+use gw_config::{Config, StoreConfig};
 use gw_db::{schema::COLUMNS, RocksDB};
 use gw_generator::{
     account_lock_manage::{
@@ -17,11 +17,11 @@ use gw_generator::{
     Generator,
 };
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::{transaction::StoreTransaction, Store};
+use gw_store::Store;
 use gw_types::{
     core::ChallengeTargetType,
     offchain::RollupContext,
-    packed::{Byte32, L2Block, RollupConfig},
+    packed::{Byte32, RollupConfig},
     prelude::{Pack, Unpack},
 };
 
@@ -44,7 +44,7 @@ pub fn replay(args: ReplayArgs) -> Result<()> {
         path: to_db_store,
         options: config.store.options.clone(),
         options_file: config.store.options_file.clone(),
-        cache_size: config.store.cache_size.clone(),
+        cache_size: config.store.cache_size,
     };
     let local_store = Store::new(RocksDB::open(&store_config, COLUMNS));
     let rollup_type_script = {
@@ -86,7 +86,7 @@ pub fn replay(args: ReplayArgs) -> Result<()> {
         &local_store,
         &config.genesis,
         config.chain.genesis_committed_info.clone().into(),
-        secp_data.clone(),
+        secp_data,
     )
     .with_context(|| "init genesis")?;
     let generator = {
@@ -109,7 +109,7 @@ pub fn replay(args: ReplayArgs) -> Result<()> {
         Arc::new(Generator::new(
             backend_manage,
             account_lock_manage,
-            rollup_context.clone(),
+            rollup_context,
             Some(config.rpc.clone()),
         ))
     };
@@ -128,7 +128,7 @@ pub fn replay(args: ReplayArgs) -> Result<()> {
             path: from_db_store,
             options: config.store.options.clone(),
             options_file: config.store.options_file.clone(),
-            cache_size: config.store.cache_size.clone(),
+            cache_size: config.store.cache_size,
         };
         Store::new(RocksDB::open(&store_config, from_db_columns))
     };

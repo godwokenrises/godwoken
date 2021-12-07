@@ -191,7 +191,6 @@ fn test_deposit_and_withdrawal() {
     )
     .unwrap();
     // check status
-    let tip_block_hash = chain.store().get_tip_block_hash().unwrap();
     let db = chain.store().begin_transaction();
     let tree = db.state_tree(StateContext::ReadOnly).unwrap();
     let ckb_balance2 = tree
@@ -202,8 +201,6 @@ fn test_deposit_and_withdrawal() {
     assert_eq!(nonce, 1);
     // check tx pool state
     {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mem_pool = smol::block_on(mem_pool.lock());
         let state = db.mem_pool_state_tree().unwrap();
         assert_eq!(
             state
@@ -271,8 +268,6 @@ fn test_overdraft() {
     // check tx pool state
     {
         let db = chain.store().begin_transaction();
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mem_pool = smol::block_on(mem_pool.lock());
         let state = db.mem_pool_state_tree().unwrap();
         assert_eq!(
             state

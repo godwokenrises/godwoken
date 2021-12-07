@@ -119,7 +119,6 @@ fn test_produce_blocks() {
     // check state
     {
         let db = chain.store().begin_transaction();
-        let tip_block_hash = db.get_tip_block_hash().unwrap();
         let tree = db.state_tree(StateContext::ReadOnly).unwrap();
         let script_hash_a: H256 = user_script_a.hash().into();
         let script_hash_b: H256 = user_script_b.hash().into();
