@@ -9,6 +9,7 @@ enum PropertyValue<T> {
 }
 
 impl PropertyValue<u64> {
+    #[allow(dead_code)]
     pub(crate) fn as_i64(&self) -> i64 {
         match self {
             Self::Value(v) => *v as i64,
