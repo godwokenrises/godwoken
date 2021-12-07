@@ -395,7 +395,6 @@ impl BenchExecutionEnvironment {
         )
         .unwrap();
 
-        let rollup_config: gw_types::packed::RollupConfig = config.rollup_config.to_owned().into();
         db.attach_block(genesis).unwrap();
         db.commit().unwrap();
     }
