@@ -7,7 +7,7 @@ use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT, COLUMN_SCRIPT_PREFIX};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
-    packed::{self, AccountMerkleState},
+    packed::{self, AccountMerkleState, Byte32},
     prelude::*,
 };
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -35,6 +35,57 @@ impl<'a> StateTree<'a> {
             account_count,
             context,
         }
+    }
+
+    // Perform basic state checking
+    pub fn check_state(&self) -> Result<()> {
+        let non_exit_account = self.get_script_hash(self.account_count)?;
+        assert_eq!(
+            non_exit_account,
+            H256::zero(),
+            "Detect inconsistent state: account {} should be non-exist",
+            self.account_count
+        );
+
+        // check first 100 account
+        for i in 0..std::cmp::min(100, self.account_count) {
+            let script_hash = self.get_script_hash(i)?;
+            assert_ne!(
+                script_hash,
+                H256::zero(),
+                "Detect inconsistent state: account {} should exist",
+                i
+            );
+            assert!(
+                self.get_script(&script_hash).is_some(),
+                "Detect inconsistent state: script {} not exist",
+                {
+                    let hash: Byte32 = script_hash.pack();
+                    hash
+                }
+            );
+        }
+
+        // check last 100 account
+        for i in self.account_count.saturating_sub(100)..self.account_count {
+            let script_hash = self.get_script_hash(i)?;
+            assert_ne!(
+                script_hash,
+                H256::zero(),
+                "Detect inconsistent state: account {} should exist",
+                i
+            );
+            assert!(
+                self.get_script(&script_hash).is_some(),
+                "Detect inconsistent state: script {} not exist",
+                {
+                    let hash: Byte32 = script_hash.pack();
+                    hash
+                }
+            );
+        }
+
+        Ok(())
     }
 
     pub fn get_merkle_state(&self) -> AccountMerkleState {
