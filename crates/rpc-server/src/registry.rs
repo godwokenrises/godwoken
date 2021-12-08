@@ -265,9 +265,9 @@ struct RequestSubmitter {
 }
 
 impl RequestSubmitter {
-    const MAX_CHANNEL_SIZE: usize = 700;
+    const MAX_CHANNEL_SIZE: usize = 1000;
     const MAX_BATCH_SIZE: usize = 20;
-    const INTERVAL_MS: Duration = Duration::from_millis(300);
+    const INTERVAL_MS: Duration = Duration::from_millis(100);
 
     async fn in_background(self) {
         loop {
@@ -324,7 +324,6 @@ impl RequestSubmitter {
                     }
                 }
             }
-            async_std::task::sleep(Self::INTERVAL_MS).await;
         }
     }
 }
