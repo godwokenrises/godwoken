@@ -719,9 +719,14 @@ impl Chain {
                         .get_block_post_global_state(&last_valid_tip_block_hash)?
                         .expect("last valid tip global state should exists");
 
+                    let local_reverted_block_root: H256 = db.get_reverted_block_smt_root()?;
+                    let last_valid_tip_reverted_block_root: H256 =
+                        last_valid_tip_global_state.reverted_block_root().unpack();
+
                     if local_state_tip_hash == last_valid_tip_block_hash
                         && local_state_global_state.as_slice()
                             == last_valid_tip_global_state.as_slice()
+                        && local_reverted_block_root == last_valid_tip_reverted_block_root
                     {
                         // No need to rewind
                         return Ok(());
@@ -733,10 +738,7 @@ impl Chain {
                     // after sync complete.
 
                     // Rewind reverted block smt to last valid tip in db
-                    let mut current_reverted_block_root: H256 =
-                        local_state_global_state.reverted_block_root().unpack();
-                    let last_valid_tip_reverted_block_root: H256 =
-                        last_valid_tip_global_state.reverted_block_root().unpack();
+                    let mut current_reverted_block_root = local_reverted_block_root;
                     let genesis_hash = db.get_block_hash_by_number(0)?.expect("genesis hash");
                     let genesis_reverted_block_root: H256 = {
                         let genesis_global_state = db
