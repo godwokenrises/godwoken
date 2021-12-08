@@ -651,8 +651,6 @@ fn test_sync_blocks() {
 
 #[test]
 fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
-    let _ = env_logger::builder().is_test(true).try_init();
-
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
     let mut chain = setup_chain(rollup_type_script.clone());
@@ -867,7 +865,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         .get_l2block_committed_info(&last_valid_tip_block_hash)
         .unwrap();
     let rewind = RevertedL1Action {
-        prev_global_state: last_valid_tip_global_state.unwrap(),
+        prev_global_state: last_valid_tip_global_state.clone().unwrap(),
         l2block_committed_info: last_valid_tip_committed_info.unwrap(),
         context: RevertL1ActionContext::RewindToLastValidTip,
     };
@@ -876,6 +874,12 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         updates: vec![],
     };
     chain.sync(param).unwrap();
+
+    let local_reverted_block_smt_root = db.get_reverted_block_smt_root().unwrap();
+    assert_eq!(
+        local_reverted_block_smt_root,
+        Unpack::<H256>::unpack(&last_valid_tip_global_state.unwrap().reverted_block_root())
+    );
 
     // Produce new block
     let bob_script = Script::new_builder()
