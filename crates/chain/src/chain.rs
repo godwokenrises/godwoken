@@ -6,6 +6,7 @@ use gw_common::{sparse_merkle_tree, state::State, H256};
 use gw_config::ChainConfig;
 use gw_generator::{
     generator::{ApplyBlockArgs, ApplyBlockResult},
+    traits::StateExt,
     ChallengeContext, Generator,
 };
 use gw_jsonrpc_types::debugger::ReprMockTransaction;
@@ -361,7 +362,7 @@ impl Chain {
                         return Ok(SyncEvent::BadBlock { context });
                     }
 
-                    if let Some(_challenge_target) = self.process_block(
+                    if let Some(challenge_target) = self.process_block(
                         db,
                         l2block.clone(),
                         l2block_committed_info.clone(),
@@ -369,8 +370,29 @@ impl Chain {
                         deposit_requests,
                         deposit_asset_scripts,
                     )? {
+                        db.rollback()?;
+
                         let block_number = l2block.raw().number().unpack();
-                        Err(anyhow!("Bad block found! #{}", block_number))
+                        log::warn!("bad block #{} found, rollback db", block_number,);
+
+                        db.insert_bad_block(&l2block, &l2block_committed_info, &global_state)?;
+                        log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
+
+                        let global_block_root: H256 = global_state.block().merkle_root().unpack();
+                        let local_block_root = db.get_block_smt_root()?;
+                        assert_eq!(local_block_root, global_block_root, "block root fork");
+
+                        assert!(self.challenge_target.is_none());
+                        db.set_bad_block_challenge_target(
+                            &l2block.hash().into(),
+                            &challenge_target,
+                        )?;
+                        self.challenge_target = Some(challenge_target.clone());
+                        self.local_state.tip = l2block;
+
+                        let context =
+                            gw_challenge::context::build_challenge_context(db, challenge_target)?;
+                        Ok(SyncEvent::BadBlock { context })
                     } else {
                         let block_number = l2block.raw().number().unpack();
                         log::info!("sync new block #{} success", block_number);
@@ -446,17 +468,11 @@ impl Chain {
                     match self.challenge_target {
                         // Previous challenge miss right target, we should challenge it
                         Some(ref target) => {
-                            // let context = gw_challenge::context::build_challenge_context(
-                            //     db,
-                            //     target.to_owned(),
-                            // )?;
-                            panic!(
-                                "found bad block after challenge cancelled: {}, index: {}, type: {:?}",
-                                target.block_hash(),
-                                target.target_index(),
-                                target.target_type()
-                            );
-                            // Ok(SyncEvent::BadBlock { context })
+                            let context = gw_challenge::context::build_challenge_context(
+                                db,
+                                target.to_owned(),
+                            )?;
+                            Ok(SyncEvent::BadBlock { context })
                         }
                         None => Ok(SyncEvent::Success),
                     }
@@ -553,17 +569,11 @@ impl Chain {
                     // If our bad block isn't reverted, just challenge it
                     match self.challenge_target {
                         Some(ref target) => {
-                            // let context = gw_challenge::context::build_challenge_context(
-                            //     db,
-                            //     target.to_owned(),
-                            // )?;
-                            panic!(
-                                "found bad block: {}, index: {}, type: {:?}",
-                                target.block_hash(),
-                                target.target_index(),
-                                target.target_type()
-                            );
-                            // Ok(SyncEvent::BadBlock { context })
+                            let context = gw_challenge::context::build_challenge_context(
+                                db,
+                                target.to_owned(),
+                            )?;
+                            Ok(SyncEvent::BadBlock { context })
                         }
                         None => Ok(SyncEvent::Success),
                     }
@@ -708,9 +718,14 @@ impl Chain {
                         .get_block_post_global_state(&last_valid_tip_block_hash)?
                         .expect("last valid tip global state should exists");
 
+                    let local_reverted_block_root: H256 = db.get_reverted_block_smt_root()?;
+                    let last_valid_tip_reverted_block_root: H256 =
+                        last_valid_tip_global_state.reverted_block_root().unpack();
+
                     if local_state_tip_hash == last_valid_tip_block_hash
                         && local_state_global_state.as_slice()
                             == last_valid_tip_global_state.as_slice()
+                        && local_reverted_block_root == last_valid_tip_reverted_block_root
                     {
                         // No need to rewind
                         return Ok(());
@@ -722,10 +737,7 @@ impl Chain {
                     // after sync complete.
 
                     // Rewind reverted block smt to last valid tip in db
-                    let mut current_reverted_block_root: H256 =
-                        local_state_global_state.reverted_block_root().unpack();
-                    let last_valid_tip_reverted_block_root: H256 =
-                        last_valid_tip_global_state.reverted_block_root().unpack();
+                    let mut current_reverted_block_root = local_reverted_block_root;
                     let genesis_hash = db.get_block_hash_by_number(0)?.expect("genesis hash");
                     let genesis_reverted_block_root: H256 = {
                         let genesis_global_state = db
@@ -822,22 +834,20 @@ impl Chain {
         }
 
         // check consistency of account SMT
-        let expected_account_root: H256 = {
-            let raw_block = self.local_state.tip.raw();
-            raw_block.post_account().merkle_root().unpack()
-        };
+        let expected_account = self.local_state.tip.raw().post_account();
 
         assert_eq!(
             db.account_smt().unwrap().root(),
-            &expected_account_root,
+            &expected_account.merkle_root().unpack(),
             "account root consistent in DB"
         );
 
         let tree = db.state_tree(StateContext::ReadOnly)?;
-        let current_account_root = tree.calculate_root().unwrap();
+        let current_account = tree.merkle_state()?;
 
         assert_eq!(
-            current_account_root, expected_account_root,
+            current_account.as_slice(),
+            expected_account.as_slice(),
             "check account tree"
         );
 
@@ -879,11 +889,11 @@ impl Chain {
         {
             let tree = db.state_tree(StateContext::ReadOnly)?;
 
-            let prev_merkle_root: H256 = l2block.raw().prev_account().merkle_root().unpack();
+            let prev_merkle_state = l2block.raw().prev_account();
             assert_eq!(
-                tree.calculate_root()?,
-                prev_merkle_root,
-                "prev account merkle root must be consistent"
+                tree.merkle_state()?.as_slice(),
+                prev_merkle_state.as_slice(),
+                "prev account merkle state must be consistent"
             );
         }
 

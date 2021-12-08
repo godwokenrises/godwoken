@@ -96,6 +96,23 @@ pub fn setup_chain(rollup_type_script: Script) -> Chain {
         rollup_type_script,
         rollup_config,
         account_lock_manage,
+        None,
+    );
+    chain.complete_initial_syncing().unwrap();
+    chain
+}
+
+// Simulate process restart
+pub fn restart_chain(chain: &Chain, rollup_type_script: Script) -> Chain {
+    let mut account_lock_manage = AccountLockManage::default();
+    let rollup_config = chain.generator().rollup_context().rollup_config.to_owned();
+    account_lock_manage
+        .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+    let mut chain = setup_chain_with_account_lock_manage(
+        rollup_type_script,
+        rollup_config,
+        account_lock_manage,
+        Some(chain.store().to_owned()),
     );
     chain.complete_initial_syncing().unwrap();
     chain
@@ -105,8 +122,9 @@ pub fn setup_chain_with_account_lock_manage(
     rollup_type_script: Script,
     rollup_config: RollupConfig,
     account_lock_manage: AccountLockManage,
+    opt_store: Option<Store>,
 ) -> Chain {
-    let store = Store::open_tmp().unwrap();
+    let store = opt_store.unwrap_or_else(|| Store::open_tmp().unwrap());
     let rollup_script_hash = rollup_type_script.hash();
     let genesis_config = GenesisConfig {
         timestamp: 0,
