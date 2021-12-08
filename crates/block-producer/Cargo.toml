@@ -1,6 +1,6 @@
 [package]
 name = "gw-block-producer"
-version = "0.6.9"
+version = "0.7.0"
 authors = ["Nervos Network"]
 edition = "2018"
 

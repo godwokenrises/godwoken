@@ -2011,7 +2011,7 @@ dependencies = [
 
 [[package]]
 name = "gw-block-producer"
-version = "0.6.9"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -2286,7 +2286,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "log",
- "rand 0.8.2",
+ "rand 0.8.4",
  "semver 1.0.4",
  "serde",
  "serde_json",
@@ -2477,7 +2477,7 @@ dependencies = [
 
 [[package]]
 name = "gw-version"
-version = "0.6.9"
+version = "0.7.0"
 dependencies = [
  "anyhow",
 ]
