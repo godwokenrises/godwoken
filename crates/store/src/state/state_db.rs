@@ -75,6 +75,14 @@ impl<'a> StateTree<'a> {
                 "Detect inconsistent state: account {} should exist",
                 i
             );
+            assert!(
+                self.get_script(&script_hash).is_some(),
+                "Detect inconsistent state: script {} not exist",
+                {
+                    let hash: Byte32 = script_hash.pack();
+                    hash
+                }
+            );
         }
 
         Ok(())
