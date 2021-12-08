@@ -1,8 +1,9 @@
 //! Storage implementation
 
-use crate::transaction::StoreTransaction;
 use crate::write_batch::StoreWriteBatch;
+use crate::{state::state_db::StateContext, transaction::StoreTransaction};
 use anyhow::Result;
+use gw_common::smt::Blake2bHasher;
 use gw_common::{error::Error, smt::H256};
 use gw_db::{
     schema::{
@@ -178,5 +179,30 @@ impl<'a> Store {
             )),
             None => Ok(None),
         }
+    }
+
+    pub fn check_state(&self) -> Result<()> {
+        let db = self.begin_transaction();
+
+        // check state tree
+        let tree = db.state_tree(StateContext::ReadOnly)?;
+        tree.check_state()?;
+
+        // check block smt
+        {
+            let smt = db.block_smt()?;
+            let tip_number: u64 = self.get_tip_block()?.raw().number().unpack();
+            for number in tip_number.saturating_sub(100)..tip_number {
+                let block_hash = self.get_block_hash_by_number(number)?.expect("exist");
+                let block = self.get_block(&block_hash)?.expect("exist");
+                let key = block.smt_key();
+                let proof = smt.merkle_proof(vec![key.into()])?;
+                let root =
+                    proof.compute_root::<Blake2bHasher>(vec![(key.into(), block.hash().into())])?;
+                assert_eq!(&root, smt.root(), "block smt root consistent");
+            }
+        }
+        db.rollback()?;
+        Ok(())
     }
 }

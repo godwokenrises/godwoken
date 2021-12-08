@@ -26,7 +26,7 @@ use gw_mem_pool::{
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
-use gw_store::{state::state_db::StateContext, Store};
+use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     offchain::RollupContext,
@@ -470,9 +470,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     // check state db
     {
         let t = Instant::now();
-        let db = store.begin_transaction();
-        let tree = db.state_tree(StateContext::ReadOnly)?;
-        tree.check_state()?;
+        store.check_state()?;
         log::info!("Check state db done: {}ms", t.elapsed().as_millis());
     }
 
