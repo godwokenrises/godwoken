@@ -362,7 +362,6 @@ impl Chain {
                         return Ok(SyncEvent::BadBlock { context });
                     }
 
-                    println!("deposit_requests {}", deposit_requests.len());
                     if let Some(challenge_target) = self.process_block(
                         db,
                         l2block.clone(),
