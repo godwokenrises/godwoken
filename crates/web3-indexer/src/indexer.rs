@@ -64,7 +64,26 @@ impl Web3Indexer {
         }
     }
 
-    pub async fn store_genesis(&self, store: Store) -> Result<()> {
+    pub async fn fix_missing_blocks(&self, store: &Store) -> Result<()> {
+        let tip = store.get_tip_block()?;
+        let tip_number: u64 = tip.raw().number().unpack();
+        for number in tip_number.saturating_sub(20000)..=tip_number {
+            if self.query_number(number).await?.is_none() {
+                let block = {
+                    let db = store.begin_transaction();
+                    let block_hash = db
+                        .get_block_hash_by_number(number)?
+                        .expect("get block hash");
+                    db.get_block(&block_hash)?.expect("get block")
+                };
+                log::info!("Fix missing block #{}", number);
+                self.insert_l2block(store, block).await?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn store_genesis(&self, store: &Store) -> Result<()> {
         let row: Option<(Decimal,)> =
             sqlx::query_as("SELECT number FROM blocks WHERE number=0 LIMIT 1")
                 .fetch_optional(&self.pool)
@@ -85,7 +104,7 @@ impl Web3Indexer {
         Ok(())
     }
 
-    pub async fn store(&self, store: Store, l1_transaction: &Transaction) -> Result<()> {
+    pub async fn store(&self, store: &Store, l1_transaction: &Transaction) -> Result<()> {
         let l2_block = match self.extract_l2_block(l1_transaction)? {
             Some(block) => block,
             None => return Err(anyhow!("can't find l2 block from l1 transaction")),
@@ -117,7 +136,7 @@ impl Web3Indexer {
         Ok(row.and_then(|(n,)| n.to_u64()))
     }
 
-    async fn insert_l2block(&self, store: Store, l2_block: L2Block) -> Result<()> {
+    async fn insert_l2block(&self, store: &Store, l2_block: L2Block) -> Result<()> {
         let web3_tx_with_logs_vec = self
             .filter_web3_transactions(store.clone(), l2_block.clone())
             .await?;

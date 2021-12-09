@@ -513,7 +513,12 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 tron_account_lock_hash,
             );
             // fix missing genesis block
-            smol::block_on(web3_indexer.store_genesis(store.clone()))?;
+            log::info!("Check web3 indexing...");
+            smol::block_on(async {
+                web3_indexer.store_genesis(&store).await?;
+                web3_indexer.fix_missing_blocks(&store).await?;
+                Ok::<(), anyhow::Error>(())
+            })?;
             Some(web3_indexer)
         }
         None => None,
