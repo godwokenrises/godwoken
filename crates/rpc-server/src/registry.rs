@@ -348,12 +348,12 @@ impl RequestSubmitter {
     fn req_to_entry(&self, req: Request, state: &(impl State + CodeStore)) -> Result<FeeEntry> {
         match req {
             Request::Tx(tx) => {
-                let sender: u32 = tx.raw().from_id().unpack();
-                let script_hash = state.get_script_hash(sender)?;
+                let receiver: u32 = tx.raw().to_id().unpack();
+                let script_hash = state.get_script_hash(receiver)?;
                 let backend_type = self
                     .generator
                     .load_backend(state, &script_hash)
-                    .ok_or_else(|| anyhow!("can't find backend for sender: {}", sender))?
+                    .ok_or_else(|| anyhow!("can't find backend for receiver: {}", receiver))?
                     .backend_type;
                 FeeEntry::from_tx(tx, &self.fee_config, backend_type)
             }
