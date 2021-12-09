@@ -135,7 +135,7 @@ impl Default for FeeQueue {
 mod tests {
     use gw_common::{h256_ext::H256Ext, state::State, H256};
     use gw_config::GenesisConfig;
-    use gw_generator::{genesis::init_genesis, traits::StateExt};
+    use gw_generator::genesis::init_genesis;
     use gw_store::{state::state_db::StateContext, Store};
     use gw_types::{
         bytes::Bytes,
@@ -160,13 +160,15 @@ mod tests {
             let db = store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            db.set_mem_block_account_count(genesis.raw().post_account().count().unpack());
-            db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack());
+            db.set_mem_block_account_count(genesis.raw().post_account().count().unpack())
+                .unwrap();
+            db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack())
+                .unwrap();
             let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
 
             // create accounts
             for i in 0..4 {
-                state.create_account(H256::from_u32(i));
+                state.create_account(H256::from_u32(i)).unwrap();
             }
 
             db.commit().expect("commit");
@@ -238,13 +240,15 @@ mod tests {
             let db = store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            db.set_mem_block_account_count(genesis.raw().post_account().count().unpack());
-            db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack());
+            db.set_mem_block_account_count(genesis.raw().post_account().count().unpack())
+                .unwrap();
+            db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack())
+                .unwrap();
             let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
 
             // create accounts
             for i in 0..4 {
-                state.create_account(H256::from_u32(i));
+                state.create_account(H256::from_u32(i)).unwrap();
             }
 
             db.commit().expect("commit");
@@ -295,13 +299,15 @@ mod tests {
             let db = store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            db.set_mem_block_account_count(genesis.raw().post_account().count().unpack());
-            db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack());
+            db.set_mem_block_account_count(genesis.raw().post_account().count().unpack())
+                .unwrap();
+            db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack())
+                .unwrap();
             let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
 
             // create accounts
             for i in 0..4 {
-                state.create_account(H256::from_u32(i));
+                state.create_account(H256::from_u32(i)).unwrap();
             }
 
             db.commit().expect("commit");
@@ -355,13 +361,15 @@ mod tests {
             let db = store.begin_transaction();
             let genesis = db.get_tip_block().expect("tip");
             assert_eq!(genesis.raw().number().unpack(), 0);
-            db.set_mem_block_account_count(genesis.raw().post_account().count().unpack());
-            db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack());
+            db.set_mem_block_account_count(genesis.raw().post_account().count().unpack())
+                .unwrap();
+            db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack())
+                .unwrap();
             let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
 
             // create accounts
             for i in 0..4 {
-                state.create_account(H256::from_u32(i));
+                state.create_account(H256::from_u32(i)).unwrap();
             }
 
             db.commit().expect("commit");
