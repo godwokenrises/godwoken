@@ -34,6 +34,11 @@ impl FeeQueue {
     /// Add item to queue
     pub fn add(&mut self, entry: FeeEntry) {
         // push to queue
+        log::debug!(
+            "add entry: {:?} {}",
+            entry.item.kind(),
+            hex::encode(entry.item.hash().as_slice())
+        );
         self.queue.push(entry);
 
         // drop items if full
@@ -85,7 +90,15 @@ impl FeeQueue {
                     // push item back if it still has change to get fetched
                     future_queue.push(entry);
                 }
-                _ => {}
+                _ => {
+                    log::debug!(
+                        "delete entry: {:?} {} entry_nonce {} nonce {}",
+                        entry.item.kind(),
+                        hex::encode(entry.item.hash().as_slice()),
+                        entry.item.nonce(),
+                        nonce
+                    );
+                }
             }
 
             if fetched_items.len() >= count {
@@ -98,6 +111,13 @@ impl FeeQueue {
             // Only add back if we fetched another item from the same sender
             if fetched_senders.contains_key(&entry.sender) {
                 self.add(entry);
+            } else {
+                log::debug!(
+                    "drop future entry: {:?} {} entry_nonce {}",
+                    entry.item.kind(),
+                    hex::encode(entry.item.hash().as_slice()),
+                    entry.item.nonce(),
+                );
             }
         }
 
