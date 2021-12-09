@@ -298,7 +298,7 @@ impl ChainUpdater {
         match &self.web3_indexer {
             Some(indexer) => {
                 let store = { self.chain.lock().await.store().to_owned() };
-                if let Err(err) = indexer.store(store, &tx).await {
+                if let Err(err) = indexer.store(&store, &tx).await {
                     log::error!("Web3 indexer store failed: {:?}", err);
                 }
             }
