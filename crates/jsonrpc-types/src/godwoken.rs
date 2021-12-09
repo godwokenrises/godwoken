@@ -1058,3 +1058,24 @@ impl From<offchain::ErrorTxReceipt> for ErrorTxReceipt {
         }
     }
 }
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct SUDTFeeConfig {
+    pub sudt_id: Uint32,
+    pub cycles_limit: Uint64,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct FeeConfig {
+    // fee_rate: fee / weight
+    pub meta_cycles_limit: Uint64,
+    // fee_rate: fee / weight
+    pub default_cycles_limit: Uint64,
+    /// HashMap<sudt_id, fee_weight>
+    ///
+    /// fee_rate: fee / weight
+    /// if sudt_id is not in the map, the default_fee_weight is used
+    pub sudt: Vec<SUDTFeeConfig>,
+}

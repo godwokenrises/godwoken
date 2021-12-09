@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use gw_common::state::State;
 use gw_store::transaction::StoreTransaction;
 use std::collections::{BinaryHeap, HashMap};
@@ -8,7 +8,7 @@ const MAX_QUEUE_SIZE: usize = 10000;
 /// Drop size when queue is full
 const DROP_SIZE: usize = 100;
 
-use super::types::{FeeEntry, FeeItem};
+use super::types::FeeEntry;
 
 /// Txs & withdrawals queue sorted by fee rate
 pub struct FeeQueue {
@@ -25,6 +25,10 @@ impl FeeQueue {
 
     pub fn len(&self) -> usize {
         self.queue.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
     }
 
     /// Add item to queue
@@ -70,14 +74,18 @@ impl FeeQueue {
                 Some(&nonce) => nonce,
                 None => state.get_nonce(entry.sender)?,
             };
-            if entry.item.nonce() == nonce {
-                // update nonce
-                fetched_senders.insert(entry.sender, nonce.saturating_add(1));
-                // fetch this item
-                fetched_items.push(entry);
-            } else if entry.item.nonce() > nonce {
-                // push item back if it still has change to get fetched
-                future_queue.push(entry);
+            match entry.item.nonce().cmp(&nonce) {
+                std::cmp::Ordering::Equal => {
+                    // update nonce
+                    fetched_senders.insert(entry.sender, nonce.saturating_add(1));
+                    // fetch this item
+                    fetched_items.push(entry);
+                }
+                std::cmp::Ordering::Greater => {
+                    // push item back if it still has change to get fetched
+                    future_queue.push(entry);
+                }
+                _ => {}
             }
 
             if fetched_items.len() >= count {
