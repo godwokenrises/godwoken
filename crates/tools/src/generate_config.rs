@@ -230,6 +230,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
                 .meta_contract_validator
                 .script_type_hash
                 .clone(),
+            backend_type: gw_config::BackendType::Meta,
         },
         BackendConfig {
             validator_path: build_scripts_result.built_scripts["l2_sudt_validator"].clone(),
@@ -238,6 +239,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
                 .l2_sudt_validator
                 .script_type_hash
                 .clone(),
+            backend_type: gw_config::BackendType::Sudt,
         },
         BackendConfig {
             validator_path: build_scripts_result.built_scripts["polyjuice_validator"].clone(),
@@ -246,6 +248,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
                 .polyjuice_validator
                 .script_type_hash
                 .clone(),
+            backend_type: gw_config::BackendType::Polyjuice,
         },
     ];
 
@@ -328,6 +331,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         mem_pool: Default::default(),
         db_block_validator: Default::default(),
         store,
+        fee: Default::default(),
     };
 
     Ok(config)

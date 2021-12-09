@@ -1,6 +1,10 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use gw_common::state::State;
-use gw_store::transaction::StoreTransaction;
+use gw_store::{
+    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
+    transaction::StoreTransaction,
+};
+use gw_types::prelude::Unpack;
 use std::collections::{BinaryHeap, HashMap};
 
 /// Max queue size
@@ -8,7 +12,7 @@ const MAX_QUEUE_SIZE: usize = 10000;
 /// Drop size when queue is full
 const DROP_SIZE: usize = 100;
 
-use super::types::{FeeEntry, FeeItem};
+use super::types::FeeEntry;
 
 /// Txs & withdrawals queue sorted by fee rate
 pub struct FeeQueue {
@@ -25,6 +29,10 @@ impl FeeQueue {
 
     pub fn len(&self) -> usize {
         self.queue.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
     }
 
     /// Add item to queue
@@ -55,9 +63,19 @@ impl FeeQueue {
         self.queue.len() > MAX_QUEUE_SIZE
     }
 
+    #[allow(clippy::needless_lifetimes)]
+    fn mem_pool_state_db<'a>(&self, db: &'a StoreTransaction) -> Result<StateDBTransaction<'a>> {
+        let tip = db.get_tip_block()?;
+        let tip_block_number = tip.raw().number().unpack();
+        let checkpoint = CheckPoint::new(tip_block_number, SubState::MemBlock);
+        StateDBTransaction::from_checkpoint(db, checkpoint, StateDBMode::ReadOnly)
+            .map_err(Into::into)
+    }
+
     /// Fetch items by fee sort
     pub fn fetch(&mut self, db: &StoreTransaction, count: usize) -> Result<Vec<FeeEntry>> {
-        let state = db.mem_pool_state_tree()?;
+        let state_db = self.mem_pool_state_db(db)?;
+        let state = state_db.state_tree()?;
         // sorted fee items
         let mut fetched_items = Vec::with_capacity(count as usize);
         let mut fetched_senders: HashMap<u32, u32> = Default::default();
@@ -70,14 +88,18 @@ impl FeeQueue {
                 Some(&nonce) => nonce,
                 None => state.get_nonce(entry.sender)?,
             };
-            if entry.item.nonce() == nonce {
-                // update nonce
-                fetched_senders.insert(entry.sender, nonce.saturating_add(1));
-                // fetch this item
-                fetched_items.push(entry);
-            } else if entry.item.nonce() > nonce {
-                // push item back if it still has change to get fetched
-                future_queue.push(entry);
+            match entry.item.nonce().cmp(&nonce) {
+                std::cmp::Ordering::Equal => {
+                    // update nonce
+                    fetched_senders.insert(entry.sender, nonce.saturating_add(1));
+                    // fetch this item
+                    fetched_items.push(entry);
+                }
+                std::cmp::Ordering::Greater => {
+                    // push item back if it still has change to get fetched
+                    future_queue.push(entry);
+                }
+                _ => {}
             }
 
             if fetched_items.len() >= count {
@@ -108,7 +130,7 @@ mod tests {
     use gw_common::{h256_ext::H256Ext, state::State, H256};
     use gw_config::GenesisConfig;
     use gw_generator::{genesis::init_genesis, traits::StateExt};
-    use gw_store::{state::state_db::StateContext, Store};
+    use gw_store::Store;
     use gw_types::{
         bytes::Bytes,
         packed::{L2BlockCommittedInfo, L2Transaction, RawL2Transaction, RollupConfig},
@@ -134,7 +156,8 @@ mod tests {
             assert_eq!(genesis.raw().number().unpack(), 0);
             db.set_mem_block_account_count(genesis.raw().post_account().count().unpack());
             db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack());
-            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+            let state_db = queue.mem_pool_state_db(&db).unwrap();
+            let mut state = state_db.state_tree().unwrap();
 
             // create accounts
             for i in 0..4 {
@@ -212,7 +235,8 @@ mod tests {
             assert_eq!(genesis.raw().number().unpack(), 0);
             db.set_mem_block_account_count(genesis.raw().post_account().count().unpack());
             db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack());
-            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+            let state_db = queue.mem_pool_state_db(&db).unwrap();
+            let mut state = state_db.state_tree().unwrap();
 
             // create accounts
             for i in 0..4 {
@@ -269,7 +293,8 @@ mod tests {
             assert_eq!(genesis.raw().number().unpack(), 0);
             db.set_mem_block_account_count(genesis.raw().post_account().count().unpack());
             db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack());
-            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+            let state_db = queue.mem_pool_state_db(&db).unwrap();
+            let mut state = state_db.state_tree().unwrap();
 
             // create accounts
             for i in 0..4 {
@@ -329,7 +354,8 @@ mod tests {
             assert_eq!(genesis.raw().number().unpack(), 0);
             db.set_mem_block_account_count(genesis.raw().post_account().count().unpack());
             db.set_mem_block_account_smt_root(genesis.raw().post_account().merkle_root().unpack());
-            let mut state = db.state_tree(StateContext::AttachBlock(1)).expect("state");
+            let state_db = queue.mem_pool_state_db(&db).unwrap();
+            let mut state = state_db.state_tree().unwrap();
 
             // create accounts
             for i in 0..4 {

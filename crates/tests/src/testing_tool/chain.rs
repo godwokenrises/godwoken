@@ -74,11 +74,13 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
             validator_path: META_VALIDATOR_PATH.into(),
             generator_path: META_GENERATOR_PATH.into(),
             validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
+            backend_type: gw_config::BackendType::Meta,
         },
         BackendConfig {
             validator_path: SUDT_VALIDATOR_PATH.into(),
             generator_path: SUDT_GENERATOR_PATH.into(),
             validator_script_type_hash: sudt_validator_script_type_hash.into(),
+            backend_type: gw_config::BackendType::Sudt,
         },
     ];
     BackendManage::from_config(configs).expect("default backend")

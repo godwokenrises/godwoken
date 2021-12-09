@@ -25,7 +25,10 @@ use gw_mem_pool::{
 };
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
+use gw_rpc_server::{
+    registry::{Registry, RegistryArgs},
+    server::start_jsonrpc_server,
+};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
@@ -611,19 +614,22 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     };
 
     // RPC registry
-    let rpc_registry = Registry::new(
+    let args = RegistryArgs {
         store,
-        mem_pool.clone(),
+        mem_pool: mem_pool.clone(),
         generator,
-        test_mode_control.map(Box::new),
+        tests_rpc_impl: test_mode_control.map(Box::new),
         rollup_config,
-        config.debug.clone(),
-        Arc::clone(&chain),
+        mem_pool_config: config.mem_pool.clone(),
+        node_mode: config.node_mode,
+        rpc_client: rpc_client.clone(),
+        fee_config: config.fee.clone(),
+        chain: Arc::clone(&chain),
         offchain_mock_context,
-        config.mem_pool.clone(),
-        config.node_mode,
-        rpc_client.clone(),
-    );
+        debug_config: config.debug.clone(),
+    };
+
+    let rpc_registry = Registry::new(args);
 
     let (exit_sender, exit_recv) = async_channel::bounded(100);
     let handle = {
