@@ -31,6 +31,8 @@ pub struct Config {
     pub db_block_validator: Option<DBBlockValidatorConfig>,
     #[serde(default)]
     pub store: StoreConfig,
+    #[serde(default)]
+    pub fee: FeeConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -131,11 +133,26 @@ fn default_check_mem_block_before_submit() -> bool {
     false
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum BackendType {
+    Meta,
+    Sudt,
+    Polyjuice,
+    Unknown,
+}
+
+impl Default for BackendType {
+    fn default() -> Self {
+        BackendType::Unknown
+    }
+}
+
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BackendConfig {
     pub validator_path: PathBuf,
     pub generator_path: PathBuf,
     pub validator_script_type_hash: H256,
+    pub backend_type: BackendType,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -264,30 +281,25 @@ pub struct StoreConfig {
     pub cache_size: Option<usize>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FeeConfig {
-    // fee_rate: fee / weight
-    pub meta_weight: u64,
-    // fee_rate: fee / weight
-    pub withdraw_weight: u64,
-    // fee_rate: fee / weight
-    pub default_fee_weight: u64,
-    /// HashMap<sudt_id, fee_weight>
+    // fee_rate: fee / cycles limit
+    pub meta_cycles_limit: u64,
+    // fee_rate: fee / cycles limit
+    pub default_cycles_limit: u64,
+    /// HashMap<sudt_id, cycles limit>
     ///
     /// fee_rate: fee / weight
-    /// if sudt_id is not in the map, the default_fee_weight is used
-    pub sudt_fee_weights: HashMap<u32, u64>,
+    /// if sudt_id is not in the map, the default_cycles_limit is used
+    pub sudt_fee_cycles_limit: HashMap<u32, u64>,
 }
 
-pub enum BackendType {
-    Meta,
-    Sudt,
-    Polyjuice,
-    Unknown,
-}
-
-impl Default for BackendType {
+impl Default for FeeConfig {
     fn default() -> Self {
-        BackendType::Unknown
+        Self {
+            meta_cycles_limit: 200000,                 // 200K cycles
+            default_cycles_limit: 200000,              // 200K cycles
+            sudt_fee_cycles_limit: Default::default(), // use default
+        }
     }
 }

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use gw_common::H256;
-use gw_config::BackendConfig;
+use gw_config::{BackendConfig, BackendType};
 use gw_types::bytes::Bytes;
 use std::{collections::HashMap, fs};
 
@@ -9,6 +9,7 @@ pub struct Backend {
     pub validator: Bytes,
     pub generator: Bytes,
     pub validator_script_type_hash: H256,
+    pub backend_type: BackendType,
 }
 
 #[derive(Clone)]
@@ -34,6 +35,7 @@ impl BackendManage {
             validator_path,
             generator_path,
             validator_script_type_hash,
+            backend_type,
         } = config;
         let validator = fs::read(validator_path)?.into();
         let generator = fs::read(generator_path)?.into();
@@ -45,6 +47,7 @@ impl BackendManage {
             validator,
             generator,
             validator_script_type_hash,
+            backend_type,
         };
         self.register_backend(backend);
         Ok(())

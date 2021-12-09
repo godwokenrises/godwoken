@@ -609,7 +609,11 @@ impl Generator {
         }
     }
 
-    fn load_backend<S: State + CodeStore>(&self, state: &S, script_hash: &H256) -> Option<Backend> {
+    pub fn load_backend<S: State + CodeStore>(
+        &self,
+        state: &S,
+        script_hash: &H256,
+    ) -> Option<Backend> {
         log::debug!(
             "load_backend for script_hash: {}",
             hex::encode(script_hash.as_slice())
@@ -702,10 +706,11 @@ impl Generator {
             exit_code = machine.run()?;
             used_cycles = machine.machine.cycles();
             log::debug!(
-                "[execute tx] VM run time: {}ms, exit code: {} used_cycles: {}",
+                "[execute tx] VM run time: {}ms, exit code: {} used_cycles: {} backend: {:?}",
                 t.elapsed().as_millis(),
                 exit_code,
-                used_cycles
+                used_cycles,
+                backend.backend_type
             );
         }
         // record used cycles

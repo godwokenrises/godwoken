@@ -1,8 +1,8 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
+use gw_config::{FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
@@ -10,17 +10,23 @@ use gw_jsonrpc_types::{
     godwoken::{
         BackendInfo, ErrorTxReceipt, GlobalState, L2BlockCommittedInfo, L2BlockStatus, L2BlockView,
         L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, NodeInfo, RunResult,
-        TxReceipt,
+        SUDTFeeConfig, TxReceipt,
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
-use gw_mem_pool::custodian::AvailableCustodians;
+use gw_mem_pool::{
+    custodian::AvailableCustodians,
+    fee::{
+        queue::FeeQueue,
+        types::{FeeEntry, FeeItem},
+    },
+};
 use gw_rpc_client::rpc_client::RPCClient;
 // use gw_mem_pool::batch::{MemPoolBatch};
 use gw_store::{chain_view::ChainView, state::state_db::StateContext, CfMemStat, Store};
 use gw_traits::CodeStore;
 use gw_types::{
-    packed::{self, BlockInfo, L2Transaction, RawL2Block, RollupConfig, WithdrawalRequest},
+    packed::{self, BlockInfo, Byte32, L2Transaction, RawL2Block, RollupConfig, WithdrawalRequest},
     prelude::*,
 };
 use gw_version::Version;
@@ -103,6 +109,20 @@ fn to_jsonh256(v: H256) -> JsonH256 {
     h.into()
 }
 
+pub struct RegistryArgs<T> {
+    pub store: Store,
+    pub mem_pool: MemPool,
+    pub generator: Arc<Generator>,
+    pub tests_rpc_impl: Option<Box<T>>,
+    pub rollup_config: RollupConfig,
+    pub mem_pool_config: MemPoolConfig,
+    pub node_mode: NodeMode,
+    pub rpc_client: RPCClient,
+    pub send_tx_rate_limit: Option<RPCRateLimit>,
+    pub server_config: RPCServerConfig,
+    pub fee_config: FeeConfig,
+}
+
 pub struct Registry {
     generator: Arc<Generator>,
     mem_pool: MemPool,
@@ -116,31 +136,38 @@ pub struct Registry {
     rpc_client: RPCClient,
     send_tx_rate_limit: Option<RPCRateLimit>,
     server_config: RPCServerConfig,
+    fee_config: FeeConfig,
 }
 
 impl Registry {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new<T>(
-        store: Store,
-        mem_pool: MemPool,
-        generator: Arc<Generator>,
-        tests_rpc_impl: Option<Box<T>>,
-        rollup_config: RollupConfig,
-        mem_pool_config: MemPoolConfig,
-        node_mode: NodeMode,
-        rpc_client: RPCClient,
-        send_tx_rate_limit: Option<RPCRateLimit>,
-        server_config: RPCServerConfig,
-    ) -> Self
+    pub fn new<T>(args: RegistryArgs<T>) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
     {
+        let RegistryArgs {
+            generator,
+            mem_pool,
+            store,
+            tests_rpc_impl,
+            rollup_config,
+            mem_pool_config,
+            node_mode,
+            rpc_client,
+            send_tx_rate_limit,
+            server_config,
+            fee_config,
+        } = args;
+
         let backend_info = get_backend_info(generator.clone());
         let (submit_tx, submit_rx) = smol::channel::bounded(RequestSubmitter::MAX_CHANNEL_SIZE);
         if let Some(mem_pool) = mem_pool.as_ref().to_owned() {
             let submitter = RequestSubmitter {
                 mem_pool: Arc::clone(mem_pool),
                 submit_rx,
+                queue: Arc::new(Mutex::new(FeeQueue::new())),
+                fee_config: fee_config.clone(),
+                generator: generator.clone(),
+                store: store.clone(),
             };
             smol::spawn(submitter.in_background()).detach();
         }
@@ -159,6 +186,7 @@ impl Registry {
             rpc_client,
             send_tx_rate_limit,
             server_config,
+            fee_config,
         }
     }
 
@@ -181,6 +209,7 @@ impl Registry {
             .with_data(Data::new(self.rpc_client))
             .with_data(Data::new(self.send_tx_rate_limit))
             .with_data(Data::new(send_transaction_rate_limiter))
+            .with_data(Data::new(self.fee_config))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -209,6 +238,7 @@ impl Registry {
                 "gw_compute_l2_sudt_script_hash",
                 compute_l2_sudt_script_hash,
             )
+            .with_method("gw_get_fee_config", get_fee_config)
             .with_method("gw_get_node_info", get_node_info);
         if self.node_mode != NodeMode::ReadOnly {
             server = server
@@ -269,12 +299,43 @@ impl Request {
 struct RequestSubmitter {
     mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
     submit_rx: smol::channel::Receiver<Request>,
+    queue: Arc<Mutex<FeeQueue>>,
+    fee_config: FeeConfig,
+    store: Store,
+    generator: Arc<Generator>,
 }
 
 impl RequestSubmitter {
     const MAX_CHANNEL_SIZE: usize = 1000;
     const MAX_BATCH_SIZE: usize = 20;
     const INTERVAL_MS: Duration = Duration::from_millis(100);
+
+    fn req_to_entry(&self, req: Request, state: &(impl State + CodeStore)) -> Result<FeeEntry> {
+        match req {
+            Request::Tx(tx) => {
+                let sender: u32 = tx.raw().from_id().unpack();
+                let script_hash = state.get_script_hash(sender)?;
+                let backend_type = self
+                    .generator
+                    .load_backend(state, &script_hash)
+                    .ok_or_else(|| anyhow!("can't find backend for sender: {}", sender))?
+                    .backend_type;
+                FeeEntry::from_tx(tx, &self.fee_config, backend_type)
+            }
+            Request::Withdrawal(withdraw) => {
+                let script_hash = withdraw.raw().account_script_hash().unpack();
+                let sender = state
+                    .get_account_id_by_script_hash(&script_hash)?
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "can't find id by script hash {}",
+                            withdraw.raw().account_script_hash()
+                        )
+                    })?;
+                FeeEntry::from_withdrawal(withdraw, sender, &self.fee_config)
+            }
+        }
+    }
 
     async fn in_background(self) {
         loop {
@@ -304,30 +365,75 @@ impl RequestSubmitter {
                 }
             };
 
-            let mut batch = Vec::with_capacity(Self::MAX_BATCH_SIZE);
-            batch.push(req);
-            while let Ok(req) = self.submit_rx.try_recv() {
-                batch.push(req);
-                if batch.len() >= Self::MAX_BATCH_SIZE {
-                    break;
+            // push items to fee priority queue
+            let mut queue = self.queue.lock().await;
+            {
+                let db = self.store.begin_transaction();
+                let state = db.mem_pool_state_tree().expect("mem pool state");
+                let kind = req.kind();
+                let hash = req.hash();
+                match self.req_to_entry(req, &state) {
+                    Ok(entry) => {
+                        queue.add(entry);
+                    }
+                    Err(err) => {
+                        log::error!(
+                            "Failed to convert req to entry kind: {}, hash: {}, err: {}",
+                            kind,
+                            hash,
+                            err
+                        );
+                    }
+                }
+                while let Ok(req) = self.submit_rx.try_recv() {
+                    let kind = req.kind();
+                    let hash = req.hash();
+                    match self.req_to_entry(req, &state) {
+                        Ok(entry) => {
+                            queue.add(entry);
+                        }
+                        Err(err) => {
+                            log::error!(
+                                "Failed to convert req to entry kind: {}, hash: {}, err: {}",
+                                kind,
+                                hash,
+                                err
+                            );
+                        }
+                    }
                 }
             }
 
-            if !batch.is_empty() {
-                let mut mem_pool = self.mem_pool.lock().await;
-                for req in batch.drain(..) {
-                    let kind = req.kind();
-                    let hash = req.hash();
+            // fetch items from PQ
+            let items = {
+                let db = self.store.begin_transaction();
+                match queue.fetch(&db, Self::MAX_BATCH_SIZE) {
+                    Ok(items) => items,
+                    Err(err) => {
+                        log::error!(
+                            "Fetch items({}) from queue({}) error: {}",
+                            Self::MAX_BATCH_SIZE,
+                            queue.len(),
+                            err
+                        );
+                        continue;
+                    }
+                }
+            };
 
-                    let maybe_ok = match req {
-                        Request::Tx(tx) => mem_pool.push_transaction(tx),
-                        Request::Withdrawal(withdrawal) => {
+            if !items.is_empty() {
+                let mut mem_pool = self.mem_pool.lock().await;
+                for entry in items {
+                    let maybe_ok = match entry.item.clone() {
+                        FeeItem::Tx(tx) => mem_pool.push_transaction(tx),
+                        FeeItem::Withdrawal(withdrawal) => {
                             mem_pool.push_withdrawal_request(withdrawal)
                         }
                     };
 
                     if let Err(err) = maybe_ok {
-                        log::info!("push {} {} failed {}", kind, hash, err);
+                        let hash: Byte32 = entry.item.hash().pack();
+                        log::info!("push {:?} {} failed {}", entry.item.kind(), hash, err);
                     }
                 }
             }
@@ -1045,6 +1151,22 @@ async fn get_node_info(backend_info: Data<Vec<BackendInfo>>) -> Result<NodeInfo>
         version: Version::current().to_string(),
         backends: backend_info.clone(),
     })
+}
+
+async fn get_fee_config(fee: Data<FeeConfig>) -> Result<gw_jsonrpc_types::godwoken::FeeConfig> {
+    let fee_config = gw_jsonrpc_types::godwoken::FeeConfig {
+        meta_cycles_limit: fee.meta_cycles_limit.into(),
+        default_cycles_limit: fee.default_cycles_limit.into(),
+        sudt: fee
+            .sudt_fee_cycles_limit
+            .iter()
+            .map(|(&sudt_id, &cycles_limit)| SUDTFeeConfig {
+                sudt_id: sudt_id.into(),
+                cycles_limit: cycles_limit.into(),
+            })
+            .collect(),
+    };
+    Ok(fee_config)
 }
 
 async fn tests_produce_block(
