@@ -35,7 +35,8 @@ impl FeeQueue {
     pub fn add(&mut self, entry: FeeEntry) {
         // push to queue
         log::debug!(
-            "add entry: {:?} {}",
+            "QueueLen: {} | add entry: {:?} {}",
+            self.len(),
             entry.item.kind(),
             hex::encode(entry.item.hash().as_slice())
         );
@@ -53,7 +54,8 @@ impl FeeQueue {
             }
             self.queue = new_queue;
             log::debug!(
-                "Fee queue is full, drop {} items, new size: {}",
+                "QueueLen: {} | Fee queue is full, drop {} items, new size: {}",
+                self.len(),
                 DROP_SIZE,
                 expected_len
             );
@@ -92,7 +94,8 @@ impl FeeQueue {
                 }
                 _ => {
                     log::debug!(
-                        "delete entry: {:?} {} entry_nonce {} nonce {}",
+                        "QueueLen: {} | delete entry: {:?} {} entry_nonce {} nonce {}",
+                        self.len(),
                         entry.item.kind(),
                         hex::encode(entry.item.hash().as_slice()),
                         entry.item.nonce(),
@@ -113,7 +116,8 @@ impl FeeQueue {
                 self.add(entry);
             } else {
                 log::debug!(
-                    "drop future entry: {:?} {} entry_nonce {}",
+                    "QueueLen: {} | drop future entry: {:?} {} entry_nonce {}",
+                    self.len(),
                     entry.item.kind(),
                     hex::encode(entry.item.hash().as_slice()),
                     entry.item.nonce(),
