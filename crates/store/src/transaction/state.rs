@@ -56,7 +56,7 @@ impl StoreTransaction {
     // The ReadOnly is for fetching history state, and the write only is for writing new state.
     // This function should only be added on the ReadOnly state.
     pub fn account_smt(&self) -> Result<SMT<SMTStore<'_, Self>>, Error> {
-        let block = self.get_tip_block()?;
+        let block = self.get_last_valid_tip_block()?;
         let merkle_state = block.raw().post_account();
         self.account_smt_with_merkle_state(merkle_state)
     }

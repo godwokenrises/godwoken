@@ -519,7 +519,7 @@ async fn get_block_hash(
 }
 
 async fn get_tip_block_hash(store: Data<Store>) -> Result<JsonH256> {
-    let tip_block_hash = store.get_tip_block_hash()?;
+    let tip_block_hash = store.begin_transaction().get_last_valid_tip_block_hash()?;
     Ok(to_jsonh256(tip_block_hash))
 }
 
@@ -557,7 +557,7 @@ async fn execute_l2transaction(
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
 
-    let raw_block = store.get_tip_block()?.raw();
+    let raw_block = store.begin_transaction().get_last_valid_tip_block()?.raw();
     let block_producer_id = raw_block.block_producer_id();
     let timestamp = raw_block.timestamp();
     let number = {
@@ -573,8 +573,8 @@ async fn execute_l2transaction(
 
     let tx_hash = tx.hash();
     let mut run_result = unblock(move || {
-        let tip_block_hash = store.get_tip_block_hash()?;
         let db = store.begin_transaction();
+        let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
         let state = db.mem_pool_state_tree()?;
         // verify tx signature
@@ -670,7 +670,7 @@ async fn execute_raw_l2transaction(
     // execute tx in task
     let mut run_result = unblock(move || {
         let chain_view = {
-            let tip_block_hash = db.get_tip_block_hash()?;
+            let tip_block_hash = db.get_last_valid_tip_block_hash()?;
             ChainView::new(&db, tip_block_hash)
         };
         // execute tx
@@ -805,8 +805,8 @@ async fn submit_withdrawal_request(
     // verify finalized custodian
     {
         let finalized_custodians = {
-            let tip = store.get_tip_block()?;
             let db = store.begin_transaction();
+            let tip = db.get_last_valid_tip_block()?;
             // query withdrawals from ckb-indexer
             let last_finalized_block_number = generator
                 .rollup_context()

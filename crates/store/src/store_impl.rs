@@ -191,7 +191,7 @@ impl<'a> Store {
         // check block smt
         {
             let smt = db.block_smt()?;
-            let tip_number: u64 = self.get_tip_block()?.raw().number().unpack();
+            let tip_number: u64 = db.get_last_valid_tip_block()?.raw().number().unpack();
             for number in tip_number.saturating_sub(100)..tip_number {
                 let block_hash = self.get_block_hash_by_number(number)?.expect("exist");
                 let block = self.get_block(&block_hash)?.expect("exist");

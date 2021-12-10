@@ -594,9 +594,11 @@ impl Generator {
             );
         }
 
-        println!(
+        log::debug!(
             "signature {}ms execute tx {}ms apply state {}ms",
-            check_signature_total_ms, execute_tx_total_ms, apply_state_total_ms
+            check_signature_total_ms,
+            execute_tx_total_ms,
+            apply_state_total_ms
         );
 
         ApplyBlockResult::Success {
