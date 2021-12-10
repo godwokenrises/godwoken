@@ -835,7 +835,7 @@ impl Chain {
 
         // check consistency of account SMT
         let expected_account = match self.challenge_target {
-            Some(_) => db.get_last_valid_tip_block()?.raw().prev_account(),
+            Some(_) => db.get_last_valid_tip_block()?.raw().post_account(),
             None => self.local_state.tip.raw().post_account(),
         };
 
