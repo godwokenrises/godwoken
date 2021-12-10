@@ -1214,13 +1214,14 @@ async fn get_node_info(backend_info: Data<Vec<BackendInfo>>) -> Result<NodeInfo>
 async fn get_fee_config(fee: Data<FeeConfig>) -> Result<gw_jsonrpc_types::godwoken::FeeConfig> {
     let fee_config = gw_jsonrpc_types::godwoken::FeeConfig {
         meta_cycles_limit: fee.meta_cycles_limit.into(),
-        default_cycles_limit: fee.default_cycles_limit.into(),
-        sudt: fee
-            .sudt_fee_cycles_limit
+        sudt_cycles_limit: fee.sudt_cycles_limit.into(),
+        withdraw_cycles_limit: fee.withdraw_cycles_limit.into(),
+        sudt_fee_rate_weight: fee
+            .sudt_fee_rate_weight
             .iter()
-            .map(|(&sudt_id, &cycles_limit)| SUDTFeeConfig {
+            .map(|(&sudt_id, &fee_rate_weight)| SUDTFeeConfig {
                 sudt_id: sudt_id.into(),
-                cycles_limit: cycles_limit.into(),
+                fee_rate_weight: fee_rate_weight.into(),
             })
             .collect(),
     };
