@@ -345,7 +345,10 @@ impl TestModeRPC for TestModeControl {
         };
 
         let ret = {
-            let median_time = self.rpc_client.get_block_median_time(tip_hash).await?;
+            let median_time = match self.rpc_client.get_block_median_time(tip_hash).await? {
+                Some(median_time) => median_time,
+                None => return Ok(ShouldProduceBlock::No),
+            };
             let poa_cell_input = InputCellInfo {
                 input: CellInput::new_builder()
                     .previous_output(rollup_cell.out_point.clone())

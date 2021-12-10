@@ -371,8 +371,8 @@ impl RPCClient {
         Ok(number_hash.into())
     }
 
-    pub async fn get_block_median_time(&self, block_hash: H256) -> Result<Duration> {
-        let median_time: gw_jsonrpc_types::ckb_jsonrpc_types::Uint64 = to_result(
+    pub async fn get_block_median_time(&self, block_hash: H256) -> Result<Option<Duration>> {
+        let opt_median_time: Option<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64> = to_result(
             self.ckb
                 .request(
                     "get_block_median_time",
@@ -380,7 +380,8 @@ impl RPCClient {
                 )
                 .await?,
         )?;
-        Ok(Duration::from_millis(median_time.into()))
+
+        Ok(opt_median_time.map(|t| Duration::from_millis(t.into())))
     }
 
     pub async fn get_block_by_number(&self, number: u64) -> Result<Option<Block>> {

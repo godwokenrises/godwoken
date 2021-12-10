@@ -256,7 +256,10 @@ impl BlockProducer {
             return Ok(());
         }
 
-        let median_time = self.rpc_client.get_block_median_time(tip_hash).await?;
+        let median_time = match self.rpc_client.get_block_median_time(tip_hash).await? {
+            Some(time) => time,
+            None => return Ok(()),
+        };
         let poa_cell_input = InputCellInfo {
             input: CellInput::new_builder()
                 .previous_output(rollup_cell.out_point.clone())

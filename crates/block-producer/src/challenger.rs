@@ -105,7 +105,10 @@ impl Challenger {
         }
 
         let tip_hash = to_tip_hash(&event);
-        let median_time = self.rpc_client.get_block_median_time(tip_hash).await?;
+        let median_time = match self.rpc_client.get_block_median_time(tip_hash).await? {
+            Some(time) => time,
+            None => return Ok(()),
+        };
         let rollup = RollupState::query(&self.rpc_client).await?;
 
         {
