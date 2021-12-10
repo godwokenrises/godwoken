@@ -608,7 +608,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     // RPC registry
     let args = RegistryArgs {
         store,
-        mem_pool: mem_pool.clone(),
+        mem_pool,
         generator,
         tests_rpc_impl: test_mode_control.map(Box::new),
         rollup_config,
@@ -685,8 +685,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     });
 
-    let mem_block_save_guard = MemBlockSaveGuard { mem_pool };
-
     smol::block_on(async {
         let _ = exit_recv.recv().await;
         log::info!("Exiting...");
@@ -695,32 +693,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         chain_task.cancel().await;
     });
 
-    drop(mem_block_save_guard);
-
     Ok(())
-}
-
-struct MemBlockSaveGuard {
-    mem_pool: Option<Arc<Mutex<MemPool>>>,
-}
-
-impl Drop for MemBlockSaveGuard {
-    fn drop(&mut self) {
-        if let Some(mem_pool) = self.mem_pool.as_ref() {
-            let mem_pool = mem_pool.clone();
-            smol::block_on(async move {
-                let mem_pool = mem_pool.lock().await;
-                log::info!(
-                    "Saving mem block to {:?}",
-                    mem_pool.restore_manager().path()
-                );
-                if let Err(err) = mem_pool.save_mem_block() {
-                    log::error!("Save mem block error {}", err);
-                }
-                mem_pool.restore_manager().delete_before_one_hour();
-            });
-        }
-    }
 }
 
 fn check_ckb_version(rpc_client: &RPCClient) -> Result<()> {
