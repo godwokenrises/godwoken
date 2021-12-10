@@ -17,6 +17,20 @@ impl<'r> Unpack<[u8; 36]> for packed::TransactionKeyReader<'r> {
 }
 impl_conversion_for_entity_unpack!([u8; 36], TransactionKey);
 
+impl Pack<packed::WithdrawalKey> for [u8; 36] {
+    fn pack(&self) -> packed::WithdrawalKey {
+        packed::WithdrawalKey::from_slice(&self[..]).expect("impossible: fail to pack [u8; 36]")
+    }
+}
+
+impl<'r> Unpack<[u8; 36]> for packed::WithdrawalKeyReader<'r> {
+    fn unpack(&self) -> [u8; 36] {
+        let ptr = self.as_slice().as_ptr() as *const [u8; 36];
+        unsafe { *ptr }
+    }
+}
+impl_conversion_for_entity_unpack!([u8; 36], WithdrawalKey);
+
 impl Pack<packed::SMTMergeValue> for MergeValue {
     fn pack(&self) -> packed::SMTMergeValue {
         match self {

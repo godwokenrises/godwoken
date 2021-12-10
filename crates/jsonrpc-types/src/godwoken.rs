@@ -513,6 +513,26 @@ pub struct L2TransactionWithStatus {
     pub status: L2TransactionStatus,
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum WithdrawalStatus {
+    Pending,
+    Committed,
+}
+
+impl Default for WithdrawalStatus {
+    fn default() -> Self {
+        Self::Pending
+    }
+}
+
+#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct WithdrawalWithStatus {
+    pub withdrawal: Option<WithdrawalRequest>,
+    pub status: WithdrawalStatus,
+}
+
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct SubmitTransactions {
