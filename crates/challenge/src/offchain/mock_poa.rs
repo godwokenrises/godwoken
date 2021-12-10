@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use gw_poa::{PoA, PoAContext};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
@@ -22,10 +22,7 @@ impl MockPoA {
         poa: &PoA,
         rollup_cell: &InputCellInfo,
     ) -> Result<Self> {
-        let median_time = {
-            let l1_tip_block_hash = rpc_client.get_tip().await?.block_hash().unpack();
-            rpc_client.get_block_median_time(l1_tip_block_hash).await?
-        };
+        let median_time = MockPoA::query_block_median_time(rpc_client).await?;
         let context = poa.query_poa_context(rollup_cell).await?;
 
         let poa_context = MockPoA::ensure_unlockable(context, poa, median_time);
@@ -42,6 +39,24 @@ impl MockPoA {
         };
 
         Ok(mock_poa)
+    }
+
+    async fn query_block_median_time(rpc_client: &RPCClient) -> Result<Duration> {
+        let mut count = 5;
+
+        while count > 0 {
+            let l1_tip_block_hash = rpc_client.get_tip().await?.block_hash().unpack();
+            if let Some(time) = rpc_client.get_block_median_time(l1_tip_block_hash).await? {
+                return Ok(time);
+            }
+
+            smol::Timer::after(Duration::from_secs(1)).await;
+            count -= 1;
+        }
+
+        Err(anyhow!(
+            "mock poa failed, unable to get ckb tip block median time"
+        ))
     }
 
     fn ensure_unlockable(mut context: PoAContext, poa: &PoA, median_time: Duration) -> PoAContext {
