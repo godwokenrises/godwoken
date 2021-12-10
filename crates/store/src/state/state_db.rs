@@ -140,6 +140,14 @@ impl<'a> State for StateTree<'a> {
                 .unwrap_or_default(),
             _ => self.tree.get(key)?,
         };
+        {
+            let k: Byte32 = key.pack();
+            let v: Byte32 = v.pack();
+            println!(
+                "[state-trace] get_raw ctx:{:?} k:{} v:{}",
+                self.context, k, v
+            );
+        }
         Ok(v)
     }
 
@@ -159,15 +167,36 @@ impl<'a> State for StateTree<'a> {
                 panic!("wrong ctx: {:?}", ctx);
             }
         }
+        {
+            let k: Byte32 = key.pack();
+            let v: Byte32 = value.pack();
+            println!(
+                "[state-trace] update_raw ctx:{:?} k:{} v:{}",
+                self.context, k, v
+            );
+        }
         Ok(())
     }
 
     fn get_account_count(&self) -> Result<u32, StateError> {
+        {
+            println!(
+                "[state-trace] get_account_count ctx:{:?} count:{}",
+                self.context, self.account_count
+            );
+        }
         Ok(self.account_count)
     }
 
     fn set_account_count(&mut self, count: u32) -> Result<(), StateError> {
+        let origin_count = self.account_count;
         self.account_count = count;
+        {
+            println!(
+                "[state-trace] set_account_count ctx:{:?} origin: {} count:{}",
+                self.context, origin_count, self.account_count
+            );
+        }
         Ok(())
     }
 
