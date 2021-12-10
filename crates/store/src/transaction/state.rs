@@ -43,7 +43,7 @@ impl StoreTransaction {
                 self.get_block(&block_hash)?
                     .ok_or_else(|| "can't find block".to_string())?
             }
-            _ => self.get_tip_block()?,
+            _ => self.get_last_valid_tip_block()?,
         };
         let merkle_state = block.raw().post_account();
         let account_count = merkle_state.count().unpack();
