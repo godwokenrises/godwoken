@@ -9,14 +9,14 @@ use gw_db::schema::{
     COLUMN_BLOCK_SMT_LEAF, COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META,
     COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF,
     COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
-    COLUMN_TRANSACTION_RECEIPT, META_BLOCK_SMT_ROOT_KEY, META_CHAIN_ID_KEY,
-    META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY,
+    COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO, META_BLOCK_SMT_ROOT_KEY,
+    META_CHAIN_ID_KEY, META_LAST_VALID_TIP_BLOCK_HASH_KEY, META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY,
     META_MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY, META_REVERTED_BLOCK_SMT_ROOT_KEY, META_TIP_BLOCK_HASH_KEY,
 };
 use gw_db::ReadOptions;
 use gw_db::{error::Error, iter::DBIter, DBIterator, IteratorMode, RocksDBTransaction};
 use gw_types::offchain::global_state_from_slice;
-use gw_types::packed::Script;
+use gw_types::packed::{Script, WithdrawalKey};
 use gw_types::{
     packed::{
         self, AccountMerkleState, Byte32, ChallengeTarget, TransactionKey, WithdrawalReceipt,
@@ -304,17 +304,38 @@ impl StoreTransaction {
             }))
     }
 
-    // pub fn get_checkpoint_post_state(
-    //     &self,
-    //     checkpoint: &Byte32,
-    // ) -> Result<Option<packed::AccountMerkleState>, Error> {
-    //     Ok(self
-    //         .get(COLUMN_CHECKPOINT, checkpoint.as_slice())
-    //         .map(|slice| {
-    //             packed::AccountMerkleStateReader::from_slice_should_be_ok(slice.as_ref())
-    //                 .to_entity()
-    //         }))
-    // }
+    pub fn get_withdrawal(
+        &self,
+        withdrawal_hash: &H256,
+    ) -> Result<Option<packed::WithdrawalRequest>, Error> {
+        match self.get_withdrawal_info(withdrawal_hash)? {
+            Some(withdrawal_info) => self.get_withdrawal_by_key(&withdrawal_info.key()),
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_withdrawal_info(
+        &self,
+        withdrawal_hash: &H256,
+    ) -> Result<Option<packed::WithdrawalInfo>, Error> {
+        let withdrawal_info_opt = self
+            .get(COLUMN_WITHDRAWAL_INFO, withdrawal_hash.as_slice())
+            .map(|slice| {
+                packed::WithdrawalInfoReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
+            });
+        Ok(withdrawal_info_opt)
+    }
+
+    pub fn get_withdrawal_by_key(
+        &self,
+        withdrawal_key: &WithdrawalKey,
+    ) -> Result<Option<packed::WithdrawalRequest>, Error> {
+        Ok(self
+            .get(COLUMN_WITHDRAWAL, withdrawal_key.as_slice())
+            .map(|slice| {
+                packed::WithdrawalRequestReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
+            }))
+    }
 
     pub fn get_l2block_committed_info(
         &self,
@@ -565,12 +586,6 @@ impl StoreTransaction {
             if tx_receipts.is_empty() && prev_txs_state.as_slice() != block_post_state.as_slice() {
                 return Err(Error::from("unexpected no tx post state".to_string()));
             }
-
-            // self.insert_raw(
-            //     COLUMN_CHECKPOINT,
-            //     checkpoint.as_slice(),
-            //     prev_txs_state.as_slice(),
-            // )?;
         }
 
         for (index, (tx, tx_receipt)) in block
@@ -587,6 +602,10 @@ impl StoreTransaction {
                 tx_receipt.as_slice(),
             )?;
         }
+        for (index, withdrawal) in block.withdrawals().into_iter().enumerate() {
+            let key = WithdrawalKey::build_withdrawal_key(block_hash.pack(), index as u32);
+            self.insert_raw(COLUMN_WITHDRAWAL, key.as_slice(), withdrawal.as_slice())?;
+        }
 
         let post_states: Vec<AccountMerkleState> = {
             let withdrawal_post_states = withdrawal_receipts.into_iter().map(|w| w.post_state());
@@ -598,13 +617,6 @@ impl StoreTransaction {
         if post_states.len() != state_checkpoint_list.len() {
             return Err(Error::from("unexpected block post state length".to_owned()));
         }
-        // for (checkpoint, post_state) in state_checkpoint_list.zip(post_states) {
-        //     self.insert_raw(
-        //         COLUMN_CHECKPOINT,
-        //         checkpoint.as_slice(),
-        //         post_state.as_slice(),
-        //     )?;
-        // }
 
         Ok(())
     }
@@ -641,6 +653,17 @@ impl StoreTransaction {
                 .build();
             let tx_hash = tx.hash();
             self.insert_raw(COLUMN_TRANSACTION_INFO, &tx_hash, info.as_slice())?;
+        }
+
+        // build withdrawal info
+        for (index, withdrawal) in block.withdrawals().into_iter().enumerate() {
+            let key = WithdrawalKey::build_withdrawal_key(block_hash.pack(), index as u32);
+            let info = packed::WithdrawalInfo::new_builder()
+                .key(key)
+                .block_number(raw_number.clone())
+                .build();
+            let withdrawal_hash = withdrawal.hash();
+            self.insert_raw(COLUMN_TRANSACTION_INFO, &withdrawal_hash, info.as_slice())?;
         }
 
         // build main chain index

@@ -10,7 +10,7 @@ use gw_jsonrpc_types::{
     godwoken::{
         BackendInfo, ErrorTxReceipt, GlobalState, L2BlockCommittedInfo, L2BlockStatus, L2BlockView,
         L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, NodeInfo, RunResult,
-        SUDTFeeConfig, TxReceipt,
+        SUDTFeeConfig, TxReceipt, WithdrawalStatus, WithdrawalWithStatus,
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
@@ -26,7 +26,7 @@ use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{chain_view::ChainView, state::state_db::StateContext, CfMemStat, Store};
 use gw_traits::CodeStore;
 use gw_types::{
-    packed::{self, BlockInfo, Byte32, L2Transaction, RawL2Block, RollupConfig, WithdrawalRequest},
+    packed::{self, BlockInfo, Byte32, L2Transaction, RollupConfig, WithdrawalRequest},
     prelude::*,
 };
 use gw_version::Version;
@@ -232,6 +232,7 @@ impl Registry {
             .with_method("gw_get_data", get_data)
             .with_method("gw_get_transaction", get_transaction)
             .with_method("gw_get_transaction_receipt", get_transaction_receipt)
+            .with_method("gw_get_withdrawal", get_withdrawal)
             .with_method("gw_execute_l2transaction", execute_l2transaction)
             .with_method("gw_execute_raw_l2transaction", execute_raw_l2transaction)
             .with_method(
@@ -513,18 +514,6 @@ async fn get_transaction(
     let status;
     match db.get_transaction_info(&tx_hash)? {
         Some(tx_info) => {
-            let tx_block_number = tx_info.block_number().unpack();
-
-            // return None if tx's committed block is reverted
-            if !db
-                .reverted_block_smt()?
-                .get(&RawL2Block::compute_smt_key(tx_block_number).into())?
-                .is_zero()
-            {
-                // block is reverted
-                return Ok(None);
-            }
-
             tx_opt = db.get_transaction_by_key(&tx_info.key())?;
             status = L2TransactionStatus::Committed;
         }
@@ -904,9 +893,10 @@ async fn submit_withdrawal_request(
     store: Data<Store>,
     submit_tx: Data<smol::channel::Sender<Request>>,
     rpc_client: Data<RPCClient>,
-) -> Result<(), RpcError> {
+) -> Result<JsonH256, RpcError> {
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequest::from_slice(&withdrawal_bytes)?;
+    let withdrawal_hash = withdrawal.hash();
 
     // verify finalized custodian
     {
@@ -959,7 +949,75 @@ async fn submit_withdrawal_request(
         }
     }
 
-    Ok(())
+    Ok(withdrawal_hash.into())
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum GetWithdrawalParams {
+    Default((JsonH256,)),
+    WithVerbose((JsonH256, u8)),
+}
+
+enum GetWithdrawalVerbose {
+    WithdrawalWithStatus = 0,
+    OnlyStatus = 1,
+}
+
+impl TryFrom<u8> for GetWithdrawalVerbose {
+    type Error = u8;
+    fn try_from(n: u8) -> Result<Self, u8> {
+        let verbose = match n {
+            0 => Self::WithdrawalWithStatus,
+            1 => Self::OnlyStatus,
+            _ => {
+                return Err(n);
+            }
+        };
+        Ok(verbose)
+    }
+}
+
+async fn get_withdrawal(
+    Params(param): Params<GetWithdrawalParams>,
+    store: Data<Store>,
+) -> Result<Option<WithdrawalWithStatus>, RpcError> {
+    let (withdrawal_hash, verbose) = match param {
+        GetWithdrawalParams::Default((withdrawal_hash,)) => (
+            to_h256(withdrawal_hash),
+            GetWithdrawalVerbose::WithdrawalWithStatus,
+        ),
+        GetWithdrawalParams::WithVerbose((withdrawal_hash, verbose)) => {
+            let verbose = verbose
+                .try_into()
+                .map_err(|_err| invalid_param_err("invalid verbose param"))?;
+            (to_h256(withdrawal_hash), verbose)
+        }
+    };
+    let db = store.begin_transaction();
+    let withdrawal_opt;
+    let status;
+    match db.get_withdrawal_info(&withdrawal_hash)? {
+        Some(withdrawal_info) => {
+            withdrawal_opt = db.get_withdrawal_by_key(&withdrawal_info.key())?;
+            status = WithdrawalStatus::Committed;
+        }
+        None => {
+            withdrawal_opt = db.get_mem_pool_withdrawal(&withdrawal_hash)?;
+            status = WithdrawalStatus::Pending;
+        }
+    };
+
+    Ok(withdrawal_opt.map(|withdrawal| match verbose {
+        GetWithdrawalVerbose::OnlyStatus => WithdrawalWithStatus {
+            withdrawal: None,
+            status,
+        },
+        GetWithdrawalVerbose::WithdrawalWithStatus => WithdrawalWithStatus {
+            withdrawal: Some(withdrawal.into()),
+            status,
+        },
+    }))
 }
 
 // short_address, sudt_id, block_number

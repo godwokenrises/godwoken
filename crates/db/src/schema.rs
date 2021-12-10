@@ -3,7 +3,7 @@
 /// Column families alias type
 pub type Col = u8;
 /// Total column number
-pub const COLUMNS: u32 = 33;
+pub const COLUMNS: u32 = 35;
 /// Column store meta data
 pub const COLUMN_META: Col = 0;
 /// Column store chain index
@@ -70,6 +70,10 @@ pub const COLUMN_MEM_POOL_SCRIPT: Col = 30;
 pub const COLUMN_MEM_POOL_DATA: Col = 31;
 /// Column script prefix
 pub const COLUMN_MEM_POOL_SCRIPT_PREFIX: Col = 32;
+/// Column store withdrawal
+pub const COLUMN_WITHDRAWAL: Col = 33;
+/// Column store withdrawal extra information
+pub const COLUMN_WITHDRAWAL_INFO: Col = 34;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";
