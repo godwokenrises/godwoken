@@ -101,7 +101,7 @@ impl DBBlockCancelChallengeValidator {
         let from_block = from_block.unwrap_or(0);
         let to_block = match to_block {
             Some(to) => to,
-            None => db.get_tip_block()?.raw().number().unpack(),
+            None => db.get_last_valid_tip_block()?.raw().number().unpack(),
         };
 
         if self.config.parallel_verify_blocks {

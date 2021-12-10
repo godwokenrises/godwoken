@@ -99,7 +99,10 @@ impl MemPool {
     ) -> Result<Self> {
         let pending = Default::default();
 
-        let tip_block = store.get_tip_block()?;
+        let tip_block = {
+            let db = store.begin_transaction();
+            db.get_last_valid_tip_block()?
+        };
         let tip = (tip_block.hash().into(), tip_block.raw().number().unpack());
 
         // init mem pool if tip is genesis
@@ -462,7 +465,7 @@ impl MemPool {
 
         // check output block state consistent
         {
-            let tip_block = db.get_tip_block()?;
+            let tip_block = db.get_last_valid_tip_block()?;
             assert_eq!(
                 parent_block.hash(),
                 tip_block.hash(),
@@ -717,7 +720,10 @@ impl MemPool {
         // read block from db
         let new_tip = match new_tip {
             Some(block_hash) => block_hash,
-            None => self.store.get_tip_block_hash()?,
+            None => {
+                let db = self.store.begin_transaction();
+                db.get_last_valid_tip_block_hash()?
+            }
         };
         let new_tip_block = self.store.get_block(&new_tip)?.expect("new tip block");
 

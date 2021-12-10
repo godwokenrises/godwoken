@@ -214,7 +214,10 @@ impl BlockProducer {
         }
 
         // check l2 tip
-        let l2_tip_block_hash = self.store.get_tip_block_hash()?;
+        let l2_tip_block_hash = self
+            .store
+            .begin_transaction()
+            .get_last_valid_tip_block_hash()?;
 
         // skip produce new block unless:
         // 1. local l2 tip updated

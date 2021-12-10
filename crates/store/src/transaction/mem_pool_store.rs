@@ -32,7 +32,7 @@ impl StoreTransaction {
         smt_store: S,
         context: MemStateContext,
     ) -> Result<MemStateTree<S>, Error> {
-        let block = self.get_tip_block()?;
+        let block = self.get_last_valid_tip_block()?;
         let merkle_root = block.raw().post_account();
         let account_count = merkle_root.count().unpack();
         let block_post_count: u32 = block.raw().post_account().count().unpack();
