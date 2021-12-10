@@ -62,7 +62,7 @@ impl Web3Indexer {
     }
 
     pub async fn fix_missing_blocks(&self, store: &Store) -> Result<()> {
-        let tip = store.get_tip_block()?;
+        let tip = store.begin_transaction().get_last_valid_tip_block()?;
         let tip_number: u64 = tip.raw().number().unpack();
         for number in tip_number.saturating_sub(20000)..=tip_number {
             if self.query_number(number).await?.is_none() {
