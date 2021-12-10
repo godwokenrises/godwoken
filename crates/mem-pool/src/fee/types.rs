@@ -96,7 +96,6 @@ impl Ord for FeeEntry {
         }
         // lower cycles is priority
         let ord = other.cycles_limit.cmp(&self.cycles_limit);
-        dbg!(ord);
         if ord != Ordering::Equal {
             return ord;
         }
