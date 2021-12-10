@@ -663,7 +663,7 @@ impl StoreTransaction {
                 .block_number(raw_number.clone())
                 .build();
             let withdrawal_hash = withdrawal.hash();
-            self.insert_raw(COLUMN_TRANSACTION_INFO, &withdrawal_hash, info.as_slice())?;
+            self.insert_raw(COLUMN_WITHDRAWAL_INFO, &withdrawal_hash, info.as_slice())?;
         }
 
         // build main chain index
