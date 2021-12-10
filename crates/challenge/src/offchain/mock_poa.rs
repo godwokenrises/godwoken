@@ -42,7 +42,7 @@ impl MockPoA {
     }
 
     async fn query_block_median_time(rpc_client: &RPCClient) -> Result<Duration> {
-        let mut count = 5;
+        let mut count = 10;
 
         while count > 0 {
             let l1_tip_block_hash = rpc_client.get_tip().await?.block_hash().unpack();
