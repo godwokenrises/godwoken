@@ -16,7 +16,7 @@ keep_log_file_num=32
 
 [CFOptions "default"]
 level_compaction_dynamic_level_bytes=true
-write_buffer_size=67108864
+write_buffer_size=134217728
 min_write_buffer_number_to_merge=1
 max_write_buffer_number=2
 max_write_buffer_size_to_maintain=-1
@@ -48,5 +48,3 @@ use db.toml in the godwoken config:
 path = 'tuning_db/store.db'
 options_file = 'db.toml'
 ```
-
-Do not set **cache_index_and_filter_blocks=true**. That will cause a performance degradation.
