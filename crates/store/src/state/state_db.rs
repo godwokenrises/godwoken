@@ -195,16 +195,15 @@ impl<'a> State for StateTree<'a> {
     }
 
     fn set_account_count(&mut self, count: u32) -> Result<(), StateError> {
-        let origin_count = self.account_count;
-        self.account_count = count;
         if log_enabled!(log::Level::Trace) {
             log::trace!(
                 "[state-trace] set_account_count ctx:{:?} origin: {} count:{}",
                 self.context,
-                origin_count,
-                self.account_count
+                self.account_count,
+                count
             );
         }
+        self.account_count = count;
         Ok(())
     }
 
