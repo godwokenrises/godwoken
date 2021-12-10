@@ -35,6 +35,7 @@ use gw_types::{
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
+    ops::Shr,
     sync::Arc,
     time::Instant,
 };
@@ -588,7 +589,7 @@ impl MemPool {
             let total =
                 mem_block.withdrawals().len() + mem_block.deposits().len() + mem_block.txs().len();
             // Drop base on retry count
-            let mut remain = total / (output_param.retry_count + 1);
+            let mut remain = total.shr(output_param.retry_count);
             if 0 == remain {
                 // Package at least one
                 remain = 1;
