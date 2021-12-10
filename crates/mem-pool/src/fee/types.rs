@@ -10,6 +10,8 @@ use gw_types::{
 };
 use std::{cmp::Ordering, convert::TryInto};
 
+const FEE_RATE_WEIGHT_BASE: u64 = 1000;
+
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum FeeItemKind {
     Tx,
@@ -149,15 +151,17 @@ fn parse_withdraw_fee_rate(
 ) -> Result<L2Fee> {
     let fee = raw_withdraw.fee();
     let sudt_id: u32 = fee.sudt_id().unpack();
-    let cycles_limit: u64 = fee_config
-        .sudt_fee_cycles_limit
+    let cycles_limit: u64 = fee_config.withdraw_cycles_limit;
+    let fee_rate_weight = fee_config
+        .sudt_fee_rate_weight
         .get(&sudt_id)
         .cloned()
-        .unwrap_or(fee_config.default_cycles_limit);
+        .unwrap_or(FEE_RATE_WEIGHT_BASE);
     let fee_amount: u128 = fee.amount().unpack();
     let fee_rate = fee_amount
-        .checked_div(cycles_limit.into())
-        .ok_or(anyhow!("Can't calculate fee"))?;
+        .saturating_mul(fee_rate_weight.into())
+        .checked_div(cycles_limit.saturating_mul(FEE_RATE_WEIGHT_BASE).into())
+        .ok_or(anyhow!("can't calculate fee"))?;
     Ok(L2Fee {
         fee_rate: fee_rate.try_into()?,
         cycles_limit,
@@ -178,18 +182,23 @@ fn parse_l2tx_fee_rate(
                 MetaContractArgsUnion::CreateAccount(args) => args.fee(),
             };
             let sudt_id: u32 = fee.sudt_id().unpack();
-            let weight: u64 = fee_config
-                .sudt_fee_cycles_limit
+            let cycles_limit: u64 = fee_config.meta_cycles_limit;
+            let fee_amount: u128 = fee.amount().unpack();
+            let fee_rate_weight = fee_config
+                .sudt_fee_rate_weight
                 .get(&sudt_id)
                 .cloned()
-                .unwrap_or(fee_config.default_cycles_limit);
-            let fee_amount: u128 = fee.amount().unpack();
+                .unwrap_or(FEE_RATE_WEIGHT_BASE);
+
+            // fee rate = fee / cycles_limit * (weight / FEE_RATE_WEIGHT_BASE)
             let fee_rate = fee_amount
-                .checked_div(weight.into())
-                .ok_or(anyhow!("Can't calculate fee"))?;
+                .saturating_mul(fee_rate_weight.into())
+                .checked_div(cycles_limit.saturating_mul(FEE_RATE_WEIGHT_BASE).into())
+                .ok_or(anyhow!("can't calculate fee"))?;
+
             Ok(L2Fee {
                 fee_rate: fee_rate.try_into()?,
-                cycles_limit: weight,
+                cycles_limit,
             })
         }
         BackendType::Sudt => {
@@ -202,17 +211,21 @@ fn parse_l2tx_fee_rate(
                 SUDTArgsUnion::SUDTTransfer(args) => args.fee().unpack(),
             };
             let sudt_id: u32 = raw_l2tx.to_id().unpack();
-            let weight: u64 = fee_config
-                .sudt_fee_cycles_limit
+            let cycles_limit: u64 = fee_config.sudt_cycles_limit;
+            let fee_rate_weight = fee_config
+                .sudt_fee_rate_weight
                 .get(&sudt_id)
                 .cloned()
-                .unwrap_or(fee_config.default_cycles_limit);
+                .unwrap_or(FEE_RATE_WEIGHT_BASE);
+
+            // fee rate = fee / cycles_limit * (weight / FEE_RATE_WEIGHT_BASE)
             let fee_rate = fee_amount
-                .checked_div(weight.into())
+                .saturating_mul(fee_rate_weight.into())
+                .checked_div(cycles_limit.saturating_mul(FEE_RATE_WEIGHT_BASE).into())
                 .ok_or(anyhow!("can't calculate fee"))?;
             Ok(L2Fee {
                 fee_rate: fee_rate.try_into()?,
-                cycles_limit: weight,
+                cycles_limit,
             })
         }
         BackendType::Polyjuice => {

@@ -286,20 +286,23 @@ pub struct FeeConfig {
     // fee_rate: fee / cycles limit
     pub meta_cycles_limit: u64,
     // fee_rate: fee / cycles limit
-    pub default_cycles_limit: u64,
-    /// HashMap<sudt_id, cycles limit>
+    pub sudt_cycles_limit: u64,
+    // fee_rate: fee / cycles limit
+    pub withdraw_cycles_limit: u64,
+    /// HashMap<sudt_id, fee rate weight>
     ///
-    /// fee_rate: fee / weight
-    /// if sudt_id is not in the map, the default_cycles_limit is used
-    pub sudt_fee_cycles_limit: HashMap<u32, u64>,
+    /// adjusted fee_rate: fee_rate * weight / 1000
+    /// if sudt_id is not in the map, the weight is 1
+    pub sudt_fee_rate_weight: HashMap<u32, u64>,
 }
 
 impl Default for FeeConfig {
     fn default() -> Self {
         Self {
-            meta_cycles_limit: 200000,                 // 200K cycles
-            default_cycles_limit: 200000,              // 200K cycles
-            sudt_fee_cycles_limit: Default::default(), // use default
+            meta_cycles_limit: 20000,                 // 20K cycles
+            sudt_cycles_limit: 20000,                 // 20K cycles
+            withdraw_cycles_limit: 20000,             // 20K cycles
+            sudt_fee_rate_weight: Default::default(), // default is 1
         }
     }
 }
