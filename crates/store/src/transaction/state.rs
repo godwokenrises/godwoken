@@ -16,9 +16,6 @@ use crate::{
     traits::KVStore,
 };
 
-/// TODO use a variable instead of hardcode
-const NUMBER_OF_CONFIRMATION: u64 = 3600;
-
 impl StoreTransaction {
     pub fn account_smt_store(&self) -> Result<SMTStore<'_, Self>, Error> {
         let smt_store = SMTStore::new(COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ACCOUNT_SMT_BRANCH, self);
@@ -79,17 +76,13 @@ impl StoreTransaction {
         )
     }
 
+    /// TODO implement this
     /// Prune finalized block state record
     /// The arg new_number is current block number
-    pub(crate) fn prune_finalized_block_state_record(&self, new_number: u64) -> Result<(), Error> {
-        if new_number <= NUMBER_OF_CONFIRMATION {
-            return Ok(());
-        }
-        let finalized_block_number = new_number - NUMBER_OF_CONFIRMATION - 1;
-        if finalized_block_number == 0 {
-            return Ok(());
-        }
-        self.remove_block_state_record(finalized_block_number)
+    pub(crate) fn prune_finalized_block_state_record(&self, _new_number: u64) -> Result<(), Error> {
+        // this function is a placeholder for now
+        // we should prune unused block state record and save them into a state snapshot
+        Ok(())
     }
 
     pub(crate) fn remove_block_state_record(&self, block_number: u64) -> Result<(), Error> {
