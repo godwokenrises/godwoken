@@ -426,6 +426,12 @@ impl BlockProducer {
         {
             Ok((number, tx))
         } else {
+            utils::dump_transaction(
+                &self.debug_config.debug_tx_dump_path,
+                &self.rpc_client,
+                tx.clone(),
+            )
+            .await;
             Err(anyhow!(
                 "l2 block submit tx exceeded max block bytes, tx size: {} max block bytes: {}",
                 tx.as_slice().len(),
