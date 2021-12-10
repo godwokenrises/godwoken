@@ -10,6 +10,7 @@ use gw_types::{
     packed::{self, AccountMerkleState, Byte32},
     prelude::*,
 };
+use log::log_enabled;
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum StateContext {
     ReadOnly,
@@ -140,12 +141,14 @@ impl<'a> State for StateTree<'a> {
                 .unwrap_or_default(),
             _ => self.tree.get(key)?,
         };
-        {
+        if log_enabled!(log::Level::Trace) {
             let k: Byte32 = key.pack();
             let v: Byte32 = v.pack();
-            println!(
+            log::trace!(
                 "[state-trace] get_raw ctx:{:?} k:{} v:{}",
-                self.context, k, v
+                self.context,
+                k,
+                v
             );
         }
         Ok(v)
@@ -167,22 +170,25 @@ impl<'a> State for StateTree<'a> {
                 panic!("wrong ctx: {:?}", ctx);
             }
         }
-        {
+        if log_enabled!(log::Level::Trace) {
             let k: Byte32 = key.pack();
             let v: Byte32 = value.pack();
-            println!(
+            log::trace!(
                 "[state-trace] update_raw ctx:{:?} k:{} v:{}",
-                self.context, k, v
+                self.context,
+                k,
+                v
             );
         }
         Ok(())
     }
 
     fn get_account_count(&self) -> Result<u32, StateError> {
-        {
-            println!(
+        if log_enabled!(log::Level::Trace) {
+            log::trace!(
                 "[state-trace] get_account_count ctx:{:?} count:{}",
-                self.context, self.account_count
+                self.context,
+                self.account_count
             );
         }
         Ok(self.account_count)
@@ -191,10 +197,12 @@ impl<'a> State for StateTree<'a> {
     fn set_account_count(&mut self, count: u32) -> Result<(), StateError> {
         let origin_count = self.account_count;
         self.account_count = count;
-        {
-            println!(
+        if log_enabled!(log::Level::Trace) {
+            log::trace!(
                 "[state-trace] set_account_count ctx:{:?} origin: {} count:{}",
-                self.context, origin_count, self.account_count
+                self.context,
+                origin_count,
+                self.account_count
             );
         }
         Ok(())
