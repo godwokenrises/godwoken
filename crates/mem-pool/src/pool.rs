@@ -128,15 +128,16 @@ impl MemPool {
         }
 
         let restore_manager = RestoreManager::build(&config.restore_path)?;
-        let (is_restored, mem_block) = match restore_manager.restore_from_latest() {
+        let mem_block = match restore_manager.restore_from_latest() {
             Ok(Some((restored, timestamp))) => {
                 log::info!("[mem-pool] restore mem block from timestamp {}", timestamp);
-                (true, MemBlock::unpack(restored))
+                MemBlock::unpack(restored)
             }
-            _ => (false, MemBlock::with_block_producer(block_producer_id)),
+            _ => MemBlock::with_block_producer(block_producer_id),
         };
 
         let pending_deposits = mem_block.deposits().to_vec();
+        let pending_restored_tx_hashes = mem_block.txs().to_vec();
         let mut mem_pool = MemPool {
             store,
             current_tip: tip,
@@ -147,64 +148,14 @@ impl MemPool {
             provider,
             pending_deposits,
             restore_manager: restore_manager.clone(),
-            pending_restored_tx_hashes: Default::default(),
+            pending_restored_tx_hashes,
         };
 
         // set tip
-        let db = mem_pool.store.begin_transaction();
-        let mem_block = &mut mem_pool.mem_block;
-        let is_mem_block_state_matched = || -> Result<bool> {
-            // Check prev merkle state
-            if mem_block.prev_merkle_state().as_slice() != tip_block.raw().post_account().as_slice()
-            {
-                log::warn!("restored mem block prev merkle state not matched");
-                return Ok(false);
-            }
-
-            // Check block number
-            if mem_block.block_info().number().unpack() != tip.1 + 1 {
-                log::warn!("restored mem block number not matched");
-                return Ok(false);
-            }
-
-            // Check block info
-            let db_block_info = db.get_mem_pool_block_info()?;
-            if db_block_info.map(|i| i.as_slice().to_vec())
-                != Some(mem_block.block_info().as_slice().to_vec())
-            {
-                log::warn!("restored mem block info not matched");
-                return Ok(false);
-            }
-
-            // Check mem block merkle state
-            if db.get_mem_block_account_smt_root()?
-                != Some(mem_block.post_merkle_state().merkle_root().unpack())
-                || db.get_mem_block_account_count()?
-                    != Some(Unpack::<u32>::unpack(
-                        &mem_block.post_merkle_state().count(),
-                    ))
-            {
-                log::warn!("restored mem block post merkle state not matched");
-                return Ok(false);
-            }
-
-            log::info!(
-                "db mem block account count {:?}",
-                db.get_mem_block_account_count()?
-            );
-            log::info!(
-                "tip block post account count {}",
-                Unpack::<u32>::unpack(&db.get_tip_block()?.raw().post_account().count())
-            );
-
-            Ok(true)
-        };
-        if !is_restored || !is_mem_block_state_matched()? {
-            mem_pool.pending_restored_tx_hashes = mem_block.drain_txs();
-            mem_pool.reset(None, Some(tip.0))?;
-        }
+        mem_pool.reset(None, Some(tip.0))?;
 
         // update mem block info
+        let db = mem_pool.store.begin_transaction();
         db.update_mem_pool_block_info(mem_pool.mem_block.block_info())?;
 
         smol::spawn(async move {
