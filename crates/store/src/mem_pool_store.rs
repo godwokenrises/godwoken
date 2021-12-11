@@ -32,30 +32,35 @@ impl<T> Value<T> {
 }
 
 pub struct MemPoolStore {
-    inner: Mutex<Vec<HashMap<Bytes, Value<Bytes>>>>,
+    inner: Vec<Mutex<HashMap<Bytes, Value<Bytes>>>>,
 }
 
 impl MemPoolStore {
     pub fn new(columns: usize) -> Self {
         let mut mem_pool_store = Vec::default();
-        mem_pool_store.resize_with(columns, || Default::default());
+        mem_pool_store.resize_with(columns, || Mutex::new(Default::default()));
         Self {
-            inner: Mutex::new(mem_pool_store),
+            inner: mem_pool_store,
         }
     }
 
     pub fn get(&self, col: usize, key: &[u8]) -> Option<Value<Bytes>> {
-        let columns = self.inner.lock().expect("mem pool store");
-        columns
+        let col = self
+            .inner
             .get(col)
-            .and_then(|kv_store| kv_store.get(key))
-            .cloned()
+            .expect("col")
+            .lock()
+            .expect("mem pool store");
+        col.get(key).cloned()
     }
 
     pub fn insert(&self, col: usize, key: Bytes, value: Value<Bytes>) {
-        let mut columns = self.inner.lock().expect("mem pool store");
-        if let Some(kv_store) = columns.get_mut(col) {
-            kv_store.insert(key, value);
-        }
+        let mut col = self
+            .inner
+            .get(col)
+            .expect("col")
+            .lock()
+            .expect("mem pool store");
+        col.insert(key, value);
     }
 }
