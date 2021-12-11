@@ -116,8 +116,8 @@ impl MemPool {
         };
         let tip = (tip_block.hash().into(), tip_block.raw().number().unpack());
 
-        // init mem pool if tip is genesis
-        if tip.1 == 0 {
+        // init mem pool
+        {
             let merkle_state = tip_block.raw().post_account();
             let db = store.begin_transaction();
             db.set_mem_block_account_count(merkle_state.count().unpack())?;
@@ -174,16 +174,18 @@ impl MemPool {
 
             // Check mem block merkle state
             if db.get_mem_block_account_smt_root()?
-                != mem_block.post_merkle_state().merkle_root().unpack()
+                != Some(mem_block.post_merkle_state().merkle_root().unpack())
                 || db.get_mem_block_account_count()?
-                    != Unpack::<u32>::unpack(&mem_block.post_merkle_state().count())
+                    != Some(Unpack::<u32>::unpack(
+                        &mem_block.post_merkle_state().count(),
+                    ))
             {
                 log::warn!("restored mem block post merkle state not matched");
                 return Ok(false);
             }
 
             log::info!(
-                "db mem block account count {}",
+                "db mem block account count {:?}",
                 db.get_mem_block_account_count()?
             );
             log::info!(
@@ -196,6 +198,9 @@ impl MemPool {
         if !is_restored || !is_mem_block_state_matched()? {
             mem_pool.reset(None, Some(tip.0))?;
         }
+
+        // update mem block info
+        db.update_mem_pool_block_info(mem_pool.mem_block.block_info())?;
 
         smol::spawn(async move {
             restore_manager.delete_before_one_hour();

@@ -60,16 +60,6 @@ pub const COLUMN_ASSET_SCRIPT: Col = 25;
 pub const COLUMN_MEM_POOL_TRANSACTION: Col = 26;
 /// Column mem pool withdrawal
 pub const COLUMN_MEM_POOL_WITHDRAWAL: Col = 27;
-/// Column account SMT branch
-pub const COLUMN_MEM_POOL_ACCOUNT_SMT_BRANCH: Col = 28;
-/// Column account SMT leaf
-pub const COLUMN_MEM_POOL_ACCOUNT_SMT_LEAF: Col = 29;
-/// Column mem pool script
-pub const COLUMN_MEM_POOL_SCRIPT: Col = 30;
-/// Column data
-pub const COLUMN_MEM_POOL_DATA: Col = 31;
-/// Column script prefix
-pub const COLUMN_MEM_POOL_SCRIPT_PREFIX: Col = 32;
 /// Column store withdrawal
 pub const COLUMN_WITHDRAWAL: Col = 33;
 /// Column store withdrawal extra information
@@ -85,12 +75,6 @@ pub const META_BLOCK_SMT_ROOT_KEY: &[u8] = b"BLOCK_SMT_ROOT_KEY";
 pub const META_REVERTED_BLOCK_SMT_ROOT_KEY: &[u8] = b"REVERTED_BLOCK_SMT_ROOT_KEY";
 /// track the latest known valid block hash
 pub const META_LAST_VALID_TIP_BLOCK_HASH_KEY: &[u8] = b"LAST_VALID_TIP_BLOCK_HASH";
-/// account SMT root
-pub const META_MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY: &[u8] = b"MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY";
-/// account SMT count
-pub const META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY: &[u8] = b"MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY";
-/// mem pool block info
-pub const META_MEM_POOL_BLOCK_INFO: &[u8] = b"MEM_POOL_BLOCK_INFO";
 
 /// CHAIN_SPEC_HASH_KEY tracks the hash of chain spec which created current database
 pub const CHAIN_SPEC_HASH_KEY: &[u8] = b"chain-spec-hash";

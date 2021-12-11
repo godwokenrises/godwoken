@@ -1,8 +1,12 @@
 //! Storage implementation
 
+use std::sync::Arc;
+
+use crate::mem_pool_store::{MemPoolStore, MEM_POOL_COLUMNS};
 use crate::write_batch::StoreWriteBatch;
 use crate::{state::state_db::StateContext, transaction::StoreTransaction};
 use anyhow::Result;
+use arc_swap::ArcSwap;
 use gw_common::smt::Blake2bHasher;
 use gw_common::{error::Error, smt::H256};
 use gw_db::{
@@ -22,11 +26,18 @@ use gw_types::{
 #[derive(Clone)]
 pub struct Store {
     db: RocksDB,
+    mem_pool: Arc<ArcSwap<MemPoolStore>>,
 }
 
 impl<'a> Store {
     pub fn new(db: RocksDB) -> Self {
-        Store { db }
+        Store {
+            db,
+            mem_pool: {
+                let mem_pool = MemPoolStore::new(MEM_POOL_COLUMNS);
+                Arc::new(ArcSwap::new(Arc::new(mem_pool)))
+            },
+        }
     }
 
     pub fn open_tmp() -> Result<Self> {
@@ -47,6 +58,7 @@ impl<'a> Store {
     pub fn begin_transaction(&self) -> StoreTransaction {
         StoreTransaction {
             inner: self.db.transaction(),
+            mem_pool: self.mem_pool.clone(),
         }
     }
 

@@ -1,14 +1,14 @@
 //! State DB
 
+use crate::mem_pool_store::{
+    Value, MEM_POOL_COL_DATA, MEM_POOL_COL_SCRIPT, MEM_POOL_COL_SCRIPT_PREFIX,
+};
 use crate::smt::mem_pool_smt_store::MemPoolSMTStore;
 use crate::{traits::KVStore, transaction::StoreTransaction};
 use anyhow::Result;
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_db::error::Error;
-use gw_db::schema::{
-    COLUMN_DATA, COLUMN_MEM_POOL_DATA, COLUMN_MEM_POOL_SCRIPT, COLUMN_MEM_POOL_SCRIPT_PREFIX,
-    COLUMN_SCRIPT, COLUMN_SCRIPT_PREFIX,
-};
+use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT, COLUMN_SCRIPT_PREFIX};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,
@@ -91,37 +91,44 @@ impl<'a> State for MemPoolStateTree<'a> {
 
 impl<'a> CodeStore for MemPoolStateTree<'a> {
     fn insert_script(&mut self, script_hash: H256, script: packed::Script) {
-        self.db()
-            .insert_raw(
-                COLUMN_MEM_POOL_SCRIPT,
-                script_hash.as_slice(),
-                script.as_slice(),
-            )
-            .expect("insert script");
+        let mem_pool_store = self.db().mem_pool.load();
+        mem_pool_store.insert(
+            MEM_POOL_COL_SCRIPT,
+            script_hash.as_slice().to_vec().into(),
+            Value::Exist(script.as_slice().to_vec().into()),
+        );
 
         // build script_hash prefix search index
-        self.db()
-            .insert_raw(
-                COLUMN_MEM_POOL_SCRIPT_PREFIX,
-                &script_hash.as_slice()[..20],
-                script_hash.as_slice(),
-            )
-            .expect("insert script prefix");
+        mem_pool_store.insert(
+            MEM_POOL_COL_SCRIPT_PREFIX,
+            script_hash.as_slice()[..20].to_vec().into(),
+            Value::Exist(script_hash.as_slice().to_vec().into()),
+        );
     }
 
     fn get_script(&self, script_hash: &H256) -> Option<packed::Script> {
-        self.db()
-            .get(COLUMN_MEM_POOL_SCRIPT, script_hash.as_slice())
-            .or_else(|| self.db().get(COLUMN_SCRIPT, script_hash.as_slice()))
+        let mem_pool_store = self.db().mem_pool.load();
+        mem_pool_store
+            .get(MEM_POOL_COL_SCRIPT, script_hash.as_slice())
+            .and_then(|v| v.to_opt())
+            .or_else(|| {
+                self.db()
+                    .get(COLUMN_SCRIPT, script_hash.as_slice())
+                    .map(Into::into)
+            })
             .map(|slice| packed::ScriptReader::from_slice_should_be_ok(slice.as_ref()).to_entity())
     }
 
     fn get_script_hash_by_short_address(&self, script_hash_prefix: &[u8]) -> Option<H256> {
-        match self
-            .db()
-            .get(COLUMN_MEM_POOL_SCRIPT_PREFIX, script_hash_prefix)
-            .or_else(|| self.db().get(COLUMN_SCRIPT_PREFIX, script_hash_prefix))
-        {
+        let mem_pool_store = self.db().mem_pool.load();
+        match mem_pool_store
+            .get(MEM_POOL_COL_SCRIPT_PREFIX, script_hash_prefix)
+            .and_then(|v| v.to_opt())
+            .or_else(|| {
+                self.db()
+                    .get(COLUMN_SCRIPT_PREFIX, script_hash_prefix)
+                    .map(Into::into)
+            }) {
             Some(slice) => {
                 let mut hash = [0u8; 32];
                 hash.copy_from_slice(slice.as_ref());
@@ -132,15 +139,24 @@ impl<'a> CodeStore for MemPoolStateTree<'a> {
     }
 
     fn insert_data(&mut self, data_hash: H256, code: Bytes) {
-        self.db()
-            .insert_raw(COLUMN_MEM_POOL_DATA, data_hash.as_slice(), &code)
-            .expect("insert data");
+        let mem_pool_store = self.db().mem_pool.load();
+        mem_pool_store.insert(
+            MEM_POOL_COL_DATA,
+            data_hash.as_slice().to_vec().into(),
+            Value::Exist(code),
+        );
     }
 
     fn get_data(&self, data_hash: &H256) -> Option<Bytes> {
-        self.db()
-            .get(COLUMN_MEM_POOL_DATA, data_hash.as_slice())
-            .or_else(|| self.db().get(COLUMN_DATA, data_hash.as_slice()))
+        let mem_pool_store = self.db().mem_pool.load();
+        mem_pool_store
+            .get(MEM_POOL_COL_DATA, data_hash.as_slice())
+            .and_then(|v| v.to_opt())
+            .or_else(|| {
+                self.db()
+                    .get(COLUMN_DATA, data_hash.as_slice())
+                    .map(Into::into)
+            })
             .map(|slice| Bytes::from(slice.to_vec()))
     }
 }
