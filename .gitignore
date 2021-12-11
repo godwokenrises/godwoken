@@ -2,3 +2,4 @@ target/
 build/
 .tmp/
 crates/benches/smt_data/db/
+crates/tests/mem_block/
