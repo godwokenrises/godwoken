@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use gw_common::{
     smt::{Store, SMT},
     H256,
@@ -5,19 +7,18 @@ use gw_common::{
 use gw_db::{
     error::Error,
     schema::{
-        COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_MEM_POOL_ACCOUNT_SMT_BRANCH,
-        COLUMN_MEM_POOL_ACCOUNT_SMT_LEAF, COLUMN_MEM_POOL_DATA, COLUMN_MEM_POOL_SCRIPT,
-        COLUMN_MEM_POOL_SCRIPT_PREFIX, COLUMN_MEM_POOL_TRANSACTION,
-        COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
-        META_MEM_POOL_BLOCK_INFO,
+        COLUMN_MEM_POOL_TRANSACTION, COLUMN_MEM_POOL_TRANSACTION_RECEIPT,
+        COLUMN_MEM_POOL_WITHDRAWAL,
     },
-    IteratorMode,
 };
 use gw_types::{packed, prelude::*};
 
 use super::StoreTransaction;
 use crate::{
-    smt::{mem_pool_smt_store::MemPoolSMTStore, mem_smt_store::MemSMTStore, Columns},
+    mem_pool_store::{
+        MemPoolStore, Value, MEM_POOL_COLUMNS, MEM_POOL_COL_META, META_MEM_POOL_BLOCK_INFO,
+    },
+    smt::{mem_pool_smt_store::MemPoolSMTStore, mem_smt_store::MemSMTStore},
     state::{
         mem_pool_state_db::MemPoolStateTree,
         mem_state_db::{MemStateContext, MemStateTree},
@@ -48,41 +49,30 @@ impl StoreTransaction {
     }
 
     pub fn mem_pool_account_smt(&self) -> Result<MemPoolSMTStore<'_>, Error> {
-        let mem_pool_columns = Columns {
-            leaf_col: COLUMN_MEM_POOL_ACCOUNT_SMT_LEAF,
-            branch_col: COLUMN_MEM_POOL_ACCOUNT_SMT_BRANCH,
-        };
-        let under_layer_columns = Columns {
-            leaf_col: COLUMN_ACCOUNT_SMT_LEAF,
-            branch_col: COLUMN_ACCOUNT_SMT_BRANCH,
-        };
-        Ok(MemPoolSMTStore::new(
-            mem_pool_columns,
-            under_layer_columns,
-            self,
-        ))
+        Ok(MemPoolSMTStore::new(self, self.mem_pool.load().clone()))
     }
 
     pub fn mem_pool_state_tree(&self) -> Result<MemPoolStateTree, Error> {
-        let merkle_root = self.get_mem_block_account_smt_root()?;
-        let account_count = self.get_mem_block_account_count()?;
+        let (root, count) = match self.get_mem_block_account_smt_root()? {
+            Some(root) => {
+                let count = self
+                    .get_mem_block_account_count()?
+                    .expect("get mem pool account count");
+                (root, count)
+            }
+            None => {
+                let merkle = self.get_last_valid_tip_block()?.raw().post_account();
+                (merkle.merkle_root().unpack(), merkle.count().unpack())
+            }
+        };
         let smt_store = self.mem_pool_account_smt()?;
-        let tree = SMT::new(merkle_root, smt_store);
-        Ok(MemPoolStateTree::new(tree, account_count))
+        let tree = SMT::new(root, smt_store);
+        Ok(MemPoolStateTree::new(tree, count))
     }
 
     pub fn clear_mem_block_state(&self) -> Result<(), Error> {
-        for col in [
-            COLUMN_MEM_POOL_SCRIPT,
-            COLUMN_MEM_POOL_DATA,
-            COLUMN_MEM_POOL_SCRIPT_PREFIX,
-            COLUMN_MEM_POOL_ACCOUNT_SMT_LEAF,
-            COLUMN_MEM_POOL_ACCOUNT_SMT_BRANCH,
-        ] {
-            for (k, _v) in self.get_iter(col, IteratorMode::Start) {
-                self.delete(col, &k)?;
-            }
-        }
+        let mem_pool_store = MemPoolStore::new(MEM_POOL_COLUMNS);
+        self.mem_pool.store(Arc::new(mem_pool_store));
         Ok(())
     }
 
@@ -167,12 +157,20 @@ impl StoreTransaction {
     }
 
     pub fn update_mem_pool_block_info(&self, block_info: &packed::BlockInfo) -> Result<(), Error> {
-        self.insert_raw(COLUMN_META, META_MEM_POOL_BLOCK_INFO, block_info.as_slice())
+        self.mem_pool.load().insert(
+            MEM_POOL_COL_META,
+            META_MEM_POOL_BLOCK_INFO.into(),
+            Value::Exist(block_info.as_slice().to_vec().into()),
+        );
+        Ok(())
     }
 
     pub fn get_mem_pool_block_info(&self) -> Result<Option<packed::BlockInfo>, Error> {
         Ok(self
-            .get(COLUMN_META, META_MEM_POOL_BLOCK_INFO)
+            .mem_pool
+            .load()
+            .get(MEM_POOL_COL_META, META_MEM_POOL_BLOCK_INFO)
+            .and_then(|v| v.to_opt())
             .map(|slice| {
                 packed::BlockInfoReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
             }))
