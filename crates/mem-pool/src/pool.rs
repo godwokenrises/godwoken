@@ -128,7 +128,7 @@ impl MemPool {
         }
 
         let restore_manager = RestoreManager::build(&config.restore_path)?;
-        let mem_block = match restore_manager.restore_from_latest() {
+        let mut mem_block = match restore_manager.restore_from_latest() {
             Ok(Some((restored, timestamp))) => {
                 log::info!("[mem-pool] restore mem block from timestamp {}", timestamp);
                 MemBlock::unpack(restored)
@@ -138,6 +138,7 @@ impl MemPool {
 
         let pending_deposits = mem_block.deposits().to_vec();
         let pending_restored_tx_hashes = mem_block.txs().to_vec();
+        mem_block.clear_txs();
         let mut mem_pool = MemPool {
             store,
             current_tip: tip,
