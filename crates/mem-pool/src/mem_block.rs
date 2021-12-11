@@ -202,20 +202,20 @@ impl MemBlock {
     }
 
     pub fn pack(&self) -> packed::MemBlock {
-        let touched_keys = self.touched_keys().iter().cloned().collect::<Vec<_>>();
+        // let touched_keys = self.touched_keys().iter().cloned().collect::<Vec<_>>();
 
         packed::MemBlock::new_builder()
             .block_producer_id(self.block_producer_id.pack())
             .txs(self.txs.pack())
             .withdrawals(self.withdrawals.pack())
-            .finalized_custodians(self.finalized_custodians.pack())
+            // .finalized_custodians(self.finalized_custodians.pack())
             .deposits(self.deposits.pack())
-            .state_checkpoints(self.state_checkpoints.pack())
-            .txs_prev_state_checkpoint(self.txs_prev_state_checkpoint.pack())
+            // .state_checkpoints(self.state_checkpoints.pack())
+            // .txs_prev_state_checkpoint(self.txs_prev_state_checkpoint.pack())
             .block_info(self.block_info.clone())
             .prev_merkle_state(self.prev_merkle_state.clone())
-            .post_merkle_state(self.post_merkle_state.clone())
-            .touched_keys(touched_keys.pack())
+            // .post_merkle_state(self.post_merkle_state.clone())
+            // .touched_keys(touched_keys.pack())
             .build()
     }
 
