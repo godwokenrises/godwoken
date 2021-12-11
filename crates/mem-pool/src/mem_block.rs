@@ -131,6 +131,20 @@ impl MemBlock {
         self.state_checkpoints.push(state_checkpoint);
     }
 
+    pub fn emergency_reinject_restored_tx_hashes(&mut self, tx_hashes: &[H256]) {
+        for tx_hash in tx_hashes {
+            if !self.txs_set.contains(tx_hash) {
+                self.txs_set.insert(*tx_hash);
+                self.txs.push(*tx_hash);
+            }
+        }
+    }
+
+    pub fn drain_txs(&mut self) -> Vec<H256> {
+        self.txs_set.clear();
+        self.txs.drain(..).collect()
+    }
+
     pub fn append_touched_keys<I: Iterator<Item = H256>>(&mut self, keys: I) {
         self.touched_keys.extend(keys)
     }

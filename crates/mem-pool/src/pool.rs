@@ -87,6 +87,8 @@ pub struct MemPool {
     pending_deposits: Vec<DepositInfo>,
     /// Mem block save and restore
     restore_manager: RestoreManager,
+    /// Restored txs to finalize
+    pending_restored_tx_hashes: Vec<H256>,
 }
 
 impl Drop for MemPool {
@@ -144,6 +146,7 @@ impl MemPool {
             provider,
             pending_deposits: Default::default(),
             restore_manager: restore_manager.clone(),
+            pending_restored_tx_hashes: Default::default(),
         };
 
         // set tip
@@ -196,6 +199,7 @@ impl MemPool {
             Ok(true)
         };
         if !is_restored || !is_mem_block_state_matched()? {
+            mem_pool.pending_restored_tx_hashes = mem_block.drain_txs();
             mem_pool.reset(None, Some(tip.0))?;
         }
 
@@ -218,11 +222,29 @@ impl MemPool {
         &self.restore_manager
     }
 
-    pub fn save_mem_block(&self) -> Result<()> {
+    pub fn save_mem_block(&mut self) -> Result<()> {
+        if !self.pending_restored_tx_hashes.is_empty() {
+            log::warn!(
+                "save mem block, but have pending restored txs from previous restored mem block"
+            );
+
+            self.mem_block
+                .emergency_reinject_restored_tx_hashes(self.pending_restored_tx_hashes.as_slice());
+        }
+
         self.restore_manager.save(self.mem_block())
     }
 
-    pub fn save_mem_block_with_suffix(&self, suffix: &str) -> Result<()> {
+    pub fn save_mem_block_with_suffix(&mut self, suffix: &str) -> Result<()> {
+        if !self.pending_restored_tx_hashes.is_empty() {
+            log::warn!(
+                "save mem block, but have pending restored txs from previous restored mem block"
+            );
+
+            self.mem_block
+                .emergency_reinject_restored_tx_hashes(self.pending_restored_tx_hashes.as_slice());
+        }
+
         self.restore_manager
             .save_with_suffix(self.mem_block(), suffix)
     }
@@ -233,6 +255,10 @@ impl MemPool {
 
     pub fn is_mem_txs_full(&self, expect_slots: usize) -> bool {
         self.mem_block.txs().len().saturating_add(expect_slots) > MAX_MEM_BLOCK_TXS
+    }
+
+    pub fn reinject_txs_mut(&mut self) -> &mut Vec<H256> {
+        &mut self.pending_restored_tx_hashes
     }
 
     /// Push a layer2 tx into pool
