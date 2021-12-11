@@ -136,6 +136,7 @@ impl MemPool {
             _ => (false, MemBlock::with_block_producer(block_producer_id)),
         };
 
+        let pending_deposits = mem_block.deposits().to_vec();
         let mut mem_pool = MemPool {
             store,
             current_tip: tip,
@@ -144,7 +145,7 @@ impl MemPool {
             pending,
             mem_block,
             provider,
-            pending_deposits: Default::default(),
+            pending_deposits,
             restore_manager: restore_manager.clone(),
             pending_restored_tx_hashes: Default::default(),
         };
