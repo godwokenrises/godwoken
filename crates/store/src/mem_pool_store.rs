@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::HashMap, sync::RwLock};
 
 use gw_types::bytes::Bytes;
 
@@ -32,13 +32,13 @@ impl<T> Value<T> {
 }
 
 pub struct MemPoolStore {
-    inner: Vec<Mutex<HashMap<Bytes, Value<Bytes>>>>,
+    inner: Vec<RwLock<HashMap<Bytes, Value<Bytes>>>>,
 }
 
 impl MemPoolStore {
     pub fn new(columns: usize) -> Self {
         let mut mem_pool_store = Vec::default();
-        mem_pool_store.resize_with(columns, || Mutex::new(Default::default()));
+        mem_pool_store.resize_with(columns, || RwLock::new(Default::default()));
         Self {
             inner: mem_pool_store,
         }
@@ -49,8 +49,8 @@ impl MemPoolStore {
             .inner
             .get(col)
             .expect("col")
-            .lock()
-            .expect("mem pool store");
+            .read()
+            .expect("read mem pool store");
         col.get(key).cloned()
     }
 
@@ -59,8 +59,8 @@ impl MemPoolStore {
             .inner
             .get(col)
             .expect("col")
-            .lock()
-            .expect("mem pool store");
+            .write()
+            .expect("write mem pool store");
         col.insert(key, value);
     }
 }
