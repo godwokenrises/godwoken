@@ -410,7 +410,7 @@ impl BlockProducer {
             if let Err(err) =
                 ReplayBlock::replay(&db, &self.generator, &block, deposit_requests.as_slice())
             {
-                let mem_pool = self.mem_pool.lock().await;
+                let mut mem_pool = self.mem_pool.lock().await;
                 mem_pool.save_mem_block_with_suffix(&format!("invalid_block_{}", number))?;
                 bail!("replay block {} {}", number, err);
             }

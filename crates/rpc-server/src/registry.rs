@@ -354,6 +354,30 @@ impl RequestSubmitter {
     }
 
     async fn in_background(self) {
+        // First mem pool reinject txs
+        {
+            let db = self.store.begin_transaction();
+            let mut mem_pool = self.mem_pool.lock().await;
+
+            while let Some(hash) = mem_pool.reinject_txs_mut().last().cloned() {
+                match db.get_mem_pool_transaction(&hash) {
+                    Ok(Some(tx)) => {
+                        if let Err(err) = mem_pool.push_transaction(tx) {
+                            log::error!("push mem pool reinject tx {} failed {}", hash.pack(), err);
+                        }
+                    }
+                    Ok(None) => {
+                        log::error!("mem block tx {:?} not found", hash.pack());
+                    }
+                    Err(err) => {
+                        log::error!("fetch mem block tx {} err {}", hash.pack(), err);
+                    }
+                }
+
+                mem_pool.reinject_txs_mut().pop();
+            }
+        }
+
         loop {
             // check mem block empty slots
             loop {
