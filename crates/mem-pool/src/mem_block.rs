@@ -140,9 +140,9 @@ impl MemBlock {
         }
     }
 
-    pub fn drain_txs(&mut self) -> Vec<H256> {
+    pub fn clear_txs(&mut self) {
         self.txs_set.clear();
-        self.txs.drain(..).collect()
+        self.txs.clear();
     }
 
     pub fn append_touched_keys<I: Iterator<Item = H256>>(&mut self, keys: I) {
