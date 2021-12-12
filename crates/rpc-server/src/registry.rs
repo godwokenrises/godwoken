@@ -361,9 +361,9 @@ impl RequestSubmitter {
 
             log::info!(
                 "reinject mem block txs {}",
-                mem_pool.reinject_txs_mut().len()
+                mem_pool.pending_restored_txc_hashes().len()
             );
-            while let Some(hash) = mem_pool.reinject_txs_mut().last().cloned() {
+            while let Some(hash) = mem_pool.pending_restored_txc_hashes().last().cloned() {
                 match db.get_mem_pool_transaction(&hash) {
                     Ok(Some(tx)) => {
                         if let Err(err) = mem_pool.push_transaction(tx) {
@@ -378,7 +378,7 @@ impl RequestSubmitter {
                     }
                 }
 
-                mem_pool.reinject_txs_mut().pop();
+                mem_pool.pending_restored_txc_hashes().pop();
             }
         }
 

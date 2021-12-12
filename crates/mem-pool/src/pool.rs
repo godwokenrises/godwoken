@@ -182,7 +182,7 @@ impl MemPool {
             );
 
             self.mem_block
-                .emergency_reinject_restored_tx_hashes(self.pending_restored_tx_hashes.as_slice());
+                .force_reinject_tx_hashes(self.pending_restored_tx_hashes.as_slice());
         }
 
         self.restore_manager.save(self.mem_block())
@@ -195,7 +195,7 @@ impl MemPool {
             );
 
             self.mem_block
-                .emergency_reinject_restored_tx_hashes(self.pending_restored_tx_hashes.as_slice());
+                .force_reinject_tx_hashes(self.pending_restored_tx_hashes.as_slice());
         }
 
         self.restore_manager
@@ -210,7 +210,7 @@ impl MemPool {
         self.mem_block.txs().len().saturating_add(expect_slots) > MAX_MEM_BLOCK_TXS
     }
 
-    pub fn reinject_txs_mut(&mut self) -> &mut Vec<H256> {
+    pub fn pending_restored_txc_hashes(&mut self) -> &mut Vec<H256> {
         &mut self.pending_restored_tx_hashes
     }
 
