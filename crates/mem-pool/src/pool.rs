@@ -210,7 +210,7 @@ impl MemPool {
         self.mem_block.txs().len().saturating_add(expect_slots) > MAX_MEM_BLOCK_TXS
     }
 
-    pub fn pending_restored_txc_hashes(&mut self) -> &mut Vec<H256> {
+    pub fn pending_restored_tx_hashes(&mut self) -> &mut Vec<H256> {
         &mut self.pending_restored_tx_hashes
     }
 
