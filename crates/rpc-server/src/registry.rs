@@ -361,9 +361,9 @@ impl RequestSubmitter {
 
             log::info!(
                 "reinject mem block txs {}",
-                mem_pool.pending_restored_txc_hashes().len()
+                mem_pool.pending_restored_tx_hashes().len()
             );
-            while let Some(hash) = mem_pool.pending_restored_txc_hashes().last().cloned() {
+            while let Some(hash) = mem_pool.pending_restored_tx_hashes().pop() {
                 match db.get_mem_pool_transaction(&hash) {
                     Ok(Some(tx)) => {
                         if let Err(err) = mem_pool.push_transaction(tx) {
@@ -377,8 +377,6 @@ impl RequestSubmitter {
                         log::error!("reinject mem block tx {} err {}", hash.pack(), err);
                     }
                 }
-
-                mem_pool.pending_restored_txc_hashes().pop();
             }
         }
 
