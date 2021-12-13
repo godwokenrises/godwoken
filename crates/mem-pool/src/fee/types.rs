@@ -153,7 +153,7 @@ fn parse_withdraw_fee_rate(
     let cycles_limit: u64 = fee_config.withdraw_cycles_limit;
     let fee_rate_weight = fee_config
         .sudt_fee_rate_weight
-        .get(&sudt_id)
+        .get(&sudt_id.into())
         .cloned()
         .unwrap_or(FEE_RATE_WEIGHT_BASE);
     let fee_amount: u128 = fee.amount().unpack();
@@ -185,7 +185,7 @@ fn parse_l2tx_fee_rate(
             let fee_amount: u128 = fee.amount().unpack();
             let fee_rate_weight = fee_config
                 .sudt_fee_rate_weight
-                .get(&sudt_id)
+                .get(&sudt_id.into())
                 .cloned()
                 .unwrap_or(FEE_RATE_WEIGHT_BASE);
 
@@ -213,7 +213,7 @@ fn parse_l2tx_fee_rate(
             let cycles_limit: u64 = fee_config.sudt_cycles_limit;
             let fee_rate_weight = fee_config
                 .sudt_fee_rate_weight
-                .get(&sudt_id)
+                .get(&sudt_id.into())
                 .cloned()
                 .unwrap_or(FEE_RATE_WEIGHT_BASE);
 
