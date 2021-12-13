@@ -987,8 +987,7 @@ impl MemPool {
         // we can safely expire pending deposits if the number of account doesn't change or mem block txs is empty
         // in these situation more deposits do not affects mem-pool account's id
         let safe_expired = self.pending_deposits.is_empty()
-            && mem_account_count == tip_account_count
-            || self.mem_block.txs().is_empty();
+            && (mem_account_count == tip_account_count || self.mem_block.txs().is_empty());
         if safe_expired {
             log::debug!(
                     "[mem-pool] safely refresh pending deposits, mem_account_count: {}, tip_account_count: {}",
