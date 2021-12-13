@@ -33,7 +33,7 @@ use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     offchain::RollupContext,
-    packed::{CellDep, NumberHash, RollupConfig, Script},
+    packed::{Byte32, CellDep, NumberHash, RollupConfig, Script},
     prelude::*,
 };
 use gw_utils::{genesis_info::CKBGenesisInfo, wallet::Wallet};
@@ -53,7 +53,8 @@ use std::{
 
 const MIN_CKB_VERSION: &str = "0.40.0";
 const SMOL_THREADS_ENV_VAR: &str = "SMOL_THREADS";
-const DEFAULT_RUNTIME_THREADS: usize = 4;
+const DEFAULT_RUNTIME_THREADS: usize = 8;
+const EVENT_TIMEOUT_SECONDS: u64 = 30;
 
 async fn poll_loop(
     rpc_client: RPCClient,
@@ -83,6 +84,9 @@ async fn poll_loop(
         let tip_hash: H256 = tip.block_hash().unpack();
         (tip_number, tip_hash)
     };
+
+    let mut last_event_time = Instant::now();
+
     loop {
         if let Some(block) = rpc_client.get_block_by_number(tip_number + 1).await? {
             let raw_header = block.header().raw();
@@ -192,12 +196,25 @@ async fn poll_loop(
             if *global_vm_version != vm_version {
                 *global_vm_version = vm_version;
             }
+            last_event_time = Instant::now();
         } else {
             log::debug!(
                 "Not found layer1 block #{} sleep {}s then retry",
                 tip_number + 1,
                 poll_interval.as_secs()
             );
+            let seconds_since_last_event = last_event_time.elapsed().as_secs();
+            if seconds_since_last_event > EVENT_TIMEOUT_SECONDS {
+                log::warn!(
+                    "Can't find layer1 block update in {}s. last block is #{}({}) CKB node may out of sync",
+                    seconds_since_last_event,
+                    tip_number,
+                    {
+                        let hash: Byte32 =  tip_hash.pack();
+                        hash
+                    }
+                );
+            }
             async_std::task::sleep(poll_interval).await;
         }
     }
