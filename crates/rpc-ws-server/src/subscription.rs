@@ -59,13 +59,18 @@ pub trait SubscriptionRpc {
     type Metadata;
 
     #[pubsub(subscription = "subscribe", subscribe, name = "subscribe")]
-    fn subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<String>, topic: Topic);
+    fn subscribe(
+        &self,
+        meta: Self::Metadata,
+        subscriber: Subscriber<serde_json::Value>,
+        topic: Topic,
+    );
 
     #[pubsub(subscription = "subscribe", unsubscribe, name = "unsubscribe")]
     fn unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
 }
 
-type Subscribers = HashMap<SubscriptionId, Sink<String>>;
+type Subscribers = HashMap<SubscriptionId, Sink<serde_json::Value>>;
 
 #[derive(Default)]
 pub struct SubscriptionRpcImpl {
@@ -76,7 +81,12 @@ pub struct SubscriptionRpcImpl {
 impl SubscriptionRpc for SubscriptionRpcImpl {
     type Metadata = Option<SubscriptionSession>;
 
-    fn subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<String>, topic: Topic) {
+    fn subscribe(
+        &self,
+        meta: Self::Metadata,
+        subscriber: Subscriber<serde_json::Value>,
+        topic: Topic,
+    ) {
         if let Some(session) = meta {
             let id = SubscriptionId::String(format!(
                 "{:#x}",
@@ -149,13 +159,13 @@ impl SubscriptionRpcImpl {
                 select! {
                     recv(new_error_tx_receipt_receiver) -> msg => match msg {
                         Ok(error_tx_receipt) => {
-                            log::info!("received new error tx receipt: {:?}", msg);
+                            // log::info!("received new error tx receipt: {:?}", msg);
                             let subscribers = subscribers.read().expect("acquiring subscribers read lock");
                             if let Some(new_error_tx_receipt_subscribers) = subscribers.get(&Topic::NewErrorTxReceipt) {
-                                // let header: ckb_jsonrpc_types::HeaderView  = block.header().into();
-                                let json_string = Ok(serde_json::to_string(&error_tx_receipt).expect("serialization should be ok"));
+                                let receipt: gw_jsonrpc_types::godwoken::ErrorTxReceipt = error_tx_receipt.into();
+                                let json_value = Ok(serde_json::to_value(&receipt).expect("serialization should be ok"));
                                 for sink in new_error_tx_receipt_subscribers.values() {
-                                    let _ = sink.notify(json_string.clone());
+                                    let _ = sink.notify(json_value.clone());
                                 }
                             }
                         },

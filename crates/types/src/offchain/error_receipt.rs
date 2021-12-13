@@ -2,6 +2,7 @@ use crate::packed::LogItem;
 
 use sparse_merkle_tree::H256;
 
+#[derive(Debug, Clone)]
 pub struct ErrorTxReceipt {
     pub tx_hash: H256,
     pub block_number: u64,
