@@ -44,7 +44,7 @@ impl RestoreManager {
         };
         log::info!("[mem-pool] restore manager save mem block {:?}", file_path);
 
-        let packed = mem_block.pack();
+        let packed = mem_block.pack_compact();
         write(file_path, packed.as_slice())?;
 
         Ok(())
@@ -54,13 +54,13 @@ impl RestoreManager {
         let file_path = self.block_file_path(timestamp);
         log::info!("[mem-pool] save restore save mem block {:?}", file_path);
 
-        let packed = mem_block.pack();
+        let packed = mem_block.pack_compact();
         write(file_path, packed.as_slice())?;
 
         Ok(())
     }
 
-    pub fn restore_from_latest(&self) -> Result<Option<(packed::MemBlock, u128)>> {
+    pub fn restore_from_latest(&self) -> Result<Option<(packed::CompactMemBlock, u128)>> {
         let mut dir = read_dir(self.restore_path.clone())?;
         let mut opt_latest_timestamp = None;
         while let Some(Ok(file)) = dir.next() {
@@ -84,11 +84,14 @@ impl RestoreManager {
         };
         let file_path = self.block_file_path(timestamp);
 
-        let block = packed::MemBlock::from_slice(&read(file_path)?)?;
+        let block = packed::CompactMemBlock::from_slice(&read(file_path)?)?;
         Ok(Some((block, timestamp)))
     }
 
-    pub fn restore_from_timestamp(&self, timestamp: u128) -> Result<Option<packed::MemBlock>> {
+    pub fn restore_from_timestamp(
+        &self,
+        timestamp: u128,
+    ) -> Result<Option<packed::CompactMemBlock>> {
         let mut dir = read_dir(self.restore_path.clone())?;
         let mut opt_timestamp_found = None;
         while let Some(Ok(file)) = dir.next() {
@@ -112,7 +115,7 @@ impl RestoreManager {
             None => return Ok(None),
         };
 
-        let block = packed::MemBlock::from_slice(&read(file_path)?)?;
+        let block = packed::CompactMemBlock::from_slice(&read(file_path)?)?;
         Ok(Some(block))
     }
 
@@ -193,7 +196,7 @@ mod tests {
 
         // Should able to save and restore packed mem block
         let mem_block = MemBlock::with_block_producer(666);
-        let expected_packed = mem_block.pack();
+        let expected_packed = mem_block.pack_compact();
         restore_manager.save(&mem_block).unwrap();
         let (restored_packed, _) = restore_manager
             .restore_from_latest()
@@ -223,7 +226,7 @@ mod tests {
             .unwrap()
             .expect("earlier timestamp");
         assert_eq!(
-            earlier_mem_block.pack().as_slice(),
+            earlier_mem_block.pack_compact().as_slice(),
             earlier_packed.as_slice()
         );
         restore_manager.delete_before_timestamp(earlier_timestamp.saturating_add(1000));

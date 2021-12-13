@@ -102,6 +102,20 @@ impl MemBlock {
         self.state_checkpoints.push(state_checkpoint);
     }
 
+    pub fn force_reinject_withdrawal_hashes(&mut self, withdrawal_hashes: &[H256]) {
+        assert!(self.withdrawals.is_empty());
+        assert!(self.state_checkpoints.is_empty());
+        assert!(self.deposits.is_empty());
+        assert!(self.txs.is_empty());
+
+        for withdrawal_hash in withdrawal_hashes {
+            if !self.withdrawals_set.contains(withdrawal_hash) {
+                self.withdrawals_set.insert(*withdrawal_hash);
+                self.withdrawals.push(*withdrawal_hash);
+            }
+        }
+    }
+
     pub fn set_finalized_custodians(&mut self, finalized_custodians: CollectedCustodianCells) {
         assert!(self.finalized_custodians.is_none());
         self.finalized_custodians = Some(finalized_custodians);
@@ -194,37 +208,11 @@ impl MemBlock {
         &self.prev_merkle_state
     }
 
-    pub fn pack(&self) -> packed::MemBlock {
-        packed::MemBlock::new_builder()
-            .block_producer_id(self.block_producer_id.pack())
+    pub fn pack_compact(&self) -> packed::CompactMemBlock {
+        packed::CompactMemBlock::new_builder()
             .txs(self.txs.pack())
             .withdrawals(self.withdrawals.pack())
             .deposits(self.deposits.pack())
-            .block_info(self.block_info.clone())
-            .prev_merkle_state(self.prev_merkle_state.clone())
             .build()
-    }
-
-    pub fn unpack(mem_block: packed::MemBlock) -> Self {
-        let txs: Vec<_> = mem_block.txs().unpack();
-        let txs_set = txs.iter().cloned().collect();
-        let withdrawals: Vec<_> = mem_block.withdrawals().unpack();
-        let withdrawals_set = withdrawals.iter().cloned().collect();
-        let touched_keys = mem_block.touched_keys().into_iter().map(|h| h.unpack());
-
-        MemBlock {
-            block_producer_id: mem_block.block_producer_id().unpack(),
-            txs,
-            txs_set,
-            withdrawals,
-            withdrawals_set,
-            finalized_custodians: mem_block.finalized_custodians().unpack(),
-            deposits: mem_block.deposits().unpack(),
-            state_checkpoints: mem_block.state_checkpoints().unpack(),
-            txs_prev_state_checkpoint: mem_block.txs_prev_state_checkpoint().unpack(),
-            block_info: mem_block.block_info(),
-            prev_merkle_state: mem_block.prev_merkle_state(),
-            touched_keys: touched_keys.collect(),
-        }
     }
 }
