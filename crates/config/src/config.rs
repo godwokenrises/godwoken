@@ -292,17 +292,20 @@ pub struct FeeConfig {
     /// HashMap<sudt_id, fee rate weight>
     ///
     /// adjusted fee_rate: fee_rate * weight / 1000
-    /// if sudt_id is not in the map, the weight is 1
+    /// if sudt_id is not in the map, the weight is 1000
     pub sudt_fee_rate_weight: HashMap<u32, u64>,
 }
 
 impl Default for FeeConfig {
     fn default() -> Self {
+        let mut sudt_fee_rate_weight = HashMap::default();
+        // CKB default weight is 1000 / 1000
+        sudt_fee_rate_weight.insert(1u32, 1000u64);
         Self {
-            meta_cycles_limit: 20000,                 // 20K cycles
-            sudt_cycles_limit: 20000,                 // 20K cycles
-            withdraw_cycles_limit: 20000,             // 20K cycles
-            sudt_fee_rate_weight: Default::default(), // default is 1
+            meta_cycles_limit: 20000,     // 20K cycles
+            sudt_cycles_limit: 20000,     // 20K cycles
+            withdraw_cycles_limit: 20000, // 20K cycles
+            sudt_fee_rate_weight,
         }
     }
 }
