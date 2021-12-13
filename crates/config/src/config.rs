@@ -172,7 +172,7 @@ fn default_enable_debug_rpc() -> bool {
 
 impl Default for DebugConfig {
     fn default() -> Self {
-        const EXPECTED_TX_UPPER_BOUND_CYCLES: u64 = 45000000u64;
+        const EXPECTED_TX_UPPER_BOUND_CYCLES: u64 = 70000000u64;
         const DEFAULT_DEBUG_TX_DUMP_PATH: &str = "debug-tx-dump";
 
         Self {
