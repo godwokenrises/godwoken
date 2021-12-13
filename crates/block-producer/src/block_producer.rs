@@ -466,6 +466,10 @@ impl BlockProducer {
                 tx.clone(),
             )
             .await;
+            return Err(anyhow!(
+                "Submitting l2 block cycles exceeded limitation, cycles: {:?}",
+                cycles
+            ));
         }
 
         // send transaction
@@ -493,16 +497,11 @@ impl BlockProducer {
                         tx.clone(),
                     )
                     .await;
-                    // self.mem_pool
-                    //     .lock()
-                    //     .await
-                    //     .try_to_recovery_from_invalid_state()?;
                     return Err(anyhow!("Submitting l2 block error: {}", err));
                 } else {
                     // ignore non script error
                     log::debug!("Skip dumping non-script-error tx");
                 }
-                // self.mem_pool.lock().await.reset_mem_block()?;
             }
         }
         Ok(())
