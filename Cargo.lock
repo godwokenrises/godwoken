@@ -2450,6 +2450,8 @@ dependencies = [
  "ckb-channel",
  "ckb-stop-handler",
  "ckb-types",
+ "gw-jsonrpc-types",
+ "gw-types",
  "jsonrpc-core 18.0.0",
  "jsonrpc-derive",
  "jsonrpc-http-server",
