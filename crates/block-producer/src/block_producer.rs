@@ -49,8 +49,9 @@ use std::{
 };
 
 const MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT: usize = 10;
-const TRANSACTION_SRIPT_ERROR: &str = "TransactionScriptError";
+const TRANSACTION_SCRIPT_ERROR: &str = "TransactionScriptError";
 const TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR: &str = "ExceededMaximumBlockBytes";
+const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
 /// 524_288 we choose this value because it is smaller than the MAX_BLOCK_BYTES which is 597K
 const MAX_ROLLUP_WITNESS_SIZE: usize = 1 << 19;
 const WAIT_PRODUCE_BLOCK_SECONDS: u64 = 45;
@@ -455,20 +456,32 @@ impl BlockProducer {
         block_number: u64,
         tx: Transaction,
     ) -> Result<SubmitResult> {
-        let cycles = utils::dry_run_transaction(
-            &self.debug_config,
-            &self.rpc_client,
-            tx.clone(),
-            format!("L2 block {}", block_number).as_str(),
-        )
-        .await;
+        let cycles = match self.rpc_client.dry_run_transaction(tx.clone()).await {
+            Ok(cycles) => {
+                log::info!(
+                    "Tx({}) L2 block #{} execution cycles: {}",
+                    block_number,
+                    hex::encode(tx.hash()),
+                    cycles
+                );
+                cycles
+            }
+            Err(err) => {
+                let err_str = err.to_string();
+                if err_str.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
+                    log::info!("Skip submitting l2 block since CKB can't resolve tx, previous block may haven't been processed by CKB");
+                    return Ok(SubmitResult::Skip);
+                } else {
+                    return Err(anyhow!(
+                        "Fail to dry run transaction {}, error: {}",
+                        hex::encode(tx.hash()),
+                        err
+                    ));
+                }
+            }
+        };
 
-        if cycles.is_none() {
-            log::info!("Skip submitting l2 block since can't get cycles of tx, previous block may haven't been processed by CKB");
-            return Ok(SubmitResult::Skip);
-        }
-
-        if cycles.unwrap_or(0) > self.debug_config.expected_l1_tx_upper_bound_cycles {
+        if cycles > self.debug_config.expected_l1_tx_upper_bound_cycles {
             log::warn!(
                 "Submitting l2 block is cost unexpected cycles: {:?}, expected upper bound: {}",
                 cycles,
@@ -501,7 +514,7 @@ impl BlockProducer {
 
                 // dumping script error transactions
                 let err_str = err.to_string();
-                if err_str.contains(TRANSACTION_SRIPT_ERROR)
+                if err_str.contains(TRANSACTION_SCRIPT_ERROR)
                     || err_str.contains(TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR)
                 {
                     // dumping failed tx
