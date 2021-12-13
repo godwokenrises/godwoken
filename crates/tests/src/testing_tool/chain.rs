@@ -3,7 +3,7 @@
 use gw_block_producer::produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult};
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
 use gw_common::{blake2b::new_blake2b, H256};
-use gw_config::{BackendConfig, ChainConfig, GenesisConfig};
+use gw_config::{BackendConfig, ChainConfig, GenesisConfig, MemPoolConfig};
 use gw_generator::{
     account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
     backend_manage::BackendManage,
@@ -99,25 +99,60 @@ pub fn setup_chain(rollup_type_script: Script) -> Chain {
         rollup_config,
         account_lock_manage,
         None,
+        None,
+        None,
     );
     chain.complete_initial_syncing().unwrap();
     chain
 }
 
 // Simulate process restart
-pub fn restart_chain(chain: &Chain, rollup_type_script: Script) -> Chain {
+pub fn restart_chain(
+    chain: &Chain,
+    rollup_type_script: Script,
+    opt_provider: Option<DummyMemPoolProvider>,
+) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
     let rollup_config = chain.generator().rollup_context().rollup_config.to_owned();
     account_lock_manage
         .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+    let restore_path = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mem_pool = smol::block_on(mem_pool.lock());
+        mem_pool.restore_manager().path().to_path_buf()
+    };
+    let mem_pool_config = MemPoolConfig {
+        restore_path,
+        ..Default::default()
+    };
     let mut chain = setup_chain_with_account_lock_manage(
         rollup_type_script,
         rollup_config,
         account_lock_manage,
         Some(chain.store().to_owned()),
+        Some(mem_pool_config),
+        opt_provider,
     );
     chain.complete_initial_syncing().unwrap();
     chain
+}
+
+pub fn chain_generator(chain: &Chain, rollup_type_script: Script) -> Arc<Generator> {
+    let rollup_config = chain.generator().rollup_context().rollup_config.to_owned();
+    let mut account_lock_manage = AccountLockManage::default();
+    account_lock_manage
+        .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+    let backend_manage = build_backend_manage(&rollup_config);
+    let rollup_context = RollupContext {
+        rollup_script_hash: rollup_type_script.hash().into(),
+        rollup_config,
+    };
+    Arc::new(Generator::new(
+        backend_manage,
+        account_lock_manage,
+        rollup_context,
+        Default::default(),
+    ))
 }
 
 pub fn setup_chain_with_account_lock_manage(
@@ -125,8 +160,14 @@ pub fn setup_chain_with_account_lock_manage(
     rollup_config: RollupConfig,
     account_lock_manage: AccountLockManage,
     opt_store: Option<Store>,
+    opt_mem_pool_config: Option<MemPoolConfig>,
+    opt_mem_pool_provider: Option<DummyMemPoolProvider>,
 ) -> Chain {
     let store = opt_store.unwrap_or_else(|| Store::open_tmp().unwrap());
+    let mem_pool_config = opt_mem_pool_config.unwrap_or_else(|| MemPoolConfig {
+        restore_path: tempfile::TempDir::new().unwrap().path().to_path_buf(),
+        ..Default::default()
+    });
     let rollup_script_hash = rollup_type_script.hash();
     let genesis_config = GenesisConfig {
         timestamp: 0,
@@ -154,14 +195,14 @@ pub fn setup_chain_with_account_lock_manage(
         rollup_context,
         Default::default(),
     ));
-    let provider = DummyMemPoolProvider::default();
+    let provider = opt_mem_pool_provider.unwrap_or_default();
     let mem_pool = MemPool::create(
         0,
         store.clone(),
         Arc::clone(&generator),
         Box::new(provider),
         None,
-        Default::default(),
+        mem_pool_config,
     )
     .unwrap();
     Chain::create(

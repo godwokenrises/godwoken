@@ -2401,6 +2401,7 @@ name = "gw-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-jsonrpc-client",
  "blake2b-rs 0.2.0",
  "ckb-crypto 0.100.0",
  "ckb-error",
@@ -2419,6 +2420,8 @@ dependencies = [
  "gw-db",
  "gw-generator",
  "gw-mem-pool",
+ "gw-rpc-client",
+ "gw-rpc-server",
  "gw-store",
  "gw-traits",
  "gw-types",
@@ -2430,6 +2433,7 @@ dependencies = [
  "serde_json",
  "sha3",
  "smol",
+ "tempfile",
  "thiserror",
 ]
 

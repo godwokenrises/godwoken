@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::Result;
 use gw_mem_pool::traits::MemPoolProvider;
 use gw_types::{
-    offchain::{CellWithStatus, CollectedCustodianCells, DepositInfo, RollupContext},
+    offchain::{CellStatus, CellWithStatus, CollectedCustodianCells, DepositInfo, RollupContext},
     packed::{OutPoint, WithdrawalRequest},
 };
 use smol::Task;
@@ -34,7 +34,12 @@ impl MemPoolProvider for DummyMemPoolProvider {
         smol::spawn(async move { Ok(collected_custodians) })
     }
     fn get_cell(&self, _out_point: OutPoint) -> Task<Result<Option<CellWithStatus>>> {
-        smol::spawn(async { Ok(None) })
+        smol::spawn(async {
+            Ok(Some(CellWithStatus {
+                cell: Some(Default::default()),
+                status: CellStatus::Live,
+            }))
+        })
     }
     fn query_mergeable_custodians(
         &self,

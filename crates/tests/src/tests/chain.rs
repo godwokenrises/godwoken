@@ -857,7 +857,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
 
     //  Rewind to last tip
     //  IMPORTANT: simulate restart process
-    let mut chain = restart_chain(&chain, rollup_type_script);
+    let mut chain = restart_chain(&chain, rollup_type_script, None);
     let last_valid_tip_global_state = db
         .get_block_post_global_state(&last_valid_tip_block_hash)
         .unwrap();
