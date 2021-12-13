@@ -1,5 +1,6 @@
 use crate::packed::{
     AccountMerkleState, Byte32, GlobalState, GlobalStateV0, TransactionKey, TxReceipt,
+    WithdrawalKey,
 };
 use crate::prelude::*;
 use ckb_types::error::VerificationError;
@@ -9,6 +10,16 @@ use super::RunResult;
 
 impl TransactionKey {
     pub fn build_transaction_key(block_hash: Byte32, index: u32) -> Self {
+        let mut key = [0u8; 36];
+        key[..32].copy_from_slice(block_hash.as_slice());
+        // use BE, so we have a sorted bytes representation
+        key[32..].copy_from_slice(&index.to_be_bytes());
+        key.pack()
+    }
+}
+
+impl WithdrawalKey {
+    pub fn build_withdrawal_key(block_hash: Byte32, index: u32) -> Self {
         let mut key = [0u8; 36];
         key[..32].copy_from_slice(block_hash.as_slice());
         // use BE, so we have a sorted bytes representation

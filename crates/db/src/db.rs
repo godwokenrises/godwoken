@@ -1,8 +1,9 @@
+use crate::memory_stats::TrackRocksDBMemory;
 use crate::schema::Col;
 use crate::snapshot::RocksDBSnapshot;
 use crate::transaction::RocksDBTransaction;
 use crate::write_batch::RocksDBWriteBatch;
-use crate::{internal_error, Result};
+use crate::{internal_error, CfMemStat, Result};
 use gw_config::StoreConfig;
 use rocksdb::ops::{
     CreateCF, DropCF, GetColumnFamilys, GetPinned, GetPinnedCF, IterateCF, OpenCF, Put, SetOptions,
@@ -206,6 +207,10 @@ impl RocksDB {
         let inner = Arc::get_mut(&mut self.inner)
             .ok_or_else(|| internal_error("drop_cf get_mut failed"))?;
         inner.drop_cf(&col.to_string()).map_err(internal_error)
+    }
+
+    pub fn gather_mem_stats(&self) -> Vec<CfMemStat> {
+        self.inner.gather_memory_stats()
     }
 }
 

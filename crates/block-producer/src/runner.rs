@@ -6,7 +6,7 @@ use anyhow::{anyhow, Context, Result};
 use async_jsonrpc_client::HttpClient;
 use ckb_types::core::hardfork::HardForkSwitch;
 use gw_chain::chain::Chain;
-use gw_challenge::offchain::{OffChainMockContext, OffChainValidatorContext};
+use gw_challenge::offchain::OffChainMockContext;
 use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION};
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
@@ -25,7 +25,10 @@ use gw_mem_pool::{
 };
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_rpc_server::{registry::Registry, server::start_jsonrpc_server};
+use gw_rpc_server::{
+    registry::{Registry, RegistryArgs},
+    server::start_jsonrpc_server,
+};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
@@ -301,7 +304,7 @@ impl BaseInitComponents {
                 backend_manage,
                 account_lock_manage,
                 rollup_context.clone(),
-                config.rpc.clone(),
+                Some(config.rpc.clone()),
             ))
         };
 
@@ -409,20 +412,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 base.init_offchain_mock_context(&poa, &block_producer_config)
                     .await
             })?;
-
-            let mut offchain_validator_context = None;
-            if let Some(validator_config) = config.offchain_validator {
-                let debug_config = config.debug.clone();
-
-                let context = OffChainValidatorContext::build(
-                    &offchain_mock_context,
-                    debug_config,
-                    validator_config,
-                )?;
-
-                offchain_validator_context = Some(context);
-            }
-
             let mem_pool_provider = DefaultMemPoolProvider::new(
                 base.rpc_client.clone(),
                 Arc::clone(&poa),
@@ -454,7 +443,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     base.generator.clone(),
                     Box::new(mem_pool_provider),
                     error_tx_handler,
-                    offchain_validator_context,
                     config.mem_pool.clone(),
                 )
                 .with_context(|| "create mem-pool")?,
@@ -481,6 +469,13 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         store,
         generator,
     } = base;
+
+    // check state db
+    {
+        let t = Instant::now();
+        store.check_state()?;
+        log::info!("Check state db done: {}ms", t.elapsed().as_millis());
+    }
 
     let chain = Arc::new(Mutex::new(
         Chain::create(
@@ -513,7 +508,12 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 tron_account_lock_hash,
             );
             // fix missing genesis block
-            smol::block_on(web3_indexer.store_genesis(store.clone()))?;
+            log::info!("Check web3 indexing...");
+            smol::block_on(async {
+                web3_indexer.store_genesis(&store).await?;
+                web3_indexer.fix_missing_blocks(&store).await?;
+                Ok::<(), anyhow::Error>(())
+            })?;
             Some(web3_indexer)
         }
         None => None,
@@ -540,12 +540,12 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 .ok_or_else(|| anyhow!("mem-pool must be enabled in mode: {:?}", mode))?;
             let wallet =
                 wallet.ok_or_else(|| anyhow!("wallet must be enabled in mode: {:?}", mode))?;
-            let poa = poa.ok_or_else(|| anyhow!("poa must be enabled in mode: {:?}", mode))?;
             let offchain_mock_context = {
-                let ctx = offchain_mock_context.clone();
+                let ctx = offchain_mock_context;
                 let msg = "offchain mock require block producer config, wallet and poa in mode: ";
                 ctx.ok_or_else(|| anyhow!("{} {:?}", msg, mode))?
             };
+            let poa = poa.ok_or_else(|| anyhow!("poa must be enabled in mode: {:?}", mode))?;
             let tests_control = if let NodeMode::Test = config.node_mode {
                 Some(TestModeControl::new(
                     rpc_client.clone(),
@@ -606,19 +606,21 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     };
 
     // RPC registry
-    let rpc_registry = Registry::new(
+    let args = RegistryArgs {
         store,
-        mem_pool.clone(),
+        mem_pool,
         generator,
-        test_mode_control.map(Box::new),
+        tests_rpc_impl: test_mode_control.map(Box::new),
         rollup_config,
-        config.debug.clone(),
-        Arc::clone(&chain),
-        offchain_mock_context,
-        config.mem_pool.clone(),
-        config.node_mode,
-        rpc_client.clone(),
-    );
+        mem_pool_config: config.mem_pool.clone(),
+        node_mode: config.node_mode,
+        rpc_client: rpc_client.clone(),
+        send_tx_rate_limit: config.rpc.send_tx_rate_limit.clone(),
+        server_config: config.rpc_server.clone(),
+        fee_config: config.fee.clone(),
+    };
+
+    let rpc_registry = Registry::new(args);
 
     let (exit_sender, exit_recv) = async_channel::bounded(100);
     let handle = {
@@ -683,8 +685,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     });
 
-    let mem_block_save_guard = MemBlockSaveGuard { mem_pool };
-
     smol::block_on(async {
         let _ = exit_recv.recv().await;
         log::info!("Exiting...");
@@ -693,32 +693,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         chain_task.cancel().await;
     });
 
-    drop(mem_block_save_guard);
-
     Ok(())
-}
-
-struct MemBlockSaveGuard {
-    mem_pool: Option<Arc<Mutex<MemPool>>>,
-}
-
-impl Drop for MemBlockSaveGuard {
-    fn drop(&mut self) {
-        if let Some(mem_pool) = self.mem_pool.as_ref() {
-            let mem_pool = mem_pool.clone();
-            smol::block_on(async move {
-                let mem_pool = mem_pool.lock().await;
-                log::info!(
-                    "Saving mem block to {:?}",
-                    mem_pool.restore_manager().path()
-                );
-                if let Err(err) = mem_pool.save_mem_block() {
-                    log::error!("Save mem block error {}", err);
-                }
-                mem_pool.restore_manager().delete_before_one_hour();
-            });
-        }
-    }
 }
 
 fn check_ckb_version(rpc_client: &RPCClient) -> Result<()> {

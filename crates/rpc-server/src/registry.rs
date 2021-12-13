@@ -1,44 +1,48 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
-use gw_chain::chain::Chain;
-use gw_challenge::offchain::OffChainMockContext;
 use gw_common::{blake2b::new_blake2b, state::State, H256};
-use gw_config::{DebugConfig, MemPoolConfig, NodeMode};
+use gw_config::{FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
-    debugger::{DumpChallengeTarget, ReprMockTransaction},
     godwoken::{
         BackendInfo, ErrorTxReceipt, GlobalState, L2BlockCommittedInfo, L2BlockStatus, L2BlockView,
         L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, NodeInfo, RunResult,
-        TxReceipt,
+        SUDTFeeConfig, TxReceipt, WithdrawalStatus, WithdrawalWithStatus,
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
-use gw_mem_pool::{custodian::AvailableCustodians, pool::MemBlockDBMode};
-use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::{
-    chain_view::ChainView,
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
-    transaction::{mem_pool_store::MemPoolStore, StoreTransaction},
-    Store,
+use gw_mem_pool::{
+    custodian::AvailableCustodians,
+    fee::{
+        queue::FeeQueue,
+        types::{FeeEntry, FeeItem},
+    },
 };
+use gw_rpc_client::rpc_client::RPCClient;
+// use gw_mem_pool::batch::{MemPoolBatch};
+use gw_store::{chain_view::ChainView, state::state_db::StateContext, CfMemStat, Store};
 use gw_traits::CodeStore;
 use gw_types::{
-    packed::{self, BlockInfo, L2Transaction, RawL2Block, RollupConfig, WithdrawalRequest},
+    packed::{self, BlockInfo, Byte32, L2Transaction, RollupConfig, WithdrawalRequest},
     prelude::*,
 };
 use gw_version::Version;
 use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as JsonrpcServer};
 use lru::LruCache;
+use once_cell::sync::Lazy;
+use pprof::ProfilerGuard;
 use smol::{lock::Mutex, unblock};
 use std::{
     convert::{TryFrom, TryInto},
     sync::Arc,
     time::{Duration, Instant},
 };
+
+static PROFILER_GUARD: Lazy<std::sync::Mutex<Option<ProfilerGuard>>> =
+    Lazy::new(|| std::sync::Mutex::new(None));
 
 // type alias
 type RPCServer = Arc<Server<MapRouter>>;
@@ -57,10 +61,6 @@ const INVALID_REQUEST: i64 = -32600;
 const METHOD_NOT_AVAILABLE_ERR_CODE: i64 = -32601;
 const INVALID_PARAM_ERR_CODE: i64 = -32602;
 const RATE_LIMIT_ERR_CODE: i64 = -32603;
-
-// rate limit
-const MAX_SEND_TX_RATE_LIMIT_LRU_SIZE: usize = 128 * 1024 * 1024; // 128m
-const SEND_TX_RATE_LIMIT_SECONDS: u64 = 10;
 
 type SendTransactionRateLimiter = Mutex<LruCache<u32, Instant>>;
 
@@ -109,36 +109,18 @@ fn to_jsonh256(v: H256) -> JsonH256 {
     h.into()
 }
 
-#[allow(clippy::needless_lifetimes)]
-fn get_state_db_at_block<'a>(
-    db: &'a StoreTransaction,
-    block_number: Option<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64>,
-    is_mem_pool_enabled: bool,
-) -> Result<StateDBTransaction<'a>, RpcError> {
-    let tip_block_number = db.get_tip_block()?.raw().number().unpack();
-    match block_number.map(|n| n.value()) {
-        Some(block_number) => {
-            if block_number > tip_block_number {
-                return Err(header_not_found_err());
-            }
-            StateDBTransaction::from_checkpoint(
-                db,
-                CheckPoint::new(block_number, SubState::Block),
-                StateDBMode::ReadOnly,
-            )
-            .map_err(Into::into)
-        }
-        None => {
-            let checkpoint = if is_mem_pool_enabled {
-                CheckPoint::new(tip_block_number, SubState::MemBlock)
-            } else {
-                // fallback to db
-                CheckPoint::new(tip_block_number, SubState::Block)
-            };
-            StateDBTransaction::from_checkpoint(db, checkpoint, StateDBMode::ReadOnly)
-                .map_err(Into::into)
-        }
-    }
+pub struct RegistryArgs<T> {
+    pub store: Store,
+    pub mem_pool: MemPool,
+    pub generator: Arc<Generator>,
+    pub tests_rpc_impl: Option<Box<T>>,
+    pub rollup_config: RollupConfig,
+    pub mem_pool_config: MemPoolConfig,
+    pub node_mode: NodeMode,
+    pub rpc_client: RPCClient,
+    pub send_tx_rate_limit: Option<RPCRateLimit>,
+    pub server_config: RPCServerConfig,
+    pub fee_config: FeeConfig,
 }
 
 pub struct Registry {
@@ -146,41 +128,46 @@ pub struct Registry {
     mem_pool: MemPool,
     store: Store,
     tests_rpc_impl: Option<Arc<BoxedTestsRPCImpl>>,
-    chain: Arc<Mutex<Chain>>,
-    offchain_mock_context: Option<OffChainMockContext>,
     rollup_config: RollupConfig,
-    debug_config: DebugConfig,
     mem_pool_config: MemPoolConfig,
     backend_info: Vec<BackendInfo>,
     node_mode: NodeMode,
     submit_tx: smol::channel::Sender<Request>,
     rpc_client: RPCClient,
+    send_tx_rate_limit: Option<RPCRateLimit>,
+    server_config: RPCServerConfig,
+    fee_config: FeeConfig,
 }
 
 impl Registry {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new<T>(
-        store: Store,
-        mem_pool: MemPool,
-        generator: Arc<Generator>,
-        tests_rpc_impl: Option<Box<T>>,
-        rollup_config: RollupConfig,
-        debug_config: DebugConfig,
-        chain: Arc<Mutex<Chain>>,
-        offchain_mock_context: Option<OffChainMockContext>,
-        mem_pool_config: MemPoolConfig,
-        node_mode: NodeMode,
-        rpc_client: RPCClient,
-    ) -> Self
+    pub fn new<T>(args: RegistryArgs<T>) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
     {
+        let RegistryArgs {
+            generator,
+            mem_pool,
+            store,
+            tests_rpc_impl,
+            rollup_config,
+            mem_pool_config,
+            node_mode,
+            rpc_client,
+            send_tx_rate_limit,
+            server_config,
+            fee_config,
+        } = args;
+
         let backend_info = get_backend_info(generator.clone());
         let (submit_tx, submit_rx) = smol::channel::bounded(RequestSubmitter::MAX_CHANNEL_SIZE);
         if let Some(mem_pool) = mem_pool.as_ref().to_owned() {
             let submitter = RequestSubmitter {
                 mem_pool: Arc::clone(mem_pool),
                 submit_rx,
+                queue: Arc::new(Mutex::new(FeeQueue::new())),
+                fee_config: fee_config.clone(),
+                generator: generator.clone(),
+                store: store.clone(),
             };
             smol::spawn(submitter.in_background()).detach();
         }
@@ -192,22 +179,24 @@ impl Registry {
             tests_rpc_impl: tests_rpc_impl
                 .map(|r| Arc::new(r as Box<dyn TestModeRPC + Sync + Send + 'static>)),
             rollup_config,
-            debug_config,
-            chain,
-            offchain_mock_context,
             mem_pool_config,
             backend_info,
             node_mode,
             submit_tx,
             rpc_client,
+            send_tx_rate_limit,
+            server_config,
+            fee_config,
         }
     }
 
     pub fn build_rpc_server(self) -> Result<RPCServer> {
         let mut server = JsonrpcServer::new();
 
-        let send_transaction_rate_limiter: SendTransactionRateLimiter =
-            Mutex::new(lru::LruCache::new(MAX_SEND_TX_RATE_LIMIT_LRU_SIZE));
+        let send_transaction_rate_limiter: Option<SendTransactionRateLimiter> = self
+            .send_tx_rate_limit
+            .as_ref()
+            .map(|send_tx_rate_limit| Mutex::new(lru::LruCache::new(send_tx_rate_limit.lru_size)));
 
         server = server
             .with_data(Data::new(self.mem_pool))
@@ -218,7 +207,9 @@ impl Registry {
             .with_data(Data::new(self.backend_info))
             .with_data(Data::new(self.submit_tx))
             .with_data(Data::new(self.rpc_client))
+            .with_data(Data::new(self.send_tx_rate_limit))
             .with_data(Data::new(send_transaction_rate_limiter))
+            .with_data(Data::new(self.fee_config))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
             .with_method("gw_get_block_hash", get_block_hash)
@@ -241,12 +232,14 @@ impl Registry {
             .with_method("gw_get_data", get_data)
             .with_method("gw_get_transaction", get_transaction)
             .with_method("gw_get_transaction_receipt", get_transaction_receipt)
+            .with_method("gw_get_withdrawal", get_withdrawal)
             .with_method("gw_execute_l2transaction", execute_l2transaction)
             .with_method("gw_execute_raw_l2transaction", execute_raw_l2transaction)
             .with_method(
                 "gw_compute_l2_sudt_script_hash",
                 compute_l2_sudt_script_hash,
             )
+            .with_method("gw_get_fee_config", get_fee_config)
             .with_method("gw_get_node_info", get_node_info);
         if self.node_mode != NodeMode::ReadOnly {
             server = server
@@ -263,15 +256,20 @@ impl Registry {
                 .with_method("tests_get_global_state", tests_get_global_state);
         }
 
-        // Debug
-        if self.debug_config.enable_debug_rpc {
-            server = server
-                .with_data(Data::new(self.chain))
-                .with_data(Data::new(self.offchain_mock_context))
-                .with_method(
-                    "debug_dump_cancel_challenge_tx",
-                    debug_dump_cancel_challenge_tx,
-                );
+        for enabled in self.server_config.enable_methods.iter() {
+            match enabled {
+                RPCMethods::PProf => {
+                    server = server
+                        .with_method("gw_start_profiler", start_profiler)
+                        .with_method("gw_report_pprof", report_pprof);
+                }
+                RPCMethods::Test => {
+                    server = server
+                        // .with_method("gw_dump_mem_block", dump_mem_block)
+                        .with_method("gw_get_rocksdb_mem_stats", get_rocksdb_memory_stats)
+                        .with_method("gw_dump_jemalloc_profiling", dump_jemalloc_profiling);
+                }
+            }
         }
 
         Ok(server.finish())
@@ -302,12 +300,43 @@ impl Request {
 struct RequestSubmitter {
     mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
     submit_rx: smol::channel::Receiver<Request>,
+    queue: Arc<Mutex<FeeQueue>>,
+    fee_config: FeeConfig,
+    store: Store,
+    generator: Arc<Generator>,
 }
 
 impl RequestSubmitter {
-    const MAX_CHANNEL_SIZE: usize = 700;
+    const MAX_CHANNEL_SIZE: usize = 1000;
     const MAX_BATCH_SIZE: usize = 20;
-    const INTERVAL_MS: Duration = Duration::from_millis(300);
+    const INTERVAL_MS: Duration = Duration::from_millis(100);
+
+    fn req_to_entry(&self, req: Request, state: &(impl State + CodeStore)) -> Result<FeeEntry> {
+        match req {
+            Request::Tx(tx) => {
+                let receiver: u32 = tx.raw().to_id().unpack();
+                let script_hash = state.get_script_hash(receiver)?;
+                let backend_type = self
+                    .generator
+                    .load_backend(state, &script_hash)
+                    .ok_or_else(|| anyhow!("can't find backend for receiver: {}", receiver))?
+                    .backend_type;
+                FeeEntry::from_tx(tx, &self.fee_config, backend_type)
+            }
+            Request::Withdrawal(withdraw) => {
+                let script_hash = withdraw.raw().account_script_hash().unpack();
+                let sender = state
+                    .get_account_id_by_script_hash(&script_hash)?
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "can't find id by script hash {}",
+                            withdraw.raw().account_script_hash()
+                        )
+                    })?;
+                FeeEntry::from_withdrawal(withdraw, sender, &self.fee_config)
+            }
+        }
+    }
 
     async fn in_background(self) {
         loop {
@@ -337,34 +366,78 @@ impl RequestSubmitter {
                 }
             };
 
-            let mut batch = Vec::with_capacity(Self::MAX_BATCH_SIZE);
-            batch.push(req);
-            while let Ok(req) = self.submit_rx.try_recv() {
-                batch.push(req);
-                if batch.len() >= Self::MAX_BATCH_SIZE {
-                    break;
+            // push items to fee priority queue
+            let mut queue = self.queue.lock().await;
+            {
+                let db = self.store.begin_transaction();
+                let state = db.mem_pool_state_tree().expect("mem pool state");
+                let kind = req.kind();
+                let hash = req.hash();
+                match self.req_to_entry(req, &state) {
+                    Ok(entry) => {
+                        queue.add(entry);
+                    }
+                    Err(err) => {
+                        log::error!(
+                            "Failed to convert req to entry kind: {}, hash: {}, err: {}",
+                            kind,
+                            hash,
+                            err
+                        );
+                    }
+                }
+                while let Ok(req) = self.submit_rx.try_recv() {
+                    let kind = req.kind();
+                    let hash = req.hash();
+                    match self.req_to_entry(req, &state) {
+                        Ok(entry) => {
+                            queue.add(entry);
+                        }
+                        Err(err) => {
+                            log::error!(
+                                "Failed to convert req to entry kind: {}, hash: {}, err: {}",
+                                kind,
+                                hash,
+                                err
+                            );
+                        }
+                    }
                 }
             }
 
-            if !batch.is_empty() {
-                let mut mem_pool = self.mem_pool.lock().await;
-                for req in batch.drain(..) {
-                    let kind = req.kind();
-                    let hash = req.hash();
+            // fetch items from PQ
+            let items = {
+                let db = self.store.begin_transaction();
+                match queue.fetch(&db, Self::MAX_BATCH_SIZE) {
+                    Ok(items) => items,
+                    Err(err) => {
+                        log::error!(
+                            "Fetch items({}) from queue({}) error: {}",
+                            Self::MAX_BATCH_SIZE,
+                            queue.len(),
+                            err
+                        );
+                        continue;
+                    }
+                }
+            };
 
-                    let maybe_ok = match req {
-                        Request::Tx(tx) => mem_pool.push_transaction(tx),
-                        Request::Withdrawal(withdrawal) => {
+            if !items.is_empty() {
+                let mut mem_pool = self.mem_pool.lock().await;
+                for entry in items {
+                    let maybe_ok = match entry.item.clone() {
+                        FeeItem::Tx(tx) => mem_pool.push_transaction(tx),
+                        FeeItem::Withdrawal(withdrawal) => {
                             mem_pool.push_withdrawal_request(withdrawal)
                         }
                     };
 
                     if let Err(err) = maybe_ok {
-                        log::info!("push {} {} failed {}", kind, hash, err);
+                        let hash: Byte32 = entry.item.hash().pack();
+                        log::info!("push {:?} {} failed {}", entry.item.kind(), hash, err);
                     }
                 }
             }
-            async_std::task::sleep(Self::INTERVAL_MS).await;
         }
     }
 }
@@ -441,18 +514,6 @@ async fn get_transaction(
     let status;
     match db.get_transaction_info(&tx_hash)? {
         Some(tx_info) => {
-            let tx_block_number = tx_info.block_number().unpack();
-
-            // return None if tx's committed block is reverted
-            if !db
-                .reverted_block_smt()?
-                .get(&RawL2Block::compute_smt_key(tx_block_number).into())?
-                .is_zero()
-            {
-                // block is reverted
-                return Ok(None);
-            }
-
             tx_opt = db.get_transaction_by_key(&tx_info.key())?;
             status = L2TransactionStatus::Committed;
         }
@@ -553,7 +614,7 @@ async fn get_block_hash(
 }
 
 async fn get_tip_block_hash(store: Data<Store>) -> Result<JsonH256> {
-    let tip_block_hash = store.get_tip_block_hash()?;
+    let tip_block_hash = store.begin_transaction().get_last_valid_tip_block_hash()?;
     Ok(to_jsonh256(tip_block_hash))
 }
 
@@ -591,7 +652,7 @@ async fn execute_l2transaction(
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
 
-    let raw_block = store.get_tip_block()?.raw();
+    let raw_block = store.begin_transaction().get_last_valid_tip_block()?.raw();
     let block_producer_id = raw_block.block_producer_id();
     let timestamp = raw_block.timestamp();
     let number = {
@@ -607,12 +668,10 @@ async fn execute_l2transaction(
 
     let tx_hash = tx.hash();
     let mut run_result = unblock(move || {
-        let tip_block_hash = store.get_tip_block_hash()?;
         let db = store.begin_transaction();
-        let state_db =
-            gw_mem_pool::pool::fetch_state_db_with_mode(&db, MemBlockDBMode::NewBlock, number)?;
-        let state = state_db.state_tree()?;
+        let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
+        let state = db.mem_pool_state_tree()?;
         // verify tx signature
         generator.check_transaction_signature(&state, &tx)?;
         // tx basic verification
@@ -705,22 +764,33 @@ async fn execute_raw_l2transaction(
 
     // execute tx in task
     let mut run_result = unblock(move || {
-        let state_db = get_state_db_at_block(&db, block_number_opt.map(Into::into), true)
-            .map_err(|_err| anyhow!("get state db error"))?;
-        let state = state_db.state_tree()?;
         let chain_view = {
-            let tip_block_hash = db.get_tip_block_hash()?;
+            let tip_block_hash = db.get_last_valid_tip_block_hash()?;
             ChainView::new(&db, tip_block_hash)
         };
         // execute tx
-        let run_result = generator.unchecked_execute_transaction(
-            &chain_view,
-            &state,
-            &block_info,
-            &raw_l2tx,
-            execute_l2tx_max_cycles,
-        )?;
-
+        let run_result = match block_number_opt {
+            Some(block_number) => {
+                let state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
+                generator.unchecked_execute_transaction(
+                    &chain_view,
+                    &state,
+                    &block_info,
+                    &raw_l2tx,
+                    execute_l2tx_max_cycles,
+                )?
+            }
+            None => {
+                let state = db.mem_pool_state_tree()?;
+                generator.unchecked_execute_transaction(
+                    &chain_view,
+                    &state,
+                    &block_info,
+                    &raw_l2tx,
+                    execute_l2tx_max_cycles,
+                )?
+            }
+        };
         Result::<_, anyhow::Error>::Ok(run_result)
     })
     .await?;
@@ -747,18 +817,24 @@ async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     store: Data<Store>,
     submit_tx: Data<smol::channel::Sender<Request>>,
-    rate_limiter: Data<SendTransactionRateLimiter>,
+    rate_limiter: Data<Option<SendTransactionRateLimiter>>,
+    rate_limit_config: Data<Option<RPCRateLimit>>,
 ) -> Result<JsonH256, RpcError> {
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
     let tx_hash = to_jsonh256(tx.hash().into());
 
     // check rate limit
-    {
+    if let Some(rate_limiter) = rate_limiter.as_ref() {
         let mut rate_limiter = rate_limiter.lock().await;
         let sender_id: u32 = tx.raw().from_id().unpack();
         if let Some(last_touch) = rate_limiter.get(&sender_id) {
-            if last_touch.elapsed().as_secs() < SEND_TX_RATE_LIMIT_SECONDS {
+            if last_touch.elapsed().as_secs()
+                < rate_limit_config
+                    .as_ref()
+                    .map(|c| c.seconds)
+                    .unwrap_or_default()
+            {
                 return Err(rate_limit_err());
             }
         }
@@ -769,8 +845,7 @@ async fn submit_l2transaction(
     {
         // fetch mem-pool state
         let db = store.begin_transaction();
-        let state_db = get_state_db_at_block(&db, None, true)?;
-        let tree = state_db.state_tree()?;
+        let tree = db.mem_pool_state_tree()?;
         // sender_id
         let sender_id = tx.raw().from_id().unpack();
         let sender_nonce: u32 = tree.get_nonce(sender_id)?;
@@ -818,15 +893,16 @@ async fn submit_withdrawal_request(
     store: Data<Store>,
     submit_tx: Data<smol::channel::Sender<Request>>,
     rpc_client: Data<RPCClient>,
-) -> Result<(), RpcError> {
+) -> Result<JsonH256, RpcError> {
     let withdrawal_bytes = withdrawal_request.into_bytes();
     let withdrawal = packed::WithdrawalRequest::from_slice(&withdrawal_bytes)?;
+    let withdrawal_hash = withdrawal.hash();
 
     // verify finalized custodian
     {
         let finalized_custodians = {
-            let tip = store.get_tip_block()?;
             let db = store.begin_transaction();
+            let tip = db.get_last_valid_tip_block()?;
             // query withdrawals from ckb-indexer
             let last_finalized_block_number = generator
                 .rollup_context()
@@ -873,7 +949,75 @@ async fn submit_withdrawal_request(
         }
     }
 
-    Ok(())
+    Ok(withdrawal_hash.into())
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum GetWithdrawalParams {
+    Default((JsonH256,)),
+    WithVerbose((JsonH256, u8)),
+}
+
+enum GetWithdrawalVerbose {
+    WithdrawalWithStatus = 0,
+    OnlyStatus = 1,
+}
+
+impl TryFrom<u8> for GetWithdrawalVerbose {
+    type Error = u8;
+    fn try_from(n: u8) -> Result<Self, u8> {
+        let verbose = match n {
+            0 => Self::WithdrawalWithStatus,
+            1 => Self::OnlyStatus,
+            _ => {
+                return Err(n);
+            }
+        };
+        Ok(verbose)
+    }
+}
+
+async fn get_withdrawal(
+    Params(param): Params<GetWithdrawalParams>,
+    store: Data<Store>,
+) -> Result<Option<WithdrawalWithStatus>, RpcError> {
+    let (withdrawal_hash, verbose) = match param {
+        GetWithdrawalParams::Default((withdrawal_hash,)) => (
+            to_h256(withdrawal_hash),
+            GetWithdrawalVerbose::WithdrawalWithStatus,
+        ),
+        GetWithdrawalParams::WithVerbose((withdrawal_hash, verbose)) => {
+            let verbose = verbose
+                .try_into()
+                .map_err(|_err| invalid_param_err("invalid verbose param"))?;
+            (to_h256(withdrawal_hash), verbose)
+        }
+    };
+    let db = store.begin_transaction();
+    let withdrawal_opt;
+    let status;
+    match db.get_withdrawal_info(&withdrawal_hash)? {
+        Some(withdrawal_info) => {
+            withdrawal_opt = db.get_withdrawal_by_key(&withdrawal_info.key())?;
+            status = WithdrawalStatus::Committed;
+        }
+        None => {
+            withdrawal_opt = db.get_mem_pool_withdrawal(&withdrawal_hash)?;
+            status = WithdrawalStatus::Pending;
+        }
+    };
+
+    Ok(withdrawal_opt.map(|withdrawal| match verbose {
+        GetWithdrawalVerbose::OnlyStatus => WithdrawalWithStatus {
+            withdrawal: None,
+            status,
+        },
+        GetWithdrawalVerbose::WithdrawalWithStatus => WithdrawalWithStatus {
+            withdrawal: Some(withdrawal.into()),
+            status,
+        },
+    }))
 }
 
 // short_address, sudt_id, block_number
@@ -886,7 +1030,6 @@ enum GetBalanceParams {
 
 async fn get_balance(
     Params(params): Params<GetBalanceParams>,
-    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<Uint128, RpcError> {
     let (short_address, sudt_id, block_number) = match params {
@@ -895,9 +1038,16 @@ async fn get_balance(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some())?;
-    let tree = state_db.state_tree()?;
-    let balance = tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?;
+    let balance = match block_number {
+        Some(block_number) => {
+            let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
+            tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?
+        }
+        None => {
+            let tree = db.mem_pool_state_tree()?;
+            tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?
+        }
+    };
     Ok(balance.into())
 }
 
@@ -911,7 +1061,6 @@ enum GetStorageAtParams {
 
 async fn get_storage_at(
     Params(params): Params<GetStorageAtParams>,
-    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<JsonH256, RpcError> {
     let (account_id, key, block_number) = match params {
@@ -920,11 +1069,18 @@ async fn get_storage_at(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some())?;
-
-    let tree = state_db.state_tree()?;
-    let key: H256 = to_h256(key);
-    let value = tree.get_value(account_id.into(), &key)?;
+    let value = match block_number {
+        Some(block_number) => {
+            let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
+            let key: H256 = to_h256(key);
+            tree.get_value(account_id.into(), &key)?
+        }
+        None => {
+            let tree = db.mem_pool_state_tree()?;
+            let key: H256 = to_h256(key);
+            tree.get_value(account_id.into(), &key)?
+        }
+    };
 
     let json_value = to_jsonh256(value);
     Ok(json_value)
@@ -932,12 +1088,10 @@ async fn get_storage_at(
 
 async fn get_account_id_by_script_hash(
     Params((script_hash,)): Params<(JsonH256,)>,
-    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<Option<AccountID>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some())?;
-    let tree = state_db.state_tree()?;
+    let tree = db.mem_pool_state_tree()?;
 
     let script_hash = to_h256(script_hash);
 
@@ -958,7 +1112,6 @@ enum GetNonceParams {
 
 async fn get_nonce(
     Params(params): Params<GetNonceParams>,
-    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<Uint32, RpcError> {
     let (account_id, block_number) = match params {
@@ -967,22 +1120,26 @@ async fn get_nonce(
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some())?;
-    let tree = state_db.state_tree()?;
-
-    let nonce = tree.get_nonce(account_id.into())?;
+    let nonce = match block_number {
+        Some(block_number) => {
+            let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
+            tree.get_nonce(account_id.into())?
+        }
+        None => {
+            let tree = db.mem_pool_state_tree()?;
+            tree.get_nonce(account_id.into())?
+        }
+    };
 
     Ok(nonce.into())
 }
 
 async fn get_script(
     Params((script_hash,)): Params<(JsonH256,)>,
-    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<Option<Script>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some())?;
-    let tree = state_db.state_tree()?;
+    let tree = db.mem_pool_state_tree()?;
 
     let script_hash = to_h256(script_hash);
     let script_opt = tree.get_script(&script_hash).map(Into::into);
@@ -992,12 +1149,10 @@ async fn get_script(
 
 async fn get_script_hash(
     Params((account_id,)): Params<(AccountID,)>,
-    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<JsonH256, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some())?;
-    let tree = state_db.state_tree()?;
+    let tree = db.mem_pool_state_tree()?;
 
     let script_hash = tree.get_script_hash(account_id.into())?;
     Ok(to_jsonh256(script_hash))
@@ -1005,12 +1160,10 @@ async fn get_script_hash(
 
 async fn get_script_hash_by_short_address(
     Params((short_address,)): Params<(JsonBytes,)>,
-    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<Option<JsonH256>, RpcError> {
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, None, mem_pool.is_some())?;
-    let tree = state_db.state_tree()?;
+    let tree = db.mem_pool_state_tree()?;
     let script_hash_opt = tree.get_script_hash_by_short_address(&short_address.into_bytes());
     Ok(script_hash_opt.map(to_jsonh256))
 }
@@ -1025,17 +1178,15 @@ enum GetDataParams {
 
 async fn get_data(
     Params(params): Params<GetDataParams>,
-    mem_pool: Data<MemPool>,
     store: Data<Store>,
 ) -> Result<Option<JsonBytes>, RpcError> {
-    let (data_hash, block_number) = match params {
+    let (data_hash, _block_number) = match params {
         GetDataParams::Tip(p) => (p.0, None),
         GetDataParams::Number(p) => p,
     };
 
     let db = store.begin_transaction();
-    let state_db = get_state_db_at_block(&db, block_number, mem_pool.is_some())?;
-    let tree = state_db.state_tree()?;
+    let tree = db.mem_pool_state_tree()?;
 
     let data_opt = tree
         .get_data(&to_h256(data_hash))
@@ -1060,6 +1211,23 @@ async fn get_node_info(backend_info: Data<Vec<BackendInfo>>) -> Result<NodeInfo>
     })
 }
 
+async fn get_fee_config(fee: Data<FeeConfig>) -> Result<gw_jsonrpc_types::godwoken::FeeConfig> {
+    let fee_config = gw_jsonrpc_types::godwoken::FeeConfig {
+        meta_cycles_limit: fee.meta_cycles_limit.into(),
+        sudt_cycles_limit: fee.sudt_cycles_limit.into(),
+        withdraw_cycles_limit: fee.withdraw_cycles_limit.into(),
+        sudt_fee_rate_weight: fee
+            .sudt_fee_rate_weight
+            .iter()
+            .map(|(&sudt_id, &fee_rate_weight)| SUDTFeeConfig {
+                sudt_id: sudt_id.into(),
+                fee_rate_weight: fee_rate_weight.into(),
+            })
+            .collect(),
+    };
+    Ok(fee_config)
+}
+
 async fn tests_produce_block(
     Params((payload,)): Params<(TestModePayload,)>,
     tests_rpc_impl: Data<BoxedTestsRPCImpl>,
@@ -1077,65 +1245,67 @@ async fn tests_should_produce_block(
     tests_rpc_impl.should_produce_block().await
 }
 
-async fn debug_dump_cancel_challenge_tx(
-    Params((target,)): Params<(DumpChallengeTarget,)>,
-    chain: Data<Arc<Mutex<Chain>>>,
-    offchain_mock_context: Data<Option<OffChainMockContext>>,
-) -> Result<ReprMockTransaction, RpcError> {
-    let offchain_mock_context = match *offchain_mock_context {
-        Some(ref ctx) => ctx,
-        None => {
-            return Err(RpcError::Provided {
-                code: INTERNAL_ERROR_ERR_CODE,
-                message: "offchain validator is not enable, unable to dump cancel challenge tx",
-            })
+async fn start_profiler() -> Result<()> {
+    log::info!("profiler started");
+    *PROFILER_GUARD.lock().unwrap() = Some(ProfilerGuard::new(100).unwrap());
+    Ok(())
+}
+
+async fn report_pprof() -> Result<()> {
+    if let Some(profiler) = PROFILER_GUARD.lock().unwrap().take() {
+        smol::spawn(async move {
+            if let Ok(report) = profiler.report().build() {
+                let file = std::fs::File::create("/code/workspace/flamegraph.svg").unwrap();
+                let mut options = pprof::flamegraph::Options::default();
+                options.image_width = Some(2500);
+                report.flamegraph_with_options(file, &mut options).unwrap();
+            }
+        })
+        .detach()
+    }
+    Ok(())
+}
+
+// async fn dump_mem_block(mem_pool_batch: Data<Option<MemPoolBatch>>) -> Result<JsonBytes, RpcError> {
+//     let mem_pool_batch = match &*mem_pool_batch {
+//         Some(mem_pool_batch) => mem_pool_batch,
+//         None => {
+//             return Err(mem_pool_is_disabled_err());
+//         }
+//     };
+
+//     let mem_block = mem_pool_batch.dump_mem_block()?.await?;
+
+//     Ok(JsonBytes::from_bytes(mem_block.as_bytes()))
+// }
+
+async fn get_rocksdb_memory_stats(store: Data<Store>) -> Result<Vec<CfMemStat>, RpcError> {
+    Ok(store.gather_mem_stats())
+}
+
+async fn dump_jemalloc_profiling() -> Result<()> {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let filename = format!("godwoken-jeprof-{}-heap", timestamp);
+
+    let mut filename0 = format!("{}\0", filename);
+    let opt_name = "prof.dump";
+    let opt_c_name = std::ffi::CString::new(opt_name).unwrap();
+    log::info!("jemalloc profiling dump: {}", filename);
+    unsafe {
+        let ret = jemalloc_sys::mallctl(
+            opt_c_name.as_ptr(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut filename0 as *mut _ as *mut _,
+            std::mem::size_of::<*mut std::ffi::c_void>(),
+        );
+        if ret != 0 {
+            log::error!("dump failure {:?}", errno::Errno(ret));
         }
-    };
+    }
 
-    let to_block_hash = |chain: &Chain, block_number: u64| -> Result<H256, RpcError> {
-        let db = chain.store().begin_transaction();
-        match db.get_block_hash_by_number(block_number) {
-            Ok(Some(hash)) => Ok(hash),
-            Ok(None) => Err(RpcError::Provided {
-                code: INVALID_PARAM_ERR_CODE,
-                message: "block hash not found",
-            }),
-            Err(err) => Err(RpcError::Full {
-                code: INTERNAL_ERROR_ERR_CODE,
-                message: err.to_string(),
-                data: None,
-            }),
-        }
-    };
-
-    let chain = chain.lock().await;
-    let (block_hash, target_index, target_type) = match target {
-        DumpChallengeTarget::ByBlockHash {
-            block_hash,
-            target_index,
-            target_type,
-        } => (to_h256(block_hash), target_index, target_type),
-        DumpChallengeTarget::ByBlockNumber {
-            block_number,
-            target_index,
-            target_type,
-        } => (
-            to_block_hash(&chain, block_number.into())?,
-            target_index,
-            target_type,
-        ),
-    };
-
-    let target = gw_types::packed::ChallengeTarget::new_builder()
-        .block_hash(Into::<[u8; 32]>::into(block_hash).pack())
-        .target_index(target_index.value().pack())
-        .target_type(target_type.into())
-        .build();
-
-    let maybe_tx = chain.dump_cancel_challenge_tx(offchain_mock_context, target);
-    maybe_tx.map_err(|err| RpcError::Full {
-        code: INTERNAL_ERROR_ERR_CODE,
-        message: err.to_string(),
-        data: None,
-    })
+    Ok(())
 }

@@ -15,10 +15,7 @@ use ckb_hash::blake2b_256;
 use ckb_types::H256;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_common::state::State;
-use gw_store::{
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState},
-    Store,
-};
+use gw_store::{state::state_db::StateContext, Store};
 use gw_traits::CodeStore;
 use gw_types::packed::{
     L2Block, RollupAction, RollupActionReader, RollupActionUnion, Transaction, WitnessArgs,
@@ -64,7 +61,26 @@ impl Web3Indexer {
         }
     }
 
-    pub async fn store_genesis(&self, store: Store) -> Result<()> {
+    pub async fn fix_missing_blocks(&self, store: &Store) -> Result<()> {
+        let tip = store.begin_transaction().get_last_valid_tip_block()?;
+        let tip_number: u64 = tip.raw().number().unpack();
+        for number in tip_number.saturating_sub(20000)..=tip_number {
+            if self.query_number(number).await?.is_none() {
+                let block = {
+                    let db = store.begin_transaction();
+                    let block_hash = db
+                        .get_block_hash_by_number(number)?
+                        .expect("get block hash");
+                    db.get_block(&block_hash)?.expect("get block")
+                };
+                log::info!("Fix missing block #{}", number);
+                self.insert_l2block(store, block).await?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn store_genesis(&self, store: &Store) -> Result<()> {
         let row: Option<(Decimal,)> =
             sqlx::query_as("SELECT number FROM blocks WHERE number=0 LIMIT 1")
                 .fetch_optional(&self.pool)
@@ -85,7 +101,7 @@ impl Web3Indexer {
         Ok(())
     }
 
-    pub async fn store(&self, store: Store, l1_transaction: &Transaction) -> Result<()> {
+    pub async fn store(&self, store: &Store, l1_transaction: &Transaction) -> Result<()> {
         let l2_block = match self.extract_l2_block(l1_transaction)? {
             Some(block) => block,
             None => return Err(anyhow!("can't find l2 block from l1 transaction")),
@@ -117,7 +133,7 @@ impl Web3Indexer {
         Ok(row.and_then(|(n,)| n.to_u64()))
     }
 
-    async fn insert_l2block(&self, store: Store, l2_block: L2Block) -> Result<()> {
+    async fn insert_l2block(&self, store: &Store, l2_block: L2Block) -> Result<()> {
         let web3_tx_with_logs_vec = self
             .filter_web3_transactions(store.clone(), l2_block.clone())
             .await?;
@@ -519,13 +535,7 @@ impl Web3Indexer {
 
 async fn get_script_hash(store: Store, account_id: u32) -> Result<gw_common::H256> {
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_checkpoint(
-        &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
-        StateDBMode::ReadOnly,
-    )?;
-    let tree = state_db.state_tree()?;
+    let tree = db.state_tree(StateContext::ReadOnly)?;
 
     let script_hash = tree.get_script_hash(account_id)?;
     Ok(script_hash)
@@ -533,13 +543,7 @@ async fn get_script_hash(store: Store, account_id: u32) -> Result<gw_common::H25
 
 async fn get_script(store: Store, script_hash: gw_common::H256) -> Result<Option<Script>> {
     let db = store.begin_transaction();
-    let tip_hash = db.get_tip_block_hash()?;
-    let state_db = StateDBTransaction::from_checkpoint(
-        &db,
-        CheckPoint::from_block_hash(&db, tip_hash, SubState::Block)?,
-        StateDBMode::ReadOnly,
-    )?;
-    let tree = state_db.state_tree()?;
+    let tree = db.state_tree(StateContext::ReadOnly)?;
 
     let script_opt = tree.get_script(&script_hash);
     Ok(script_opt)

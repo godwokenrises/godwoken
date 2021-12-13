@@ -128,7 +128,7 @@ impl From<ErrorTxReceipt> for ErrorReceiptRecord {
                 };
 
                 // First 4 bytes are func signature
-                let data = if receipt.return_data.len() >= 4 {
+                let data = if receipt.return_data.len() > 4 {
                     &receipt.return_data[4..]
                 } else {
                     &receipt.return_data[..]

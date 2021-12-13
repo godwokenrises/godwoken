@@ -1,6 +1,7 @@
 pub mod db;
 pub mod error;
 pub mod iter;
+pub mod memory_stats;
 pub mod schema;
 pub mod snapshot;
 pub mod transaction;
@@ -9,6 +10,7 @@ pub mod write_batch;
 // re-exports
 pub use crate::db::RocksDB;
 pub use crate::iter::DBIterator;
+pub use crate::memory_stats::CfMemStat;
 pub use crate::snapshot::RocksDBSnapshot;
 pub use crate::transaction::{RocksDBTransaction, RocksDBTransactionSnapshot};
 pub use crate::write_batch::RocksDBWriteBatch;

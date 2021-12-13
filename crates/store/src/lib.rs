@@ -1,12 +1,13 @@
 pub mod chain_view;
-mod constant;
-pub mod smt_store_impl;
-pub mod state_db;
+pub mod mem_pool_store;
+pub mod smt;
+pub mod state;
 mod store_impl;
 pub mod traits;
 pub mod transaction;
 mod write_batch;
 
+pub use gw_db::memory_stats::CfMemStat;
 pub use store_impl::Store;
 
 #[cfg(test)]

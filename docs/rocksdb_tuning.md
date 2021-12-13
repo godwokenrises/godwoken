@@ -16,6 +16,22 @@ keep_log_file_num=32
 
 [CFOptions "default"]
 level_compaction_dynamic_level_bytes=true
+write_buffer_size=134217728
+min_write_buffer_number_to_merge=1
+max_write_buffer_number=2
+max_write_buffer_size_to_maintain=-1
+
+[CFOptions "18"]
+prefix_extractor=8
+level_compaction_dynamic_level_bytes=true
+write_buffer_size=67108864
+min_write_buffer_number_to_merge=1
+max_write_buffer_number=2
+max_write_buffer_size_to_maintain=-1
+
+[CFOptions "20"]
+prefix_extractor=32
+level_compaction_dynamic_level_bytes=true
 write_buffer_size=67108864
 min_write_buffer_number_to_merge=1
 max_write_buffer_number=2
@@ -23,6 +39,7 @@ max_write_buffer_size_to_maintain=-1
 
 [TableOptions/BlockBasedTable "default"]
 pin_l0_filter_and_index_blocks_in_cache=true
+cache_index_and_filter_blocks=true
 ```
 
 use db.toml in the godwoken config:
@@ -31,5 +48,3 @@ use db.toml in the godwoken config:
 path = 'tuning_db/store.db'
 options_file = 'db.toml'
 ```
-
-Do not set **cache_index_and_filter_blocks=true**. That will cause a performance degradation.

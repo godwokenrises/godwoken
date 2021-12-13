@@ -36,6 +36,13 @@ table TxReceipt {
     logs: LogItemVec,
 }
 
+array WithdrawalKey [byte; 36];
+
+struct WithdrawalInfo {
+    block_number:   Uint64,
+    key:            WithdrawalKey,
+}
+
 table WithdrawalReceipt {
     post_state: AccountMerkleState,
 }

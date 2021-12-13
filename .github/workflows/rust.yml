@@ -30,3 +30,5 @@ jobs:
       run: devtools/fetch-binaries.sh
     - name: Tests
       run: cargo test --all-targets
+    - name: Test TOML serialization
+      run: cargo run --bin godwoken -- generate-example-config -o test.toml

@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Instant,
+};
 
 use crate::{
     account_lock_manage::AccountLockManage,
@@ -26,10 +29,7 @@ use gw_common::{
     H256,
 };
 use gw_config::RPCConfig;
-use gw_store::{
-    state_db::{CheckPoint, StateDBMode, StateDBTransaction, SubState, WriteContext},
-    transaction::StoreTransaction,
-};
+use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
 use gw_traits::{ChainStore, CodeStore};
 use gw_tx_filter::polyjuice_contract_creator_allowlist::PolyjuiceContractCreatorAllowList;
 use gw_types::{
@@ -84,19 +84,29 @@ impl Generator {
         backend_manage: BackendManage,
         account_lock_manage: AccountLockManage,
         rollup_context: RollupContext,
-        rpc_config: RPCConfig,
+        rpc_config: Option<RPCConfig>,
     ) -> Self {
-        let polyjuice_contract_creator_allowlist =
-            PolyjuiceContractCreatorAllowList::from_rpc_config(&rpc_config);
+        let polyjuice_contract_creator_allowlist;
+        let sudt_proxy_account_whitelist;
+        match rpc_config {
+            Some(rpc_config) => {
+                polyjuice_contract_creator_allowlist =
+                    PolyjuiceContractCreatorAllowList::from_rpc_config(&rpc_config);
 
-        let sudt_proxy_account_whitelist = SUDTProxyAccountAllowlist::new(
-            rpc_config.allowed_sudt_proxy_creator_account_id,
-            rpc_config
-                .sudt_proxy_code_hashes
-                .into_iter()
-                .map(|hash| hash.0.into())
-                .collect(),
-        );
+                sudt_proxy_account_whitelist = SUDTProxyAccountAllowlist::new(
+                    rpc_config.allowed_sudt_proxy_creator_account_id,
+                    rpc_config
+                        .sudt_proxy_code_hashes
+                        .into_iter()
+                        .map(|hash| hash.0.into())
+                        .collect(),
+                );
+            }
+            None => {
+                polyjuice_contract_creator_allowlist = None;
+                sudt_proxy_account_whitelist = Default::default();
+            }
+        }
 
         Generator {
             backend_manage,
@@ -364,60 +374,14 @@ impl Generator {
     ) -> ApplyBlockResult {
         let raw_block = args.l2block.raw();
         let block_info = get_block_info(&raw_block);
-
-        let tx_offset = args.l2block.withdrawals().len() as u32;
         let block_number = raw_block.number().unpack();
-        macro_rules! state_db {
-            ($sub_state:expr) => {
-                match StateDBTransaction::from_checkpoint(
-                    db,
-                    CheckPoint::new(block_number, $sub_state),
-                    StateDBMode::Write(WriteContext::new(tx_offset)),
-                ) {
-                    Ok(state_db) => state_db,
-                    Err(err) => {
-                        log::error!("next state {}", err);
-                        return ApplyBlockResult::Error(Error::State(StateError::Store));
-                    }
-                }
-            };
-        }
-        macro_rules! get_state {
-            ($state_db:expr) => {
-                match $state_db.state_tree() {
-                    Ok(state) => state,
-                    Err(err) => {
-                        log::error!("next state {}", err);
-                        return ApplyBlockResult::Error(Error::State(StateError::Store));
-                    }
-                }
-            };
-            ($state_db:expr, $merkle_state:expr) => {
-                match $state_db.state_tree_with_merkle_state($merkle_state) {
-                    Ok(state) => state,
-                    Err(err) => {
-                        log::error!("next state {}", err);
-                        return ApplyBlockResult::Error(Error::State(StateError::Store));
-                    }
-                }
-            };
-        }
 
-        let mut account_state = {
-            let parent_number = block_number.saturating_sub(1);
-            let state_db = match StateDBTransaction::from_checkpoint(
-                db,
-                CheckPoint::new(parent_number, SubState::Block),
-                StateDBMode::ReadOnly,
-            ) {
-                Ok(state_db) => state_db,
-                Err(err) => {
-                    log::error!("failed to get state {}", err);
-                    return ApplyBlockResult::Error(Error::State(StateError::Store));
-                }
-            };
-            let state = &mut get_state!(state_db);
-            state.get_merkle_state()
+        let mut state = match db.state_tree(StateContext::AttachBlock(block_number)) {
+            Ok(state) => state,
+            Err(err) => {
+                log::error!("next state {}", err);
+                return ApplyBlockResult::Error(Error::State(StateError::Store));
+            }
         };
 
         // apply withdrawal to state
@@ -426,12 +390,13 @@ impl Generator {
         let block_producer_id: u32 = block_info.block_producer_id().unpack();
         let state_checkpoint_list: Vec<H256> = raw_block.state_checkpoint_list().unpack();
 
+        let mut check_signature_total_ms = 0;
+        let mut execute_tx_total_ms = 0;
+        let mut apply_state_total_ms = 0;
         let mut withdrawal_receipts = Vec::with_capacity(withdrawal_requests.len());
         for (wth_idx, request) in withdrawal_requests.into_iter().enumerate() {
-            let state_db = state_db!(SubState::Withdrawal(wth_idx as u32));
-            let state = &mut get_state!(state_db, account_state.clone());
-
-            if let Err(error) = self.check_withdrawal_request_signature(state, &request) {
+            let now = Instant::now();
+            if let Err(error) = self.check_withdrawal_request_signature(&state, &request) {
                 let target = build_challenge_target(
                     block_hash.into(),
                     ChallengeTargetType::Withdrawal,
@@ -440,6 +405,7 @@ impl Generator {
 
                 return ApplyBlockResult::Challenge { target, error };
             }
+            check_signature_total_ms += now.elapsed().as_millis();
 
             let withdrawal_receipt = match state.apply_withdrawal_request(
                 &self.rollup_context,
@@ -449,7 +415,7 @@ impl Generator {
                 Ok(receipt) => receipt,
                 Err(err) => return ApplyBlockResult::Error(err),
             };
-            account_state = state.get_merkle_state();
+            let account_state = state.get_merkle_state();
             let expected_checkpoint = calculate_state_checkpoint(
                 &account_state.merkle_root().unpack(),
                 account_state.count().unpack(),
@@ -471,15 +437,12 @@ impl Generator {
         }
 
         // apply deposition to state
-        let state_db = state_db!(SubState::PrevTxs);
-        let state = &mut get_state!(state_db, account_state.clone());
         if let Err(err) = state.apply_deposit_requests(&self.rollup_context, &args.deposit_requests)
         {
             return ApplyBlockResult::Error(err);
         }
 
         let prev_txs_state = state.get_merkle_state();
-        account_state = prev_txs_state.clone();
 
         // handle transactions
         let mut offchain_used_cycles: u64 = 0;
@@ -498,10 +461,8 @@ impl Generator {
                 tx_index,
                 hex::encode(tx.hash())
             );
-            let state_db = state_db!(SubState::Tx(tx_index as u32));
-            let state = &mut get_state!(state_db, account_state.clone());
-
-            if let Err(err) = self.check_transaction_signature(state, &tx) {
+            let now = Instant::now();
+            if let Err(err) = self.check_transaction_signature(&state, &tx) {
                 let target = build_challenge_target(
                     block_hash.into(),
                     ChallengeTargetType::TxSignature,
@@ -513,6 +474,7 @@ impl Generator {
                     error: err.into(),
                 };
             }
+            check_signature_total_ms += now.elapsed().as_millis();
 
             // check nonce
             let raw_tx = tx.raw();
@@ -538,29 +500,37 @@ impl Generator {
 
             // build call context
             // NOTICE users only allowed to send HandleMessage CallType txs
-            let run_result =
-                match self.execute_transaction(chain, state, &block_info, &raw_tx, L2TX_MAX_CYCLES)
-                {
-                    Ok(run_result) => run_result,
-                    Err(err) => {
-                        let target = build_challenge_target(
-                            block_hash.into(),
-                            ChallengeTargetType::TxExecution,
-                            tx_index as u32,
-                        );
+            let now = Instant::now();
+            let run_result = match self.execute_transaction(
+                chain,
+                &state,
+                &block_info,
+                &raw_tx,
+                L2TX_MAX_CYCLES,
+            ) {
+                Ok(run_result) => run_result,
+                Err(err) => {
+                    let target = build_challenge_target(
+                        block_hash.into(),
+                        ChallengeTargetType::TxExecution,
+                        tx_index as u32,
+                    );
 
-                        return ApplyBlockResult::Challenge {
-                            target,
-                            error: Error::Transaction(err),
-                        };
-                    }
-                };
+                    return ApplyBlockResult::Challenge {
+                        target,
+                        error: Error::Transaction(err),
+                    };
+                }
+            };
+            execute_tx_total_ms += now.elapsed().as_millis();
 
             {
+                let now = Instant::now();
                 if let Err(err) = state.apply_run_result(&run_result) {
                     return ApplyBlockResult::Error(err);
                 }
-                account_state = state.get_merkle_state();
+                apply_state_total_ms += now.elapsed().as_millis();
+                let account_state = state.get_merkle_state();
 
                 let expected_checkpoint = calculate_state_checkpoint(
                     &account_state.merkle_root().unpack(),
@@ -608,6 +578,29 @@ impl Generator {
             }
         }
 
+        // check post state
+        if !skip_checkpoint_check {
+            let post_merkle_root: H256 = raw_block.post_account().merkle_root().unpack();
+            let post_merkle_count: u32 = raw_block.post_account().count().unpack();
+            assert_eq!(
+                state.calculate_root().expect("check post root"),
+                post_merkle_root,
+                "post account merkle root must be consistent"
+            );
+            assert_eq!(
+                state.get_account_count().expect("check post count"),
+                post_merkle_count,
+                "post account merkle count must be consistent"
+            );
+        }
+
+        log::debug!(
+            "signature {}ms execute tx {}ms apply state {}ms",
+            check_signature_total_ms,
+            execute_tx_total_ms,
+            apply_state_total_ms
+        );
+
         ApplyBlockResult::Success {
             withdrawal_receipts,
             prev_txs_state,
@@ -616,7 +609,11 @@ impl Generator {
         }
     }
 
-    fn load_backend<S: State + CodeStore>(&self, state: &S, script_hash: &H256) -> Option<Backend> {
+    pub fn load_backend<S: State + CodeStore>(
+        &self,
+        state: &S,
+        script_hash: &H256,
+    ) -> Option<Backend> {
         log::debug!(
             "load_backend for script_hash: {}",
             hex::encode(script_hash.as_slice())
@@ -705,8 +702,16 @@ impl Generator {
                 .load_backend(state, &script_hash)
                 .ok_or(TransactionError::BackendNotFound { script_hash })?;
             machine.load_program(&backend.generator, &[])?;
+            let t = Instant::now();
             exit_code = machine.run()?;
             used_cycles = machine.machine.cycles();
+            log::debug!(
+                "[execute tx] VM run time: {}ms, exit code: {} used_cycles: {} backend: {:?}",
+                t.elapsed().as_millis(),
+                exit_code,
+                used_cycles,
+                backend.backend_type
+            );
         }
         // record used cycles
         run_result.used_cycles = used_cycles;

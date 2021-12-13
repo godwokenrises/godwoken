@@ -20,6 +20,7 @@ use gw_types::{
     prelude::*,
 };
 
+#[derive(Clone)]
 pub struct ProduceBlockResult {
     pub block: L2Block,
     pub global_state: GlobalState,

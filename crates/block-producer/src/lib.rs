@@ -6,6 +6,7 @@ pub mod debugger;
 pub mod deposit;
 pub mod poller;
 pub mod produce_block;
+pub mod replay_block;
 pub mod runner;
 pub mod stake;
 pub mod test_mode_control;

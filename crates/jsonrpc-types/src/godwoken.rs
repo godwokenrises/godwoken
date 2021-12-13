@@ -513,6 +513,26 @@ pub struct L2TransactionWithStatus {
     pub status: L2TransactionStatus,
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum WithdrawalStatus {
+    Pending,
+    Committed,
+}
+
+impl Default for WithdrawalStatus {
+    fn default() -> Self {
+        Self::Pending
+    }
+}
+
+#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct WithdrawalWithStatus {
+    pub withdrawal: Option<WithdrawalRequest>,
+    pub status: WithdrawalStatus,
+}
+
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct SubmitTransactions {
@@ -1057,4 +1077,20 @@ impl From<offchain::ErrorTxReceipt> for ErrorTxReceipt {
             last_log: receipt.last_log.map(Into::into),
         }
     }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct SUDTFeeConfig {
+    pub sudt_id: Uint32,
+    pub fee_rate_weight: Uint64,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct FeeConfig {
+    pub meta_cycles_limit: Uint64,
+    pub sudt_cycles_limit: Uint64,
+    pub withdraw_cycles_limit: Uint64,
+    pub sudt_fee_rate_weight: Vec<SUDTFeeConfig>,
 }

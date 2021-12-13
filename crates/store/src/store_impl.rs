@@ -1,16 +1,21 @@
 //! Storage implementation
 
-use crate::transaction::StoreTransaction;
+use std::sync::Arc;
+
+use crate::mem_pool_store::{MemPoolStore, MEM_POOL_COLUMNS};
 use crate::write_batch::StoreWriteBatch;
+use crate::{state::state_db::StateContext, transaction::StoreTransaction};
 use anyhow::Result;
+use arc_swap::ArcSwap;
+use gw_common::smt::Blake2bHasher;
 use gw_common::{error::Error, smt::H256};
 use gw_db::{
     schema::{
-        Col, COLUMNS, COLUMN_BLOCK, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_L2BLOCK_COMMITTED_INFO,
-        COLUMN_META, COLUMN_TRANSACTION, COLUMN_TRANSACTION_RECEIPT, META_CHAIN_ID_KEY,
-        META_TIP_BLOCK_HASH_KEY,
+        Col, COLUMNS, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE,
+        COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META, COLUMN_TRANSACTION,
+        COLUMN_TRANSACTION_RECEIPT, META_CHAIN_ID_KEY, META_TIP_BLOCK_HASH_KEY,
     },
-    DBPinnableSlice, RocksDB,
+    CfMemStat, DBPinnableSlice, RocksDB,
 };
 use gw_types::{
     offchain::global_state_from_slice,
@@ -21,11 +26,18 @@ use gw_types::{
 #[derive(Clone)]
 pub struct Store {
     db: RocksDB,
+    mem_pool: Arc<ArcSwap<MemPoolStore>>,
 }
 
 impl<'a> Store {
     pub fn new(db: RocksDB) -> Self {
-        Store { db }
+        Store {
+            db,
+            mem_pool: {
+                let mem_pool = MemPoolStore::new(MEM_POOL_COLUMNS);
+                Arc::new(ArcSwap::new(Arc::new(mem_pool)))
+            },
+        }
     }
 
     pub fn open_tmp() -> Result<Self> {
@@ -46,7 +58,12 @@ impl<'a> Store {
     pub fn begin_transaction(&self) -> StoreTransaction {
         StoreTransaction {
             inner: self.db.transaction(),
+            mem_pool: self.mem_pool.clone(),
         }
+    }
+
+    pub fn gather_mem_stats(&self) -> Vec<CfMemStat> {
+        self.db.gather_mem_stats()
     }
 
     pub fn new_write_batch(&self) -> StoreWriteBatch {
@@ -147,5 +164,57 @@ impl<'a> Store {
             )),
             None => Ok(None),
         }
+    }
+
+    pub fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, Error> {
+        let block_number: packed::Uint64 = number.pack();
+        match self.get(COLUMN_INDEX, block_number.as_slice()) {
+            Some(slice) => Ok(Some(
+                packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref())
+                    .to_entity()
+                    .unpack(),
+            )),
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_block_deposit_requests(
+        &self,
+        block_hash: &H256,
+    ) -> Result<Option<Vec<packed::DepositRequest>>, Error> {
+        match self.get(COLUMN_BLOCK_DEPOSIT_REQUESTS, block_hash.as_slice()) {
+            Some(slice) => Ok(Some(
+                packed::DepositRequestVecReader::from_slice_should_be_ok(slice.as_ref())
+                    .to_entity()
+                    .into_iter()
+                    .collect(),
+            )),
+            None => Ok(None),
+        }
+    }
+
+    pub fn check_state(&self) -> Result<()> {
+        let db = self.begin_transaction();
+
+        // check state tree
+        let tree = db.state_tree(StateContext::ReadOnly)?;
+        tree.check_state()?;
+
+        // check block smt
+        {
+            let smt = db.block_smt()?;
+            let tip_number: u64 = db.get_last_valid_tip_block()?.raw().number().unpack();
+            for number in tip_number.saturating_sub(100)..tip_number {
+                let block_hash = self.get_block_hash_by_number(number)?.expect("exist");
+                let block = self.get_block(&block_hash)?.expect("exist");
+                let key = block.smt_key();
+                let proof = smt.merkle_proof(vec![key.into()])?;
+                let root =
+                    proof.compute_root::<Blake2bHasher>(vec![(key.into(), block.hash().into())])?;
+                assert_eq!(&root, smt.root(), "block smt root consistent");
+            }
+        }
+        db.rollback()?;
+        Ok(())
     }
 }

@@ -3,7 +3,7 @@
 /// Column families alias type
 pub type Col = u8;
 /// Total column number
-pub const COLUMNS: u32 = 28;
+pub const COLUMNS: u32 = 35;
 /// Column store meta data
 pub const COLUMN_META: Col = 0;
 /// Column store chain index
@@ -44,8 +44,8 @@ pub const COLUMN_MEM_POOL_TRANSACTION_RECEIPT: Col = 17;
 pub const COLUMN_BLOCK_STATE_RECORD: Col = 18;
 /// Column script prefix
 pub const COLUMN_SCRIPT_PREFIX: Col = 19;
-/// Column checkpoint
-pub const COLUMN_CHECKPOINT: Col = 20;
+/// Column block state reverse record
+pub const COLUMN_BLOCK_STATE_REVERSE_RECORD: Col = 20;
 /// Column reverted block SMT branch
 pub const COLUMN_REVERTED_BLOCK_SMT_BRANCH: Col = 21;
 /// Column reverted block SMT leaf
@@ -60,6 +60,10 @@ pub const COLUMN_ASSET_SCRIPT: Col = 25;
 pub const COLUMN_MEM_POOL_TRANSACTION: Col = 26;
 /// Column mem pool withdrawal
 pub const COLUMN_MEM_POOL_WITHDRAWAL: Col = 27;
+/// Column store withdrawal
+pub const COLUMN_WITHDRAWAL: Col = 33;
+/// Column store withdrawal extra information
+pub const COLUMN_WITHDRAWAL_INFO: Col = 34;
 
 /// chain id
 pub const META_CHAIN_ID_KEY: &[u8] = b"CHAIN_ID";
@@ -71,12 +75,6 @@ pub const META_BLOCK_SMT_ROOT_KEY: &[u8] = b"BLOCK_SMT_ROOT_KEY";
 pub const META_REVERTED_BLOCK_SMT_ROOT_KEY: &[u8] = b"REVERTED_BLOCK_SMT_ROOT_KEY";
 /// track the latest known valid block hash
 pub const META_LAST_VALID_TIP_BLOCK_HASH_KEY: &[u8] = b"LAST_VALID_TIP_BLOCK_HASH";
-/// account SMT root
-pub const META_MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY: &[u8] = b"MEM_BLOCK_ACCOUNT_SMT_ROOT_KEY";
-/// account SMT count
-pub const META_MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY: &[u8] = b"MEM_BLOCK_ACCOUNT_SMT_COUNT_KEY";
-/// mem pool block info
-pub const META_MEM_POOL_BLOCK_INFO: &[u8] = b"MEM_POOL_BLOCK_INFO";
 
 /// CHAIN_SPEC_HASH_KEY tracks the hash of chain spec which created current database
 pub const CHAIN_SPEC_HASH_KEY: &[u8] = b"chain-spec-hash";

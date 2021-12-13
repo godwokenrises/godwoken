@@ -35,6 +35,21 @@ impl RestoreManager {
         self.save_with_timestamp(mem_block, now)
     }
 
+    pub fn save_with_suffix(&self, mem_block: &MemBlock, suffix: &str) -> Result<()> {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+        let file_path = {
+            let mut os_string_path = self.block_file_path(now).into_os_string();
+            os_string_path.push(format!("_{}", suffix));
+            PathBuf::from(os_string_path)
+        };
+        log::info!("[mem-pool] restore manager save mem block {:?}", file_path);
+
+        let packed = mem_block.pack();
+        write(file_path, packed.as_slice())?;
+
+        Ok(())
+    }
+
     pub fn save_with_timestamp(&self, mem_block: &MemBlock, timestamp: u128) -> Result<()> {
         let file_path = self.block_file_path(timestamp);
         log::info!("[mem-pool] save restore save mem block {:?}", file_path);

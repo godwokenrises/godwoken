@@ -31,11 +31,22 @@ pub struct Config {
     pub db_block_validator: Option<DBBlockValidatorConfig>,
     #[serde(default)]
     pub store: StoreConfig,
+    #[serde(default)]
+    pub fee: FeeConfig,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum RPCMethods {
+    PProf,
+    Test,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RPCServerConfig {
     pub listen: String,
+    #[serde(default)]
+    pub enable_methods: HashSet<RPCMethods>,
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -50,6 +61,13 @@ pub struct RPCConfig {
     pub sudt_proxy_code_hashes: Vec<H256>,
     pub allowed_polyjuice_contract_creator_address: Option<HashSet<H160>>,
     pub polyjuice_script_code_hash: Option<H256>,
+    pub send_tx_rate_limit: Option<RPCRateLimit>,
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RPCRateLimit {
+    pub seconds: u64,
+    pub lru_size: usize,
 }
 
 /// Onchain rollup cell config
@@ -92,6 +110,8 @@ pub struct ChallengerConfig {
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockProducerConfig {
     pub account_id: u32,
+    #[serde(default = "default_check_mem_block_before_submit")]
+    pub check_mem_block_before_submit: bool,
     // cell deps
     pub rollup_cell_type_dep: CellDep,
     pub rollup_config_cell_dep: CellDep,
@@ -109,11 +129,30 @@ pub struct BlockProducerConfig {
     pub wallet_config: WalletConfig,
 }
 
+fn default_check_mem_block_before_submit() -> bool {
+    false
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum BackendType {
+    Meta,
+    Sudt,
+    Polyjuice,
+    Unknown,
+}
+
+impl Default for BackendType {
+    fn default() -> Self {
+        BackendType::Unknown
+    }
+}
+
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BackendConfig {
     pub validator_path: PathBuf,
     pub generator_path: PathBuf,
     pub validator_script_type_hash: H256,
+    pub backend_type: BackendType,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -240,4 +279,30 @@ pub struct StoreConfig {
     pub options_file: Option<PathBuf>,
     #[serde(default)]
     pub cache_size: Option<usize>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FeeConfig {
+    // fee_rate: fee / cycles limit
+    pub meta_cycles_limit: u64,
+    // fee_rate: fee / cycles limit
+    pub sudt_cycles_limit: u64,
+    // fee_rate: fee / cycles limit
+    pub withdraw_cycles_limit: u64,
+    /// HashMap<sudt_id, fee rate weight>
+    ///
+    /// adjusted fee_rate: fee_rate * weight / 1000
+    /// if sudt_id is not in the map, the weight is 1
+    pub sudt_fee_rate_weight: HashMap<u32, u64>,
+}
+
+impl Default for FeeConfig {
+    fn default() -> Self {
+        Self {
+            meta_cycles_limit: 20000,                 // 20K cycles
+            sudt_cycles_limit: 20000,                 // 20K cycles
+            withdraw_cycles_limit: 20000,             // 20K cycles
+            sudt_fee_rate_weight: Default::default(), // default is 1
+        }
+    }
 }

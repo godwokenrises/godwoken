@@ -11,7 +11,7 @@ use gw_generator::{
     Generator,
 };
 use gw_mem_pool::pool::{MemPool, OutputParam};
-use gw_store::{transaction::mem_pool_store::MemPoolStore, Store};
+use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -74,11 +74,13 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
             validator_path: META_VALIDATOR_PATH.into(),
             generator_path: META_GENERATOR_PATH.into(),
             validator_script_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
+            backend_type: gw_config::BackendType::Meta,
         },
         BackendConfig {
             validator_path: SUDT_VALIDATOR_PATH.into(),
             generator_path: SUDT_GENERATOR_PATH.into(),
             validator_script_type_hash: sudt_validator_script_type_hash.into(),
+            backend_type: gw_config::BackendType::Sudt,
         },
     ];
     BackendManage::from_config(configs).expect("default backend")
@@ -96,6 +98,23 @@ pub fn setup_chain(rollup_type_script: Script) -> Chain {
         rollup_type_script,
         rollup_config,
         account_lock_manage,
+        None,
+    );
+    chain.complete_initial_syncing().unwrap();
+    chain
+}
+
+// Simulate process restart
+pub fn restart_chain(chain: &Chain, rollup_type_script: Script) -> Chain {
+    let mut account_lock_manage = AccountLockManage::default();
+    let rollup_config = chain.generator().rollup_context().rollup_config.to_owned();
+    account_lock_manage
+        .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+    let mut chain = setup_chain_with_account_lock_manage(
+        rollup_type_script,
+        rollup_config,
+        account_lock_manage,
+        Some(chain.store().to_owned()),
     );
     chain.complete_initial_syncing().unwrap();
     chain
@@ -105,8 +124,9 @@ pub fn setup_chain_with_account_lock_manage(
     rollup_type_script: Script,
     rollup_config: RollupConfig,
     account_lock_manage: AccountLockManage,
+    opt_store: Option<Store>,
 ) -> Chain {
-    let store = Store::open_tmp().unwrap();
+    let store = opt_store.unwrap_or_else(|| Store::open_tmp().unwrap());
     let rollup_script_hash = rollup_type_script.hash();
     let genesis_config = GenesisConfig {
         timestamp: 0,
@@ -116,6 +136,13 @@ pub fn setup_chain_with_account_lock_manage(
         secp_data_dep: Default::default(),
     };
     let genesis_committed_info = L2BlockCommittedInfo::default();
+    init_genesis(
+        &store,
+        &genesis_config,
+        genesis_committed_info,
+        Bytes::default(),
+    )
+    .unwrap();
     let backend_manage = build_backend_manage(&rollup_config);
     let rollup_context = RollupContext {
         rollup_script_hash: rollup_script_hash.into(),
@@ -127,20 +154,12 @@ pub fn setup_chain_with_account_lock_manage(
         rollup_context,
         Default::default(),
     ));
-    init_genesis(
-        &store,
-        &genesis_config,
-        genesis_committed_info,
-        Bytes::default(),
-    )
-    .unwrap();
     let provider = DummyMemPoolProvider::default();
     let mem_pool = MemPool::create(
         0,
         store.clone(),
         Arc::clone(&generator),
         Box::new(provider),
-        None,
         None,
         Default::default(),
     )
@@ -277,11 +296,17 @@ pub fn construct_block(
     let provider = DummyMemPoolProvider {
         deposit_cells,
         fake_blocktime: Duration::from_millis(0),
-        collected_custodians,
+        collected_custodians: collected_custodians.clone(),
     };
     mem_pool.set_provider(Box::new(provider));
     // refresh mem block
     mem_pool.reset_mem_block()?;
+    let provider = DummyMemPoolProvider {
+        deposit_cells: Vec::default(),
+        fake_blocktime: Duration::from_millis(0),
+        collected_custodians,
+    };
+    mem_pool.set_provider(Box::new(provider));
 
     let (_custodians, block_param) = mem_pool.output_mem_block(&OutputParam::default()).unwrap();
     let param = ProduceBlockParam {
