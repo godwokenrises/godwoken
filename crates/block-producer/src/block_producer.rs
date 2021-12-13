@@ -55,6 +55,11 @@ const TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR: &str = "ExceededMaximumBlo
 const MAX_ROLLUP_WITNESS_SIZE: usize = 1 << 19;
 const WAIT_PRODUCE_BLOCK_SECONDS: u64 = 45;
 
+enum SubmitResult {
+    Submitted,
+    Skip,
+}
+
 fn generate_custodian_cells(
     rollup_context: &RollupContext,
     block: &L2Block,
@@ -294,7 +299,13 @@ impl BlockProducer {
                 }
 
                 match self.submit_block_tx(block_number, tx).await {
-                    Ok(()) => {}
+                    Ok(SubmitResult::Submitted) => {
+                        self.last_committed_l2_block = LastCommittedL2Block {
+                            committed_tip_block_hash: l2_tip_block_hash,
+                            committed_at: Instant::now(),
+                        };
+                    }
+                    Ok(SubmitResult::Skip) => {}
                     Err(err) => {
                         retry_count += 1;
                         log::warn!(
@@ -306,10 +317,6 @@ impl BlockProducer {
                     }
                 }
 
-                self.last_committed_l2_block = LastCommittedL2Block {
-                    committed_tip_block_hash: l2_tip_block_hash,
-                    committed_at: Instant::now(),
-                };
                 return Ok(());
             }
             return Err(anyhow!(
@@ -443,7 +450,11 @@ impl BlockProducer {
         }
     }
 
-    async fn submit_block_tx(&mut self, block_number: u64, tx: Transaction) -> Result<()> {
+    async fn submit_block_tx(
+        &mut self,
+        block_number: u64,
+        tx: Transaction,
+    ) -> Result<SubmitResult> {
         let cycles = utils::dry_run_transaction(
             &self.debug_config,
             &self.rpc_client,
@@ -452,9 +463,12 @@ impl BlockProducer {
         )
         .await;
 
-        if cycles.is_none()
-            || cycles.unwrap_or(0) > self.debug_config.expected_l1_tx_upper_bound_cycles
-        {
+        if cycles.is_none() {
+            log::info!("Skip submitting l2 block since can't get cycles of tx, previous block may haven't been processed by CKB");
+            return Ok(SubmitResult::Skip);
+        }
+
+        if cycles.unwrap_or(0) > self.debug_config.expected_l1_tx_upper_bound_cycles {
             log::warn!(
                 "Submitting l2 block is cost unexpected cycles: {:?}, expected upper bound: {}",
                 cycles,
@@ -504,7 +518,7 @@ impl BlockProducer {
                 }
             }
         }
-        Ok(())
+        Ok(SubmitResult::Submitted)
     }
 
     async fn complete_tx_skeleton(
