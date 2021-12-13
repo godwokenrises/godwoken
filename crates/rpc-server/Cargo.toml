@@ -19,6 +19,7 @@ gw-mem-pool = { path = "../mem-pool" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-version = { path = "../version" }
 gw-rpc-client = { path = "../rpc-client" }
+gw-rpc-ws-server = { path = "../rpc-ws-server" }
 faster-hex = "0.4"
 ckb-crypto = "0.100.0"
 ckb-fixed-hash = "0.100.0"

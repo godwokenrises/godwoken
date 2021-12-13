@@ -37,6 +37,7 @@ use gw_rpc_server::{
     registry::{Registry, RegistryArgs},
     server::start_jsonrpc_server,
 };
+use gw_rpc_ws_server::server::start_jsonrpc_ws_server;
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
@@ -821,12 +822,23 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             }
         }
     });
+
+    let exit_sender_clone = exit_sender.clone();
     let rpc_task = smol::spawn(async move {
         if let Err(err) = start_jsonrpc_server(rpc_address, rpc_registry).await {
             log::error!("Error running JSONRPC server: {:?}", err);
         }
-        if let Err(err) = exit_sender.send(()).await {
+        if let Err(err) = exit_sender_clone.send(()).await {
             log::error!("send exit signal error: {}", err)
+        }
+    });
+
+    let rpc_ws_task = smol::spawn(async move {
+        if let Err(err) = start_jsonrpc_ws_server().await {
+            log::error!("Error running JSONRPC WebSockert server: {:?}", err);
+        }
+        if let Err(err) = exit_sender.send(()).await {
+            log::error!("send exit signal error: {}", err);
         }
     });
 
@@ -834,6 +846,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         let _ = exit_recv.recv().await;
         log::info!("Exiting...");
 
+        drop(rpc_ws_task);
         rpc_task.cancel().await;
         chain_task.cancel().await;
     });

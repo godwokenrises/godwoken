@@ -21,6 +21,7 @@ use gw_config::{MemPoolConfig, NodeMode};
 use gw_generator::{
     constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
 };
+use gw_rpc_ws_server::server::GLOBAL_NOTIFY_CONTROLLER;
 use gw_store::{
     chain_view::ChainView,
     mem_pool_state::{MemPoolState, MemStore},
@@ -1299,6 +1300,12 @@ impl MemPool {
             };
             if let Some(ref mut error_tx_handler) = self.error_tx_handler {
                 let t = Instant::now();
+                // TODO: notify real message
+                smol::spawn(async move {
+                    let notify_controller = GLOBAL_NOTIFY_CONTROLLER.lock().await;
+                    notify_controller.notify_new_error_tx_receipt(2333);
+                })
+                .detach();
                 error_tx_handler.handle_error_receipt(receipt).detach();
                 log::debug!(
                     "[finalize tx] handle error tx: {}ms",
