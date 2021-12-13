@@ -127,17 +127,21 @@ impl MemPool {
             db.commit()?;
         }
 
-        let restore_manager = RestoreManager::build(&config.restore_path)?;
-        let mut mem_block = match restore_manager.restore_from_latest() {
-            Ok(Some((restored, timestamp))) => {
-                log::info!("[mem-pool] restore mem block from timestamp {}", timestamp);
-                MemBlock::unpack(restored)
-            }
-            _ => MemBlock::with_block_producer(block_producer_id),
-        };
+        let mut mem_block = MemBlock::with_block_producer(block_producer_id);
+        let mut pending_deposits = vec![];
+        let mut pending_restored_tx_hashes = vec![];
 
-        let pending_deposits = mem_block.deposits().to_vec();
-        let pending_restored_tx_hashes = mem_block.txs().to_vec();
+        let restore_manager = RestoreManager::build(&config.restore_path)?;
+        if let Ok(Some((restored, timestamp))) = restore_manager.restore_from_latest() {
+            log::info!("[mem-pool] restore mem block from timestamp {}", timestamp);
+
+            let hashes: Vec<_> = restored.withdrawals().unpack();
+            mem_block.force_reinject_withdrawal_hashes(hashes.as_slice());
+
+            pending_restored_tx_hashes = restored.txs().unpack();
+            pending_deposits = restored.deposits().unpack();
+        }
+
         mem_block.clear_txs();
         let mut mem_pool = MemPool {
             store,
