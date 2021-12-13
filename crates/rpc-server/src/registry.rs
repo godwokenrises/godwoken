@@ -1219,7 +1219,7 @@ async fn get_fee_config(fee: Data<FeeConfig>) -> Result<gw_jsonrpc_types::godwok
             .sudt_fee_rate_weight
             .iter()
             .map(|(&sudt_id, &fee_rate_weight)| SUDTFeeConfig {
-                sudt_id: sudt_id.into(),
+                sudt_id,
                 fee_rate_weight: fee_rate_weight.into(),
             })
             .collect(),
