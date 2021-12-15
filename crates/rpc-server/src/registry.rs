@@ -311,7 +311,12 @@ impl RequestSubmitter {
     const MAX_BATCH_SIZE: usize = 20;
     const INTERVAL_MS: Duration = Duration::from_millis(100);
 
-    fn req_to_entry(&self, req: Request, state: &(impl State + CodeStore)) -> Result<FeeEntry> {
+    fn req_to_entry(
+        &self,
+        req: Request,
+        state: &(impl State + CodeStore),
+        order: usize,
+    ) -> Result<FeeEntry> {
         match req {
             Request::Tx(tx) => {
                 let receiver: u32 = tx.raw().to_id().unpack();
@@ -321,7 +326,7 @@ impl RequestSubmitter {
                     .load_backend(state, &script_hash)
                     .ok_or_else(|| anyhow!("can't find backend for receiver: {}", receiver))?
                     .backend_type;
-                FeeEntry::from_tx(tx, &self.fee_config, backend_type)
+                FeeEntry::from_tx(tx, &self.fee_config, backend_type, order)
             }
             Request::Withdrawal(withdraw) => {
                 let script_hash = withdraw.raw().account_script_hash().unpack();
@@ -333,7 +338,7 @@ impl RequestSubmitter {
                             withdraw.raw().account_script_hash()
                         )
                     })?;
-                FeeEntry::from_withdrawal(withdraw, sender, &self.fee_config)
+                FeeEntry::from_withdrawal(withdraw, sender, &self.fee_config, order)
             }
         }
     }
@@ -373,7 +378,7 @@ impl RequestSubmitter {
                 let state = db.mem_pool_state_tree().expect("mem pool state");
                 let kind = req.kind();
                 let hash = req.hash();
-                match self.req_to_entry(req, &state) {
+                match self.req_to_entry(req, &state, queue.len()) {
                     Ok(entry) => {
                         queue.add(entry);
                     }
@@ -389,7 +394,7 @@ impl RequestSubmitter {
                 while let Ok(req) = self.submit_rx.try_recv() {
                     let kind = req.kind();
                     let hash = req.hash();
-                    match self.req_to_entry(req, &state) {
+                    match self.req_to_entry(req, &state, queue.len()) {
                         Ok(entry) => {
                             queue.add(entry);
                         }
@@ -423,7 +428,12 @@ impl RequestSubmitter {
             };
 
             if !items.is_empty() {
+                let t = Instant::now();
                 let mut mem_pool = self.mem_pool.lock().await;
+                log::debug!(
+                    "Mem-pool background job: unlock mem_pool {}ms",
+                    t.elapsed().as_millis()
+                );
                 for entry in items {
                     let maybe_ok = match entry.item.clone() {
                         FeeItem::Tx(tx) => mem_pool.push_transaction(tx),
@@ -1265,19 +1275,6 @@ async fn report_pprof() -> Result<()> {
     }
     Ok(())
 }
-
-// async fn dump_mem_block(mem_pool_batch: Data<Option<MemPoolBatch>>) -> Result<JsonBytes, RpcError> {
-//     let mem_pool_batch = match &*mem_pool_batch {
-//         Some(mem_pool_batch) => mem_pool_batch,
-//         None => {
-//             return Err(mem_pool_is_disabled_err());
-//         }
-//     };
-
-//     let mem_block = mem_pool_batch.dump_mem_block()?.await?;
-
-//     Ok(JsonBytes::from_bytes(mem_block.as_bytes()))
-// }
 
 async fn get_rocksdb_memory_stats(store: Data<Store>) -> Result<Vec<CfMemStat>, RpcError> {
     Ok(store.gather_mem_stats())

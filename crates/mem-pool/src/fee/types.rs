@@ -73,6 +73,8 @@ impl PartialOrd for FeeItem {
 pub struct FeeEntry {
     /// item: tx or withdrawal
     pub item: FeeItem,
+    /// Order in queue: queue.len() when insertion
+    pub order: usize,
     /// sender
     pub sender: u32,
     /// fee rate
@@ -94,6 +96,11 @@ impl Ord for FeeEntry {
         if ord != Ordering::Equal {
             return ord;
         }
+        // lower order is priority
+        let ord = other.order.cmp(&self.order);
+        if ord != Ordering::Equal {
+            return ord;
+        }
         // lower cycles is priority
         let ord = other.cycles_limit.cmp(&self.cycles_limit);
         if ord != Ordering::Equal {
@@ -109,6 +116,7 @@ impl FeeEntry {
         tx: L2Transaction,
         fee_config: &FeeConfig,
         backend_type: BackendType,
+        order: usize,
     ) -> Result<Self> {
         let raw_l2tx = tx.raw();
         let sender = raw_l2tx.from_id().unpack();
@@ -118,6 +126,7 @@ impl FeeEntry {
             sender,
             fee_rate: fee.fee_rate,
             cycles_limit: fee.cycles_limit,
+            order,
         };
         Ok(entry)
     }
@@ -126,6 +135,7 @@ impl FeeEntry {
         withdrawal: WithdrawalRequest,
         sender: u32,
         fee_config: &FeeConfig,
+        order: usize,
     ) -> Result<Self> {
         let raw_withdrawal = withdrawal.raw();
         let fee = parse_withdraw_fee_rate(fee_config, &raw_withdrawal)?;
@@ -134,6 +144,7 @@ impl FeeEntry {
             sender,
             fee_rate: fee.fee_rate,
             cycles_limit: fee.cycles_limit,
+            order,
         };
         Ok(entry)
     }
