@@ -87,13 +87,15 @@ pub struct DepositInfo {
 
 #[derive(Debug, Clone, Default)]
 pub struct SUDTStat {
-    pub amount: u128,
+    pub total_amount: u128,
+    pub finalized_amount: u128,
     pub cells_count: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct CustodianStat {
     pub total_capacity: u128,
+    pub finalized_capacity: u128,
     pub cells_count: usize,
     pub ckb_cells_count: usize,
     pub sudt_stat: HashMap<ckb_types::packed::Script, SUDTStat>,

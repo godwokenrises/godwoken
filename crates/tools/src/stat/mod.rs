@@ -10,11 +10,16 @@ pub fn stat_custodian_cells(
     rollup_type_hash: &H256,
     custodian_script_type_hash: &H256,
     min_capacity: Option<u64>,
+    last_finalized_block_number: u64,
 ) -> Result<CustodianStat> {
     let script = Script::new_builder()
         .code_hash(custodian_script_type_hash.pack())
         .hash_type(ScriptHashType::Type.into())
         .args(rollup_type_hash.as_slice().to_vec().pack())
         .build();
-    smol::block_on(rpc_client.stat_custodian_cells(script, min_capacity))
+    smol::block_on(rpc_client.stat_custodian_cells(
+        script,
+        min_capacity,
+        last_finalized_block_number,
+    ))
 }

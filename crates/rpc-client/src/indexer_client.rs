@@ -7,6 +7,7 @@ use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use ckb_types::prelude::Entity;
 use gw_jsonrpc_types::ckb_jsonrpc_types::Uint32;
 use gw_types::offchain::{CustodianStat, SUDTStat};
+use gw_types::packed::CustodianLockArgs;
 use gw_types::{
     offchain::CellInfo,
     packed::{CellOutput, OutPoint, Script},
@@ -120,6 +121,7 @@ impl CKBIndexerClient {
         &self,
         lock: Script,
         min_capacity: Option<u64>,
+        last_finalized_block_number: u64,
     ) -> Result<CustodianStat> {
         let mut sudt_stat: HashMap<ckb_types::packed::Script, SUDTStat> = HashMap::default();
 
@@ -141,6 +143,7 @@ impl CKBIndexerClient {
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
 
         let mut total_capacity = 0u128;
+        let mut finalized_capacity = 0u128;
         let mut cells_count = 0;
         let mut ckb_cells_count = 0;
         let mut cursor = None;
@@ -168,6 +171,14 @@ impl CKBIndexerClient {
             for cell in cells.objects.into_iter() {
                 let capacity: u64 = cell.output.capacity.into();
                 total_capacity += capacity as u128;
+                let is_finalized = {
+                    let args = cell.output.lock.args.into_bytes();
+                    let args = CustodianLockArgs::from_slice(&args[32..]).unwrap();
+                    args.deposit_block_number().unpack() >= last_finalized_block_number
+                };
+                if is_finalized {
+                    finalized_capacity += capacity as u128;
+                }
 
                 if let Some(type_) = cell.output.type_.as_ref() {
                     assert_eq!(cell.output_data.len(), 16);
@@ -179,8 +190,11 @@ impl CKBIndexerClient {
                         buf.copy_from_slice(cell.output_data.as_bytes());
                         u128::from_le_bytes(buf)
                     };
-                    stat.amount += amount;
+                    stat.total_amount += amount;
                     stat.cells_count += 1;
+                    if is_finalized {
+                        stat.finalized_amount += amount;
+                    }
                 } else {
                     ckb_cells_count += 1;
                 }
@@ -189,6 +203,7 @@ impl CKBIndexerClient {
         Ok(CustodianStat {
             cells_count,
             total_capacity,
+            finalized_capacity,
             sudt_stat,
             ckb_cells_count,
         })

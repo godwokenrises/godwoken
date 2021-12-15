@@ -737,6 +737,13 @@ fn run_cli() -> Result<()> {
                         .default_value("0")
                         .help("Query cells with min capacity(shannon)"),
                 )
+                .arg(
+                    Arg::with_name("tip-block-number")
+                        .long("tip-block-number")
+                        .takes_value(true)
+                        .default_value("0")
+                        .help("Tip block number"),
+                )
         );
 
     let matches = app.clone().get_matches();
@@ -1216,6 +1223,8 @@ fn run_cli() -> Result<()> {
             let custodian_script_type_hash =
                 cli_args::to_h256(m.value_of("custodian-script-type-hash").unwrap())?;
             let min_capacity: u64 = m.value_of("min-capacity").unwrap_or_default().parse()?;
+            let tip_block_number: u64 =
+                m.value_of("tip-block-number").unwrap_or_default().parse()?;
             let rpc_client = CKBIndexerClient::new(HttpClient::new(indexer_rpc_url)?);
 
             let alias: HashMap<ckb_types::bytes::Bytes, String> = [
@@ -1249,17 +1258,26 @@ fn run_cli() -> Result<()> {
             })
             .collect();
 
+            let last_finalized_block_number = tip_block_number.saturating_sub(450);
+
             let stat = stat::stat_custodian_cells(
                 &rpc_client,
                 &rollup_type_hash.into(),
                 &custodian_script_type_hash.into(),
                 Some(min_capacity),
+                last_finalized_block_number,
             )?;
 
             let ckb = stat.total_capacity / ONE_CKB as u128;
             let shannon = stat.total_capacity - (ckb * ONE_CKB as u128);
             println!("Cells count: {}", stat.cells_count);
             println!("Total custodian: {}.{:0>8} CKB", ckb, shannon);
+            let finalized_ckb = stat.finalized_capacity / ONE_CKB as u128;
+            let finalized_shannon = stat.finalized_capacity - (finalized_ckb * ONE_CKB as u128);
+            println!(
+                "Finalized custodian: {}.{:0>8} CKB",
+                finalized_ckb, finalized_shannon
+            );
             println!("CKB cells count: {}", stat.ckb_cells_count);
             if !stat.sudt_stat.is_empty() {
                 println!("========================================");
@@ -1271,10 +1289,11 @@ fn run_cli() -> Result<()> {
                     .cloned()
                     .unwrap_or_else(|| "Unknown".to_string());
                 println!(
-                    "Simple UDT ({} {}) amount: {} cells count: {}",
+                    "Simple UDT ({} {}) total amount: {} finalized amount {} cells count: {}",
                     alias_name,
                     sudt_script.args(),
-                    sudt_stat.amount,
+                    sudt_stat.total_amount,
+                    sudt_stat.finalized_amount,
                     sudt_stat.cells_count,
                 );
             }
