@@ -183,6 +183,7 @@ mod tests {
             fee_rate: 100,
             cycles_limit: 1000,
             sender: 2,
+            order: queue.len(),
         };
 
         let entry2 = FeeEntry {
@@ -190,6 +191,7 @@ mod tests {
             fee_rate: 101,
             cycles_limit: 1000,
             sender: 3,
+            order: queue.len(),
         };
 
         let entry3 = FeeEntry {
@@ -197,6 +199,7 @@ mod tests {
             fee_rate: 100,
             cycles_limit: 1001,
             sender: 4,
+            order: queue.len(),
         };
 
         let entry4 = FeeEntry {
@@ -204,6 +207,7 @@ mod tests {
             fee_rate: 101,
             cycles_limit: 1001,
             sender: 5,
+            order: queue.len(),
         };
 
         queue.add(entry1);
@@ -267,6 +271,7 @@ mod tests {
             fee_rate: 100,
             cycles_limit: 1000,
             sender: 2,
+            order: queue.len(),
         };
 
         let entry2 = FeeEntry {
@@ -278,6 +283,7 @@ mod tests {
             fee_rate: 100,
             cycles_limit: 1000,
             sender: 2,
+            order: queue.len(),
         };
 
         queue.add(entry1);
@@ -326,6 +332,7 @@ mod tests {
             fee_rate: 100,
             cycles_limit: 1000,
             sender: 2,
+            order: queue.len(),
         };
 
         let entry2 = FeeEntry {
@@ -337,6 +344,7 @@ mod tests {
             fee_rate: 101,
             cycles_limit: 1000,
             sender: 2,
+            order: queue.len(),
         };
 
         queue.add(entry1);
@@ -389,6 +397,7 @@ mod tests {
                 fee_rate: 100,
                 cycles_limit: 1000,
                 sender: 2,
+                order: queue.len(),
             };
             queue.add(entry1);
         }
@@ -410,6 +419,7 @@ mod tests {
                 fee_rate: 100,
                 cycles_limit: 1000,
                 sender: 2,
+                order: queue.len(),
             };
             queue.add(entry1);
         }
