@@ -1,5 +1,6 @@
 use ckb_vm::Error as VMError;
 use gw_common::{error::Error as StateError, sparse_merkle_tree::error::Error as SMTError, H256};
+use gw_types::packed::Byte32;
 use thiserror::Error;
 
 /// Error
@@ -69,6 +70,8 @@ pub enum WithdrawalError {
     WithdrawFakedCKB,
     #[error("Non positive sudt amount")]
     NonPositiveSUDTAmount,
+    #[error("Expected owner lock hash {0}")]
+    OwnerLock(Byte32),
 }
 
 impl From<WithdrawalError> for Error {
