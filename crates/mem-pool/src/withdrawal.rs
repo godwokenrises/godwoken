@@ -4,7 +4,7 @@ use gw_generator::generator::WithdrawalCellError;
 use gw_types::{
     bytes::Bytes,
     offchain::RollupContext,
-    packed::{CellOutput, L2Block, Script, WithdrawalRequest},
+    packed::{CellOutput, L2Block, Script, WithdrawalRequest, WithdrawalRequestExtra},
     prelude::*,
 };
 
@@ -84,10 +84,11 @@ impl<'a> Generator<'a> {
 
     pub fn verified_output(
         &self,
-        req: &WithdrawalRequest,
+        req_extra: &WithdrawalRequestExtra,
         block: &L2Block,
     ) -> Result<(CellOutput, Bytes)> {
         // Verify finalized custodian exists
+        let req = req_extra.request();
         let req_sudt: u128 = req.raw().amount().unpack();
         let sudt_type_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
         if 0 != req_sudt && !self.sudt_custodians.contains_key(&sudt_type_hash) {
@@ -101,14 +102,13 @@ impl<'a> Generator<'a> {
         };
         let block_hash: H256 = block.hash().into();
         let block_number = block.raw().number().unpack();
-        // FIXME: support owner lock
         let output = match gw_generator::Generator::build_withdrawal_cell_output(
             self.rollup_context,
-            req,
+            &req,
             &block_hash,
             block_number,
             sudt_script,
-            None,
+            req_extra.owner_lock().to_opt(),
         ) {
             Ok(output) => output,
             Err(WithdrawalCellError::OwnerLock(lock_hash)) => {
@@ -119,7 +119,7 @@ impl<'a> Generator<'a> {
             }
         };
 
-        self.verify_remained_amount(req).map(|_| output)
+        self.verify_remained_amount(&req).map(|_| output)
     }
 
     pub fn verify_remained_amount(&self, req: &WithdrawalRequest) -> Result<()> {
@@ -171,11 +171,16 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn include_and_verify(&mut self, req: &WithdrawalRequest, block: &L2Block) -> Result<()> {
-        let verified_output = self.verified_output(req, block)?;
+    pub fn include_and_verify(
+        &mut self,
+        req_extra: &WithdrawalRequestExtra,
+        block: &L2Block,
+    ) -> Result<()> {
+        let verified_output = self.verified_output(req_extra, block)?;
         let ckb_custodian = &mut self.ckb_custodian;
 
         // Update custodians according to verified output
+        let req = req_extra.request();
         let req_sudt: u128 = req.raw().amount().unpack();
         if 0 != req_sudt {
             let sudt_type_hash: [u8; 32] = req.raw().sudt_script_hash().unpack();
@@ -283,5 +288,154 @@ impl<'a> Generator<'a> {
         }
 
         outputs
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::collections::HashMap;
+    use std::iter::FromIterator;
+
+    use gw_common::h256_ext::H256Ext;
+    use gw_common::H256;
+    use gw_types::offchain::RollupContext;
+    use gw_types::packed::{
+        Fee, L2Block, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest,
+        WithdrawalRequestExtra,
+    };
+    use gw_types::prelude::{Builder, Entity, Pack, Unpack};
+
+    use crate::custodian::AvailableCustodians;
+    use crate::withdrawal::Generator;
+
+    #[test]
+    fn test_withdrawal_generator() {
+        let rollup_context = RollupContext {
+            rollup_script_hash: H256::from_u32(1),
+            rollup_config: RollupConfig::new_builder()
+                .withdrawal_script_type_hash(H256::from_u32(100).pack())
+                .build(),
+        };
+
+        let sudt_script = Script::new_builder()
+            .code_hash(H256::from_u32(2).pack())
+            .args(vec![3u8; 32].pack())
+            .build();
+
+        let available_custodians = AvailableCustodians {
+            capacity: u64::MAX as u128,
+            sudt: HashMap::from_iter([(sudt_script.hash(), (u128::MAX, sudt_script.clone()))]),
+        };
+
+        let mut generator = Generator::new(&rollup_context, available_custodians);
+
+        let owner_lock = Script::new_builder()
+            .code_hash(H256::from_u32(4).pack())
+            .args(vec![5; 32].pack())
+            .build();
+
+        let req = {
+            let fee = Fee::new_builder()
+                .sudt_id(20u32.pack())
+                .amount(50u128.pack())
+                .build();
+            let raw = RawWithdrawalRequest::new_builder()
+                .nonce(1u32.pack())
+                .capacity((500 * 10u64.pow(8)).pack())
+                .amount(20u128.pack())
+                .sudt_script_hash(sudt_script.hash().pack())
+                .account_script_hash(H256::from_u32(10).pack())
+                .sell_amount(99999u128.pack())
+                .sell_capacity(99999u64.pack())
+                .owner_lock_hash(owner_lock.hash().pack())
+                .payment_lock_hash(owner_lock.hash().pack())
+                .fee(fee)
+                .build();
+            WithdrawalRequest::new_builder()
+                .raw(raw)
+                .signature(vec![6u8; 65].pack())
+                .build()
+        };
+
+        let block = L2Block::default();
+
+        // ## Without owner lock
+        let req_extra = WithdrawalRequestExtra::new_builder()
+            .request(req.clone())
+            .build();
+        let (output, data) = generator.verified_output(&req_extra, &block).unwrap();
+        let (expected_output, expected_data) =
+            gw_generator::Generator::build_withdrawal_cell_output(
+                &rollup_context,
+                &req,
+                &block.hash().into(),
+                block.raw().number().unpack(),
+                Some(sudt_script.clone()),
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(output.as_slice(), expected_output.as_slice());
+        assert_eq!(data, expected_data);
+
+        // ## With owner lock
+        let req_extra = req_extra
+            .as_builder()
+            .owner_lock(Some(owner_lock.clone()).pack())
+            .build();
+        let (output, data) = generator.verified_output(&req_extra, &block).unwrap();
+        let (expected_output, expected_data) =
+            gw_generator::Generator::build_withdrawal_cell_output(
+                &rollup_context,
+                &req,
+                &block.hash().into(),
+                block.raw().number().unpack(),
+                Some(sudt_script),
+                Some(owner_lock),
+            )
+            .unwrap();
+
+        assert_eq!(output.as_slice(), expected_output.as_slice());
+        assert_eq!(data, expected_data);
+
+        // ## Min capacity error
+        let err_req_extra = {
+            let raw = req.raw().as_builder();
+            let err_raw = raw
+                .capacity(500u64.pack()) // ERROR: capacity not enough
+                .build();
+            let err_req = req.as_builder().raw(err_raw).build();
+            req_extra.clone().as_builder().request(err_req).build()
+        };
+        let err = generator
+            .verified_output(&err_req_extra, &block)
+            .unwrap_err();
+        assert!(err.to_string().contains("minimal capacity for"));
+
+        // ## Owner lock error
+        let err_req_extra = {
+            let err_owner_lock = Script::new_builder()
+                .code_hash([100u8; 32].pack())
+                .args(vec![99u8; 32].pack())
+                .build();
+            req_extra
+                .clone()
+                .as_builder()
+                .owner_lock(Some(err_owner_lock).pack())
+                .build()
+        };
+        let err = generator
+            .verified_output(&err_req_extra, &block)
+            .unwrap_err();
+        assert!(err.to_string().contains("owner lock not match hash"));
+
+        // ## include_and_verify() and finish()
+        generator.include_and_verify(&req_extra, &block).unwrap();
+
+        let outputs = generator.finish();
+        let (output, data) = outputs.first().unwrap();
+
+        assert_eq!(output.as_slice(), expected_output.as_slice());
+        assert_eq!(data, &expected_data);
     }
 }

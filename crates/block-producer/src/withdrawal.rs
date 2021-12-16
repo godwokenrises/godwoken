@@ -8,7 +8,7 @@ use gw_types::{
     packed::{
         CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, L2Block, Script,
         UnlockWithdrawalViaRevert, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
-        WitnessArgs,
+        WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
@@ -42,9 +42,11 @@ pub fn generate(
 
     let total_withdrawal_amount = sum_withdrawals(block.withdrawals().into_iter());
     let mut generator = Generator::new(rollup_context, (&finalized_custodians).into());
+    // FIXME: extra
     for req in block.withdrawals().into_iter() {
+        let req_extra = WithdrawalRequestExtra::new_builder().request(req).build();
         generator
-            .include_and_verify(&req, block)
+            .include_and_verify(&req_extra, block)
             .map_err(|err| anyhow!("unexpected withdrawal err {}", err))?
     }
     log::debug!("included withdrawals {}", generator.withdrawals().len());

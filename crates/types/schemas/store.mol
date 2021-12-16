@@ -47,6 +47,11 @@ table WithdrawalReceipt {
     post_state: AccountMerkleState,
 }
 
+table WithdrawalRequestExtra {
+    request: WithdrawalRequest,
+    owner_lock: ScriptOpt,
+}
+
 struct SMTBranchKey {
     height: byte,
     node_key: Byte32,
