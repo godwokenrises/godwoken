@@ -33,9 +33,10 @@ use gw_traits::CodeStore;
 use gw_types::{
     offchain::{BlockParam, CellStatus, CollectedCustodianCells, DepositInfo, ErrorTxReceipt},
     packed::{
-        AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt, WithdrawalRequest,
+        AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt,
+        WithdrawalRequest, WithdrawalRequestExtra,
     },
-    prelude::{Entity, Unpack},
+    prelude::{Builder, Entity, Unpack},
 };
 use std::{
     cmp::{max, min},
@@ -1216,8 +1217,12 @@ impl MemPool {
             }
             total_withdrawal_capacity = new_total_withdrwal_capacity;
 
+            // FIXME: extra
+            let withdrawal_extra = WithdrawalRequestExtra::new_builder()
+                .request(withdrawal.to_owned())
+                .build();
             if let Err(err) =
-                withdrawal_verifier.include_and_verify(&withdrawal, &L2Block::default())
+                withdrawal_verifier.include_and_verify(&withdrawal_extra, &L2Block::default())
             {
                 log::info!(
                     "[mem-pool] withdrawal contextual verification failed : {}",
