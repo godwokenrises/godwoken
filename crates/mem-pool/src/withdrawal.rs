@@ -1,5 +1,6 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use gw_common::H256;
+use gw_generator::generator::WithdrawalCellError;
 use gw_types::{
     bytes::Bytes,
     offchain::RollupContext,
@@ -100,14 +101,23 @@ impl<'a> Generator<'a> {
         };
         let block_hash: H256 = block.hash().into();
         let block_number = block.raw().number().unpack();
-        let output = gw_generator::Generator::build_withdrawal_cell_output(
+        // FIXME: support owner lock
+        let output = match gw_generator::Generator::build_withdrawal_cell_output(
             self.rollup_context,
             req,
             &block_hash,
             block_number,
             sudt_script,
-        )
-        .map_err(|min_capacity| anyhow!("{} minimal capacity for {}", min_capacity, req))?;
+            None,
+        ) {
+            Ok(output) => output,
+            Err(WithdrawalCellError::OwnerLock(lock_hash)) => {
+                bail!("owner lock not match hash {}", lock_hash.pack())
+            }
+            Err(WithdrawalCellError::MinCapacity { min, req: _ }) => {
+                bail!("{} minimal capacity for {}", min, req)
+            }
+        };
 
         self.verify_remained_amount(req).map(|_| output)
     }

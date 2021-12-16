@@ -386,8 +386,9 @@ impl MemPool {
         let db = self.store.begin_transaction();
         let asset_script =
             db.get_asset_script(&withdrawal_request.raw().sudt_script_hash().unpack())?;
+        // FIXME: support owner lock
         self.generator
-            .verify_withdrawal_request(state, withdrawal_request, asset_script)
+            .verify_withdrawal_request(state, withdrawal_request, asset_script, None)
             .map_err(Into::into)
     }
 
@@ -1124,6 +1125,7 @@ impl MemPool {
     }
 
     /// Execute withdrawal & update local state
+    // FIXME: support owner lock
     async fn finalize_withdrawals(
         &mut self,
         mut withdrawals: Vec<WithdrawalRequest>,
@@ -1192,7 +1194,7 @@ impl MemPool {
                 .cloned();
             if let Err(err) =
                 self.generator
-                    .verify_withdrawal_request(&state, &withdrawal, asset_script)
+                    .verify_withdrawal_request(&state, &withdrawal, asset_script, None)
             {
                 log::info!("[mem-pool] withdrawal verification error: {:?}", err);
                 unused_withdrawals.push(withdrawal_hash);
