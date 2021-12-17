@@ -138,7 +138,10 @@ mod tests {
     use gw_common::{h256_ext::H256Ext, state::State, H256};
     use gw_config::GenesisConfig;
     use gw_generator::genesis::init_genesis;
-    use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore, Store};
+    use gw_store::{
+        mem_pool_state::MemStore, state::state_db::StateContext, traits::chain_store::ChainStore,
+        Store,
+    };
     use gw_types::{
         bytes::Bytes,
         packed::{L2BlockCommittedInfo, L2Transaction, RawL2Transaction, RollupConfig},
@@ -210,7 +213,8 @@ mod tests {
         queue.add(entry3);
         queue.add(entry4);
 
-        let tree = snap.state().unwrap();
+        let mem_store = MemStore::new(snap);
+        let tree = mem_store.state().unwrap();
 
         // fetch 3
         {
@@ -281,7 +285,8 @@ mod tests {
         queue.add(entry2);
 
         let snap = store.get_snapshot();
-        let tree = snap.state().unwrap();
+        let mem_store = MemStore::new(snap);
+        let tree = mem_store.state().unwrap();
 
         // fetch
         {
@@ -339,7 +344,8 @@ mod tests {
         queue.add(entry2);
 
         let snap = store.get_snapshot();
-        let tree = snap.state().unwrap();
+        let mem_store = MemStore::new(snap);
+        let tree = mem_store.state().unwrap();
 
         // fetch
         {

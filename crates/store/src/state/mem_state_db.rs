@@ -1,6 +1,6 @@
 //! State DB
 
-use crate::snapshot::StoreSnapshot;
+use crate::mem_pool_state::MemStore;
 use crate::traits::kv_store::KVStoreRead;
 use crate::{smt::smt_store::SMTStore, traits::kv_store::KVStoreWrite};
 use anyhow::Result;
@@ -16,13 +16,13 @@ use gw_types::{
 use super::state_tracker::StateTracker;
 
 pub struct MemStateTree<'a> {
-    tree: SMT<SMTStore<'a, StoreSnapshot>>,
+    tree: SMT<SMTStore<'a, MemStore>>,
     account_count: u32,
     tracker: StateTracker,
 }
 
 impl<'a> MemStateTree<'a> {
-    pub fn new(tree: SMT<SMTStore<'a, StoreSnapshot>>, account_count: u32) -> Self {
+    pub fn new(tree: SMT<SMTStore<'a, MemStore>>, account_count: u32) -> Self {
         MemStateTree {
             tree,
             account_count,
@@ -41,7 +41,7 @@ impl<'a> MemStateTree<'a> {
             .build()
     }
 
-    pub fn smt(&self) -> &SMT<SMTStore<'a, StoreSnapshot>> {
+    pub fn smt(&self) -> &SMT<SMTStore<'a, MemStore>> {
         &self.tree
     }
 
@@ -56,7 +56,7 @@ impl<'a> MemStateTree<'a> {
             .expect("set smt root");
     }
 
-    fn db(&self) -> &StoreSnapshot {
+    fn db(&self) -> &MemStore {
         self.tree.store().inner_store()
     }
 }

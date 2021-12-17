@@ -12,7 +12,7 @@ use gw_block_producer::{
 use gw_common::H256;
 use gw_generator::traits::StateExt;
 use gw_mem_pool::pool::OutputParam;
-use gw_store::traits::chain_store::ChainStore;
+use gw_store::{mem_pool_state::MemStore, traits::chain_store::ChainStore};
 use gw_types::{
     core::ScriptHashType,
     offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext},
@@ -58,7 +58,8 @@ fn test_repackage_mem_block() {
 
     {
         let snap = chain.store().get_snapshot();
-        let state = snap.state().unwrap();
+        let mem_store = MemStore::new(snap);
+        let state = mem_store.state().unwrap();
         let tip_block = chain.store().get_tip_block().unwrap();
 
         assert_eq!(

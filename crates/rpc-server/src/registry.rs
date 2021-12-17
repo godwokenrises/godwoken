@@ -23,8 +23,11 @@ use gw_mem_pool::{
 };
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{
-    chain_view::ChainView, mem_pool_state::MemPoolState, state::state_db::StateContext,
-    traits::chain_store::ChainStore, CfMemStat, Store,
+    chain_view::ChainView,
+    mem_pool_state::{MemPoolState, MemStore},
+    state::state_db::StateContext,
+    traits::chain_store::ChainStore,
+    CfMemStat, Store,
 };
 use gw_traits::CodeStore;
 use gw_types::{
@@ -171,7 +174,9 @@ impl Registry {
                 let mem_pool = smol::block_on(pool.lock());
                 mem_pool.mem_pool_state()
             }
-            None => Arc::new(MemPoolState::new(Arc::new(store.get_snapshot()))),
+            None => Arc::new(MemPoolState::new(Arc::new(MemStore::new(
+                store.get_snapshot(),
+            )))),
         };
         let (submit_tx, submit_rx) = smol::channel::bounded(RequestSubmitter::MAX_CHANNEL_SIZE);
         if let Some(mem_pool) = mem_pool.as_ref().to_owned() {
