@@ -44,7 +44,7 @@ use gw_types::{
     prelude::*,
 };
 
-use ckb_vm::{DefaultMachineBuilder, SupportMachine};
+use ckb_vm::{machine::aot::AotCode, DefaultMachineBuilder, SupportMachine};
 
 #[cfg(not(has_asm))]
 use ckb_vm::TraceMachine;
@@ -122,6 +122,7 @@ impl Generator {
         &self.account_lock_manage
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn machine_run<'a, S: State + CodeStore, C: ChainStore>(
         &'a self,
         chain: &'a C,
@@ -130,6 +131,7 @@ impl Generator {
         raw_tx: &'a RawL2Transaction,
         max_cycles: u64,
         code_bytes: Bytes,
+        aot_code_opt: Option<&AotCode>,
     ) -> Result<RunResult, TransactionError> {
         let mut run_result = RunResult::default();
         let used_cycles;
@@ -159,30 +161,7 @@ impl Generator {
             let default_machine = machine_builder.build();
 
             #[cfg(has_asm)]
-            #[cfg(feature = "aot")]
-            let aot_code = {
-                let mut aot_machine = ckb_vm::machine::aot::AotCompilingMachine::load(
-                    &code_bytes,
-                    Some(Box::new(instruction_cycles)),
-                    vm_version.vm_isa(),
-                    vm_version.vm_version(),
-                )?;
-                aot_machine.compile()?
-            };
-            // TODO: cache the compiled aot_code
-            log::debug!(
-                "[execute tx] AotCompilingMachine::load time: {}ms",
-                t.elapsed().as_millis()
-            );
-
-            #[cfg(has_asm)]
-            #[cfg(feature = "aot")]
-            let mut machine =
-                ckb_vm::machine::asm::AsmMachine::new(default_machine, Some(&aot_code));
-
-            #[cfg(has_asm)]
-            #[cfg(not(feature = "aot"))]
-            let mut machine = ckb_vm::machine::asm::AsmMachine::new(default_machine, None);
+            let mut machine = ckb_vm::machine::asm::AsmMachine::new(default_machine, aot_code_opt);
 
             #[cfg(not(has_asm))]
             let machine = TraceMachine::new(default_machine);
@@ -190,7 +169,6 @@ impl Generator {
             machine.load_program(&code_bytes, &[])?;
             exit_code = machine.run()?;
             used_cycles = machine.machine.cycles();
-
             log::debug!(
                 "[execute tx] VM machine_run time: {}ms, exit code: {} used_cycles: {}",
                 t.elapsed().as_millis(),
@@ -730,6 +708,8 @@ impl Generator {
         let backend = self
             .load_backend(state, &script_hash)
             .ok_or(TransactionError::BackendNotFound { script_hash })?;
+        let aot_code_opt = self.backend_manage.get_aot_code(&script_hash);
+
         let run_result: RunResult = self.machine_run(
             chain,
             state,
@@ -737,6 +717,7 @@ impl Generator {
             raw_tx,
             max_cycles,
             backend.generator,
+            aot_code_opt,
         )?;
 
         if 0 == run_result.exit_code {
