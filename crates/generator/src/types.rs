@@ -6,7 +6,7 @@ use gw_types::packed::{ChallengeTarget, ChallengeWitness};
 use std::fmt::{self, Display};
 
 #[cfg(has_asm)]
-use ckb_vm::machine::asm::AsmCoreMachine;
+use ckb_vm::machine::asm::{AsmCoreMachine, AsmMachine};
 
 #[cfg(not(has_asm))]
 use ckb_vm::{DefaultCoreMachine, SparseMemory, TraceMachine, WXorXMemory};
@@ -74,8 +74,9 @@ impl VMVersion {
     }
 }
 
-// #[cfg(has_asm)]
-// pub(crate) type Machine<'a> = AsmMachine<'a>;
+#[allow(dead_code)]
+#[cfg(has_asm)]
+pub(crate) type Machine<'a> = AsmMachine<'a>;
 #[cfg(not(has_asm))]
 pub(crate) type Machine<'a> = TraceMachine<'a, CoreMachine>;
 

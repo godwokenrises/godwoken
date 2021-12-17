@@ -1,4 +1,7 @@
 use anyhow::Result;
+#[cfg(has_asm)]
+#[cfg(feature = "aot")]
+use ckb_vm::machine::aot::AotCode;
 use gw_common::H256;
 use gw_config::{BackendConfig, BackendType};
 use gw_types::bytes::Bytes;
@@ -12,16 +15,17 @@ pub struct Backend {
     pub backend_type: BackendType,
 }
 
-#[derive(Clone)]
+#[derive(Default)]
 pub struct BackendManage {
     backends: HashMap<H256, Backend>,
+    /// define here not in backends,
+    /// so we don't need to implement the trait `Clone` of AotCode
+    aot_codes: HashMap<H256, AotCode>,
 }
 
 impl BackendManage {
     pub fn from_config(configs: Vec<BackendConfig>) -> Result<Self> {
-        let mut backend_manage = BackendManage {
-            backends: Default::default(),
-        };
+        let mut backend_manage: BackendManage = Default::default();
 
         for config in configs {
             backend_manage.register_backend_config(config)?;
@@ -54,12 +58,43 @@ impl BackendManage {
     }
 
     pub fn register_backend(&mut self, backend: Backend) {
+        #[cfg(has_asm)]
+        #[cfg(feature = "aot")]
+        self.aot_codes.insert(
+            backend.validator_script_type_hash,
+            self.aot_compile(&backend.generator)
+                .expect("Ahead-of-time compile"),
+        );
+
         self.backends
             .insert(backend.validator_script_type_hash, backend);
     }
 
     pub fn get_backend(&self, code_hash: &H256) -> Option<&Backend> {
         self.backends.get(code_hash)
+    }
+
+    #[cfg(has_asm)]
+    #[cfg(feature = "aot")]
+    fn aot_compile(&self, code_bytes: &Bytes) -> Result<AotCode, ckb_vm::Error> {
+        let global_vm_version =
+            smol::block_on(async { *gw_ckb_hardfork::GLOBAL_VM_VERSION.lock().await });
+        let vm_version = match global_vm_version {
+            0 => crate::VMVersion::V0,
+            1 => crate::VMVersion::V1,
+            ver => panic!("Unsupport VMVersion: {}", ver),
+        };
+        let mut aot_machine = ckb_vm::machine::aot::AotCompilingMachine::load(
+            code_bytes,
+            Some(Box::new(crate::vm_cost_model::instruction_cycles)),
+            vm_version.vm_isa(),
+            vm_version.vm_version(),
+        )?;
+        aot_machine.compile()
+    }
+
+    pub fn get_aot_code(&self, code_hash: &H256) -> Option<&AotCode> {
+        self.aot_codes.get(code_hash)
     }
 
     pub fn get_backends(&self) -> &HashMap<H256, Backend> {
