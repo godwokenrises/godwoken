@@ -54,7 +54,7 @@ const TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR: &str = "ExceededMaximumBlo
 const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
 /// 524_288 we choose this value because it is smaller than the MAX_BLOCK_BYTES which is 597K
 const MAX_ROLLUP_WITNESS_SIZE: usize = 1 << 19;
-const WAIT_PRODUCE_BLOCK_SECONDS: u64 = 45;
+const WAIT_PRODUCE_BLOCK_SECONDS: u64 = 90;
 
 enum SubmitResult {
     Submitted,
@@ -236,6 +236,13 @@ impl BlockProducer {
                 .as_secs()
                 < WAIT_PRODUCE_BLOCK_SECONDS
         {
+            log::debug!(
+                "skip produce new block, last committed is {}s ago",
+                self.last_committed_l2_block
+                    .committed_at
+                    .elapsed()
+                    .as_secs()
+            );
             return Ok(());
         }
 
