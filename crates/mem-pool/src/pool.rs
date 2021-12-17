@@ -22,8 +22,12 @@ use gw_generator::{
     constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
 };
 use gw_store::{
-    chain_view::ChainView, mem_pool_state::MemPoolState, state::state_db::StateContext,
-    traits::chain_store::ChainStore, transaction::StoreTransaction, Store,
+    chain_view::ChainView,
+    mem_pool_state::{MemPoolState, MemStore},
+    state::state_db::StateContext,
+    traits::chain_store::ChainStore,
+    transaction::StoreTransaction,
+    Store,
 };
 use gw_traits::CodeStore;
 use gw_types::{
@@ -152,7 +156,10 @@ impl MemPool {
             })
             .transpose()?;
 
-        let mem_pool_state = Arc::new(MemPoolState::new(Arc::new(store.get_snapshot())));
+        let mem_pool_state = {
+            let mem_store = MemStore::new(store.get_snapshot());
+            Arc::new(MemPoolState::new(Arc::new(mem_store)))
+        };
 
         let mut mem_pool = MemPool {
             store,
@@ -652,7 +659,9 @@ impl MemPool {
             new_snapshot.get_tip_block_hash()?,
             "snapshot consistent"
         );
-        let mut mem_state = new_snapshot.state()?;
+        // use a new mem_store to package block
+        let new_mem_store = MemStore::new(new_snapshot);
+        let mut mem_state = new_mem_store.state()?;
 
         // NOTE: Must have at least one tx to have correct post block state
         if withdrawal_hashes.len() == mem_block.withdrawals().len()
@@ -844,7 +853,8 @@ impl MemPool {
         {
             let snapshot = self.store.get_snapshot();
             assert_eq!(snapshot.get_tip_block_hash()?, new_tip, "set new snapshot");
-            self.mem_pool_state.store(Arc::new(snapshot));
+            let mem_store = MemStore::new(snapshot);
+            self.mem_pool_state.store(Arc::new(mem_store));
         }
         let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
         let snap = self.mem_pool_state.load();

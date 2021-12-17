@@ -7,6 +7,7 @@ use gw_generator::constants::L2TX_MAX_CYCLES;
 use gw_generator::traits::StateExt;
 use gw_generator::Generator;
 use gw_store::chain_view::ChainView;
+use gw_store::mem_pool_state::MemStore;
 use gw_store::traits::chain_store::ChainStore;
 use gw_store::Store;
 use gw_types::packed::{BlockInfo, DepositRequest, L2Block, RawL2Block};
@@ -32,7 +33,8 @@ impl ReplayBlock {
             .get_block(&parent_block_hash)?
             .ok_or_else(|| anyhow!("replay parent block not found"))?;
 
-        let mut state = snap.state()?;
+        let mem_store = MemStore::new(snap);
+        let mut state = mem_store.state()?;
         {
             let parent_post_state = parent_block.raw().post_account();
             assert_eq!(
