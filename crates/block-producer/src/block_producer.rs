@@ -343,8 +343,20 @@ impl BlockProducer {
 
         // get txs & withdrawal requests from mem pool
         let (opt_finalized_custodians, block_param) = {
+            let t = Instant::now();
+            log::debug!("[compose_next_block_submit_tx] acquire mem-pool",);
             let mem_pool = self.mem_pool.lock().await;
-            mem_pool.output_mem_block(&OutputParam::new(retry_count))?
+            log::debug!(
+                "[compose_next_block_submit_tx] unlock mem-pool {}ms",
+                t.elapsed().as_millis()
+            );
+            let t = Instant::now();
+            let output = mem_pool.output_mem_block(&OutputParam::new(retry_count))?;
+            log::debug!(
+                "[compose_next_block_submit_tx] output mem block {}ms",
+                t.elapsed().as_millis()
+            );
+            output
         };
         let deposit_cells = block_param.deposits.clone();
 

@@ -347,7 +347,13 @@ impl RequestSubmitter {
             // check mem block empty slots
             loop {
                 if !self.submit_rx.is_empty() {
+                    log::debug!("[Mem-pool background job] check mem-pool acquire mem_pool",);
+                    let t = Instant::now();
                     let mem_pool = self.mem_pool.lock().await;
+                    log::debug!(
+                        "[Mem-pool background job] check-mem-pool unlock mem_pool {}ms",
+                        t.elapsed().as_millis()
+                    );
                     // continue to batch process if we have enough mem block slots
                     if !mem_pool.is_mem_txs_full(Self::MAX_BATCH_SIZE) {
                         break;
@@ -427,10 +433,11 @@ impl RequestSubmitter {
             };
 
             if !items.is_empty() {
+                log::debug!("[Mem-pool background job] acquire mem_pool",);
                 let t = Instant::now();
                 let mut mem_pool = self.mem_pool.lock().await;
                 log::debug!(
-                    "Mem-pool background job: unlock mem_pool {}ms",
+                    "[Mem-pool background job] unlock mem_pool {}ms",
                     t.elapsed().as_millis()
                 );
                 for entry in items {

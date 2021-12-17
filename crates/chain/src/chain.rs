@@ -26,7 +26,7 @@ use gw_types::{
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
 use smol::lock::Mutex;
-use std::{collections::HashSet, convert::TryFrom, sync::Arc};
+use std::{collections::HashSet, convert::TryFrom, sync::Arc, time::Instant};
 
 #[derive(Debug, Clone)]
 pub struct ChallengeCell {
@@ -252,7 +252,16 @@ impl Chain {
             if !self.complete_initial_syncing {
                 // Do first notify
                 let tip_block_hash: H256 = self.local_state.tip.hash().into();
-                smol::block_on(async { mem_pool.lock().await.notify_new_tip(tip_block_hash) })?;
+                smol::block_on(async {
+                    log::debug!("[complete_initial_syncing] acquire mem-pool",);
+                    let t = Instant::now();
+                    mem_pool.lock().await.notify_new_tip(tip_block_hash)?;
+                    log::debug!(
+                        "[complete_initial_syncing] unlock mem-pool {}ms",
+                        t.elapsed().as_millis()
+                    );
+                    Ok::<(), anyhow::Error>(())
+                })?;
             }
         }
         self.complete_initial_syncing = true;
@@ -829,7 +838,13 @@ impl Chain {
                 && (is_revert_happend || self.complete_initial_syncing)
             {
                 // update mem pool state
-                smol::block_on(async { mem_pool.lock().await.notify_new_tip(tip_block_hash) })?;
+                smol::block_on(async {
+                    log::debug!("[sync] acquire mem-pool",);
+                    let t = Instant::now();
+                    mem_pool.lock().await.notify_new_tip(tip_block_hash)?;
+                    log::debug!("[sync] unlock mem-pool {}ms", t.elapsed().as_millis());
+                    Ok::<(), anyhow::Error>(())
+                })?;
             }
         }
 
