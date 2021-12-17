@@ -10,6 +10,7 @@ use gw_common::{
 use gw_config::GenesisConfig;
 use gw_store::{
     state::state_db::{StateContext, StateTree},
+    traits::chain_store::ChainStore,
     transaction::StoreTransaction,
     Store,
 };

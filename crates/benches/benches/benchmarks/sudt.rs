@@ -9,7 +9,7 @@ use gw_generator::{
     constants::L2TX_MAX_CYCLES, dummy_state::DummyState, error::TransactionError, traits::StateExt,
     Generator,
 };
-use gw_traits::{ChainStore, CodeStore};
+use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -52,7 +52,7 @@ fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
 
 struct DummyChainStore;
 
-impl ChainStore for DummyChainStore {
+impl ChainView for DummyChainStore {
     fn get_block_hash_by_number(&self, _number: u64) -> Result<Option<H256>, gw_db::error::Error> {
         Err("dummy chain store".to_string().into())
     }

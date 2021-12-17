@@ -15,7 +15,7 @@ use ckb_hash::blake2b_256;
 use ckb_types::H256;
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_common::state::State;
-use gw_store::{state::state_db::StateContext, Store};
+use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore, Store};
 use gw_traits::CodeStore;
 use gw_types::packed::{
     L2Block, RollupAction, RollupActionReader, RollupActionUnion, Transaction, WitnessArgs,

@@ -14,6 +14,7 @@ use gw_jsonrpc_types::{
 use gw_poa::{PoA, ShouldIssueBlock};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::registry::TestModeRPC;
+use gw_store::traits::chain_store::ChainStore;
 use gw_store::Store;
 use gw_types::core::{ChallengeTargetType, Status};
 use gw_types::offchain::{global_state_from_slice, InputCellInfo};

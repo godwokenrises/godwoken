@@ -10,6 +10,6 @@ pub trait CodeStore {
     fn get_data(&self, data_hash: &H256) -> Option<Bytes>;
 }
 
-pub trait ChainStore {
+pub trait ChainView {
     fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, DBError>;
 }

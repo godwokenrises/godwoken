@@ -23,7 +23,7 @@ use gw_generator::{
 };
 use gw_store::{
     chain_view::ChainView, mem_pool_state::MemPoolState, state::state_db::StateContext,
-    transaction::StoreTransaction, Store,
+    traits::chain_store::ChainStore, transaction::StoreTransaction, Store,
 };
 use gw_traits::CodeStore;
 use gw_types::{

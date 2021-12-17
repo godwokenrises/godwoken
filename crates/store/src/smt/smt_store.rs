@@ -1,6 +1,6 @@
 //! Implement SMTStore trait
 
-use crate::traits::KVStore;
+use crate::traits::kv_store::KVStore;
 use gw_common::{
     sparse_merkle_tree::{
         error::Error as SMTError,

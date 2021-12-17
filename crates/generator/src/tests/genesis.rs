@@ -1,7 +1,7 @@
 use crate::genesis::{build_genesis, init_genesis};
 use gw_common::{sparse_merkle_tree::H256, state::State};
 use gw_config::GenesisConfig;
-use gw_store::{state::state_db::StateContext, Store};
+use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore, Store};
 use gw_traits::CodeStore;
 use gw_types::{
     bytes::Bytes,

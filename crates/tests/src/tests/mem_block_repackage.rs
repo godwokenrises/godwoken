@@ -12,6 +12,7 @@ use gw_block_producer::{
 use gw_common::H256;
 use gw_generator::traits::StateExt;
 use gw_mem_pool::pool::OutputParam;
+use gw_store::traits::chain_store::ChainStore;
 use gw_types::{
     core::ScriptHashType,
     offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext},

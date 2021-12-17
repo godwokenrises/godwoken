@@ -22,7 +22,7 @@ use gw_mem_pool::{
 };
 use gw_poa::{PoA, ShouldIssueBlock};
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_store::Store;
+use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     bytes::Bytes,
     core::{DepType, ScriptHashType, Status},
