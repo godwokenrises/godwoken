@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_rpc_client::rpc_client::{QueryResult, RPCClient};
-use gw_store::{traits::chain_store::ChainStore, transaction::StoreTransaction};
+use gw_store::traits::chain_store::ChainStore;
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -120,7 +120,7 @@ pub fn sum_withdrawals<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> 
 
 pub async fn query_finalized_custodians<WithdrawalIter: Iterator<Item = WithdrawalRequest>>(
     rpc_client: &RPCClient,
-    db: &StoreTransaction,
+    db: &impl ChainStore,
     withdrawals: WithdrawalIter,
     rollup_context: &RollupContext,
     last_finalized_block_number: u64,
@@ -211,7 +211,7 @@ pub fn generate_finalized_custodian(
 }
 
 fn sum_change_capacity(
-    db: &StoreTransaction,
+    db: &impl ChainStore,
     rollup_context: &RollupContext,
     withdrawals_amount: &WithdrawalsAmount,
 ) -> u128 {

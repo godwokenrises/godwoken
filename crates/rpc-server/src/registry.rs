@@ -579,10 +579,10 @@ async fn get_transaction(
             (to_h256(tx_hash), verbose)
         }
     };
-    let db = store.begin_transaction();
+    let db = store.get_snapshot();
     let tx_opt;
     let status;
-    match db.get_transaction_info(&tx_hash)? {
+    match store.get_transaction_info(&tx_hash)? {
         Some(tx_info) => {
             tx_opt = db.get_transaction_by_key(&tx_info.key())?;
             status = L2TransactionStatus::Committed;
@@ -610,7 +610,7 @@ async fn get_block_committed_info(
     store: Data<Store>,
 ) -> Result<Option<L2BlockCommittedInfo>> {
     let block_hash = to_h256(block_hash);
-    let db = store.begin_transaction();
+    let db = store.get_snapshot();
     let committed_info = match db.get_l2block_committed_info(&block_hash)? {
         Some(committed_info) => committed_info,
         None => return Ok(None),
@@ -661,7 +661,7 @@ async fn get_block_by_number(
     store: Data<Store>,
 ) -> Result<Option<L2BlockView>> {
     let block_number = block_number.value();
-    let db = store.begin_transaction();
+    let db = store.get_snapshot();
     let block_hash = match db.get_block_hash_by_number(block_number)? {
         Some(hash) => hash,
         None => return Ok(None),
@@ -678,13 +678,13 @@ async fn get_block_hash(
     store: Data<Store>,
 ) -> Result<Option<JsonH256>> {
     let block_number = block_number.value();
-    let db = store.begin_transaction();
+    let db = store.get_snapshot();
     let hash_opt = db.get_block_hash_by_number(block_number)?.map(to_jsonh256);
     Ok(hash_opt)
 }
 
 async fn get_tip_block_hash(store: Data<Store>) -> Result<JsonH256> {
-    let tip_block_hash = store.begin_transaction().get_last_valid_tip_block_hash()?;
+    let tip_block_hash = store.get_snapshot().get_last_valid_tip_block_hash()?;
     Ok(to_jsonh256(tip_block_hash))
 }
 
@@ -693,7 +693,7 @@ async fn get_transaction_receipt(
     store: Data<Store>,
 ) -> Result<Option<TxReceipt>> {
     let tx_hash = to_h256(tx_hash);
-    let db = store.begin_transaction();
+    let db = store.get_snapshot();
     // search from db
     if let Some(receipt) = db.get_transaction_receipt(&tx_hash)?.map(|receipt| {
         let receipt: TxReceipt = receipt.into();
@@ -723,7 +723,7 @@ async fn execute_l2transaction(
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
 
-    let raw_block = store.begin_transaction().get_last_valid_tip_block()?.raw();
+    let raw_block = store.get_snapshot().get_last_valid_tip_block()?.raw();
     let block_producer_id = raw_block.block_producer_id();
     let timestamp = raw_block.timestamp();
     let number = {
@@ -739,7 +739,7 @@ async fn execute_l2transaction(
 
     let tx_hash = tx.hash();
     let mut run_result = unblock(move || {
-        let db = store.begin_transaction();
+        let db = store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
         let snap = mem_pool_state.load();
@@ -976,7 +976,7 @@ async fn submit_withdrawal_request(
     // verify finalized custodian
     {
         let finalized_custodians = {
-            let db = store.begin_transaction();
+            let db = store.get_snapshot();
             let tip = db.get_last_valid_tip_block()?;
             // query withdrawals from ckb-indexer
             let last_finalized_block_number = generator
@@ -1069,7 +1069,7 @@ async fn get_withdrawal(
             (to_h256(withdrawal_hash), verbose)
         }
     };
-    let db = store.begin_transaction();
+    let db = store.get_snapshot();
     let withdrawal_opt;
     let status;
     match db.get_withdrawal_info(&withdrawal_hash)? {
