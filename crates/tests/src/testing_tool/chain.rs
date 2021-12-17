@@ -11,7 +11,7 @@ use gw_generator::{
     Generator,
 };
 use gw_mem_pool::pool::{MemPool, OutputParam};
-use gw_store::Store;
+use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,

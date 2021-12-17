@@ -1,4 +1,9 @@
-use crate::{state::state_db::StateContext, traits::KVStore, transaction::StoreTransaction, Store};
+use crate::{
+    state::state_db::StateContext,
+    traits::{chain_store::ChainStore, kv_store::KVStoreWrite},
+    transaction::StoreTransaction,
+    Store,
+};
 use gw_common::{h256_ext::H256Ext, merkle_utils::calculate_state_checkpoint, state::State, H256};
 use gw_db::schema::COLUMN_BLOCK;
 use gw_types::{

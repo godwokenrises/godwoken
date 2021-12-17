@@ -12,7 +12,8 @@ use gw_generator::{
 use gw_jsonrpc_types::debugger::ReprMockTransaction;
 use gw_mem_pool::pool::MemPool;
 use gw_store::{
-    chain_view::ChainView, state::state_db::StateContext, transaction::StoreTransaction, Store,
+    chain_view::ChainView, state::state_db::StateContext, traits::chain_store::ChainStore,
+    transaction::StoreTransaction, Store,
 };
 use gw_types::{
     bytes::Bytes,

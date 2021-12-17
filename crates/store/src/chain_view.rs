@@ -2,9 +2,9 @@
 
 use gw_common::H256;
 use gw_db::error::Error;
-use gw_traits::ChainStore;
+use gw_traits::ChainView as ChainViewTrait;
 
-use crate::transaction::StoreTransaction;
+use crate::{traits::chain_store::ChainStore, transaction::StoreTransaction};
 
 /// Max block hashes we can read, not included tip
 const MAX_BLOCK_HASHES_DEPTH: u64 = 256;
@@ -20,7 +20,7 @@ impl<'db> ChainView<'db> {
     }
 }
 
-impl<'db> ChainStore for ChainView<'db> {
+impl<'db> ChainViewTrait for ChainView<'db> {
     fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, Error> {
         // if we can read block number from db index, we are in the main chain
         if let Some(tip_number) = self.db.get_block_number(&self.tip_block_hash)? {

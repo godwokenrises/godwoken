@@ -12,7 +12,7 @@ use gw_common::H256;
 use gw_config::{Config, DBBlockValidatorConfig, DebugConfig};
 use gw_generator::Generator;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType as JsonChallengeTargetType;
-use gw_store::Store;
+use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     core::{ChallengeTargetType, Status},
     packed::{ChallengeTarget, GlobalState, L2Block},

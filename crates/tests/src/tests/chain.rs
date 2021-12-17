@@ -16,7 +16,7 @@ use gw_common::{
     state::{to_short_address, State},
     H256,
 };
-use gw_store::state::state_db::StateContext;
+use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore};
 use gw_types::{
     bytes::Bytes,
     core::{ScriptHashType, Status},

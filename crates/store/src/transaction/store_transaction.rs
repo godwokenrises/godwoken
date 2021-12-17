@@ -1,12 +1,18 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::{smt::smt_store::SMTStore, traits::KVStore};
+use crate::state::state_db::{StateContext, StateTree};
+use crate::traits::chain_store::ChainStore;
+use crate::traits::kv_store::{KVStore, KVStoreWrite};
+use crate::{smt::smt_store::SMTStore, traits::kv_store::KVStoreRead};
 use gw_common::h256_ext::H256Ext;
 use gw_common::{merkle_utils::calculate_state_checkpoint, smt::SMT, H256};
 use gw_db::schema::{
-    Col, COLUMN_ASSET_SCRIPT, COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK,
-    COLUMN_BLOCK_DEPOSIT_REQUESTS, COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH,
-    COLUMN_BLOCK_SMT_LEAF, COLUMN_INDEX, COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_META,
+    Col, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ASSET_SCRIPT,
+    COLUMN_BAD_BLOCK_CHALLENGE_TARGET, COLUMN_BLOCK, COLUMN_BLOCK_DEPOSIT_REQUESTS,
+    COLUMN_BLOCK_GLOBAL_STATE, COLUMN_BLOCK_SMT_BRANCH, COLUMN_BLOCK_SMT_LEAF,
+    COLUMN_BLOCK_STATE_RECORD, COLUMN_BLOCK_STATE_REVERSE_RECORD, COLUMN_INDEX,
+    COLUMN_L2BLOCK_COMMITTED_INFO, COLUMN_MEM_POOL_TRANSACTION,
+    COLUMN_MEM_POOL_TRANSACTION_RECEIPT, COLUMN_MEM_POOL_WITHDRAWAL, COLUMN_META,
     COLUMN_REVERTED_BLOCK_SMT_BRANCH, COLUMN_REVERTED_BLOCK_SMT_LEAF,
     COLUMN_REVERTED_BLOCK_SMT_ROOT, COLUMN_TRANSACTION, COLUMN_TRANSACTION_INFO,
     COLUMN_TRANSACTION_RECEIPT, COLUMN_WITHDRAWAL, COLUMN_WITHDRAWAL_INFO, META_BLOCK_SMT_ROOT_KEY,
@@ -14,7 +20,7 @@ use gw_db::schema::{
     META_TIP_BLOCK_HASH_KEY,
 };
 use gw_db::{error::Error, iter::DBIter, DBIterator, IteratorMode, RocksDBTransaction};
-use gw_types::offchain::global_state_from_slice;
+use gw_db::{DBRawIterator, Direction};
 use gw_types::packed::{Script, WithdrawalKey};
 use gw_types::{
     packed::{
@@ -24,18 +30,22 @@ use gw_types::{
 };
 use std::collections::HashSet;
 
+use crate::state::block_state_record::{BlockStateRecordKey, BlockStateRecordKeyReverse};
+
 pub struct StoreTransaction {
     pub(crate) inner: RocksDBTransaction,
 }
 
-impl KVStore for StoreTransaction {
+impl KVStoreRead for StoreTransaction {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
         self.inner
             .get(col, key)
             .expect("db operation should be ok")
             .map(|v| Box::<[u8]>::from(v.as_ref()))
     }
+}
 
+impl KVStoreWrite for StoreTransaction {
     fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
         self.inner.put(col, key, value)
     }
@@ -44,6 +54,8 @@ impl KVStore for StoreTransaction {
         self.inner.delete(col, key)
     }
 }
+
+impl KVStore for StoreTransaction {}
 
 impl StoreTransaction {
     pub fn commit(&self) -> Result<(), Error> {
@@ -65,274 +77,14 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn get_block_smt_root(&self) -> Result<H256, Error> {
-        let slice = self
-            .get(COLUMN_META, META_BLOCK_SMT_ROOT_KEY)
-            .expect("must has root");
-        debug_assert_eq!(slice.len(), 32);
-        let mut root = [0u8; 32];
-        root.copy_from_slice(&slice);
-        Ok(root.into())
-    }
-
     pub fn set_block_smt_root(&self, root: H256) -> Result<(), Error> {
         self.insert_raw(COLUMN_META, META_BLOCK_SMT_ROOT_KEY, root.as_slice())?;
         Ok(())
     }
 
-    pub fn block_smt(&self) -> Result<SMT<SMTStore<Self>>, Error> {
-        let root = self.get_block_smt_root()?;
-        let smt_store = SMTStore::new(COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_SMT_BRANCH, self);
-        Ok(SMT::new(root, smt_store))
-    }
-
-    pub fn get_reverted_block_smt_root(&self) -> Result<H256, Error> {
-        let slice = self
-            .get(COLUMN_META, META_REVERTED_BLOCK_SMT_ROOT_KEY)
-            .expect("must has root");
-        debug_assert_eq!(slice.len(), 32);
-        let mut root = [0u8; 32];
-        root.copy_from_slice(&slice);
-        Ok(root.into())
-    }
-
-    pub fn set_reverted_block_smt_root(&self, root: H256) -> Result<(), Error> {
-        self.insert_raw(
-            COLUMN_META,
-            META_REVERTED_BLOCK_SMT_ROOT_KEY,
-            root.as_slice(),
-        )?;
-        Ok(())
-    }
-
-    pub fn reverted_block_smt(&self) -> Result<SMT<SMTStore<Self>>, Error> {
-        let root = self.get_reverted_block_smt_root()?;
-        let smt_store = SMTStore::new(
-            COLUMN_REVERTED_BLOCK_SMT_LEAF,
-            COLUMN_REVERTED_BLOCK_SMT_BRANCH,
-            self,
-        );
-        Ok(SMT::new(root, smt_store))
-    }
-
-    pub fn get_last_valid_tip_block(&self) -> Result<packed::L2Block, Error> {
-        let block_hash = self.get_last_valid_tip_block_hash()?;
-        let block = self
-            .get_block(&block_hash)?
-            .expect("last valid tip block exists");
-
-        Ok(block)
-    }
-
-    pub fn get_last_valid_tip_block_hash(&self) -> Result<H256, Error> {
-        let slice = self
-            .get(COLUMN_META, META_LAST_VALID_TIP_BLOCK_HASH_KEY)
-            .expect("get last valid tip block hash");
-
-        let byte32 = packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref()).to_entity();
-        Ok(byte32.unpack())
-    }
-
-    pub fn set_last_valid_tip_block_hash(&self, block_hash: &H256) -> Result<(), Error> {
-        self.insert_raw(
-            COLUMN_META,
-            META_LAST_VALID_TIP_BLOCK_HASH_KEY,
-            block_hash.as_slice(),
-        )
-    }
-
-    pub fn get_tip_block_hash(&self) -> Result<H256, Error> {
-        let slice = self
-            .get(COLUMN_META, META_TIP_BLOCK_HASH_KEY)
-            .expect("get tip block hash");
-        Ok(
-            packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref())
-                .to_entity()
-                .unpack(),
-        )
-    }
-
     pub fn set_tip_block_hash(&self, block_hash: H256) -> Result<(), Error> {
         let block_hash: [u8; 32] = block_hash.into();
         self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &block_hash)
-    }
-
-    pub fn get_tip_block(&self) -> Result<packed::L2Block, Error> {
-        let tip_block_hash = self.get_tip_block_hash()?;
-        Ok(self.get_block(&tip_block_hash)?.expect("get tip block"))
-    }
-
-    pub fn get_block_hash_by_number(&self, number: u64) -> Result<Option<H256>, Error> {
-        let block_number: packed::Uint64 = number.pack();
-        match self.get(COLUMN_INDEX, block_number.as_slice()) {
-            Some(slice) => Ok(Some(
-                packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref())
-                    .to_entity()
-                    .unpack(),
-            )),
-            None => Ok(None),
-        }
-    }
-
-    pub fn get_block_number(&self, block_hash: &H256) -> Result<Option<u64>, Error> {
-        match self.get(COLUMN_INDEX, block_hash.as_slice()) {
-            Some(slice) => Ok(Some(
-                packed::Uint64Reader::from_slice_should_be_ok(slice.as_ref())
-                    .to_entity()
-                    .unpack(),
-            )),
-            None => Ok(None),
-        }
-    }
-
-    pub fn get_block(&self, block_hash: &H256) -> Result<Option<packed::L2Block>, Error> {
-        match self.get(COLUMN_BLOCK, block_hash.as_slice()) {
-            Some(slice) => Ok(Some(
-                packed::L2BlockReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
-            )),
-            None => Ok(None),
-        }
-    }
-
-    pub fn get_transaction(&self, tx_hash: &H256) -> Result<Option<packed::L2Transaction>, Error> {
-        match self.get_transaction_info(tx_hash)? {
-            Some(tx_info) => self.get_transaction_by_key(&tx_info.key()),
-            None => Ok(None),
-        }
-    }
-
-    pub fn get_transaction_info(
-        &self,
-        tx_hash: &H256,
-    ) -> Result<Option<packed::TransactionInfo>, Error> {
-        let tx_info_opt = self
-            .get(COLUMN_TRANSACTION_INFO, tx_hash.as_slice())
-            .map(|slice| {
-                packed::TransactionInfoReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
-            });
-        Ok(tx_info_opt)
-    }
-
-    pub fn get_transaction_by_key(
-        &self,
-        tx_key: &TransactionKey,
-    ) -> Result<Option<packed::L2Transaction>, Error> {
-        Ok(self
-            .get(COLUMN_TRANSACTION, tx_key.as_slice())
-            .map(|slice| {
-                packed::L2TransactionReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
-            }))
-    }
-
-    pub fn get_transaction_receipt(
-        &self,
-        tx_hash: &H256,
-    ) -> Result<Option<packed::TxReceipt>, Error> {
-        if let Some(slice) = self.get(COLUMN_TRANSACTION_INFO, tx_hash.as_slice()) {
-            let info =
-                packed::TransactionInfoReader::from_slice_should_be_ok(slice.as_ref()).to_entity();
-            let tx_key = info.key();
-            self.get_transaction_receipt_by_key(&tx_key)
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub fn get_transaction_receipt_by_key(
-        &self,
-        key: &TransactionKey,
-    ) -> Result<Option<packed::TxReceipt>, Error> {
-        Ok(self
-            .get(COLUMN_TRANSACTION_RECEIPT, key.as_slice())
-            .map(|slice| {
-                packed::TxReceiptReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
-            }))
-    }
-
-    pub fn get_withdrawal(
-        &self,
-        withdrawal_hash: &H256,
-    ) -> Result<Option<packed::WithdrawalRequest>, Error> {
-        match self.get_withdrawal_info(withdrawal_hash)? {
-            Some(withdrawal_info) => self.get_withdrawal_by_key(&withdrawal_info.key()),
-            None => Ok(None),
-        }
-    }
-
-    pub fn get_withdrawal_info(
-        &self,
-        withdrawal_hash: &H256,
-    ) -> Result<Option<packed::WithdrawalInfo>, Error> {
-        let withdrawal_info_opt = self
-            .get(COLUMN_WITHDRAWAL_INFO, withdrawal_hash.as_slice())
-            .map(|slice| {
-                packed::WithdrawalInfoReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
-            });
-        Ok(withdrawal_info_opt)
-    }
-
-    pub fn get_withdrawal_by_key(
-        &self,
-        withdrawal_key: &WithdrawalKey,
-    ) -> Result<Option<packed::WithdrawalRequest>, Error> {
-        Ok(self
-            .get(COLUMN_WITHDRAWAL, withdrawal_key.as_slice())
-            .map(|slice| {
-                packed::WithdrawalRequestReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
-            }))
-    }
-
-    pub fn get_l2block_committed_info(
-        &self,
-        block_hash: &H256,
-    ) -> Result<Option<packed::L2BlockCommittedInfo>, Error> {
-        match self.get(COLUMN_L2BLOCK_COMMITTED_INFO, block_hash.as_slice()) {
-            Some(slice) => Ok(Some(
-                packed::L2BlockCommittedInfoReader::from_slice_should_be_ok(slice.as_ref())
-                    .to_entity(),
-            )),
-            None => Ok(None),
-        }
-    }
-
-    pub fn get_block_deposit_requests(
-        &self,
-        block_hash: &H256,
-    ) -> Result<Option<Vec<packed::DepositRequest>>, Error> {
-        match self.get(COLUMN_BLOCK_DEPOSIT_REQUESTS, block_hash.as_slice()) {
-            Some(slice) => Ok(Some(
-                packed::DepositRequestVecReader::from_slice_should_be_ok(slice.as_ref())
-                    .to_entity()
-                    .into_iter()
-                    .collect(),
-            )),
-            None => Ok(None),
-        }
-    }
-
-    pub fn get_block_post_global_state(
-        &self,
-        block_hash: &H256,
-    ) -> Result<Option<packed::GlobalState>, Error> {
-        match self.get(COLUMN_BLOCK_GLOBAL_STATE, block_hash.as_slice()) {
-            Some(slice) => Ok(Some(
-                global_state_from_slice(slice.as_ref()).expect("global state should be ok"),
-            )),
-            None => Ok(None),
-        }
-    }
-
-    pub fn get_bad_block_challenge_target(
-        &self,
-        block_hash: &H256,
-    ) -> Result<Option<ChallengeTarget>, Error> {
-        match self.get(COLUMN_BAD_BLOCK_CHALLENGE_TARGET, block_hash.as_slice()) {
-            Some(slice) => {
-                let target = packed::ChallengeTargetReader::from_slice_should_be_ok(slice.as_ref());
-                Ok(Some(target.to_entity()))
-            }
-            None => Ok(None),
-        }
     }
 
     pub fn set_bad_block_challenge_target(
@@ -347,33 +99,6 @@ impl StoreTransaction {
         )
     }
 
-    // TODO: prune db state
-    pub fn get_reverted_block_hashes(&self) -> Result<HashSet<H256>, Error> {
-        let iter = self.get_iter(COLUMN_REVERTED_BLOCK_SMT_LEAF, IteratorMode::End);
-        let to_byte32 = iter.map(|(key, _value)| {
-            packed::Byte32Reader::from_slice_should_be_ok(key.as_ref()).to_entity()
-        });
-        let to_h256 = to_byte32.map(|byte32| byte32.unpack());
-
-        Ok(to_h256.collect())
-    }
-
-    pub fn get_reverted_block_hashes_by_root(
-        &self,
-        reverted_block_smt_root: &H256,
-    ) -> Result<Option<Vec<H256>>, Error> {
-        match self.get(
-            COLUMN_REVERTED_BLOCK_SMT_ROOT,
-            reverted_block_smt_root.as_slice(),
-        ) {
-            Some(slice) => {
-                let block_hash = packed::Byte32VecReader::from_slice_should_be_ok(slice.as_ref());
-                Ok(Some(block_hash.to_entity().unpack()))
-            }
-            None => Ok(None),
-        }
-    }
-
     pub fn set_reverted_block_hashes(
         &self,
         reverted_block_smt_root: &H256,
@@ -386,97 +111,6 @@ impl StoreTransaction {
             reverted_block_smt_root.as_slice(),
             block_hashes.pack().as_slice(),
         )
-    }
-
-    pub fn rewind_reverted_block_smt(&self, block_hashes: Vec<H256>) -> Result<(), Error> {
-        let mut reverted_block_smt = self.reverted_block_smt()?;
-
-        for block_hash in block_hashes.into_iter() {
-            reverted_block_smt
-                .update(block_hash, H256::zero())
-                .map_err(|err| Error::from(format!("reset reverted block smt error {}", err)))?;
-        }
-
-        self.set_reverted_block_smt_root(*reverted_block_smt.root())
-    }
-
-    pub fn rewind_block_smt(&self, block: &packed::L2Block) -> Result<(), Error> {
-        let mut block_smt = self.block_smt()?;
-        block_smt
-            .update(block.smt_key().into(), H256::zero())
-            .map_err(|err| Error::from(format!("reset block smt error {}", err)))?;
-
-        self.set_block_smt_root(*block_smt.root())
-    }
-
-    pub fn insert_bad_block(
-        &self,
-        block: &packed::L2Block,
-        committed_info: &packed::L2BlockCommittedInfo,
-        global_state: &packed::GlobalState,
-    ) -> Result<(), Error> {
-        let block_hash = block.hash();
-        let block_number = block.raw().number();
-
-        let committed_info = committed_info.as_slice();
-        let global_state = global_state.as_slice();
-
-        self.insert_raw(COLUMN_L2BLOCK_COMMITTED_INFO, &block_hash, committed_info)?;
-        self.insert_raw(COLUMN_BLOCK_GLOBAL_STATE, &block_hash, global_state)?;
-
-        self.insert_raw(COLUMN_BLOCK, &block_hash, block.as_slice())?;
-
-        self.insert_raw(COLUMN_INDEX, block_number.as_slice(), &block_hash)?;
-        self.insert_raw(COLUMN_INDEX, &block_hash, block_number.as_slice())?;
-
-        // Add to block smt
-        let mut block_smt = self.block_smt()?;
-        block_smt
-            .update(block.smt_key().into(), block_hash.into())
-            .map_err(|err| Error::from(format!("block smt error {}", err)))?;
-        self.set_block_smt_root(*block_smt.root())?;
-
-        // Update tip block
-        self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &block_hash)?;
-
-        Ok(())
-    }
-
-    pub fn revert_bad_blocks(&self, bad_blocks: &[packed::L2Block]) -> Result<(), Error> {
-        if bad_blocks.is_empty() {
-            return Ok(());
-        }
-
-        let mut block_smt = self.block_smt()?;
-        let mut reverted_block_smt = self.reverted_block_smt()?;
-
-        for block in bad_blocks {
-            let block_hash = block.hash();
-            let block_number = block.raw().number();
-
-            self.delete(COLUMN_INDEX, &block_hash)?;
-            self.delete(COLUMN_INDEX, block_number.as_slice())?;
-
-            // Remove block from smt
-            block_smt
-                .update(block.smt_key().into(), H256::zero())
-                .map_err(|err| Error::from(format!("block smt error {}", err)))?;
-
-            // Add block to reverted smt
-            reverted_block_smt
-                .update(block_hash.into(), H256::one())
-                .map_err(|err| Error::from(format!("reverted block smt error {}", err)))?;
-        }
-
-        self.set_block_smt_root(*block_smt.root())?;
-        self.set_reverted_block_smt_root(*reverted_block_smt.root())?;
-
-        // Revert tip block to parent block
-        let parent_block_hash: [u8; 32] = {
-            let first_bad_block = bad_blocks.first().expect("exists");
-            first_bad_block.raw().parent_block_hash().unpack()
-        };
-        self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &parent_block_hash)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -585,13 +219,139 @@ impl StoreTransaction {
         Ok(())
     }
 
-    pub fn get_asset_script(&self, script_hash: &H256) -> Result<Option<Script>, Error> {
-        match self.get(COLUMN_ASSET_SCRIPT, script_hash.as_slice()) {
-            Some(slice) => Ok(Some(
-                packed::ScriptReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
-            )),
-            None => Ok(None),
+    pub fn block_smt(&self) -> Result<SMT<SMTStore<Self>>, Error> {
+        let root = self.get_block_smt_root()?;
+        let smt_store = SMTStore::new(COLUMN_BLOCK_SMT_LEAF, COLUMN_BLOCK_SMT_BRANCH, self);
+        Ok(SMT::new(root, smt_store))
+    }
+
+    pub fn reverted_block_smt(&self) -> Result<SMT<SMTStore<Self>>, Error> {
+        let root = self.get_reverted_block_smt_root()?;
+        let smt_store = SMTStore::new(
+            COLUMN_REVERTED_BLOCK_SMT_LEAF,
+            COLUMN_REVERTED_BLOCK_SMT_BRANCH,
+            self,
+        );
+        Ok(SMT::new(root, smt_store))
+    }
+
+    // TODO: prune db state
+    pub fn get_reverted_block_hashes(&self) -> Result<HashSet<H256>, Error> {
+        let iter = self.get_iter(COLUMN_REVERTED_BLOCK_SMT_LEAF, IteratorMode::End);
+        let to_byte32 = iter.map(|(key, _value)| {
+            packed::Byte32Reader::from_slice_should_be_ok(key.as_ref()).to_entity()
+        });
+        let to_h256 = to_byte32.map(|byte32| byte32.unpack());
+
+        Ok(to_h256.collect())
+    }
+
+    pub fn rewind_reverted_block_smt(&self, block_hashes: Vec<H256>) -> Result<(), Error> {
+        let mut reverted_block_smt = self.reverted_block_smt()?;
+
+        for block_hash in block_hashes.into_iter() {
+            reverted_block_smt
+                .update(block_hash, H256::zero())
+                .map_err(|err| Error::from(format!("reset reverted block smt error {}", err)))?;
         }
+
+        self.set_reverted_block_smt_root(*reverted_block_smt.root())
+    }
+
+    pub fn rewind_block_smt(&self, block: &packed::L2Block) -> Result<(), Error> {
+        let mut block_smt = self.block_smt()?;
+        block_smt
+            .update(block.smt_key().into(), H256::zero())
+            .map_err(|err| Error::from(format!("reset block smt error {}", err)))?;
+
+        self.set_block_smt_root(*block_smt.root())
+    }
+
+    fn set_last_valid_tip_block_hash(&self, block_hash: &H256) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_META,
+            META_LAST_VALID_TIP_BLOCK_HASH_KEY,
+            block_hash.as_slice(),
+        )
+    }
+
+    pub fn set_reverted_block_smt_root(&self, root: H256) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_META,
+            META_REVERTED_BLOCK_SMT_ROOT_KEY,
+            root.as_slice(),
+        )?;
+        Ok(())
+    }
+
+    pub fn insert_bad_block(
+        &self,
+        block: &packed::L2Block,
+        committed_info: &packed::L2BlockCommittedInfo,
+        global_state: &packed::GlobalState,
+    ) -> Result<(), Error> {
+        let block_hash = block.hash();
+        let block_number = block.raw().number();
+
+        let committed_info = committed_info.as_slice();
+        let global_state = global_state.as_slice();
+
+        self.insert_raw(COLUMN_L2BLOCK_COMMITTED_INFO, &block_hash, committed_info)?;
+        self.insert_raw(COLUMN_BLOCK_GLOBAL_STATE, &block_hash, global_state)?;
+
+        self.insert_raw(COLUMN_BLOCK, &block_hash, block.as_slice())?;
+
+        self.insert_raw(COLUMN_INDEX, block_number.as_slice(), &block_hash)?;
+        self.insert_raw(COLUMN_INDEX, &block_hash, block_number.as_slice())?;
+
+        // Add to block smt
+        let mut block_smt = self.block_smt()?;
+        block_smt
+            .update(block.smt_key().into(), block_hash.into())
+            .map_err(|err| Error::from(format!("block smt error {}", err)))?;
+        self.set_block_smt_root(*block_smt.root())?;
+
+        // Update tip block
+        self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &block_hash)?;
+
+        Ok(())
+    }
+
+    pub fn revert_bad_blocks(&self, bad_blocks: &[packed::L2Block]) -> Result<(), Error> {
+        if bad_blocks.is_empty() {
+            return Ok(());
+        }
+
+        let mut block_smt = self.block_smt()?;
+        let mut reverted_block_smt = self.reverted_block_smt()?;
+
+        for block in bad_blocks {
+            let block_hash = block.hash();
+            let block_number = block.raw().number();
+
+            self.delete(COLUMN_INDEX, &block_hash)?;
+            self.delete(COLUMN_INDEX, block_number.as_slice())?;
+
+            // Remove block from smt
+            block_smt
+                .update(block.smt_key().into(), H256::zero())
+                .map_err(|err| Error::from(format!("block smt error {}", err)))?;
+
+            // Add block to reverted smt
+            reverted_block_smt
+                .update(block_hash.into(), H256::one())
+                .map_err(|err| Error::from(format!("reverted block smt error {}", err)))?;
+        }
+
+        self.set_block_smt_root(*block_smt.root())?;
+        self.set_reverted_block_smt_root(*reverted_block_smt.root())?;
+
+        // Revert tip block to parent block
+        let parent_block_hash: [u8; 32] = {
+            let first_bad_block = bad_blocks.first().expect("exists");
+            first_bad_block.raw().parent_block_hash().unpack()
+        };
+        self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &parent_block_hash)
     }
 
     /// Attach block to the rollup main chain
@@ -636,7 +396,6 @@ impl StoreTransaction {
 
         // update tip
         self.insert_raw(COLUMN_META, META_TIP_BLOCK_HASH_KEY, &block_hash)?;
-        self.prune_finalized_block_state_record(raw_number.unpack())?;
         self.set_last_valid_tip_block_hash(&block_hash.into())?;
 
         Ok(())
@@ -690,4 +449,173 @@ impl StoreTransaction {
 
         Ok(())
     }
+
+    pub fn remove_block_state_record(&self, block_number: u64) -> Result<(), Error> {
+        let iter = self.iter_block_state_record(block_number);
+        for record_key in iter {
+            // delete record key
+            self.delete(COLUMN_BLOCK_STATE_RECORD, record_key.as_slice())?;
+            // delete reverse record key
+            let reverse_key =
+                BlockStateRecordKeyReverse::new(record_key.block_number(), &record_key.state_key());
+            self.delete(COLUMN_BLOCK_STATE_REVERSE_RECORD, reverse_key.as_slice())?;
+        }
+        Ok(())
+    }
+
+    pub fn get_history_state(&self, block_number: u64, state_key: &H256) -> Option<H256> {
+        let key = BlockStateRecordKeyReverse::new(block_number, state_key);
+        let mut raw_iter: DBRawIterator = self
+            .get_iter(COLUMN_BLOCK_STATE_REVERSE_RECORD, IteratorMode::Start)
+            .into();
+        raw_iter.seek_for_prev(key.as_slice());
+
+        if !raw_iter.valid() {
+            return None;
+        }
+        match raw_iter.key() {
+            Some(prev_key) => {
+                // not a some key
+                if &prev_key[..32] != key.state_key().as_slice() {
+                    return None;
+                }
+
+                // get old value
+                let prev_reverse_key = BlockStateRecordKeyReverse::from_slice(prev_key);
+                let prev_key = BlockStateRecordKey::new(
+                    prev_reverse_key.block_number(),
+                    &prev_reverse_key.state_key(),
+                );
+
+                self.get(COLUMN_BLOCK_STATE_RECORD, prev_key.as_slice())
+                    .map(|raw| {
+                        let mut buf = [0u8; 32];
+                        buf.copy_from_slice(&raw);
+                        buf.into()
+                    })
+            }
+            _ => None,
+        }
+    }
+
+    pub fn iter_block_state_record(
+        &self,
+        block_number: u64,
+    ) -> impl Iterator<Item = BlockStateRecordKey> + '_ {
+        let start_key = BlockStateRecordKey::new(block_number, &H256::zero());
+        self.get_iter(
+            COLUMN_BLOCK_STATE_RECORD,
+            IteratorMode::From(start_key.as_slice(), Direction::Forward),
+        )
+        .map(|(key, _value)| BlockStateRecordKey::from_slice(&key))
+        .take_while(move |key| key.block_number() == block_number)
+    }
+
+    // FIXME: This method may running into inconsistent state if current state is dirty.
+    // We should separate the StateDB into ReadOnly & WriteOnly,
+    // The ReadOnly is for fetching history state, and the write only is for writing new state.
+    // This function should only be added on the ReadOnly state.
+    pub fn account_smt(&self) -> Result<SMT<SMTStore<'_, Self>>, Error> {
+        let block = self.get_last_valid_tip_block()?;
+        let merkle_state = block.raw().post_account();
+        self.account_smt_with_merkle_state(merkle_state)
+    }
+
+    pub fn account_smt_store(&self) -> Result<SMTStore<Self>, Error> {
+        let smt_store = SMTStore::new(COLUMN_ACCOUNT_SMT_LEAF, COLUMN_ACCOUNT_SMT_BRANCH, self);
+        Ok(smt_store)
+    }
+
+    pub fn account_smt_with_merkle_state(
+        &self,
+        merkle_state: AccountMerkleState,
+    ) -> Result<SMT<SMTStore<Self>>, Error> {
+        let smt_store = self.account_smt_store()?;
+        Ok(SMT::new(merkle_state.merkle_root().unpack(), smt_store))
+    }
+
+    // get state tree
+    pub fn state_tree(&self, context: StateContext) -> Result<StateTree, Error> {
+        let block = match context {
+            StateContext::ReadOnlyHistory(block_number) => {
+                let block_hash = self
+                    .get_block_hash_by_number(block_number)?
+                    .ok_or_else(|| Error::from("can't find block".to_string()))?;
+                self.get_block(&block_hash)?
+                    .ok_or_else(|| "can't find block".to_string())?
+            }
+            _ => self.get_last_valid_tip_block()?,
+        };
+        let merkle_state = block.raw().post_account();
+        let account_count = merkle_state.count().unpack();
+        let tree = self.account_smt_with_merkle_state(merkle_state)?;
+        Ok(StateTree::new(tree, account_count, context))
+    }
+
+    pub fn insert_mem_pool_transaction(
+        &self,
+        tx_hash: &H256,
+        tx: packed::L2Transaction,
+    ) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_MEM_POOL_TRANSACTION,
+            tx_hash.as_slice(),
+            tx.as_slice(),
+        )
+    }
+
+    pub fn remove_mem_pool_transaction(&self, tx_hash: &H256) -> Result<(), Error> {
+        self.delete(COLUMN_MEM_POOL_TRANSACTION, tx_hash.as_slice())?;
+        self.delete(COLUMN_MEM_POOL_TRANSACTION_RECEIPT, tx_hash.as_slice())?;
+        Ok(())
+    }
+
+    pub fn insert_mem_pool_transaction_receipt(
+        &self,
+        tx_hash: &H256,
+        tx_receipt: packed::TxReceipt,
+    ) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_MEM_POOL_TRANSACTION_RECEIPT,
+            tx_hash.as_slice(),
+            tx_receipt.as_slice(),
+        )
+    }
+
+    pub fn insert_mem_pool_withdrawal(
+        &self,
+        withdrawal_hash: &H256,
+        withdrawal: packed::WithdrawalRequest,
+    ) -> Result<(), Error> {
+        self.insert_raw(
+            COLUMN_MEM_POOL_WITHDRAWAL,
+            withdrawal_hash.as_slice(),
+            withdrawal.as_slice(),
+        )
+    }
+
+    pub fn remove_mem_pool_withdrawal(&self, withdrawal_hash: &H256) -> Result<(), Error> {
+        self.delete(COLUMN_MEM_POOL_WITHDRAWAL, withdrawal_hash.as_slice())?;
+        Ok(())
+    }
+
+    pub fn record_block_state(
+        &self,
+        block_number: u64,
+        state_key: H256,
+        value: H256,
+    ) -> Result<(), Error> {
+        // insert block state key value
+        let key = BlockStateRecordKey::new(block_number, &state_key);
+        self.insert_raw(COLUMN_BLOCK_STATE_RECORD, key.as_slice(), value.as_slice())?;
+        // insert block state reverse key
+        let reverse_key = BlockStateRecordKeyReverse::new(block_number, &state_key);
+        self.insert_raw(
+            COLUMN_BLOCK_STATE_REVERSE_RECORD,
+            reverse_key.as_slice(),
+            &[],
+        )
+    }
 }
+
+impl ChainStore for StoreTransaction {}

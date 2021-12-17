@@ -1,4 +1,4 @@
-use std::sync::RwLock;
+use std::sync::Arc;
 
 use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
 use gw_common::{
@@ -20,9 +20,10 @@ use gw_generator::{
 use gw_store::{
     mem_pool_state::MemPoolState,
     state::state_db::{StateContext, StateTree},
+    traits::chain_store::ChainStore,
     Store,
 };
-use gw_traits::{ChainStore, CodeStore};
+use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     core::{ScriptHashType, Status},
     offchain::RollupContext,
@@ -98,7 +99,7 @@ impl Account {
 }
 
 struct BenchChain;
-impl ChainStore for BenchChain {
+impl ChainView for BenchChain {
     fn get_block_hash_by_number(&self, _: u64) -> Result<Option<H256>, gw_db::error::Error> {
         unreachable!("bench chain store")
     }
@@ -107,7 +108,6 @@ impl ChainStore for BenchChain {
 struct BenchExecutionEnvironment {
     generator: Generator,
     chain: BenchChain,
-    store: Store,
     mem_pool_state: MemPoolState,
 }
 
@@ -161,18 +161,18 @@ impl BenchExecutionEnvironment {
         );
 
         Self::init_genesis(&store, &genesis_config, accounts);
-        let mem_pool_state = MemPoolState::new(store.get_snapshot());
+        let mem_pool_state = MemPoolState::new(Arc::new(store.get_snapshot()));
 
         BenchExecutionEnvironment {
             generator,
             chain: BenchChain,
-            store,
             mem_pool_state,
         }
     }
 
     fn accounts_transfer(&self, accounts: u32, count: usize) {
-        let mut state = self.mem_pool_state.state().unwrap();
+        let snap = self.mem_pool_state.load();
+        let mut state = snap.state().unwrap();
 
         let block_producer_script = Account::build_script(0);
         let block_producer_id = {
@@ -248,7 +248,8 @@ impl BenchExecutionEnvironment {
             transfer_count -= 1;
         }
 
-        let state = self.mem_pool_state.state().unwrap();
+        let snap = self.mem_pool_state.load();
+        let state = snap.state().unwrap();
         let post_block_producer_balance = state
             .get_sudt_balance(
                 CKB_SUDT_ACCOUNT_ID,

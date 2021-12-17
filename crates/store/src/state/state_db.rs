@@ -1,6 +1,10 @@
 //! State DB
 
-use crate::{smt::smt_store::SMTStore, traits::KVStore, transaction::StoreTransaction};
+use crate::{
+    smt::smt_store::SMTStore,
+    traits::kv_store::{KVStoreRead, KVStoreWrite},
+    transaction::StoreTransaction,
+};
 use anyhow::{anyhow, Result};
 use gw_common::{error::Error as StateError, smt::SMT, state::State, H256};
 use gw_db::schema::{COLUMN_DATA, COLUMN_SCRIPT, COLUMN_SCRIPT_PREFIX};

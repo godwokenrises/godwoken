@@ -15,6 +15,7 @@ use gw_generator::{ChallengeContext, Generator};
 use gw_store::chain_view::ChainView;
 use gw_store::state::mem_state_db::MemStateTree;
 use gw_store::state::state_db::StateContext;
+use gw_store::traits::chain_store::ChainStore;
 use gw_store::transaction::StoreTransaction;
 use gw_traits::CodeStore;
 use gw_types::core::ChallengeTargetType;

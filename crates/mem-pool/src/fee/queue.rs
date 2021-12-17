@@ -138,7 +138,7 @@ mod tests {
     use gw_common::{h256_ext::H256Ext, state::State, H256};
     use gw_config::GenesisConfig;
     use gw_generator::genesis::init_genesis;
-    use gw_store::{state::state_db::StateContext, Store};
+    use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore, Store};
     use gw_types::{
         bytes::Bytes,
         packed::{L2BlockCommittedInfo, L2Transaction, RawL2Transaction, RollupConfig},

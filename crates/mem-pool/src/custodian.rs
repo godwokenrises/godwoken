@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
 use gw_rpc_client::rpc_client::{QueryResult, RPCClient};
-use gw_store::transaction::StoreTransaction;
+use gw_store::{traits::chain_store::ChainStore, transaction::StoreTransaction};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,

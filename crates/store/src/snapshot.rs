@@ -4,18 +4,22 @@ use anyhow::Result;
 use gw_common::{smt::SMT, H256};
 use gw_db::{
     error::Error,
-    schema::{
-        Col, COLUMNS, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_BLOCK,
-        COLUMN_META, META_TIP_BLOCK_HASH_KEY,
-    },
+    schema::{Col, COLUMNS, COLUMN_ACCOUNT_SMT_BRANCH, COLUMN_ACCOUNT_SMT_LEAF, COLUMN_META},
     RocksDBSnapshot,
 };
 use gw_types::{
-    packed::{self, L2Block},
+    packed::{self},
     prelude::{Entity, FromSliceShouldBeOk, Pack, Reader, Unpack},
 };
 
-use crate::{smt::smt_store::SMTStore, state::mem_state_db::MemStateTree, traits::KVStore};
+use crate::{
+    smt::smt_store::SMTStore,
+    state::mem_state_db::MemStateTree,
+    traits::{
+        chain_store::ChainStore,
+        kv_store::{KVStore, KVStoreRead, KVStoreWrite},
+    },
+};
 
 pub const META_MEM_BLOCK_INFO: &[u8] = b"MEM_BLOCK_INFO";
 /// account SMT root
@@ -59,22 +63,6 @@ impl StoreSnapshot {
         Ok(MemStateTree::new(tree, account_count))
     }
 
-    pub fn get_tip_block_hash(&self) -> Result<H256, Error> {
-        let slice = self
-            .get(COLUMN_META, META_TIP_BLOCK_HASH_KEY)
-            .expect("get tip block hash");
-        Ok(
-            packed::Byte32Reader::from_slice_should_be_ok(slice.as_ref())
-                .to_entity()
-                .unpack(),
-        )
-    }
-
-    pub fn get_tip_block(&self) -> Result<L2Block, Error> {
-        let tip_block_hash = self.get_tip_block_hash()?;
-        Ok(self.get_block(&tip_block_hash)?.expect("get tip block"))
-    }
-
     pub fn get_mem_block_account_smt_root(&self) -> Result<Option<H256>, Error> {
         match self.get(COLUMN_META, META_MEM_SMT_ROOT_KEY) {
             Some(slice) => {
@@ -94,15 +82,6 @@ impl StoreSnapshot {
                     packed::Uint32Reader::from_slice_should_be_ok(slice.as_ref()).to_entity();
                 Ok(Some(count.unpack()))
             }
-            None => Ok(None),
-        }
-    }
-
-    pub fn get_block(&self, block_hash: &H256) -> Result<Option<L2Block>, Error> {
-        match self.get(COLUMN_BLOCK, block_hash.as_slice()) {
-            Some(slice) => Ok(Some(
-                packed::L2BlockReader::from_slice_should_be_ok(slice.as_ref()).to_entity(),
-            )),
             None => Ok(None),
         }
     }
@@ -135,7 +114,9 @@ impl StoreSnapshot {
     }
 }
 
-impl KVStore for StoreSnapshot {
+impl ChainStore for StoreSnapshot {}
+
+impl KVStoreRead for StoreSnapshot {
     fn get(&self, col: Col, key: &[u8]) -> Option<Box<[u8]>> {
         match self
             .mem
@@ -154,7 +135,9 @@ impl KVStore for StoreSnapshot {
                 .map(|v| Box::<[u8]>::from(v.as_ref())),
         }
     }
+}
 
+impl KVStoreWrite for StoreSnapshot {
     fn insert_raw(&self, col: Col, key: &[u8], value: &[u8]) -> Result<(), Error> {
         self.mem
             .get(col as usize)
@@ -175,3 +158,5 @@ impl KVStore for StoreSnapshot {
         Ok(())
     }
 }
+
+impl KVStore for StoreSnapshot {}

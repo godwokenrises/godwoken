@@ -14,7 +14,7 @@ use gw_common::{
     },
     H256,
 };
-use gw_traits::{ChainStore, CodeStore};
+use gw_traits::{ChainView, CodeStore};
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
@@ -124,7 +124,7 @@ pub fn store_data<Mac: SupportMachine>(machine: &mut Mac, data: &[u8]) -> Result
     Ok(real_size)
 }
 
-impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S, C> {
+impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscalls<'a, S, C> {
     fn initialize(&mut self, _machine: &mut Mac) -> Result<(), VMError> {
         Ok(())
     }
@@ -487,7 +487,7 @@ impl<'a, S: State, C: ChainStore, Mac: SupportMachine> Syscalls<Mac> for L2Sysca
     }
 }
 
-impl<'a, S: State, C: ChainStore> L2Syscalls<'a, S, C> {
+impl<'a, S: State, C: ChainView> L2Syscalls<'a, S, C> {
     fn get_raw(&mut self, key: &H256) -> Result<H256, VMError> {
         let value = match self.result.write_values.get(key) {
             Some(value) => *value,

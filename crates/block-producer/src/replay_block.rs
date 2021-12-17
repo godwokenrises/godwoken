@@ -7,6 +7,7 @@ use gw_generator::constants::L2TX_MAX_CYCLES;
 use gw_generator::traits::StateExt;
 use gw_generator::Generator;
 use gw_store::chain_view::ChainView;
+use gw_store::traits::chain_store::ChainStore;
 use gw_store::Store;
 use gw_types::packed::{BlockInfo, DepositRequest, L2Block, RawL2Block};
 use gw_types::prelude::Unpack;

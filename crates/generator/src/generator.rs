@@ -30,7 +30,7 @@ use gw_common::{
 };
 use gw_config::RPCConfig;
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
-use gw_traits::{ChainStore, CodeStore};
+use gw_traits::{ChainView, CodeStore};
 use gw_tx_filter::polyjuice_contract_creator_allowlist::PolyjuiceContractCreatorAllowList;
 use gw_types::{
     bytes::Bytes,
@@ -124,7 +124,7 @@ impl Generator {
 
     #[allow(clippy::too_many_arguments)]
     #[allow(unused_variables)]
-    fn machine_run<'a, S: State + CodeStore, C: ChainStore>(
+    fn machine_run<'a, S: State + CodeStore, C: ChainView>(
         &'a self,
         chain: &'a C,
         state: &'a S,
@@ -385,7 +385,7 @@ impl Generator {
     }
 
     /// Apply l2 state transition
-    pub fn verify_and_apply_block<C: ChainStore>(
+    pub fn verify_and_apply_block<C: ChainView>(
         &self,
         db: &StoreTransaction,
         chain: &C,
@@ -658,7 +658,7 @@ impl Generator {
     }
 
     /// execute a layer2 tx
-    pub fn execute_transaction<S: State + CodeStore, C: ChainStore>(
+    pub fn execute_transaction<S: State + CodeStore, C: ChainView>(
         &self,
         chain: &C,
         state: &S,
@@ -676,7 +676,7 @@ impl Generator {
     }
 
     /// execute a layer2 tx, doesn't check exit code
-    pub fn unchecked_execute_transaction<S: State + CodeStore, C: ChainStore>(
+    pub fn unchecked_execute_transaction<S: State + CodeStore, C: ChainView>(
         &self,
         chain: &C,
         state: &S,

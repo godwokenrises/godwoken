@@ -3,7 +3,7 @@ use std::{convert::TryInto, time::Instant};
 use crate::setup::Context as ChainContext;
 use anyhow::{anyhow, Result};
 use gw_common::H256;
-use gw_store::state::state_db::StateContext;
+use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore};
 use gw_types::{
     core::ChallengeTargetType,
     packed::Byte32,

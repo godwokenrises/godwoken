@@ -23,8 +23,8 @@ use gw_mem_pool::{
 };
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::{
-    chain_view::ChainView, mem_pool_state::MemPoolState, state::state_db::StateContext, CfMemStat,
-    Store,
+    chain_view::ChainView, mem_pool_state::MemPoolState, state::state_db::StateContext,
+    traits::chain_store::ChainStore, CfMemStat, Store,
 };
 use gw_traits::CodeStore;
 use gw_types::{

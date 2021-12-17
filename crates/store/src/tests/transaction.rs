@@ -1,4 +1,7 @@
-use crate::{traits::KVStore, Store};
+use crate::{
+    traits::kv_store::{KVStoreRead, KVStoreWrite},
+    Store,
+};
 use gw_db::{DBRawIterator, Direction::Forward, IteratorMode};
 use std::collections::HashMap;
 
