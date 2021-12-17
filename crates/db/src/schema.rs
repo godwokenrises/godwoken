@@ -10,8 +10,6 @@ pub const COLUMN_META: Col = 0;
 pub const COLUMN_INDEX: Col = 1;
 /// Column store block
 pub const COLUMN_BLOCK: Col = 2;
-/// Column store block's header info
-pub const COLUMN_BLOCK_HEADER_INFO: Col = 3;
 /// Column store block's global state
 pub const COLUMN_BLOCK_GLOBAL_STATE: Col = 4;
 /// Column store transaction
@@ -30,8 +28,6 @@ pub const COLUMN_ACCOUNT_SMT_LEAF: Col = 10;
 pub const COLUMN_BLOCK_SMT_BRANCH: Col = 11;
 /// Column block SMT leaf
 pub const COLUMN_BLOCK_SMT_LEAF: Col = 12;
-/// Column store block number-hash pair
-pub const COLUMN_NUMBER_HASH: Col = 13;
 /// Column script
 pub const COLUMN_SCRIPT: Col = 14;
 /// Column data
