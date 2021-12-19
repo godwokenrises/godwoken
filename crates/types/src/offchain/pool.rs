@@ -1,6 +1,6 @@
 use sparse_merkle_tree::H256;
 
-use crate::packed::{AccountMerkleState, L2Block, L2Transaction, WithdrawalRequest};
+use crate::packed::{AccountMerkleState, L2Block, L2Transaction, WithdrawalRequestExtra};
 
 use super::DepositInfo;
 
@@ -10,7 +10,7 @@ pub struct BlockParam {
     pub timestamp: u64,
     pub txs: Vec<L2Transaction>,
     pub deposits: Vec<DepositInfo>,
-    pub withdrawals: Vec<WithdrawalRequest>,
+    pub withdrawals: Vec<WithdrawalRequestExtra>,
     pub state_checkpoint_list: Vec<H256>,
     pub parent_block: L2Block,
     pub txs_prev_state_checkpoint: H256,

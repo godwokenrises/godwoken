@@ -712,18 +712,20 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = smol::block_on(mem_pool.lock());
-        smol::block_on(mem_pool.push_withdrawal_request(withdrawal)).unwrap();
+        smol::block_on(mem_pool.push_withdrawal_request(withdrawal.into())).unwrap();
         construct_block(&chain, &mut mem_pool, Vec::default()).unwrap()
     };
     let bad_block_result = {
         let ProduceBlockResult {
             block,
             global_state,
+            withdrawal_extras,
         } = block_result;
         let (bad_block, bad_global_state) = generate_bad_block(&chain, block, global_state);
         ProduceBlockResult {
             block: bad_block,
             global_state: bad_global_state,
+            withdrawal_extras,
         }
     };
 
@@ -767,6 +769,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         let ProduceBlockResult {
             block,
             global_state,
+            withdrawal_extras,
         } = bad_block_result;
 
         let global_state = global_state
@@ -777,6 +780,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         ProduceBlockResult {
             global_state,
             block,
+            withdrawal_extras,
         }
     };
 
@@ -819,6 +823,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         let ProduceBlockResult {
             block,
             global_state,
+            withdrawal_extras,
         } = bad_block_result;
 
         let global_state = global_state
@@ -833,6 +838,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         ProduceBlockResult {
             global_state,
             block,
+            withdrawal_extras,
         }
     };
 

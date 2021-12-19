@@ -31,7 +31,7 @@ use gw_store::{
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    packed::{self, BlockInfo, Byte32, L2Transaction, RollupConfig, WithdrawalRequest},
+    packed::{self, BlockInfo, Byte32, L2Transaction, RollupConfig, WithdrawalRequestExtra},
     prelude::*,
 };
 use gw_version::Version;
@@ -308,7 +308,7 @@ impl Registry {
 
 enum Request {
     Tx(L2Transaction),
-    Withdrawal(WithdrawalRequest),
+    Withdrawal(WithdrawalRequestExtra),
 }
 
 impl Request {
@@ -975,7 +975,8 @@ async fn submit_withdrawal_request(
     rpc_client: Data<RPCClient>,
 ) -> Result<JsonH256, RpcError> {
     let withdrawal_bytes = withdrawal_request.into_bytes();
-    let withdrawal = packed::WithdrawalRequest::from_slice(&withdrawal_bytes)?;
+    let withdrawal =
+        packed::WithdrawalRequestExtra::from_request_compitable_slice(&withdrawal_bytes)?;
     let withdrawal_hash = withdrawal.hash();
 
     // verify finalized custodian
@@ -991,7 +992,7 @@ async fn submit_withdrawal_request(
             gw_mem_pool::custodian::query_finalized_custodians(
                 &rpc_client,
                 &db,
-                vec![withdrawal.clone()].into_iter(),
+                vec![withdrawal.request()].into_iter(),
                 generator.rollup_context(),
                 last_finalized_block_number,
             )
@@ -1008,7 +1009,7 @@ async fn submit_withdrawal_request(
             generator.rollup_context(),
             available_custodians,
         );
-        if let Err(err) = withdrawal_generator.verify_remained_amount(&withdrawal) {
+        if let Err(err) = withdrawal_generator.verify_remained_amount(&withdrawal.request()) {
             return Err(RpcError::Full {
                 code: CUSTODIAN_NOT_ENOUGH_CODE,
                 message: format!(
@@ -1089,7 +1090,9 @@ async fn get_withdrawal(
             status = WithdrawalStatus::Committed;
         }
         None => {
-            withdrawal_opt = db.get_mem_pool_withdrawal(&withdrawal_hash)?;
+            withdrawal_opt = db
+                .get_mem_pool_withdrawal(&withdrawal_hash)?
+                .map(|w| w.request());
             status = WithdrawalStatus::Pending;
         }
     };
