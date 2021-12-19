@@ -1,6 +1,6 @@
 use crate::packed::{
     AccountMerkleState, Byte32, CompactMemBlock, GlobalState, GlobalStateV0, MemBlock,
-    TransactionKey, TxReceipt, WithdrawalKey,
+    TransactionKey, TxReceipt, WithdrawalKey, WithdrawalRequestExtra,
 };
 use crate::prelude::*;
 use ckb_types::error::VerificationError;
@@ -75,3 +75,19 @@ impl CompactMemBlock {
         }
     }
 }
+
+impl std::hash::Hash for WithdrawalRequestExtra {
+    #[inline]
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_slice().hash(state)
+    }
+}
+
+impl PartialEq for WithdrawalRequestExtra {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
+impl Eq for WithdrawalRequestExtra {}

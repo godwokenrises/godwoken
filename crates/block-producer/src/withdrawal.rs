@@ -1,4 +1,7 @@
+#![allow(clippy::mutable_key_type)]
+
 use anyhow::{anyhow, Result};
+use gw_common::H256;
 use gw_config::ContractsCellDep;
 use gw_mem_pool::{custodian::sum_withdrawals, withdrawal::Generator};
 use gw_types::{
@@ -13,7 +16,10 @@ use gw_types::{
     prelude::*,
 };
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::HashMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[derive(Clone)]
 struct CkbCustodian {
@@ -34,6 +40,7 @@ pub fn generate(
     finalized_custodians: CollectedCustodianCells,
     block: &L2Block,
     contracts_dep: &ContractsCellDep,
+    withdrawal_extras: &HashMap<H256, WithdrawalRequestExtra>,
 ) -> Result<Option<GeneratedWithdrawals>> {
     if block.withdrawals().is_empty() && finalized_custodians.cells_info.is_empty() {
         return Ok(None);
@@ -42,9 +49,11 @@ pub fn generate(
 
     let total_withdrawal_amount = sum_withdrawals(block.withdrawals().into_iter());
     let mut generator = Generator::new(rollup_context, (&finalized_custodians).into());
-    // FIXME: extra
     for req in block.withdrawals().into_iter() {
-        let req_extra = WithdrawalRequestExtra::new_builder().request(req).build();
+        let req_extra = match withdrawal_extras.get(&req.hash().into()) {
+            Some(req_extra) => req_extra.to_owned(),
+            None => WithdrawalRequestExtra::new_builder().request(req).build(),
+        };
         generator
             .include_and_verify(&req_extra, block)
             .map_err(|err| anyhow!("unexpected withdrawal err {}", err))?
@@ -181,4 +190,137 @@ pub fn revert(
         outputs: custodian_outputs,
         witness_args: withdrawal_witness,
     }))
+}
+
+#[cfg(test)]
+mod test {
+    use std::collections::HashMap;
+    use std::iter::FromIterator;
+
+    use gw_common::{h256_ext::H256Ext, H256};
+    use gw_config::BlockProducerConfig;
+    use gw_types::offchain::{CellInfo, CollectedCustodianCells};
+    use gw_types::packed::{
+        Fee, L2Block, RawWithdrawalRequest, Script, WithdrawalRequest, WithdrawalRequestExtra,
+    };
+    use gw_types::prelude::{Builder, Entity, Pack, PackVec, Unpack};
+    use gw_types::{offchain::RollupContext, packed::RollupConfig};
+
+    use crate::withdrawal::generate;
+
+    #[test]
+    fn test_withdrawal_cell_generate() {
+        let rollup_context = RollupContext {
+            rollup_script_hash: H256::from_u32(1),
+            rollup_config: RollupConfig::new_builder()
+                .withdrawal_script_type_hash(H256::from_u32(100).pack())
+                .build(),
+        };
+
+        let sudt_script = Script::new_builder()
+            .code_hash(H256::from_u32(2).pack())
+            .args(vec![3u8; 32].pack())
+            .build();
+
+        let finalized_custodians = CollectedCustodianCells {
+            cells_info: vec![CellInfo::default()],
+            capacity: u64::MAX as u128,
+            sudt: HashMap::from_iter([(sudt_script.hash(), (u128::MAX, sudt_script.clone()))]),
+        };
+
+        let owner_lock = Script::new_builder()
+            .code_hash(H256::from_u32(4).pack())
+            .args(vec![5; 32].pack())
+            .build();
+
+        let withdrawal = {
+            let fee = Fee::new_builder()
+                .sudt_id(20u32.pack())
+                .amount(50u128.pack())
+                .build();
+            let raw = RawWithdrawalRequest::new_builder()
+                .nonce(1u32.pack())
+                .capacity((500 * 10u64.pow(8)).pack())
+                .amount(20u128.pack())
+                .sudt_script_hash(sudt_script.hash().pack())
+                .account_script_hash(H256::from_u32(10).pack())
+                .sell_amount(99999u128.pack())
+                .sell_capacity(99999u64.pack())
+                .owner_lock_hash(owner_lock.hash().pack())
+                .payment_lock_hash(owner_lock.hash().pack())
+                .fee(fee)
+                .build();
+            WithdrawalRequest::new_builder()
+                .raw(raw)
+                .signature(vec![6u8; 65].pack())
+                .build()
+        };
+
+        let block = L2Block::new_builder()
+            .withdrawals(vec![withdrawal.clone()].pack())
+            .build();
+
+        let block_producer_config = BlockProducerConfig::default();
+
+        // ## No owner lock
+        let withdrawal_extra = WithdrawalRequestExtra::new_builder()
+            .request(withdrawal.clone())
+            .build();
+        let withdrawal_extras = HashMap::from_iter([(withdrawal.hash().into(), withdrawal_extra)]);
+
+        let generated = generate(
+            &rollup_context,
+            finalized_custodians.clone(),
+            &block,
+            &block_producer_config,
+            &withdrawal_extras,
+        )
+        .unwrap();
+        let (output, data) = generated.unwrap().outputs.first().unwrap().to_owned();
+
+        let (expected_output, expected_data) =
+            gw_generator::Generator::build_withdrawal_cell_output(
+                &rollup_context,
+                &withdrawal,
+                &block.hash().into(),
+                block.raw().number().unpack(),
+                Some(sudt_script.clone()),
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(expected_output.as_slice(), output.as_slice());
+        assert_eq!(expected_data, data);
+
+        // ## With owner lock
+        let withdrawal_extra = WithdrawalRequestExtra::new_builder()
+            .request(withdrawal.clone())
+            .owner_lock(Some(owner_lock.clone()).pack())
+            .build();
+        let withdrawal_extras = HashMap::from_iter([(withdrawal.hash().into(), withdrawal_extra)]);
+
+        let generated = generate(
+            &rollup_context,
+            finalized_custodians,
+            &block,
+            &block_producer_config,
+            &withdrawal_extras,
+        )
+        .unwrap();
+        let (output, data) = generated.unwrap().outputs.first().unwrap().to_owned();
+
+        let (expected_output, expected_data) =
+            gw_generator::Generator::build_withdrawal_cell_output(
+                &rollup_context,
+                &withdrawal,
+                &block.hash().into(),
+                block.raw().number().unpack(),
+                Some(sudt_script),
+                Some(owner_lock),
+            )
+            .unwrap();
+
+        assert_eq!(expected_output.as_slice(), output.as_slice());
+        assert_eq!(expected_data, data);
+    }
 }

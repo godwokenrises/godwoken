@@ -832,11 +832,13 @@ impl BlockProducer {
             .push((generated_stake.output, generated_stake.output_data));
 
         // withdrawal cells
+        // FIXME: extra
         if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
             rollup_context,
             finalized_custodians,
             &block,
             &contracts_dep,
+            &Default::default(),
         )? {
             tx_skeleton
                 .cell_deps_mut()
