@@ -2456,6 +2456,7 @@ dependencies = [
  "sha3",
  "smol",
  "tempfile",
+ "socket2",
  "thiserror",
 ]
 
