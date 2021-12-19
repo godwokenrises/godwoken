@@ -1,6 +1,7 @@
 use crate::packed::{
     AccountMerkleState, Byte32, CompactMemBlock, GlobalState, GlobalStateV0, MemBlock,
-    TransactionKey, TxReceipt, WithdrawalKey, WithdrawalRequestExtra,
+    RawWithdrawalRequest, Script, TransactionKey, TxReceipt, WithdrawalKey, WithdrawalRequest,
+    WithdrawalRequestExtra,
 };
 use crate::prelude::*;
 use ckb_types::error::VerificationError;
@@ -76,15 +77,40 @@ impl CompactMemBlock {
     }
 }
 
-impl std::hash::Hash for WithdrawalRequestExtra {
-    #[inline]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.as_slice().hash(state)
+impl WithdrawalRequestExtra {
+    pub fn hash(&self) -> [u8; 32] {
+        self.request().hash()
+    }
+
+    pub fn witness_hash(&self) -> [u8; 32] {
+        self.request().witness_hash()
+    }
+
+    pub fn raw(&self) -> RawWithdrawalRequest {
+        self.request().raw()
+    }
+
+    pub fn opt_owner_lock(&self) -> Option<Script> {
+        self.owner_lock().to_opt()
+    }
+
+    pub fn from_request_compitable_slice(
+        slice: &[u8],
+    ) -> Result<WithdrawalRequestExtra, VerificationError> {
+        match WithdrawalRequestExtra::from_slice(slice) {
+            Ok(withdrawal) => Ok(withdrawal),
+            Err(_) => WithdrawalRequest::from_slice(slice).map(Into::into),
+        }
+    }
+}
+
+impl From<WithdrawalRequest> for WithdrawalRequestExtra {
+    fn from(req: WithdrawalRequest) -> Self {
+        WithdrawalRequestExtra::new_builder().request(req).build()
     }
 }
 
 impl PartialEq for WithdrawalRequestExtra {
-    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.as_slice() == other.as_slice()
     }

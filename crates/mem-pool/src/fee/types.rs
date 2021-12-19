@@ -4,7 +4,7 @@ use gw_config::{BackendType, FeeConfig};
 use gw_types::{
     packed::{
         L2Transaction, MetaContractArgs, MetaContractArgsUnion, SUDTArgs, SUDTArgsUnion,
-        WithdrawalRequest,
+        WithdrawalRequestExtra,
     },
     prelude::{Entity, Unpack},
 };
@@ -22,7 +22,7 @@ pub enum FeeItemKind {
 #[derive(PartialEq, Eq, Clone)]
 pub enum FeeItem {
     Tx(L2Transaction),
-    Withdrawal(WithdrawalRequest),
+    Withdrawal(WithdrawalRequestExtra),
 }
 
 impl FeeItem {
@@ -133,7 +133,7 @@ impl FeeEntry {
     }
 
     pub fn from_withdrawal(
-        withdrawal: WithdrawalRequest,
+        withdrawal: WithdrawalRequestExtra,
         sender: u32,
         fee_config: &FeeConfig,
         order: usize,

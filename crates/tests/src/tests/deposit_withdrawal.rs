@@ -95,7 +95,7 @@ fn withdrawal_from_chain(
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = smol::block_on(mem_pool.lock());
-        smol::block_on(mem_pool.push_withdrawal_request(withdrawal))?;
+        smol::block_on(mem_pool.push_withdrawal_request(withdrawal.into()))?;
         construct_block(chain, &mut mem_pool, Vec::default()).unwrap()
     };
 

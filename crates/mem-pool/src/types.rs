@@ -1,5 +1,5 @@
 use gw_types::{
-    packed::{L2Transaction, WithdrawalRequest},
+    packed::{L2Transaction, WithdrawalRequestExtra},
     prelude::*,
 };
 
@@ -8,7 +8,7 @@ pub struct EntryList {
     // txs sorted by nonce
     pub txs: Vec<L2Transaction>,
     // withdrawals sorted by nonce
-    pub withdrawals: Vec<WithdrawalRequest>,
+    pub withdrawals: Vec<WithdrawalRequestExtra>,
 }
 
 impl EntryList {
@@ -34,7 +34,7 @@ impl EntryList {
         &mut self,
         nonce: u32,
         capacity: u128,
-    ) -> Vec<WithdrawalRequest> {
+    ) -> Vec<WithdrawalRequestExtra> {
         let mut removed = Vec::default();
 
         // remove lower nonce withdrawals

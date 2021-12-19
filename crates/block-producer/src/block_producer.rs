@@ -32,7 +32,7 @@ use gw_types::{
     },
     packed::{
         CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, OutPointVec, RollupAction,
-        RollupActionUnion, RollupSubmitBlock, Transaction, WitnessArgs,
+        RollupActionUnion, RollupSubmitBlock, Transaction, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
@@ -419,6 +419,7 @@ impl BlockProducer {
         let ProduceBlockResult {
             mut block,
             mut global_state,
+            withdrawal_extras,
         } = block_result;
 
         let number: u64 = block.raw().number().unpack();
@@ -472,6 +473,7 @@ impl BlockProducer {
                 global_state,
                 median_time,
                 rollup_cell.clone(),
+                withdrawal_extras,
             )
             .await
         {
@@ -635,6 +637,7 @@ impl BlockProducer {
         global_state: GlobalState,
         median_time: Duration,
         rollup_cell: CellInfo,
+        withdrawal_extras: Vec<WithdrawalRequestExtra>,
     ) -> Result<Transaction> {
         let rollup_context = self.generator.rollup_context();
         let mut tx_skeleton = TransactionSkeleton::default();
@@ -832,13 +835,13 @@ impl BlockProducer {
             .push((generated_stake.output, generated_stake.output_data));
 
         // withdrawal cells
-        // FIXME: extra
+        let map_withdrawal_extras = withdrawal_extras.into_iter().map(|w| (w.hash().into(), w));
         if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
             rollup_context,
             finalized_custodians,
             &block,
             &contracts_dep,
-            &Default::default(),
+            &map_withdrawal_extras.collect(),
         )? {
             tx_skeleton
                 .cell_deps_mut()

@@ -36,7 +36,7 @@ use gw_types::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt,
         WithdrawalRequest, WithdrawalRequestExtra,
     },
-    prelude::{Builder, Entity, Unpack},
+    prelude::{Entity, Unpack},
 };
 use std::{
     cmp::{max, min},
@@ -315,7 +315,10 @@ impl MemPool {
     }
 
     /// Push a withdrawal request into pool
-    pub async fn push_withdrawal_request(&mut self, withdrawal: WithdrawalRequest) -> Result<()> {
+    pub async fn push_withdrawal_request(
+        &mut self,
+        withdrawal: WithdrawalRequestExtra,
+    ) -> Result<()> {
         // check withdrawal size
         if withdrawal.as_slice().len() > MAX_WITHDRAWAL_SIZE {
             return Err(anyhow!("withdrawal over size"));
@@ -352,17 +355,17 @@ impl MemPool {
     // TODO: duplicate withdrawal check
     fn verify_withdrawal_request(
         &self,
-        withdrawal_request: &WithdrawalRequest,
+        withdrawal: &WithdrawalRequestExtra,
         state: &(impl State + CodeStore),
     ) -> Result<()> {
         // check withdrawal size
-        if withdrawal_request.as_slice().len() > MAX_WITHDRAWAL_SIZE {
+        if withdrawal.as_slice().len() > MAX_WITHDRAWAL_SIZE {
             return Err(anyhow!("withdrawal over size"));
         }
 
         // verify withdrawal signature
         self.generator
-            .check_withdrawal_request_signature(state, withdrawal_request)?;
+            .check_withdrawal_request_signature(state, &withdrawal.request())?;
 
         // verify finalized custodian
         let finalized_custodians = {
@@ -372,7 +375,7 @@ impl MemPool {
                 .rollup_context()
                 .last_finalized_block_number(self.current_tip.1);
             let task = self.provider.query_available_custodians(
-                vec![withdrawal_request.clone()],
+                vec![withdrawal.request()],
                 last_finalized_block_number,
                 self.generator.rollup_context().to_owned(),
             );
@@ -381,15 +384,14 @@ impl MemPool {
         let avaliable_custodians = AvailableCustodians::from(&finalized_custodians);
         let withdrawal_generator =
             WithdrawalGenerator::new(self.generator.rollup_context(), avaliable_custodians);
-        withdrawal_generator.verify_remained_amount(withdrawal_request)?;
+        withdrawal_generator.verify_remained_amount(&withdrawal.request())?;
 
         // withdrawal basic verification
         let db = self.store.begin_transaction();
-        let asset_script =
-            db.get_asset_script(&withdrawal_request.raw().sudt_script_hash().unpack())?;
-        // FIXME: support owner lock
+        let asset_script = db.get_asset_script(&withdrawal.raw().sudt_script_hash().unpack())?;
+        let opt_owner_lock = withdrawal.opt_owner_lock();
         self.generator
-            .verify_withdrawal_request(state, withdrawal_request, asset_script, None)
+            .verify_withdrawal_request(state, &withdrawal.request(), asset_script, opt_owner_lock)
             .map_err(Into::into)
     }
 
@@ -707,7 +709,7 @@ impl MemPool {
                 mem_state.apply_withdrawal_request(
                     self.generator.rollup_context(),
                     mem_block.block_producer_id(),
-                    withdrawal,
+                    &withdrawal.request(),
                 )?;
 
                 new_mem_block.push_withdrawal(
@@ -836,7 +838,10 @@ impl MemPool {
                 // remove included withdrawals
                 discarded_withdrawals
                     .retain(|withdrawal| !included_withdrawals.contains(withdrawal));
-                reinject_withdrawals = discarded_withdrawals;
+                reinject_withdrawals = discarded_withdrawals
+                    .into_iter()
+                    .map(Into::<WithdrawalRequestExtra>::into)
+                    .collect::<VecDeque<_>>()
             }
         }
 
@@ -944,7 +949,7 @@ impl MemPool {
 
     /// Prepare for next mem block
     async fn prepare_next_mem_block<
-        WithdrawalIter: Iterator<Item = WithdrawalRequest>,
+        WithdrawalIter: Iterator<Item = WithdrawalRequestExtra>,
         TxIter: Iterator<Item = L2Transaction> + Clone,
     >(
         &mut self,
@@ -1126,10 +1131,9 @@ impl MemPool {
     }
 
     /// Execute withdrawal & update local state
-    // FIXME: support owner lock
     async fn finalize_withdrawals(
         &mut self,
-        mut withdrawals: Vec<WithdrawalRequest>,
+        mut withdrawals: Vec<WithdrawalRequestExtra>,
     ) -> Result<()> {
         // check mem block state
         assert!(self.mem_block.withdrawals().is_empty());
@@ -1155,7 +1159,7 @@ impl MemPool {
                 .rollup_context()
                 .last_finalized_block_number(self.current_tip.1);
             let task = self.provider.query_available_custodians(
-                withdrawals.clone(),
+                withdrawals.iter().map(|w| w.request()).collect(),
                 last_finalized_block_number,
                 self.generator.rollup_context().to_owned(),
             );
@@ -1184,7 +1188,7 @@ impl MemPool {
             // check withdrawal request
             if let Err(err) = self
                 .generator
-                .check_withdrawal_request_signature(&state, &withdrawal)
+                .check_withdrawal_request_signature(&state, &withdrawal.request())
             {
                 log::info!("[mem-pool] withdrawal signature error: {:?}", err);
                 unused_withdrawals.push(withdrawal_hash);
@@ -1193,10 +1197,12 @@ impl MemPool {
             let asset_script = asset_scripts
                 .get(&withdrawal.raw().sudt_script_hash().unpack())
                 .cloned();
-            if let Err(err) =
-                self.generator
-                    .verify_withdrawal_request(&state, &withdrawal, asset_script, None)
-            {
+            if let Err(err) = self.generator.verify_withdrawal_request(
+                &state,
+                &withdrawal.request(),
+                asset_script,
+                withdrawal.opt_owner_lock(),
+            ) {
                 log::info!("[mem-pool] withdrawal verification error: {:?}", err);
                 unused_withdrawals.push(withdrawal_hash);
                 continue;
@@ -1217,12 +1223,8 @@ impl MemPool {
             }
             total_withdrawal_capacity = new_total_withdrwal_capacity;
 
-            // FIXME: extra
-            let withdrawal_extra = WithdrawalRequestExtra::new_builder()
-                .request(withdrawal.to_owned())
-                .build();
             if let Err(err) =
-                withdrawal_verifier.include_and_verify(&withdrawal_extra, &L2Block::default())
+                withdrawal_verifier.include_and_verify(&withdrawal, &L2Block::default())
             {
                 log::info!(
                     "[mem-pool] withdrawal contextual verification failed : {}",
@@ -1236,7 +1238,7 @@ impl MemPool {
             match state.apply_withdrawal_request(
                 self.generator.rollup_context(),
                 self.mem_block.block_producer_id(),
-                &withdrawal,
+                &withdrawal.request(),
             ) {
                 Ok(_) => {
                     self.mem_block.push_withdrawal(

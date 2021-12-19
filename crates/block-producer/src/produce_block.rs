@@ -16,6 +16,7 @@ use gw_types::{
     offchain::BlockParam,
     packed::{
         BlockMerkleState, GlobalState, L2Block, RawL2Block, SubmitTransactions, SubmitWithdrawals,
+        WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -24,6 +25,7 @@ use gw_types::{
 pub struct ProduceBlockResult {
     pub block: L2Block,
     pub global_state: GlobalState,
+    pub withdrawal_extras: Vec<WithdrawalRequestExtra>,
 }
 
 pub struct ProduceBlockParam {
@@ -124,12 +126,13 @@ pub fn produce_block(
         .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
         .compile(vec![(H256::from_u64(number), H256::zero())])?;
     let packed_kv_state = kv_state.pack();
+    let withdrawal_requests = withdrawals.iter().map(|w| w.request());
     let block = L2Block::new_builder()
         .raw(raw_block)
         .kv_state(packed_kv_state)
         .kv_state_proof(kv_state_proof.pack())
         .transactions(txs.pack())
-        .withdrawals(withdrawals.pack())
+        .withdrawals(withdrawal_requests.collect::<Vec<_>>().pack())
         .block_proof(block_proof.0.pack())
         .build();
     let post_block = {
@@ -158,5 +161,6 @@ pub fn produce_block(
     Ok(ProduceBlockResult {
         block,
         global_state,
+        withdrawal_extras: withdrawals,
     })
 }

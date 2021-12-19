@@ -224,6 +224,7 @@ pub fn build_sync_tx(
     let ProduceBlockResult {
         block,
         global_state,
+        ..
     } = produce_block_result;
     let rollup_action = {
         let submit_block = RollupSubmitBlock::new_builder().block(block).build();
