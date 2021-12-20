@@ -5,6 +5,7 @@ use crate::{
     poller::ChainUpdater,
     test_mode_control::TestModeControl,
     types::ChainEvent,
+    withdrawal_unlocker::FinalizedWithdrawalUnlocker,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use ckb_types::core::hardfork::HardForkSwitch;
@@ -68,6 +69,7 @@ async fn poll_loop(
     chain_updater: ChainUpdater,
     block_producer: Option<BlockProducer>,
     challenger: Option<Challenger>,
+    withdrawal_unlocker: Option<FinalizedWithdrawalUnlocker>,
     cleaner: Option<Arc<Cleaner>>,
     poll_interval: Duration,
 ) -> Result<()> {
@@ -76,6 +78,7 @@ async fn poll_loop(
         block_producer: Option<BlockProducer>,
         challenger: Option<Challenger>,
         cleaner: Option<Arc<Cleaner>>,
+        withdrawal_unlocker: Option<FinalizedWithdrawalUnlocker>,
     }
 
     let inner = Arc::new(smol::lock::Mutex::new(Inner {
@@ -83,6 +86,7 @@ async fn poll_loop(
         challenger,
         block_producer,
         cleaner,
+        withdrawal_unlocker,
     }));
     // get tip
     let (mut tip_number, mut tip_hash) = {
@@ -176,6 +180,17 @@ async fn poll_loop(
                         err
                     );
                 }
+            }
+
+            if let Some(ref withdrawal_unlocker) = inner.withdrawal_unlocker {
+                if let Err(err) = withdrawal_unlocker.handle_event(&event).await {
+                    if is_l1_query_error(&err) {
+                        log::error!("[polling] finalized withdrawal unlocker, event: {} error: {}", event, err);
+                        smol::Timer::after(poll_interval).await;
+                        continue;
+                    }
+                }
+                bail!("Error occurred when polling finalized withdrawal unlocker, event: {}, error: {}", event, err);
             }
 
             if let Some(ref cleaner) = inner.cleaner {
@@ -615,7 +630,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         web3_indexer,
     );
 
-    let (block_producer, challenger, test_mode_control, cleaner) = match config.node_mode {
+    let (block_producer, challenger, test_mode_control, withdrawal_unlocker, cleaner) = match config.node_mode {
         NodeMode::ReadOnly => {
             if let Some(sync_mem_block_config) = &config.mem_pool.subscribe {
                 match &mem_pool {
@@ -627,7 +642,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     }
                 }
             }
-            (None, None, None, None)
+            (None, None, None, None, None)
         }
         mode => {
             let block_producer_config = config
@@ -649,22 +664,30 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             let poa = poa.ok_or_else(|| anyhow!("poa must be enabled in mode: {:?}", mode))?;
             let tests_control = if let NodeMode::Test = config.node_mode {
                 Some(TestModeControl::new(
+                        rpc_client.clone(),
+                        Arc::clone(&poa),
+                        store.clone(),
+                    ))
+                } else {
+                    None
+                };
+
+                // FIXME: support different pk for unlocker
+                let withdrawal_unlocker = FinalizedWithdrawalUnlocker::new(
                     rpc_client.clone(),
-                    Arc::clone(&poa),
-                    store.clone(),
-                ))
-            } else {
-                None
-            };
+                    ckb_genesis_info.clone(),
+                    block_producer_config.clone(),
+                    wallet,
+                );
 
-            let cleaner = Arc::new(Cleaner::new(
-                rpc_client.clone(),
-                ckb_genesis_info.clone(),
-                wallet,
-            ));
+                let wallet = Wallet::from_config(&block_producer_config.wallet_config)
+                    .with_context(|| "init wallet")?;
 
-            let wallet = Wallet::from_config(&block_producer_config.wallet_config)
-                .with_context(|| "init wallet")?;
+                let cleaner = Arc::new(Cleaner::new(
+                    rpc_client.clone(),
+                    ckb_genesis_info.clone(),
+                    wallet,
+                ));
 
             // Challenger
             let args = ChallengerNewArgs {
@@ -701,14 +724,15 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             let block_producer =
                 BlockProducer::create(create_args).with_context(|| "init block producer")?;
 
-            (
-                Some(block_producer),
-                Some(challenger),
-                tests_control,
-                Some(cleaner),
-            )
-        }
-    };
+                (
+                    Some(block_producer),
+                    Some(challenger),
+                    tests_control,
+                    Some(withdrawal_unlocker),
+                    Some(cleaner),
+                )
+            }
+        };
 
     // RPC registry
     let args = RegistryArgs {
@@ -772,6 +796,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 chain_updater,
                 block_producer,
                 challenger,
+                withdrawal_unlocker,
                 cleaner,
                 Duration::from_secs(3),
             )
