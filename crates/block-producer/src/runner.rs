@@ -635,6 +635,9 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         send_tx_rate_limit: config.rpc.send_tx_rate_limit.clone(),
         server_config: config.rpc_server.clone(),
         fee_config: config.fee.clone(),
+        last_submitted_tx_hash: block_producer
+            .as_ref()
+            .map(|bp| bp.last_submitted_tx_hash()),
     };
 
     let rpc_registry = Registry::new(args);

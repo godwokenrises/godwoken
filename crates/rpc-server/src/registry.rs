@@ -9,8 +9,8 @@ use gw_jsonrpc_types::{
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
     godwoken::{
         BackendInfo, ErrorTxReceipt, GlobalState, L2BlockCommittedInfo, L2BlockStatus, L2BlockView,
-        L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, NodeInfo, RunResult,
-        SUDTFeeConfig, TxReceipt, WithdrawalStatus, WithdrawalWithStatus,
+        L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, LastL2BlockCommittedInfo,
+        NodeInfo, RunResult, SUDTFeeConfig, TxReceipt, WithdrawalStatus, WithdrawalWithStatus,
     },
     test_mode::{ShouldProduceBlock, TestModePayload},
 };
@@ -120,6 +120,7 @@ pub struct RegistryArgs<T> {
     pub send_tx_rate_limit: Option<RPCRateLimit>,
     pub server_config: RPCServerConfig,
     pub fee_config: FeeConfig,
+    pub last_submitted_tx_hash: Option<Arc<smol::lock::RwLock<H256>>>,
 }
 
 pub struct Registry {
@@ -136,6 +137,7 @@ pub struct Registry {
     send_tx_rate_limit: Option<RPCRateLimit>,
     server_config: RPCServerConfig,
     fee_config: FeeConfig,
+    last_submitted_tx_hash: Option<Arc<smol::lock::RwLock<H256>>>,
 }
 
 impl Registry {
@@ -155,6 +157,7 @@ impl Registry {
             send_tx_rate_limit,
             server_config,
             fee_config,
+            last_submitted_tx_hash,
         } = args;
 
         let backend_info = get_backend_info(generator.clone());
@@ -186,6 +189,7 @@ impl Registry {
             send_tx_rate_limit,
             server_config,
             fee_config,
+            last_submitted_tx_hash,
         }
     }
 
@@ -240,10 +244,17 @@ impl Registry {
             )
             .with_method("gw_get_fee_config", get_fee_config)
             .with_method("gw_get_node_info", get_node_info);
+
         if self.node_mode != NodeMode::ReadOnly {
             server = server
                 .with_method("gw_submit_l2transaction", submit_l2transaction)
                 .with_method("gw_submit_withdrawal_request", submit_withdrawal_request);
+        }
+
+        if let Some(last_submitted_tx_hash) = self.last_submitted_tx_hash {
+            server = server
+                .with_data(Data(last_submitted_tx_hash))
+                .with_method("gw_get_last_submitted_info", get_last_submitted_info);
         }
 
         // Tests
@@ -1224,6 +1235,17 @@ async fn get_node_info(backend_info: Data<Vec<BackendInfo>>) -> Result<NodeInfo>
     Ok(NodeInfo {
         version: Version::current().to_string(),
         backends: backend_info.clone(),
+    })
+}
+
+async fn get_last_submitted_info(
+    last_submitted_tx_hash: Data<smol::lock::RwLock<H256>>,
+) -> Result<LastL2BlockCommittedInfo> {
+    Ok(LastL2BlockCommittedInfo {
+        transaction_hash: {
+            let hash: [u8; 32] = (*last_submitted_tx_hash.read().await).into();
+            hash.into()
+        },
     })
 }
 
