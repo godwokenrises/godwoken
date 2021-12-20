@@ -1,9 +1,13 @@
-use anyhow::Result;
+#![allow(clippy::mutable_key_type)]
+
+use std::collections::HashSet;
+
+use anyhow::{bail, Result};
 use async_trait::async_trait;
-use gw_config::BlockProducerConfig;
+use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::offchain::{global_state_from_slice, CellInfo, RollupContext};
-use gw_types::packed::Transaction;
+use gw_types::packed::{OutPoint, Transaction};
 use gw_types::prelude::{Pack, Unpack};
 use gw_utils::fee::fill_tx_fee;
 use gw_utils::genesis_info::CKBGenesisInfo;
@@ -11,13 +15,14 @@ use gw_utils::transaction_skeleton::TransactionSkeleton;
 use gw_utils::wallet::Wallet;
 
 use crate::types::ChainEvent;
+use crate::utils;
 
-// TODO: split into two components
-// 1. build unlocked tx and use withdrawal lock script binary to check
-// 2. unlocker need to track submit tx and related withdrawal cells, we don't want to re-generate
-//    duplicate unlocked cell
+const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
+
 pub struct FinalizedWithdrawalUnlocker {
     unlocker: DefaultUnlocker,
+    unlocked_set: HashSet<OutPoint>,
+    debug_config: DebugConfig,
 }
 
 impl FinalizedWithdrawalUnlocker {
@@ -26,17 +31,50 @@ impl FinalizedWithdrawalUnlocker {
         ckb_genesis_info: CKBGenesisInfo,
         block_producer_config: BlockProducerConfig,
         wallet: Wallet,
+        debug_config: DebugConfig,
     ) -> Self {
         let unlocker =
             DefaultUnlocker::new(rpc_client, ckb_genesis_info, block_producer_config, wallet);
 
-        FinalizedWithdrawalUnlocker { unlocker }
+        FinalizedWithdrawalUnlocker {
+            unlocker,
+            unlocked_set: Default::default(),
+            debug_config,
+        }
     }
 
-    pub async fn handle_event(&self, _event: &ChainEvent) -> Result<()> {
-        if let Some(tx) = self.unlocker.query_and_unlock_to_owner().await? {
-            let tx_hash = self.unlocker.rpc_client.send_transaction(tx).await?;
-            log::info!("unlock finalized withdrawal in tx {}", tx_hash.pack());
+    pub async fn handle_event(&mut self, _event: &ChainEvent) -> Result<()> {
+        let unlocked = &self.unlocked_set;
+        let rpc_client = &self.unlocker.rpc_client;
+        if let Some((tx, to_unlock)) = self.unlocker.query_and_unlock_to_owner(unlocked).await? {
+            if let Err(err) = rpc_client.dry_run_transaction(tx.clone()).await {
+                let err_string = err.to_string();
+                if err_string.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
+                    // NOTE: Maybe unlocked withdrawals are included, this happens after restart.
+                    // Wait indexer remove these cells.
+                    log::info!(
+                        "[unlock withdrawal] failed to resolve, wait unlocked become committed"
+                    );
+                    return Ok(());
+                }
+                bail!("[unlock withdrawal] dry unlock tx failed {}", err);
+            }
+
+            let tx_hash = match self.unlocker.rpc_client.send_transaction(tx.clone()).await {
+                Ok(tx_hash) => tx_hash,
+                Err(err) => {
+                    let debug_tx_dump_path = &self.debug_config.debug_tx_dump_path;
+                    utils::dump_transaction(debug_tx_dump_path, rpc_client, tx).await;
+                    bail!("[unlock withdrawal] send tx failed {}", err);
+                }
+            };
+            log::info!(
+                "[unlock withdrawal] unlock {} withdrawals in tx {}",
+                to_unlock.len(),
+                tx_hash.pack()
+            );
+
+            self.unlocked_set.extend(to_unlock.clone());
         }
 
         Ok(())
@@ -54,11 +92,15 @@ pub trait BuildUnlockWithdrawalToOwner {
     async fn query_unlockable_withdrawals(
         &self,
         last_finalized_block_number: u64,
+        unlocked: &HashSet<OutPoint>,
     ) -> Result<Vec<CellInfo>>;
 
     async fn complete_tx(&self, tx_skeleton: TransactionSkeleton) -> Result<Transaction>;
 
-    async fn query_and_unlock_to_owner(&self) -> Result<Option<Transaction>> {
+    async fn query_and_unlock_to_owner(
+        &self,
+        unlocked: &HashSet<OutPoint>,
+    ) -> Result<Option<(Transaction, Vec<OutPoint>)>> {
         let rollup_cell = match self.query_rollup_cell().await? {
             Some(cell) => cell,
             None => {
@@ -70,30 +112,35 @@ pub trait BuildUnlockWithdrawalToOwner {
         let global_state = global_state_from_slice(&rollup_cell.data)?;
         let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();
         let unlockable_withdrawals = self
-            .query_unlockable_withdrawals(last_finalized_block_number)
+            .query_unlockable_withdrawals(last_finalized_block_number, unlocked)
             .await?;
         log::info!(
-            "find unlockable finalized withdrawals {}",
+            "[unlock withdrawal] find unlockable finalized withdrawals {}",
             unlockable_withdrawals.len()
         );
 
-        let unlocked = match crate::withdrawal::unlock_to_owner(
+        let to_unlock = match crate::withdrawal::unlock_to_owner(
             rollup_cell,
             self.rollup_context(),
             self.block_producer_config(),
             unlockable_withdrawals,
         )? {
-            Some(unlocked) => unlocked,
+            Some(to_unlock) => to_unlock,
             None => return Ok(None),
+        };
+        let to_unlock_out_point = {
+            let inputs = to_unlock.inputs.iter();
+            inputs.map(|i| i.cell.out_point.clone()).collect::<Vec<_>>()
         };
 
         let mut tx_skeleton = TransactionSkeleton::default();
-        tx_skeleton.cell_deps_mut().extend(unlocked.deps);
-        tx_skeleton.inputs_mut().extend(unlocked.inputs);
-        tx_skeleton.witnesses_mut().extend(unlocked.witness_args);
-        tx_skeleton.outputs_mut().extend(unlocked.outputs);
+        tx_skeleton.cell_deps_mut().extend(to_unlock.deps);
+        tx_skeleton.inputs_mut().extend(to_unlock.inputs);
+        tx_skeleton.witnesses_mut().extend(to_unlock.witness_args);
+        tx_skeleton.outputs_mut().extend(to_unlock.outputs);
 
-        self.complete_tx(tx_skeleton).await.map(Some)
+        let tx = self.complete_tx(tx_skeleton).await?;
+        Ok(Some((tx, to_unlock_out_point)))
     }
 }
 
@@ -105,6 +152,8 @@ struct DefaultUnlocker {
 }
 
 impl DefaultUnlocker {
+    pub const MAX_WITHDRAWALS_PER_TX: usize = 100;
+
     pub fn new(
         rpc_client: RPCClient,
         ckb_genesis_info: CKBGenesisInfo,
@@ -137,9 +186,14 @@ impl BuildUnlockWithdrawalToOwner for DefaultUnlocker {
     async fn query_unlockable_withdrawals(
         &self,
         last_finalized_block_number: u64,
+        unlocked: &HashSet<OutPoint>,
     ) -> Result<Vec<CellInfo>> {
         self.rpc_client
-            .query_finalized_owner_lock_withdrawal_cells(last_finalized_block_number)
+            .query_finalized_owner_lock_withdrawal_cells(
+                last_finalized_block_number,
+                unlocked,
+                Self::MAX_WITHDRAWALS_PER_TX,
+            )
             .await
     }
 

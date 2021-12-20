@@ -1347,6 +1347,8 @@ impl RPCClient {
     pub async fn query_finalized_owner_lock_withdrawal_cells(
         &self,
         last_finalized_block_number: u64,
+        exclusions: &HashSet<OutPoint>,
+        max_cells: usize,
     ) -> Result<Vec<CellInfo>> {
         let rollup_context = &self.rollup_context;
 
@@ -1385,6 +1387,10 @@ impl RPCClient {
 
             for cell in cells.objects.into_iter() {
                 let info = to_cell_info(cell);
+                if exclusions.contains(&info.out_point) {
+                    log::debug!("[finalized withdrawal] skip, in exclusions");
+                    continue;
+                }
 
                 if let Err(err) = crate::withdrawal::verify_unlockable_to_owner(
                     &info,
@@ -1396,6 +1402,9 @@ impl RPCClient {
                 }
 
                 collected.push(info);
+                if collected.len() >= max_cells {
+                    break;
+                }
             }
 
             if cells.last_cursor.is_empty() {

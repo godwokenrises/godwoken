@@ -201,7 +201,7 @@ async fn poll_loop(
                         continue;
                     }
                     bail!(
-                        "Error occurred when polling block_producer, event: {}, error: {}",
+                        "Error occurred when polling cleaner, event: {}, error: {}",
                         event,
                         err
                     );
@@ -678,6 +678,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     ckb_genesis_info.clone(),
                     block_producer_config.clone(),
                     wallet,
+                    config.debug.clone(),
                 );
 
                 let wallet = Wallet::from_config(&block_producer_config.wallet_config)
