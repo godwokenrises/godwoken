@@ -18,7 +18,7 @@ use gw_generator::{
     Generator,
 };
 use gw_store::{
-    mem_pool_state::MemPoolState,
+    mem_pool_state::{MemPoolState, MemStore},
     state::state_db::{StateContext, StateTree},
     traits::chain_store::ChainStore,
     Store,
@@ -161,7 +161,7 @@ impl BenchExecutionEnvironment {
         );
 
         Self::init_genesis(&store, &genesis_config, accounts);
-        let mem_pool_state = MemPoolState::new(Arc::new(store.get_snapshot()));
+        let mem_pool_state = MemPoolState::new(Arc::new(MemStore::new(store.get_snapshot())));
 
         BenchExecutionEnvironment {
             generator,
