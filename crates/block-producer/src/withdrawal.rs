@@ -562,6 +562,7 @@ mod test {
                     .type_(Some(sudt_script).pack())
                     .lock(lock)
                     .build(),
+                data: 100u128.pack().as_bytes(),
                 ..Default::default()
             }
         };

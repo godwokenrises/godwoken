@@ -19,6 +19,10 @@ pub fn verify_unlockable_to_owner(
 
 fn verify_l1_sudt_script(info: &CellInfo, l1_sudt_script_hash: &Byte32) -> Result<()> {
     if let Some(sudt_type) = info.output.type_().to_opt() {
+        if info.data.len() < 16 {
+            bail!("invalid l1 sudt data len");
+        }
+
         if &sudt_type.code_hash() != l1_sudt_script_hash
             || sudt_type.hash_type() != ScriptHashType::Type.into()
         {
@@ -222,9 +226,19 @@ mod test {
                 .lock(lock)
                 .type_(Some(l1_sudt.clone()).pack())
                 .build(),
+            data: 100u128.pack().as_bytes(),
             ..Default::default()
         };
         verify_l1_sudt_script(&info, &l1_sudt.code_hash()).expect("pass");
+
+        // # invalid data len
+        let err_info = CellInfo {
+            output: info.output.clone(),
+            data: 100u64.pack().as_bytes(),
+            out_point: info.out_point.clone(),
+        };
+        let err = verify_l1_sudt_script(&err_info, &l1_sudt.code_hash()).unwrap_err();
+        assert!(err.to_string().contains("invalid l1 sudt data len"));
 
         // # wrong l1 sudt code hash
         let err = verify_l1_sudt_script(&info, &[10u8; 32].pack()).unwrap_err();
@@ -241,7 +255,8 @@ mod test {
                 .as_builder()
                 .type_(Some(err_l1_sudt.clone()).pack())
                 .build(),
-            ..Default::default()
+            data: info.data.clone(),
+            out_point: info.out_point,
         };
 
         let err = verify_l1_sudt_script(&info, &err_l1_sudt.hash().pack()).unwrap_err();
