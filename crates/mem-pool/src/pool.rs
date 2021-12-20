@@ -35,6 +35,7 @@ use gw_types::{
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
+    iter::FromIterator,
     ops::Shr,
     sync::Arc,
     time::Instant,
@@ -88,7 +89,7 @@ pub struct MemPool {
     /// Mem block save and restore
     restore_manager: RestoreManager,
     /// Restored txs to finalize
-    pending_restored_tx_hashes: Vec<H256>,
+    pending_restored_tx_hashes: VecDeque<H256>,
 }
 
 impl Drop for MemPool {
@@ -129,7 +130,7 @@ impl MemPool {
 
         let mut mem_block = MemBlock::with_block_producer(block_producer_id);
         let mut pending_deposits = vec![];
-        let mut pending_restored_tx_hashes = vec![];
+        let mut pending_restored_tx_hashes = VecDeque::new();
 
         let restore_manager = RestoreManager::build(&config.restore_path)?;
         if let Ok(Some((restored, timestamp))) = restore_manager.restore_from_latest() {
@@ -138,7 +139,7 @@ impl MemPool {
             let hashes: Vec<_> = restored.withdrawals().unpack();
             mem_block.force_reinject_withdrawal_hashes(hashes.as_slice());
 
-            pending_restored_tx_hashes = restored.txs().unpack();
+            pending_restored_tx_hashes = VecDeque::from(Unpack::<Vec<_>>::unpack(&restored.txs()));
             pending_deposits = restored.deposits().unpack();
         }
 
@@ -185,8 +186,9 @@ impl MemPool {
                 "save mem block, but have pending restored txs from previous restored mem block"
             );
 
-            self.mem_block
-                .force_reinject_tx_hashes(self.pending_restored_tx_hashes.as_slice());
+            self.mem_block.force_reinject_tx_hashes(
+                Vec::from_iter(self.pending_restored_tx_hashes.clone()).as_slice(),
+            );
         }
 
         self.restore_manager.save(self.mem_block())
@@ -198,8 +200,9 @@ impl MemPool {
                 "save mem block, but have pending restored txs from previous restored mem block"
             );
 
-            self.mem_block
-                .force_reinject_tx_hashes(self.pending_restored_tx_hashes.as_slice());
+            self.mem_block.force_reinject_tx_hashes(
+                Vec::from(self.pending_restored_tx_hashes.clone()).as_slice(),
+            );
         }
 
         self.restore_manager
@@ -214,7 +217,7 @@ impl MemPool {
         self.mem_block.txs().len().saturating_add(expect_slots) > MAX_MEM_BLOCK_TXS
     }
 
-    pub fn pending_restored_tx_hashes(&mut self) -> &mut Vec<H256> {
+    pub fn pending_restored_tx_hashes(&mut self) -> &mut VecDeque<H256> {
         &mut self.pending_restored_tx_hashes
     }
 

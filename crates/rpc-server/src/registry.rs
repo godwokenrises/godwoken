@@ -363,7 +363,7 @@ impl RequestSubmitter {
                 "reinject mem block txs {}",
                 mem_pool.pending_restored_tx_hashes().len()
             );
-            while let Some(hash) = mem_pool.pending_restored_tx_hashes().pop() {
+            while let Some(hash) = mem_pool.pending_restored_tx_hashes().pop_front() {
                 match db.get_mem_pool_transaction(&hash) {
                     Ok(Some(tx)) => {
                         if let Err(err) = mem_pool.push_transaction(tx) {
