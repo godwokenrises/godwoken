@@ -60,3 +60,4 @@ tikv-jemallocator = { version = "0.4.0", features = ["unprefixed_malloc_on_suppo
 [features]
 default = []
 profiling = ["tikv-jemallocator/profiling"]
+aot-vm = ["gw-generator/aot"]

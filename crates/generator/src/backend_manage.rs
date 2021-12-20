@@ -1,6 +1,4 @@
 use anyhow::Result;
-#[cfg(has_asm)]
-#[cfg(feature = "aot")]
 use ckb_vm::machine::aot::AotCode;
 use gw_common::H256;
 use gw_config::{BackendConfig, BackendType};
