@@ -199,9 +199,11 @@ mod test {
 
     use gw_common::{h256_ext::H256Ext, H256};
     use gw_config::BlockProducerConfig;
+    use gw_types::core::ScriptHashType;
     use gw_types::offchain::{CellInfo, CollectedCustodianCells};
     use gw_types::packed::{
-        Fee, L2Block, RawWithdrawalRequest, Script, WithdrawalRequest, WithdrawalRequestExtra,
+        Fee, L2Block, RawL2Block, RawWithdrawalRequest, Script, WithdrawalRequest,
+        WithdrawalRequestExtra,
     };
     use gw_types::prelude::{Builder, Entity, Pack, PackVec, Unpack};
     use gw_types::{offchain::RollupContext, packed::RollupConfig};
@@ -214,11 +216,13 @@ mod test {
             rollup_script_hash: H256::from_u32(1),
             rollup_config: RollupConfig::new_builder()
                 .withdrawal_script_type_hash(H256::from_u32(100).pack())
+                .finality_blocks(1u64.pack())
                 .build(),
         };
 
         let sudt_script = Script::new_builder()
             .code_hash(H256::from_u32(2).pack())
+            .hash_type(ScriptHashType::Type.into())
             .args(vec![3u8; 32].pack())
             .build();
 
@@ -256,7 +260,9 @@ mod test {
                 .build()
         };
 
+        let raw_block = RawL2Block::new_builder().number(1000u64.pack()).build();
         let block = L2Block::new_builder()
+            .raw(raw_block)
             .withdrawals(vec![withdrawal.clone()].pack())
             .build();
 
@@ -315,12 +321,27 @@ mod test {
                 &withdrawal,
                 &block.hash().into(),
                 block.raw().number().unpack(),
-                Some(sudt_script),
+                Some(sudt_script.clone()),
                 Some(owner_lock),
             )
             .unwrap();
 
         assert_eq!(expected_output.as_slice(), output.as_slice());
         assert_eq!(expected_data, data);
+
+        // Check our generate withdrawal can be queried and unlocked to owner
+        let info = CellInfo {
+            output,
+            data,
+            ..Default::default()
+        };
+        let last_finalized_block_number =
+            block.raw().number().unpack() + rollup_context.rollup_config.finality_blocks().unpack();
+        gw_rpc_client::withdrawal::verify_unlockable_to_owner(
+            &info,
+            last_finalized_block_number,
+            &sudt_script.code_hash(),
+        )
+        .expect("pass verification");
     }
 }
