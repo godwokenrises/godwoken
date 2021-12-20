@@ -12,4 +12,5 @@ pub mod stake;
 pub mod test_mode_control;
 pub mod types;
 pub mod utils;
-mod withdrawal;
+pub mod withdrawal;
+pub mod withdrawal_unlocker;
