@@ -1,6 +1,6 @@
 use crate::packed::{
-    AccountMerkleState, Byte32, GlobalState, GlobalStateV0, TransactionKey, TxReceipt,
-    WithdrawalKey,
+    AccountMerkleState, Byte32, CompactMemBlock, GlobalState, GlobalStateV0, MemBlock,
+    TransactionKey, TxReceipt, WithdrawalKey,
 };
 use crate::prelude::*;
 use ckb_types::error::VerificationError;
@@ -54,5 +54,24 @@ pub fn global_state_from_slice(slice: &[u8]) -> Result<GlobalState, Verification
     match GlobalState::from_slice(slice) {
         Ok(state) => Ok(state),
         Err(_) => GlobalStateV0::from_slice(slice).map(Into::into),
+    }
+}
+
+impl From<MemBlock> for CompactMemBlock {
+    fn from(block: MemBlock) -> Self {
+        CompactMemBlock::new_builder()
+            .txs(block.txs())
+            .withdrawals(block.withdrawals())
+            .deposits(block.deposits())
+            .build()
+    }
+}
+
+impl CompactMemBlock {
+    pub fn from_full_compitablie_slice(slice: &[u8]) -> Result<CompactMemBlock, VerificationError> {
+        match CompactMemBlock::from_slice(slice) {
+            Ok(block) => Ok(block),
+            Err(_) => MemBlock::from_slice(slice).map(Into::into),
+        }
     }
 }
