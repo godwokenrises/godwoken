@@ -672,17 +672,26 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     None
                 };
 
-                // FIXME: support different pk for unlocker
+                let unlocker_wallet = match block_producer_config
+                    .withdrawal_unlocker_wallet_config
+                    .as_ref()
+                {
+                    Some(wallet_config) => Wallet::from_config(wallet_config)
+                        .with_context(|| "init unlocker wallet")?,
+                    None => {
+                        log::info!("[unlock withdrawal] reuse block producer wallet");
+                        Wallet::from_config(&block_producer_config.wallet_config)
+                            .with_context(|| "init unlocker wallet")?
+                    }
+                };
+
                 let withdrawal_unlocker = FinalizedWithdrawalUnlocker::new(
                     rpc_client.clone(),
                     ckb_genesis_info.clone(),
                     block_producer_config.clone(),
-                    wallet,
+                    unlocker_wallet,
                     config.debug.clone(),
                 );
-
-                let wallet = Wallet::from_config(&block_producer_config.wallet_config)
-                    .with_context(|| "init wallet")?;
 
                 let cleaner = Arc::new(Cleaner::new(
                     rpc_client.clone(),

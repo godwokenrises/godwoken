@@ -191,10 +191,16 @@ pub struct BlockProducerConfig {
     pub allowed_contract_deps: HashMap<H256, CellDep>,
     pub challenger_config: ChallengerConfig,
     pub wallet_config: WalletConfig,
+    #[serde(default = "default_withdrawal_unlocker_wallet")]
+    pub withdrawal_unlocker_wallet_config: Option<WalletConfig>,
 }
 
 fn default_check_mem_block_before_submit() -> bool {
     false
+}
+
+fn default_withdrawal_unlocker_wallet() -> Option<WalletConfig> {
+    None
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
