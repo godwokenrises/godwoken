@@ -1344,6 +1344,69 @@ impl RPCClient {
         Ok(verifier_cell)
     }
 
+    pub async fn query_finalized_owner_lock_withdrawal_cells(
+        &self,
+        last_finalized_block_number: u64,
+    ) -> Result<Vec<CellInfo>> {
+        let rollup_context = &self.rollup_context;
+
+        let withdrawal_lock = Script::new_builder()
+            .code_hash(rollup_context.rollup_config.withdrawal_script_type_hash())
+            .hash_type(ScriptHashType::Type.into())
+            .args(rollup_context.rollup_script_hash.as_slice().pack())
+            .build();
+
+        let search_key = SearchKey {
+            script: ckb_types::packed::Script::new_unchecked(withdrawal_lock.as_bytes()).into(),
+            script_type: ScriptType::Lock,
+            filter: None,
+        };
+        let order = Order::Asc;
+        let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
+
+        let mut collected = vec![];
+        let mut cursor = None;
+
+        while collected.is_empty() {
+            let cells: Pagination<Cell> = to_result(
+                self.indexer
+                    .client()
+                    .request(
+                        "get_cells",
+                        Some(ClientParams::Array(vec![
+                            json!(search_key),
+                            json!(order),
+                            json!(limit),
+                            json!(cursor),
+                        ])),
+                    )
+                    .await?,
+            )?;
+
+            for cell in cells.objects.into_iter() {
+                let info = to_cell_info(cell);
+
+                if let Err(err) = crate::withdrawal::verify_unlockable_to_owner(
+                    &info,
+                    last_finalized_block_number,
+                    &rollup_context.rollup_config.l1_sudt_script_type_hash(),
+                ) {
+                    log::debug!("[finalized withdrawal] skip, verify failed {}", err);
+                    continue;
+                }
+
+                collected.push(info);
+            }
+
+            if cells.last_cursor.is_empty() {
+                return Ok(collected);
+            }
+            cursor = Some(cells.last_cursor);
+        }
+
+        Ok(collected)
+    }
+
     pub async fn get_block(
         &self,
         block_hash: H256,
