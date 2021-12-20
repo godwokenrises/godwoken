@@ -157,6 +157,7 @@ pub struct BlockProducer {
     ckb_genesis_info: CKBGenesisInfo,
     tests_control: Option<TestModeControl>,
     last_committed_l2_block: LastCommittedL2Block,
+    last_submitted_tx_hash: Arc<smol::lock::RwLock<H256>>,
 }
 
 impl BlockProducer {
@@ -183,7 +184,6 @@ impl BlockProducer {
 
         let block_producer = BlockProducer {
             rollup_config_hash,
-            store,
             generator,
             chain,
             mem_pool,
@@ -198,8 +198,17 @@ impl BlockProducer {
                 committed_at: Instant::now(),
                 committed_tip_block_hash: H256::zero(),
             },
+            last_submitted_tx_hash: {
+                let hash = store.get_tip_block_hash()?;
+                Arc::new(smol::lock::RwLock::new(hash))
+            },
+            store,
         };
         Ok(block_producer)
+    }
+
+    pub fn last_submitted_tx_hash(&self) -> Arc<smol::lock::RwLock<H256>> {
+        self.last_submitted_tx_hash.clone()
     }
 
     pub async fn handle_event(&mut self, event: ChainEvent) -> Result<()> {
@@ -306,12 +315,15 @@ impl BlockProducer {
                     return Ok(());
                 }
 
+                let submitted_tx_hash = tx.hash();
                 match self.submit_block_tx(block_number, tx).await {
                     Ok(SubmitResult::Submitted) => {
                         self.last_committed_l2_block = LastCommittedL2Block {
                             committed_tip_block_hash: l2_tip_block_hash,
                             committed_at: Instant::now(),
                         };
+                        let mut last_submitted_tx_hash = self.last_submitted_tx_hash.write().await;
+                        *last_submitted_tx_hash = submitted_tx_hash.into();
                     }
                     Ok(SubmitResult::Skip) => {}
                     Err(err) => {
