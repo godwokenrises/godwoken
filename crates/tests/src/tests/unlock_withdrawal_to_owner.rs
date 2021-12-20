@@ -1,3 +1,6 @@
+#![allow(clippy::mutable_key_type)]
+
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -299,7 +302,7 @@ fn test_build_unlock_to_owner_tx() {
         ..Default::default()
     };
 
-    let withdrawal_count = rand::random::<u8>() % 20 + 5;
+    let withdrawal_count = rand::random::<u8>() % 100 + 5;
     let random_withdrawals: Vec<_> = (0..withdrawal_count)
         .map(|_| {
             let owner_lock = random_always_success_script(None);
@@ -349,7 +352,8 @@ fn test_build_unlock_to_owner_tx() {
         .into_iter()
         .map(into_input_cell)
         .collect();
-    let tx = smol::block_on(unlocker.query_and_unlock_to_owner())
+    let unlocked = Default::default();
+    let (tx, _unlocked) = smol::block_on(unlocker.query_and_unlock_to_owner(&unlocked))
         .expect("unlock")
         .expect("some withdrawals tx");
 
@@ -386,6 +390,7 @@ impl BuildUnlockWithdrawalToOwner for DummyUnlocker {
     async fn query_unlockable_withdrawals(
         &self,
         _last_finalized_block_number: u64,
+        _unlocked: &HashSet<OutPoint>,
     ) -> anyhow::Result<Vec<CellInfo>> {
         Ok(self.withdrawals.clone())
     }
