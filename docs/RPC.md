@@ -923,3 +923,32 @@ Response
     "result": "0xb57c6da2f803413b5781f8c6508320a0ada61a2992bb59ab38f16da2d02099c1"
 }
 ```
+
+### Method `gw_get_last_submitted_info`
+
+Get node last submitted info.
+
+#### Examples
+
+Request
+
+``` json
+{
+    "id": 42,
+    "jsonrpc": "2.0",
+    "method": "gw_get_last_submitted_info",
+    "params": []
+}
+```
+
+Response
+
+``` json
+ {
+    "id": 42,
+    "jsonrpc": "2.0",
+    "result": {
+        "transaction_hash": "0x1536b5af1e42707e0278cf16dd086ec630485883ce3d1c1388f9eb4d8169b119"
+    }
+}
+```
