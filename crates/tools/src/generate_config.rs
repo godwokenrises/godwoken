@@ -206,6 +206,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         challenger_config,
         wallet_config,
         check_mem_block_before_submit: false,
+        withdrawal_unlocker_wallet_config: None,
         ..Default::default()
     });
     let genesis: GenesisConfig = GenesisConfig {
