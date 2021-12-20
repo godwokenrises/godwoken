@@ -465,18 +465,16 @@ impl BlockProducer {
 
         // composite tx
         let t = Instant::now();
-        let tx = match self
-            .complete_tx_skeleton(
-                deposit_cells,
-                finalized_custodians,
-                block,
-                global_state,
-                median_time,
-                rollup_cell.clone(),
-                withdrawal_extras,
-            )
-            .await
-        {
+        let args = CompleteTxArgs {
+            deposit_cells,
+            finalized_custodians,
+            block,
+            global_state,
+            median_time,
+            rollup_cell: rollup_cell.clone(),
+            withdrawal_extras,
+        };
+        let tx = match self.complete_tx_skeleton(args).await {
             Ok(tx) => tx,
             Err(err) => {
                 log::error!(
@@ -629,16 +627,17 @@ impl BlockProducer {
         }
     }
 
-    async fn complete_tx_skeleton(
-        &self,
-        deposit_cells: Vec<DepositInfo>,
-        finalized_custodians: CollectedCustodianCells,
-        block: L2Block,
-        global_state: GlobalState,
-        median_time: Duration,
-        rollup_cell: CellInfo,
-        withdrawal_extras: Vec<WithdrawalRequestExtra>,
-    ) -> Result<Transaction> {
+    async fn complete_tx_skeleton(&self, args: CompleteTxArgs) -> Result<Transaction> {
+        let CompleteTxArgs {
+            deposit_cells,
+            finalized_custodians,
+            block,
+            global_state,
+            median_time,
+            rollup_cell,
+            withdrawal_extras,
+        } = args;
+
         let rollup_context = self.generator.rollup_context();
         let mut tx_skeleton = TransactionSkeleton::default();
         let rollup_cell_input_index = tx_skeleton.inputs().len();
@@ -932,4 +931,14 @@ impl BlockProducer {
         log::debug!("final tx size: {}", tx.as_slice().len());
         Ok(tx)
     }
+}
+
+struct CompleteTxArgs {
+    deposit_cells: Vec<DepositInfo>,
+    finalized_custodians: CollectedCustodianCells,
+    block: L2Block,
+    global_state: GlobalState,
+    median_time: Duration,
+    rollup_cell: CellInfo,
+    withdrawal_extras: Vec<WithdrawalRequestExtra>,
 }
