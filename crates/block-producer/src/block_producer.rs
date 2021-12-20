@@ -199,8 +199,13 @@ impl BlockProducer {
                 committed_tip_block_hash: H256::zero(),
             },
             last_submitted_tx_hash: {
-                let hash = store.get_tip_block_hash()?;
-                Arc::new(smol::lock::RwLock::new(hash))
+                let tip_block_hash = store.get_tip_block_hash()?;
+                let committed_info = store
+                    .get_l2block_committed_info(&tip_block_hash)?
+                    .ok_or_else(|| anyhow!("can't find committed info for tip block"))?;
+                Arc::new(smol::lock::RwLock::new(
+                    committed_info.transaction_hash().unpack(),
+                ))
             },
             store,
         };
