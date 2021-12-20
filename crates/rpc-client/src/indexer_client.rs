@@ -174,7 +174,7 @@ impl CKBIndexerClient {
                 let is_finalized = {
                     let args = cell.output.lock.args.into_bytes();
                     let args = CustodianLockArgs::from_slice(&args[32..]).unwrap();
-                    args.deposit_block_number().unpack() >= last_finalized_block_number
+                    args.deposit_block_number().unpack() <= last_finalized_block_number
                 };
                 if is_finalized {
                     finalized_capacity += capacity as u128;
