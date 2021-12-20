@@ -257,6 +257,11 @@ fn test_restore_mem_block() {
             mem_block.state_checkpoints().len(),
             random_withdrawals.len() + random_txs.len()
         );
+
+        // Also check txs order
+        for (reinjected_tx_hash, tx) in mem_block.txs().iter().zip(random_txs.iter()) {
+            assert_eq!(reinjected_tx_hash.pack(), tx.hash().pack());
+        }
     }
 }
 
