@@ -84,7 +84,7 @@ impl RestoreManager {
         };
         let file_path = self.block_file_path(timestamp);
 
-        let block = packed::CompactMemBlock::from_slice(&read(file_path)?)?;
+        let block = packed::CompactMemBlock::from_full_compitablie_slice(&read(file_path)?)?;
         Ok(Some((block, timestamp)))
     }
 
@@ -115,7 +115,7 @@ impl RestoreManager {
             None => return Ok(None),
         };
 
-        let block = packed::CompactMemBlock::from_slice(&read(file_path)?)?;
+        let block = packed::CompactMemBlock::from_full_compitablie_slice(&read(file_path)?)?;
         Ok(Some(block))
     }
 
@@ -181,8 +181,12 @@ impl RestoreManager {
 
 #[cfg(test)]
 mod tests {
+    #![allow(deprecated)]
+
+    use std::fs::write;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+    use gw_types::packed;
     use gw_types::prelude::Entity;
 
     use crate::mem_block::MemBlock;
@@ -234,5 +238,26 @@ mod tests {
             .restore_from_timestamp(earlier_timestamp)
             .unwrap();
         assert!(opt_restored.is_none());
+
+        // Should able to restore from compatible mem block
+        let full_mem_block = MemBlock::with_block_producer(77777).pack();
+
+        let latest_timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .saturating_add(Duration::from_secs(233))
+            .as_millis();
+        let file_path = restore_manager.block_file_path(latest_timestamp);
+        write(file_path, full_mem_block.as_slice()).unwrap();
+
+        let (restored_packed, _) = restore_manager
+            .restore_from_latest()
+            .unwrap()
+            .expect("saved");
+
+        assert_eq!(
+            packed::CompactMemBlock::from(full_mem_block).as_slice(),
+            restored_packed.as_slice()
+        );
     }
 }
