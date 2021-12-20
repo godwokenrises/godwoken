@@ -6,12 +6,14 @@ use gw_config::ContractsCellDep;
 use gw_mem_pool::{custodian::sum_withdrawals, withdrawal::Generator};
 use gw_types::{
     bytes::Bytes,
-    core::ScriptHashType,
-    offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext},
+    core::{DepType, ScriptHashType},
+    offchain::{
+        global_state_from_slice, CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext,
+    },
     packed::{
         CellDep, CellInput, CellOutput, CustodianLockArgs, DepositLockArgs, L2Block, Script,
-        UnlockWithdrawalViaRevert, UnlockWithdrawalWitness, UnlockWithdrawalWitnessUnion,
-        WithdrawalRequestExtra, WitnessArgs,
+        UnlockWithdrawalViaFinalize, UnlockWithdrawalViaRevert, UnlockWithdrawalWitness,
+        UnlockWithdrawalWitnessUnion, WithdrawalLockArgs, WithdrawalRequestExtra, WitnessArgs,
     },
     prelude::*,
 };
@@ -192,6 +194,120 @@ pub fn revert(
     }))
 }
 
+pub struct UnlockedWithdrawals {
+    pub deps: Vec<CellDep>,
+    pub inputs: Vec<InputCellInfo>,
+    pub witness_args: Vec<WitnessArgs>,
+    pub outputs: Vec<(CellOutput, Bytes)>,
+}
+
+pub fn unlock_to_owner(
+    rollup_cell: CellInfo,
+    rollup_context: &RollupContext,
+    block_producer_config: &BlockProducerConfig,
+    withdrawal_cells: Vec<CellInfo>,
+) -> Result<Option<UnlockedWithdrawals>> {
+    if withdrawal_cells.is_empty() {
+        return Ok(None);
+    }
+
+    let mut withdrawal_inputs = vec![];
+    let mut withdrawal_witness = vec![];
+    let mut unlocked_to_owner_outputs = vec![];
+
+    let unlock_via_finalize_witness = {
+        let unlock_args = UnlockWithdrawalViaFinalize::new_builder().build();
+        let unlock_witness = UnlockWithdrawalWitness::new_builder()
+            .set(UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(
+                unlock_args,
+            ))
+            .build();
+        WitnessArgs::new_builder()
+            .lock(Some(unlock_witness.as_bytes()).pack())
+            .build()
+    };
+
+    let global_state = global_state_from_slice(&rollup_cell.data)?;
+    let last_finalized_block_number: u64 = global_state.last_finalized_block_number().unpack();
+    let l1_sudt_script_hash = rollup_context.rollup_config.l1_sudt_script_type_hash();
+    for withdrawal_cell in withdrawal_cells {
+        // Double check
+        if let Err(err) = gw_rpc_client::withdrawal::verify_unlockable_to_owner(
+            &withdrawal_cell,
+            last_finalized_block_number,
+            &l1_sudt_script_hash,
+        ) {
+            log::error!("[unlock withdrawal] unexpected verify failed {}", err);
+            continue;
+        }
+
+        let owner_lock = {
+            let args: Bytes = withdrawal_cell.output.lock().args().unpack();
+            let lock_args_end = 32 + WithdrawalLockArgs::TOTAL_SIZE;
+            let lock_start = lock_args_end + 4;
+            let owner_lock = Script::new_unchecked(args.slice(lock_start..));
+            // Double check owner lock
+            let withdrawal_lock_args =
+                match WithdrawalLockArgs::from_slice(&args.slice(32..lock_args_end)) {
+                    Ok(args) => args,
+                    Err(err) => {
+                        log::error!("[unlock withdrawal] impossible lock args {}", err);
+                        continue;
+                    }
+                };
+            if withdrawal_lock_args.owner_lock_hash() != owner_lock.hash().pack() {
+                log::error!("[unlock withdrawal] impossible extract owner lock failed");
+                continue;
+            }
+            owner_lock
+        };
+
+        let withdrawal_input = {
+            let input = CellInput::new_builder()
+                .previous_output(withdrawal_cell.out_point.clone())
+                .build();
+
+            InputCellInfo {
+                input,
+                cell: withdrawal_cell.clone(),
+            }
+        };
+
+        // Switch to owner lock
+        let output = withdrawal_cell.output.as_builder().lock(owner_lock).build();
+
+        withdrawal_inputs.push(withdrawal_input);
+        withdrawal_witness.push(unlock_via_finalize_witness.clone());
+        unlocked_to_owner_outputs.push((output, withdrawal_cell.data));
+    }
+
+    if withdrawal_inputs.is_empty() {
+        return Ok(None);
+    }
+
+    let rollup_dep = CellDep::new_builder()
+        .out_point(rollup_cell.out_point)
+        .dep_type(DepType::Code.into())
+        .build();
+    let withdrawal_lock_dep = block_producer_config.withdrawal_cell_lock_dep.clone();
+    let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
+
+    let mut cell_deps = vec![rollup_dep, withdrawal_lock_dep.into()];
+    if unlocked_to_owner_outputs
+        .iter()
+        .any(|output| output.0.type_().to_opt().is_some())
+    {
+        cell_deps.push(sudt_type_dep.into())
+    }
+
+    Ok(Some(UnlockedWithdrawals {
+        deps: cell_deps,
+        inputs: withdrawal_inputs,
+        witness_args: withdrawal_witness,
+        outputs: unlocked_to_owner_outputs,
+    }))
+}
+
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
@@ -199,16 +315,20 @@ mod test {
 
     use gw_common::{h256_ext::H256Ext, H256};
     use gw_config::BlockProducerConfig;
-    use gw_types::core::ScriptHashType;
-    use gw_types::offchain::{CellInfo, CollectedCustodianCells};
+    use gw_types::core::{DepType, ScriptHashType};
+    use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo};
     use gw_types::packed::{
-        Fee, L2Block, RawL2Block, RawWithdrawalRequest, Script, WithdrawalRequest,
-        WithdrawalRequestExtra,
+        CellDep, CellInput, CellOutput, Fee, GlobalState, L2Block, OutPoint, RawL2Block,
+        RawWithdrawalRequest, Script, UnlockWithdrawalViaFinalize, UnlockWithdrawalWitness,
+        UnlockWithdrawalWitnessUnion, WithdrawalLockArgs, WithdrawalRequest,
+        WithdrawalRequestExtra, WitnessArgs,
     };
     use gw_types::prelude::{Builder, Entity, Pack, PackVec, Unpack};
     use gw_types::{offchain::RollupContext, packed::RollupConfig};
 
     use crate::withdrawal::generate;
+
+    use super::unlock_to_owner;
 
     #[test]
     fn test_withdrawal_cell_generate() {
@@ -343,5 +463,186 @@ mod test {
             &sudt_script.code_hash(),
         )
         .expect("pass verification");
+    }
+
+    #[test]
+    fn test_unlock_to_owner() {
+        // Output should only change lock to owner lock
+        let last_finalized_block_number = 100u64;
+        let global_state = GlobalState::new_builder()
+            .last_finalized_block_number(last_finalized_block_number.pack())
+            .build();
+
+        let rollup_type = Script::new_builder()
+            .code_hash(H256::from_u32(1).pack())
+            .build();
+
+        let rollup_cell = CellInfo {
+            data: global_state.as_bytes(),
+            out_point: OutPoint::new_builder()
+                .tx_hash(H256::from_u32(2).pack())
+                .build(),
+            output: CellOutput::new_builder()
+                .type_(Some(rollup_type.clone()).pack())
+                .build(),
+        };
+
+        let sudt_script = Script::new_builder()
+            .code_hash(H256::from_u32(3).pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(vec![4u8; 32].pack())
+            .build();
+
+        let rollup_context = RollupContext {
+            rollup_script_hash: rollup_type.hash().into(),
+            rollup_config: RollupConfig::new_builder()
+                .withdrawal_script_type_hash(H256::from_u32(5).pack())
+                .l1_sudt_script_type_hash(sudt_script.code_hash())
+                .finality_blocks(1u64.pack())
+                .build(),
+        };
+
+        let block_producer_config = {
+            let withdrawal_out_point = OutPoint::new_builder()
+                .tx_hash(H256::from_u32(6).pack())
+                .build();
+            let l1_sudt_out_point = OutPoint::new_builder()
+                .tx_hash(H256::from_u32(7).pack())
+                .build();
+
+            BlockProducerConfig {
+                withdrawal_cell_lock_dep: CellDep::new_builder()
+                    .out_point(withdrawal_out_point)
+                    .build()
+                    .into(),
+                l1_sudt_type_dep: CellDep::new_builder()
+                    .out_point(l1_sudt_out_point)
+                    .build()
+                    .into(),
+                ..Default::default()
+            }
+        };
+
+        let owner_lock = Script::new_builder()
+            .code_hash(H256::from_u32(8).pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(vec![9u8; 32].pack())
+            .build();
+
+        let withdrawal_without_owner_lock = {
+            let lock_args = WithdrawalLockArgs::new_builder()
+                .owner_lock_hash(owner_lock.hash().pack())
+                .withdrawal_block_number((last_finalized_block_number - 1).pack())
+                .build();
+
+            let mut args = rollup_type.hash().to_vec();
+            args.extend_from_slice(&lock_args.as_bytes());
+
+            let lock = Script::new_builder().args(args.pack()).build();
+            CellInfo {
+                output: CellOutput::new_builder().lock(lock).build(),
+                ..Default::default()
+            }
+        };
+
+        let withdrawal_with_owner_lock = {
+            let lock_args = WithdrawalLockArgs::new_builder()
+                .owner_lock_hash(owner_lock.hash().pack())
+                .withdrawal_block_number((last_finalized_block_number - 1).pack())
+                .build();
+
+            let mut args = rollup_type.hash().to_vec();
+            args.extend_from_slice(&lock_args.as_bytes());
+            args.extend_from_slice(&(owner_lock.as_bytes().len() as u32).to_be_bytes());
+            args.extend_from_slice(&owner_lock.as_bytes());
+
+            let lock = Script::new_builder().args(args.pack()).build();
+            CellInfo {
+                output: CellOutput::new_builder()
+                    .type_(Some(sudt_script).pack())
+                    .lock(lock)
+                    .build(),
+                ..Default::default()
+            }
+        };
+
+        let unlocked = unlock_to_owner(
+            rollup_cell.clone(),
+            &rollup_context,
+            &block_producer_config,
+            vec![
+                withdrawal_without_owner_lock,
+                withdrawal_with_owner_lock.clone(),
+            ],
+        )
+        .expect("unlock")
+        .expect("some unlocked");
+
+        assert_eq!(unlocked.inputs.len(), 1, "skip one without owner lock");
+        assert_eq!(unlocked.outputs.len(), 1);
+        assert_eq!(unlocked.witness_args.len(), 1);
+
+        let expected_output = {
+            let output = withdrawal_with_owner_lock.output.clone().as_builder();
+            output.lock(owner_lock).build()
+        };
+
+        let (output, data) = unlocked.outputs.first().unwrap().to_owned();
+        assert_eq!(expected_output.as_slice(), output.as_slice());
+        assert_eq!(withdrawal_with_owner_lock.data, data);
+
+        let expected_input = {
+            let input = CellInput::new_builder()
+                .previous_output(withdrawal_with_owner_lock.out_point.clone())
+                .build();
+
+            InputCellInfo {
+                input,
+                cell: withdrawal_with_owner_lock,
+            }
+        };
+        let input = unlocked.inputs.first().unwrap().to_owned();
+        assert_eq!(expected_input.input.as_slice(), input.input.as_slice());
+        assert_eq!(
+            expected_input.cell.output.as_slice(),
+            input.cell.output.as_slice()
+        );
+        assert_eq!(
+            expected_input.cell.out_point.as_slice(),
+            input.cell.out_point.as_slice()
+        );
+        assert_eq!(expected_input.cell.data, input.cell.data);
+
+        let expected_witness = {
+            let unlock_args = UnlockWithdrawalViaFinalize::new_builder().build();
+            let unlock_witness = UnlockWithdrawalWitness::new_builder()
+                .set(UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(
+                    unlock_args,
+                ))
+                .build();
+            WitnessArgs::new_builder()
+                .lock(Some(unlock_witness.as_bytes()).pack())
+                .build()
+        };
+        let witness = unlocked.witness_args.first().unwrap().to_owned();
+        assert_eq!(expected_witness.as_slice(), witness.as_slice());
+
+        assert_eq!(unlocked.deps.len(), 3);
+        let rollup_dep = CellDep::new_builder()
+            .out_point(rollup_cell.out_point)
+            .dep_type(DepType::Code.into())
+            .build();
+        assert_eq!(
+            unlocked.deps.first().unwrap().as_slice(),
+            rollup_dep.as_slice()
+        );
+        assert_eq!(
+            unlocked.deps.get(1).unwrap().as_slice(),
+            CellDep::from(block_producer_config.withdrawal_cell_lock_dep).as_slice(),
+        );
+        assert_eq!(
+            unlocked.deps.get(2).unwrap().as_slice(),
+            CellDep::from(block_producer_config.l1_sudt_type_dep).as_slice(),
+        );
     }
 }
