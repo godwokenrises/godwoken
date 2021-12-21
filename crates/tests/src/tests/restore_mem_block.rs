@@ -221,6 +221,7 @@ fn test_restore_mem_block() {
             send_tx_rate_limit: Default::default(),
             server_config: Default::default(),
             fee_config: Default::default(),
+            last_submitted_tx_hash: None,
         };
 
         Registry::new(args)
