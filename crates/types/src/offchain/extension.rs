@@ -68,7 +68,7 @@ impl From<MemBlock> for CompactMemBlock {
 }
 
 impl CompactMemBlock {
-    pub fn from_full_compitablie_slice(slice: &[u8]) -> Result<CompactMemBlock, VerificationError> {
+    pub fn from_full_compatible_slice(slice: &[u8]) -> Result<CompactMemBlock, VerificationError> {
         match CompactMemBlock::from_slice(slice) {
             Ok(block) => Ok(block),
             Err(_) => MemBlock::from_slice(slice).map(Into::into),
