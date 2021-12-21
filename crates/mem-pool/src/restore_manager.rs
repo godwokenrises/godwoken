@@ -84,7 +84,7 @@ impl RestoreManager {
         };
         let file_path = self.block_file_path(timestamp);
 
-        let block = packed::CompactMemBlock::from_full_compitablie_slice(&read(file_path)?)?;
+        let block = packed::CompactMemBlock::from_full_compatible_slice(&read(file_path)?)?;
         Ok(Some((block, timestamp)))
     }
 
@@ -115,7 +115,7 @@ impl RestoreManager {
             None => return Ok(None),
         };
 
-        let block = packed::CompactMemBlock::from_full_compitablie_slice(&read(file_path)?)?;
+        let block = packed::CompactMemBlock::from_full_compatible_slice(&read(file_path)?)?;
         Ok(Some(block))
     }
 
