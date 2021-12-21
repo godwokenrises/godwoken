@@ -21,153 +21,13 @@ use gw_types::core::ScriptHashType;
 use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext};
 use gw_types::packed::{
     CellDep, CellInput, CellOutput, DepositRequest, GlobalState, L2BlockCommittedInfo, OutPoint,
-    RawWithdrawalRequest, RollupConfig, Script, WithdrawalLockArgs, WithdrawalRequest,
-    WithdrawalRequestExtra,
+    RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
 };
-use gw_types::prelude::Pack;
+use gw_types::prelude::{Pack, Unpack};
 use gw_utils::transaction_skeleton::TransactionSkeleton;
 
 const CKB: u64 = 100000000;
-
-#[test]
-fn test_push_withdrawal_with_owner_lock() {
-    let _ = env_logger::builder().is_test(true).try_init();
-
-    let rollup_type_script = Script::default();
-    let rollup_script_hash: H256 = rollup_type_script.hash().into();
-    let rollup_cell = CellOutput::new_builder()
-        .type_(Some(rollup_type_script.clone()).pack())
-        .build();
-    let mut chain = setup_chain(rollup_type_script);
-
-    // Deposit 2 accounts
-    const DEPOSIT_CAPACITY: u64 = 1000000 * CKB;
-    let accounts: Vec<_> = (0..2)
-        .map(|_| random_always_success_script(Some(&rollup_script_hash)))
-        .collect();
-    let deposits = accounts.iter().map(|account_script| {
-        DepositRequest::new_builder()
-            .capacity(DEPOSIT_CAPACITY.pack())
-            .sudt_script_hash(H256::zero().pack())
-            .amount(0.pack())
-            .script(account_script.to_owned())
-            .build()
-    });
-
-    let block_result = {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
-        construct_block(&chain, &mut mem_pool, deposits.clone().collect()).unwrap()
-    };
-    let apply_deposits = L1Action {
-        context: L1ActionContext::SubmitBlock {
-            l2block: block_result.block.clone(),
-            deposit_requests: deposits.collect(),
-            deposit_asset_scripts: Default::default(),
-        },
-        transaction: build_sync_tx(rollup_cell, block_result),
-        l2block_committed_info: L2BlockCommittedInfo::new_builder()
-            .number(1u64.pack())
-            .build(),
-    };
-    let param = SyncParam {
-        updates: vec![apply_deposits],
-        reverts: Default::default(),
-    };
-    chain.sync(param).unwrap();
-    assert!(chain.last_sync_event().is_success());
-
-    // Generate random withdrawals
-    const WITHDRAWAL_CAPACITY: u64 = 1000 * CKB;
-    let alice = accounts.first().unwrap().to_owned();
-    let withdrawal: WithdrawalRequestExtra = {
-        let raw = RawWithdrawalRequest::new_builder()
-            .capacity(WITHDRAWAL_CAPACITY.pack())
-            .account_script_hash(alice.hash().pack())
-            .sudt_script_hash(H256::zero().pack())
-            .build();
-        WithdrawalRequest::new_builder().raw(raw).build().into()
-    };
-    let bob = accounts.last().unwrap().to_owned();
-    let bob_owner_lock = random_always_success_script(Some(&rollup_script_hash));
-    let withdrawal_with_owner_lock = {
-        let raw = RawWithdrawalRequest::new_builder()
-            .capacity(WITHDRAWAL_CAPACITY.pack())
-            .account_script_hash(bob.hash().pack())
-            .sudt_script_hash(H256::zero().pack())
-            .owner_lock_hash(bob_owner_lock.hash().pack())
-            .build();
-        let req = WithdrawalRequest::new_builder().raw(raw).build();
-        WithdrawalRequestExtra::new_builder()
-            .request(req)
-            .owner_lock(Some(bob_owner_lock).pack())
-            .build()
-    };
-
-    // Push withdrawals, deposits and txs
-    let finalized_custodians = CollectedCustodianCells {
-        capacity: ((accounts.len() as u64 + 1) * WITHDRAWAL_CAPACITY) as u128,
-        cells_info: vec![Default::default()],
-        ..Default::default()
-    };
-
-    {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
-        let provider = DummyMemPoolProvider {
-            deposit_cells: vec![],
-            fake_blocktime: Duration::from_millis(0),
-            collected_custodians: finalized_custodians,
-        };
-        mem_pool.set_provider(Box::new(provider));
-        mem_pool.reset_mem_block().unwrap();
-
-        mem_pool
-            .push_withdrawal_request(withdrawal.clone())
-            .unwrap();
-        mem_pool
-            .push_withdrawal_request(withdrawal_with_owner_lock.clone())
-            .unwrap();
-    }
-
-    // Check restore withdrawals, deposits and txs
-    {
-        let mut count = 10;
-        while count > 0 {
-            {
-                let mem_pool = chain.mem_pool().as_ref().unwrap();
-                let mem_pool = smol::block_on(mem_pool.lock());
-
-                if mem_pool.mem_block().withdrawals().len() == 2 {
-                    break;
-                }
-            }
-            smol::block_on(smol::Timer::after(Duration::from_secs(1)));
-            count -= 1;
-        }
-    }
-
-    let block_result = {
-        let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
-        construct_block(&chain, &mut mem_pool, vec![]).unwrap()
-    };
-
-    assert_eq!(block_result.block.withdrawals().len(), 2);
-
-    let expected_withdrawals: HashMap<[u8; 32], _> = HashMap::from_iter([
-        (withdrawal.hash(), withdrawal),
-        (
-            withdrawal_with_owner_lock.hash(),
-            withdrawal_with_owner_lock,
-        ),
-    ]);
-
-    for extra in block_result.withdrawal_extras.iter() {
-        let expected = expected_withdrawals.get(&extra.hash()).unwrap();
-        assert_eq!(extra.as_slice(), expected.as_slice());
-    }
-}
+const MAX_MEM_BLOCK_WITHDRAWALS: u8 = 50;
 
 #[test]
 fn test_build_unlock_to_owner_tx() {
@@ -179,6 +39,7 @@ fn test_build_unlock_to_owner_tx() {
         .build();
 
     let rollup_type = random_always_success_script(None);
+    let rollup_script_hash: H256 = rollup_type.hash().into();
     let rollup_cell = CellInfo {
         data: global_state.as_bytes(),
         out_point: OutPoint::new_builder()
@@ -188,6 +49,7 @@ fn test_build_unlock_to_owner_tx() {
             .type_(Some(rollup_type.clone()).pack())
             .build(),
     };
+    let mut chain = setup_chain(rollup_type.clone());
 
     let always_type = random_always_success_script(None);
     let always_cell = CellInfo {
@@ -240,61 +102,195 @@ fn test_build_unlock_to_owner_tx() {
         ..Default::default()
     };
 
-    let withdrawal_count = rand::random::<u8>() % 100 + 5;
-    let random_withdrawals: Vec<_> = (0..withdrawal_count)
-        .map(|_| {
-            let owner_lock = random_always_success_script(None);
+    // Deposit random accounts
+    const DEPOSIT_CAPACITY: u64 = 1000000 * CKB;
+    const DEPOSIT_AMOUNT: u128 = 1000;
+    let account_count = (rand::random::<u8>() % 100 + 5) % MAX_MEM_BLOCK_WITHDRAWALS;
+    let accounts: Vec<_> = (0..account_count)
+        .map(|_| random_always_success_script(Some(&rollup_script_hash)))
+        .collect();
+    let deposits = accounts.iter().map(|account_script| {
+        DepositRequest::new_builder()
+            .capacity(DEPOSIT_CAPACITY.pack())
+            .sudt_script_hash(sudt_script.hash().pack())
+            .amount(DEPOSIT_AMOUNT.pack())
+            .script(account_script.to_owned())
+            .build()
+    });
 
-            let lock_args = WithdrawalLockArgs::new_builder()
-                .owner_lock_hash(owner_lock.hash().pack())
-                .withdrawal_block_number((last_finalized_block_number - 1).pack())
+    let block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
+        construct_block(&chain, &mut mem_pool, deposits.clone().collect()).unwrap()
+    };
+    let apply_deposits = L1Action {
+        context: L1ActionContext::SubmitBlock {
+            l2block: block_result.block.clone(),
+            deposit_requests: deposits.collect(),
+            deposit_asset_scripts: Default::default(),
+        },
+        transaction: build_sync_tx(rollup_cell.output.clone(), block_result),
+        l2block_committed_info: L2BlockCommittedInfo::new_builder()
+            .number(1u64.pack())
+            .build(),
+    };
+    let param = SyncParam {
+        updates: vec![apply_deposits],
+        reverts: Default::default(),
+    };
+    chain.sync(param).unwrap();
+    assert!(chain.last_sync_event().is_success());
+
+    // Generate random withdrawals(w/wo owner lock)
+    const WITHDRAWAL_CAPACITY: u64 = 1000 * CKB;
+    const WITHDRAWAL_AMOUNT: u128 = 100;
+    let no_owner_lock_count = rand::random::<u8>() % (accounts.len() as u8 / 2) + 1;
+    let withdrawals_no_lock = {
+        let accounts = accounts.iter().take(no_owner_lock_count as usize);
+        accounts.map(|account_script| {
+            let raw = RawWithdrawalRequest::new_builder()
+                .capacity(WITHDRAWAL_CAPACITY.pack())
+                .amount(WITHDRAWAL_AMOUNT.pack())
+                .account_script_hash(account_script.hash().pack())
+                .owner_lock_hash(account_script.hash().pack())
+                .sudt_script_hash(sudt_script.hash().pack())
                 .build();
-
-            let mut args = rollup_type.hash().to_vec();
-            args.extend_from_slice(&lock_args.as_bytes());
-            args.extend_from_slice(&(owner_lock.as_bytes().len() as u32).to_be_bytes());
-            args.extend_from_slice(&owner_lock.as_bytes());
-
-            let lock = Script::new_builder()
-                .code_hash(withdrawal_lock_type.hash().pack())
-                .hash_type(ScriptHashType::Type.into())
-                .args(args.pack())
+            WithdrawalRequest::new_builder().raw(raw).build().into()
+        })
+    };
+    let withdrawals_lock = {
+        let accounts = accounts.iter().skip(no_owner_lock_count as usize);
+        accounts.map(|account_script| {
+            let raw = RawWithdrawalRequest::new_builder()
+                .capacity(WITHDRAWAL_CAPACITY.pack())
+                .amount(WITHDRAWAL_AMOUNT.pack())
+                .account_script_hash(account_script.hash().pack())
+                .owner_lock_hash(account_script.hash().pack())
+                .sudt_script_hash(sudt_script.hash().pack())
                 .build();
+            let req = WithdrawalRequest::new_builder().raw(raw).build();
+            WithdrawalRequestExtra::new_builder()
+                .request(req)
+                .owner_lock(Some(account_script.to_owned()).pack())
+                .build()
+        })
+    };
 
-            CellInfo {
-                output: CellOutput::new_builder()
-                    .type_(Some(sudt_script.clone()).pack())
-                    .lock(lock)
-                    .build(),
-                data: 100u128.pack().as_bytes(),
+    // Push withdrawals
+    let finalized_custodians = CollectedCustodianCells {
+        capacity: ((accounts.len() as u128 + 1) * WITHDRAWAL_CAPACITY as u128),
+        cells_info: vec![Default::default()],
+        sudt: HashMap::from_iter([(
+            sudt_script.hash(),
+            (
+                WITHDRAWAL_AMOUNT * (accounts.len() as u128 + 1),
+                sudt_script.clone(),
+            ),
+        )]),
+    };
+
+    {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let provider = DummyMemPoolProvider {
+            deposit_cells: vec![],
+            fake_blocktime: Duration::from_millis(0),
+            collected_custodians: finalized_custodians.clone(),
+        };
+        mem_pool.set_provider(Box::new(provider));
+
+        for withdrawal in withdrawals_no_lock.chain(withdrawals_lock) {
+            mem_pool.push_withdrawal_request(withdrawal).unwrap();
+        }
+
+        mem_pool.reset_mem_block().unwrap();
+        assert_eq!(mem_pool.mem_block().withdrawals().len(), accounts.len());
+    }
+
+    let block_result = {
+        let mem_pool = chain.mem_pool().as_ref().unwrap();
+        let mut mem_pool = smol::block_on(mem_pool.lock());
+        construct_block(&chain, &mut mem_pool, vec![]).unwrap()
+    };
+    assert_eq!(block_result.block.withdrawals().len(), accounts.len());
+
+    // Generate withdrawal cells
+    let withdrawal_extras = block_result
+        .withdrawal_extras
+        .into_iter()
+        .map(|w| (w.hash().into(), w));
+    let generated_withdrawals = gw_block_producer::withdrawal::generate(
+        &rollup_context,
+        finalized_custodians,
+        &block_result.block,
+        &block_producer_config,
+        &withdrawal_extras.collect(),
+    )
+    .expect("generate")
+    .expect("some withdrawals cell");
+
+    let random_withdrawal_cells = {
+        let outputs = generated_withdrawals.outputs.into_iter();
+        outputs
+            .map(|(output, data)| CellInfo {
+                output,
+                data,
                 out_point: OutPoint::new_builder()
                     .tx_hash(rand::random::<[u8; 32]>().pack())
                     .build(),
-            }
+            })
+            .collect::<Vec<_>>()
+    };
+
+    let mut unlocker = DummyUnlocker {
+        rollup_cell: rollup_cell.clone(),
+        rollup_context: rollup_context.clone(),
+        block_producer_config,
+        withdrawals: random_withdrawal_cells.clone(),
+    };
+
+    let unlocked = Default::default();
+    let (_tx, to_unlock) = smol::block_on(unlocker.query_and_unlock_to_owner(&unlocked))
+        .expect("unlock")
+        .expect("skip no owner lock");
+    assert_eq!(
+        to_unlock.len(),
+        accounts.len() - no_owner_lock_count as usize
+    );
+
+    // Simulate rpc client filter no owner lock withdrawal cells
+    let last_finalized_block_number = block_result.block.raw().number().unpack();
+    let unlockable_random_withdrawals: Vec<_> = random_withdrawal_cells
+        .into_iter()
+        .filter(|cell| {
+            gw_rpc_client::withdrawal::verify_unlockable_to_owner(
+                cell,
+                last_finalized_block_number,
+                &rollup_context.rollup_config.l1_sudt_script_type_hash(),
+            )
+            .is_ok()
         })
         .collect();
+    assert_eq!(
+        unlockable_random_withdrawals.len(),
+        accounts.len() - no_owner_lock_count as usize
+    );
 
-    let unlocker = DummyUnlocker {
-        rollup_cell: rollup_cell.clone(),
-        rollup_context,
-        block_producer_config,
-        withdrawals: random_withdrawals.clone(),
-    };
+    unlocker.withdrawals = unlockable_random_withdrawals.clone();
+    let (tx, _to_unlock) = smol::block_on(unlocker.query_and_unlock_to_owner(&unlocked))
+        .expect("unlock")
+        .expect("some withdrawals tx");
+
+    let inputs = unlockable_random_withdrawals
+        .into_iter()
+        .map(into_input_cell)
+        .collect();
 
     let cell_deps = vec![
         into_input_cell(rollup_cell),
         into_input_cell(always_cell),
         into_input_cell(withdrawal_lock_cell),
     ];
-    let inputs = random_withdrawals
-        .into_iter()
-        .map(into_input_cell)
-        .collect();
-    let unlocked = Default::default();
-    let (tx, _unlocked) = smol::block_on(unlocker.query_and_unlock_to_owner(&unlocked))
-        .expect("unlock")
-        .expect("some withdrawals tx");
-
     let tx_with_context = TxWithContext {
         tx,
         cell_deps,
