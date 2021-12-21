@@ -57,7 +57,7 @@ impl FinalizedWithdrawalUnlocker {
                     );
                     return Ok(());
                 }
-                bail!("[unlock withdrawal] dry unlock tx failed {}", err);
+                bail!("dry unlock tx failed {}", err);
             }
 
             let tx_hash = match self.unlocker.rpc_client.send_transaction(tx.clone()).await {
@@ -65,7 +65,7 @@ impl FinalizedWithdrawalUnlocker {
                 Err(err) => {
                     let debug_tx_dump_path = &self.debug_config.debug_tx_dump_path;
                     utils::dump_transaction(debug_tx_dump_path, rpc_client, tx).await;
-                    bail!("[unlock withdrawal] send tx failed {}", err);
+                    bail!("send tx failed {}", err);
                 }
             };
             log::info!(
