@@ -184,13 +184,8 @@ async fn poll_loop(
 
             if let Some(ref withdrawal_unlocker) = inner.withdrawal_unlocker {
                 if let Err(err) = withdrawal_unlocker.handle_event(&event).await {
-                    if is_l1_query_error(&err) {
-                        log::error!("[polling] finalized withdrawal unlocker, event: {} error: {}", event, err);
-                        smol::Timer::after(poll_interval).await;
-                        continue;
-                    }
+                    log::error!("[unlock withdrawal] {}", err);
                 }
-                bail!("Error occurred when polling finalized withdrawal unlocker, event: {}, error: {}", event, err);
             }
 
             if let Some(ref cleaner) = inner.cleaner {
