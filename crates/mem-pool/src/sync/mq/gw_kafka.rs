@@ -63,7 +63,7 @@ pub(crate) struct Consumer {
 }
 
 impl Consumer {
-    pub(crate) fn new(
+    pub(crate) fn start(
         hosts: Vec<String>,
         topic: String,
         group: String,
@@ -116,12 +116,12 @@ impl Consume for Consumer {
                     gw_types::packed::RefreshMemBlockMessageUnionReader::NextMemBlock(next) => {
                         match self.subscribe.next_mem_block(next.to_entity()) {
                             Ok(None) => {
-                                log::warn!("Invalid tip. Need wait for syncing to the new tip.");
+                                log::debug!("Invalid tip. Wait for syncing to the new tip.");
                                 early_exit = Some(());
                                 break 'inner;
                             }
                             Ok(Some(block_number)) => {
-                                log::info!("Refresh mem pool to {}", block_number);
+                                log::debug!("Refresh mem pool to {}", block_number);
                             }
                             Err(err) => {
                                 log::error!("[Refresh mem pool] error: {:?}", err);

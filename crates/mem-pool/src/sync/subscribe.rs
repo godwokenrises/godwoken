@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use gw_config::SubscribeMemPoolConfig;
@@ -23,7 +23,7 @@ impl SubscribeMemPoolService {
         let tx_hash = tx.raw().hash();
         log::info!("Add tx: {} to mem block", hex::encode(&tx_hash));
         let mut mem_pool = smol::block_on(self.mem_pool.lock());
-        if let Err(err) = mem_pool.push_transaction(tx) {
+        if let Err(err) = mem_pool.append_tx(tx) {
             log::error!("Sync tx from full node failed: {:?}", err);
         }
         Ok(())
@@ -50,10 +50,11 @@ pub fn spawn_sub_mem_pool_task(
         topic,
         group,
     } = mem_block_config;
-    let mut consumer = gw_kafka::Consumer::new(hosts, topic, group, fan_in)?;
+    let mut consumer = gw_kafka::Consumer::start(hosts, topic, group, fan_in)?;
     smol::spawn(async move {
         log::info!("Spawn fan in mem_block task");
         loop {
+            let _ = smol::Timer::after(Duration::from_secs(5)).await;
             if let Err(err) = consumer.poll() {
                 log::error!("consume error: {:?}", err);
             }

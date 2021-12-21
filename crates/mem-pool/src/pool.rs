@@ -1330,4 +1330,13 @@ impl MemPool {
 
         Ok(Some(next_block_number))
     }
+
+    // Only **ReadOnly** node needs this.
+    // Sync tx from fullnode to readonly.
+    pub(crate) fn append_tx(&mut self, tx: L2Transaction) -> Result<()> {
+        let db = self.store.begin_transaction();
+        let _ = self.finalize_tx(&db, tx)?;
+        db.commit()?;
+        Ok(())
+    }
 }
