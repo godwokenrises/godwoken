@@ -16,7 +16,7 @@ use gw_rpc_client::{
 use gw_types::{
     bytes::Bytes,
     core::ScriptHashType,
-    offchain::{global_state_from_slice, RollupContext, TxStatus},
+    offchain::{RollupContext, TxStatus},
     packed::{
         CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositLockArgs,
         DepositRequest, L2BlockCommittedInfo, OutPoint, RollupAction, RollupActionUnion, Script,
