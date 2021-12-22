@@ -2,7 +2,7 @@ use anyhow::Result;
 use gw_types::{
     bytes::Bytes,
     packed::{RefreshMemBlockMessage, RefreshMemBlockMessageUnion},
-    prelude::{Entity, Reader},
+    prelude::{Builder, Entity, Reader},
 };
 use rdkafka::{
     consumer::{BaseConsumer, CommitMode, Consumer as RdConsumer},
@@ -35,7 +35,8 @@ impl Produce for Producer {
     type Msg = RefreshMemBlockMessageUnion;
 
     fn send(&mut self, message: Self::Msg) -> Result<()> {
-        let bytes = message.as_bytes();
+        let msg = RefreshMemBlockMessage::new_builder().set(message).build();
+        let bytes = msg.as_bytes();
         log::trace!("Producer send msg: {:?}", &bytes.to_vec());
         let message = RefreshMemBlockMessageFacade(bytes);
         if let Err((err, _)) = self

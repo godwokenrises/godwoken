@@ -36,7 +36,10 @@ impl SubscribeMemPoolService {
     }
 
     pub(crate) fn next_mem_block(&self, next_mem_block: NextMemBlock) -> Result<Option<u64>> {
-        log::info!("Refresh next mem block");
+        log::info!(
+            "Refresh next mem block: {}",
+            next_mem_block.block_info().number().unpack()
+        );
         let block_info = next_mem_block.block_info();
         let withdrawals = next_mem_block.withdrawals().into_iter().collect();
         let deposits = next_mem_block.deposits().unpack();
