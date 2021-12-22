@@ -146,7 +146,6 @@ impl SubscriptionRpcImpl {
         notify_controller: NotifyController,
         name: S,
     ) -> Self {
-        println!("!!name: {:?}", name);
         let new_error_tx_receipt_receiver =
             notify_controller.subscribe_new_error_tx_receipt(name.to_string());
 

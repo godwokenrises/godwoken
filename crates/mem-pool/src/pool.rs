@@ -1298,6 +1298,7 @@ impl MemPool {
                     notify_controller.notify_new_error_tx_receipt(receipt_clone);
                 })
                 .detach();
+                // TODO: remove this
                 error_tx_handler.handle_error_receipt(receipt).detach();
                 log::debug!(
                     "[finalize tx] handle error tx: {}ms",

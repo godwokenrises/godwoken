@@ -5,7 +5,6 @@ use smol::lock::Mutex;
 use crate::notify_controller::{NotifyController, NotifyService};
 use crate::subscription::{IoHandler, SubscriptionRpc, SubscriptionRpcImpl, SubscriptionSession};
 use std::net::ToSocketAddrs;
-// use std::{time, thread};
 
 lazy_static::lazy_static! {
     pub static ref GLOBAL_NOTIFY_CONTROLLER: Mutex<NotifyController> = Mutex::new(NotifyService::new().start(Some("NotifyService")));
@@ -43,12 +42,6 @@ pub async fn start_jsonrpc_ws_server() -> Result<()> {
 
         ws_server
     });
-
-    // let ten_millis = time::Duration::from_secs(1);
-    // for num in 0..100 {
-    //     thread::sleep(ten_millis);
-    //     notify_controller.notify_new_error_tx_receipt(num);
-    // }
 
     if let Some(server) = ws {
         server.wait()?;
