@@ -110,27 +110,6 @@ impl ChainUpdater {
 
         self.try_sync().await?;
 
-        // Double check that we are synced to latest block
-        // TODO: remove
-        if let Some(rollup_cell) = self.rpc_client.query_rollup_cell().await? {
-            let local_tip_block_number: u64 = {
-                let chain = self.chain.lock().await;
-                chain.local_state().tip().raw().number().unpack()
-            };
-            let tip_block_number = {
-                let global_state = global_state_from_slice(&rollup_cell.data)?;
-                Unpack::<u64>::unpack(&global_state.block().count()).saturating_sub(1)
-            };
-            assert!(tip_block_number >= local_tip_block_number);
-
-            if local_tip_block_number.saturating_add(1) == tip_block_number {
-                log::info!("single update to latest l2 block {}", tip_block_number);
-
-                let tx_hash = rollup_cell.out_point.tx_hash().unpack();
-                self.update_single(&tx_hash).await?;
-            }
-        }
-
         if initial_syncing {
             // Start notify mem pool after synced
             self.chain.lock().await.complete_initial_syncing()?;
