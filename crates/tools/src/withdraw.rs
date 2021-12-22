@@ -10,7 +10,7 @@ use ckb_jsonrpc_types::JsonBytes;
 use ckb_sdk::{Address, HumanCapacity};
 use ckb_types::{prelude::Builder as CKBBuilder, prelude::Entity as CKBEntity};
 use gw_types::core::ScriptHashType;
-use gw_types::packed::{CellOutput, WithdrawalLockArgs};
+use gw_types::packed::{CellOutput, WithdrawalLockArgs, WithdrawalRequestExtra};
 use gw_types::{
     bytes::Bytes as GwBytes,
     packed::{Byte32, RawWithdrawalRequest, WithdrawalRequest},
@@ -63,15 +63,14 @@ pub fn withdraw(
     let payment_lock_hash = H256::from([0u8; 32]);
 
     // owner_ckb_address -> owner_lock_hash
-    let owner_lock_hash: H256 = {
+    let owner_lock_script = {
         let address = Address::from_str(owner_ckb_address)?;
         let payload = address.payload();
-        let owner_lock_script = ckb_types::packed::Script::from(payload);
-
-        CkbHasher::new()
-            .update(owner_lock_script.as_slice())
-            .finalize()
+        ckb_types::packed::Script::from(payload)
     };
+    let owner_lock_hash: H256 = CkbHasher::new()
+        .update(owner_lock_script.as_slice())
+        .finalize();
 
     let privkey = read_privkey(privkey_path)?;
 
@@ -104,13 +103,18 @@ pub fn withdraw(
         .raw(raw_request)
         .signature(signature.pack())
         .build();
+    let owner_lock = gw_types::packed::Script::new_unchecked(owner_lock_script.as_bytes());
+    let withdrawal_request_extra = WithdrawalRequestExtra::new_builder()
+        .request(withdrawal_request)
+        .owner_lock(Some(owner_lock).pack())
+        .build();
 
-    log::info!("withdrawal_request: {}", withdrawal_request);
+    log::info!("withdrawal_request_extra: {}", withdrawal_request_extra);
 
     let init_balance =
         godwoken_rpc_client.get_balance(JsonBytes::from_bytes(from_address.clone()), 1)?;
 
-    let bytes = JsonBytes::from_bytes(withdrawal_request.as_bytes());
+    let bytes = JsonBytes::from_bytes(withdrawal_request_extra.as_bytes());
     godwoken_rpc_client.submit_withdrawal_request(bytes)?;
 
     wait_for_balance_change(&mut godwoken_rpc_client, from_address, init_balance, 180u64)?;
