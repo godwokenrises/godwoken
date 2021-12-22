@@ -3577,6 +3577,272 @@ impl molecule::prelude::Builder for NextMemBlockBuilder {
     }
 }
 #[derive(Clone)]
+pub struct NextL2Transaction(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for NextL2Transaction {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for NextL2Transaction {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for NextL2Transaction {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "tx", self.tx())?;
+        write!(f, ", {}: {}", "mem_block_number", self.mem_block_number())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for NextL2Transaction {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            72, 0, 0, 0, 12, 0, 0, 0, 64, 0, 0, 0, 52, 0, 0, 0, 12, 0, 0, 0, 48, 0, 0, 0, 36, 0, 0,
+            0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        NextL2Transaction::new_unchecked(v.into())
+    }
+}
+impl NextL2Transaction {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn tx(&self) -> L2Transaction {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        L2Transaction::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn mem_block_number(&self) -> Uint64 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            Uint64::new_unchecked(self.0.slice(start..end))
+        } else {
+            Uint64::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> NextL2TransactionReader<'r> {
+        NextL2TransactionReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for NextL2Transaction {
+    type Builder = NextL2TransactionBuilder;
+    const NAME: &'static str = "NextL2Transaction";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        NextL2Transaction(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        NextL2TransactionReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        NextL2TransactionReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .tx(self.tx())
+            .mem_block_number(self.mem_block_number())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct NextL2TransactionReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for NextL2TransactionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for NextL2TransactionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for NextL2TransactionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "tx", self.tx())?;
+        write!(f, ", {}: {}", "mem_block_number", self.mem_block_number())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> NextL2TransactionReader<'r> {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn tx(&self) -> L2TransactionReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        L2TransactionReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn mem_block_number(&self) -> Uint64Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            Uint64Reader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for NextL2TransactionReader<'r> {
+    type Entity = NextL2Transaction;
+    const NAME: &'static str = "NextL2TransactionReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        NextL2TransactionReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        L2TransactionReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        Uint64Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct NextL2TransactionBuilder {
+    pub(crate) tx: L2Transaction,
+    pub(crate) mem_block_number: Uint64,
+}
+impl NextL2TransactionBuilder {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn tx(mut self, v: L2Transaction) -> Self {
+        self.tx = v;
+        self
+    }
+    pub fn mem_block_number(mut self, v: Uint64) -> Self {
+        self.mem_block_number = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for NextL2TransactionBuilder {
+    type Entity = NextL2Transaction;
+    const NAME: &'static str = "NextL2TransactionBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.tx.as_slice().len()
+            + self.mem_block_number.as_slice().len()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.tx.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.mem_block_number.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.tx.as_slice())?;
+        writer.write_all(self.mem_block_number.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        NextL2Transaction::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
 pub struct RefreshMemBlockMessage(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for RefreshMemBlockMessage {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -3602,9 +3868,9 @@ impl ::core::fmt::Display for RefreshMemBlockMessage {
 impl ::core::default::Default for RefreshMemBlockMessage {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            0, 0, 0, 0, 52, 0, 0, 0, 12, 0, 0, 0, 48, 0, 0, 0, 36, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0,
-            0, 28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0,
+            0, 0, 0, 0, 72, 0, 0, 0, 12, 0, 0, 0, 64, 0, 0, 0, 52, 0, 0, 0, 12, 0, 0, 0, 48, 0, 0,
+            0, 36, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         RefreshMemBlockMessage::new_unchecked(v.into())
     }
@@ -3617,7 +3883,7 @@ impl RefreshMemBlockMessage {
     pub fn to_enum(&self) -> RefreshMemBlockMessageUnion {
         let inner = self.0.slice(molecule::NUMBER_SIZE..);
         match self.item_id() {
-            0 => L2Transaction::new_unchecked(inner).into(),
+            0 => NextL2Transaction::new_unchecked(inner).into(),
             1 => NextMemBlock::new_unchecked(inner).into(),
             _ => panic!("{}: invalid data", Self::NAME),
         }
@@ -3682,7 +3948,7 @@ impl<'r> RefreshMemBlockMessageReader<'r> {
     pub fn to_enum(&self) -> RefreshMemBlockMessageUnionReader<'r> {
         let inner = &self.as_slice()[molecule::NUMBER_SIZE..];
         match self.item_id() {
-            0 => L2TransactionReader::new_unchecked(inner).into(),
+            0 => NextL2TransactionReader::new_unchecked(inner).into(),
             1 => NextMemBlockReader::new_unchecked(inner).into(),
             _ => panic!("{}: invalid data", Self::NAME),
         }
@@ -3709,7 +3975,7 @@ impl<'r> molecule::prelude::Reader<'r> for RefreshMemBlockMessageReader<'r> {
         let item_id = molecule::unpack_number(slice);
         let inner_slice = &slice[molecule::NUMBER_SIZE..];
         match item_id {
-            0 => L2TransactionReader::verify(inner_slice, compatible),
+            0 => NextL2TransactionReader::verify(inner_slice, compatible),
             1 => NextMemBlockReader::verify(inner_slice, compatible),
             _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
         }?;
@@ -3747,24 +4013,24 @@ impl molecule::prelude::Builder for RefreshMemBlockMessageBuilder {
 }
 #[derive(Debug, Clone)]
 pub enum RefreshMemBlockMessageUnion {
-    L2Transaction(L2Transaction),
+    NextL2Transaction(NextL2Transaction),
     NextMemBlock(NextMemBlock),
 }
 #[derive(Debug, Clone, Copy)]
 pub enum RefreshMemBlockMessageUnionReader<'r> {
-    L2Transaction(L2TransactionReader<'r>),
+    NextL2Transaction(NextL2TransactionReader<'r>),
     NextMemBlock(NextMemBlockReader<'r>),
 }
 impl ::core::default::Default for RefreshMemBlockMessageUnion {
     fn default() -> Self {
-        RefreshMemBlockMessageUnion::L2Transaction(::core::default::Default::default())
+        RefreshMemBlockMessageUnion::NextL2Transaction(::core::default::Default::default())
     }
 }
 impl ::core::fmt::Display for RefreshMemBlockMessageUnion {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
-            RefreshMemBlockMessageUnion::L2Transaction(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, L2Transaction::NAME, item)
+            RefreshMemBlockMessageUnion::NextL2Transaction(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, NextL2Transaction::NAME, item)
             }
             RefreshMemBlockMessageUnion::NextMemBlock(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, NextMemBlock::NAME, item)
@@ -3775,8 +4041,8 @@ impl ::core::fmt::Display for RefreshMemBlockMessageUnion {
 impl<'r> ::core::fmt::Display for RefreshMemBlockMessageUnionReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
-            RefreshMemBlockMessageUnionReader::L2Transaction(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, L2Transaction::NAME, item)
+            RefreshMemBlockMessageUnionReader::NextL2Transaction(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, NextL2Transaction::NAME, item)
             }
             RefreshMemBlockMessageUnionReader::NextMemBlock(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, NextMemBlock::NAME, item)
@@ -3787,7 +4053,7 @@ impl<'r> ::core::fmt::Display for RefreshMemBlockMessageUnionReader<'r> {
 impl RefreshMemBlockMessageUnion {
     pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
-            RefreshMemBlockMessageUnion::L2Transaction(ref item) => write!(f, "{}", item),
+            RefreshMemBlockMessageUnion::NextL2Transaction(ref item) => write!(f, "{}", item),
             RefreshMemBlockMessageUnion::NextMemBlock(ref item) => write!(f, "{}", item),
         }
     }
@@ -3795,14 +4061,14 @@ impl RefreshMemBlockMessageUnion {
 impl<'r> RefreshMemBlockMessageUnionReader<'r> {
     pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
-            RefreshMemBlockMessageUnionReader::L2Transaction(ref item) => write!(f, "{}", item),
+            RefreshMemBlockMessageUnionReader::NextL2Transaction(ref item) => write!(f, "{}", item),
             RefreshMemBlockMessageUnionReader::NextMemBlock(ref item) => write!(f, "{}", item),
         }
     }
 }
-impl ::core::convert::From<L2Transaction> for RefreshMemBlockMessageUnion {
-    fn from(item: L2Transaction) -> Self {
-        RefreshMemBlockMessageUnion::L2Transaction(item)
+impl ::core::convert::From<NextL2Transaction> for RefreshMemBlockMessageUnion {
+    fn from(item: NextL2Transaction) -> Self {
+        RefreshMemBlockMessageUnion::NextL2Transaction(item)
     }
 }
 impl ::core::convert::From<NextMemBlock> for RefreshMemBlockMessageUnion {
@@ -3810,9 +4076,11 @@ impl ::core::convert::From<NextMemBlock> for RefreshMemBlockMessageUnion {
         RefreshMemBlockMessageUnion::NextMemBlock(item)
     }
 }
-impl<'r> ::core::convert::From<L2TransactionReader<'r>> for RefreshMemBlockMessageUnionReader<'r> {
-    fn from(item: L2TransactionReader<'r>) -> Self {
-        RefreshMemBlockMessageUnionReader::L2Transaction(item)
+impl<'r> ::core::convert::From<NextL2TransactionReader<'r>>
+    for RefreshMemBlockMessageUnionReader<'r>
+{
+    fn from(item: NextL2TransactionReader<'r>) -> Self {
+        RefreshMemBlockMessageUnionReader::NextL2Transaction(item)
     }
 }
 impl<'r> ::core::convert::From<NextMemBlockReader<'r>> for RefreshMemBlockMessageUnionReader<'r> {
@@ -3824,31 +4092,31 @@ impl RefreshMemBlockMessageUnion {
     pub const NAME: &'static str = "RefreshMemBlockMessageUnion";
     pub fn as_bytes(&self) -> molecule::bytes::Bytes {
         match self {
-            RefreshMemBlockMessageUnion::L2Transaction(item) => item.as_bytes(),
+            RefreshMemBlockMessageUnion::NextL2Transaction(item) => item.as_bytes(),
             RefreshMemBlockMessageUnion::NextMemBlock(item) => item.as_bytes(),
         }
     }
     pub fn as_slice(&self) -> &[u8] {
         match self {
-            RefreshMemBlockMessageUnion::L2Transaction(item) => item.as_slice(),
+            RefreshMemBlockMessageUnion::NextL2Transaction(item) => item.as_slice(),
             RefreshMemBlockMessageUnion::NextMemBlock(item) => item.as_slice(),
         }
     }
     pub fn item_id(&self) -> molecule::Number {
         match self {
-            RefreshMemBlockMessageUnion::L2Transaction(_) => 0,
+            RefreshMemBlockMessageUnion::NextL2Transaction(_) => 0,
             RefreshMemBlockMessageUnion::NextMemBlock(_) => 1,
         }
     }
     pub fn item_name(&self) -> &str {
         match self {
-            RefreshMemBlockMessageUnion::L2Transaction(_) => "L2Transaction",
+            RefreshMemBlockMessageUnion::NextL2Transaction(_) => "NextL2Transaction",
             RefreshMemBlockMessageUnion::NextMemBlock(_) => "NextMemBlock",
         }
     }
     pub fn as_reader<'r>(&'r self) -> RefreshMemBlockMessageUnionReader<'r> {
         match self {
-            RefreshMemBlockMessageUnion::L2Transaction(item) => item.as_reader().into(),
+            RefreshMemBlockMessageUnion::NextL2Transaction(item) => item.as_reader().into(),
             RefreshMemBlockMessageUnion::NextMemBlock(item) => item.as_reader().into(),
         }
     }
@@ -3857,19 +4125,19 @@ impl<'r> RefreshMemBlockMessageUnionReader<'r> {
     pub const NAME: &'r str = "RefreshMemBlockMessageUnionReader";
     pub fn as_slice(&self) -> &'r [u8] {
         match self {
-            RefreshMemBlockMessageUnionReader::L2Transaction(item) => item.as_slice(),
+            RefreshMemBlockMessageUnionReader::NextL2Transaction(item) => item.as_slice(),
             RefreshMemBlockMessageUnionReader::NextMemBlock(item) => item.as_slice(),
         }
     }
     pub fn item_id(&self) -> molecule::Number {
         match self {
-            RefreshMemBlockMessageUnionReader::L2Transaction(_) => 0,
+            RefreshMemBlockMessageUnionReader::NextL2Transaction(_) => 0,
             RefreshMemBlockMessageUnionReader::NextMemBlock(_) => 1,
         }
     }
     pub fn item_name(&self) -> &str {
         match self {
-            RefreshMemBlockMessageUnionReader::L2Transaction(_) => "L2Transaction",
+            RefreshMemBlockMessageUnionReader::NextL2Transaction(_) => "NextL2Transaction",
             RefreshMemBlockMessageUnionReader::NextMemBlock(_) => "NextMemBlock",
         }
     }

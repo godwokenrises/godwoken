@@ -1,39 +1,32 @@
-use std::time::Duration;
-
-use anyhow::{anyhow, Result};
-use gw_types::bytes::Bytes;
-use gw_types::packed::{RefreshMemBlockMessage, RefreshMemBlockMessageUnion};
-use gw_types::prelude::{Builder, Entity, Reader};
-use kafka::client::{Compression, FetchOffset, GroupOffsetStorage};
-use kafka::producer::{AsBytes, Record};
+use anyhow::Result;
+use gw_types::{
+    bytes::Bytes,
+    packed::{RefreshMemBlockMessage, RefreshMemBlockMessageUnion},
+    prelude::{Entity, Reader},
+};
+use rdkafka::{
+    consumer::{BaseConsumer, CommitMode, Consumer as RdConsumer},
+    message::ToBytes,
+    producer::{BaseProducer, BaseRecord},
+    ClientConfig, Message,
+};
 
 use crate::sync::subscribe::SubscribeMemPoolService;
 
 use super::{Consume, Produce};
-
 pub(crate) struct Producer {
-    producer: kafka::producer::Producer,
+    producer: rdkafka::producer::BaseProducer,
     topic: String,
 }
 
 impl Producer {
     pub(crate) fn connect(hosts: Vec<String>, topic: String) -> Result<Self> {
-        let mut client = kafka::client::KafkaClient::new(hosts);
-        client.load_metadata(&[&topic]).map_err(|err| {
-            anyhow!(
-                "topic {:?} not found, load metadata error: {:?}",
-                &topic,
-                err
-            )
-        })?;
-        let producer = kafka::producer::Producer::from_client(client)
-            .with_ack_timeout(Duration::from_secs(1))
-            .with_required_acks(kafka::client::RequiredAcks::One)
-            .with_compression(Compression::SNAPPY)
-            .with_connection_idle_timeout(Duration::from_secs(5))
-            .create()
-            .map_err(|err| anyhow!("Init producer failed: {:?}", err))?;
-
+        let brokers = hosts.join(",");
+        let producer: BaseProducer = ClientConfig::new()
+            .set("bootstrap.servers", brokers)
+            .set("message.timeout.ms", "5000")
+            .set("enable.idempotence", "true")
+            .create()?;
         Ok(Self { producer, topic })
     }
 }
@@ -42,24 +35,23 @@ impl Produce for Producer {
     type Msg = RefreshMemBlockMessageUnion;
 
     fn send(&mut self, message: Self::Msg) -> Result<()> {
-        let msg = RefreshMemBlockMessage::new_builder().set(message).build();
-
-        let bytes = msg.as_bytes();
+        let bytes = message.as_bytes();
         log::trace!("Producer send msg: {:?}", &bytes.to_vec());
         let message = RefreshMemBlockMessageFacade(bytes);
-        let rec = Record::from_value(&self.topic, message);
-
-        if let Err(err) = self.producer.send(&rec) {
-            log::warn!("Publish message failed, error: {:?}", err);
+        if let Err((err, _)) = self
+            .producer
+            .send(BaseRecord::to(&self.topic).key("").payload(&message))
+        {
+            log::error!("[kafka] send message failed: {:?}", &err);
         }
-
         Ok(())
     }
 }
 
 pub(crate) struct Consumer {
-    consumer: kafka::consumer::Consumer,
+    consumer: BaseConsumer,
     subscribe: SubscribeMemPoolService,
+    topic: String,
 }
 
 impl Consumer {
@@ -67,89 +59,91 @@ impl Consumer {
         hosts: Vec<String>,
         topic: String,
         group: String,
-        fan_in: SubscribeMemPoolService,
+        subscribe: SubscribeMemPoolService,
     ) -> Result<Self> {
-        let consumer = kafka::consumer::Consumer::from_hosts(hosts)
-            .with_topic(topic)
-            .with_group(group)
-            .with_fallback_offset(FetchOffset::Earliest)
-            .with_offset_storage(GroupOffsetStorage::Kafka)
-            .create()
-            .map_err(|err| anyhow!("Create consumer with error: {:?}", err))?;
+        let brokers = hosts.join(",");
+        let consumer: BaseConsumer = ClientConfig::new()
+            .set("bootstrap.servers", brokers)
+            .set("session.timeout.ms", "6000")
+            .set("enable.auto.commit", "false")
+            .set("auto.offset.reset", "earliest")
+            .set("group.id", group)
+            .create()?;
         Ok(Self {
             consumer,
-            subscribe: fan_in,
+            topic,
+            subscribe,
         })
     }
 }
 
 impl Consume for Consumer {
     fn poll(&mut self) -> Result<()> {
-        let msg_sets = self
-            .consumer
-            .poll()
-            .map_err(|err| anyhow!("Poll message from kafka with error: {:?}", err))?;
-        if msg_sets.is_empty() {
-            return Ok(());
-        }
-        let mut current_offset = None;
-        // if the current tip is not vaild, we need to exit and retry later.
-        let mut early_exit = None;
-        for set in msg_sets.iter() {
-            'inner: for msg in set.messages().iter() {
-                log::trace!(
-                    "Recv kafka msg: {}:{}@{}: {:?}",
-                    set.topic(),
-                    set.partition(),
-                    msg.offset,
-                    msg.value
-                );
-                let refresh_msg = RefreshMemBlockMessage::from_slice(msg.value)?;
-                let reader = refresh_msg.as_reader();
-                let refresh_msg = reader.to_enum();
-                match &refresh_msg {
-                    gw_types::packed::RefreshMemBlockMessageUnionReader::L2Transaction(tx) => {
-                        if let Err(err) = self.subscribe.add_tx(tx.to_entity()) {
-                            log::error!("[Subscribe tx] error: {:?}", err);
-                        }
-                    }
-                    gw_types::packed::RefreshMemBlockMessageUnionReader::NextMemBlock(next) => {
-                        match self.subscribe.next_mem_block(next.to_entity()) {
-                            Ok(None) => {
-                                log::debug!("Invalid tip. Wait for syncing to the new tip.");
-                                early_exit = Some(());
-                                break 'inner;
+        log::trace!("Start to consume...");
+        self.consumer.subscribe(&[&self.topic])?;
+        for message in self.consumer.iter() {
+            match message {
+                Ok(msg) => {
+                    let topic = msg.topic();
+                    let partition = msg.partition();
+                    let offset = msg.offset();
+                    let payload = msg.payload();
+                    log::trace!(
+                        "Recv kafka msg: {}:{}@{}: {:?}",
+                        topic,
+                        partition,
+                        offset,
+                        &payload
+                    );
+
+                    if let Some(payload) = payload {
+                        let refresh_msg = RefreshMemBlockMessage::from_slice(payload)?;
+                        let reader = refresh_msg.as_reader();
+                        let refresh_msg = reader.to_enum();
+                        match &refresh_msg {
+                            gw_types::packed::RefreshMemBlockMessageUnionReader::NextL2Transaction(
+                                next,
+                            ) => {
+                                if let Err(err) = self.subscribe.next_tx(next.to_entity()) {
+                                    log::error!("[Subscribe tx] error: {:?}", err);
+                                }
                             }
-                            Ok(Some(block_number)) => {
-                                log::debug!("Refresh mem pool to {}", block_number);
-                            }
-                            Err(err) => {
-                                log::error!("[Refresh mem pool] error: {:?}", err);
+                            gw_types::packed::RefreshMemBlockMessageUnionReader::NextMemBlock(
+                                next,
+                            ) => {
+                                match self.subscribe.next_mem_block(next.to_entity()) {
+                                    Ok(None) => {
+                                        log::debug!(
+                                            "Invalid tip. Wait for syncing to the new tip."
+                                        );
+                                        break;
+                                    }
+                                    Ok(Some(block_number)) => {
+                                        log::debug!("Refresh mem pool to {}", block_number);
+                                    }
+                                    Err(err) => {
+                                        log::error!("[Refresh mem pool] error: {:?}", err);
+                                    }
+                                };
                             }
                         };
-                    }
-                };
-                current_offset = Some(msg.offset);
-            }
-            if let Some(offset) = current_offset {
-                self.consumer
-                    .consume_message(set.topic(), set.partition(), offset)
-                    .map_err(|err| anyhow!("Mark consumed message with error: {:?}", err))?;
-                self.consumer
-                    .commit_consumed()
-                    .map_err(|err| anyhow!("Kafka commit consumed failed: {:?}", err))?;
-            }
-            if early_exit.is_some() {
-                break;
+                        self.consumer.commit_message(&msg, CommitMode::Async)?;
+                        log::trace!("Kafka commit offset: {}", offset);
+                    };
+                }
+                Err(err) => {
+                    log::error!("Receive error from kafka: {:?}", err);
+                }
             }
         }
+
         Ok(())
     }
 }
 
 struct RefreshMemBlockMessageFacade(Bytes);
-impl AsBytes for RefreshMemBlockMessageFacade {
-    fn as_bytes(&self) -> &[u8] {
+impl ToBytes for RefreshMemBlockMessageFacade {
+    fn to_bytes(&self) -> &[u8] {
         &self.0
     }
 }

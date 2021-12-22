@@ -1291,7 +1291,7 @@ impl MemPool {
 
         // fan-out to readonly mem block
         if let Some(handler) = &self.mem_pool_publish_service {
-            handler.new_tx(tx)
+            handler.new_tx(tx, self.current_tip.1)
         }
 
         Ok(tx_receipt)
@@ -1308,6 +1308,10 @@ impl MemPool {
         deposits: Vec<DepositInfo>,
     ) -> Result<Option<u64>> {
         let next_block_number = block_info.number().unpack();
+        if next_block_number < self.current_tip.1 {
+            // mem blocks from the past should be ignored
+            return Ok(Some(self.current_tip.1));
+        }
         if next_block_number != self.current_tip.1 + 1 {
             return Ok(None);
         }
@@ -1337,7 +1341,15 @@ impl MemPool {
 
     // Only **ReadOnly** node needs this.
     // Sync tx from fullnode to readonly.
-    pub(crate) fn append_tx(&mut self, tx: L2Transaction) -> Result<()> {
+    pub(crate) fn append_tx(
+        &mut self,
+        tx: L2Transaction,
+        current_tip_block_number: u64,
+    ) -> Result<()> {
+        if current_tip_block_number < self.current_tip.1 {
+            // txs from the past block should be ignored
+            return Ok(());
+        }
         let db = self.store.begin_transaction();
         self.finalize_tx(&db, tx)?;
         db.commit()?;

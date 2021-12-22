@@ -19,11 +19,17 @@ impl SubscribeMemPoolService {
         Self { mem_pool }
     }
 
-    pub(crate) fn add_tx(&self, tx: L2Transaction) -> Result<()> {
+    pub(crate) fn next_tx(&self, next: NextL2Transaction) -> Result<()> {
+        let tx = next.tx();
+        let block_number = next.mem_block_number().unpack();
         let tx_hash = tx.raw().hash();
-        log::info!("Add tx: {} to mem block", hex::encode(&tx_hash));
+        log::info!(
+            "Add tx: {} from block: {} to mem block",
+            hex::encode(&tx_hash),
+            block_number
+        );
         let mut mem_pool = smol::block_on(self.mem_pool.lock());
-        if let Err(err) = mem_pool.append_tx(tx) {
+        if let Err(err) = mem_pool.append_tx(tx, block_number) {
             log::error!("Sync tx from full node failed: {:?}", err);
         }
         Ok(())

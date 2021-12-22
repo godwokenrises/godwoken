@@ -1,7 +1,8 @@
 use gw_types::{
     offchain::DepositInfo,
     packed::{
-        BlockInfo, L2Transaction, NextMemBlock, RefreshMemBlockMessageUnion, WithdrawalRequest,
+        BlockInfo, L2Transaction, NextL2Transaction, NextMemBlock, RefreshMemBlockMessageUnion,
+        WithdrawalRequest,
     },
     prelude::{Builder, Entity, Pack, PackVec},
 };
@@ -50,10 +51,14 @@ impl MemPoolPublishService {
         Self { sender }
     }
 
-    pub(crate) fn new_tx(&self, tx: L2Transaction) {
+    pub(crate) fn new_tx(&self, tx: L2Transaction, current_tip_block_number: u64) {
+        let next_tx = NextL2Transaction::new_builder()
+            .tx(tx)
+            .mem_block_number(current_tip_block_number.pack())
+            .build();
         if let Err(err) = smol::block_on(
             self.sender
-                .send(RefreshMemBlockMessageUnion::L2Transaction(tx)),
+                .send(RefreshMemBlockMessageUnion::NextL2Transaction(next_tx)),
         ) {
             log::error!("Send new tx message with error: {:?}", err);
         }

@@ -58,7 +58,12 @@ table NextMemBlock {
     block_info: BlockInfo,
 }
 
+table NextL2Transaction {
+    tx: L2Transaction,
+    mem_block_number: Uint64,
+}
+
 union RefreshMemBlockMessage {
-    L2Transaction,
+    NextL2Transaction,
     NextMemBlock,
 }
