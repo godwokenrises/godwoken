@@ -151,7 +151,7 @@ fn test_restore_mem_block() {
         };
         mem_pool.set_provider(Box::new(provider));
         for withdrawal in random_withdrawals.clone() {
-            smol::block_on(mem_pool.push_withdrawal_request(withdrawal)).unwrap();
+            smol::block_on(mem_pool.push_withdrawal_request(withdrawal.into())).unwrap();
         }
         smol::block_on(mem_pool.reset_mem_block()).unwrap();
         for tx in random_txs.clone() {
