@@ -27,6 +27,7 @@ pub fn withdraw(
     privkey_path: &Path,
     capacity: &str,
     amount: &str,
+    fee: &str,
     sudt_script_hash: &str,
     owner_ckb_address: &str,
     config_path: &Path,
@@ -36,6 +37,7 @@ pub fn withdraw(
         .map_err(|err| err.to_string())?;
     let capacity = parse_capacity(capacity)?;
     let amount: u128 = amount.parse().expect("sUDT amount format error");
+    let fee = parse_capacity(fee)?;
 
     let scripts_deployment_content =
         fs::read_to_string(scripts_deployment_path).map_err(|err| err.to_string())?;
@@ -88,6 +90,7 @@ pub fn withdraw(
         &nonce,
         &capacity,
         &amount,
+        &fee,
         &sudt_script_hash,
         &account_script_hash,
         &sell_capacity,
@@ -127,6 +130,7 @@ fn create_raw_withdrawal_request(
     nonce: &u32,
     capacity: &u64,
     amount: &u128,
+    fee: &u64,
     sudt_script_hash: &H256,
     account_script_hash: &H256,
     sell_capacity: &u64,
@@ -134,6 +138,11 @@ fn create_raw_withdrawal_request(
     owner_lock_hash: &H256,
     payment_lock_hash: &H256,
 ) -> Result<RawWithdrawalRequest, String> {
+    let fee = gw_types::packed::Fee::new_builder()
+        .amount(GwPack::pack(&(*fee as u128)))
+        .sudt_id(GwPack::pack(&1u32)) // default fee type: CKB
+        .build();
+
     let raw = RawWithdrawalRequest::new_builder()
         .nonce(GwPack::pack(nonce))
         .capacity(GwPack::pack(capacity))
@@ -144,6 +153,7 @@ fn create_raw_withdrawal_request(
         .sell_amount(GwPack::pack(sell_amount))
         .owner_lock_hash(h256_to_byte32(owner_lock_hash)?)
         .payment_lock_hash(h256_to_byte32(payment_lock_hash)?)
+        .fee(fee)
         .build();
 
     Ok(raw)
