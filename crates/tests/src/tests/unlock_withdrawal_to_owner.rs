@@ -242,21 +242,39 @@ fn test_build_unlock_to_owner_tx() {
             .collect::<Vec<_>>()
     };
 
+    // Check unlock to owner tx
     let mut unlocker = DummyUnlocker {
         rollup_cell: rollup_cell.clone(),
         rollup_context: rollup_context.clone(),
         block_producer_config,
         withdrawals: random_withdrawal_cells.clone(),
     };
+    let cell_deps = vec![
+        into_input_cell(rollup_cell),
+        into_input_cell(always_cell),
+        into_input_cell(withdrawal_lock_cell),
+    ];
 
     let unlocked = Default::default();
-    let (_tx, to_unlock) = smol::block_on(unlocker.query_and_unlock_to_owner(&unlocked))
+    let (tx, to_unlock) = smol::block_on(unlocker.query_and_unlock_to_owner(&unlocked))
         .expect("unlock")
         .expect("skip no owner lock");
     assert_eq!(
         to_unlock.len(),
         accounts.len() - no_owner_lock_count as usize
     );
+
+    let inputs = {
+        let cells = random_withdrawal_cells.clone().into_iter();
+        cells.map(into_input_cell).collect()
+    };
+    let tx_with_context = TxWithContext {
+        tx,
+        cell_deps: cell_deps.clone(),
+        inputs,
+    };
+
+    verify_tx(tx_with_context, 7000_0000u64).expect("pass");
 
     // Simulate rpc client filter no owner lock withdrawal cells
     let last_finalized_block_number = block_result.block.raw().number().unpack();
@@ -286,11 +304,6 @@ fn test_build_unlock_to_owner_tx() {
         .map(into_input_cell)
         .collect();
 
-    let cell_deps = vec![
-        into_input_cell(rollup_cell),
-        into_input_cell(always_cell),
-        into_input_cell(withdrawal_lock_cell),
-    ];
     let tx_with_context = TxWithContext {
         tx,
         cell_deps,
