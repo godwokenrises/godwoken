@@ -317,6 +317,14 @@ fn run_cli() -> Result<()> {
                         .help("sUDT amount to withdrawal"),
                 )
                 .arg(
+                    Arg::with_name("fee")
+                        .short("f")
+                        .long("fee")
+                        .takes_value(true)
+                        .default_value("0.0001")
+                        .help("Withdrawal fee, default to 0.0001 CKB"),
+                )
+                .arg(
                     Arg::with_name("owner-ckb-address")
                         .short("a")
                         .long("owner-ckb-address")
@@ -952,6 +960,7 @@ fn run_cli() -> Result<()> {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
             let capacity = m.value_of("capacity").unwrap();
             let amount = m.value_of("amount").unwrap();
+            let fee = m.value_of("fee").unwrap();
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
@@ -963,6 +972,7 @@ fn run_cli() -> Result<()> {
                 privkey_path,
                 capacity,
                 amount,
+                fee,
                 sudt_script_hash,
                 owner_ckb_address,
                 config_path,
