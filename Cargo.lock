@@ -2459,8 +2459,8 @@ dependencies = [
  "serde_json",
  "sha3",
  "smol",
- "tempfile",
  "socket2",
+ "tempfile",
  "thiserror",
 ]
 

@@ -155,6 +155,24 @@ pub fn restart_chain(
     chain
 }
 
+pub fn chain_generator(chain: &Chain, rollup_type_script: Script) -> Arc<Generator> {
+    let rollup_config = chain.generator().rollup_context().rollup_config.to_owned();
+    let mut account_lock_manage = AccountLockManage::default();
+    account_lock_manage
+        .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+    let backend_manage = build_backend_manage(&rollup_config);
+    let rollup_context = RollupContext {
+        rollup_script_hash: rollup_type_script.hash().into(),
+        rollup_config,
+    };
+    Arc::new(Generator::new(
+        backend_manage,
+        account_lock_manage,
+        rollup_context,
+        Default::default(),
+    ))
+}
+
 pub fn setup_chain_with_account_lock_manage(
     rollup_type_script: Script,
     rollup_config: RollupConfig,
