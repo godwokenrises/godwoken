@@ -317,7 +317,7 @@ struct RequestSubmitter {
 }
 
 impl RequestSubmitter {
-    const MAX_CHANNEL_SIZE: usize = 2000;
+    const MAX_CHANNEL_SIZE: usize = 10000;
     const MAX_BATCH_SIZE: usize = 20;
     const INTERVAL_MS: Duration = Duration::from_millis(100);
 
