@@ -25,7 +25,7 @@ use gw_mem_pool::{
     traits::MemPoolErrorTxHandler,
 };
 use gw_poa::PoA;
-use gw_rpc_client::rpc_client::RPCClient;
+use gw_rpc_client::{contract::LiveContractDeps, rpc_client::RPCClient};
 use gw_rpc_server::{
     registry::{Registry, RegistryArgs},
     server::start_jsonrpc_server,
@@ -232,6 +232,7 @@ pub struct BaseInitComponents {
     pub rpc_client: RPCClient,
     pub store: Store,
     pub generator: Arc<Generator>,
+    pub opt_block_producer_config: Option<BlockProducerConfig>,
 }
 
 impl BaseInitComponents {
@@ -262,16 +263,24 @@ impl BaseInitComponents {
             )
         };
 
+        let mut opt_block_producer_config = config.block_producer.clone();
+        if let Some(block_producer_config) = opt_block_producer_config.as_mut() {
+            let live_deps = smol::block_on(gw_rpc_client::contract::query_cell_deps(
+                &rpc_client,
+                &rollup_config,
+            ))?;
+            *block_producer_config = update_contract_deps(block_producer_config, live_deps);
+        }
+
         if !skip_config_check {
             check_ckb_version(&rpc_client)?;
             // TODO: check ckb indexer version
             if NodeMode::ReadOnly != config.node_mode {
-                let block_producer_config = config
-                    .block_producer
-                    .clone()
+                let block_producer_config = opt_block_producer_config
+                    .as_ref()
                     .ok_or_else(|| anyhow!("not set block producer"))?;
-                check_rollup_config_cell(&block_producer_config, &rollup_config, &rpc_client)?;
-                check_locks(&block_producer_config, &rollup_config)?;
+                check_rollup_config_cell(block_producer_config, &rollup_config, &rpc_client)?;
+                check_locks(block_producer_config, &rollup_config)?;
             }
         }
 
@@ -360,6 +369,7 @@ impl BaseInitComponents {
             rpc_client,
             store,
             generator,
+            opt_block_producer_config,
         };
 
         Ok(base)
@@ -405,7 +415,7 @@ impl BaseInitComponents {
     }
 }
 
-pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
+pub fn run(mut config: Config, skip_config_check: bool) -> Result<()> {
     // Set up sentry.
     let _guard = match &config.sentry_dsn.as_ref() {
         Some(sentry_dsn) => sentry::init((
@@ -433,17 +443,19 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     );
 
     let base = BaseInitComponents::init(&config, skip_config_check)?;
+    config.block_producer = base.opt_block_producer_config.clone();
+
     let (mem_pool, wallet, poa, offchain_mock_context, pg_pool) = match config
         .block_producer
-        .clone()
+        .as_ref()
     {
         Some(block_producer_config) => {
             let wallet = Wallet::from_config(&block_producer_config.wallet_config)
                 .with_context(|| "init wallet")?;
-            let poa = base.init_poa(&wallet, &block_producer_config);
+            let poa = base.init_poa(&wallet, block_producer_config);
             let offchain_mock_context = smol::block_on(async {
                 let poa = poa.lock().await;
-                base.init_offchain_mock_context(&poa, &block_producer_config)
+                base.init_offchain_mock_context(&poa, block_producer_config)
                     .await
             })?;
             let mem_pool_provider = DefaultMemPoolProvider::new(
@@ -503,6 +515,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         rpc_client,
         store,
         generator,
+        ..
     } = base;
 
     // check state db
@@ -867,4 +880,40 @@ fn is_hardfork_switch_eq(l: &HardForkSwitch, r: &HardForkSwitch) -> bool {
         && l.rfc_0032() == r.rfc_0032()
         && l.rfc_0036() == r.rfc_0036()
         && l.rfc_0038() == r.rfc_0038()
+}
+
+fn update_contract_deps(
+    block_producer_config: &BlockProducerConfig,
+    live_deps: LiveContractDeps,
+) -> BlockProducerConfig {
+    let LiveContractDeps {
+        rollup_cell_type_dep,
+        deposit_cell_lock_dep,
+        stake_cell_lock_dep,
+        custodian_cell_lock_dep,
+        withdrawal_cell_lock_dep,
+        challenge_cell_lock_dep,
+        l1_sudt_type_dep,
+        allowed_eoa_deps,
+        allowed_contract_deps,
+    } = live_deps;
+
+    BlockProducerConfig {
+        account_id: block_producer_config.account_id,
+        check_mem_block_before_submit: block_producer_config.check_mem_block_before_submit,
+        rollup_cell_type_dep,
+        rollup_config_cell_dep: block_producer_config.rollup_config_cell_dep.to_owned(),
+        deposit_cell_lock_dep,
+        stake_cell_lock_dep,
+        poa_lock_dep: block_producer_config.poa_lock_dep.to_owned(),
+        poa_state_dep: block_producer_config.poa_state_dep.to_owned(),
+        custodian_cell_lock_dep,
+        withdrawal_cell_lock_dep,
+        challenge_cell_lock_dep,
+        l1_sudt_type_dep,
+        allowed_eoa_deps,
+        allowed_contract_deps,
+        challenger_config: block_producer_config.challenger_config.to_owned(),
+        wallet_config: block_producer_config.wallet_config.to_owned(),
+    }
 }
