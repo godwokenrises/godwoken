@@ -80,7 +80,6 @@ impl Consumer {
 
 impl Consume for Consumer {
     fn poll(&mut self) -> Result<()> {
-        log::trace!("Start to consume...");
         self.consumer.subscribe(&[&self.topic])?;
         for message in self.consumer.iter() {
             match message {

@@ -1299,6 +1299,7 @@ impl MemPool {
 
     // Only **ReadOnly** node needs this.
     // Refresh mem block with those params.
+    // Always expects next block number equals with current_tip_block_number + 1.
     // This function returns Ok(Some(block_number)), if refresh is successful.
     // Or returns Ok(None) if current tip has not synced yet.
     pub(crate) fn refresh_mem_block(
@@ -1308,11 +1309,17 @@ impl MemPool {
         deposits: Vec<DepositInfo>,
     ) -> Result<Option<u64>> {
         let next_block_number = block_info.number().unpack();
-        if next_block_number < self.current_tip.1 {
+        let current_tip_block_number = self.current_tip.1;
+        if next_block_number <= current_tip_block_number {
             // mem blocks from the past should be ignored
-            return Ok(Some(self.current_tip.1));
+            log::trace!(
+                "Ignore this mem block: {}, current tip: {}",
+                next_block_number,
+                current_tip_block_number
+            );
+            return Ok(Some(current_tip_block_number));
         }
-        if next_block_number != self.current_tip.1 + 1 {
+        if next_block_number != current_tip_block_number + 1 {
             return Ok(None);
         }
         let db = self.store.begin_transaction();
@@ -1346,6 +1353,8 @@ impl MemPool {
         tx: L2Transaction,
         current_tip_block_number: u64,
     ) -> Result<()> {
+        // Always expects tx from current tip.
+        // Ignore tx from an old block.
         if current_tip_block_number < self.current_tip.1 {
             // txs from the past block should be ignored
             return Ok(());
