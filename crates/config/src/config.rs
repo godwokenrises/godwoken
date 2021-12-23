@@ -117,15 +117,23 @@ pub struct BlockProducerConfig {
     // cell deps
     pub rollup_cell_type_dep: CellDep,
     pub rollup_config_cell_dep: CellDep,
+    #[serde(skip)]
     pub deposit_cell_lock_dep: CellDep,
+    #[serde(skip)]
     pub stake_cell_lock_dep: CellDep,
     pub poa_lock_dep: CellDep,
     pub poa_state_dep: CellDep,
+    #[serde(skip)]
     pub custodian_cell_lock_dep: CellDep,
+    #[serde(skip)]
     pub withdrawal_cell_lock_dep: CellDep,
+    #[serde(skip)]
     pub challenge_cell_lock_dep: CellDep,
+    #[serde(skip)]
     pub l1_sudt_type_dep: CellDep,
+    #[serde(skip)]
     pub allowed_eoa_deps: HashMap<H256, CellDep>,
+    #[serde(skip)]
     pub allowed_contract_deps: HashMap<H256, CellDep>,
     pub challenger_config: ChallengerConfig,
     pub wallet_config: WalletConfig,
