@@ -1,9 +1,10 @@
 use anyhow::Result;
-use ckb_vm::machine::aot::AotCode;
 use gw_common::H256;
 use gw_config::{BackendConfig, BackendType};
 use gw_types::bytes::Bytes;
 use std::{collections::HashMap, fs};
+
+use crate::AotCode;
 
 #[derive(Clone)]
 pub struct Backend {
@@ -18,6 +19,7 @@ pub struct BackendManage {
     backends: HashMap<H256, Backend>,
     /// define here not in backends,
     /// so we don't need to implement the trait `Clone` of AotCode
+    #[cfg(feature = "aot")]
     aot_codes: HashMap<H256, AotCode>,
 }
 
@@ -72,7 +74,6 @@ impl BackendManage {
         self.backends.get(code_hash)
     }
 
-    #[cfg(has_asm)]
     #[cfg(feature = "aot")]
     fn aot_compile(&self, code_bytes: &Bytes) -> Result<AotCode, ckb_vm::Error> {
         let global_vm_version =
@@ -91,8 +92,14 @@ impl BackendManage {
         aot_machine.compile()
     }
 
+    #[cfg(feature = "aot")]
     pub fn get_aot_code(&self, code_hash: &H256) -> Option<&AotCode> {
         self.aot_codes.get(code_hash)
+    }
+
+    #[cfg(not(feature = "aot"))]
+    pub(crate) fn get_aot_code(&self, _code_hash: &H256) -> Option<&AotCode> {
+        None
     }
 
     pub fn get_backends(&self) -> &HashMap<H256, Backend> {

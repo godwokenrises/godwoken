@@ -10,7 +10,7 @@ use crate::{
     erc20_creator_allowlist::SUDTProxyAccountAllowlist,
     error::{BlockError, TransactionValidateError, WithdrawalError},
     vm_cost_model::instruction_cycles,
-    VMVersion,
+    AotCode, VMVersion,
 };
 use crate::{
     backend_manage::Backend,
@@ -44,7 +44,7 @@ use gw_types::{
     prelude::*,
 };
 
-use ckb_vm::{machine::aot::AotCode, DefaultMachineBuilder, SupportMachine};
+use ckb_vm::{DefaultMachineBuilder, SupportMachine};
 
 #[cfg(not(has_asm))]
 use ckb_vm::TraceMachine;
@@ -123,6 +123,7 @@ impl Generator {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[allow(unused_variables)]
     fn machine_run<'a, S: State + CodeStore, C: ChainStore>(
         &'a self,
         chain: &'a C,
@@ -164,7 +165,7 @@ impl Generator {
             let mut machine = ckb_vm::machine::asm::AsmMachine::new(default_machine, aot_code_opt);
 
             #[cfg(not(has_asm))]
-            let machine = TraceMachine::new(default_machine);
+            let mut machine = TraceMachine::new(default_machine);
 
             machine.load_program(&code_bytes, &[])?;
             exit_code = machine.run()?;
