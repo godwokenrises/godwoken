@@ -118,7 +118,8 @@ pub fn withdraw(
         godwoken_rpc_client.get_balance(JsonBytes::from_bytes(from_address.clone()), 1)?;
 
     let bytes = JsonBytes::from_bytes(withdrawal_request_extra.as_bytes());
-    godwoken_rpc_client.submit_withdrawal_request(bytes)?;
+    let withdrawal_hash = godwoken_rpc_client.submit_withdrawal_request(bytes)?;
+    log::info!("withdrawal_hash: {}", withdrawal_hash.pack());
 
     wait_for_balance_change(&mut godwoken_rpc_client, from_address, init_balance, 180u64)?;
 

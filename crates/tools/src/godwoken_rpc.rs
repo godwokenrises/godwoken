@@ -57,9 +57,9 @@ impl GodwokenRpcClient {
     pub fn submit_withdrawal_request(
         &mut self,
         withdrawal_request: JsonBytes,
-    ) -> Result<(), String> {
+    ) -> Result<H256, String> {
         let params = serde_json::to_value((withdrawal_request,)).map_err(|err| err.to_string())?;
-        self.rpc::<()>("submit_withdrawal_request", params)
+        self.rpc::<H256>("submit_withdrawal_request", params)
             .map(Into::into)
     }
 
