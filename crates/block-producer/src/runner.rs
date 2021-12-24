@@ -21,7 +21,8 @@ use gw_generator::{
     Generator,
 };
 use gw_mem_pool::{
-    default_provider::DefaultMemPoolProvider, pool::MemPool, traits::MemPoolErrorTxHandler,
+    default_provider::DefaultMemPoolProvider, pool::MemPool, spawn_fan_in_mem_block_task,
+    traits::MemPoolErrorTxHandler,
 };
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
@@ -546,7 +547,22 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     );
 
     let (block_producer, challenger, test_mode_control, cleaner) = match config.node_mode {
-        NodeMode::ReadOnly => (None, None, None, None),
+        NodeMode::ReadOnly => {
+            if let Some(sync_mem_block_config) = &config.mem_pool.sync_mem_block {
+                match &mem_pool {
+                    Some(mem_pool) => {
+                        spawn_fan_in_mem_block_task(
+                            mem_pool.clone(),
+                            sync_mem_block_config.clone(),
+                        )?;
+                    }
+                    None => {
+                        log::warn!("Failed to init sync mem block, because mem_pool is None.");
+                    }
+                }
+            }
+            (None, None, None, None)
+        }
         mode => {
             let block_producer_config = config
                 .block_producer

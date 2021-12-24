@@ -29,7 +29,9 @@ use gw_store::{
 };
 use gw_types::{
     offchain::{BlockParam, CellStatus, CollectedCustodianCells, DepositInfo, ErrorTxReceipt},
-    packed::{AccountMerkleState, L2Block, L2Transaction, Script, TxReceipt, WithdrawalRequest},
+    packed::{
+        AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt, WithdrawalRequest,
+    },
     prelude::{Entity, Unpack},
 };
 use std::{
@@ -46,6 +48,7 @@ use crate::{
     custodian::AvailableCustodians,
     mem_block::MemBlock,
     restore_manager::RestoreManager,
+    sync::{fan_out::FanOutMemBlockHandler, mq::gw_kafka},
     traits::{MemPoolErrorTxHandler, MemPoolProvider},
     types::EntryList,
     withdrawal::Generator as WithdrawalGenerator,
@@ -90,6 +93,8 @@ pub struct MemPool {
     restore_manager: RestoreManager,
     /// Restored txs to finalize
     pending_restored_tx_hashes: VecDeque<H256>,
+    // Fan-out mem block from full node to readonly node
+    fan_out_mem_block_handler: Option<FanOutMemBlockHandler>,
 }
 
 impl Drop for MemPool {
@@ -144,6 +149,16 @@ impl MemPool {
         }
 
         mem_block.clear_txs();
+        let fan_out_mem_block_handler = config
+            .clone()
+            .sync_mem_block
+            .map(|config| -> Result<FanOutMemBlockHandler> {
+                let producer = gw_kafka::Producer::new(config.hosts, config.topic)?;
+                let handler = FanOutMemBlockHandler::new(producer);
+                Ok(handler)
+            })
+            .transpose()?;
+
         let mut mem_pool = MemPool {
             store,
             current_tip: tip,
@@ -155,6 +170,7 @@ impl MemPool {
             pending_deposits,
             restore_manager: restore_manager.clone(),
             pending_restored_tx_hashes,
+            fan_out_mem_block_handler,
         };
 
         // set tip
@@ -923,10 +939,22 @@ impl MemPool {
         }
         // Handle state before txs
         // withdrawal
-        self.finalize_withdrawals(db, withdrawals.collect())?;
+        let withdrawals: Vec<WithdrawalRequest> = withdrawals.collect();
+        self.finalize_withdrawals(db, withdrawals.clone())?;
         // deposits
         let deposit_cells = self.pending_deposits.clone();
-        self.finalize_deposits(db, deposit_cells)?;
+        self.finalize_deposits(db, deposit_cells.clone())?;
+
+        // Fan-out next mem block to readonly node
+        // TODO: add optional condition
+        if let Some(handler) = &self.fan_out_mem_block_handler {
+            handler.next_mem_block(
+                withdrawals,
+                deposit_cells,
+                txs.clone().collect(),
+                self.mem_block.block_info().clone(),
+            )
+        }
         // re-inject txs
         for tx in txs {
             if let Err(err) = self.push_transaction_with_db(db, tx.clone()) {
@@ -1254,6 +1282,36 @@ impl MemPool {
         let tx_receipt =
             TxReceipt::build_receipt(tx.witness_hash().into(), run_result, merkle_state);
 
+        // fan-out to readonly mem block
+        if let Some(handler) = &self.fan_out_mem_block_handler {
+            handler.new_tx(tx)
+        }
+
         Ok(tx_receipt)
+    }
+
+    // Only **ReadOnly** node needs this fn.
+    // Refresh mem block with those params.
+    pub(crate) fn refresh_mem_block(
+        &mut self,
+        block_info: BlockInfo,
+        withdrawals: Vec<WithdrawalRequest>,
+        deposits: Vec<DepositInfo>,
+        txs: Vec<L2Transaction>,
+    ) -> Result<()> {
+        log::info!("Refreshing readonly mem block: {:?}", &block_info);
+        let mem_block = MemBlock::new(block_info, self.mem_block.prev_merkle_state().to_owned());
+        self.mem_block = mem_block;
+
+        let db = self.store.begin_transaction();
+
+        self.finalize_withdrawals(&db, withdrawals)?;
+        self.finalize_deposits(&db, deposits)?;
+        for tx in txs {
+            self.finalize_tx(&db, tx)?;
+        }
+
+        db.commit()?;
+        Ok(())
     }
 }

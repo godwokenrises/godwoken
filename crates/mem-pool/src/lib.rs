@@ -11,6 +11,9 @@ pub mod fee;
 mod mem_block;
 pub mod pool;
 pub mod restore_manager;
+mod sync;
 pub mod traits;
 mod types;
 pub mod withdrawal;
+
+pub use sync::fan_in::spawn_fan_in_mem_block_task;

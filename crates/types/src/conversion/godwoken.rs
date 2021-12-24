@@ -24,3 +24,4 @@ impl_conversion_for_packed_iterator_pack!(DepositRequest, DepositRequestVec);
 impl_conversion_for_packed_iterator_pack!(WithdrawalRequest, WithdrawalRequestVec);
 impl_conversion_for_packed_iterator_pack!(L2Transaction, L2TransactionVec);
 impl_conversion_for_packed_iterator_pack!(RawL2Block, RawL2BlockVec);
+impl_conversion_for_packed_iterator_pack!(DepositInfo, DepositInfoVec);
