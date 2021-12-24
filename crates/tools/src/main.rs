@@ -24,13 +24,14 @@ mod withdraw;
 use anyhow::Result;
 use async_jsonrpc_client::HttpClient;
 use ckb_sdk::constants::ONE_CKB;
-use ckb_types::prelude::Unpack;
+use ckb_types::prelude::{Entity, Unpack};
 use clap::{value_t, App, Arg, SubCommand};
 use deploy_genesis::DeployRollupCellArgs;
 use dump_tx::ChallengeBlock;
 use generate_config::GenerateNodeConfigArgs;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
+use gw_types::packed::WithdrawalLockArgs;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -744,7 +745,18 @@ fn run_cli() -> Result<()> {
                         .default_value("0")
                         .help("Tip block number"),
                 )
-        );
+        )
+        .subcommand(
+            SubCommand::with_name("parse-withdrawal-lock-args")
+                .about("Output withdrawal lock args")
+                .arg(
+                    Arg::with_name("input")
+                        .long("input")
+                        .takes_value(true)
+                        .required(true)
+                        .help("input file"),
+                ))
+        ;
 
     let matches = app.clone().get_matches();
     match matches.subcommand() {
@@ -1297,6 +1309,22 @@ fn run_cli() -> Result<()> {
                     sudt_stat.cells_count,
                 );
             }
+        }
+        ("parse-withdrawal-lock-args", Some(m)) => {
+            let input_path: PathBuf = m.value_of("input").unwrap().into();
+            let input = std::fs::read_to_string(input_path)?;
+            let input_data = hex::decode(&input.trim().trim_start_matches("0x"))?;
+            if input_data.len() <= 32 {
+                return Err(anyhow::anyhow!(
+                    "expect input at least 32 bytes length, got: {}",
+                    input_data.len()
+                ));
+            }
+            let withdrawal_lock = WithdrawalLockArgs::from_slice(&input_data[32..])?;
+            let withdrawal_lock: gw_jsonrpc_types::godwoken::WithdrawalLockArgs =
+                withdrawal_lock.into();
+            let output = serde_json::to_string_pretty(&withdrawal_lock)?;
+            println!("{}", output);
         }
         _ => {
             app.print_help().expect("print help");
