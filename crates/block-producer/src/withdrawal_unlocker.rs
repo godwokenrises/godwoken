@@ -1,12 +1,13 @@
 #![allow(clippy::mutable_key_type)]
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
+use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_types::offchain::{global_state_from_slice, CellInfo, RollupContext};
+use gw_types::offchain::{global_state_from_slice, CellInfo, RollupContext, TxStatus};
 use gw_types::packed::{OutPoint, Transaction};
 use gw_types::prelude::{Pack, Unpack};
 use gw_utils::fee::fill_tx_fee;
@@ -22,6 +23,7 @@ const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
 pub struct FinalizedWithdrawalUnlocker {
     unlocker: DefaultUnlocker,
     unlocked_set: HashSet<OutPoint>,
+    unlock_txs: HashMap<H256, Vec<OutPoint>>,
     debug_config: DebugConfig,
 }
 
@@ -39,6 +41,7 @@ impl FinalizedWithdrawalUnlocker {
         FinalizedWithdrawalUnlocker {
             unlocker,
             unlocked_set: Default::default(),
+            unlock_txs: Default::default(),
             debug_config,
         }
     }
@@ -68,21 +71,39 @@ impl FinalizedWithdrawalUnlocker {
                     bail!("send tx failed {}", err);
                 }
             };
-
-            // Check unlock tx
-            match rpc_client.get_transaction(tx_hash).await {
-                Err(err) => bail!("get unlock tx failed {}", err), // Let indexer remove cells for us
-                Ok(None) => bail!("unlock tx {} not found", tx_hash.pack()),
-                Ok(Some(_)) => (), // Pass
-            }
-
-            log::info!(
-                "[unlock withdrawal] unlock {} withdrawals in tx {}",
-                to_unlock.len(),
-                tx_hash.pack()
-            );
-
             self.unlocked_set.extend(to_unlock.clone());
+            self.unlock_txs.insert(tx_hash, to_unlock);
+        }
+
+        // Check unlock tx
+        let mut drop_txs = vec![];
+        for (tx_hash, withdrawal_to_unlock) in self.unlock_txs.iter() {
+            match rpc_client.get_transaction_status(*tx_hash).await {
+                Err(err) => {
+                    log::debug!("[unlock withdrawal] get unlock tx failed {}", err);
+                }
+                Ok(None) => {
+                    log::info!("[unlock withdrawal] dropped unlock tx {}", tx_hash.pack());
+                    drop_txs.push(*tx_hash);
+                }
+                Ok(Some(tx_status)) if matches!(tx_status, TxStatus::Committed) => {
+                    log::info!(
+                        "[unlock withdrawal] unlock {} withdrawals in tx {}",
+                        withdrawal_to_unlock.len(),
+                        tx_hash.pack(),
+                    );
+                    drop_txs.push(*tx_hash);
+                }
+                Ok(Some(_)) => (), // Wait
+            }
+        }
+
+        for tx_hash in drop_txs {
+            if let Some(out_points) = self.unlock_txs.remove(&tx_hash) {
+                for out_point in out_points {
+                    self.unlocked_set.remove(&out_point);
+                }
+            }
         }
 
         Ok(())
