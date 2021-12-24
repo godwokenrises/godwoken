@@ -19,7 +19,7 @@ Important steps:
 config.toml:
 
 ```toml
-[mem_pool.pub_sync_mem_block]
+[mem_pool.publish]
 hosts = ['localhost:9092']
 topic = 'sync-mem-block'
 ```
@@ -29,7 +29,7 @@ topic = 'sync-mem-block'
 config.toml:
 
 ```toml
-[mem_pool.sub_sync_mem_block]
+[mem_pool.subscribe]
 hosts = ['localhost:9092']
 topic = 'sync-mem-block'
 group = 'sync-mem-block-1'

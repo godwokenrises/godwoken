@@ -21,7 +21,7 @@ use gw_generator::{
     Generator,
 };
 use gw_mem_pool::{
-    default_provider::DefaultMemPoolProvider, pool::MemPool, spawn_fan_in_mem_block_task,
+    default_provider::DefaultMemPoolProvider, pool::MemPool, spawn_sub_mem_pool_task,
     traits::MemPoolErrorTxHandler,
 };
 use gw_poa::PoA;
@@ -461,7 +461,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     base.generator.clone(),
                     Box::new(mem_pool_provider),
                     error_tx_handler,
-                    (config.mem_pool.clone(), config.node_mode),
+                    config.mem_pool.clone(),
                 )
                 .with_context(|| "create mem-pool")?,
             ));
@@ -494,7 +494,11 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         store.check_state()?;
         log::info!("Check state db done: {}ms", t.elapsed().as_millis());
     }
-
+    let mem_pool_ = if config.node_mode == NodeMode::ReadOnly {
+        None
+    } else {
+        mem_pool.clone()
+    };
     let chain = Arc::new(Mutex::new(
         Chain::create(
             &rollup_config,
@@ -502,7 +506,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             &config.chain,
             store.clone(),
             generator.clone(),
-            mem_pool.clone(),
+            mem_pool_,
         )
         .with_context(|| "create chain")?,
     ));
@@ -548,13 +552,10 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     let (block_producer, challenger, test_mode_control, cleaner) = match config.node_mode {
         NodeMode::ReadOnly => {
-            if let Some(sync_mem_block_config) = &config.mem_pool.sub_sync_mem_block {
+            if let Some(sync_mem_block_config) = &config.mem_pool.subscribe {
                 match &mem_pool {
                     Some(mem_pool) => {
-                        spawn_fan_in_mem_block_task(
-                            mem_pool.clone(),
-                            sync_mem_block_config.clone(),
-                        )?;
+                        spawn_sub_mem_pool_task(mem_pool.clone(), sync_mem_block_config.clone())?;
                     }
                     None => {
                         log::warn!("Failed to init sync mem block, because mem_pool is None.");

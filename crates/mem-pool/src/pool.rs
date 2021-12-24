@@ -17,7 +17,7 @@ use gw_common::{
     state::{to_short_address, State},
     H256,
 };
-use gw_config::{MemPoolConfig, NodeMode};
+use gw_config::MemPoolConfig;
 use gw_generator::{
     constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
 };
@@ -48,7 +48,7 @@ use crate::{
     custodian::AvailableCustodians,
     mem_block::MemBlock,
     restore_manager::RestoreManager,
-    sync::{fan_out::FanOutMemBlockHandler, mq::gw_kafka},
+    sync::{mq::gw_kafka, publish::MemPoolPublishService},
     traits::{MemPoolErrorTxHandler, MemPoolProvider},
     types::EntryList,
     withdrawal::Generator as WithdrawalGenerator,
@@ -94,8 +94,7 @@ pub struct MemPool {
     /// Restored txs to finalize
     pending_restored_tx_hashes: VecDeque<H256>,
     // Fan-out mem block from full node to readonly node
-    fan_out_mem_block_handler: Option<FanOutMemBlockHandler>,
-    node_mode: NodeMode,
+    mem_pool_publish_service: Option<MemPoolPublishService>,
 }
 
 impl Drop for MemPool {
@@ -115,9 +114,8 @@ impl MemPool {
         generator: Arc<Generator>,
         provider: Box<dyn MemPoolProvider + Send>,
         error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
-        config: (MemPoolConfig, NodeMode),
+        config: MemPoolConfig,
     ) -> Result<Self> {
-        let (config, node_mode) = config;
         let pending = Default::default();
 
         let tip_block = {
@@ -152,11 +150,11 @@ impl MemPool {
 
         mem_block.clear_txs();
         let fan_out_mem_block_handler = config
-            .pub_sync_mem_block
-            .map(|config| -> Result<FanOutMemBlockHandler> {
+            .publish
+            .map(|config| -> Result<MemPoolPublishService> {
                 log::info!("Setup fan out mem_block handler.");
-                let producer = gw_kafka::Producer::new(config.hosts, config.topic)?;
-                let handler = FanOutMemBlockHandler::new(producer);
+                let producer = gw_kafka::Producer::connect(config.hosts, config.topic)?;
+                let handler = MemPoolPublishService::start(producer);
                 Ok(handler)
             })
             .transpose()?;
@@ -172,8 +170,7 @@ impl MemPool {
             pending_deposits,
             restore_manager: restore_manager.clone(),
             pending_restored_tx_hashes,
-            fan_out_mem_block_handler,
-            node_mode,
+            mem_pool_publish_service: fan_out_mem_block_handler,
         };
 
         // set tip
@@ -265,12 +262,8 @@ impl MemPool {
             ));
         }
 
-        // We can bypass this condition for ReadOnly node.
-        // Nonce could be invalid during syncing.
-        if let NodeMode::FullNode = self.node_mode {
-            // verification
-            self.verify_tx(db, &tx)?;
-        }
+        // verification
+        self.verify_tx(db, &tx)?;
 
         // instantly run tx in background & update local state
         let t = Instant::now();
@@ -389,9 +382,7 @@ impl MemPool {
     /// this method update current state of mem pool
     pub fn notify_new_tip(&mut self, new_tip: H256) -> Result<()> {
         // reset pool state
-        if let NodeMode::FullNode = self.node_mode {
-            self.reset(Some(self.current_tip.0), Some(new_tip))?;
-        }
+        self.reset(Some(self.current_tip.0), Some(new_tip))?;
         Ok(())
     }
 
@@ -955,11 +946,10 @@ impl MemPool {
         self.finalize_deposits(db, deposit_cells.clone())?;
 
         // Fan-out next mem block to readonly node
-        if let Some(handler) = &self.fan_out_mem_block_handler {
+        if let Some(handler) = &self.mem_pool_publish_service {
             handler.next_mem_block(
                 withdrawals,
                 deposit_cells,
-                txs.clone().collect(),
                 self.mem_block.block_info().clone(),
             )
         }
@@ -1291,7 +1281,7 @@ impl MemPool {
             TxReceipt::build_receipt(tx.witness_hash().into(), run_result, merkle_state);
 
         // fan-out to readonly mem block
-        if let Some(handler) = &self.fan_out_mem_block_handler {
+        if let Some(handler) = &self.mem_pool_publish_service {
             handler.new_tx(tx)
         }
 
@@ -1300,23 +1290,32 @@ impl MemPool {
 
     // Only **ReadOnly** node needs this.
     // Refresh mem block with those params.
+    // This function returns Ok(Some(block_number)), if refresh is successful.
+    // Or returns Ok(None) if current tip has not synced yet.
     pub(crate) fn refresh_mem_block(
         &mut self,
         block_info: BlockInfo,
         withdrawals: Vec<WithdrawalRequest>,
         deposits: Vec<DepositInfo>,
-        txs: Vec<L2Transaction>,
-    ) -> Result<()> {
-        let mem_block = MemBlock::new(block_info, self.mem_block.prev_merkle_state().to_owned());
+    ) -> Result<Option<u64>> {
+        let tip_block = {
+            let db = self.store.begin_transaction();
+            db.get_last_valid_tip_block()?
+        };
+        let current_tip_number = tip_block.raw().number().unpack();
+        let next_block_number = block_info.number().unpack();
+        if next_block_number != current_tip_number + 1 {
+            return Ok(None);
+        }
+
+        let post_merkle_state = tip_block.raw().post_account();
+        let mem_block = MemBlock::new(block_info, post_merkle_state);
         self.mem_block = mem_block;
 
         let db = self.store.begin_transaction();
 
         self.finalize_withdrawals(&db, withdrawals)?;
         self.finalize_deposits(&db, deposits)?;
-        for tx in txs {
-            self.finalize_tx(&db, tx)?;
-        }
 
         db.commit()?;
 
@@ -1329,6 +1328,6 @@ impl MemPool {
             mem_block.txs().len()
         );
 
-        Ok(())
+        Ok(Some(next_block_number))
     }
 }

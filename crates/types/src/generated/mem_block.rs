@@ -3305,8 +3305,7 @@ impl ::core::fmt::Debug for NextMemBlock {
 impl ::core::fmt::Display for NextMemBlock {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "txs", self.txs())?;
-        write!(f, ", {}: {}", "deposits", self.deposits())?;
+        write!(f, "{}: {}", "deposits", self.deposits())?;
         write!(f, ", {}: {}", "withdrawals", self.withdrawals())?;
         write!(f, ", {}: {}", "block_info", self.block_info())?;
         let extra_count = self.count_extra_fields();
@@ -3319,14 +3318,14 @@ impl ::core::fmt::Display for NextMemBlock {
 impl ::core::default::Default for NextMemBlock {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            52, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0,
-            0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            44, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         NextMemBlock::new_unchecked(v.into())
     }
 }
 impl NextMemBlock {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -3343,29 +3342,23 @@ impl NextMemBlock {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn txs(&self) -> L2TransactionVec {
+    pub fn deposits(&self) -> DepositInfoVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        L2TransactionVec::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn deposits(&self) -> DepositInfoVec {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
         DepositInfoVec::new_unchecked(self.0.slice(start..end))
     }
     pub fn withdrawals(&self) -> WithdrawalRequestVec {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
         WithdrawalRequestVec::new_unchecked(self.0.slice(start..end))
     }
     pub fn block_info(&self) -> BlockInfo {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
+        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[20..]) as usize;
+            let end = molecule::unpack_number(&slice[16..]) as usize;
             BlockInfo::new_unchecked(self.0.slice(start..end))
         } else {
             BlockInfo::new_unchecked(self.0.slice(start..))
@@ -3398,7 +3391,6 @@ impl molecule::prelude::Entity for NextMemBlock {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .txs(self.txs())
             .deposits(self.deposits())
             .withdrawals(self.withdrawals())
             .block_info(self.block_info())
@@ -3423,8 +3415,7 @@ impl<'r> ::core::fmt::Debug for NextMemBlockReader<'r> {
 impl<'r> ::core::fmt::Display for NextMemBlockReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "txs", self.txs())?;
-        write!(f, ", {}: {}", "deposits", self.deposits())?;
+        write!(f, "{}: {}", "deposits", self.deposits())?;
         write!(f, ", {}: {}", "withdrawals", self.withdrawals())?;
         write!(f, ", {}: {}", "block_info", self.block_info())?;
         let extra_count = self.count_extra_fields();
@@ -3435,7 +3426,7 @@ impl<'r> ::core::fmt::Display for NextMemBlockReader<'r> {
     }
 }
 impl<'r> NextMemBlockReader<'r> {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -3452,29 +3443,23 @@ impl<'r> NextMemBlockReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn txs(&self) -> L2TransactionVecReader<'r> {
+    pub fn deposits(&self) -> DepositInfoVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        L2TransactionVecReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn deposits(&self) -> DepositInfoVecReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
         DepositInfoVecReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn withdrawals(&self) -> WithdrawalRequestVecReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
         WithdrawalRequestVecReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn block_info(&self) -> BlockInfoReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
+        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[20..]) as usize;
+            let end = molecule::unpack_number(&slice[16..]) as usize;
             BlockInfoReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             BlockInfoReader::new_unchecked(&self.as_slice()[start..])
@@ -3530,26 +3515,20 @@ impl<'r> molecule::prelude::Reader<'r> for NextMemBlockReader<'r> {
         if offsets.windows(2).any(|i| i[0] > i[1]) {
             return ve!(Self, OffsetsNotMatch);
         }
-        L2TransactionVecReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        DepositInfoVecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        WithdrawalRequestVecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        BlockInfoReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        DepositInfoVecReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        WithdrawalRequestVecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        BlockInfoReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct NextMemBlockBuilder {
-    pub(crate) txs: L2TransactionVec,
     pub(crate) deposits: DepositInfoVec,
     pub(crate) withdrawals: WithdrawalRequestVec,
     pub(crate) block_info: BlockInfo,
 }
 impl NextMemBlockBuilder {
-    pub const FIELD_COUNT: usize = 4;
-    pub fn txs(mut self, v: L2TransactionVec) -> Self {
-        self.txs = v;
-        self
-    }
+    pub const FIELD_COUNT: usize = 3;
     pub fn deposits(mut self, v: DepositInfoVec) -> Self {
         self.deposits = v;
         self
@@ -3568,7 +3547,6 @@ impl molecule::prelude::Builder for NextMemBlockBuilder {
     const NAME: &'static str = "NextMemBlockBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.txs.as_slice().len()
             + self.deposits.as_slice().len()
             + self.withdrawals.as_slice().len()
             + self.block_info.as_slice().len()
@@ -3576,8 +3554,6 @@ impl molecule::prelude::Builder for NextMemBlockBuilder {
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.txs.as_slice().len();
         offsets.push(total_size);
         total_size += self.deposits.as_slice().len();
         offsets.push(total_size);
@@ -3588,7 +3564,6 @@ impl molecule::prelude::Builder for NextMemBlockBuilder {
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.txs.as_slice())?;
         writer.write_all(self.deposits.as_slice())?;
         writer.write_all(self.withdrawals.as_slice())?;
         writer.write_all(self.block_info.as_slice())?;

@@ -16,4 +16,4 @@ pub mod traits;
 mod types;
 pub mod withdrawal;
 
-pub use sync::fan_in::spawn_fan_in_mem_block_task;
+pub use sync::subscribe::spawn_sub_mem_pool_task;

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use gw_config::SubscribeMemBlockConfig;
+use gw_config::SubscribeMemPoolConfig;
 use gw_types::packed::*;
 use gw_types::prelude::Unpack;
 use smol::lock::Mutex;
@@ -10,11 +10,11 @@ use crate::pool::MemPool;
 
 use super::mq::{gw_kafka, Consume};
 
-pub(crate) struct FanInMemBlock {
+pub(crate) struct SubscribeMemPoolService {
     mem_pool: Arc<Mutex<MemPool>>,
 }
 
-impl FanInMemBlock {
+impl SubscribeMemPoolService {
     pub(crate) fn new(mem_pool: Arc<Mutex<MemPool>>) -> Self {
         Self { mem_pool }
     }
@@ -29,27 +29,23 @@ impl FanInMemBlock {
         Ok(())
     }
 
-    pub(crate) fn next_mem_block(&self, next_mem_block: NextMemBlock) -> Result<()> {
+    pub(crate) fn next_mem_block(&self, next_mem_block: NextMemBlock) -> Result<Option<u64>> {
         log::info!("Refresh next mem block");
         let block_info = next_mem_block.block_info();
         let withdrawals = next_mem_block.withdrawals().into_iter().collect();
         let deposits = next_mem_block.deposits().unpack();
-        let txs = next_mem_block.txs().into_iter().collect();
 
         let mut mem_pool = smol::block_on(self.mem_pool.lock());
-        if let Err(err) = mem_pool.refresh_mem_block(block_info, withdrawals, deposits, txs) {
-            log::error!("Refresh mem block error: {:?}", err);
-        }
-        Ok(())
+        mem_pool.refresh_mem_block(block_info, withdrawals, deposits)
     }
 }
 
-pub fn spawn_fan_in_mem_block_task(
+pub fn spawn_sub_mem_pool_task(
     mem_pool: Arc<Mutex<MemPool>>,
-    mem_block_config: SubscribeMemBlockConfig,
+    mem_block_config: SubscribeMemPoolConfig,
 ) -> Result<()> {
-    let fan_in = FanInMemBlock::new(mem_pool);
-    let SubscribeMemBlockConfig {
+    let fan_in = SubscribeMemPoolService::new(mem_pool);
+    let SubscribeMemPoolConfig {
         hosts,
         topic,
         group,

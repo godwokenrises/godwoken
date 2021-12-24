@@ -9,13 +9,13 @@ use smol::channel::{Receiver, Sender};
 
 use super::mq::{gw_kafka, Produce};
 
-const CHANNEL_BUFFER_SIZE: usize = 500;
-pub(crate) struct FanOutMemBlockActor {
+const CHANNEL_BUFFER_SIZE: usize = 1000;
+pub(crate) struct PublishMemPoolActor {
     receiver: Receiver<RefreshMemBlockMessageUnion>,
     producer: gw_kafka::Producer,
 }
 
-impl FanOutMemBlockActor {
+impl PublishMemPoolActor {
     pub(crate) fn new(
         receiver: Receiver<RefreshMemBlockMessageUnion>,
         producer: gw_kafka::Producer,
@@ -30,47 +30,49 @@ impl FanOutMemBlockActor {
     }
 }
 
-async fn fan_out_handle(mut actor: FanOutMemBlockActor) {
+async fn publish_handle(mut actor: PublishMemPoolActor) {
     log::info!("Fanout handle is started.");
     while let Ok(msg) = actor.receiver.recv().await {
         actor.handle(msg);
     }
 }
 
-pub(crate) struct FanOutMemBlockHandler {
+pub(crate) struct MemPoolPublishService {
     sender: Sender<RefreshMemBlockMessageUnion>,
 }
 
-impl FanOutMemBlockHandler {
-    pub(crate) fn new(producer: gw_kafka::Producer) -> Self {
+impl MemPoolPublishService {
+    pub(crate) fn start(producer: gw_kafka::Producer) -> Self {
         let (sender, receiver) = smol::channel::bounded(CHANNEL_BUFFER_SIZE);
 
-        let actor = FanOutMemBlockActor::new(receiver, producer);
-        smol::spawn(fan_out_handle(actor)).detach();
+        let actor = PublishMemPoolActor::new(receiver, producer);
+        smol::spawn(publish_handle(actor)).detach();
         Self { sender }
     }
 
     pub(crate) fn new_tx(&self, tx: L2Transaction) {
-        let _ = smol::block_on(
+        if let Err(err) = smol::block_on(
             self.sender
                 .send(RefreshMemBlockMessageUnion::L2Transaction(tx)),
-        );
+        ) {
+            log::error!("Send new tx message with error: {:?}", err);
+        }
     }
 
     pub(crate) fn next_mem_block(
         &self,
         withdrawals: Vec<WithdrawalRequest>,
         deposits: Vec<DepositInfo>,
-        txs: Vec<L2Transaction>,
         block_info: BlockInfo,
     ) {
         let next_mem_block = NextMemBlock::new_builder()
             .block_info(block_info)
             .withdrawals(withdrawals.pack())
             .deposits(deposits.pack())
-            .txs(txs.pack())
             .build();
         let msg = RefreshMemBlockMessageUnion::NextMemBlock(next_mem_block);
-        let _ = smol::block_on(self.sender.send(msg));
+        if let Err(err) = smol::block_on(self.sender.send(msg)) {
+            log::error!("Send mem block message with error: {:?}", err);
+        }
     }
 }
