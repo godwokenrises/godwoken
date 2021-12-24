@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use gw_config::SyncMemBlockConfig;
+use gw_config::SubscribeMemBlockConfig;
 use gw_types::packed::*;
 use gw_types::prelude::Unpack;
 use smol::lock::Mutex;
@@ -20,6 +20,8 @@ impl FanInMemBlock {
     }
 
     pub(crate) fn add_tx(&self, tx: L2Transaction) -> Result<()> {
+        let tx_hash = tx.raw().hash();
+        log::info!("Add tx: {} to mem block", hex::encode(&tx_hash));
         let mut mem_pool = smol::block_on(self.mem_pool.lock());
         if let Err(err) = mem_pool.push_transaction(tx) {
             log::error!("Sync tx from full node failed: {:?}", err);
@@ -28,6 +30,7 @@ impl FanInMemBlock {
     }
 
     pub(crate) fn next_mem_block(&self, next_mem_block: NextMemBlock) -> Result<()> {
+        log::info!("Refresh next mem block");
         let block_info = next_mem_block.block_info();
         let withdrawals = next_mem_block.withdrawals().into_iter().collect();
         let deposits = next_mem_block.deposits().unpack();
@@ -43,14 +46,14 @@ impl FanInMemBlock {
 
 pub fn spawn_fan_in_mem_block_task(
     mem_pool: Arc<Mutex<MemPool>>,
-    sync_mem_block_config: SyncMemBlockConfig,
+    mem_block_config: SubscribeMemBlockConfig,
 ) -> Result<()> {
     let fan_in = FanInMemBlock::new(mem_pool);
-    let SyncMemBlockConfig {
+    let SubscribeMemBlockConfig {
         hosts,
         topic,
         group,
-    } = sync_mem_block_config;
+    } = mem_block_config;
     let mut consumer = gw_kafka::Consumer::new(hosts, topic, group, fan_in)?;
     smol::spawn(async move {
         log::info!("Spawn fan in mem_block task");

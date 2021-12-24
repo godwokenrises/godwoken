@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use gw_types::bytes::Bytes;
 use gw_types::packed::{RefreshMemBlockMessage, RefreshMemBlockMessageUnion};
-use gw_types::prelude::{Entity, Reader};
+use gw_types::prelude::{Builder, Entity, Reader};
 use kafka::client::{Compression, FetchOffset, GroupOffsetStorage};
 use kafka::producer::{AsBytes, Record};
 
@@ -42,7 +42,10 @@ impl Produce for Producer {
     type Msg = RefreshMemBlockMessageUnion;
 
     fn send(&mut self, message: Self::Msg) -> Result<()> {
-        let bytes = message.as_bytes();
+        let msg = RefreshMemBlockMessage::new_builder().set(message).build();
+
+        let bytes = msg.as_bytes();
+        log::trace!("Producer send msg: {:?}", &bytes.to_vec());
         let message = RefreshMemBlockMessageFacade(bytes);
         let rec = Record::from_value(&self.topic, message);
 
@@ -88,7 +91,7 @@ impl Consume for Consumer {
         }
         for set in msg_sets.iter() {
             for msg in set.messages().iter() {
-                log::debug!(
+                log::trace!(
                     "Recv kafka msg: {}:{}@{}: {:?}",
                     set.topic(),
                     set.partition(),
@@ -112,6 +115,9 @@ impl Consume for Consumer {
                 };
             }
         }
+        self.consumer
+            .commit_consumed()
+            .map_err(|err| anyhow!("Kafka commit consumed failed: {:?}", err))?;
         Ok(())
     }
 }

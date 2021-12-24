@@ -461,7 +461,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     base.generator.clone(),
                     Box::new(mem_pool_provider),
                     error_tx_handler,
-                    config.mem_pool.clone(),
+                    (config.mem_pool.clone(), config.node_mode),
                 )
                 .with_context(|| "create mem-pool")?,
             ));
@@ -548,7 +548,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     let (block_producer, challenger, test_mode_control, cleaner) = match config.node_mode {
         NodeMode::ReadOnly => {
-            if let Some(sync_mem_block_config) = &config.mem_pool.sync_mem_block {
+            if let Some(sync_mem_block_config) = &config.mem_pool.sub_sync_mem_block {
                 match &mem_pool {
                     Some(mem_pool) => {
                         spawn_fan_in_mem_block_task(
