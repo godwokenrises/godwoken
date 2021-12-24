@@ -56,6 +56,7 @@ const MIN_CKB_VERSION: &str = "0.40.0";
 const SMOL_THREADS_ENV_VAR: &str = "SMOL_THREADS";
 const DEFAULT_RUNTIME_THREADS: usize = 8;
 const EVENT_TIMEOUT_SECONDS: u64 = 30;
+const DEFAULT_HTTP_TIMEOUT: Duration = Duration::from_secs(15);
 
 async fn poll_loop(
     rpc_client: RPCClient,
@@ -245,8 +246,12 @@ impl BaseInitComponents {
         };
         let rollup_type_script: Script = config.chain.rollup_type_script.clone().into();
         let rpc_client = {
-            let indexer_client = HttpClient::new(config.rpc_client.indexer_url.to_owned())?;
-            let ckb_client = HttpClient::new(config.rpc_client.ckb_url.to_owned())?;
+            let indexer_client = HttpClient::builder()
+                .timeout(DEFAULT_HTTP_TIMEOUT)
+                .build(config.rpc_client.indexer_url.to_owned())?;
+            let ckb_client = HttpClient::builder()
+                .timeout(DEFAULT_HTTP_TIMEOUT)
+                .build(config.rpc_client.ckb_url.to_owned())?;
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(
