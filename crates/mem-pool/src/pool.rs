@@ -819,6 +819,8 @@ impl MemPool {
         if self.node_mode != NodeMode::ReadOnly {
             // check pending deposits
             self.refresh_deposit_cells(&db, new_tip)?;
+        } else {
+            self.pending_deposits.clear();
         }
 
         // estimate next l2block timestamp
