@@ -1100,3 +1100,62 @@ pub struct FeeConfig {
     pub withdraw_cycles_limit: Uint64,
     pub sudt_fee_rate_weight: Vec<SUDTFeeConfig>,
 }
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct WithdrawalLockArgs {
+    pub account_script_hash: H256,
+    pub withdrawal_block_hash: H256,
+    pub withdrawal_block_number: Uint64,
+    // buyer can pay sell_amount token to unlock
+    pub sudt_script_hash: H256,
+    pub sell_amount: Uint128,
+    pub sell_capacity: Uint64,
+    // layer1 lock to withdraw after challenge period
+    pub owner_lock_hash: H256,
+    // layer1 lock to receive the payment, must exists on the chain
+    pub payment_lock_hash: H256,
+}
+
+impl From<WithdrawalLockArgs> for packed::WithdrawalLockArgs {
+    fn from(json: WithdrawalLockArgs) -> packed::WithdrawalLockArgs {
+        let WithdrawalLockArgs {
+            account_script_hash,
+            withdrawal_block_hash,
+            withdrawal_block_number,
+            sudt_script_hash,
+            sell_amount,
+            sell_capacity,
+            owner_lock_hash,
+            payment_lock_hash,
+        } = json;
+        packed::WithdrawalLockArgs::new_builder()
+            .account_script_hash(account_script_hash.pack())
+            .withdrawal_block_hash(withdrawal_block_hash.pack())
+            .withdrawal_block_number(withdrawal_block_number.value().pack())
+            .sudt_script_hash(sudt_script_hash.pack())
+            .sell_amount(sell_amount.value().pack())
+            .sell_capacity(sell_capacity.value().pack())
+            .owner_lock_hash(owner_lock_hash.pack())
+            .payment_lock_hash(payment_lock_hash.pack())
+            .build()
+    }
+}
+
+impl From<packed::WithdrawalLockArgs> for WithdrawalLockArgs {
+    fn from(data: packed::WithdrawalLockArgs) -> WithdrawalLockArgs {
+        let sell_capacity: u64 = data.sell_capacity().unpack();
+        let sell_amount: u128 = data.sell_amount().unpack();
+        let withdrawal_block_number: u64 = data.withdrawal_block_number().unpack();
+        Self {
+            sell_capacity: sell_capacity.into(),
+            sell_amount: sell_amount.into(),
+            sudt_script_hash: data.sudt_script_hash().unpack(),
+            account_script_hash: data.account_script_hash().unpack(),
+            owner_lock_hash: data.owner_lock_hash().unpack(),
+            payment_lock_hash: data.payment_lock_hash().unpack(),
+            withdrawal_block_hash: data.withdrawal_block_hash().unpack(),
+            withdrawal_block_number: withdrawal_block_number.into(),
+        }
+    }
+}
