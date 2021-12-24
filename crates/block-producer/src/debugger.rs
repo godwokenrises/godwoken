@@ -21,7 +21,7 @@ use gw_types::{
 pub async fn dump_transaction<P: AsRef<Path>>(
     dir: P,
     rpc_client: &RPCClient,
-    tx: Transaction,
+    tx: &Transaction,
 ) -> Result<()> {
     // ensure dir is exist
     create_dir_all(&dir)?;
@@ -32,7 +32,7 @@ pub async fn dump_transaction<P: AsRef<Path>>(
     let mut dump_path = PathBuf::new();
     dump_path.push(dir);
     let json_content;
-    match build_mock_transaction(rpc_client, tx.clone()).await {
+    match build_mock_transaction(rpc_client, tx).await {
         Ok(mock_tx) => {
             dump_path.push(format!("{}-mock-tx.json", tx_hash));
             json_content = serde_json::to_string_pretty(&mock_tx)?;
@@ -57,7 +57,7 @@ pub async fn dump_transaction<P: AsRef<Path>>(
 
 pub async fn build_mock_transaction(
     rpc_client: &RPCClient,
-    tx: Transaction,
+    tx: &Transaction,
 ) -> Result<ReprMockTransaction> {
     async fn resolve_dep_group(rpc_client: &RPCClient, dep: &CellDep) -> Result<Vec<CellDep>> {
         // return dep

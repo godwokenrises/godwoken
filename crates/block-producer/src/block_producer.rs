@@ -499,12 +499,8 @@ impl BlockProducer {
         {
             Ok((number, tx))
         } else {
-            utils::dump_transaction(
-                &self.debug_config.debug_tx_dump_path,
-                &self.rpc_client,
-                tx.clone(),
-            )
-            .await;
+            utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx)
+                .await;
             Err(anyhow!(
                 "l2 block submit tx exceeded max block bytes, tx size: {} max block bytes: {}",
                 tx.as_slice().len(),
@@ -519,7 +515,7 @@ impl BlockProducer {
         tx: Transaction,
     ) -> Result<SubmitResult> {
         let t = Instant::now();
-        let cycles = match self.rpc_client.dry_run_transaction(tx.clone()).await {
+        let cycles = match self.rpc_client.dry_run_transaction(&tx).await {
             Ok(cycles) => {
                 log::info!(
                     "Tx({}) L2 block #{} execution cycles: {}",
@@ -560,12 +556,8 @@ impl BlockProducer {
                 cycles,
                 self.debug_config.expected_l1_tx_upper_bound_cycles
             );
-            utils::dump_transaction(
-                &self.debug_config.debug_tx_dump_path,
-                &self.rpc_client,
-                tx.clone(),
-            )
-            .await;
+            utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx)
+                .await;
             return Err(anyhow!(
                 "Submitting l2 block cycles exceeded limitation, cycles: {:?}",
                 cycles
@@ -573,7 +565,7 @@ impl BlockProducer {
         }
 
         // send transaction
-        match self.rpc_client.send_transaction(tx.clone()).await {
+        match self.rpc_client.send_transaction(&tx).await {
             Ok(tx_hash) => {
                 log::info!(
                     "Submitted l2 block {} in tx {}",
@@ -595,7 +587,7 @@ impl BlockProducer {
                     utils::dump_transaction(
                         &self.debug_config.debug_tx_dump_path,
                         &self.rpc_client,
-                        tx.clone(),
+                        &tx,
                     )
                     .await;
                     Err(anyhow!("Submitting l2 block error: {}", err))

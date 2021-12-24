@@ -47,7 +47,7 @@ impl FinalizedWithdrawalUnlocker {
         let unlocked = &self.unlocked_set;
         let rpc_client = &self.unlocker.rpc_client;
         if let Some((tx, to_unlock)) = self.unlocker.query_and_unlock_to_owner(unlocked).await? {
-            if let Err(err) = rpc_client.dry_run_transaction(tx.clone()).await {
+            if let Err(err) = rpc_client.dry_run_transaction(&tx).await {
                 let err_string = err.to_string();
                 if err_string.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
                     // NOTE: Maybe unlocked withdrawals are included, this happens after restart.
@@ -60,11 +60,11 @@ impl FinalizedWithdrawalUnlocker {
                 bail!("dry unlock tx failed {}", err);
             }
 
-            let tx_hash = match rpc_client.send_transaction(tx.clone()).await {
+            let tx_hash = match rpc_client.send_transaction(&tx).await {
                 Ok(tx_hash) => tx_hash,
                 Err(err) => {
                     let debug_tx_dump_path = &self.debug_config.debug_tx_dump_path;
-                    utils::dump_transaction(debug_tx_dump_path, rpc_client, tx.clone()).await;
+                    utils::dump_transaction(debug_tx_dump_path, rpc_client, &tx).await;
                     bail!("send tx failed {}", err);
                 }
             };

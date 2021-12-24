@@ -1509,7 +1509,7 @@ impl RPCClient {
         )
     }
 
-    pub async fn send_transaction(&self, tx: Transaction) -> Result<H256> {
+    pub async fn send_transaction(&self, tx: &Transaction) -> Result<H256> {
         let tx: ckb_jsonrpc_types::Transaction = {
             let tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
             tx.into()
@@ -1529,7 +1529,7 @@ impl RPCClient {
         Ok(node.version)
     }
 
-    pub async fn dry_run_transaction(&self, tx: Transaction) -> Result<u64> {
+    pub async fn dry_run_transaction(&self, tx: &Transaction) -> Result<u64> {
         let tx: ckb_jsonrpc_types::Transaction = {
             let tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
             tx.into()

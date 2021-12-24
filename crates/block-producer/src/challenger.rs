@@ -267,16 +267,10 @@ impl Challenger {
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
-        self.dry_run_transaction(tx.clone(), "challenge block")
-            .await?;
-        utils::dump_transaction(
-            &self.debug_config.debug_tx_dump_path,
-            &self.rpc_client,
-            tx.clone(),
-        )
-        .await;
+        self.dry_run_transaction(&tx, "challenge block").await?;
+        utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx).await;
 
-        let tx_hash = self.rpc_client.send_transaction(tx).await?;
+        let tx_hash = self.rpc_client.send_transaction(&tx).await?;
         log::info!("Challenge block {} in tx {}", block_numer, to_hex(&tx_hash));
         Ok(())
     }
@@ -326,7 +320,7 @@ impl Challenger {
                 .await?
         };
         let verifier_spent_inputs = extract_inputs(&tx);
-        let verifier_tx_hash = self.rpc_client.send_transaction(tx).await?;
+        let verifier_tx_hash = self.rpc_client.send_transaction(&tx).await?;
         log::info!("Create verifier in tx {}", to_hex(&verifier_tx_hash));
 
         self.wait_tx_proposed(verifier_tx_hash).await?;
@@ -366,14 +360,8 @@ impl Challenger {
             )
             .await?;
 
-        self.dry_run_transaction(tx.clone(), "cancel challenge")
-            .await?;
-        utils::dump_transaction(
-            &self.debug_config.debug_tx_dump_path,
-            &self.rpc_client,
-            tx.clone(),
-        )
-        .await;
+        self.dry_run_transaction(&tx, "cancel challenge").await?;
+        utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx).await;
 
         let load_data_inputs = verifier_context.load_data_context.map(|d| d.inputs);
         let verifier = Verifier::new(
@@ -383,7 +371,7 @@ impl Challenger {
             verifier_context.input,
             verifier_context.witness,
         );
-        match self.rpc_client.send_transaction(tx).await {
+        match self.rpc_client.send_transaction(&tx).await {
             Ok(tx_hash) => {
                 self.cleaner.watch_verifier(verifier, Some(tx_hash)).await;
                 log::info!("Cancel challenge in tx {}", to_hex(&tx_hash));
@@ -520,15 +508,10 @@ impl Challenger {
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
-        self.dry_run_transaction(tx.clone(), "revert block").await?;
-        utils::dump_transaction(
-            &self.debug_config.debug_tx_dump_path,
-            &self.rpc_client,
-            tx.clone(),
-        )
-        .await;
+        self.dry_run_transaction(&tx, "revert block").await?;
+        utils::dump_transaction(&self.debug_config.debug_tx_dump_path, &self.rpc_client, &tx).await;
 
-        let tx_hash = self.rpc_client.send_transaction(tx).await?;
+        let tx_hash = self.rpc_client.send_transaction(&tx).await?;
         log::info!("Revert block in tx {}", to_hex(&tx_hash));
 
         Ok(())
@@ -731,8 +714,8 @@ impl Challenger {
         }
     }
 
-    async fn dry_run_transaction(&self, tx: Transaction, action: &str) -> Result<()> {
-        match self.rpc_client.dry_run_transaction(tx.clone()).await {
+    async fn dry_run_transaction(&self, tx: &Transaction, action: &str) -> Result<()> {
+        match self.rpc_client.dry_run_transaction(tx).await {
             Ok(cycles) => {
                 log::info!("tx({}) {} cycles: {}", action, tx.hash().pack(), cycles);
                 Ok(())

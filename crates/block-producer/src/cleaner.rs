@@ -160,7 +160,7 @@ impl Cleaner {
 
             let verifier_tx = verifier.tx_hash();
             let tx = self.build_reclaim_verifier_tx(verifier).await?;
-            let tx_hash = rpc_client.send_transaction(tx).await?;
+            let tx_hash = rpc_client.send_transaction(&tx).await?;
 
             {
                 let mut verifiers = self.consumed_verifiers.lock().await;
