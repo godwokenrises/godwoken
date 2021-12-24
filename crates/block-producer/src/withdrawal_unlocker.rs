@@ -60,14 +60,22 @@ impl FinalizedWithdrawalUnlocker {
                 bail!("dry unlock tx failed {}", err);
             }
 
-            let tx_hash = match self.unlocker.rpc_client.send_transaction(tx.clone()).await {
+            let tx_hash = match rpc_client.send_transaction(tx.clone()).await {
                 Ok(tx_hash) => tx_hash,
                 Err(err) => {
                     let debug_tx_dump_path = &self.debug_config.debug_tx_dump_path;
-                    utils::dump_transaction(debug_tx_dump_path, rpc_client, tx).await;
+                    utils::dump_transaction(debug_tx_dump_path, rpc_client, tx.clone()).await;
                     bail!("send tx failed {}", err);
                 }
             };
+
+            // Check unlock tx
+            match rpc_client.get_transaction(tx_hash).await {
+                Err(err) => bail!("get unlock tx failed {}", err), // Let indexer remove cells for us
+                Ok(None) => bail!("unlock tx {} not found", tx_hash.pack()),
+                Ok(Some(_)) => (), // Pass
+            }
+
             log::info!(
                 "[unlock withdrawal] unlock {} withdrawals in tx {}",
                 to_unlock.len(),
