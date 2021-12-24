@@ -336,6 +336,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         db_block_validator: Default::default(),
         store,
         fee: Default::default(),
+        sentry_dsn: None,
     };
 
     Ok(config)

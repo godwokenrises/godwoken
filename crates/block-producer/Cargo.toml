@@ -53,6 +53,8 @@ hex = "0.4"
 async-trait = "0.1"
 semver = "1.0"
 rayon = "1.5"
+sentry = "0.23.0"
+sentry-log = "0.23.0"
 
 [target.'cfg(all(not(target_env = "msvc"), not(target_os="macos")))'.dependencies]
 tikv-jemallocator = { version = "0.4.0", features = ["unprefixed_malloc_on_supported_platforms"] }

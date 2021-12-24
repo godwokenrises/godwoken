@@ -7,6 +7,7 @@ use clap::{App, Arg, SubCommand};
 use gw_block_producer::{db_block_validator, runner};
 use gw_config::Config;
 use gw_version::Version;
+use sentry_log::LogFilter;
 use std::{fs, path::Path};
 
 const COMMAND_RUN: &str = "run";
@@ -127,6 +128,20 @@ fn run_cli() -> Result<()> {
 
 /// Godwoken entry
 fn main() {
-    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+    init_log();
     run_cli().expect("run cli");
+}
+
+fn init_log() {
+    let logger = env_logger::builder()
+        .parse_env(env_logger::Env::default().default_filter_or("info"))
+        .build();
+    let level = logger.filter();
+    let logger = sentry_log::SentryLogger::with_dest(logger).filter(|md| match md.level() {
+        log::Level::Error => LogFilter::Event,
+        _ => LogFilter::Ignore,
+    });
+    log::set_boxed_logger(Box::new(logger))
+        .map(|()| log::set_max_level(level))
+        .expect("set log");
 }
