@@ -203,6 +203,7 @@ pub fn setup_chain_with_account_lock_manage(
         Box::new(provider),
         None,
         mem_pool_config,
+        gw_config::NodeMode::FullNode,
     )
     .unwrap();
     Chain::create(

@@ -17,7 +17,7 @@ use gw_common::{
     state::{to_short_address, State},
     H256,
 };
-use gw_config::MemPoolConfig;
+use gw_config::{MemPoolConfig, NodeMode};
 use gw_generator::{
     constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
 };
@@ -95,6 +95,7 @@ pub struct MemPool {
     pending_restored_tx_hashes: VecDeque<H256>,
     // Fan-out mem block from full node to readonly node
     mem_pool_publish_service: Option<MemPoolPublishService>,
+    node_mode: NodeMode,
 }
 
 impl Drop for MemPool {
@@ -115,6 +116,7 @@ impl MemPool {
         provider: Box<dyn MemPoolProvider + Send>,
         error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
         config: MemPoolConfig,
+        node_mode: NodeMode,
     ) -> Result<Self> {
         let pending = Default::default();
 
@@ -171,6 +173,7 @@ impl MemPool {
             restore_manager: restore_manager.clone(),
             pending_restored_tx_hashes,
             mem_pool_publish_service: fan_out_mem_block_handler,
+            node_mode,
         };
 
         // set tip
@@ -812,8 +815,11 @@ impl MemPool {
         }
 
         let db = self.store.begin_transaction();
-        // check pending deposits
-        self.refresh_deposit_cells(&db, new_tip)?;
+
+        if self.node_mode != NodeMode::ReadOnly {
+            // check pending deposits
+            self.refresh_deposit_cells(&db, new_tip)?;
+        }
 
         // estimate next l2block timestamp
         let estimated_timestamp = smol::block_on(self.provider.estimate_next_blocktime())?;
@@ -858,7 +864,10 @@ impl MemPool {
             .chain(mem_block_withdrawals);
         // re-inject txs
         let txs_iter = reinject_txs.into_iter().chain(mem_block_txs);
-        self.prepare_next_mem_block(&db, withdrawals_iter, txs_iter)?;
+
+        if self.node_mode != NodeMode::ReadOnly {
+            self.prepare_next_mem_block(&db, withdrawals_iter, txs_iter)?;
+        }
         db.commit()?;
 
         Ok(())
@@ -1298,21 +1307,16 @@ impl MemPool {
         withdrawals: Vec<WithdrawalRequest>,
         deposits: Vec<DepositInfo>,
     ) -> Result<Option<u64>> {
-        let tip_block = {
-            let db = self.store.begin_transaction();
-            db.get_last_valid_tip_block()?
-        };
-        let current_tip_number = tip_block.raw().number().unpack();
         let next_block_number = block_info.number().unpack();
-        if next_block_number != current_tip_number + 1 {
+        if next_block_number != self.current_tip.1 + 1 {
             return Ok(None);
         }
+        let db = self.store.begin_transaction();
+        let tip_block = db.get_last_valid_tip_block()?;
 
         let post_merkle_state = tip_block.raw().post_account();
         let mem_block = MemBlock::new(block_info, post_merkle_state);
         self.mem_block = mem_block;
-
-        let db = self.store.begin_transaction();
 
         self.finalize_withdrawals(&db, withdrawals)?;
         self.finalize_deposits(&db, deposits)?;
@@ -1335,7 +1339,7 @@ impl MemPool {
     // Sync tx from fullnode to readonly.
     pub(crate) fn append_tx(&mut self, tx: L2Transaction) -> Result<()> {
         let db = self.store.begin_transaction();
-        let _ = self.finalize_tx(&db, tx)?;
+        self.finalize_tx(&db, tx)?;
         db.commit()?;
         Ok(())
     }

@@ -462,6 +462,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     Box::new(mem_pool_provider),
                     error_tx_handler,
                     config.mem_pool.clone(),
+                    config.node_mode,
                 )
                 .with_context(|| "create mem-pool")?,
             ));
@@ -494,11 +495,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         store.check_state()?;
         log::info!("Check state db done: {}ms", t.elapsed().as_millis());
     }
-    let mem_pool_ = if config.node_mode == NodeMode::ReadOnly {
-        None
-    } else {
-        mem_pool.clone()
-    };
     let chain = Arc::new(Mutex::new(
         Chain::create(
             &rollup_config,
@@ -506,7 +502,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             &config.chain,
             store.clone(),
             generator.clone(),
-            mem_pool_,
+            mem_pool.clone(),
         )
         .with_context(|| "create chain")?,
     ));
