@@ -5,8 +5,9 @@ use std::iter::FromIterator;
 use std::time::Duration;
 
 use crate::testing_tool::chain::{
-    build_sync_tx, construct_block, setup_chain, ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM,
-    WITHDRAWAL_LOCK_PROGRAM,
+    build_sync_tx, construct_block, construct_block_with_timestamp, setup_chain_with_config,
+    ALWAYS_SUCCESS_CODE_HASH, ALWAYS_SUCCESS_PROGRAM, CUSTODIAN_LOCK_PROGRAM, STAKE_LOCK_PROGRAM,
+    STATE_VALIDATOR_TYPE_PROGRAM, WITHDRAWAL_LOCK_PROGRAM,
 };
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use crate::testing_tool::verify_tx::{verify_tx, TxWithContext};
@@ -17,13 +18,16 @@ use gw_block_producer::withdrawal_unlocker::BuildUnlockWithdrawalToOwner;
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::H256;
 use gw_config::BlockProducerConfig;
-use gw_types::core::ScriptHashType;
+use gw_types::bytes::Bytes;
+use gw_types::core::{DepType, ScriptHashType};
 use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext};
 use gw_types::packed::{
-    CellDep, CellInput, CellOutput, DepositRequest, GlobalState, L2BlockCommittedInfo, OutPoint,
-    RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
+    CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest, GlobalState,
+    L2BlockCommittedInfo, OutPoint, RawWithdrawalRequest, RollupAction, RollupActionUnion,
+    RollupConfig, RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest,
+    WithdrawalRequestExtra, WitnessArgs,
 };
-use gw_types::prelude::{Pack, Unpack};
+use gw_types::prelude::{Pack, PackVec, Unpack};
 use gw_utils::transaction_skeleton::TransactionSkeleton;
 
 const CKB: u64 = 100000000;
@@ -33,31 +37,14 @@ const MAX_MEM_BLOCK_WITHDRAWALS: u8 = 50;
 fn test_build_unlock_to_owner_tx() {
     let _ = env_logger::builder().is_test(true).try_init();
 
-    let last_finalized_block_number = 100u64;
-    let global_state = GlobalState::new_builder()
-        .last_finalized_block_number(last_finalized_block_number.pack())
-        .build();
-
-    let rollup_type = random_always_success_script(None);
-    let rollup_script_hash: H256 = rollup_type.hash().into();
-    let rollup_cell = CellInfo {
-        data: global_state.as_bytes(),
-        out_point: OutPoint::new_builder()
-            .tx_hash(rand::random::<[u8; 32]>().pack())
-            .build(),
-        output: CellOutput::new_builder()
-            .type_(Some(rollup_type.clone()).pack())
-            .build(),
-    };
-    let mut chain = setup_chain(rollup_type.clone());
-
+    const CONTRACT_CELL_CAPACITY: u64 = 1000 * CKB;
     let always_type = random_always_success_script(None);
     let always_cell = CellInfo {
         out_point: OutPoint::new_builder()
             .tx_hash(rand::random::<[u8; 32]>().pack())
             .build(),
         output: CellOutput::new_builder()
-            .capacity((1000 * 10u64.pow(8)).pack())
+            .capacity(CONTRACT_CELL_CAPACITY.pack())
             .type_(Some(always_type.clone()).pack())
             .build(),
         data: ALWAYS_SUCCESS_PROGRAM.clone(),
@@ -75,19 +62,96 @@ fn test_build_unlock_to_owner_tx() {
             .tx_hash(rand::random::<[u8; 32]>().pack())
             .build(),
         output: CellOutput::new_builder()
-            .capacity((1000 * 10u64.pow(8)).pack())
+            .capacity(CONTRACT_CELL_CAPACITY.pack())
             .type_(Some(withdrawal_lock_type.clone()).pack())
             .build(),
         data: WITHDRAWAL_LOCK_PROGRAM.clone(),
     };
 
-    let rollup_context = RollupContext {
-        rollup_script_hash: rollup_type.hash().into(),
-        rollup_config: RollupConfig::new_builder()
-            .withdrawal_script_type_hash(withdrawal_lock_type.hash().pack())
-            .l1_sudt_script_type_hash(always_type.hash().pack())
-            .finality_blocks(1u64.pack())
+    let stake_lock_type = random_always_success_script(None);
+    let stake_lock_cell = CellInfo {
+        out_point: OutPoint::new_builder()
+            .tx_hash(rand::random::<[u8; 32]>().pack())
             .build(),
+        output: CellOutput::new_builder()
+            .capacity(CONTRACT_CELL_CAPACITY.pack())
+            .type_(Some(stake_lock_type.clone()).pack())
+            .build(),
+        data: STAKE_LOCK_PROGRAM.clone(),
+    };
+
+    let deposit_lock_type = random_always_success_script(None);
+
+    let custodian_lock_type = random_always_success_script(None);
+    let custodian_lock_cell = CellInfo {
+        out_point: OutPoint::new_builder()
+            .tx_hash(rand::random::<[u8; 32]>().pack())
+            .build(),
+        output: CellOutput::new_builder()
+            .capacity(CONTRACT_CELL_CAPACITY.pack())
+            .type_(Some(custodian_lock_type.clone()).pack())
+            .build(),
+        data: CUSTODIAN_LOCK_PROGRAM.clone(),
+    };
+
+    let rollup_config = RollupConfig::new_builder()
+        .stake_script_type_hash(stake_lock_type.hash().pack())
+        .custodian_script_type_hash(custodian_lock_type.hash().pack())
+        .withdrawal_script_type_hash(withdrawal_lock_type.hash().pack())
+        .deposit_script_type_hash(deposit_lock_type.hash().pack())
+        .l1_sudt_script_type_hash(always_type.hash().pack())
+        .allowed_eoa_type_hashes(vec![ALWAYS_SUCCESS_CODE_HASH.pack()].pack())
+        .finality_blocks(1u64.pack())
+        .build();
+    let rollup_config_type = random_always_success_script(None);
+    let rollup_config_cell = CellInfo {
+        out_point: OutPoint::new_builder()
+            .tx_hash(rand::random::<[u8; 32]>().pack())
+            .build(),
+        output: CellOutput::new_builder()
+            .capacity(CONTRACT_CELL_CAPACITY.pack())
+            .type_(Some(rollup_config_type).pack())
+            .build(),
+        data: rollup_config.as_bytes(),
+    };
+
+    let last_finalized_block_number = 100u64;
+    let global_state = GlobalState::new_builder()
+        .last_finalized_block_number(last_finalized_block_number.pack())
+        .rollup_config_hash(rollup_config.hash().pack())
+        .build();
+
+    let state_validator_type = random_always_success_script(None);
+    let state_validator_cell = CellInfo {
+        out_point: OutPoint::new_builder()
+            .tx_hash(rand::random::<[u8; 32]>().pack())
+            .build(),
+        output: CellOutput::new_builder()
+            .capacity(CONTRACT_CELL_CAPACITY.pack())
+            .type_(Some(state_validator_type.clone()).pack())
+            .build(),
+        data: STATE_VALIDATOR_TYPE_PROGRAM.clone(),
+    };
+
+    let rollup_type_script = Script::new_builder()
+        .code_hash(state_validator_type.hash().pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args(vec![1u8; 32].pack())
+        .build();
+    let rollup_script_hash: H256 = rollup_type_script.hash().into();
+    let rollup_cell = CellInfo {
+        data: global_state.as_bytes(),
+        out_point: OutPoint::new_builder()
+            .tx_hash(rand::random::<[u8; 32]>().pack())
+            .build(),
+        output: CellOutput::new_builder()
+            .type_(Some(rollup_type_script.clone()).pack())
+            .build(),
+    };
+    let mut chain = setup_chain_with_config(rollup_type_script.clone(), rollup_config.clone());
+    let rollup_context = RollupContext {
+        rollup_script_hash,
+        rollup_config,
     };
 
     let block_producer_config = BlockProducerConfig {
@@ -107,7 +171,12 @@ fn test_build_unlock_to_owner_tx() {
     const DEPOSIT_AMOUNT: u128 = 1000;
     let account_count = (rand::random::<u8>() % 100 + 5) % MAX_MEM_BLOCK_WITHDRAWALS;
     let accounts: Vec<_> = (0..account_count)
-        .map(|_| random_always_success_script(Some(&rollup_script_hash)))
+        .map(|_| {
+            random_always_success_script(Some(&rollup_script_hash))
+                .as_builder()
+                .hash_type(ScriptHashType::Type.into())
+                .build()
+        })
         .collect();
     let deposits = accounts.iter().map(|account_script| {
         DepositRequest::new_builder()
@@ -129,7 +198,7 @@ fn test_build_unlock_to_owner_tx() {
             deposit_requests: deposits.collect(),
             deposit_asset_scripts: Default::default(),
         },
-        transaction: build_sync_tx(rollup_cell.output.clone(), block_result),
+        transaction: build_sync_tx(rollup_cell.output.clone(), block_result.clone()),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
             .number(1u64.pack())
             .build(),
@@ -141,10 +210,21 @@ fn test_build_unlock_to_owner_tx() {
     chain.sync(param).unwrap();
     assert!(chain.last_sync_event().is_success());
 
+    let input_rollup_cell = CellInfo {
+        data: block_result.global_state.as_bytes(),
+        out_point: OutPoint::new_builder()
+            .tx_hash(rand::random::<[u8; 32]>().pack())
+            .build(),
+        output: CellOutput::new_builder()
+            .type_(Some(rollup_type_script).pack())
+            .lock(random_always_success_script(None))
+            .build(),
+    };
+
     // Generate random withdrawals(w/wo owner lock)
     const WITHDRAWAL_CAPACITY: u64 = 1000 * CKB;
     const WITHDRAWAL_AMOUNT: u128 = 100;
-    let no_owner_lock_count = rand::random::<u8>() % (accounts.len() as u8 / 2) + 1;
+    let no_owner_lock_count = rand::random::<u8>() % (accounts.len() as u8 / 2 + 1) + 1;
     let withdrawals_no_lock = {
         let accounts = accounts.iter().take(no_owner_lock_count as usize);
         accounts.map(|account_script| {
@@ -207,10 +287,11 @@ fn test_build_unlock_to_owner_tx() {
         assert_eq!(mem_pool.mem_block().withdrawals().len(), accounts.len());
     }
 
+    const BLOCK_TIMESTAMP: u64 = 10000u64;
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = smol::block_on(mem_pool.lock());
-        construct_block(&chain, &mut mem_pool, vec![]).unwrap()
+        construct_block_with_timestamp(&chain, &mut mem_pool, vec![], BLOCK_TIMESTAMP).unwrap()
     };
     assert_eq!(block_result.block.withdrawals().len(), accounts.len());
 
@@ -221,7 +302,7 @@ fn test_build_unlock_to_owner_tx() {
         .map(|w| (w.hash().into(), w));
     let generated_withdrawals = gw_block_producer::withdrawal::generate(
         &rollup_context,
-        finalized_custodians,
+        finalized_custodians.clone(),
         &block_result.block,
         &block_producer_config,
         &withdrawal_extras.collect(),
@@ -229,6 +310,138 @@ fn test_build_unlock_to_owner_tx() {
     .expect("generate")
     .expect("some withdrawals cell");
 
+    //  Check submit withdrawal cells pass state validator contract
+    const STAKE_CAPACITY: u64 = 1000 * CKB;
+    let input_stake_cell = {
+        let mut lock_args = rollup_script_hash.as_slice().to_vec();
+        lock_args.extend_from_slice(StakeLockArgs::default().as_slice());
+
+        let stake_lock = Script::new_builder()
+            .code_hash(stake_lock_type.hash().pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(lock_args.pack())
+            .build();
+
+        CellInfo {
+            out_point: OutPoint::new_builder()
+                .tx_hash(rand::random::<[u8; 32]>().pack())
+                .build(),
+            output: CellOutput::new_builder()
+                .capacity(STAKE_CAPACITY.pack())
+                .lock(stake_lock)
+                .build(),
+            data: Bytes::default(),
+        }
+    };
+    let output_stake = {
+        let block_number = block_result.block.raw().number();
+        let stake_lock_args = StakeLockArgs::new_builder()
+            .stake_block_number(block_number)
+            .build();
+
+        let mut lock_args = rollup_script_hash.as_slice().to_vec();
+        lock_args.extend_from_slice(stake_lock_args.as_slice());
+
+        let stake_lock = Script::new_builder()
+            .code_hash(stake_lock_type.hash().pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(lock_args.pack())
+            .build();
+
+        let output = CellOutput::new_builder()
+            .capacity(STAKE_CAPACITY.pack())
+            .lock(stake_lock)
+            .build();
+        (output, Bytes::default())
+    };
+
+    let input_custodian_cell = {
+        let mut lock_args = rollup_script_hash.as_slice().to_vec();
+        lock_args.extend_from_slice(CustodianLockArgs::default().as_slice());
+
+        let custodian_lock = Script::new_builder()
+            .code_hash(custodian_lock_type.hash().pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(lock_args.pack())
+            .build();
+
+        let mut finalized_sudt = finalized_custodians.sudt.values().collect::<Vec<_>>();
+        CellInfo {
+            out_point: OutPoint::new_builder()
+                .tx_hash(rand::random::<[u8; 32]>().pack())
+                .build(),
+            output: CellOutput::new_builder()
+                .capacity((finalized_custodians.capacity as u64).pack())
+                .type_(Some(sudt_script.clone()).pack())
+                .lock(custodian_lock)
+                .build(),
+            data: finalized_sudt.pop().unwrap().0.pack().as_bytes(),
+        }
+    };
+
+    let output_rollup_cell = (
+        rollup_cell.output.clone(),
+        block_result.global_state.as_bytes(),
+    );
+    let witness = {
+        let rollup_action = RollupAction::new_builder()
+            .set(RollupActionUnion::RollupSubmitBlock(
+                RollupSubmitBlock::new_builder()
+                    .block(block_result.block.clone())
+                    .build(),
+            ))
+            .build();
+        WitnessArgs::new_builder()
+            .output_type(Some(rollup_action.as_bytes()).pack())
+            .build()
+    };
+
+    let input_cell_deps = vec![
+        into_input_cell(always_cell.clone()),
+        into_input_cell(stake_lock_cell),
+        into_input_cell(state_validator_cell),
+        into_input_cell(custodian_lock_cell),
+        into_input_cell(rollup_config_cell),
+    ];
+    let cell_deps = {
+        let deps = input_cell_deps.iter();
+        deps.map(|i| {
+            CellDep::new_builder()
+                .out_point(i.cell.out_point.to_owned())
+                .dep_type(DepType::Code.into())
+                .build()
+        })
+        .collect::<Vec<_>>()
+    };
+
+    const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
+    let block_since = {
+        let input_timestamp = Duration::from_millis(BLOCK_TIMESTAMP).as_secs() + 1;
+        SINCE_BLOCK_TIMESTAMP_FLAG | input_timestamp
+    };
+    let inputs = vec![
+        into_input_cell_since(input_rollup_cell, block_since),
+        into_input_cell(input_stake_cell),
+        into_input_cell(input_custodian_cell),
+    ];
+    let mut outputs = vec![output_rollup_cell, output_stake];
+    outputs.extend(generated_withdrawals.outputs.clone());
+
+    let mut tx_skeleton = TransactionSkeleton::default();
+    tx_skeleton.cell_deps_mut().extend(cell_deps);
+    tx_skeleton.inputs_mut().extend(inputs.clone());
+    tx_skeleton.witnesses_mut().push(witness);
+    tx_skeleton.outputs_mut().extend(outputs);
+    let tx = tx_skeleton.seal(&[], vec![]).unwrap().transaction;
+
+    let tx_with_context = TxWithContext {
+        tx,
+        cell_deps: input_cell_deps,
+        inputs,
+    };
+    verify_tx(tx_with_context, 7000_0000u64).expect("pass");
+
+    // Check unlock to owner tx
     let random_withdrawal_cells = {
         let outputs = generated_withdrawals.outputs.into_iter();
         outputs
@@ -242,7 +455,6 @@ fn test_build_unlock_to_owner_tx() {
             .collect::<Vec<_>>()
     };
 
-    // Check unlock to owner tx
     let mut unlocker = DummyUnlocker {
         rollup_cell: rollup_cell.clone(),
         rollup_context: rollup_context.clone(),
@@ -359,11 +571,21 @@ fn into_input_cell(cell: CellInfo) -> InputCellInfo {
     }
 }
 
+fn into_input_cell_since(cell: CellInfo, since: u64) -> InputCellInfo {
+    InputCellInfo {
+        input: CellInput::new_builder()
+            .previous_output(cell.out_point.clone())
+            .since(since.pack())
+            .build(),
+        cell,
+    }
+}
+
 fn random_always_success_script(opt_rollup_script_hash: Option<&H256>) -> Script {
     let random_bytes: [u8; 32] = rand::random();
     Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Data.into())
         .args({
             let mut args = opt_rollup_script_hash
                 .map(|h| h.as_slice().to_vec())
