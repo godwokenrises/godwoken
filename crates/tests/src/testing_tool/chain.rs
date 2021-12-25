@@ -34,6 +34,9 @@ use super::mem_pool_provider::DummyMemPoolProvider;
 const SCRIPT_DIR: &str = "../../.tmp/binaries/godwoken-scripts";
 const ALWAYS_SUCCESS_PATH: &str = "always-success";
 const WITHDRAWAL_LOCK_PATH: &str = "withdrawal-lock";
+const STATE_VALIDATOR_TYPE_PATH: &str = "state-validator";
+const STAKE_LOCK_PATH: &str = "stake-lock";
+const CUSTODIAN_LOCK_PATH: &str = "custodian-lock";
 
 lazy_static! {
     pub static ref ALWAYS_SUCCESS_PROGRAM: Bytes = {
@@ -66,6 +69,56 @@ lazy_static! {
         let mut buf = [0u8; 32];
         let mut hasher = new_blake2b();
         hasher.update(&WITHDRAWAL_LOCK_PROGRAM);
+        hasher.finalize(&mut buf);
+        buf
+    };
+    pub static ref STATE_VALIDATOR_TYPE_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut path = PathBuf::new();
+        path.push(&SCRIPT_DIR);
+        path.push(&STATE_VALIDATOR_TYPE_PATH);
+        let mut f = fs::File::open(&path).expect("load state validator type program");
+        f.read_to_end(&mut buf)
+            .expect("read state validator type program");
+        Bytes::from(buf.to_vec())
+    };
+    pub static ref STATE_VALIDATOR_CODE_HASH: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&STATE_VALIDATOR_TYPE_PROGRAM);
+        hasher.finalize(&mut buf);
+        buf
+    };
+    pub static ref STAKE_LOCK_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut path = PathBuf::new();
+        path.push(&SCRIPT_DIR);
+        path.push(&STAKE_LOCK_PATH);
+        let mut f = fs::File::open(&path).expect("load stake lock program");
+        f.read_to_end(&mut buf).expect("read stake lock program");
+        Bytes::from(buf.to_vec())
+    };
+    pub static ref STAKE_LOCK_CODE_HASH: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&STAKE_LOCK_PROGRAM);
+        hasher.finalize(&mut buf);
+        buf
+    };
+    pub static ref CUSTODIAN_LOCK_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut path = PathBuf::new();
+        path.push(&SCRIPT_DIR);
+        path.push(&CUSTODIAN_LOCK_PATH);
+        let mut f = fs::File::open(&path).expect("load custodian lock program");
+        f.read_to_end(&mut buf)
+            .expect("read custodian lock program");
+        Bytes::from(buf.to_vec())
+    };
+    pub static ref CUSTODIAN_LOCK_CODE_HASH: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&CUSTODIAN_LOCK_PROGRAM);
         hasher.finalize(&mut buf);
         buf
     };
@@ -110,6 +163,22 @@ pub fn setup_chain(rollup_type_script: Script) -> Chain {
         .allowed_eoa_type_hashes(vec![*ALWAYS_SUCCESS_CODE_HASH].pack())
         .finality_blocks(DEFAULT_FINALITY_BLOCKS.pack())
         .build();
+    account_lock_manage
+        .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+    let mut chain = setup_chain_with_account_lock_manage(
+        rollup_type_script,
+        rollup_config,
+        account_lock_manage,
+        None,
+        None,
+        None,
+    );
+    chain.complete_initial_syncing().unwrap();
+    chain
+}
+
+pub fn setup_chain_with_config(rollup_type_script: Script, rollup_config: RollupConfig) -> Chain {
+    let mut account_lock_manage = AccountLockManage::default();
     account_lock_manage
         .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
     let mut chain = setup_chain_with_account_lock_manage(
@@ -296,6 +365,15 @@ pub fn construct_block(
     mem_pool: &mut MemPool,
     deposit_requests: Vec<DepositRequest>,
 ) -> anyhow::Result<ProduceBlockResult> {
+    construct_block_with_timestamp(chain, mem_pool, deposit_requests, 0)
+}
+
+pub fn construct_block_with_timestamp(
+    chain: &Chain,
+    mem_pool: &mut MemPool,
+    deposit_requests: Vec<DepositRequest>,
+    timestamp: u64,
+) -> anyhow::Result<ProduceBlockResult> {
     let stake_cell_owner_lock_hash = H256::zero();
     let db = chain.store().begin_transaction();
     let generator = chain.generator();
@@ -356,7 +434,7 @@ pub fn construct_block(
         .collect();
     let provider = DummyMemPoolProvider {
         deposit_cells,
-        fake_blocktime: Duration::from_millis(0),
+        fake_blocktime: Duration::from_millis(timestamp),
         collected_custodians: collected_custodians.clone(),
     };
     mem_pool.set_provider(Box::new(provider));
