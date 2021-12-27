@@ -11,6 +11,7 @@ use gw_types::{
 use std::{cmp::Ordering, convert::TryInto};
 
 const FEE_RATE_WEIGHT_BASE: u64 = 1000;
+const DEFAULT_SUDT_FEE_RATE: u64 = 0;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum FeeItemKind {
@@ -166,7 +167,7 @@ fn parse_withdraw_fee_rate(
         .sudt_fee_rate_weight
         .get(&sudt_id.into())
         .cloned()
-        .unwrap_or(FEE_RATE_WEIGHT_BASE);
+        .unwrap_or(DEFAULT_SUDT_FEE_RATE);
     let fee_amount: u128 = fee.amount().unpack();
     let fee_rate = fee_amount
         .saturating_mul(fee_rate_weight.into())
@@ -198,7 +199,7 @@ fn parse_l2tx_fee_rate(
                 .sudt_fee_rate_weight
                 .get(&sudt_id.into())
                 .cloned()
-                .unwrap_or(FEE_RATE_WEIGHT_BASE);
+                .unwrap_or(DEFAULT_SUDT_FEE_RATE);
 
             // fee rate = fee / cycles_limit * (weight / FEE_RATE_WEIGHT_BASE)
             let fee_rate = fee_amount
@@ -226,7 +227,7 @@ fn parse_l2tx_fee_rate(
                 .sudt_fee_rate_weight
                 .get(&sudt_id.into())
                 .cloned()
-                .unwrap_or(FEE_RATE_WEIGHT_BASE);
+                .unwrap_or(DEFAULT_SUDT_FEE_RATE);
 
             // fee rate = fee / cycles_limit * (weight / FEE_RATE_WEIGHT_BASE)
             let fee_rate = fee_amount
