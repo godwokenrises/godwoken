@@ -309,7 +309,7 @@ pub struct FeeConfig {
     /// HashMap<sudt_id, fee rate weight>
     ///
     /// adjusted fee_rate: fee_rate * weight / 1000
-    /// if sudt_id is not in the map, the weight is 1000
+    /// if sudt_id is not in the map, the weight is 0
     pub sudt_fee_rate_weight: HashMap<Uint32, u64>,
 }
 
