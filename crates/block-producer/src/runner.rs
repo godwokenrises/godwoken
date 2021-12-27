@@ -21,7 +21,8 @@ use gw_generator::{
     Generator,
 };
 use gw_mem_pool::{
-    default_provider::DefaultMemPoolProvider, pool::MemPool, traits::MemPoolErrorTxHandler,
+    default_provider::DefaultMemPoolProvider, pool::MemPool, spawn_sub_mem_pool_task,
+    traits::MemPoolErrorTxHandler,
 };
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
@@ -461,6 +462,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     Box::new(mem_pool_provider),
                     error_tx_handler,
                     config.mem_pool.clone(),
+                    config.node_mode,
                 )
                 .with_context(|| "create mem-pool")?,
             ));
@@ -493,7 +495,6 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         store.check_state()?;
         log::info!("Check state db done: {}ms", t.elapsed().as_millis());
     }
-
     let chain = Arc::new(Mutex::new(
         Chain::create(
             &rollup_config,
@@ -546,7 +547,19 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     );
 
     let (block_producer, challenger, test_mode_control, cleaner) = match config.node_mode {
-        NodeMode::ReadOnly => (None, None, None, None),
+        NodeMode::ReadOnly => {
+            if let Some(sync_mem_block_config) = &config.mem_pool.subscribe {
+                match &mem_pool {
+                    Some(mem_pool) => {
+                        spawn_sub_mem_pool_task(mem_pool.clone(), sync_mem_block_config.clone())?;
+                    }
+                    None => {
+                        log::warn!("Failed to init sync mem block, because mem_pool is None.");
+                    }
+                }
+            }
+            (None, None, None, None)
+        }
         mode => {
             let block_producer_config = config
                 .block_producer

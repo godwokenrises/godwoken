@@ -215,10 +215,24 @@ impl Default for OffChainValidatorConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PublishMemPoolConfig {
+    pub hosts: Vec<String>,
+    pub topic: String,
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SubscribeMemPoolConfig {
+    pub hosts: Vec<String>,
+    pub topic: String,
+    pub group: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MemPoolConfig {
     pub execute_l2tx_max_cycles: u64,
     #[serde(default = "default_restore_path")]
     pub restore_path: PathBuf,
+    pub publish: Option<PublishMemPoolConfig>,
+    pub subscribe: Option<SubscribeMemPoolConfig>,
 }
 
 // Field default value for backward config file compitability
@@ -233,6 +247,8 @@ impl Default for MemPoolConfig {
         Self {
             execute_l2tx_max_cycles: 100_000_000,
             restore_path: default_restore_path(),
+            publish: None,
+            subscribe: None,
         }
     }
 }

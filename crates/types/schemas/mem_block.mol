@@ -51,3 +51,19 @@ table MemBlock {
     post_merkle_state: AccountMerkleState,
     touched_keys: Byte32Vec,
 }
+
+table NextMemBlock {
+    deposits: DepositInfoVec,
+    withdrawals: WithdrawalRequestVec,
+    block_info: BlockInfo,
+}
+
+table NextL2Transaction {
+    tx: L2Transaction,
+    mem_block_number: Uint64,
+}
+
+union RefreshMemBlockMessage {
+    NextL2Transaction,
+    NextMemBlock,
+}
