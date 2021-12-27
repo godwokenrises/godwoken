@@ -138,7 +138,7 @@ fn init_log() {
         .build();
     let level = logger.filter();
     let logger = sentry_log::SentryLogger::with_dest(logger).filter(|md| match md.level() {
-        log::Level::Error => LogFilter::Event,
+        log::Level::Error | log::Level::Warn => LogFilter::Event,
         _ => LogFilter::Ignore,
     });
     log::set_boxed_logger(Box::new(logger))
