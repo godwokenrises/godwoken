@@ -1,6 +1,6 @@
 use anyhow::Result;
 use ckb_types::prelude::Entity;
-use gw_config::BlockProducerConfig;
+use gw_config::ContractsCellDep;
 use gw_types::bytes::Bytes;
 use gw_types::core::ScriptHashType;
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
@@ -19,7 +19,7 @@ pub struct RevertedDeposits {
 
 pub fn revert(
     rollup_context: &RollupContext,
-    block_producer_config: &BlockProducerConfig,
+    contracts_dep: &ContractsCellDep,
     custodian_cells: Vec<CellInfo>,
 ) -> Result<Option<RevertedDeposits>> {
     if custodian_cells.is_empty() {
@@ -80,8 +80,8 @@ pub fn revert(
         deposit_outputs.push((deposit_output, revert_custodian.data.clone()));
     }
 
-    let custodian_lock_dep = block_producer_config.custodian_cell_lock_dep.clone();
-    let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
+    let custodian_lock_dep = contracts_dep.custodian_cell_lock.clone();
+    let sudt_type_dep = contracts_dep.l1_sudt_type.clone();
     let mut cell_deps = vec![custodian_lock_dep.into()];
     if custodian_inputs
         .iter()

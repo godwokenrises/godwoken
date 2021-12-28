@@ -3,7 +3,7 @@ use crate::types::{VerifyContext, VerifyWitness};
 use anyhow::{anyhow, Result};
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
-use gw_config::BlockProducerConfig;
+use gw_config::ContractsCellDep;
 use gw_types::core::{DepType, SigningType, Status};
 use gw_types::offchain::{CellInfo, InputCellInfo, RecoverAccount, RollupContext};
 use gw_types::packed::{
@@ -86,11 +86,11 @@ impl CancelChallengeOutput {
         InputCellInfo { input, cell }
     }
 
-    pub fn verifier_dep(&self, block_producer_config: &BlockProducerConfig) -> Result<CellDep> {
+    pub fn verifier_dep(&self, contracts_dep: &ContractsCellDep) -> Result<CellDep> {
         let lock_code_hash: [u8; 32] = self.verifier_cell.0.lock().code_hash().unpack();
         let mut allowed_script_deps = {
-            let eoa = block_producer_config.allowed_eoa_deps.iter();
-            eoa.chain(block_producer_config.allowed_contract_deps.iter())
+            let eoa = contracts_dep.allowed_eoa_locks.iter();
+            eoa.chain(contracts_dep.allowed_contract_types.iter())
         };
         let has_dep = allowed_script_deps.find(|(code_hash, _)| code_hash.0 == lock_code_hash);
         let to_dep = has_dep.map(|(_, dep)| dep.clone().into());
@@ -294,13 +294,13 @@ impl RecoverAccounts {
         self,
         verifier_tx_hash: H256,
         index_offset: usize,
-        block_producer_config: &BlockProducerConfig,
+        contracts_dep: &ContractsCellDep,
     ) -> Result<RecoverAccountsContext> {
         assert!(index_offset != 0, "verifier cell should be first one");
         let RecoverAccounts { cells, witnesses } = self;
 
         let cell_deps = {
-            let allowed_eoa_deps = &block_producer_config.allowed_eoa_deps;
+            let allowed_eoa_deps = &contracts_dep.allowed_eoa_locks;
             let accounts = cells.iter();
             let to_code_hash: HashSet<_> = accounts
                 .map(|(output, _)| output.lock().code_hash().unpack())

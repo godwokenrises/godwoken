@@ -2140,6 +2140,7 @@ name = "gw-challenge"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "ckb-chain-spec",
  "ckb-fixed-hash 0.100.0",
  "ckb-script",
@@ -2193,6 +2194,7 @@ dependencies = [
  "ckb-fixed-hash 0.100.0",
  "gw-jsonrpc-types",
  "serde",
+ "toml",
 ]
 
 [[package]]
@@ -2324,6 +2326,7 @@ name = "gw-rpc-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "async-channel",
  "async-jsonrpc-client",
  "async-native-tls",

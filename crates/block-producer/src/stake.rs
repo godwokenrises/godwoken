@@ -3,7 +3,7 @@ use ckb_types::{
     bytes::Bytes,
     prelude::{Builder, Entity},
 };
-use gw_config::BlockProducerConfig;
+use gw_config::ContractsCellDep;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::{
     core::{DepType, ScriptHashType},
@@ -23,7 +23,7 @@ pub async fn generate(
     rollup_cell: &CellInfo,
     rollup_context: &RollupContext,
     block: &L2Block,
-    block_producer_config: &BlockProducerConfig,
+    contracts_dep: &ContractsCellDep,
     rpc_client: &RPCClient,
     lock_script: Script,
 ) -> Result<GeneratedStake> {
@@ -60,7 +60,7 @@ pub async fn generate(
         )
         .await?
     {
-        let stake_lock_dep = block_producer_config.stake_cell_lock_dep.clone();
+        let stake_lock_dep = contracts_dep.stake_cell_lock.clone();
         let rollup_cell_dep = CellDep::new_builder()
             .out_point(rollup_cell.out_point.to_owned())
             .dep_type(DepType::Code.into())

@@ -21,6 +21,7 @@ use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::ChallengeContext;
 use gw_jsonrpc_types::test_mode::TestModePayload;
 use gw_poa::{PoA, ShouldIssueBlock};
+use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
 use gw_types::core::{ChallengeTargetType, Status};
@@ -45,6 +46,7 @@ use std::time::{Duration, Instant};
 
 const MAX_CANCEL_CYCLES: u64 = 7000_0000;
 const MAX_CANCEL_TX_BYTES: u64 = ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
+const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
 
 pub struct Challenger {
     rollup_context: RollupContext,
@@ -59,24 +61,43 @@ pub struct Challenger {
     cleaner: Arc<Cleaner>,
     debug_config: DebugConfig,
     offchain_mock_context: OffChainMockContext,
+    contracts_dep_manager: ContractsCellDepManager,
+}
+
+pub struct ChallengerNewArgs {
+    pub rollup_context: RollupContext,
+    pub rpc_client: RPCClient,
+    pub wallet: Wallet,
+    pub config: BlockProducerConfig,
+    pub debug_config: DebugConfig,
+    pub builtin_load_data: HashMap<H256, CellDep>,
+    pub ckb_genesis_info: CKBGenesisInfo,
+    pub chain: Arc<Mutex<Chain>>,
+    pub poa: Arc<Mutex<PoA>>,
+    pub tests_control: Option<TestModeControl>,
+    pub cleaner: Arc<Cleaner>,
+    pub offchain_mock_context: OffChainMockContext,
+    pub contracts_dep_manager: ContractsCellDepManager,
 }
 
 impl Challenger {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        rollup_context: RollupContext,
-        rpc_client: RPCClient,
-        wallet: Wallet,
-        config: BlockProducerConfig,
-        debug_config: DebugConfig,
-        builtin_load_data: HashMap<H256, CellDep>,
-        ckb_genesis_info: CKBGenesisInfo,
-        chain: Arc<Mutex<Chain>>,
-        poa: Arc<Mutex<PoA>>,
-        tests_control: Option<TestModeControl>,
-        cleaner: Arc<Cleaner>,
-        offchain_mock_context: OffChainMockContext,
-    ) -> Self {
+    pub fn new(args: ChallengerNewArgs) -> Self {
+        let ChallengerNewArgs {
+            rollup_context,
+            rpc_client,
+            wallet,
+            config,
+            debug_config,
+            builtin_load_data,
+            ckb_genesis_info,
+            chain,
+            poa,
+            tests_control,
+            cleaner,
+            offchain_mock_context,
+            contracts_dep_manager,
+        } = args;
+
         Self {
             rollup_context,
             rpc_client,
@@ -90,6 +111,7 @@ impl Challenger {
             tests_control,
             cleaner,
             offchain_mock_context,
+            contracts_dep_manager,
         }
     }
 
@@ -207,10 +229,11 @@ impl Challenger {
 
         // Build challenge transaction
         let mut tx_skeleton = TransactionSkeleton::default();
+        let contracts_dep = self.contracts_dep_manager.load();
 
         // Rollup
         let rollup_deps = vec![
-            self.config.rollup_cell_type_dep.clone().into(),
+            contracts_dep.rollup_cell_type.clone().into(),
             self.config.rollup_config_cell_dep.clone().into(),
         ];
         let rollup_output = (
@@ -244,13 +267,8 @@ impl Challenger {
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
-        utils::dry_run_transaction(
-            &self.debug_config,
-            &self.rpc_client,
-            tx.clone(),
-            "challenge block",
-        )
-        .await;
+        self.dry_run_transaction(tx.clone(), "challenge block")
+            .await?;
         utils::dump_transaction(
             &self.debug_config.debug_tx_dump_path,
             &self.rpc_client,
@@ -316,7 +334,8 @@ impl Challenger {
         // Build cancellation transaction
         let challenge_input = to_input_cell_info(challenge_cell);
         let verifier_context = {
-            let cell_dep = cancel_output.verifier_dep(&self.config)?;
+            let contracts_dep = self.contracts_dep_manager.load();
+            let cell_dep = cancel_output.verifier_dep(&contracts_dep)?;
             let input = cancel_output.verifier_input(verifier_tx_hash, 0);
             let witness = cancel_output.verifier_witness.clone();
             let load_data = cancel_output.load_data.take();
@@ -324,7 +343,7 @@ impl Challenger {
             let load_data_context = load_data.map(|ld| ld.into_context(verifier_tx_hash, 0));
             let recover_accounts = cancel_output.recover_accounts.take();
             let recover_accounts_context = recover_accounts
-                .map(|ra| ra.into_context(verifier_tx_hash, load_data_len + 1, &self.config))
+                .map(|ra| ra.into_context(verifier_tx_hash, load_data_len + 1, &contracts_dep))
                 .transpose()?;
 
             VerifierContext::new(
@@ -347,13 +366,8 @@ impl Challenger {
             )
             .await?;
 
-        utils::dry_run_transaction(
-            &self.debug_config,
-            &self.rpc_client,
-            tx.clone(),
-            "cancel challenge",
-        )
-        .await;
+        self.dry_run_transaction(tx.clone(), "cancel challenge")
+            .await?;
         utils::dump_transaction(
             &self.debug_config.debug_tx_dump_path,
             &self.rpc_client,
@@ -454,10 +468,11 @@ impl Challenger {
 
         // Build revert transaction
         let mut tx_skeleton = TransactionSkeleton::default();
+        let contracts_dep = self.contracts_dep_manager.load();
 
         // Rollup
         let rollup_deps = vec![
-            self.config.rollup_cell_type_dep.clone().into(),
+            contracts_dep.rollup_cell_type.clone().into(),
             self.config.rollup_config_cell_dep.clone().into(),
         ];
         let rollup_output = (
@@ -482,13 +497,13 @@ impl Challenger {
 
         // Challenge
         let challenge_input = to_input_cell_info_with_since(challenge_cell, since);
-        let challenge_dep = self.config.challenge_cell_lock_dep.clone().into();
+        let challenge_dep = contracts_dep.challenge_cell_lock.clone().into();
         tx_skeleton.cell_deps_mut().push(challenge_dep);
         tx_skeleton.inputs_mut().push(challenge_input);
 
         // Stake
         let stake_inputs = stake_cells.into_iter().map(to_input_cell_info);
-        let stake_dep = self.config.stake_cell_lock_dep.clone().into();
+        let stake_dep = contracts_dep.stake_cell_lock.clone().into();
         tx_skeleton.cell_deps_mut().push(stake_dep);
         tx_skeleton.inputs_mut().extend(stake_inputs);
 
@@ -505,13 +520,7 @@ impl Challenger {
 
         let tx = self.wallet.sign_tx_skeleton(tx_skeleton)?;
 
-        utils::dry_run_transaction(
-            &self.debug_config,
-            &self.rpc_client,
-            tx.clone(),
-            "revert block",
-        )
-        .await;
+        self.dry_run_transaction(tx.clone(), "revert block").await?;
         utils::dump_transaction(
             &self.debug_config.debug_tx_dump_path,
             &self.rpc_client,
@@ -559,10 +568,11 @@ impl Challenger {
         median_time: Duration,
     ) -> Result<Transaction> {
         let mut tx_skeleton = TransactionSkeleton::default();
+        let contracts_dep = self.contracts_dep_manager.load();
 
         // Rollup
         let rollup_deps = vec![
-            self.config.rollup_cell_type_dep.clone().into(),
+            contracts_dep.rollup_cell_type.clone().into(),
             self.config.rollup_config_cell_dep.clone().into(),
         ];
         let rollup_output = (
@@ -577,7 +587,7 @@ impl Challenger {
         tx_skeleton.witnesses_mut().push(rollup_witness);
 
         // Challenge
-        let challenge_dep = self.config.challenge_cell_lock_dep.clone().into();
+        let challenge_dep = contracts_dep.challenge_cell_lock.clone().into();
         let challenge_witness = cancel_output.challenge_witness;
         tx_skeleton.cell_deps_mut().push(challenge_dep);
         tx_skeleton.inputs_mut().push(challenge_input);
@@ -718,6 +728,28 @@ impl Challenger {
             }
 
             async_std::task::sleep(Duration::new(3, 0)).await;
+        }
+    }
+
+    async fn dry_run_transaction(&self, tx: Transaction, action: &str) -> Result<()> {
+        match self.rpc_client.dry_run_transaction(tx.clone()).await {
+            Ok(cycles) => {
+                log::info!("tx({}) {} cycles: {}", action, tx.hash().pack(), cycles);
+                Ok(())
+            }
+            Err(err) => {
+                log::error!("dry run {} tx {} failed", action, tx.hash().pack());
+
+                let err_str = err.to_string();
+                if err_str.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
+                    if let Err(err) = self.contracts_dep_manager.refresh().await {
+                        // Lets retry on next error
+                        log::error!("[contracts dep] refresh failed {}", err);
+                    }
+                    return Ok(());
+                }
+                Err(err)
+            }
         }
     }
 }

@@ -7,6 +7,7 @@ use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig, OffChainValidatorConfig};
 use gw_poa::PoA;
+use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::state::mem_state_db::MemStateTree;
 use gw_store::transaction::StoreTransaction;
@@ -56,21 +57,36 @@ pub struct CKBGenesisInfo {
 
 #[derive(Clone)]
 pub struct OffChainMockContext {
+    pub contracts_dep_manager: ContractsCellDepManager,
     pub rollup_cell_deps: RollupCellDeps,
     pub mock_rollup: Arc<MockRollup>,
     pub mock_poa: Arc<MockPoA>,
 }
 
+pub struct OffChainMockContextBuildArgs<'a> {
+    pub rpc_client: &'a RPCClient,
+    pub poa: &'a PoA,
+    pub rollup_context: RollupContext,
+    pub wallet: Wallet,
+    pub config: BlockProducerConfig,
+    pub ckb_genesis_info: CKBGenesisInfo,
+    pub builtin_load_data: HashMap<H256, CellDep>,
+    pub contracts_dep_manager: ContractsCellDepManager,
+}
+
 impl OffChainMockContext {
-    pub async fn build(
-        rpc_client: &RPCClient,
-        poa: &PoA,
-        rollup_context: RollupContext,
-        wallet: Wallet,
-        config: BlockProducerConfig,
-        ckb_genesis_info: CKBGenesisInfo,
-        builtin_load_data: HashMap<H256, CellDep>,
-    ) -> Result<Self> {
+    pub async fn build(args: OffChainMockContextBuildArgs<'_>) -> Result<Self> {
+        let OffChainMockContextBuildArgs {
+            rpc_client,
+            poa,
+            rollup_context,
+            wallet,
+            config,
+            ckb_genesis_info,
+            builtin_load_data,
+            contracts_dep_manager,
+        } = args;
+
         let rollup_cell = {
             let query = rpc_client.query_rollup_cell().await?;
             into_input_cell_info(query.ok_or_else(|| anyhow!("can't found rollup cell"))?)
@@ -86,24 +102,27 @@ impl OffChainMockContext {
                 config,
                 ckb_genesis_info,
                 builtin_load_data,
+                contracts_dep_manager: contracts_dep_manager.clone(),
             };
             Arc::new(mock)
         };
 
+        // FIXME: Update rollup_cell_deps after contracts dep manager refresh
+        // FIXME: cancel challenge
         let rollup_deps: Vec<CellDep> = {
             let mut deps = vec![
-                mock_rollup.config.rollup_cell_type_dep.clone().into(),
+                mock_rollup.cell_deps().rollup_cell_type.clone().into(),
                 mock_rollup.config.rollup_config_cell_dep.clone().into(),
-                mock_rollup.config.challenge_cell_lock_dep.clone().into(),
+                mock_rollup.cell_deps().challenge_cell_lock.clone().into(),
                 mock_rollup.ckb_genesis_info.sighash_dep.clone(),
             ];
             deps.extend({
-                let contract_deps = mock_rollup.config.allowed_contract_deps.values();
-                contract_deps.cloned().map(CellDep::from)
+                let contract_deps = mock_rollup.cell_deps().allowed_contract_types.clone();
+                contract_deps.into_values().map(CellDep::from)
             });
             deps.extend({
-                let eoa_deps = mock_rollup.config.allowed_eoa_deps.values();
-                eoa_deps.cloned().map(CellDep::from)
+                let eoa_deps = mock_rollup.cell_deps().allowed_eoa_locks.clone();
+                eoa_deps.into_values().map(CellDep::from)
             });
             deps.extend(mock_rollup.builtin_load_data.values().cloned());
             deps.extend(mock_poa.cell_deps.clone());
@@ -114,6 +133,7 @@ impl OffChainMockContext {
         let rollup_cell_deps = RollupCellDeps::new(resolved_rollup_deps);
 
         let mock_context = OffChainMockContext {
+            contracts_dep_manager,
             rollup_cell_deps,
             mock_rollup,
             mock_poa,
@@ -124,6 +144,7 @@ impl OffChainMockContext {
 
     pub fn replace_scripts(&self, scripts: &HashMap<ckb_types::H256, PathBuf>) -> Result<Self> {
         let mock_context = OffChainMockContext {
+            contracts_dep_manager: self.contracts_dep_manager.clone(),
             rollup_cell_deps: self.rollup_cell_deps.replace_scripts(scripts)?,
             mock_rollup: Arc::clone(&self.mock_rollup),
             mock_poa: Arc::clone(&self.mock_poa),

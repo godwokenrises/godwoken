@@ -7,13 +7,16 @@ use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_config::{
-    BackendConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config, GenesisConfig,
-    NodeMode, RPCClientConfig, RPCServerConfig, StoreConfig, WalletConfig, Web3IndexerConfig,
+    BackendConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config,
+    ContractTypeScriptConfig, GenesisConfig, NodeMode, RPCClientConfig, RPCServerConfig,
+    StoreConfig, WalletConfig, Web3IndexerConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
 use std::collections::HashMap;
+use std::iter::FromIterator;
 use std::path::Path;
+use std::time::Duration;
 
 pub struct GenerateNodeConfigArgs<'a> {
     pub rollup_result: &'a RollupDeploymentResult,
@@ -108,101 +111,14 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         let dep: ckb_types::packed::CellDep = scripts_deployment.poa_state.cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
-    let rollup_cell_type_dep = {
-        let dep: ckb_types::packed::CellDep =
-            scripts_deployment.state_validator.cell_dep.clone().into();
-        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
-    };
-    let deposit_cell_lock_dep = {
-        let dep: ckb_types::packed::CellDep =
-            scripts_deployment.deposit_lock.cell_dep.clone().into();
-        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
-    };
-    let stake_cell_lock_dep = {
-        let dep: ckb_types::packed::CellDep = scripts_deployment.stake_lock.cell_dep.clone().into();
-        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
-    };
     let (_data, secp_data_dep) =
         get_secp_data(&mut rpc_client).map_err(|err| anyhow!("{}", err))?;
-    let custodian_cell_lock_dep = {
-        let dep: ckb_types::packed::CellDep =
-            scripts_deployment.custodian_lock.cell_dep.clone().into();
-        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
-    };
-    let withdrawal_cell_lock_dep = {
-        let dep: ckb_types::packed::CellDep =
-            scripts_deployment.withdrawal_lock.cell_dep.clone().into();
-        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
-    };
-    let challenge_cell_lock_dep = {
-        let dep: ckb_types::packed::CellDep =
-            scripts_deployment.challenge_lock.cell_dep.clone().into();
-        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
-    };
 
-    // TODO: automatic generation
-    let l1_sudt_type_dep = {
-        let dep: ckb_types::packed::CellDep = user_rollup_config.l1_sudt_cell_dep.clone().into();
-        let dep = gw_types::packed::CellDep::new_unchecked(dep.as_bytes());
-        dep.into()
-    };
-
-    // Allowed eoa script deps
-    let mut allowed_eoa_deps = HashMap::new();
-    let eth_account_lock_dep = {
-        let dep: ckb_types::packed::CellDep =
-            scripts_deployment.eth_account_lock.cell_dep.clone().into();
-        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
-    };
-    allowed_eoa_deps.insert(
-        scripts_deployment.eth_account_lock.script_type_hash.clone(),
-        eth_account_lock_dep,
-    );
-
-    // Allowed contract script deps
-    let mut allowed_contract_deps = HashMap::new();
-    let meta_contract_validator_dep = {
-        let dep: ckb_types::packed::CellDep = scripts_deployment
-            .meta_contract_validator
-            .cell_dep
-            .clone()
-            .into();
-        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
-    };
-    allowed_contract_deps.insert(
-        scripts_deployment
-            .meta_contract_validator
-            .script_type_hash
-            .clone(),
-        meta_contract_validator_dep,
-    );
-    let l2_sudt_validator_dep = {
-        let dep: ckb_types::packed::CellDep =
-            scripts_deployment.l2_sudt_validator.cell_dep.clone().into();
-        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
-    };
-    allowed_contract_deps.insert(
-        scripts_deployment
-            .l2_sudt_validator
-            .script_type_hash
-            .clone(),
-        l2_sudt_validator_dep,
-    );
-    let polyjuice_validator_dep = {
-        let dep: ckb_types::packed::CellDep = scripts_deployment
-            .polyjuice_validator
-            .cell_dep
-            .clone()
-            .into();
-        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
-    };
-    allowed_contract_deps.insert(
-        scripts_deployment
-            .polyjuice_validator
-            .script_type_hash
-            .clone(),
-        polyjuice_validator_dep,
-    );
+    let contract_type_scripts = smol::block_on(query_contracts_script(
+        ckb_url.clone(),
+        scripts_deployment,
+        user_rollup_config,
+    ))?;
 
     let challenger_config = ChallengerConfig {
         rewards_receiver_lock: {
@@ -279,21 +195,14 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
     let block_producer: Option<BlockProducerConfig> = Some(BlockProducerConfig {
         account_id,
         // cell deps
+        rollup_config_cell_dep,
         poa_lock_dep,
         poa_state_dep,
-        rollup_cell_type_dep,
-        rollup_config_cell_dep,
-        deposit_cell_lock_dep,
-        stake_cell_lock_dep,
-        custodian_cell_lock_dep,
-        withdrawal_cell_lock_dep,
-        challenge_cell_lock_dep,
-        l1_sudt_type_dep,
-        allowed_eoa_deps,
-        allowed_contract_deps,
         challenger_config,
         wallet_config,
         check_mem_block_before_submit: false,
+        contract_type_scripts,
+        ..Default::default()
     });
     let genesis: GenesisConfig = GenesisConfig {
         timestamp: rollup_result.timestamp,
@@ -340,4 +249,120 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
     };
 
     Ok(config)
+}
+
+async fn query_contracts_script(
+    ckb_url: String,
+    deployment: &ScriptsDeploymentResult,
+    user_rollup_config: &UserRollupConfig,
+) -> Result<ContractTypeScriptConfig> {
+    use ckb_jsonrpc_types::CellDep;
+
+    let rpc_client = async_jsonrpc_client::HttpClient::builder()
+        .timeout(Duration::from_secs(15))
+        .build(ckb_url.to_owned())?;
+
+    let query = |contract: &'static str, cell_dep: CellDep| -> _ {
+        gw_rpc_client::contract::query_type_script(&rpc_client, contract, cell_dep.into())
+    };
+
+    let state_validator = query(
+        "state validator",
+        deployment.state_validator.cell_dep.clone(),
+    )
+    .await?;
+    assert_eq!(
+        state_validator.hash(),
+        deployment.state_validator.script_type_hash
+    );
+
+    let deposit_lock = query("deposit", deployment.deposit_lock.cell_dep.clone()).await?;
+    assert_eq!(
+        deposit_lock.hash(),
+        deployment.deposit_lock.script_type_hash
+    );
+
+    let stake_lock = query("stake", deployment.stake_lock.cell_dep.clone()).await?;
+    assert_eq!(stake_lock.hash(), deployment.stake_lock.script_type_hash);
+
+    let custodian_lock = query("custodian", deployment.custodian_lock.cell_dep.clone()).await?;
+    assert_eq!(
+        custodian_lock.hash(),
+        deployment.custodian_lock.script_type_hash
+    );
+
+    let withdrawal_lock = query("withdrawal", deployment.withdrawal_lock.cell_dep.clone()).await?;
+    assert_eq!(
+        withdrawal_lock.hash(),
+        deployment.withdrawal_lock.script_type_hash
+    );
+
+    let challenge_lock = query("challenge", deployment.challenge_lock.cell_dep.clone()).await?;
+    assert_eq!(
+        challenge_lock.hash(),
+        deployment.challenge_lock.script_type_hash
+    );
+
+    let l1_sudt = query("l1 sudt", user_rollup_config.l1_sudt_cell_dep.clone()).await?;
+    assert_eq!(l1_sudt.hash(), user_rollup_config.l1_sudt_script_type_hash);
+
+    // Allowed eoa script deps
+    let eth_account_lock =
+        query("eth account", deployment.eth_account_lock.cell_dep.clone()).await?;
+    assert_eq!(
+        eth_account_lock.hash(),
+        deployment.eth_account_lock.script_type_hash
+    );
+
+    let tron_account_lock = query(
+        "tron account",
+        deployment.tron_account_lock.cell_dep.clone(),
+    )
+    .await?;
+    assert_eq!(
+        tron_account_lock.hash(),
+        deployment.tron_account_lock.script_type_hash
+    );
+    // Allowed contract script deps
+    let meta_validator = query("meta", deployment.meta_contract_validator.cell_dep.clone()).await?;
+    assert_eq!(
+        meta_validator.hash(),
+        deployment.meta_contract_validator.script_type_hash
+    );
+
+    let l2_sudt_validator = query("l2 sudt", deployment.l2_sudt_validator.cell_dep.clone()).await?;
+    assert_eq!(
+        l2_sudt_validator.hash(),
+        deployment.l2_sudt_validator.script_type_hash
+    );
+
+    let polyjuice_validator =
+        query("polyjuice", deployment.polyjuice_validator.cell_dep.clone()).await?;
+    assert_eq!(
+        polyjuice_validator.hash(),
+        deployment.polyjuice_validator.script_type_hash
+    );
+
+    let allowed_eoa_scripts: HashMap<_, _> = HashMap::from_iter([
+        (eth_account_lock.hash(), eth_account_lock),
+        (tron_account_lock.hash(), tron_account_lock),
+    ]);
+
+    let allowed_contract_scripts: HashMap<_, _> = HashMap::from_iter([
+        (meta_validator.hash(), meta_validator),
+        (l2_sudt_validator.hash(), l2_sudt_validator),
+        (polyjuice_validator.hash(), polyjuice_validator),
+    ]);
+
+    Ok(ContractTypeScriptConfig {
+        state_validator,
+        deposit_lock,
+        stake_lock,
+        custodian_lock,
+        withdrawal_lock,
+        challenge_lock,
+        l1_sudt,
+        allowed_eoa_scripts,
+        allowed_contract_scripts,
+    })
 }

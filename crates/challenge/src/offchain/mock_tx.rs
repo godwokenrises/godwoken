@@ -5,13 +5,15 @@ use crate::cancel_challenge::{
 use crate::enter_challenge::EnterChallenge;
 use crate::offchain::{mock_poa::MockPoA, CKBGenesisInfo};
 use crate::types::VerifyContext;
+use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
 use gw_utils::wallet::Wallet;
 
 use anyhow::Result;
+use arc_swap::Guard;
 use gw_common::blake2b::new_blake2b;
 use gw_common::H256;
-use gw_config::BlockProducerConfig;
+use gw_config::{BlockProducerConfig, ContractsCellDep};
 use gw_generator::ChallengeContext;
 use gw_types::bytes::Bytes;
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext};
@@ -22,6 +24,7 @@ use gw_types::packed::{
 use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 pub struct MockRollup {
     pub rollup_type_script: ScriptOpt,
@@ -30,6 +33,7 @@ pub struct MockRollup {
     pub config: BlockProducerConfig,
     pub ckb_genesis_info: CKBGenesisInfo,
     pub builtin_load_data: HashMap<H256, CellDep>,
+    pub contracts_dep_manager: ContractsCellDepManager,
 }
 
 #[derive(Clone)]
@@ -66,7 +70,9 @@ pub fn mock_cancel_challenge_tx(
         load_data_strategy,
     )?;
 
-    let verifier_context = VerifierContext::mock_from(&mut cancel_output, &mock_rollup.config)?;
+    let contracts_dep = mock_rollup.cell_deps();
+    let verifier_context = VerifierContext::mock_from(&mut cancel_output, &contracts_dep)?;
+    let contracts_dep = mock_rollup.contracts_dep_manager.load();
 
     let mut tx_skeleton = TransactionSkeleton::default();
     let mut cell_deps = Vec::new();
@@ -81,7 +87,7 @@ pub fn mock_cancel_challenge_tx(
     inputs.push(rollup_input.clone());
 
     let rollup_deps = vec![
-        mock_rollup.config.rollup_cell_type_dep.clone().into(),
+        contracts_dep.rollup_cell_type.clone().into(),
         mock_rollup.config.rollup_config_cell_dep.clone().into(),
     ];
     let rollup_output = (
@@ -98,7 +104,7 @@ pub fn mock_cancel_challenge_tx(
     // Challenge
     inputs.push(challenge_input.clone());
 
-    let challenge_dep = mock_rollup.config.challenge_cell_lock_dep.clone().into();
+    let challenge_dep = contracts_dep.challenge_cell_lock.clone().into();
     let challenge_witness = cancel_output.challenge_witness;
     tx_skeleton.cell_deps_mut().push(challenge_dep);
     tx_skeleton.inputs_mut().push(challenge_input);
@@ -193,6 +199,7 @@ impl MockRollup {
         ckb_genesis_info: CKBGenesisInfo,
         config: BlockProducerConfig,
         builtin_load_data: HashMap<H256, CellDep>,
+        contracts_dep_manager: ContractsCellDepManager,
     ) -> Self {
         MockRollup {
             rollup_type_script,
@@ -201,7 +208,12 @@ impl MockRollup {
             config,
             ckb_genesis_info,
             builtin_load_data,
+            contracts_dep_manager,
         }
+    }
+
+    pub fn cell_deps(&self) -> Guard<Arc<ContractsCellDep>> {
+        self.contracts_dep_manager.load()
     }
 
     fn mock_owner_cell(&self) -> InputCellInfo {
@@ -395,7 +407,7 @@ struct VerifierContext {
 impl VerifierContext {
     fn mock_from(
         cancel_output: &mut CancelChallengeOutput,
-        config: &BlockProducerConfig,
+        contracts_dep: &ContractsCellDep,
     ) -> Result<VerifierContext> {
         let verifier_tx_hash = random_hash().unpack();
         let load_data_len = {
@@ -405,11 +417,11 @@ impl VerifierContext {
 
         let to_ctx = |load_data: LoadData| load_data.into_context(verifier_tx_hash, 0);
         let to_recv_ctx = |recover_accounts: RecoverAccounts| -> Result<_> {
-            recover_accounts.into_context(verifier_tx_hash, load_data_len + 1, config)
+            recover_accounts.into_context(verifier_tx_hash, load_data_len + 1, contracts_dep)
         };
 
         let verifier_context = VerifierContext {
-            cell_dep: cancel_output.verifier_dep(config)?,
+            cell_dep: cancel_output.verifier_dep(contracts_dep)?,
             input: cancel_output.verifier_input(verifier_tx_hash, 0),
             witness: cancel_output.verifier_witness.clone(),
             load_data_context: cancel_output.load_data.take().map(to_ctx),
