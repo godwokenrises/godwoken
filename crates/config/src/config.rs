@@ -34,6 +34,7 @@ pub struct Config {
     pub store: StoreConfig,
     #[serde(default)]
     pub fee: FeeConfig,
+    pub sentry_dsn: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]

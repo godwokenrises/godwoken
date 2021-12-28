@@ -406,6 +406,17 @@ impl BaseInitComponents {
 }
 
 pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
+    // Set up sentry.
+    let _guard = match &config.sentry_dsn.as_ref() {
+        Some(sentry_dsn) => sentry::init((
+            sentry_dsn.as_str(),
+            sentry::ClientOptions {
+                release: sentry::release_name!(),
+                ..Default::default()
+            },
+        )),
+        None => sentry::init(()),
+    };
     // Enable smol threads before smol::spawn
     let runtime_threads = match std::env::var(SMOL_THREADS_ENV_VAR) {
         Ok(s) => s.parse()?,
