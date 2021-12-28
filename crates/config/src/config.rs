@@ -110,33 +110,71 @@ pub struct ChallengerConfig {
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ContractTypeScriptConfig {
+    pub state_validator: Script,
+    pub deposit_lock: Script,
+    pub stake_lock: Script,
+    pub custodian_lock: Script,
+    pub withdrawal_lock: Script,
+    pub challenge_lock: Script,
+    pub l1_sudt: Script,
+    pub allowed_eoa_scripts: HashMap<H256, Script>,
+    pub allowed_contract_scripts: HashMap<H256, Script>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ContractsCellDep {
+    pub rollup_cell_type: CellDep,
+    pub deposit_cell_lock: CellDep,
+    pub stake_cell_lock: CellDep,
+    pub custodian_cell_lock: CellDep,
+    pub withdrawal_cell_lock: CellDep,
+    pub challenge_cell_lock: CellDep,
+    pub l1_sudt_type: CellDep,
+    pub allowed_eoa_locks: HashMap<H256, CellDep>,
+    pub allowed_contract_types: HashMap<H256, CellDep>,
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockProducerConfig {
     pub account_id: u32,
     #[serde(default = "default_check_mem_block_before_submit")]
     pub check_mem_block_before_submit: bool,
     // cell deps
+    #[deprecated]
+    #[serde(skip_serializing)]
     pub rollup_cell_type_dep: CellDep,
     pub rollup_config_cell_dep: CellDep,
-    #[serde(skip)]
+    #[deprecated]
+    #[serde(skip_serializing)]
     pub deposit_cell_lock_dep: CellDep,
-    #[serde(skip)]
+    #[deprecated]
+    #[serde(skip_serializing)]
     pub stake_cell_lock_dep: CellDep,
     pub poa_lock_dep: CellDep,
     pub poa_state_dep: CellDep,
-    #[serde(skip)]
+    #[deprecated]
+    #[serde(skip_serializing)]
     pub custodian_cell_lock_dep: CellDep,
-    #[serde(skip)]
+    #[deprecated]
+    #[serde(skip_serializing)]
     pub withdrawal_cell_lock_dep: CellDep,
-    #[serde(skip)]
+    #[deprecated]
+    #[serde(skip_serializing)]
     pub challenge_cell_lock_dep: CellDep,
-    #[serde(skip)]
+    #[deprecated]
+    #[serde(skip_serializing)]
     pub l1_sudt_type_dep: CellDep,
-    #[serde(skip)]
+    #[deprecated]
+    #[serde(skip_serializing)]
     pub allowed_eoa_deps: HashMap<H256, CellDep>,
-    #[serde(skip)]
+    #[deprecated]
+    #[serde(skip_serializing)]
     pub allowed_contract_deps: HashMap<H256, CellDep>,
     pub challenger_config: ChallengerConfig,
     pub wallet_config: WalletConfig,
+    #[serde(default)]
+    pub contract_type_scripts: ContractTypeScriptConfig,
 }
 
 fn default_check_mem_block_before_submit() -> bool {
@@ -333,5 +371,70 @@ impl Default for FeeConfig {
             withdraw_cycles_limit: 20000, // 20K cycles
             sudt_fee_rate_weight,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::collections::HashMap;
+
+    use ckb_fixed_hash::H256;
+    use gw_jsonrpc_types::blockchain::{CellDep, OutPoint};
+    use serde::{Deserialize, Serialize};
+
+    use crate::{BlockProducerConfig, ChallengerConfig, WalletConfig};
+
+    #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct OldBlockProducerConfig {
+        pub account_id: u32,
+        #[serde(default = "default_check_mem_block_before_submit")]
+        pub check_mem_block_before_submit: bool,
+        // cell deps
+        pub rollup_cell_type_dep: CellDep,
+        pub rollup_config_cell_dep: CellDep,
+        pub deposit_cell_lock_dep: CellDep,
+        pub stake_cell_lock_dep: CellDep,
+        pub poa_lock_dep: CellDep,
+        pub poa_state_dep: CellDep,
+        pub custodian_cell_lock_dep: CellDep,
+        pub withdrawal_cell_lock_dep: CellDep,
+        pub challenge_cell_lock_dep: CellDep,
+        pub l1_sudt_type_dep: CellDep,
+        pub allowed_eoa_deps: HashMap<H256, CellDep>,
+        pub allowed_contract_deps: HashMap<H256, CellDep>,
+        pub challenger_config: ChallengerConfig,
+        pub wallet_config: WalletConfig,
+    }
+
+    fn default_check_mem_block_before_submit() -> bool {
+        false
+    }
+
+    #[allow(deprecated)]
+    #[test]
+    fn test_block_producer_config_serde() {
+        let expected_rollup_cell_type_dep = CellDep {
+            out_point: OutPoint {
+                tx_hash: H256([1u8; 32]),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let old_config = OldBlockProducerConfig {
+            rollup_cell_type_dep: expected_rollup_cell_type_dep.clone(),
+            ..Default::default()
+        };
+
+        let toml_config = toml::to_string(&old_config).unwrap();
+        let config: BlockProducerConfig = toml::from_str(&toml_config).expect("parse toml config");
+        assert_eq!(config.rollup_cell_type_dep, expected_rollup_cell_type_dep);
+
+        // Serialize from new config should skip deprecated fields
+        let new_toml_config = toml::to_string(&config).unwrap();
+        let err = toml::from_str::<OldBlockProducerConfig>(&new_toml_config).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("missing field `rollup_cell_type_dep`"));
     }
 }

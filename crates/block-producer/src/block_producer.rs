@@ -21,7 +21,7 @@ use gw_mem_pool::{
     pool::{MemPool, OutputParam},
 };
 use gw_poa::{PoA, ShouldIssueBlock};
-use gw_rpc_client::rpc_client::RPCClient;
+use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     bytes::Bytes,
@@ -158,22 +158,39 @@ pub struct BlockProducer {
     tests_control: Option<TestModeControl>,
     last_committed_l2_block: LastCommittedL2Block,
     last_submitted_tx_hash: Arc<smol::lock::RwLock<H256>>,
+    contracts_dep_manager: ContractsCellDepManager,
+}
+
+pub struct BlockProducerCreateArgs {
+    pub rollup_config_hash: H256,
+    pub store: Store,
+    pub generator: Arc<Generator>,
+    pub chain: Arc<Mutex<Chain>>,
+    pub mem_pool: Arc<Mutex<MemPool>>,
+    pub rpc_client: RPCClient,
+    pub ckb_genesis_info: CKBGenesisInfo,
+    pub config: BlockProducerConfig,
+    pub debug_config: DebugConfig,
+    pub tests_control: Option<TestModeControl>,
+    pub contracts_dep_manager: ContractsCellDepManager,
 }
 
 impl BlockProducer {
-    #[allow(clippy::too_many_arguments)]
-    pub fn create(
-        rollup_config_hash: H256,
-        store: Store,
-        generator: Arc<Generator>,
-        chain: Arc<Mutex<Chain>>,
-        mem_pool: Arc<Mutex<MemPool>>,
-        rpc_client: RPCClient,
-        ckb_genesis_info: CKBGenesisInfo,
-        config: BlockProducerConfig,
-        debug_config: DebugConfig,
-        tests_control: Option<TestModeControl>,
-    ) -> Result<Self> {
+    pub fn create(args: BlockProducerCreateArgs) -> Result<Self> {
+        let BlockProducerCreateArgs {
+            rollup_config_hash,
+            store,
+            generator,
+            chain,
+            mem_pool,
+            rpc_client,
+            ckb_genesis_info,
+            config,
+            debug_config,
+            tests_control,
+            contracts_dep_manager,
+        } = args;
+
         let wallet = Wallet::from_config(&config.wallet_config).with_context(|| "init wallet")?;
         let poa = PoA::new(
             rpc_client.clone(),
@@ -208,6 +225,7 @@ impl BlockProducer {
                 ))
             },
             store,
+            contracts_dep_manager,
         };
         Ok(block_producer)
     }
@@ -508,6 +526,12 @@ impl BlockProducer {
             Err(err) => {
                 let err_str = err.to_string();
                 if err_str.contains(TRANSACTION_FAILED_TO_RESOLVE_ERROR) {
+                    // TODO: check dead out point
+                    if let Err(err) = self.contracts_dep_manager.refresh().await {
+                        // Lets retry on next error
+                        log::error!("[contracts dep] refresh failed {}", err);
+                    }
+
                     log::info!("Skip submitting l2 block since CKB can't resolve tx, previous block may haven't been processed by CKB");
                     return Ok(SubmitResult::Skip);
                 } else {
@@ -592,17 +616,18 @@ impl BlockProducer {
                 .build(),
             cell: rollup_cell.clone(),
         });
+        let contracts_dep = self.contracts_dep_manager.load();
         // rollup deps
         tx_skeleton
             .cell_deps_mut()
-            .push(self.config.rollup_cell_type_dep.clone().into());
+            .push(contracts_dep.rollup_cell_type.clone().into());
         // rollup config cell
         tx_skeleton
             .cell_deps_mut()
             .push(self.config.rollup_config_cell_dep.clone().into());
         // deposit lock dep
         if !deposit_cells.is_empty() {
-            let cell_dep: CellDep = self.config.deposit_cell_lock_dep.clone().into();
+            let cell_dep: CellDep = contracts_dep.deposit_cell_lock.clone().into();
             tx_skeleton
                 .cell_deps_mut()
                 .push(CellDep::new_unchecked(cell_dep.as_bytes()));
@@ -765,7 +790,7 @@ impl BlockProducer {
             &rollup_cell,
             rollup_context,
             &block,
-            &self.config,
+            &contracts_dep,
             &self.rpc_client,
             self.wallet.lock_script().to_owned(),
         )
@@ -777,9 +802,12 @@ impl BlockProducer {
             .push((generated_stake.output, generated_stake.output_data));
 
         // withdrawal cells
-        if let Some(generated_withdrawal_cells) =
-            crate::withdrawal::generate(rollup_context, finalized_custodians, &block, &self.config)?
-        {
+        if let Some(generated_withdrawal_cells) = crate::withdrawal::generate(
+            rollup_context,
+            finalized_custodians,
+            &block,
+            &contracts_dep,
+        )? {
             tx_skeleton
                 .cell_deps_mut()
                 .extend(generated_withdrawal_cells.deps);
@@ -792,7 +820,7 @@ impl BlockProducer {
         }
 
         if let Some(reverted_deposits) =
-            crate::deposit::revert(rollup_context, &self.config, revert_custodians)?
+            crate::deposit::revert(rollup_context, &contracts_dep, revert_custodians)?
         {
             log::info!("reverted deposits {}", reverted_deposits.inputs.len());
 
@@ -818,7 +846,7 @@ impl BlockProducer {
 
         // reverted withdrawal cells
         if let Some(reverted_withdrawals) =
-            crate::withdrawal::revert(rollup_context, &self.config, revert_withdrawals)?
+            crate::withdrawal::revert(rollup_context, &contracts_dep, revert_withdrawals)?
         {
             log::info!("reverted withdrawals {}", reverted_withdrawals.inputs.len());
 

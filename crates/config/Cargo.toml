@@ -10,3 +10,6 @@ edition = "2018"
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 ckb-fixed-hash = "0.100.0"
 serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+toml = "0.5"

@@ -12,6 +12,8 @@ pub enum ScriptHashType {
     Data,
     /// Type "type" matches script code via cell type script hash.
     Type,
+    /// Type "data" matches script code via cell data hash, and run the script code in v1 CKB VM.
+    Data1,
 }
 
 impl Default for ScriptHashType {
@@ -25,9 +27,31 @@ impl From<ScriptHashType> for packed::Byte {
         match json {
             ScriptHashType::Data => packed::Byte::new(0),
             ScriptHashType::Type => packed::Byte::new(1),
+            ScriptHashType::Data1 => packed::Byte::new(2),
         }
     }
 }
+
+impl From<ckb_jsonrpc_types::ScriptHashType> for ScriptHashType {
+    fn from(hash_type: ckb_jsonrpc_types::ScriptHashType) -> ScriptHashType {
+        match hash_type {
+            ckb_jsonrpc_types::ScriptHashType::Data => ScriptHashType::Data,
+            ckb_jsonrpc_types::ScriptHashType::Type => ScriptHashType::Type,
+            ckb_jsonrpc_types::ScriptHashType::Data1 => ScriptHashType::Data1,
+        }
+    }
+}
+
+impl From<ScriptHashType> for ckb_jsonrpc_types::ScriptHashType {
+    fn from(hash_type: ScriptHashType) -> ckb_jsonrpc_types::ScriptHashType {
+        match hash_type {
+            ScriptHashType::Data => ckb_jsonrpc_types::ScriptHashType::Data,
+            ScriptHashType::Type => ckb_jsonrpc_types::ScriptHashType::Type,
+            ScriptHashType::Data1 => ckb_jsonrpc_types::ScriptHashType::Data1,
+        }
+    }
+}
+
 impl TryFrom<packed::Byte> for ScriptHashType {
     type Error = JsonError;
 
@@ -35,6 +59,7 @@ impl TryFrom<packed::Byte> for ScriptHashType {
         match u8::from(v) {
             0 => Ok(ScriptHashType::Data),
             1 => Ok(ScriptHashType::Type),
+            2 => Ok(ScriptHashType::Data1),
             _ => Err(anyhow!("Invalid script hash type {}", v)),
         }
     }
@@ -49,6 +74,13 @@ pub struct Script {
     pub hash_type: ScriptHashType,
     /// Arguments for script.
     pub args: JsonBytes,
+}
+
+impl Script {
+    pub fn hash(&self) -> H256 {
+        let script: packed::Script = self.to_owned().into();
+        H256(script.hash())
+    }
 }
 
 impl From<Script> for packed::Script {
@@ -72,6 +104,26 @@ impl From<packed::Script> for Script {
             code_hash: input.code_hash().unpack(),
             args: JsonBytes::from_bytes(input.args().unpack()),
             hash_type: ScriptHashType::try_from(input.hash_type()).expect("checked data"),
+        }
+    }
+}
+
+impl From<ckb_jsonrpc_types::Script> for Script {
+    fn from(script: ckb_jsonrpc_types::Script) -> Script {
+        Script {
+            code_hash: script.code_hash,
+            hash_type: script.hash_type.into(),
+            args: script.args,
+        }
+    }
+}
+
+impl From<Script> for ckb_jsonrpc_types::Script {
+    fn from(script: Script) -> ckb_jsonrpc_types::Script {
+        ckb_jsonrpc_types::Script {
+            code_hash: script.code_hash,
+            hash_type: script.hash_type.into(),
+            args: script.args,
         }
     }
 }
@@ -148,6 +200,15 @@ impl From<packed::CellDep> for CellDep {
     }
 }
 
+impl From<ckb_jsonrpc_types::CellDep> for CellDep {
+    fn from(cell_dep: ckb_jsonrpc_types::CellDep) -> CellDep {
+        CellDep {
+            dep_type: cell_dep.dep_type.into(),
+            out_point: cell_dep.out_point.into(),
+        }
+    }
+}
+
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct CellInput {
@@ -206,6 +267,15 @@ impl From<packed::OutPoint> for OutPoint {
     }
 }
 
+impl From<ckb_jsonrpc_types::OutPoint> for OutPoint {
+    fn from(out_point: ckb_jsonrpc_types::OutPoint) -> OutPoint {
+        OutPoint {
+            tx_hash: out_point.tx_hash,
+            index: out_point.index,
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum DepType {
@@ -238,6 +308,15 @@ impl From<packed::Byte> for DepType {
         match dep_type {
             gw_types::core::DepType::Code => DepType::Code,
             gw_types::core::DepType::DepGroup => DepType::DepGroup,
+        }
+    }
+}
+
+impl From<ckb_jsonrpc_types::DepType> for DepType {
+    fn from(dep_type: ckb_jsonrpc_types::DepType) -> Self {
+        match dep_type {
+            ckb_jsonrpc_types::DepType::Code => DepType::Code,
+            ckb_jsonrpc_types::DepType::DepGroup => DepType::DepGroup,
         }
     }
 }

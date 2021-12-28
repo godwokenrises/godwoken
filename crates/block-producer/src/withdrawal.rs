@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use gw_config::BlockProducerConfig;
+use gw_config::ContractsCellDep;
 use gw_mem_pool::{custodian::sum_withdrawals, withdrawal::Generator};
 use gw_types::{
     bytes::Bytes,
@@ -33,7 +33,7 @@ pub fn generate(
     rollup_context: &RollupContext,
     finalized_custodians: CollectedCustodianCells,
     block: &L2Block,
-    block_producer_config: &BlockProducerConfig,
+    contracts_dep: &ContractsCellDep,
 ) -> Result<Option<GeneratedWithdrawals>> {
     if block.withdrawals().is_empty() && finalized_custodians.cells_info.is_empty() {
         return Ok(None);
@@ -49,8 +49,8 @@ pub fn generate(
     }
     log::debug!("included withdrawals {}", generator.withdrawals().len());
 
-    let custodian_lock_dep = block_producer_config.custodian_cell_lock_dep.clone();
-    let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
+    let custodian_lock_dep = contracts_dep.custodian_cell_lock.clone();
+    let sudt_type_dep = contracts_dep.l1_sudt_type.clone();
     let mut cell_deps = vec![custodian_lock_dep.into()];
     if !total_withdrawal_amount.sudt.is_empty() || !finalized_custodians.sudt.is_empty() {
         cell_deps.push(sudt_type_dep.into());
@@ -81,7 +81,7 @@ pub struct RevertedWithdrawals {
 
 pub fn revert(
     rollup_context: &RollupContext,
-    block_producer_config: &BlockProducerConfig,
+    contracts_dep: &ContractsCellDep,
     withdrawal_cells: Vec<CellInfo>,
 ) -> Result<Option<RevertedWithdrawals>> {
     if withdrawal_cells.is_empty() {
@@ -163,8 +163,8 @@ pub fn revert(
         custodian_outputs.push((custodian_output, withdrawal.data.clone()));
     }
 
-    let withdrawal_lock_dep = block_producer_config.withdrawal_cell_lock_dep.clone();
-    let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
+    let withdrawal_lock_dep = contracts_dep.withdrawal_cell_lock.clone();
+    let sudt_type_dep = contracts_dep.l1_sudt_type.clone();
     let mut cell_deps = vec![withdrawal_lock_dep.into()];
     if withdrawal_inputs
         .iter()
