@@ -35,6 +35,8 @@ pub struct Config {
     #[serde(default)]
     pub fee: FeeConfig,
     pub sentry_dsn: Option<String>,
+    #[serde(default)]
+    pub consensus: ConsensusConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -136,6 +138,13 @@ pub struct ContractsCellDep {
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ConsensusConfig {
+    pub contract_type_scripts: ContractTypeScriptConfig,
+}
+
+// TODO: remove deprecated fields
+// NOTE: deprecated cell dep fields are used to fetch contract type scripts.
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockProducerConfig {
     pub account_id: u32,
     #[serde(default = "default_check_mem_block_before_submit")]
@@ -182,8 +191,6 @@ pub struct BlockProducerConfig {
     pub allowed_contract_deps: HashMap<H256, CellDep>,
     pub challenger_config: ChallengerConfig,
     pub wallet_config: WalletConfig,
-    #[serde(default)]
-    pub contract_type_scripts: ContractTypeScriptConfig,
 }
 
 fn default_check_mem_block_before_submit() -> bool {

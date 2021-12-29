@@ -236,7 +236,6 @@ pub struct BaseInitComponents {
     pub rpc_client: RPCClient,
     pub store: Store,
     pub generator: Arc<Generator>,
-    pub opt_block_producer_config: Option<BlockProducerConfig>,
     pub contracts_dep_manager: Option<ContractsCellDepManager>,
 }
 
@@ -269,36 +268,27 @@ impl BaseInitComponents {
             )
         };
 
-        let mut opt_block_producer_config = config.block_producer.clone();
+        let opt_block_producer_config = config.block_producer.as_ref();
         let mut contracts_dep_manager = None;
-        if let Some(block_producer_config) = opt_block_producer_config.as_mut() {
-            let script_config = &block_producer_config.contract_type_scripts;
-            if gw_rpc_client::contract::check_script(
-                script_config,
-                &rollup_config,
-                &config.chain.rollup_type_script,
-            )
-            .is_err()
-            {
+        if let Some(block_producer_config) = opt_block_producer_config {
+            use gw_rpc_client::contract::{check_script, query_type_script_from_old_config};
+            let mut script_config = config.consensus.contract_type_scripts.clone();
+            let rollup_type_script = &config.chain.rollup_type_script;
+
+            if check_script(&script_config, &rollup_config, rollup_type_script).is_err() {
                 let now = Instant::now();
-                let script_config =
-                    smol::block_on(gw_rpc_client::contract::query_type_script_from_old_config(
-                        &rpc_client,
-                        block_producer_config,
-                    ))?;
+                script_config = smol::block_on(query_type_script_from_old_config(
+                    &rpc_client,
+                    block_producer_config,
+                ))?;
                 log::trace!("[contracts dep] old config {}ms", now.elapsed().as_millis());
 
-                gw_rpc_client::contract::check_script(
-                    &script_config,
-                    &rollup_config,
-                    &config.chain.rollup_type_script,
-                )?;
-                block_producer_config.contract_type_scripts = script_config;
+                check_script(&script_config, &rollup_config, rollup_type_script)?;
             }
 
             contracts_dep_manager = Some(smol::block_on(ContractsCellDepManager::build(
                 rpc_client.clone(),
-                block_producer_config.contract_type_scripts.clone(),
+                script_config,
             ))?);
         }
 
@@ -306,9 +296,8 @@ impl BaseInitComponents {
             check_ckb_version(&rpc_client)?;
             // TODO: check ckb indexer version
             if NodeMode::ReadOnly != config.node_mode {
-                let block_producer_config = opt_block_producer_config
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("not set block producer"))?;
+                let block_producer_config =
+                    opt_block_producer_config.ok_or_else(|| anyhow!("not set block producer"))?;
                 check_rollup_config_cell(block_producer_config, &rollup_config, &rpc_client)?;
                 check_locks(block_producer_config, &rollup_config)?;
             }
@@ -399,7 +388,6 @@ impl BaseInitComponents {
             rpc_client,
             store,
             generator,
-            opt_block_producer_config,
             contracts_dep_manager,
         };
 
@@ -452,7 +440,7 @@ impl BaseInitComponents {
     }
 }
 
-pub fn run(mut config: Config, skip_config_check: bool) -> Result<()> {
+pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     // Set up sentry.
     let _guard = match &config.sentry_dsn.as_ref() {
         Some(sentry_dsn) => sentry::init((
@@ -480,8 +468,6 @@ pub fn run(mut config: Config, skip_config_check: bool) -> Result<()> {
     );
 
     let base = BaseInitComponents::init(&config, skip_config_check)?;
-    config.block_producer = base.opt_block_producer_config.clone();
-
     let (mem_pool, wallet, poa, offchain_mock_context, pg_pool) = match config
         .block_producer
         .as_ref()

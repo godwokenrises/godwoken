@@ -7,7 +7,7 @@ use anyhow::{anyhow, Result};
 use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_config::{
-    BackendConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config,
+    BackendConfig, BlockProducerConfig, ChainConfig, ChallengerConfig, Config, ConsensusConfig,
     ContractTypeScriptConfig, GenesisConfig, NodeMode, RPCClientConfig, RPCServerConfig,
     StoreConfig, WalletConfig, Web3IndexerConfig,
 };
@@ -192,6 +192,9 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         listen: server_url,
         ..Default::default()
     };
+    let consensus = ConsensusConfig {
+        contract_type_scripts,
+    };
     let block_producer: Option<BlockProducerConfig> = Some(BlockProducerConfig {
         account_id,
         // cell deps
@@ -201,7 +204,6 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         challenger_config,
         wallet_config,
         check_mem_block_before_submit: false,
-        contract_type_scripts,
         ..Default::default()
     });
     let genesis: GenesisConfig = GenesisConfig {
@@ -236,6 +238,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         rpc_client,
         rpc_server,
         rpc: Default::default(),
+        consensus,
         block_producer,
         web3_indexer,
         node_mode,
