@@ -587,7 +587,7 @@ async fn get_transaction(
     let db = store.get_snapshot();
     let tx_opt;
     let status;
-    match store.get_transaction_info(&tx_hash)? {
+    match db.get_transaction_info(&tx_hash)? {
         Some(tx_info) => {
             tx_opt = db.get_transaction_by_key(&tx_info.key())?;
             status = L2TransactionStatus::Committed;
