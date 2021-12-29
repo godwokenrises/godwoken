@@ -977,8 +977,7 @@ impl MemPool {
         }
         // Handle state before txs
         // withdrawal
-
-        let withdrawals: Vec<WithdrawalRequest> = withdrawals.collect();
+        let withdrawals: Vec<WithdrawalRequestExtra> = withdrawals.collect();
         self.finalize_withdrawals(withdrawals.clone()).await?;
         // deposits
         let deposit_cells = self.pending_deposits.clone();
@@ -986,6 +985,7 @@ impl MemPool {
 
         // Fan-out next mem block to readonly node
         if let Some(handler) = &self.mem_pool_publish_service {
+            let withdrawals = withdrawals.into_iter().map(|w| w.request()).collect();
             handler.next_mem_block(
                 withdrawals,
                 deposit_cells,
@@ -1368,6 +1368,7 @@ impl MemPool {
         let mem_block = MemBlock::new(block_info, post_merkle_state);
         self.mem_block = mem_block;
 
+        let withdrawals = withdrawals.into_iter().map(Into::into).collect();
         self.finalize_withdrawals(withdrawals).await?;
         self.finalize_deposits(deposits).await?;
 
