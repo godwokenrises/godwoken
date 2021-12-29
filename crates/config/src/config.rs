@@ -143,33 +143,42 @@ pub struct BlockProducerConfig {
     // cell deps
     #[deprecated]
     #[serde(skip_serializing)]
+    #[serde(default)]
     pub rollup_cell_type_dep: CellDep,
     pub rollup_config_cell_dep: CellDep,
     #[deprecated]
     #[serde(skip_serializing)]
+    #[serde(default)]
     pub deposit_cell_lock_dep: CellDep,
     #[deprecated]
     #[serde(skip_serializing)]
+    #[serde(default)]
     pub stake_cell_lock_dep: CellDep,
     pub poa_lock_dep: CellDep,
     pub poa_state_dep: CellDep,
     #[deprecated]
     #[serde(skip_serializing)]
+    #[serde(default)]
     pub custodian_cell_lock_dep: CellDep,
     #[deprecated]
     #[serde(skip_serializing)]
+    #[serde(default)]
     pub withdrawal_cell_lock_dep: CellDep,
     #[deprecated]
     #[serde(skip_serializing)]
+    #[serde(default)]
     pub challenge_cell_lock_dep: CellDep,
     #[deprecated]
     #[serde(skip_serializing)]
+    #[serde(default)]
     pub l1_sudt_type_dep: CellDep,
     #[deprecated]
     #[serde(skip_serializing)]
+    #[serde(default)]
     pub allowed_eoa_deps: HashMap<H256, CellDep>,
     #[deprecated]
     #[serde(skip_serializing)]
+    #[serde(default)]
     pub allowed_contract_deps: HashMap<H256, CellDep>,
     pub challenger_config: ChallengerConfig,
     pub wallet_config: WalletConfig,
@@ -413,6 +422,7 @@ mod test {
     #[allow(deprecated)]
     #[test]
     fn test_block_producer_config_serde() {
+        // Reading from old config
         let expected_rollup_cell_type_dep = CellDep {
             out_point: OutPoint {
                 tx_hash: H256([1u8; 32]),
@@ -427,14 +437,17 @@ mod test {
         };
 
         let toml_config = toml::to_string(&old_config).unwrap();
-        let config: BlockProducerConfig = toml::from_str(&toml_config).expect("parse toml config");
+        let config: BlockProducerConfig = toml::from_str(&toml_config).unwrap();
         assert_eq!(config.rollup_cell_type_dep, expected_rollup_cell_type_dep);
 
         // Serialize from new config should skip deprecated fields
         let new_toml_config = toml::to_string(&config).unwrap();
         let err = toml::from_str::<OldBlockProducerConfig>(&new_toml_config).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("missing field `rollup_cell_type_dep`"));
+        let expected_err_msg = "missing field `rollup_cell_type_dep`";
+        assert!(err.to_string().contains(expected_err_msg));
+
+        // Reading from new config
+        let new_config: BlockProducerConfig = toml::from_str(&new_toml_config).unwrap();
+        assert_eq!(new_config.rollup_config_cell_dep, CellDep::default()); // deprecated fields are skipped
     }
 }
