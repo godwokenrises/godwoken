@@ -953,6 +953,7 @@ async fn submit_withdrawal_request(
 
     // verify finalized custodian
     {
+        let t = Instant::now();
         let finalized_custodians = {
             let db = store.begin_transaction();
             let tip = db.get_last_valid_tip_block()?;
@@ -970,6 +971,11 @@ async fn submit_withdrawal_request(
             .await?
             .expect_any()
         };
+        log::debug!(
+            "[submit withdrawal] collected {} finalized custodian cells {}ms",
+            finalized_custodians.cells_info.len(),
+            t.elapsed().as_millis()
+        );
         let available_custodians = AvailableCustodians::from(&finalized_custodians);
         let withdrawal_generator = gw_mem_pool::withdrawal::Generator::new(
             generator.rollup_context(),
