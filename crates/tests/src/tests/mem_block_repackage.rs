@@ -93,7 +93,7 @@ fn test_repackage_mem_block() {
 
     let deposit_requests: Vec<_> = deposit_cells.iter().map(|i| i.request.clone()).collect();
     ReplayBlock::replay(
-        &store,
+        store,
         chain.generator(),
         &block_result.block,
         deposit_requests.as_slice(),
