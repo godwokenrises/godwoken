@@ -32,7 +32,7 @@ impl ContractsCellDepManager {
         Ok(Self {
             rpc_client,
             scripts: Arc::new(scripts),
-            deps: Arc::new(ArcSwap::new(Arc::new(deps))),
+            deps: Arc::new(ArcSwap::from_pointee(deps)),
         })
     }
 
