@@ -2,6 +2,8 @@ pub mod db;
 pub mod error;
 pub mod iter;
 pub mod memory_stats;
+pub mod migrate;
+pub mod read_only_db;
 pub mod schema;
 pub mod snapshot;
 pub mod transaction;
