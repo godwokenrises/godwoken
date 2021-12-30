@@ -10,7 +10,7 @@ use crate::{
     erc20_creator_allowlist::SUDTProxyAccountAllowlist,
     error::{BlockError, TransactionValidateError, WithdrawalError},
     vm_cost_model::instruction_cycles,
-    AotCode, VMVersion,
+    VMVersion,
 };
 use crate::{
     backend_manage::Backend,
@@ -122,8 +122,6 @@ impl Generator {
         &self.account_lock_manage
     }
 
-    #[allow(clippy::too_many_arguments)]
-    #[allow(unused_variables)]
     fn machine_run<'a, S: State + CodeStore, C: ChainView>(
         &'a self,
         chain: &'a C,
@@ -131,8 +129,7 @@ impl Generator {
         block_info: &'a BlockInfo,
         raw_tx: &'a RawL2Transaction,
         max_cycles: u64,
-        code_bytes: Bytes,
-        aot_code_opt: Option<&AotCode>,
+        backend: Backend,
     ) -> Result<RunResult, TransactionError> {
         let mut run_result = RunResult::default();
         let used_cycles;
@@ -161,13 +158,21 @@ impl Generator {
                 .instruction_cycle_func(Box::new(instruction_cycles));
             let default_machine = machine_builder.build();
 
+            let aot_code_opt = self
+                .backend_manage
+                .get_aot_code(&backend.validator_script_type_hash, global_vm_version);
+            #[cfg(feature = "aot")]
+            if aot_code_opt.is_none() {
+                log::warn!("[machine_run] Not AOT mode!");
+            }
+
             #[cfg(has_asm)]
             let mut machine = ckb_vm::machine::asm::AsmMachine::new(default_machine, aot_code_opt);
 
             #[cfg(not(has_asm))]
             let mut machine = TraceMachine::new(default_machine);
 
-            machine.load_program(&code_bytes, &[])?;
+            machine.load_program(&backend.generator, &[])?;
             exit_code = machine.run()?;
             used_cycles = machine.machine.cycles();
             log::debug!(
@@ -709,17 +714,9 @@ impl Generator {
         let backend = self
             .load_backend(state, &script_hash)
             .ok_or(TransactionError::BackendNotFound { script_hash })?;
-        let aot_code_opt = self.backend_manage.get_aot_code(&script_hash);
 
-        let run_result: RunResult = self.machine_run(
-            chain,
-            state,
-            block_info,
-            raw_tx,
-            max_cycles,
-            backend.generator,
-            aot_code_opt,
-        )?;
+        let run_result: RunResult =
+            self.machine_run(chain, state, block_info, raw_tx, max_cycles, backend)?;
 
         if 0 == run_result.exit_code {
             // check nonce is increased by backends
