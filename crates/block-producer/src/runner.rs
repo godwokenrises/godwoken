@@ -535,7 +535,10 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     Box::new(ErrorReceiptIndexer::new(pool))
                         as Box<dyn MemPoolErrorTxHandler + Send>
                 });
-                let notify_controller = NotifyService::new().start();
+                let notify_controller = {
+                    let opt_ws_listen = config.rpc_server.err_receipt_ws_listen.as_ref();
+                    opt_ws_listen.map(|_| NotifyService::new().start())
+                };
                 let mem_pool = Arc::new(Mutex::new(
                     MemPool::create(
                         block_producer_config.account_id,
@@ -543,7 +546,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         base.generator.clone(),
                         Box::new(mem_pool_provider),
                         error_tx_handler,
-                        Some(notify_controller.clone()),
+                        notify_controller.clone(),
                         config.mem_pool.clone(),
                         config.node_mode,
                     )
@@ -555,7 +558,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     Some(poa),
                     Some(offchain_mock_context),
                     pg_pool,
-                    Some(notify_controller),
+                    notify_controller,
                 )
             }
             None => (None, None, None, None, None, None),
@@ -840,8 +843,12 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     let mut rpc_ws_task = None;
     if let Some(notify_controller) = err_receipt_notify_ctrl {
+        let rpc_ws_addr = {
+            let ws_listen = config.rpc_server.err_receipt_ws_listen.as_ref();
+            ws_listen.expect("err receipt ws listen").to_owned()
+        };
         rpc_ws_task = Some(smol::spawn(async move {
-            if let Err(err) = start_jsonrpc_ws_server("127.0.0.1:8219", notify_controller).await {
+            if let Err(err) = start_jsonrpc_ws_server(&rpc_ws_addr, notify_controller).await {
                 log::error!("Error running JSONRPC WebSockert server: {:?}", err);
             }
             if let Err(err) = exit_sender.send(()).await {
