@@ -1,35 +1,54 @@
-use ckb_channel::{bounded, select, Receiver, RecvError, Sender};
-use ckb_stop_handler::{SignalSender, StopHandler};
-use ckb_types::core::service::Request;
+use anyhow::{anyhow, bail, Result};
+use futures::{FutureExt, StreamExt};
 use gw_types::offchain::ErrorTxReceipt;
-use log::{debug, trace};
+use smol::channel::{bounded, Receiver, Sender, TrySendError};
 use std::collections::HashMap;
-use std::thread;
-
-pub use ckb_types::core::service::PoolTransactionEntry;
+use std::sync::Arc;
 
 pub const SIGNAL_CHANNEL_SIZE: usize = 1;
 pub const REGISTER_CHANNEL_SIZE: usize = 2;
 pub const NOTIFY_CHANNEL_SIZE: usize = 128;
 
+pub struct Request<A, R> {
+    /// One shot channel for the service to send back the response.
+    pub resp_tx: Sender<R>,
+    /// Request arguments.
+    pub arguments: A,
+}
+
+impl<A, R> Request<A, R> {
+    /// Call the service with the arguments and wait for the response.
+    pub async fn call(sender: &Sender<Request<A, R>>, arguments: A) -> Result<R> {
+        let (resp_tx, resp_rx) = bounded(1);
+        if let Err(err) = sender.try_send(Request { resp_tx, arguments }) {
+            bail!("subscribe request call {}", err);
+        }
+
+        let maybe_rx = resp_rx.recv().await;
+        maybe_rx.map_err(|err| anyhow!("no response for subscribe request {}", err))
+    }
+}
+
 pub type NotifyRegister<M> = Sender<Request<String, Receiver<M>>>;
 
 #[derive(Clone)]
 pub struct NotifyController {
-    stop: StopHandler<()>,
+    stop_tx: Sender<()>,
 
-    new_error_tx_receipt_register: NotifyRegister<ErrorTxReceipt>,
-    new_error_tx_receipt_notifier: Sender<ErrorTxReceipt>,
+    subscribe_err_receipt_tx: NotifyRegister<Arc<ErrorTxReceipt>>,
+    err_receipt_tx: Sender<Arc<ErrorTxReceipt>>,
 }
 
 impl Drop for NotifyController {
     fn drop(&mut self) {
-        self.stop.try_send(());
+        if let Err(err) = self.stop_tx.try_send(()) {
+            log::error!("[error tx receipt] stop notify service {}", err);
+        }
     }
 }
 
 pub struct NotifyService {
-    error_tx_receipt_subscribers: HashMap<String, Sender<ErrorTxReceipt>>,
+    error_receipt_subscribers: HashMap<String, Sender<Arc<ErrorTxReceipt>>>,
 }
 
 impl Default for NotifyService {
@@ -41,82 +60,107 @@ impl Default for NotifyService {
 impl NotifyService {
     pub fn new() -> Self {
         Self {
-            error_tx_receipt_subscribers: HashMap::default(),
+            error_receipt_subscribers: HashMap::default(),
         }
     }
 
     /// start background single-threaded service with specified thread_name.
-    pub fn start<S: ToString>(mut self, thread_name: Option<S>) -> NotifyController {
-        let (signal_sender, signal_receiver) = bounded(SIGNAL_CHANNEL_SIZE);
+    pub fn start(mut self) -> NotifyController {
+        let (stop_tx, stop_rx) = bounded(SIGNAL_CHANNEL_SIZE);
 
-        let (new_error_tx_receipt_registrer, new_error_tx_receipt_register_receiver) =
-            bounded(NOTIFY_CHANNEL_SIZE);
-        let (new_error_tx_receipt_sender, new_error_tx_receipt_receiver) =
-            bounded(NOTIFY_CHANNEL_SIZE);
+        let (subscribe_err_receipt_tx, subscribe_err_receipt_rx) = bounded(NOTIFY_CHANNEL_SIZE);
+        let (err_receipt_tx, err_receipt_rx) = bounded(NOTIFY_CHANNEL_SIZE);
 
-        let mut thread_builder = thread::Builder::new();
-        if let Some(name) = thread_name {
-            thread_builder = thread_builder.name(name.to_string());
-        }
-        let join_handle = thread_builder
-            .spawn(move || loop {
-                select! {
-                    recv(signal_receiver) -> _ => {
-                        break;
+        smol::spawn(async move {
+            let mut subscribe_err_receipt_rx = subscribe_err_receipt_rx.fuse();
+            let mut err_receipt_rx = err_receipt_rx.fuse();
+
+            loop {
+                futures::select! {
+                    _shutdown = stop_rx.recv().fuse() => {
+                        log::info!("[error tx receipt] notify service stop");
+                        return;
+                    },
+                    opt_request = subscribe_err_receipt_rx.next() => match opt_request {
+                        Some(request) => self.handle_subscribe_err_tx_receipt(request),
+                        None => {
+                            log::error!("[error tx receipt] subscribe sender dropped");
+                            return;
+                        }
+                    },
+                    opt_receipt = err_receipt_rx.next() => match opt_receipt {
+                        Some(err_receipt) => self.handle_notify_new_error_tx_receipt(err_receipt),
+                        None => {
+                            log::error!("[error tx receipt] receipt sender dropped");
+                            return;
+                        }
+                    },
+                    complete => {
+                        log::error!("[error tx receipt] all notify service sender dropped");
+                        return;
                     }
-
-                    recv(new_error_tx_receipt_register_receiver) -> msg => self.handle_register_new_error_tx_receipt(msg),
-                    recv(new_error_tx_receipt_receiver) -> msg => self.handle_notify_new_error_tx_receipt(msg),
                 }
-            })
-            .expect("Start notify service failed");
+            }
+        })
+        .detach();
 
         NotifyController {
-            new_error_tx_receipt_register: new_error_tx_receipt_registrer,
-            new_error_tx_receipt_notifier: new_error_tx_receipt_sender,
-            stop: StopHandler::new(SignalSender::Crossbeam(signal_sender), Some(join_handle)),
+            stop_tx,
+            subscribe_err_receipt_tx,
+            err_receipt_tx,
         }
     }
 
-    fn handle_register_new_error_tx_receipt(
+    fn handle_subscribe_err_tx_receipt(
         &mut self,
-        msg: Result<Request<String, Receiver<ErrorTxReceipt>>, RecvError>,
+        req: Request<String, Receiver<Arc<ErrorTxReceipt>>>,
     ) {
-        match msg {
-            Ok(Request {
-                responder,
-                arguments: name,
-            }) => {
-                debug!("Register new_error_tx_receipt {:?}", name);
-                let (sender, receiver) = bounded(NOTIFY_CHANNEL_SIZE);
-                self.error_tx_receipt_subscribers.insert(name, sender);
-                let _ = responder.send(receiver);
-            }
-            _ => debug!("Register new_error_tx_receipt channel is closed"),
+        let Request {
+            resp_tx,
+            arguments: name,
+        } = req;
+        log::trace!("[error tx receipt] new subscriber {}", name);
+
+        let (sender, receiver) = bounded(NOTIFY_CHANNEL_SIZE);
+        self.error_receipt_subscribers.insert(name.clone(), sender);
+
+        if let Err(err) = resp_tx.try_send(receiver) {
+            log::warn!("[error tx receipt] resp subscribe rx to {} {}", name, err);
         }
     }
 
-    fn handle_notify_new_error_tx_receipt(&mut self, msg: Result<ErrorTxReceipt, RecvError>) {
-        match msg {
-            Ok(error_tx_receipt) => {
-                trace!("event new error_tx_receipt {:?}", error_tx_receipt);
-                // notify all subscribers
-                for subscriber in self.error_tx_receipt_subscribers.values() {
-                    let _ = subscriber.send(error_tx_receipt.clone());
-                }
-            }
-            _ => debug!("new error tx receipt channel is closed"),
+    fn handle_notify_new_error_tx_receipt(&self, err_receipt: Arc<ErrorTxReceipt>) {
+        log::trace!("[error tx receipt] new receipt {:?}", err_receipt);
+
+        // notify all subscribers
+        for subscriber in self.error_receipt_subscribers.values() {
+            let _ = subscriber.send(Arc::clone(&err_receipt));
         }
     }
 }
 
 impl NotifyController {
-    pub fn subscribe_new_error_tx_receipt<S: ToString>(&self, name: S) -> Receiver<ErrorTxReceipt> {
-        Request::call(&self.new_error_tx_receipt_register, name.to_string())
-            .expect("Subscribe new error tx receipt should be OK")
+    pub async fn subscribe_new_error_tx_receipt<S: ToString>(
+        &self,
+        name: S,
+    ) -> Result<Receiver<Arc<ErrorTxReceipt>>> {
+        Request::call(&self.subscribe_err_receipt_tx, name.to_string()).await
     }
 
     pub fn notify_new_error_tx_receipt(&self, error_tx_receipt: ErrorTxReceipt) {
-        let _ = self.new_error_tx_receipt_notifier.send(error_tx_receipt);
+        let err_receipt = Arc::new(error_tx_receipt);
+        if let Err(err) = self.err_receipt_tx.try_send(Arc::clone(&err_receipt)) {
+            match err {
+                TrySendError::Closed(_) => {
+                    log::error!("[error tx receipt] notify service stopped");
+                }
+                TrySendError::Full(_) => {
+                    log::info!(
+                        "[error tx receipt] notify channel is full, drop receipt {:?}",
+                        err_receipt
+                    );
+                }
+            }
+        }
     }
 }

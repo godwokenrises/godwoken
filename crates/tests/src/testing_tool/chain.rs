@@ -202,6 +202,7 @@ pub fn setup_chain_with_account_lock_manage(
         Arc::clone(&generator),
         Box::new(provider),
         None,
+        None,
         mem_pool_config,
         gw_config::NodeMode::FullNode,
     )
