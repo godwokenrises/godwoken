@@ -2225,6 +2225,7 @@ dependencies = [
  "gw-traits",
  "gw-tx-filter",
  "gw-types",
+ "gw-utils",
  "hex",
  "lazy_static",
  "log",

@@ -884,17 +884,13 @@ fn build_challenge_target(
 
 #[cfg(test)]
 mod test {
-    use anyhow::{bail, Result};
     use gw_common::h256_ext::H256Ext;
     use gw_common::H256;
     use gw_types::bytes::Bytes;
     use gw_types::core::ScriptHashType;
     use gw_types::offchain::RollupContext;
-    use gw_types::packed::{
-        Fee, RawWithdrawalRequest, RollupConfig, Script, ScriptReader, WithdrawalLockArgs,
-        WithdrawalLockArgsReader, WithdrawalRequest,
-    };
-    use gw_types::prelude::{Builder, Entity, Pack, Reader, Unpack};
+    use gw_types::packed::{Fee, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest};
+    use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
     use crate::generator::WithdrawalCellError;
     use crate::Generator;
@@ -966,12 +962,16 @@ mod test {
         assert_eq!(data, req.raw().amount().as_bytes());
 
         // Check lock args
-        let parsed_args = parse_lock_args(&output.lock()).unwrap();
+        let parsed_args =
+            gw_utils::withdrawal::parse_lock_args(&output.lock().args().unpack()).unwrap();
         assert_eq!(
             parsed_args.rollup_type_hash.pack(),
             rollup_context.rollup_script_hash.pack()
         );
-        assert_eq!(parsed_args.opt_owner_lock_hash, Some(owner_lock.hash()));
+        assert_eq!(
+            parsed_args.opt_owner_lock.map(|l| l.hash()),
+            Some(owner_lock.hash())
+        );
 
         let lock_args = parsed_args.lock_args.clone();
         assert_eq!(
@@ -1020,8 +1020,9 @@ mod test {
         )
         .unwrap();
 
-        let parsed_args3 = parse_lock_args(&output3.lock()).unwrap();
-        assert!(parsed_args3.opt_owner_lock_hash.is_none());
+        let parsed_args3 =
+            gw_utils::withdrawal::parse_lock_args(&output3.lock().args().unpack()).unwrap();
+        assert!(parsed_args3.opt_owner_lock.is_none());
 
         assert_eq!(output3.capacity().unpack(), output.capacity().unpack());
         assert_eq!(data3, data);
@@ -1083,59 +1084,5 @@ mod test {
         if let WithdrawalCellError::OwnerLock(owner_lock_hash) = err {
             assert_eq!(req.raw().owner_lock_hash(), owner_lock_hash.pack());
         }
-    }
-
-    struct ParsedWithdrawalLockArgs {
-        rollup_type_hash: [u8; 32],
-        lock_args: WithdrawalLockArgs,
-        opt_owner_lock_hash: Option<[u8; 32]>,
-    }
-
-    fn parse_lock_args(script: &Script) -> Result<ParsedWithdrawalLockArgs> {
-        let mut rollup_type_hash = [0u8; 32];
-        let args: Bytes = script.args().unpack();
-        if args.len() < rollup_type_hash.len() {
-            bail!("invalid args");
-        }
-
-        rollup_type_hash.copy_from_slice(&args[..32]);
-        let lock_args_end = 32 + WithdrawalLockArgs::TOTAL_SIZE;
-        let lock_args =
-            match WithdrawalLockArgsReader::verify(&args.slice(32..lock_args_end), false) {
-                Ok(()) => WithdrawalLockArgs::new_unchecked(args.slice(32..lock_args_end)),
-                Err(_) => bail!("invalid args"),
-            };
-
-        let owner_lock_start = lock_args_end + 4;
-        let opt_owner_lock_hash = if args.len() > owner_lock_start {
-            let mut owner_lock_len_buf = [0u8; 4];
-            owner_lock_len_buf.copy_from_slice(&args.slice(lock_args_end..owner_lock_start));
-            let owner_lock_len = u32::from_be_bytes(owner_lock_len_buf) as usize;
-            let owner_lock_end = owner_lock_start + owner_lock_len;
-            if owner_lock_end != args.len() {
-                bail!("invalid args");
-            }
-
-            let owner_lock =
-                match ScriptReader::verify(&args.slice(owner_lock_start..owner_lock_end), false) {
-                    Ok(()) => Script::new_unchecked(args.slice(owner_lock_start..owner_lock_end)),
-                    Err(_) => bail!("invalid args"),
-                };
-
-            let args_owner_lock_hash = lock_args.owner_lock_hash().unpack();
-            if owner_lock.hash() != args_owner_lock_hash {
-                bail!("invalid args");
-            }
-
-            Some(args_owner_lock_hash)
-        } else {
-            None
-        };
-
-        Ok(ParsedWithdrawalLockArgs {
-            rollup_type_hash,
-            lock_args,
-            opt_owner_lock_hash,
-        })
     }
 }

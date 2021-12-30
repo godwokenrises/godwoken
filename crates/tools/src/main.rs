@@ -24,14 +24,13 @@ mod withdraw;
 use anyhow::Result;
 use async_jsonrpc_client::HttpClient;
 use ckb_sdk::constants::ONE_CKB;
-use ckb_types::prelude::{Entity, Unpack};
+use ckb_types::prelude::Unpack;
 use clap::{value_t, App, Arg, SubCommand};
 use deploy_genesis::DeployRollupCellArgs;
 use dump_tx::ChallengeBlock;
 use generate_config::GenerateNodeConfigArgs;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
-use gw_types::packed::WithdrawalLockArgs;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -1321,6 +1320,8 @@ fn run_cli() -> Result<()> {
             }
         }
         ("parse-withdrawal-lock-args", Some(m)) => {
+            use gw_types::bytes::Bytes;
+
             let input_path: PathBuf = m.value_of("input").unwrap().into();
             let input = std::fs::read_to_string(input_path)?;
             let input_data = hex::decode(&input.trim().trim_start_matches("0x"))?;
@@ -1330,9 +1331,12 @@ fn run_cli() -> Result<()> {
                     input_data.len()
                 ));
             }
-            let withdrawal_lock = WithdrawalLockArgs::from_slice(&input_data[32..])?;
+
+            let parsed_withdrawal_lock_args =
+                gw_utils::withdrawal::parse_lock_args(&Bytes::from(input_data))?;
             let withdrawal_lock: gw_jsonrpc_types::godwoken::WithdrawalLockArgs =
-                withdrawal_lock.into();
+                parsed_withdrawal_lock_args.lock_args.into();
+
             let output = serde_json::to_string_pretty(&withdrawal_lock)?;
             println!("{}", output);
         }
