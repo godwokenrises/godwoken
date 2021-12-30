@@ -6,13 +6,14 @@ use crate::testing_tool::chain::{
 };
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 
-use async_jsonrpc_client::HttpClient;
 use ckb_types::prelude::{Builder, Entity};
 use gw_block_producer::test_mode_control::TestModeControl;
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::state::{to_short_address, State};
 use gw_common::H256;
 use gw_config::RPCClientConfig;
+use gw_rpc_client::ckb_client::CKBClient;
+use gw_rpc_client::indexer_client::CKBIndexerClient;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::registry::{Registry, RegistryArgs};
 use gw_store::state::state_db::StateContext;
@@ -198,8 +199,9 @@ fn test_restore_mem_block() {
         let rollup_config = generator.rollup_context().rollup_config.to_owned();
         let rollup_context = generator.rollup_context().to_owned();
         let rpc_client = {
-            let indexer_client = HttpClient::new(RPCClientConfig::default().indexer_url).unwrap();
-            let ckb_client = HttpClient::new(RPCClientConfig::default().ckb_url).unwrap();
+            let indexer_client =
+                CKBIndexerClient::with_url(&RPCClientConfig::default().indexer_url).unwrap();
+            let ckb_client = CKBClient::with_url(&RPCClientConfig::default().ckb_url).unwrap();
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(

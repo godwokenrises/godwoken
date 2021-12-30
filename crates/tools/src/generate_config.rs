@@ -12,11 +12,11 @@ use gw_config::{
     StoreConfig, WalletConfig, Web3IndexerConfig,
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
+use gw_rpc_client::ckb_client::CKBClient;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use std::path::Path;
-use std::time::Duration;
 
 pub struct GenerateNodeConfigArgs<'a> {
     pub rollup_result: &'a RollupDeploymentResult,
@@ -114,8 +114,9 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
     let (_data, secp_data_dep) =
         get_secp_data(&mut rpc_client).map_err(|err| anyhow!("{}", err))?;
 
+    let ckb_client = CKBClient::with_url(&ckb_url)?;
     let contract_type_scripts = smol::block_on(query_contracts_script(
-        ckb_url.clone(),
+        &ckb_client,
         scripts_deployment,
         user_rollup_config,
     ))?;
@@ -255,18 +256,14 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
 }
 
 async fn query_contracts_script(
-    ckb_url: String,
+    ckb_client: &CKBClient,
     deployment: &ScriptsDeploymentResult,
     user_rollup_config: &UserRollupConfig,
 ) -> Result<ContractTypeScriptConfig> {
     use ckb_jsonrpc_types::CellDep;
 
-    let rpc_client = async_jsonrpc_client::HttpClient::builder()
-        .timeout(Duration::from_secs(15))
-        .build(ckb_url.to_owned())?;
-
     let query = |contract: &'static str, cell_dep: CellDep| -> _ {
-        gw_rpc_client::contract::query_type_script(&rpc_client, contract, cell_dep.into())
+        ckb_client.query_type_script(contract, cell_dep.into())
     };
 
     let state_validator = query(

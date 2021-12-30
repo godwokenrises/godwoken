@@ -1,8 +1,8 @@
 #![allow(clippy::mutable_key_type)]
 
-use crate::{types::ChainEvent, utils::to_result};
+use crate::types::ChainEvent;
 use anyhow::{anyhow, Result};
-use async_jsonrpc_client::{Params as ClientParams, Transport};
+use async_jsonrpc_client::Params as ClientParams;
 use ckb_fixed_hash::H256;
 use gw_chain::chain::{
     Chain, ChallengeCell, L1Action, L1ActionContext, RevertL1ActionContext, RevertedL1Action,
@@ -154,21 +154,19 @@ impl ChainUpdater {
         // here needs revising, once we relax this constraint for more performance.
         let mut last_cursor = None;
         loop {
-            let txs: Pagination<Tx> = to_result(
-                self.rpc_client
-                    .indexer
-                    .client()
-                    .request(
-                        "get_transactions",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(last_cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let txs: Pagination<Tx> = self
+                .rpc_client
+                .indexer
+                .request(
+                    "get_transactions",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(last_cursor),
+                    ])),
+                )
+                .await?;
             if txs.objects.is_empty() {
                 break;
             }
@@ -198,15 +196,14 @@ impl ChainUpdater {
         }
         self.last_tx_hash = Some(tx_hash.clone());
 
-        let tx: Option<TransactionWithStatus> = to_result(
-            self.rpc_client
-                .ckb
-                .request(
-                    "get_transaction",
-                    Some(ClientParams::Array(vec![json!(tx_hash)])),
-                )
-                .await?,
-        )?;
+        let tx: Option<TransactionWithStatus> = self
+            .rpc_client
+            .ckb
+            .request(
+                "get_transaction",
+                Some(ClientParams::Array(vec![json!(tx_hash)])),
+            )
+            .await?;
         let tx_with_status =
             tx.ok_or_else(|| anyhow::anyhow!("Cannot locate transaction: {:x}", tx_hash))?;
         let tx = {
@@ -216,15 +213,14 @@ impl ChainUpdater {
         let block_hash = tx_with_status.tx_status.block_hash.ok_or_else(|| {
             anyhow::anyhow!("Transaction {:x} is not committed on chain!", tx_hash)
         })?;
-        let header_view: Option<HeaderView> = to_result(
-            self.rpc_client
-                .ckb
-                .request(
-                    "get_header",
-                    Some(ClientParams::Array(vec![json!(block_hash)])),
-                )
-                .await?,
-        )?;
+        let header_view: Option<HeaderView> = self
+            .rpc_client
+            .ckb
+            .request(
+                "get_header",
+                Some(ClientParams::Array(vec![json!(block_hash)])),
+            )
+            .await?;
         let header_view =
             header_view.ok_or_else(|| anyhow::anyhow!("Cannot locate block: {:x}", block_hash))?;
         let l2block_committed_info = L2BlockCommittedInfo::new_builder()
@@ -461,15 +457,14 @@ impl ChainUpdater {
             // Load cell denoted by the transaction input
             let tx_hash: H256 = input.previous_output().tx_hash().unpack();
             let index = input.previous_output().index().unpack();
-            let tx: Option<TransactionWithStatus> = to_result(
-                self.rpc_client
-                    .ckb
-                    .request(
-                        "get_transaction",
-                        Some(ClientParams::Array(vec![json!(tx_hash)])),
-                    )
-                    .await?,
-            )?;
+            let tx: Option<TransactionWithStatus> = self
+                .rpc_client
+                .ckb
+                .request(
+                    "get_transaction",
+                    Some(ClientParams::Array(vec![json!(tx_hash)])),
+                )
+                .await?;
             let tx_with_status =
                 tx.ok_or_else(|| anyhow::anyhow!("Cannot locate transaction: {:x}", tx_hash))?;
             let tx = {

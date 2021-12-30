@@ -1,3 +1,4 @@
+pub mod ckb_client;
 pub mod contract;
 pub mod indexer_client;
 pub mod indexer_types;
