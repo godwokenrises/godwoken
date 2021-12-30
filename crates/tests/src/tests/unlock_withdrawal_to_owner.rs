@@ -233,9 +233,13 @@ fn test_build_unlock_to_owner_tx() {
     // Generate random withdrawals(w/wo owner lock)
     const WITHDRAWAL_CAPACITY: u64 = 1000 * CKB;
     const WITHDRAWAL_AMOUNT: u128 = 100;
-    let no_owner_lock_count = rand::random::<u8>() % (accounts.len() as u8 / 2 + 1) + 1;
+    let mut no_owner_lock_count =
+        (rand::random::<u8>() % (accounts.len() as u8 / 2 + 1) + 1) as usize;
+    if no_owner_lock_count as usize == accounts.len() {
+        no_owner_lock_count = accounts.len() / 2;
+    }
     let withdrawals_no_lock = {
-        let accounts = accounts.iter().take(no_owner_lock_count as usize);
+        let accounts = accounts.iter().take(no_owner_lock_count);
         accounts.map(|account_script| {
             let raw = RawWithdrawalRequest::new_builder()
                 .capacity(WITHDRAWAL_CAPACITY.pack())
@@ -248,7 +252,7 @@ fn test_build_unlock_to_owner_tx() {
         })
     };
     let withdrawals_lock = {
-        let accounts = accounts.iter().skip(no_owner_lock_count as usize);
+        let accounts = accounts.iter().skip(no_owner_lock_count);
         accounts.map(|account_script| {
             let raw = RawWithdrawalRequest::new_builder()
                 .capacity(WITHDRAWAL_CAPACITY.pack())
@@ -486,10 +490,7 @@ fn test_build_unlock_to_owner_tx() {
     let (tx, to_unlock) = smol::block_on(unlocker.query_and_unlock_to_owner(&unlocked))
         .expect("unlock")
         .expect("skip no owner lock");
-    assert_eq!(
-        to_unlock.len(),
-        accounts.len() - no_owner_lock_count as usize
-    );
+    assert_eq!(to_unlock.len(), accounts.len() - no_owner_lock_count);
 
     let inputs = {
         let cells = random_withdrawal_cells.clone().into_iter();
@@ -518,7 +519,7 @@ fn test_build_unlock_to_owner_tx() {
         .collect();
     assert_eq!(
         unlockable_random_withdrawals.len(),
-        accounts.len() - no_owner_lock_count as usize
+        accounts.len() - no_owner_lock_count
     );
 
     unlocker.withdrawals = unlockable_random_withdrawals.clone();
