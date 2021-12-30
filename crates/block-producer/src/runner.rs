@@ -678,7 +678,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     Wallet::from_config(wallet_config).with_context(|| "init unlocker wallet")?
                 }
                 None => {
-                    log::info!("[unlock withdrawal] reuse block producer wallet");
+                    log::warn!("[unlock withdrawal] reuse block producer wallet");
                     Wallet::from_config(&block_producer_config.wallet_config)
                         .with_context(|| "init unlocker wallet")?
                 }
@@ -687,7 +687,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             let withdrawal_unlocker = FinalizedWithdrawalUnlocker::new(
                 rpc_client.clone(),
                 ckb_genesis_info.clone(),
-                block_producer_config.clone(),
+                contracts_dep_manager.clone(),
                 unlocker_wallet,
                 config.debug.clone(),
             );
@@ -697,6 +697,9 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 ckb_genesis_info.clone(),
                 wallet,
             ));
+
+            let wallet = Wallet::from_config(&block_producer_config.wallet_config)
+                .with_context(|| "init wallet")?;
 
             // Challenger
             let args = ChallengerNewArgs {

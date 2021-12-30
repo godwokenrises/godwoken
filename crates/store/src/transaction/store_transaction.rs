@@ -585,7 +585,7 @@ impl StoreTransaction {
     pub fn insert_mem_pool_withdrawal(
         &self,
         withdrawal_hash: &H256,
-        withdrawal: packed::WithdrawalRequest,
+        withdrawal: packed::WithdrawalRequestExtra,
     ) -> Result<(), Error> {
         self.insert_raw(
             COLUMN_MEM_POOL_WITHDRAWAL,

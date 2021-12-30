@@ -310,11 +310,17 @@ pub trait ChainStore: KVStoreRead {
     fn get_mem_pool_withdrawal(
         &self,
         withdrawal_hash: &H256,
-    ) -> Result<Option<packed::WithdrawalRequest>, Error> {
-        Ok(self
-            .get(COLUMN_MEM_POOL_WITHDRAWAL, withdrawal_hash.as_slice())
-            .map(|slice| {
-                packed::WithdrawalRequestReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
-            }))
+    ) -> Result<Option<packed::WithdrawalRequestExtra>, Error> {
+        let maybe_withdrawal =
+            match self.get(COLUMN_MEM_POOL_WITHDRAWAL, withdrawal_hash.as_slice()) {
+                Some(slice) => {
+                    packed::WithdrawalRequestExtra::from_request_compitable_slice(slice.as_ref())
+                }
+                None => return Ok(None),
+            };
+
+        maybe_withdrawal
+            .map(Some)
+            .map_err(|err| Error::from(format!("invalid withdrawal request {}", err)))
     }
 }

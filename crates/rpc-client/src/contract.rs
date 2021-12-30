@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::{anyhow, bail, Result};
-use arc_swap::{ArcSwap, Guard};
+use arc_swap::ArcSwap;
 use async_jsonrpc_client::Params as ClientParams;
 use gw_config::{BlockProducerConfig, ContractTypeScriptConfig, ContractsCellDep};
 use gw_jsonrpc_types::blockchain::{CellDep, Script};
@@ -13,6 +13,8 @@ use serde_json::json;
 
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey};
 use crate::rpc_client::RPCClient;
+
+pub use arc_swap::Guard;
 
 // Used in block producer and challenge
 #[derive(Clone)]

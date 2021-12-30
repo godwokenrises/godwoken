@@ -204,7 +204,7 @@ pub struct UnlockedWithdrawals {
 pub fn unlock_to_owner(
     rollup_cell: CellInfo,
     rollup_context: &RollupContext,
-    block_producer_config: &BlockProducerConfig,
+    contracts_dep: &ContractsCellDep,
     withdrawal_cells: Vec<CellInfo>,
 ) -> Result<Option<UnlockedWithdrawals>> {
     if withdrawal_cells.is_empty() {
@@ -289,8 +289,8 @@ pub fn unlock_to_owner(
         .out_point(rollup_cell.out_point)
         .dep_type(DepType::Code.into())
         .build();
-    let withdrawal_lock_dep = block_producer_config.withdrawal_cell_lock_dep.clone();
-    let sudt_type_dep = block_producer_config.l1_sudt_type_dep.clone();
+    let withdrawal_lock_dep = contracts_dep.withdrawal_cell_lock.clone();
+    let sudt_type_dep = contracts_dep.l1_sudt_type.clone();
 
     let mut cell_deps = vec![rollup_dep, withdrawal_lock_dep.into()];
     if unlocked_to_owner_outputs
@@ -314,7 +314,7 @@ mod test {
     use std::iter::FromIterator;
 
     use gw_common::{h256_ext::H256Ext, H256};
-    use gw_config::BlockProducerConfig;
+    use gw_config::ContractsCellDep;
     use gw_types::core::{DepType, ScriptHashType};
     use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo};
     use gw_types::packed::{
@@ -386,7 +386,7 @@ mod test {
             .withdrawals(vec![withdrawal.clone()].pack())
             .build();
 
-        let block_producer_config = BlockProducerConfig::default();
+        let contracts_dep = ContractsCellDep::default();
 
         // ## No owner lock
         let withdrawal_extra = WithdrawalRequestExtra::new_builder()
@@ -398,7 +398,7 @@ mod test {
             &rollup_context,
             finalized_custodians.clone(),
             &block,
-            &block_producer_config,
+            &contracts_dep,
             &withdrawal_extras,
         )
         .unwrap();
@@ -429,7 +429,7 @@ mod test {
             &rollup_context,
             finalized_custodians,
             &block,
-            &block_producer_config,
+            &contracts_dep,
             &withdrawal_extras,
         )
         .unwrap();
@@ -502,7 +502,7 @@ mod test {
                 .build(),
         };
 
-        let block_producer_config = {
+        let contracts_dep = {
             let withdrawal_out_point = OutPoint::new_builder()
                 .tx_hash(H256::from_u32(6).pack())
                 .build();
@@ -510,12 +510,12 @@ mod test {
                 .tx_hash(H256::from_u32(7).pack())
                 .build();
 
-            BlockProducerConfig {
-                withdrawal_cell_lock_dep: CellDep::new_builder()
+            ContractsCellDep {
+                withdrawal_cell_lock: CellDep::new_builder()
                     .out_point(withdrawal_out_point)
                     .build()
                     .into(),
-                l1_sudt_type_dep: CellDep::new_builder()
+                l1_sudt_type: CellDep::new_builder()
                     .out_point(l1_sudt_out_point)
                     .build()
                     .into(),
@@ -570,7 +570,7 @@ mod test {
         let unlocked = unlock_to_owner(
             rollup_cell.clone(),
             &rollup_context,
-            &block_producer_config,
+            &contracts_dep,
             vec![
                 withdrawal_without_owner_lock,
                 withdrawal_with_owner_lock.clone(),
@@ -639,11 +639,11 @@ mod test {
         );
         assert_eq!(
             unlocked.deps.get(1).unwrap().as_slice(),
-            CellDep::from(block_producer_config.withdrawal_cell_lock_dep).as_slice(),
+            CellDep::from(contracts_dep.withdrawal_cell_lock).as_slice(),
         );
         assert_eq!(
             unlocked.deps.get(2).unwrap().as_slice(),
-            CellDep::from(block_producer_config.l1_sudt_type_dep).as_slice(),
+            CellDep::from(contracts_dep.l1_sudt_type).as_slice(),
         );
     }
 }
