@@ -50,6 +50,8 @@ pub enum RPCMethods {
 pub struct RPCServerConfig {
     pub listen: String,
     #[serde(default)]
+    pub err_receipt_ws_listen: Option<String>,
+    #[serde(default)]
     pub enable_methods: HashSet<RPCMethods>,
 }
 
