@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use anyhow::{anyhow, bail, Result};
 use arc_swap::{ArcSwap, Guard};
-use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
+use async_jsonrpc_client::Params as ClientParams;
 use gw_config::{BlockProducerConfig, ContractTypeScriptConfig, ContractsCellDep};
 use gw_jsonrpc_types::blockchain::{CellDep, Script};
 use gw_types::packed::RollupConfig;
@@ -13,7 +13,6 @@ use serde_json::json;
 
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey};
 use crate::rpc_client::RPCClient;
-use crate::utils::to_result;
 
 // Used in block producer and challenge
 #[derive(Clone)]
@@ -145,32 +144,6 @@ pub async fn query_cell_deps(
     })
 }
 
-pub async fn query_type_script(
-    ckb_client: &HttpClient,
-    contract: &str,
-    cell_dep: CellDep,
-) -> Result<Script> {
-    use gw_jsonrpc_types::ckb_jsonrpc_types::TransactionWithStatus;
-
-    let tx_hash = cell_dep.out_point.tx_hash;
-    let get_transaction = ckb_client.request(
-        "get_transaction",
-        Some(ClientParams::Array(vec![json!(tx_hash)])),
-    );
-    let tx = match to_result::<Option<TransactionWithStatus>>(get_transaction.await?)? {
-        Some(tx_with_status) => tx_with_status.transaction.inner,
-        None => bail!("{} {} tx not found", contract, tx_hash),
-    };
-
-    match tx.outputs.get(cell_dep.out_point.index.value() as usize) {
-        Some(output) => match output.type_.as_ref() {
-            Some(script) => Ok(script.to_owned().into()),
-            None => Err(anyhow!("{} {} tx hasn't type script", contract, tx_hash)),
-        },
-        None => Err(anyhow!("{} {} tx index not found", contract, tx_hash)),
-    }
-}
-
 // For old config compatibility
 #[allow(deprecated)]
 #[deprecated]
@@ -179,7 +152,7 @@ pub async fn query_type_script_from_old_config(
     config: &BlockProducerConfig,
 ) -> Result<ContractTypeScriptConfig> {
     let query = |contract: &'static str, cell_dep: CellDep| -> _ {
-        query_type_script(&rpc_client.ckb, contract, cell_dep)
+        rpc_client.ckb.query_type_script(contract, cell_dep)
     };
 
     let state_validator = query("state validator", config.rollup_cell_type_dep.clone()).await?;
@@ -230,7 +203,7 @@ async fn query_by_type_script(
     let order = Order::Desc;
     let limit = Uint32::from(1);
 
-    let get_contract_cell = rpc_client.indexer.client().request(
+    let get_contract_cell = rpc_client.indexer.request(
         "get_cells",
         Some(ClientParams::Array(vec![
             json!(search_key),
@@ -239,7 +212,7 @@ async fn query_by_type_script(
         ])),
     );
 
-    let mut cells: Pagination<Cell> = to_result(get_contract_cell.await?)?;
+    let mut cells: Pagination<Cell> = get_contract_cell.await?;
     match cells.objects.pop() {
         Some(cell) => Ok(Into::into(CellDep {
             dep_type: DepType::Code,
