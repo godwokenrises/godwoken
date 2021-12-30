@@ -20,7 +20,7 @@ pub struct BackendManage {
     /// define here not in backends,
     /// so we don't need to implement the trait `Clone` of AotCode
     #[cfg(feature = "aot")]
-    aot_codes: HashMap<H256, AotCode>,
+    aot_codes: (HashMap<H256, AotCode>, HashMap<H256, AotCode>),
 }
 
 impl BackendManage {
@@ -58,13 +58,19 @@ impl BackendManage {
     }
 
     pub fn register_backend(&mut self, backend: Backend) {
-        #[cfg(has_asm)]
         #[cfg(feature = "aot")]
-        self.aot_codes.insert(
-            backend.validator_script_type_hash,
-            self.aot_compile(&backend.generator)
-                .expect("Ahead-of-time compile"),
-        );
+        {
+            self.aot_codes.0.insert(
+                backend.validator_script_type_hash,
+                self.aot_compile(&backend.generator, 0)
+                    .expect("Ahead-of-time compile"),
+            );
+            self.aot_codes.1.insert(
+                backend.validator_script_type_hash,
+                self.aot_compile(&backend.generator, 1)
+                    .expect("Ahead-of-time compile"),
+            );
+        }
 
         self.backends
             .insert(backend.validator_script_type_hash, backend);
@@ -75,10 +81,9 @@ impl BackendManage {
     }
 
     #[cfg(feature = "aot")]
-    fn aot_compile(&self, code_bytes: &Bytes) -> Result<AotCode, ckb_vm::Error> {
-        let global_vm_version =
-            smol::block_on(async { *gw_ckb_hardfork::GLOBAL_VM_VERSION.lock().await });
-        let vm_version = match global_vm_version {
+    fn aot_compile(&self, code_bytes: &Bytes, vm_version: u32) -> Result<AotCode, ckb_vm::Error> {
+        log::info!("Compile AotCode with VMVersion::V{}", vm_version);
+        let vm_version = match vm_version {
             0 => crate::VMVersion::V0,
             1 => crate::VMVersion::V1,
             ver => panic!("Unsupport VMVersion: {}", ver),
@@ -92,13 +97,21 @@ impl BackendManage {
         aot_machine.compile()
     }
 
+    /// get aot_code according to special VM version
     #[cfg(feature = "aot")]
-    pub fn get_aot_code(&self, code_hash: &H256) -> Option<&AotCode> {
-        self.aot_codes.get(code_hash)
+    pub(crate) fn get_aot_code(&self, code_hash: &H256, vm_version: u32) -> Option<&AotCode> {
+        match vm_version {
+            0 => self.aot_codes.0.get(code_hash),
+            1 => self.aot_codes.1.get(code_hash),
+            ver => {
+                log::error!("Unsupport VMVersion: {}", ver);
+                None
+            }
+        }
     }
 
     #[cfg(not(feature = "aot"))]
-    pub(crate) fn get_aot_code(&self, _code_hash: &H256) -> Option<&AotCode> {
+    pub(crate) fn get_aot_code(&self, _code_hash: &H256, _vm_version: u32) -> Option<&AotCode> {
         None
     }
 
