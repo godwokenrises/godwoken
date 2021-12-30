@@ -21,7 +21,7 @@ use gw_config::{MemPoolConfig, NodeMode};
 use gw_generator::{
     constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
 };
-use gw_rpc_ws_server::server::GLOBAL_NOTIFY_CONTROLLER;
+use gw_rpc_ws_server::notify_controller::NotifyController;
 use gw_store::{
     chain_view::ChainView,
     mem_pool_state::{MemPoolState, MemStore},
@@ -86,6 +86,8 @@ pub struct MemPool {
     generator: Arc<Generator>,
     /// error tx handler,
     error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
+    /// error tx receipt notifier
+    error_tx_receipt_notifier: Option<NotifyController>,
     /// pending queue, contains executable contents
     pending: HashMap<u32, EntryList>,
     /// memory block
@@ -121,6 +123,7 @@ impl MemPool {
         generator: Arc<Generator>,
         provider: Box<dyn MemPoolProvider + Send>,
         error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
+        error_tx_receipt_notifier: Option<NotifyController>,
         config: MemPoolConfig,
         node_mode: NodeMode,
     ) -> Result<Self> {
@@ -168,6 +171,7 @@ impl MemPool {
             current_tip: tip,
             generator,
             error_tx_handler,
+            error_tx_receipt_notifier,
             pending,
             mem_block,
             provider,
@@ -1300,19 +1304,16 @@ impl MemPool {
             };
             if let Some(ref mut error_tx_handler) = self.error_tx_handler {
                 let t = Instant::now();
-                // TODO: notify real message
-                let receipt_clone = receipt.clone();
-                smol::spawn(async move {
-                    let notify_controller = GLOBAL_NOTIFY_CONTROLLER.lock().await;
-                    notify_controller.notify_new_error_tx_receipt(receipt_clone);
-                })
-                .detach();
-                // TODO: remove this
-                error_tx_handler.handle_error_receipt(receipt).detach();
+                error_tx_handler
+                    .handle_error_receipt(receipt.clone())
+                    .detach();
                 log::debug!(
                     "[finalize tx] handle error tx: {}ms",
                     t.elapsed().as_millis()
                 );
+            }
+            if let Some(notifier) = self.error_tx_receipt_notifier.as_ref() {
+                notifier.notify_new_error_tx_receipt(receipt);
             }
 
             return Err(TransactionError::InvalidExitCode(run_result.exit_code).into());

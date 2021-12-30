@@ -37,7 +37,7 @@ use gw_rpc_server::{
     registry::{Registry, RegistryArgs},
     server::start_jsonrpc_server,
 };
-use gw_rpc_ws_server::server::start_jsonrpc_ws_server;
+use gw_rpc_ws_server::{notify_controller::NotifyService, server::start_jsonrpc_ws_server};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
@@ -496,65 +496,70 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     );
 
     let base = BaseInitComponents::init(&config, skip_config_check)?;
-    let (mem_pool, wallet, poa, offchain_mock_context, pg_pool) = match config
-        .block_producer
-        .as_ref()
-    {
-        Some(block_producer_config) => {
-            let wallet = Wallet::from_config(&block_producer_config.wallet_config)
-                .with_context(|| "init wallet")?;
-            let poa = base.init_poa(&wallet, block_producer_config);
-            let offchain_mock_context = smol::block_on(async {
-                let poa = poa.lock().await;
-                base.init_offchain_mock_context(&poa, block_producer_config)
-                    .await
-            })?;
-            let mem_pool_provider = DefaultMemPoolProvider::new(
-                base.rpc_client.clone(),
-                Arc::clone(&poa),
-                base.store.clone(),
-            );
-            let pg_pool = {
-                let config = config.web3_indexer.as_ref();
-                let init_pool = config.map(|web3_indexer_config| {
-                    smol::block_on(async {
-                        let mut opts: PgConnectOptions =
-                            web3_indexer_config.database_url.parse()?;
-                        opts.log_statements(log::LevelFilter::Debug)
-                            .log_slow_statements(log::LevelFilter::Warn, Duration::from_secs(5));
-                        PgPoolOptions::new()
-                            .max_connections(5)
-                            .connect_with(opts)
-                            .await
-                    })
-                });
-                init_pool.transpose()?
-            };
-            let error_tx_handler = pg_pool.clone().map(|pool| {
-                Box::new(ErrorReceiptIndexer::new(pool)) as Box<dyn MemPoolErrorTxHandler + Send>
-            });
-            let mem_pool = Arc::new(Mutex::new(
-                MemPool::create(
-                    block_producer_config.account_id,
+    let (mem_pool, wallet, poa, offchain_mock_context, pg_pool, err_receipt_notify_ctrl) =
+        match config.block_producer.as_ref() {
+            Some(block_producer_config) => {
+                let wallet = Wallet::from_config(&block_producer_config.wallet_config)
+                    .with_context(|| "init wallet")?;
+                let poa = base.init_poa(&wallet, block_producer_config);
+                let offchain_mock_context = smol::block_on(async {
+                    let poa = poa.lock().await;
+                    base.init_offchain_mock_context(&poa, block_producer_config)
+                        .await
+                })?;
+                let mem_pool_provider = DefaultMemPoolProvider::new(
+                    base.rpc_client.clone(),
+                    Arc::clone(&poa),
                     base.store.clone(),
-                    base.generator.clone(),
-                    Box::new(mem_pool_provider),
-                    error_tx_handler,
-                    config.mem_pool.clone(),
-                    config.node_mode,
+                );
+                let pg_pool = {
+                    let config = config.web3_indexer.as_ref();
+                    let init_pool = config.map(|web3_indexer_config| {
+                        smol::block_on(async {
+                            let mut opts: PgConnectOptions =
+                                web3_indexer_config.database_url.parse()?;
+                            opts.log_statements(log::LevelFilter::Debug)
+                                .log_slow_statements(
+                                    log::LevelFilter::Warn,
+                                    Duration::from_secs(5),
+                                );
+                            PgPoolOptions::new()
+                                .max_connections(5)
+                                .connect_with(opts)
+                                .await
+                        })
+                    });
+                    init_pool.transpose()?
+                };
+                let error_tx_handler = pg_pool.clone().map(|pool| {
+                    Box::new(ErrorReceiptIndexer::new(pool))
+                        as Box<dyn MemPoolErrorTxHandler + Send>
+                });
+                let notify_controller = NotifyService::new().start();
+                let mem_pool = Arc::new(Mutex::new(
+                    MemPool::create(
+                        block_producer_config.account_id,
+                        base.store.clone(),
+                        base.generator.clone(),
+                        Box::new(mem_pool_provider),
+                        error_tx_handler,
+                        Some(notify_controller.clone()),
+                        config.mem_pool.clone(),
+                        config.node_mode,
+                    )
+                    .with_context(|| "create mem-pool")?,
+                ));
+                (
+                    Some(mem_pool),
+                    Some(wallet),
+                    Some(poa),
+                    Some(offchain_mock_context),
+                    pg_pool,
+                    Some(notify_controller),
                 )
-                .with_context(|| "create mem-pool")?,
-            ));
-            (
-                Some(mem_pool),
-                Some(wallet),
-                Some(poa),
-                Some(offchain_mock_context),
-                pg_pool,
-            )
-        }
-        None => (None, None, None, None, None),
-    };
+            }
+            None => (None, None, None, None, None, None),
+        };
 
     let BaseInitComponents {
         rollup_config,
@@ -833,20 +838,25 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }
     });
 
-    let rpc_ws_task = smol::spawn(async move {
-        if let Err(err) = start_jsonrpc_ws_server().await {
-            log::error!("Error running JSONRPC WebSockert server: {:?}", err);
-        }
-        if let Err(err) = exit_sender.send(()).await {
-            log::error!("send exit signal error: {}", err);
-        }
-    });
+    let mut rpc_ws_task = None;
+    if let Some(notify_controller) = err_receipt_notify_ctrl {
+        rpc_ws_task = Some(smol::spawn(async move {
+            if let Err(err) = start_jsonrpc_ws_server("127.0.0.1:8219", notify_controller).await {
+                log::error!("Error running JSONRPC WebSockert server: {:?}", err);
+            }
+            if let Err(err) = exit_sender.send(()).await {
+                log::error!("send exit signal error: {}", err);
+            }
+        }));
+    }
 
     smol::block_on(async {
         let _ = exit_recv.recv().await;
         log::info!("Exiting...");
 
-        drop(rpc_ws_task);
+        if let Some(rpc_ws_task) = rpc_ws_task {
+            rpc_ws_task.cancel().await;
+        }
         rpc_task.cancel().await;
         chain_task.cancel().await;
     });

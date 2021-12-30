@@ -1028,18 +1028,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ckb-stop-handler"
-version = "0.100.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eaf7540f805a44d49023a12e04cfcbebcf03d8f171eae93f54fb5c3b2003bf35"
-dependencies = [
- "ckb-channel",
- "ckb-logger",
- "parking_lot",
- "tokio",
-]
-
-[[package]]
 name = "ckb-system-scripts"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2447,9 +2435,8 @@ name = "gw-rpc-ws-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ckb-channel",
- "ckb-stop-handler",
  "ckb-types",
+ "futures",
  "gw-jsonrpc-types",
  "gw-types",
  "jsonrpc-core 18.0.0",

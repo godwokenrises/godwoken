@@ -1,15 +1,13 @@
 [package]
 name = "gw-rpc-ws-server"
 version = "0.1.0"
-authors = ["jjy <jjyruby@gmail.com>"]
+authors = ["Nervos network"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 ckb-types = "0.100.0"
-ckb-channel = "0.100.0"
-ckb-stop-handler = "0.100.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_plain = "0.3.0"
@@ -26,3 +24,4 @@ lazy_static = "1.4"
 smol = "1.2.5"
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-types = { path = "../types" }
+futures = "0.3"

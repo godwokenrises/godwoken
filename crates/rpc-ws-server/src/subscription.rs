@@ -1,11 +1,9 @@
-use ckb_channel::select;
 use jsonrpc_core::{Metadata, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{
     typed::{Sink, Subscriber},
     PubSubMetadata, Session, SubscriptionId,
 };
-use log::error;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -13,7 +11,6 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
     RwLock,
 };
-use std::thread;
 
 use crate::notify_controller::NotifyController;
 
@@ -142,41 +139,59 @@ impl SubscriptionRpc for SubscriptionRpcImpl {
 }
 
 impl SubscriptionRpcImpl {
-    pub fn new<S: ToString + std::fmt::Debug>(
+    pub async fn start<S: ToString + std::fmt::Debug>(
         notify_controller: NotifyController,
         name: S,
-    ) -> Self {
-        let new_error_tx_receipt_receiver =
-            notify_controller.subscribe_new_error_tx_receipt(name.to_string());
+    ) -> Result<Self> {
+        let err_receipt_rx = match notify_controller
+            .subscribe_new_error_tx_receipt(name.to_string())
+            .await
+        {
+            Ok(rx) => rx,
+            Err(err) => {
+                log::error!("[error tx receipt] subscribe {}", err);
+                return Err(jsonrpc_core::Error {
+                    code: jsonrpc_core::ErrorCode::InternalError,
+                    message: "subscribe error tx receipt failed".to_string(),
+                    data: None,
+                });
+            }
+        };
 
         let subscription_rpc_impl = SubscriptionRpcImpl::default();
         let subscribers = Arc::clone(&subscription_rpc_impl.subscribers);
 
-        let thread_builder = thread::Builder::new().name(name.to_string());
-        thread_builder
-            .spawn(move || loop {
-                select! {
-                    recv(new_error_tx_receipt_receiver) -> msg => match msg {
-                        Ok(error_tx_receipt) => {
-                            // log::info!("received new error tx receipt: {:?}", msg);
-                            let subscribers = subscribers.read().expect("acquiring subscribers read lock");
-                            if let Some(new_error_tx_receipt_subscribers) = subscribers.get(&Topic::NewErrorTxReceipt) {
-                                let receipt: gw_jsonrpc_types::godwoken::ErrorTxReceipt = error_tx_receipt.into();
-                                let json_value = Ok(serde_json::to_value(&receipt).expect("serialization should be ok"));
-                                for sink in new_error_tx_receipt_subscribers.values() {
-                                    let _ = sink.notify(json_value.clone());
-                                }
-                            }
-                        },
-                        Err(err) => {
-                            error!("new_error_tx_receipt closed {:?}", err);
-                            break;
-                        },
-                    },
-                }
-            })
-            .expect("Start SubscriptionRpc thread failed");
+        smol::spawn(async move {
+            loop {
+                let err_receipt = match err_receipt_rx.recv().await {
+                    Ok(err_receipt) => err_receipt,
+                    Err(err) => {
+                        log::error!("[error tx receipt] notify service stop {}", err);
+                        return;
+                    }
+                };
+                log::trace!("[error tx receipt] new receipt: {:?}", err_receipt);
 
-        subscription_rpc_impl
+                let err_receipt: gw_jsonrpc_types::godwoken::ErrorTxReceipt =
+                    (*err_receipt).clone().into();
+                let json_err_receipt = match serde_json::to_value(&err_receipt) {
+                    Ok(json) => json,
+                    Err(err) => {
+                        log::error!("[error tx receipt] serialize {:?} {}", err_receipt, err);
+                        continue;
+                    }
+                };
+
+                let subscribers = subscribers.read().expect("acquiring subscribers read lock");
+                if let Some(subscribers) = subscribers.get(&Topic::NewErrorTxReceipt) {
+                    for sink in subscribers.values() {
+                        let _ = sink.notify(Ok(json_err_receipt.clone()));
+                    }
+                }
+            }
+        })
+        .detach();
+
+        Ok(subscription_rpc_impl)
     }
 }
