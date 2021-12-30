@@ -1370,20 +1370,18 @@ impl RPCClient {
         let mut cursor = None;
 
         while collected.is_empty() {
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             for cell in cells.objects.into_iter() {
                 let info = to_cell_info(cell);
