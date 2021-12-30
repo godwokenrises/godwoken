@@ -1,7 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
 use anyhow::{anyhow, Context as AnyHowContext, Result};
-use async_jsonrpc_client::HttpClient;
 use ckb_types::{bytes::Bytes, prelude::Entity};
 use gw_chain::chain::Chain;
 use gw_config::{Config, StoreConfig};
@@ -15,7 +14,9 @@ use gw_generator::{
     genesis::init_genesis,
     Generator,
 };
-use gw_rpc_client::rpc_client::RPCClient;
+use gw_rpc_client::{
+    ckb_client::CKBClient, indexer_client::CKBIndexerClient, rpc_client::RPCClient,
+};
 use gw_store::Store;
 use gw_types::{offchain::RollupContext, packed::RollupConfig, prelude::Unpack};
 
@@ -61,8 +62,8 @@ pub fn setup(args: SetupArgs) -> Result<Context> {
     };
     let secp_data: Bytes = {
         let rpc_client = {
-            let indexer_client = HttpClient::new(config.rpc_client.indexer_url.to_owned())?;
-            let ckb_client = HttpClient::new(config.rpc_client.ckb_url.to_owned())?;
+            let indexer_client = CKBIndexerClient::with_url(&config.rpc_client.indexer_url)?;
+            let ckb_client = CKBClient::with_url(&config.rpc_client.ckb_url)?;
             let rollup_type_script =
                 ckb_types::packed::Script::new_unchecked(rollup_type_script.as_bytes());
             RPCClient::new(

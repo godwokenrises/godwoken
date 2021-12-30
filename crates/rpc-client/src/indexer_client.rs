@@ -1,7 +1,7 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
-use crate::utils::{to_result, DEFAULT_QUERY_LIMIT};
+use crate::utils::{to_result, DEFAULT_HTTP_TIMEOUT, DEFAULT_QUERY_LIMIT};
 use anyhow::{anyhow, Result};
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use ckb_types::prelude::Entity;
@@ -13,6 +13,7 @@ use gw_types::{
     packed::{CellOutput, OutPoint, Script},
     prelude::*,
 };
+use serde::de::DeserializeOwned;
 use serde_json::json;
 
 use std::collections::{HashMap, HashSet};
@@ -26,12 +27,40 @@ impl CKBIndexerClient {
     }
 
     pub fn with_url(url: &str) -> Result<Self> {
-        let client = HttpClient::new(url)?;
+        let client = HttpClient::builder()
+            .timeout(DEFAULT_HTTP_TIMEOUT)
+            .build(url)?;
         Ok(Self::new(client))
     }
 
-    pub fn client(&self) -> &HttpClient {
+    fn client(&self) -> &HttpClient {
         &self.0
+    }
+
+    pub async fn request<T: DeserializeOwned>(
+        &self,
+        method: &str,
+        params: Option<ClientParams>,
+    ) -> Result<T> {
+        let response = self.client().request(method, params).await.map_err(|err| {
+            anyhow!(
+                "ckb indexer client error, method: {} error: {}",
+                method,
+                err
+            )
+        })?;
+        let response_str = response.to_string();
+        match to_result(response) {
+            Ok(r) => Ok(r),
+            Err(err) => {
+                log::error!(
+                    "[ckb-indexer-client] Failed to parse response, method: {}, response: {}",
+                    method,
+                    response_str
+                );
+                Err(err)
+            }
+        }
     }
 
     /// query payment cells, the returned cells should provide at least required_capacity fee,
@@ -57,19 +86,17 @@ impl CKBIndexerClient {
         let mut collected_capacity = 0u64;
         let mut cursor = None;
         while collected_capacity < required_capacity {
-            let cells: Pagination<Cell> = to_result(
-                self.0
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             if cells.last_cursor.is_empty() {
                 return Err(anyhow!(
@@ -148,19 +175,17 @@ impl CKBIndexerClient {
         let mut ckb_cells_count = 0;
         let mut cursor = None;
         loop {
-            let cells: Pagination<Cell> = to_result(
-                self.0
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             if cells.last_cursor.is_empty() {
                 break;

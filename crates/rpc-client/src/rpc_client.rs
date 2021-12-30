@@ -1,10 +1,11 @@
 #![allow(clippy::mutable_key_type)]
 
+use crate::ckb_client::CKBClient;
 use crate::indexer_client::CKBIndexerClient;
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
-use crate::utils::{to_h256, to_jsonh256, to_result, DEFAULT_QUERY_LIMIT, TYPE_ID_CODE_HASH};
+use crate::utils::{to_h256, to_jsonh256, DEFAULT_QUERY_LIMIT, TYPE_ID_CODE_HASH};
 use anyhow::{anyhow, Result};
-use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
+use async_jsonrpc_client::Params as ClientParams;
 use ckb_types::core::hardfork::HardForkSwitch;
 use ckb_types::prelude::Entity;
 use gw_common::{CKB_SUDT_SCRIPT_ARGS, H256};
@@ -109,7 +110,7 @@ impl<T> QueryResult<T> {
 #[derive(Clone)]
 pub struct RPCClient {
     pub indexer: CKBIndexerClient,
-    pub ckb: HttpClient,
+    pub ckb: CKBClient,
     pub rollup_type_script: ckb_types::packed::Script,
     pub rollup_context: RollupContext,
 }
@@ -118,11 +119,11 @@ impl RPCClient {
     pub fn new(
         rollup_type_script: ckb_types::packed::Script,
         rollup_context: RollupContext,
-        ckb: HttpClient,
-        indexer: HttpClient,
+        ckb: CKBClient,
+        indexer: CKBIndexerClient,
     ) -> Self {
         Self {
-            indexer: CKBIndexerClient::new(indexer),
+            indexer,
             ckb,
             rollup_context,
             rollup_type_script,
@@ -144,19 +145,17 @@ impl RPCClient {
         let order = Order::Desc;
         let limit = Uint32::from(1);
 
-        let mut cells: Pagination<Cell> = to_result(
-            self.indexer
-                .client()
-                .request(
-                    "get_cells",
-                    Some(ClientParams::Array(vec![
-                        json!(search_key),
-                        json!(order),
-                        json!(limit),
-                    ])),
-                )
-                .await?,
-        )?;
+        let mut cells: Pagination<Cell> = self
+            .indexer
+            .request(
+                "get_cells",
+                Some(ClientParams::Array(vec![
+                    json!(search_key),
+                    json!(order),
+                    json!(limit),
+                ])),
+            )
+            .await?;
         if let Some(cell) = cells.objects.pop() {
             let out_point = {
                 let out_point: ckb_types::packed::OutPoint = cell.out_point.into();
@@ -195,20 +194,18 @@ impl RPCClient {
         let mut cell = None;
         let mut cursor = None;
         while cell.is_none() {
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
             cursor = Some(cells.last_cursor);
             assert!(
                 cells.objects.len() <= 1,
@@ -254,20 +251,18 @@ impl RPCClient {
         let mut cell = None;
         let mut cursor = None;
         while cell.is_none() {
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             if cells.last_cursor.is_empty() {
                 return Err(anyhow!("no owner cell"));
@@ -297,18 +292,16 @@ impl RPCClient {
             let out_point = ckb_types::packed::OutPoint::new_unchecked(out_point.as_bytes());
             out_point.into()
         };
-        let cell_with_status: Option<gw_jsonrpc_types::ckb_jsonrpc_types::CellWithStatus> =
-            to_result(
-                self.ckb
-                    .request(
-                        "get_live_cell",
-                        Some(ClientParams::Array(vec![
-                            json!(json_out_point),
-                            json!(true),
-                        ])),
-                    )
-                    .await?,
-            )?;
+        let cell_with_status: Option<gw_jsonrpc_types::ckb_jsonrpc_types::CellWithStatus> = self
+            .ckb
+            .request(
+                "get_live_cell",
+                Some(ClientParams::Array(vec![
+                    json!(json_out_point),
+                    json!(true),
+                ])),
+            )
+            .await?;
 
         if cell_with_status.is_none() {
             return Ok(None);
@@ -367,33 +360,31 @@ impl RPCClient {
 
     pub async fn get_tip(&self) -> Result<NumberHash> {
         let number_hash: gw_jsonrpc_types::blockchain::NumberHash =
-            to_result(self.indexer.client().request("get_tip", None).await?)?;
+            self.indexer.request("get_tip", None).await?;
         Ok(number_hash.into())
     }
 
     pub async fn get_block_median_time(&self, block_hash: H256) -> Result<Option<Duration>> {
-        let opt_median_time: Option<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64> = to_result(
-            self.ckb
-                .request(
-                    "get_block_median_time",
-                    Some(ClientParams::Array(vec![json!(to_jsonh256(block_hash))])),
-                )
-                .await?,
-        )?;
+        let opt_median_time: Option<gw_jsonrpc_types::ckb_jsonrpc_types::Uint64> = self
+            .ckb
+            .request(
+                "get_block_median_time",
+                Some(ClientParams::Array(vec![json!(to_jsonh256(block_hash))])),
+            )
+            .await?;
 
         Ok(opt_median_time.map(|t| Duration::from_millis(t.into())))
     }
 
     pub async fn get_block_by_number(&self, number: u64) -> Result<Option<Block>> {
         let block_number = BlockNumber::from(number);
-        let block_opt: Option<ckb_jsonrpc_types::BlockView> = to_result(
-            self.ckb
-                .request(
-                    "get_block_by_number",
-                    Some(ClientParams::Array(vec![json!(block_number)])),
-                )
-                .await?,
-        )?;
+        let block_opt: Option<ckb_jsonrpc_types::BlockView> = self
+            .ckb
+            .request(
+                "get_block_by_number",
+                Some(ClientParams::Array(vec![json!(block_number)])),
+            )
+            .await?;
         Ok(block_opt.map(|b| {
             let block: ckb_types::core::BlockView = b.into();
             Block::new_unchecked(block.data().as_bytes())
@@ -451,20 +442,18 @@ impl RPCClient {
         while deposit_infos.len() < count {
             let limit = Uint32::from((count - deposit_infos.len()) as u32);
 
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             if cells.last_cursor.is_empty() {
                 break;
@@ -560,20 +549,18 @@ impl RPCClient {
         let mut cursor = None;
 
         while stake_cell.is_none() {
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             if cells.last_cursor.is_empty() {
                 log::debug!("no unlocked stake");
@@ -650,20 +637,18 @@ impl RPCClient {
         let mut cursor = None;
 
         while collected_owners.len() != owner_lock_hashes.len() {
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             if cells.last_cursor.is_empty() {
                 return Err(anyhow!("no all reward stake cells found"));
@@ -715,20 +700,18 @@ impl RPCClient {
         let mut cursor = None;
 
         while collected.is_empty() {
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             if cells.last_cursor.is_empty() {
                 return Ok((collected, collected_block_hashes));
@@ -799,20 +782,18 @@ impl RPCClient {
         let mut cursor = None;
         let mut collected_ckb_custodians = Vec::<CellInfo>::with_capacity(remain);
         while collected_ckb_custodians.len() < remain {
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             for cell in cells.objects.into_iter() {
                 if collected.cells_info.len() >= max_cells {
@@ -1037,20 +1018,18 @@ impl RPCClient {
         while collected.capacity < required_capacity
             || collected_fullfilled_sudt.len() < withdrawals_amount.sudt.len()
         {
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             if cells.last_cursor.is_empty() {
                 return Ok(QueryResult::NotEnough(collected));
@@ -1194,20 +1173,18 @@ impl RPCClient {
 
         let mut cursor = None;
         loop {
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             if cells.last_cursor.is_empty() {
                 return Ok(None);
@@ -1260,20 +1237,18 @@ impl RPCClient {
         let mut cursor = None;
 
         while collected.is_empty() {
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             if cells.last_cursor.is_empty() {
                 return Ok((collected, collected_block_hashes));
@@ -1333,20 +1308,18 @@ impl RPCClient {
         let mut cursor = None;
 
         while verifier_cell.is_none() {
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             if cells.last_cursor.is_empty() {
                 log::debug!(
@@ -1375,14 +1348,13 @@ impl RPCClient {
         &self,
         block_hash: H256,
     ) -> Result<Option<ckb_jsonrpc_types::BlockView>> {
-        let block: Option<ckb_jsonrpc_types::BlockView> = to_result(
-            self.ckb
-                .request(
-                    "get_block",
-                    Some(ClientParams::Array(vec![json!(to_jsonh256(block_hash))])),
-                )
-                .await?,
-        )?;
+        let block: Option<ckb_jsonrpc_types::BlockView> = self
+            .ckb
+            .request(
+                "get_block",
+                Some(ClientParams::Array(vec![json!(to_jsonh256(block_hash))])),
+            )
+            .await?;
 
         Ok(block)
     }
@@ -1391,27 +1363,25 @@ impl RPCClient {
         &self,
         block_hash: H256,
     ) -> Result<Option<ckb_jsonrpc_types::HeaderView>> {
-        let block: Option<ckb_jsonrpc_types::HeaderView> = to_result(
-            self.ckb
-                .request(
-                    "get_header",
-                    Some(ClientParams::Array(vec![json!(to_jsonh256(block_hash))])),
-                )
-                .await?,
-        )?;
+        let block: Option<ckb_jsonrpc_types::HeaderView> = self
+            .ckb
+            .request(
+                "get_header",
+                Some(ClientParams::Array(vec![json!(to_jsonh256(block_hash))])),
+            )
+            .await?;
 
         Ok(block)
     }
 
     pub async fn get_transaction_block_hash(&self, tx_hash: H256) -> Result<Option<[u8; 32]>> {
-        let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = to_result(
-            self.ckb
-                .request(
-                    "get_transaction",
-                    Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
-                )
-                .await?,
-        )?;
+        let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = self
+            .ckb
+            .request(
+                "get_transaction",
+                Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
+            )
+            .await?;
 
         match tx_with_status {
             Some(tx_with_status) => {
@@ -1436,14 +1406,13 @@ impl RPCClient {
     }
 
     pub async fn get_transaction(&self, tx_hash: H256) -> Result<Option<Transaction>> {
-        let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = to_result(
-            self.ckb
-                .request(
-                    "get_transaction",
-                    Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
-                )
-                .await?,
-        )?;
+        let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = self
+            .ckb
+            .request(
+                "get_transaction",
+                Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
+            )
+            .await?;
         Ok(tx_with_status.map(|tx_with_status| {
             let tx: ckb_types::packed::Transaction = tx_with_status.transaction.inner.into();
             Transaction::new_unchecked(tx.as_bytes())
@@ -1451,14 +1420,13 @@ impl RPCClient {
     }
 
     pub async fn get_transaction_status(&self, tx_hash: H256) -> Result<Option<TxStatus>> {
-        let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = to_result(
-            self.ckb
-                .request(
-                    "get_transaction",
-                    Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
-                )
-                .await?,
-        )?;
+        let tx_with_status: Option<ckb_jsonrpc_types::TransactionWithStatus> = self
+            .ckb
+            .request(
+                "get_transaction",
+                Some(ClientParams::Array(vec![json!(to_jsonh256(tx_hash))])),
+            )
+            .await?;
 
         Ok(
             tx_with_status.map(|tx_with_status| match tx_with_status.tx_status.status {
@@ -1474,20 +1442,18 @@ impl RPCClient {
             let tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
             tx.into()
         };
-        let tx_hash: ckb_types::H256 = to_result(
-            self.ckb
-                .request(
-                    "send_transaction",
-                    Some(ClientParams::Array(vec![json!(tx), json!("passthrough")])),
-                )
-                .await?,
-        )?;
+        let tx_hash: ckb_types::H256 = self
+            .ckb
+            .request(
+                "send_transaction",
+                Some(ClientParams::Array(vec![json!(tx), json!("passthrough")])),
+            )
+            .await?;
         Ok(to_h256(tx_hash))
     }
 
     pub async fn get_ckb_version(&self) -> Result<String> {
-        let node: ckb_jsonrpc_types::LocalNode =
-            to_result(self.ckb.request("local_node_info", None).await?)?;
+        let node: ckb_jsonrpc_types::LocalNode = self.ckb.request("local_node_info", None).await?;
         Ok(node.version)
     }
 
@@ -1496,26 +1462,25 @@ impl RPCClient {
             let tx = ckb_types::packed::Transaction::new_unchecked(tx.as_bytes());
             tx.into()
         };
-        let dry_run_result: ckb_jsonrpc_types::DryRunResult = to_result(
-            self.ckb
-                .request(
-                    "dry_run_transaction",
-                    Some(ClientParams::Array(vec![json!(tx)])),
-                )
-                .await?,
-        )?;
+        let dry_run_result: ckb_jsonrpc_types::DryRunResult = self
+            .ckb
+            .request(
+                "dry_run_transaction",
+                Some(ClientParams::Array(vec![json!(tx)])),
+            )
+            .await?;
         Ok(dry_run_result.cycles.into())
     }
 
     pub async fn get_current_epoch_number(&self) -> Result<u64> {
         let epoch_view: ckb_jsonrpc_types::EpochView =
-            to_result(self.ckb.request("get_current_epoch", None).await?)?;
+            self.ckb.request("get_current_epoch", None).await?;
         let epoch_number: u64 = epoch_view.number.into();
         Ok(epoch_number)
     }
 
     pub async fn get_hardfork_switch(&self) -> Result<HardForkSwitch> {
-        let consensus: Consensus = to_result(self.ckb.request("get_consensus", None).await?)?;
+        let consensus: Consensus = self.ckb.request("get_consensus", None).await?;
         let rfc_0028 = self.get_hardfork_feature_epoch_number(&consensus, "0028")?;
         let rfc_0029 = self.get_hardfork_feature_epoch_number(&consensus, "0029")?;
         let rfc_0030 = self.get_hardfork_feature_epoch_number(&consensus, "0030")?;
@@ -1583,20 +1548,18 @@ impl RPCClient {
         let mut sudt_type_script_set = HashSet::new();
         let mut cursor = None;
         while sudt_type_script_set.len() < max {
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             for cell in cells.objects.into_iter() {
                 if sudt_type_script_set.len() >= max {
@@ -1691,20 +1654,18 @@ impl RPCClient {
         let mut collected_set = exclusions.clone();
         let mut cursor = None;
         while collected.len() < max_cells {
-            let cells: Pagination<Cell> = to_result(
-                self.indexer
-                    .client()
-                    .request(
-                        "get_cells",
-                        Some(ClientParams::Array(vec![
-                            json!(search_key),
-                            json!(order),
-                            json!(limit),
-                            json!(cursor),
-                        ])),
-                    )
-                    .await?,
-            )?;
+            let cells: Pagination<Cell> = self
+                .indexer
+                .request(
+                    "get_cells",
+                    Some(ClientParams::Array(vec![
+                        json!(search_key),
+                        json!(order),
+                        json!(limit),
+                        json!(cursor),
+                    ])),
+                )
+                .await?;
 
             for cell in cells.objects.into_iter() {
                 if collected.len() >= max_cells {
