@@ -1,11 +1,13 @@
 #![allow(clippy::mutable_key_type)]
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use gw_common::H256;
-use gw_config::{BlockProducerConfig, DebugConfig};
+use gw_config::{ContractsCellDep, DebugConfig};
+use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::offchain::{global_state_from_slice, CellInfo, RollupContext, TxStatus};
 use gw_types::packed::{OutPoint, Transaction};
@@ -17,6 +19,8 @@ use gw_utils::wallet::Wallet;
 
 use crate::types::ChainEvent;
 use crate::utils;
+
+pub use gw_rpc_client::contract::Guard;
 
 const TRANSACTION_FAILED_TO_RESOLVE_ERROR: &str = "TransactionFailedToResolve";
 
@@ -31,12 +35,12 @@ impl FinalizedWithdrawalUnlocker {
     pub fn new(
         rpc_client: RPCClient,
         ckb_genesis_info: CKBGenesisInfo,
-        block_producer_config: BlockProducerConfig,
+        contracts_dep_manager: ContractsCellDepManager,
         wallet: Wallet,
         debug_config: DebugConfig,
     ) -> Self {
         let unlocker =
-            DefaultUnlocker::new(rpc_client, ckb_genesis_info, block_producer_config, wallet);
+            DefaultUnlocker::new(rpc_client, ckb_genesis_info, contracts_dep_manager, wallet);
 
         FinalizedWithdrawalUnlocker {
             unlocker,
@@ -114,7 +118,7 @@ impl FinalizedWithdrawalUnlocker {
 pub trait BuildUnlockWithdrawalToOwner {
     fn rollup_context(&self) -> &RollupContext;
 
-    fn block_producer_config(&self) -> &BlockProducerConfig;
+    fn contracts_dep(&self) -> Guard<Arc<ContractsCellDep>>;
 
     async fn query_rollup_cell(&self) -> Result<Option<CellInfo>>;
 
@@ -151,7 +155,7 @@ pub trait BuildUnlockWithdrawalToOwner {
         let to_unlock = match crate::withdrawal::unlock_to_owner(
             rollup_cell,
             self.rollup_context(),
-            self.block_producer_config(),
+            &self.contracts_dep(),
             unlockable_withdrawals,
         )? {
             Some(to_unlock) => to_unlock,
@@ -176,7 +180,7 @@ pub trait BuildUnlockWithdrawalToOwner {
 struct DefaultUnlocker {
     rpc_client: RPCClient,
     ckb_genesis_info: CKBGenesisInfo,
-    block_producer_config: BlockProducerConfig,
+    contracts_dep_manager: ContractsCellDepManager,
     wallet: Wallet,
 }
 
@@ -186,13 +190,13 @@ impl DefaultUnlocker {
     pub fn new(
         rpc_client: RPCClient,
         ckb_genesis_info: CKBGenesisInfo,
-        block_producer_config: BlockProducerConfig,
+        contracts_dep_manager: ContractsCellDepManager,
         wallet: Wallet,
     ) -> Self {
         DefaultUnlocker {
             rpc_client,
             ckb_genesis_info,
-            block_producer_config,
+            contracts_dep_manager,
             wallet,
         }
     }
@@ -204,8 +208,8 @@ impl BuildUnlockWithdrawalToOwner for DefaultUnlocker {
         &self.rpc_client.rollup_context
     }
 
-    fn block_producer_config(&self) -> &BlockProducerConfig {
-        &self.block_producer_config
+    fn contracts_dep(&self) -> Guard<Arc<ContractsCellDep>> {
+        self.contracts_dep_manager.load()
     }
 
     async fn query_rollup_cell(&self) -> Result<Option<CellInfo>> {

@@ -124,7 +124,7 @@ pub struct ContractTypeScriptConfig {
     pub allowed_contract_scripts: HashMap<H256, Script>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ContractsCellDep {
     pub rollup_cell_type: CellDep,
     pub deposit_cell_lock: CellDep,

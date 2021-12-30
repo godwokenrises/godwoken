@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::testing_tool::chain::{
@@ -15,13 +16,13 @@ use crate::testing_tool::verify_tx::{verify_tx, TxWithContext};
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_block_producer::produce_block::ProduceBlockResult;
-use gw_block_producer::withdrawal_unlocker::BuildUnlockWithdrawalToOwner;
+use gw_block_producer::withdrawal_unlocker::{BuildUnlockWithdrawalToOwner, Guard};
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::h256_ext::H256Ext;
 use gw_common::smt::SMT;
 use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::H256;
-use gw_config::BlockProducerConfig;
+use gw_config::ContractsCellDep;
 use gw_types::bytes::Bytes;
 use gw_types::core::{DepType, ScriptHashType};
 use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext};
@@ -158,16 +159,16 @@ fn test_build_unlock_to_owner_tx() {
         rollup_config,
     };
 
-    let block_producer_config = BlockProducerConfig {
-        withdrawal_cell_lock_dep: CellDep::new_builder()
+    let contracts_dep = ContractsCellDep {
+        withdrawal_cell_lock: CellDep::new_builder()
             .out_point(withdrawal_lock_cell.out_point.clone())
             .build()
             .into(),
-        l1_sudt_type_dep: CellDep::new_builder()
+        l1_sudt_type: CellDep::new_builder()
             .out_point(always_cell.out_point.clone())
             .build()
             .into(),
-        custodian_cell_lock_dep: CellDep::new_builder()
+        custodian_cell_lock: CellDep::new_builder()
             .out_point(custodian_lock_cell.out_point.clone())
             .build()
             .into(),
@@ -288,10 +289,10 @@ fn test_build_unlock_to_owner_tx() {
         mem_pool.set_provider(Box::new(provider));
 
         for withdrawal in withdrawals_no_lock.chain(withdrawals_lock) {
-            mem_pool.push_withdrawal_request(withdrawal).unwrap();
+            smol::block_on(mem_pool.push_withdrawal_request(withdrawal)).unwrap();
         }
 
-        mem_pool.reset_mem_block().unwrap();
+        smol::block_on(mem_pool.reset_mem_block()).unwrap();
         assert_eq!(mem_pool.mem_block().withdrawals().len(), accounts.len());
     }
 
@@ -318,7 +319,7 @@ fn test_build_unlock_to_owner_tx() {
         &rollup_context,
         finalized_custodians.clone(),
         &withdrawal_block_result.block,
-        &block_producer_config,
+        &contracts_dep,
         &withdrawal_extras.collect(),
     )
     .expect("generate")
@@ -472,7 +473,7 @@ fn test_build_unlock_to_owner_tx() {
     let mut unlocker = DummyUnlocker {
         rollup_cell: rollup_cell.clone(),
         rollup_context: rollup_context.clone(),
-        block_producer_config: block_producer_config.clone(),
+        contracts_dep: Arc::new(contracts_dep.clone()),
         withdrawals: random_withdrawal_cells.clone(),
     };
     let cell_deps = vec![
@@ -547,7 +548,7 @@ fn test_build_unlock_to_owner_tx() {
         // Reset finalized custodian should stale all withdrawals
         let provider = DummyMemPoolProvider::default();
         mem_pool.set_provider(Box::new(provider));
-        mem_pool.reset_mem_block().unwrap();
+        smol::block_on(mem_pool.reset_mem_block()).unwrap();
         construct_block_with_timestamp(&chain, &mut mem_pool, vec![], BLOCK_TIMESTAMP2).unwrap()
     };
     assert_eq!(block_result.block.withdrawals().len(), 0);
@@ -620,7 +621,7 @@ fn test_build_unlock_to_owner_tx() {
         .collect();
     let reverted_withdrawals = gw_block_producer::withdrawal::revert(
         &rollup_context,
-        &block_producer_config,
+        &contracts_dep,
         withdrawals_to_revert,
     )
     .expect("revert")
@@ -699,7 +700,7 @@ fn test_build_unlock_to_owner_tx() {
 struct DummyUnlocker {
     rollup_cell: CellInfo,
     rollup_context: RollupContext,
-    block_producer_config: BlockProducerConfig,
+    contracts_dep: Arc<ContractsCellDep>,
     withdrawals: Vec<CellInfo>,
 }
 
@@ -709,8 +710,8 @@ impl BuildUnlockWithdrawalToOwner for DummyUnlocker {
         &self.rollup_context
     }
 
-    fn block_producer_config(&self) -> &BlockProducerConfig {
-        &self.block_producer_config
+    fn contracts_dep(&self) -> Guard<Arc<ContractsCellDep>> {
+        Guard::from_inner(Arc::clone(&self.contracts_dep))
     }
 
     async fn query_rollup_cell(&self) -> anyhow::Result<Option<CellInfo>> {
