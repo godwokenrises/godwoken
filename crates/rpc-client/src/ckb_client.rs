@@ -35,7 +35,7 @@ impl CKBClient {
             .await
             .map_err(|err| anyhow!("ckb client error, method: {} error: {}", method, err))?;
         let response_str = response.to_string();
-        match to_result(response) {
+        match to_result::<T>(response) {
             Ok(r) => Ok(r),
             Err(err) => {
                 log::error!(
@@ -56,11 +56,13 @@ impl CKBClient {
         use gw_jsonrpc_types::ckb_jsonrpc_types::TransactionWithStatus;
 
         let tx_hash = cell_dep.out_point.tx_hash;
-        let get_transaction = self.request(
-            "get_transaction",
-            Some(ClientParams::Array(vec![json!(tx_hash)])),
-        );
-        let tx = match to_result::<Option<TransactionWithStatus>>(get_transaction.await?)? {
+        let tx_with_status: Option<TransactionWithStatus> = self
+            .request(
+                "get_transaction",
+                Some(ClientParams::Array(vec![json!(tx_hash)])),
+            )
+            .await?;
+        let tx = match tx_with_status {
             Some(tx_with_status) => tx_with_status.transaction.inner,
             None => bail!("{} {} tx not found", contract, tx_hash),
         };

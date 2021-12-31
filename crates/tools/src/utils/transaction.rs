@@ -98,8 +98,8 @@ pub fn wait_for_tx(
                 log::info!("tx commited");
                 return Ok(tx_with_status.transaction);
             }
-            _ => {
-                log::error!("error")
+            err => {
+                log::error!("unexpected tx status: {:?}", err)
             }
         }
     }
