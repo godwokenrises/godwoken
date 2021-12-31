@@ -97,12 +97,19 @@ async fn poll_loop(
     loop {
         if let Some(block) = rpc_client.get_block_by_number(tip_number + 1).await? {
             let raw_header = block.header().raw();
+            let new_block_number = raw_header.number().unpack();
+            let new_block_hash = block.header().hash();
+            assert_eq!(
+                new_block_number,
+                tip_number + 1,
+                "should be the same number"
+            );
             let event = if raw_header.parent_hash().as_slice() == tip_hash.as_slice() {
                 // received new layer1 block
                 log::info!(
                     "received new layer1 block {}, {}",
-                    tip_number,
-                    hex::encode(tip_hash.as_slice())
+                    new_block_number,
+                    hex::encode(new_block_hash),
                 );
                 ChainEvent::NewBlock {
                     block: block.clone(),
@@ -110,9 +117,11 @@ async fn poll_loop(
             } else {
                 // layer1 reverted
                 log::info!(
-                    "layer1 reverted {}, {:?}",
+                    "layer1 reverted current tip: {}, {} -> new block: {}, {}",
                     tip_number,
-                    hex::encode(tip_hash.as_slice())
+                    hex::encode(tip_hash.as_slice()),
+                    new_block_number,
+                    hex::encode(new_block_hash),
                 );
                 ChainEvent::Reverted {
                     old_tip: NumberHash::new_builder()
@@ -175,7 +184,7 @@ async fn poll_loop(
             }
 
             // update tip
-            tip_number = raw_header.number().unpack();
+            tip_number = new_block_number;
             tip_hash = block.header().hash().into();
 
             // update global hardfork info
