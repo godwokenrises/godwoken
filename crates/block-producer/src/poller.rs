@@ -101,7 +101,7 @@ impl ChainUpdater {
             };
 
             log::warn!(
-                "revert to l2 block number {} hash {} on l1 block number {} hash {}",
+                "[sync revert] revert to l2 block number {} hash {} on l1 block number {} hash {}",
                 local_tip_block_number,
                 local_tip_block_hash,
                 committed_l1_block_number,
@@ -126,7 +126,7 @@ impl ChainUpdater {
             let local_committed_l1_block: u64 = chain.local_state().last_synced().number().unpack();
 
             log::debug!(
-                "try sync from l2 block {} (l1 block {})",
+                "[sync revert] try sync from l2 block {} (l1 block {})",
                 local_tip_block,
                 local_committed_l1_block
             );
@@ -172,7 +172,7 @@ impl ChainUpdater {
             }
             last_cursor = Some(txs.last_cursor);
 
-            log::debug!("Poll transactions: {}", txs.objects.len());
+            log::debug!("[sync revert] poll transactions: {}", txs.objects.len());
             self.update(&txs.objects).await?;
         }
 
@@ -190,7 +190,7 @@ impl ChainUpdater {
     async fn update_single(&mut self, tx_hash: &H256) -> anyhow::Result<()> {
         if let Some(last_tx_hash) = &self.last_tx_hash {
             if last_tx_hash == tx_hash {
-                log::info!("known last tx hash, skip {}", tx_hash);
+                log::info!("[sync revert] known last tx hash, skip {}", tx_hash);
                 return Ok(());
             }
         }
@@ -228,6 +228,11 @@ impl ChainUpdater {
             .block_hash(block_hash.0.pack())
             .transaction_hash(tx_hash.pack())
             .build();
+        log::debug!(
+            "[sync revert] receive new l2 block from {} l1 block tx hash {:?}",
+            l2block_committed_info.number().unpack(),
+            tx_hash,
+        );
 
         let rollup_action = self.extract_rollup_action(&tx)?;
         let context = match rollup_action.to_enum() {
@@ -320,6 +325,7 @@ impl ChainUpdater {
         // Revert until last valid block on l1 found
         let mut local_valid_committed_info = last_valid_tip_committed_info;
         let mut local_valid_block = db.get_last_valid_tip_block()?;
+        let from_block_number = local_valid_block.raw().number().unpack();
         loop {
             if self
                 .find_l2block_on_l1(local_valid_committed_info.clone())
@@ -327,6 +333,11 @@ impl ChainUpdater {
             {
                 break;
             }
+            log::debug!(
+                "[sync revert] revert valid {} l2 block from {} l1 block",
+                local_valid_block.raw().number().unpack(),
+                local_valid_committed_info.number().unpack()
+            );
 
             let parent_valid_block_hash: [u8; 32] =
                 local_valid_block.raw().parent_block_hash().unpack();
@@ -351,10 +362,12 @@ impl ChainUpdater {
                 .expect("valid block should exists");
         }
 
-        self.chain.lock().await.sync(SyncParam {
-            reverts: revert_l1_actions,
-            updates: vec![],
-        })?;
+        {
+            self.chain.lock().await.sync(SyncParam {
+                reverts: revert_l1_actions,
+                updates: vec![],
+            })?;
+        }
 
         // Also revert last tx hash
         let local_tip_committed_info = db
@@ -362,6 +375,13 @@ impl ChainUpdater {
             .expect("tip committed info should exists");
         let local_tip_committed_l1_tx_hash = local_tip_committed_info.transaction_hash().unpack();
         self.last_tx_hash = Some(local_tip_committed_l1_tx_hash);
+        log::debug!("[sync revert] revert last l1 tx to {:?}", self.last_tx_hash);
+
+        let end_block_number = local_valid_block.raw().number().unpack();
+        log::debug!(
+            "[sync revert] total revert {} l2 blocks",
+            from_block_number - end_block_number
+        );
 
         Ok(())
     }
