@@ -48,7 +48,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
     let mut rpc_client = HttpRpcClient::new(ckb_url.to_string());
     let tx_with_status = rpc_client
         .get_transaction(rollup_result.tx_hash.clone())
-        .map_err(|err| anyhow!("{}", err))?
+        .map_err(|err| anyhow!("get transaction error: {}", err))?
         .ok_or_else(|| anyhow!("can't find genesis block transaction"))?;
     let block_hash = tx_with_status.tx_status.block_hash.ok_or_else(|| {
         anyhow!(
@@ -112,14 +112,15 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
     };
     let (_data, secp_data_dep) =
-        get_secp_data(&mut rpc_client).map_err(|err| anyhow!("{}", err))?;
+        get_secp_data(&mut rpc_client).map_err(|err| anyhow!("get secp data {}", err))?;
 
     let ckb_client = CKBClient::with_url(&ckb_url)?;
     let contract_type_scripts = smol::block_on(query_contracts_script(
         &ckb_client,
         scripts_deployment,
         user_rollup_config,
-    ))?;
+    ))
+    .map_err(|err| anyhow!("query contracts script {}", err))?;
 
     let challenger_config = ChallengerConfig {
         rewards_receiver_lock: {
