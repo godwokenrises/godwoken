@@ -13,10 +13,10 @@ use gw_types::offchain::{global_state_from_slice, CellInfo, InputCellInfo, TxSta
 use gw_types::packed::{CellDep, CellInput, Transaction, WitnessArgs};
 use gw_types::prelude::Unpack;
 
-use smol::lock::Mutex;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 const L1_FINALITY_BLOCKS: u64 = 100;
 

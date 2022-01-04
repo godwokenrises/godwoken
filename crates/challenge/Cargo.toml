@@ -19,6 +19,7 @@ gw-poa = { path = "../poa" }
 gw-traits = { path = "../traits" }
 gw-utils = { path = "../utils" }
 gw-ckb-hardfork = { path = "../ckb-hardfork" }
+gw-runtime = { path = "../runtime" }
 ckb-fixed-hash = "0.100.0"
 ckb-types = "0.100.0"
 ckb-script = "0.100.0"
@@ -31,5 +32,5 @@ hex = "0.4"
 rand = "0.8"
 log = "0.4.14"
 thiserror = "1.0"
-smol = "1.2.5"
+tokio = "1.15"
 arc-swap = "1.5"

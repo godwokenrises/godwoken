@@ -42,6 +42,7 @@ use gw_rpc_server::{
     server::start_jsonrpc_server,
 };
 use gw_rpc_ws_server::{notify_controller::NotifyService, server::start_jsonrpc_ws_server};
+use gw_runtime::{block_on, spawn};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
@@ -52,7 +53,6 @@ use gw_types::{
 use gw_utils::{genesis_info::CKBGenesisInfo, wallet::Wallet};
 use gw_web3_indexer::{ErrorReceiptIndexer, Web3Indexer};
 use semver::Version;
-use smol::lock::Mutex;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     ConnectOptions,
@@ -63,6 +63,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use tokio::sync::Mutex;
 
 const MIN_CKB_VERSION: &str = "0.40.0";
 const SMOL_THREADS_ENV_VAR: &str = "SMOL_THREADS";
@@ -86,7 +87,7 @@ async fn poll_loop(
         withdrawal_unlocker: Option<FinalizedWithdrawalUnlocker>,
     }
 
-    let inner = Arc::new(smol::lock::Mutex::new(Inner {
+    let inner = Arc::new(tokio::sync::Mutex::new(Inner {
         chain_updater,
         challenger,
         block_producer,
@@ -154,7 +155,7 @@ async fn poll_loop(
             if let Err(err) = inner.chain_updater.handle_event(event.clone()).await {
                 if is_l1_query_error(&err) {
                     log::error!("[polling] chain_updater event: {} error: {}", event, err);
-                    smol::Timer::after(poll_interval).await;
+                    tokio::time::sleep(poll_interval).await;
                     continue;
                 }
                 bail!(
@@ -168,7 +169,7 @@ async fn poll_loop(
                 if let Err(err) = challenger.handle_event(event.clone()).await {
                     if is_l1_query_error(&err) {
                         log::error!("[polling] challenger event: {} error: {}", event, err);
-                        smol::Timer::after(poll_interval).await;
+                        tokio::time::sleep(poll_interval).await;
                         continue;
                     }
                     bail!(
@@ -183,7 +184,7 @@ async fn poll_loop(
                 if let Err(err) = block_producer.handle_event(event.clone()).await {
                     if is_l1_query_error(&err) {
                         log::error!("[polling] block producer event: {} error: {}", event, err);
-                        smol::Timer::after(poll_interval).await;
+                        tokio::time::sleep(poll_interval).await;
                         continue;
                     }
                     bail!(
@@ -198,7 +199,7 @@ async fn poll_loop(
                 if let Err(err) = cleaner.handle_event(event.clone()).await {
                     if is_l1_query_error(&err) {
                         log::error!("[polling] cleaner event: {} error: {}", event, err);
-                        smol::Timer::after(poll_interval).await;
+                        tokio::time::sleep(poll_interval).await;
                         continue;
                     }
                     bail!(
@@ -257,7 +258,7 @@ async fn poll_loop(
                     }
                 );
             }
-            async_std::task::sleep(poll_interval).await;
+            tokio::time::sleep(poll_interval).await;
         }
     }
 }
@@ -310,7 +311,7 @@ impl BaseInitComponents {
 
             if check_script(&script_config, &rollup_config, rollup_type_script).is_err() {
                 let now = Instant::now();
-                script_config = smol::block_on(query_type_script_from_old_config(
+                script_config = block_on(query_type_script_from_old_config(
                     &rpc_client,
                     block_producer_config,
                 ))?;
@@ -319,7 +320,7 @@ impl BaseInitComponents {
                 check_script(&script_config, &rollup_config, rollup_type_script)?;
             }
 
-            contracts_dep_manager = Some(smol::block_on(ContractsCellDepManager::build(
+            contracts_dep_manager = Some(block_on(ContractsCellDepManager::build(
                 rpc_client.clone(),
                 script_config,
             ))?);
@@ -349,7 +350,7 @@ impl BaseInitComponents {
 
         let secp_data: Bytes = {
             let out_point = config.genesis.secp_data_dep.out_point.clone();
-            smol::block_on(rpc_client.get_transaction(out_point.tx_hash.0.into()))?
+            block_on(rpc_client.get_transaction(out_point.tx_hash.0.into()))?
                 .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?
                 .raw()
                 .outputs_data()
@@ -395,7 +396,7 @@ impl BaseInitComponents {
         };
 
         let ckb_genesis_info = {
-            let ckb_genesis = smol::block_on(async { rpc_client.get_block_by_number(0).await })?
+            let ckb_genesis = block_on(async { rpc_client.get_block_by_number(0).await })?
                 .ok_or_else(|| anyhow!("can't found CKB genesis block"))?;
             CKBGenesisInfo::from_block(&ckb_genesis)?
         };
@@ -441,7 +442,7 @@ impl BaseInitComponents {
             block_producer_config.poa_lock_dep.clone().into(),
             block_producer_config.poa_state_dep.clone().into(),
         );
-        Arc::new(smol::lock::Mutex::new(poa))
+        Arc::new(tokio::sync::Mutex::new(poa))
     }
 
     pub async fn init_offchain_mock_context(
@@ -510,7 +511,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 let wallet = Wallet::from_config(&block_producer_config.wallet_config)
                     .with_context(|| "init wallet")?;
                 let poa = base.init_poa(&wallet, block_producer_config);
-                let offchain_mock_context = smol::block_on(async {
+                let offchain_mock_context = block_on(async {
                     let poa = poa.lock().await;
                     base.init_offchain_mock_context(&poa, block_producer_config)
                         .await
@@ -523,7 +524,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 let pg_pool = {
                     let config = config.web3_indexer.as_ref();
                     let init_pool = config.map(|web3_indexer_config| {
-                        smol::block_on(async {
+                        block_on(async {
                             let mut opts: PgConnectOptions =
                                 web3_indexer_config.database_url.parse()?;
                             opts.log_statements(log::LevelFilter::Debug)
@@ -541,7 +542,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 };
                 let error_tx_handler = pg_pool.clone().map(|pool| {
                     Box::new(ErrorReceiptIndexer::new(pool))
-                        as Box<dyn MemPoolErrorTxHandler + Send>
+                        as Box<dyn MemPoolErrorTxHandler + Send + Sync>
                 });
                 let notify_controller = {
                     let opt_ws_listen = config.rpc_server.err_receipt_ws_listen.as_ref();
@@ -627,7 +628,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             );
             // fix missing genesis block
             log::info!("Check web3 indexing...");
-            smol::block_on(async {
+            block_on(async {
                 web3_indexer.store_genesis(&store).await?;
                 web3_indexer.fix_missing_blocks(&store).await?;
                 Ok::<(), anyhow::Error>(())
@@ -820,7 +821,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
 
     log::info!("{:?} mode", config.node_mode);
 
-    let chain_task = smol::spawn({
+    let chain_task = spawn({
         let exit_sender = exit_sender.clone();
         async move {
             if let Err(err) = poll_loop(
@@ -843,7 +844,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
     });
 
     let exit_sender_clone = exit_sender.clone();
-    let rpc_task = smol::spawn(async move {
+    let rpc_task = spawn(async move {
         if let Err(err) = start_jsonrpc_server(rpc_address, rpc_registry).await {
             log::error!("Error running JSONRPC server: {:?}", err);
         }
@@ -858,7 +859,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             let ws_listen = config.rpc_server.err_receipt_ws_listen.as_ref();
             ws_listen.expect("err receipt ws listen").to_owned()
         };
-        rpc_ws_task = Some(smol::spawn(async move {
+        rpc_ws_task = Some(spawn(async move {
             if let Err(err) = start_jsonrpc_ws_server(&rpc_ws_addr, notify_controller.clone()).await
             {
                 log::error!("Error running JSONRPC WebSockert server: {:?}", err);
@@ -870,22 +871,22 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }));
     }
 
-    smol::block_on(async {
+    block_on(async {
         let _ = exit_recv.recv().await;
         log::info!("Exiting...");
 
         if let Some(rpc_ws_task) = rpc_ws_task {
-            rpc_ws_task.cancel().await;
+            rpc_ws_task.abort();
         }
-        rpc_task.cancel().await;
-        chain_task.cancel().await;
+        rpc_task.abort();
+        chain_task.abort();
     });
 
     Ok(())
 }
 
 fn check_ckb_version(rpc_client: &RPCClient) -> Result<()> {
-    let ckb_version = smol::block_on(rpc_client.get_ckb_version())?;
+    let ckb_version = block_on(rpc_client.get_ckb_version())?;
     let ckb_version = ckb_version.split('(').collect::<Vec<&str>>()[0].trim_end();
     if Version::parse(ckb_version)? < Version::parse(MIN_CKB_VERSION)? {
         return Err(anyhow!(
@@ -902,7 +903,7 @@ fn check_rollup_config_cell(
     rollup_config: &RollupConfig,
     rpc_client: &RPCClient,
 ) -> Result<()> {
-    let rollup_config_cell = smol::block_on(
+    let rollup_config_cell = block_on(
         rpc_client.get_cell(
             block_producer_config
                 .rollup_config_cell_dep

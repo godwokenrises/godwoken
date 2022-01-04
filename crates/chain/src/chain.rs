@@ -11,6 +11,7 @@ use gw_generator::{
 };
 use gw_jsonrpc_types::debugger::ReprMockTransaction;
 use gw_mem_pool::pool::MemPool;
+use gw_runtime::block_on;
 use gw_store::{
     chain_view::ChainView, state::state_db::StateContext, traits::chain_store::ChainStore,
     transaction::StoreTransaction, Store,
@@ -26,8 +27,8 @@ use gw_types::{
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
-use smol::lock::Mutex;
 use std::{collections::HashSet, convert::TryFrom, sync::Arc, time::Instant};
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct ChallengeCell {
@@ -253,7 +254,8 @@ impl Chain {
             if !self.complete_initial_syncing {
                 // Do first notify
                 let tip_block_hash: H256 = self.local_state.tip.hash().into();
-                smol::block_on(async {
+
+                block_on(async {
                     log::debug!("[complete_initial_syncing] acquire mem-pool",);
                     let t = Instant::now();
                     mem_pool.lock().await.notify_new_tip(tip_block_hash).await?;
@@ -839,7 +841,7 @@ impl Chain {
                 && (is_revert_happend || self.complete_initial_syncing)
             {
                 // update mem pool state
-                smol::block_on(async {
+                block_on(async {
                     log::debug!("[sync] acquire mem-pool",);
                     let t = Instant::now();
                     mem_pool.lock().await.notify_new_tip(tip_block_hash).await?;

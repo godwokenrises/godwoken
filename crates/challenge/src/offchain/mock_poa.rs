@@ -50,7 +50,7 @@ impl MockPoA {
                 return Ok(time);
             }
 
-            smol::Timer::after(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
             count -= 1;
         }
 

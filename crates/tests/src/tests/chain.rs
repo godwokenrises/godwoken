@@ -16,6 +16,7 @@ use gw_common::{
     state::{to_short_address, State},
     H256,
 };
+use gw_runtime::block_on;
 use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore};
 use gw_types::{
     bytes::Bytes,
@@ -37,7 +38,7 @@ fn produce_a_block(
 ) -> SyncParam {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         construct_block(chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let l2block = block_result.block.clone();
@@ -184,7 +185,7 @@ fn test_layer1_fork() {
             .build();
         let chain = setup_chain(rollup_type_script);
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         let block_result = construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap();
 
         L1Action {
@@ -215,7 +216,7 @@ fn test_layer1_fork() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action1 = L1Action {
@@ -251,7 +252,7 @@ fn test_layer1_fork() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action2 = L1Action {
@@ -373,7 +374,7 @@ fn test_layer1_revert() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action1 = L1Action {
@@ -409,7 +410,7 @@ fn test_layer1_revert() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action2 = L1Action {
@@ -674,7 +675,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let action1 = L1Action {
@@ -711,8 +712,8 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
     };
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
-        smol::block_on(mem_pool.push_withdrawal_request(withdrawal.into())).unwrap();
+        let mut mem_pool = block_on(mem_pool.lock());
+        block_on(mem_pool.push_withdrawal_request(withdrawal.into())).unwrap();
         construct_block(&chain, &mut mem_pool, Vec::default()).unwrap()
     };
     let bad_block_result = {
@@ -903,7 +904,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
     };
     let new_block = L1Action {
@@ -932,7 +933,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
 fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         construct_block(chain, &mut mem_pool, Default::default()).unwrap()
     };
     let db = chain.store().begin_transaction();

@@ -2,11 +2,12 @@ use std::time::Duration;
 
 use anyhow::Result;
 use gw_mem_pool::traits::MemPoolProvider;
+use gw_runtime::spawn;
 use gw_types::{
     offchain::{CellStatus, CellWithStatus, CollectedCustodianCells, DepositInfo, RollupContext},
     packed::{OutPoint, WithdrawalRequest},
 };
-use smol::Task;
+use tokio::task::JoinHandle;
 
 #[derive(Debug, Default)]
 pub struct DummyMemPoolProvider {
@@ -16,25 +17,25 @@ pub struct DummyMemPoolProvider {
 }
 
 impl MemPoolProvider for DummyMemPoolProvider {
-    fn estimate_next_blocktime(&self) -> Task<Result<Duration>> {
+    fn estimate_next_blocktime(&self) -> JoinHandle<Result<Duration>> {
         let fake_blocktime = self.fake_blocktime;
-        smol::spawn(async move { Ok(fake_blocktime) })
+        spawn(async move { Ok(fake_blocktime) })
     }
-    fn collect_deposit_cells(&self) -> Task<Result<Vec<DepositInfo>>> {
+    fn collect_deposit_cells(&self) -> JoinHandle<Result<Vec<DepositInfo>>> {
         let deposit_cells = self.deposit_cells.clone();
-        smol::spawn(async move { Ok(deposit_cells) })
+        spawn(async move { Ok(deposit_cells) })
     }
     fn query_available_custodians(
         &self,
         _withdrawals: Vec<WithdrawalRequest>,
         _last_finalized_block_number: u64,
         _rollup_context: RollupContext,
-    ) -> Task<Result<CollectedCustodianCells>> {
+    ) -> JoinHandle<Result<CollectedCustodianCells>> {
         let collected_custodians = self.collected_custodians.clone();
-        smol::spawn(async move { Ok(collected_custodians) })
+        spawn(async move { Ok(collected_custodians) })
     }
-    fn get_cell(&self, _out_point: OutPoint) -> Task<Result<Option<CellWithStatus>>> {
-        smol::spawn(async {
+    fn get_cell(&self, _out_point: OutPoint) -> JoinHandle<Result<Option<CellWithStatus>>> {
+        spawn(async {
             Ok(Some(CellWithStatus {
                 cell: Some(Default::default()),
                 status: CellStatus::Live,
@@ -45,7 +46,7 @@ impl MemPoolProvider for DummyMemPoolProvider {
         &self,
         collected_custodians: CollectedCustodianCells,
         _last_finalized_block_number: u64,
-    ) -> Task<Result<CollectedCustodianCells>> {
-        smol::spawn(async move { Ok(collected_custodians) })
+    ) -> JoinHandle<Result<CollectedCustodianCells>> {
+        spawn(async move { Ok(collected_custodians) })
     }
 }

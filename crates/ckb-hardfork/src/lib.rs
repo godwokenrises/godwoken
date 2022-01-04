@@ -1,5 +1,5 @@
 use ckb_types::core::hardfork::HardForkSwitch;
-use smol::lock::Mutex;
+use tokio::sync::Mutex;
 
 lazy_static::lazy_static! {
     pub static ref GLOBAL_VM_VERSION: Mutex<u32> = Mutex::new(0);

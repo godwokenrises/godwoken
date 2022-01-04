@@ -1,7 +1,8 @@
 use anyhow::{anyhow, bail, Result};
+use async_channel::{bounded, Receiver, Sender, TrySendError};
 use futures::{FutureExt, StreamExt};
+use gw_runtime::spawn;
 use gw_types::offchain::ErrorTxReceipt;
-use smol::channel::{bounded, Receiver, Sender, TrySendError};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -63,7 +64,7 @@ impl NotifyService {
         let (subscribe_err_receipt_tx, subscribe_err_receipt_rx) = bounded(NOTIFY_CHANNEL_SIZE);
         let (err_receipt_tx, err_receipt_rx) = bounded(NOTIFY_CHANNEL_SIZE);
 
-        smol::spawn(async move {
+        spawn(async move {
             let mut subscribe_err_receipt_rx = subscribe_err_receipt_rx.fuse();
             let mut err_receipt_rx = err_receipt_rx.fuse();
 
@@ -93,8 +94,7 @@ impl NotifyService {
                     }
                 }
             }
-        })
-        .detach();
+        });
 
         NotifyController {
             stop_tx,

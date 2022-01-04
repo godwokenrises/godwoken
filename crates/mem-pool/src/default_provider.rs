@@ -3,6 +3,7 @@ use std::{sync::Arc, time::Duration};
 use anyhow::{anyhow, Result};
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
+use gw_runtime::spawn;
 use gw_store::Store;
 use gw_types::{
     offchain::{
@@ -11,7 +12,7 @@ use gw_types::{
     packed::{CellInput, OutPoint, WithdrawalRequest},
     prelude::*,
 };
-use smol::{lock::Mutex, Task};
+use tokio::{sync::Mutex, task::JoinHandle};
 
 use crate::{
     constants::{MAX_MEM_BLOCK_DEPOSITS, MIN_CKB_DEPOSIT_CAPACITY, MIN_SUDT_DEPOSIT_CAPACITY},
@@ -38,11 +39,11 @@ impl DefaultMemPoolProvider {
 }
 
 impl MemPoolProvider for DefaultMemPoolProvider {
-    fn estimate_next_blocktime(&self) -> Task<Result<Duration>> {
+    fn estimate_next_blocktime(&self) -> JoinHandle<Result<Duration>> {
         // estimate next l2block timestamp
         let poa = Arc::clone(&self.poa);
         let rpc_client = self.rpc_client.clone();
-        smol::spawn(async move {
+        spawn(async move {
             let poa = poa.lock().await;
             let rollup_cell = rpc_client
                 .query_rollup_cell()
@@ -61,9 +62,9 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         })
     }
 
-    fn collect_deposit_cells(&self) -> Task<Result<Vec<DepositInfo>>> {
+    fn collect_deposit_cells(&self) -> JoinHandle<Result<Vec<DepositInfo>>> {
         let rpc_client = self.rpc_client.clone();
-        smol::spawn(async move {
+        spawn(async move {
             rpc_client
                 .query_deposit_cells(
                     MAX_MEM_BLOCK_DEPOSITS,
@@ -74,9 +75,9 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         })
     }
 
-    fn get_cell(&self, out_point: OutPoint) -> Task<Result<Option<CellWithStatus>>> {
+    fn get_cell(&self, out_point: OutPoint) -> JoinHandle<Result<Option<CellWithStatus>>> {
         let rpc_client = self.rpc_client.clone();
-        smol::spawn(async move { rpc_client.get_cell(out_point).await })
+        spawn(async move { rpc_client.get_cell(out_point).await })
     }
 
     fn query_available_custodians(
@@ -84,10 +85,10 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         withdrawals: Vec<WithdrawalRequest>,
         last_finalized_block_number: u64,
         rollup_context: RollupContext,
-    ) -> Task<Result<CollectedCustodianCells>> {
+    ) -> JoinHandle<Result<CollectedCustodianCells>> {
         let rpc_client = self.rpc_client.clone();
         let db = self.store.begin_transaction();
-        smol::spawn(async move {
+        spawn(async move {
             let r = query_finalized_custodians(
                 &rpc_client,
                 &db,
@@ -104,9 +105,9 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         &self,
         collected_custodians: CollectedCustodianCells,
         last_finalized_block_number: u64,
-    ) -> Task<Result<CollectedCustodianCells>> {
+    ) -> JoinHandle<Result<CollectedCustodianCells>> {
         let rpc_client = self.rpc_client.clone();
-        smol::spawn(async move {
+        spawn(async move {
             let r = query_mergeable_custodians(
                 &rpc_client,
                 collected_custodians,

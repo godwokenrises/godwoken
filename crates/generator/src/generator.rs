@@ -152,7 +152,7 @@ impl Generator {
 
         {
             let t = Instant::now();
-            let global_vm_version = smol::block_on(async { *GLOBAL_VM_VERSION.lock().await });
+            let global_vm_version = block_on(async { *GLOBAL_VM_VERSION.lock().await });
             let vm_version = match global_vm_version {
                 0 => VMVersion::V0,
                 1 => VMVersion::V1,

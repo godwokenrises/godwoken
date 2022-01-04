@@ -22,6 +22,7 @@ use gw_generator::{
     constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
 };
 use gw_rpc_ws_server::notify_controller::NotifyController;
+use gw_runtime::{block_on, spawn};
 use gw_store::{
     chain_view::ChainView,
     mem_pool_state::{MemPoolState, MemStore},
@@ -85,7 +86,7 @@ pub struct MemPool {
     /// generator instance
     generator: Arc<Generator>,
     /// error tx handler,
-    error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
+    error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send + Sync>>,
     /// error tx receipt notifier
     error_tx_receipt_notifier: Option<NotifyController>,
     /// pending queue, contains executable contents
@@ -93,7 +94,7 @@ pub struct MemPool {
     /// memory block
     mem_block: MemBlock,
     /// Mem pool provider
-    provider: Box<dyn MemPoolProvider + Send>,
+    provider: Box<dyn MemPoolProvider + Send + Sync>,
     /// Pending deposits
     pending_deposits: Vec<DepositInfo>,
     /// Mem block save and restore
@@ -110,8 +111,8 @@ pub struct MemPoolCreateArgs {
     pub block_producer_id: u32,
     pub store: Store,
     pub generator: Arc<Generator>,
-    pub provider: Box<dyn MemPoolProvider + Send>,
-    pub error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
+    pub provider: Box<dyn MemPoolProvider + Send + Sync>,
+    pub error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send + Sync>>,
     pub error_tx_receipt_notifier: Option<NotifyController>,
     pub config: MemPoolConfig,
     pub node_mode: NodeMode,
@@ -200,12 +201,11 @@ impl MemPool {
         let snap = mem_pool.mem_pool_state().load();
         snap.update_mem_pool_block_info(mem_pool.mem_block.block_info())?;
         // set tip
-        smol::block_on(mem_pool.reset(None, Some(tip.0)))?;
+        block_on(mem_pool.reset(None, Some(tip.0)))?;
         // clear stored mem blocks
-        smol::spawn(async move {
+        spawn(async move {
             restore_manager.delete_before_one_hour();
-        })
-        .detach();
+        });
 
         Ok(mem_pool)
     }
@@ -251,7 +251,7 @@ impl MemPool {
             .save_with_suffix(self.mem_block(), suffix)
     }
 
-    pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send>) {
+    pub fn set_provider(&mut self, provider: Box<dyn MemPoolProvider + Send + Sync>) {
         self.provider = provider;
     }
 
@@ -397,7 +397,7 @@ impl MemPool {
                 last_finalized_block_number,
                 self.generator.rollup_context().to_owned(),
             );
-            smol::block_on(task)?
+            block_on(task)??
         };
         let avaliable_custodians = AvailableCustodians::from(&finalized_custodians);
         let withdrawal_generator =
@@ -607,7 +607,7 @@ impl MemPool {
             let task = self
                 .provider
                 .query_mergeable_custodians(collected, last_finalized_block_number);
-            Some(smol::block_on(task)?)
+            Some(block_on(task)??)
         };
 
         log::debug!(
@@ -873,7 +873,7 @@ impl MemPool {
         }
 
         // estimate next l2block timestamp
-        let estimated_timestamp = smol::block_on(self.provider.estimate_next_blocktime())?;
+        let estimated_timestamp = block_on(self.provider.estimate_next_blocktime())??;
         // reset mem block state
         {
             let snapshot = self.store.get_snapshot();
@@ -1059,7 +1059,7 @@ impl MemPool {
 
         // check cell is available
         for task in tasks {
-            match task.await? {
+            match task.await?? {
                 Some(cell_with_status) => {
                     if cell_with_status.status != CellStatus::Live {
                         force_expired = true;
@@ -1095,7 +1095,7 @@ impl MemPool {
                     tip_account_count
                 );
             let task = self.provider.collect_deposit_cells();
-            let cells = smol::block_on(task)?;
+            let cells = block_on(task)??;
             self.pending_deposits = {
                 let cells = cells
                     .into_iter()
@@ -1181,7 +1181,7 @@ impl MemPool {
                 last_finalized_block_number,
                 self.generator.rollup_context().to_owned(),
             );
-            smol::block_on(task)?
+            block_on(task)??
         };
 
         let available_custodians = AvailableCustodians::from(&finalized_custodians);
@@ -1317,9 +1317,7 @@ impl MemPool {
             };
             if let Some(ref mut error_tx_handler) = self.error_tx_handler {
                 let t = Instant::now();
-                error_tx_handler
-                    .handle_error_receipt(receipt.clone())
-                    .detach();
+                error_tx_handler.handle_error_receipt(receipt.clone());
                 log::debug!(
                     "[finalize tx] handle error tx: {}ms",
                     t.elapsed().as_millis()
