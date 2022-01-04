@@ -19,7 +19,7 @@ pub fn verify_unlockable_to_owner(
 
 fn verify_l1_sudt_script(info: &CellInfo, l1_sudt_script_hash: &Byte32) -> Result<()> {
     if let Some(sudt_type) = info.output.type_().to_opt() {
-        if info.data.len() < 16 {
+        if info.data.len() < ckb_types::packed::Uint128::TOTAL_SIZE {
             bail!("invalid l1 sudt data len");
         }
 
