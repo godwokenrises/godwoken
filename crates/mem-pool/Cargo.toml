@@ -17,9 +17,10 @@ gw-rpc-client = { path = "../rpc-client" }
 gw-poa = { path = "../poa" }
 gw-config = { path = "../config" }
 gw-utils = { path = "../utils" }
+gw-runtime = { path = "../runtime" }
 rdkafka = { version = "0.25", default-features = false }
 gw-rpc-ws-server = { path = "../rpc-ws-server" }
-smol = "1.2.5"
+tokio = "1.15"
 anyhow = "1.0"
 log = "0.4"
 hex = "0.4"

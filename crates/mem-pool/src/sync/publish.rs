@@ -1,3 +1,4 @@
+use gw_runtime::{block_on, spawn};
 use gw_types::{
     offchain::DepositInfo,
     packed::{
@@ -6,7 +7,7 @@ use gw_types::{
     },
     prelude::{Builder, Entity, Pack, PackVec},
 };
-use smol::channel::{Receiver, Sender};
+use tokio::sync::mpsc::{Receiver, Sender};
 
 use super::mq::{gw_kafka, Produce};
 
@@ -33,7 +34,7 @@ impl PublishMemPoolActor {
 
 async fn publish_handle(mut actor: PublishMemPoolActor) {
     log::info!("Fanout handle is started.");
-    while let Ok(msg) = actor.receiver.recv().await {
+    while let Some(msg) = actor.receiver.recv().await {
         actor.handle(msg);
     }
 }
@@ -44,10 +45,10 @@ pub(crate) struct MemPoolPublishService {
 
 impl MemPoolPublishService {
     pub(crate) fn start(producer: gw_kafka::Producer) -> Self {
-        let (sender, receiver) = smol::channel::bounded(CHANNEL_BUFFER_SIZE);
+        let (sender, receiver) = tokio::sync::mpsc::channel(CHANNEL_BUFFER_SIZE);
 
         let actor = PublishMemPoolActor::new(receiver, producer);
-        smol::spawn(publish_handle(actor)).detach();
+        spawn(publish_handle(actor));
         Self { sender }
     }
 
@@ -56,7 +57,7 @@ impl MemPoolPublishService {
             .tx(tx)
             .mem_block_number(current_tip_block_number.pack())
             .build();
-        if let Err(err) = smol::block_on(
+        if let Err(err) = block_on(
             self.sender
                 .send(RefreshMemBlockMessageUnion::NextL2Transaction(next_tx)),
         ) {
@@ -76,7 +77,7 @@ impl MemPoolPublishService {
             .deposits(deposits.pack())
             .build();
         let msg = RefreshMemBlockMessageUnion::NextMemBlock(next_mem_block);
-        if let Err(err) = smol::block_on(self.sender.send(msg)) {
+        if let Err(err) = block_on(self.sender.send(msg)) {
             log::error!("Send mem block message with error: {:?}", err);
         }
     }

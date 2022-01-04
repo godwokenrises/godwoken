@@ -4,6 +4,7 @@ use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Entity, Unpack as CKBUnpack};
 use gw_config::WalletConfig;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
+use gw_runtime::block_on;
 use gw_types::{
     offchain::{CellInfo, InputCellInfo},
     packed::{CellInput, CellOutput, OutPoint},
@@ -104,7 +105,7 @@ pub fn update_cell<P: AsRef<Path>>(
     // use same lock of existed cell to pay fee
     let payment_lock = existed_cell.lock();
     // tx fee cell
-    smol::block_on(fill_tx_fee(
+    block_on(fill_tx_fee(
         &mut tx_skeleton,
         &indexer_client,
         payment_lock.clone(),

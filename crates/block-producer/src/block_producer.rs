@@ -40,13 +40,13 @@ use gw_utils::{
     fee::fill_tx_fee, genesis_info::CKBGenesisInfo, transaction_skeleton::TransactionSkeleton,
     wallet::Wallet,
 };
-use smol::lock::Mutex;
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
     sync::Arc,
     time::{Duration, Instant},
 };
+use tokio::sync::Mutex;
 
 const MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT: usize = 10;
 const TRANSACTION_SCRIPT_ERROR: &str = "TransactionScriptError";
@@ -157,7 +157,7 @@ pub struct BlockProducer {
     ckb_genesis_info: CKBGenesisInfo,
     tests_control: Option<TestModeControl>,
     last_committed_l2_block: LastCommittedL2Block,
-    last_submitted_tx_hash: Arc<smol::lock::RwLock<H256>>,
+    last_submitted_tx_hash: Arc<tokio::sync::RwLock<H256>>,
     contracts_dep_manager: ContractsCellDepManager,
 }
 
@@ -220,7 +220,7 @@ impl BlockProducer {
                 let committed_info = store
                     .get_l2block_committed_info(&tip_block_hash)?
                     .ok_or_else(|| anyhow!("can't find committed info for tip block"))?;
-                Arc::new(smol::lock::RwLock::new(
+                Arc::new(tokio::sync::RwLock::new(
                     committed_info.transaction_hash().unpack(),
                 ))
             },
@@ -230,7 +230,7 @@ impl BlockProducer {
         Ok(block_producer)
     }
 
-    pub fn last_submitted_tx_hash(&self) -> Arc<smol::lock::RwLock<H256>> {
+    pub fn last_submitted_tx_hash(&self) -> Arc<tokio::sync::RwLock<H256>> {
         self.last_submitted_tx_hash.clone()
     }
 
@@ -393,7 +393,9 @@ impl BlockProducer {
                 t.elapsed().as_millis()
             );
             let t = Instant::now();
-            let output = smol::block_on(mem_pool.output_mem_block(&OutputParam::new(retry_count)))?;
+            let output = mem_pool
+                .output_mem_block(&OutputParam::new(retry_count))
+                .await?;
             log::debug!(
                 "[compose_next_block_submit_tx] output mem block {}ms",
                 t.elapsed().as_millis()

@@ -10,7 +10,9 @@ use gw_generator::{
     genesis::init_genesis,
     Generator,
 };
+
 use gw_mem_pool::pool::{MemPool, MemPoolCreateArgs, OutputParam};
+use gw_runtime::block_on;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     bytes::Bytes,
@@ -24,7 +26,7 @@ use gw_types::{
     prelude::*,
 };
 use lazy_static::lazy_static;
-use smol::lock::Mutex;
+use tokio::sync::Mutex;
 
 use std::{collections::HashSet, time::Duration};
 use std::{fs, io::Read, path::PathBuf, sync::Arc};
@@ -205,7 +207,7 @@ pub fn restart_chain(
         .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
     let restore_path = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mem_pool = smol::block_on(mem_pool.lock());
+        let mem_pool = block_on(mem_pool.lock());
         mem_pool.restore_manager().path().to_path_buf()
     };
     let mem_pool_config = MemPoolConfig {
@@ -440,7 +442,7 @@ pub fn construct_block_with_timestamp(
     };
     mem_pool.set_provider(Box::new(provider));
     // refresh mem block
-    smol::block_on(mem_pool.reset_mem_block())?;
+    block_on(mem_pool.reset_mem_block())?;
     let provider = DummyMemPoolProvider {
         deposit_cells: Vec::default(),
         fake_blocktime: Duration::from_millis(0),
@@ -449,7 +451,7 @@ pub fn construct_block_with_timestamp(
     mem_pool.set_provider(Box::new(provider));
 
     let (_custodians, block_param) =
-        smol::block_on(mem_pool.output_mem_block(&OutputParam::default())).unwrap();
+        block_on(mem_pool.output_mem_block(&OutputParam::default())).unwrap();
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash,
         rollup_config_hash,

@@ -13,6 +13,7 @@ use gw_config::{
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_rpc_client::ckb_client::CKBClient;
+use gw_runtime::block_on;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
 use std::collections::HashMap;
 use std::iter::FromIterator;
@@ -115,7 +116,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         get_secp_data(&mut rpc_client).map_err(|err| anyhow!("get secp data {}", err))?;
 
     let ckb_client = CKBClient::with_url(&ckb_url)?;
-    let contract_type_scripts = smol::block_on(query_contracts_script(
+    let contract_type_scripts = block_on(query_contracts_script(
         &ckb_client,
         scripts_deployment,
         user_rollup_config,

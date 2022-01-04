@@ -27,8 +27,8 @@ use gw_types::{
 };
 use gw_web3_indexer::indexer::Web3Indexer;
 use serde_json::json;
-use smol::lock::Mutex;
 use std::{collections::HashSet, sync::Arc};
+use tokio::sync::Mutex;
 
 #[derive(thiserror::Error, Debug)]
 #[error("chain updater query l1 tx {tx_hash} error {source}")]

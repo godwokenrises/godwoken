@@ -10,14 +10,17 @@ use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 use ckb_types::prelude::{Builder, Entity};
 use gw_block_producer::test_mode_control::TestModeControl;
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
-use gw_common::state::{to_short_address, State};
-use gw_common::H256;
+use gw_common::{
+    state::{to_short_address, State},
+    H256,
+};
 use gw_config::RPCClientConfig;
 use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_rpc_client::ckb_client::CKBClient;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::registry::{Registry, RegistryArgs};
+use gw_runtime::block_on;
 use gw_store::state::state_db::StateContext;
 use gw_types::core::ScriptHashType;
 use gw_types::offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext};
@@ -57,7 +60,7 @@ fn test_restore_mem_block() {
 
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         construct_block(&chain, &mut mem_pool, deposits.clone().collect()).unwrap()
     };
     let apply_deposits = L1Action {
@@ -146,7 +149,7 @@ fn test_restore_mem_block() {
     };
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         let provider = DummyMemPoolProvider {
             deposit_cells: random_deposits.clone(),
             fake_blocktime: Duration::from_millis(0),
@@ -154,11 +157,11 @@ fn test_restore_mem_block() {
         };
         mem_pool.set_provider(Box::new(provider));
         for withdrawal in random_withdrawals.clone() {
-            smol::block_on(mem_pool.push_withdrawal_request(withdrawal.into())).unwrap();
+            block_on(mem_pool.push_withdrawal_request(withdrawal.into())).unwrap();
         }
-        smol::block_on(mem_pool.reset_mem_block()).unwrap();
+        block_on(mem_pool.reset_mem_block()).unwrap();
         for tx in random_txs.clone() {
-            smol::block_on(mem_pool.push_transaction(tx)).unwrap();
+            block_on(mem_pool.push_transaction(tx)).unwrap();
         }
 
         let mem_block = mem_pool.mem_block();
@@ -179,7 +182,7 @@ fn test_restore_mem_block() {
     let chain = restart_chain(&chain, rollup_type_script.clone(), Some(provider));
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
 
         let mem_block = mem_pool.mem_block();
         assert_eq!(mem_block.withdrawals().len(), random_withdrawals.len());
@@ -239,19 +242,19 @@ fn test_restore_mem_block() {
         while count > 0 {
             {
                 let mem_pool = chain.mem_pool().as_ref().unwrap();
-                let mut mem_pool = smol::block_on(mem_pool.lock());
+                let mut mem_pool = block_on(mem_pool.lock());
 
                 if mem_pool.pending_restored_tx_hashes().is_empty() {
                     // Restored txs are processed
                     break;
                 }
             }
-            smol::block_on(smol::Timer::after(Duration::from_secs(1)));
+            block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
             count -= 1;
         }
 
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         if count == 0 && !mem_pool.pending_restored_tx_hashes().is_empty() {
             panic!("mem block restored txs aren't reinjected");
         }

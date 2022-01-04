@@ -24,6 +24,7 @@ use gw_mem_pool::{
     },
 };
 use gw_rpc_client::rpc_client::RPCClient;
+use gw_runtime::{block_on, spawn, spawn_blocking};
 use gw_store::{
     chain_view::ChainView,
     mem_pool_state::{MemPoolState, MemStore},
@@ -41,12 +42,12 @@ use jsonrpc_v2::{Data, Error as RpcError, MapRouter, Params, Server, Server as J
 use lru::LruCache;
 use once_cell::sync::Lazy;
 use pprof::ProfilerGuard;
-use smol::{lock::Mutex, unblock};
 use std::{
     convert::{TryFrom, TryInto},
     sync::Arc,
     time::{Duration, Instant},
 };
+use tokio::sync::Mutex;
 
 static PROFILER_GUARD: Lazy<std::sync::Mutex<Option<ProfilerGuard>>> =
     Lazy::new(|| std::sync::Mutex::new(None));
@@ -128,7 +129,7 @@ pub struct RegistryArgs<T> {
     pub send_tx_rate_limit: Option<RPCRateLimit>,
     pub server_config: RPCServerConfig,
     pub dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
-    pub last_submitted_tx_hash: Option<Arc<smol::lock::RwLock<H256>>>,
+    pub last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
 }
 
 pub struct Registry {
@@ -140,12 +141,12 @@ pub struct Registry {
     mem_pool_config: MemPoolConfig,
     backend_info: Vec<BackendInfo>,
     node_mode: NodeMode,
-    submit_tx: smol::channel::Sender<Request>,
+    submit_tx: async_channel::Sender<Request>,
     rpc_client: RPCClient,
     send_tx_rate_limit: Option<RPCRateLimit>,
     server_config: RPCServerConfig,
     dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
-    last_submitted_tx_hash: Option<Arc<smol::lock::RwLock<H256>>>,
+    last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
     mem_pool_state: Arc<MemPoolState>,
 }
 
@@ -173,14 +174,14 @@ impl Registry {
 
         let mem_pool_state = match mem_pool.as_ref() {
             Some(pool) => {
-                let mem_pool = smol::block_on(pool.lock());
+                let mem_pool = block_on(pool.lock());
                 mem_pool.mem_pool_state()
             }
             None => Arc::new(MemPoolState::new(Arc::new(MemStore::new(
                 store.get_snapshot(),
             )))),
         };
-        let (submit_tx, submit_rx) = smol::channel::bounded(RequestSubmitter::MAX_CHANNEL_SIZE);
+        let (submit_tx, submit_rx) = async_channel::bounded(RequestSubmitter::MAX_CHANNEL_SIZE);
         if let Some(mem_pool) = mem_pool.as_ref().to_owned() {
             let submitter = RequestSubmitter {
                 mem_pool: Arc::clone(mem_pool),
@@ -191,7 +192,7 @@ impl Registry {
                 mem_pool_state: mem_pool_state.clone(),
                 store: store.clone(),
             };
-            smol::spawn(submitter.in_background()).detach();
+            spawn(submitter.in_background());
         }
 
         Self {
@@ -332,7 +333,7 @@ impl Request {
 
 struct RequestSubmitter {
     mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
-    submit_rx: smol::channel::Receiver<Request>,
+    submit_rx: async_channel::Receiver<Request>,
     queue: Arc<Mutex<FeeQueue>>,
     dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
     generator: Arc<Generator>,
@@ -390,7 +391,7 @@ impl RequestSubmitter {
             while let Some(hash) = mem_pool.pending_restored_tx_hashes().pop_front() {
                 match db.get_mem_pool_transaction(&hash) {
                     Ok(Some(tx)) => {
-                        if let Err(err) = smol::block_on(mem_pool.push_transaction(tx)) {
+                        if let Err(err) = block_on(mem_pool.push_transaction(tx)) {
                             log::error!("reinject mem block tx {} failed {}", hash.pack(), err);
                         }
                     }
@@ -419,7 +420,7 @@ impl RequestSubmitter {
                     break;
                 }
                 // sleep and try again
-                smol::Timer::after(Self::INTERVAL_MS).await;
+                tokio::time::sleep(Self::INTERVAL_MS).await;
             }
 
             // mem-pool can process more txs
@@ -436,7 +437,7 @@ impl RequestSubmitter {
                     }
                     Err(err) => {
                         log::debug!("rpc submit rx err {}", err);
-                        async_std::task::sleep(Self::INTERVAL_MS).await;
+                        tokio::time::sleep(Self::INTERVAL_MS).await;
                         continue;
                     }
                 };
@@ -510,9 +511,9 @@ impl RequestSubmitter {
                 );
                 for entry in items {
                     let maybe_ok = match entry.item.clone() {
-                        FeeItem::Tx(tx) => smol::block_on(mem_pool.push_transaction(tx)),
+                        FeeItem::Tx(tx) => block_on(mem_pool.push_transaction(tx)),
                         FeeItem::Withdrawal(withdrawal) => {
-                            smol::block_on(mem_pool.push_withdrawal_request(withdrawal))
+                            block_on(mem_pool.push_withdrawal_request(withdrawal))
                         }
                     };
 
@@ -752,7 +753,7 @@ async fn execute_l2transaction(
         .build();
 
     let tx_hash = tx.hash();
-    let mut run_result = unblock(move || {
+    let mut run_result = spawn_blocking(move || {
         let db = store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
@@ -774,7 +775,7 @@ async fn execute_l2transaction(
 
         Result::<_, anyhow::Error>::Ok(run_result)
     })
-    .await?;
+    .await??;
 
     if run_result.exit_code != 0 {
         let receipt = gw_types::offchain::ErrorTxReceipt {
@@ -851,7 +852,7 @@ async fn execute_raw_l2transaction(
     let block_number: u64 = block_info.number().unpack();
 
     // execute tx in task
-    let mut run_result = unblock(move || {
+    let mut run_result = spawn_blocking(move || {
         let chain_view = {
             let tip_block_hash = db.get_last_valid_tip_block_hash()?;
             ChainView::new(&db, tip_block_hash)
@@ -882,7 +883,7 @@ async fn execute_raw_l2transaction(
         };
         Result::<_, anyhow::Error>::Ok(run_result)
     })
-    .await?;
+    .await??;
 
     if run_result.exit_code != 0 {
         let receipt = gw_types::offchain::ErrorTxReceipt {
@@ -904,7 +905,7 @@ async fn execute_raw_l2transaction(
 
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
-    submit_tx: Data<smol::channel::Sender<Request>>,
+    submit_tx: Data<async_channel::Sender<Request>>,
     rate_limiter: Data<Option<SendTransactionRateLimiter>>,
     rate_limit_config: Data<Option<RPCRateLimit>>,
     mem_pool_state: Data<Arc<MemPoolState>>,
@@ -980,7 +981,7 @@ async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
     generator: Data<Generator>,
     store: Data<Store>,
-    submit_tx: Data<smol::channel::Sender<Request>>,
+    submit_tx: Data<async_channel::Sender<Request>>,
     rpc_client: Data<RPCClient>,
 ) -> Result<JsonH256, RpcError> {
     let withdrawal_bytes = withdrawal_request.into_bytes();
@@ -1319,7 +1320,7 @@ async fn get_node_info(backend_info: Data<Vec<BackendInfo>>) -> Result<NodeInfo>
 }
 
 async fn get_last_submitted_info(
-    last_submitted_tx_hash: Data<smol::lock::RwLock<H256>>,
+    last_submitted_tx_hash: Data<tokio::sync::RwLock<H256>>,
 ) -> Result<LastL2BlockCommittedInfo> {
     Ok(LastL2BlockCommittedInfo {
         transaction_hash: {
@@ -1375,7 +1376,7 @@ async fn start_profiler() -> Result<()> {
 
 async fn report_pprof() -> Result<()> {
     if let Some(profiler) = PROFILER_GUARD.lock().unwrap().take() {
-        smol::spawn(async move {
+        spawn(async move {
             if let Ok(report) = profiler.report().build() {
                 let file = std::fs::File::create("/code/workspace/flamegraph.svg").unwrap();
                 let mut options = pprof::flamegraph::Options::default();
@@ -1391,8 +1392,7 @@ async fn report_pprof() -> Result<()> {
                 profile.encode(&mut content).unwrap();
                 std::io::Write::write_all(&mut file, &content).unwrap();
             }
-        })
-        .detach()
+        });
     }
     Ok(())
 }

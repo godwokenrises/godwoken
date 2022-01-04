@@ -24,7 +24,7 @@ use gw_types::packed::{
 };
 use gw_types::prelude::{Pack, PackVec};
 use gw_types::{bytes::Bytes, packed::CellInput, prelude::Unpack};
-use smol::lock::Mutex;
+use tokio::sync::Mutex;
 
 use std::sync::Arc;
 

@@ -35,10 +35,11 @@ gw-generator = { path = "../generator" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-utils = { path = "../utils" }
 gw-rpc-client = { path = "../rpc-client" }
-async-jsonrpc-client = { version = "0.3.0", default-features = false, features = ["http-async-std"] }
+gw-runtime = { path = "../runtime" }
+async-jsonrpc-client = { version = "0.3.0", default-features = false, features = ["http-tokio"] }
 url = "2.2"
 faster-hex = "0.5.0"
 rand = "0.8"
 hex = "0.4"
-smol = "1.2.5"
+tokio = "1.15"
 jsonrpc-core = "17"

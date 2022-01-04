@@ -37,7 +37,7 @@ use gw_utils::fee::fill_tx_fee;
 use gw_utils::genesis_info::CKBGenesisInfo;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
 use gw_utils::wallet::Wallet;
-use smol::lock::Mutex;
+use tokio::sync::Mutex;
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
@@ -691,7 +691,7 @@ impl Challenger {
                 return Err(anyhow!("wait tx hash {} timeout", to_hex(&tx_hash)));
             }
 
-            async_std::task::sleep(Duration::new(3, 0)).await;
+            tokio::time::sleep(Duration::new(3, 0)).await;
         }
     }
 
@@ -710,7 +710,7 @@ impl Challenger {
                 return Err(anyhow!("wait tx hash {} timeout", to_hex(&tx_hash)));
             }
 
-            async_std::task::sleep(Duration::new(3, 0)).await;
+            tokio::time::sleep(Duration::new(3, 0)).await;
         }
     }
 

@@ -16,6 +16,7 @@ use gw_generator::{
     error::{DepositError, WithdrawalError},
     Error,
 };
+use gw_runtime::block_on;
 use gw_store::state::state_db::StateContext;
 use gw_types::{
     core::ScriptHashType,
@@ -28,7 +29,7 @@ use std::{collections::HashSet, iter::FromIterator};
 fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) -> Result<()> {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         construct_block(chain, &mut mem_pool, Default::default())?
     };
     let asset_scripts = HashSet::new();
@@ -55,7 +56,7 @@ fn deposite_to_chain(
         .build()];
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
+        let mut mem_pool = block_on(mem_pool.lock());
         construct_block(chain, &mut mem_pool, deposit_requests.clone())?
     };
     let asset_scripts = if sudt_script_hash == H256::zero() {
@@ -94,8 +95,8 @@ fn withdrawal_from_chain(
     };
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = smol::block_on(mem_pool.lock());
-        smol::block_on(mem_pool.push_withdrawal_request(withdrawal.into()))?;
+        let mut mem_pool = block_on(mem_pool.lock());
+        block_on(mem_pool.push_withdrawal_request(withdrawal.into()))?;
         construct_block(chain, &mut mem_pool, Vec::default()).unwrap()
     };
 
@@ -136,7 +137,7 @@ fn test_deposit_and_withdrawal() {
     )
     .unwrap();
     let (user_id, user_script_hash, ckb_balance) = {
-        let mem_pool = smol::block_on(chain.mem_pool().as_ref().unwrap().lock());
+        let mem_pool = block_on(chain.mem_pool().as_ref().unwrap().lock());
         let snap = mem_pool.mem_pool_state().load();
         let tree = snap.state().unwrap();
         // check user account
@@ -164,7 +165,7 @@ fn test_deposit_and_withdrawal() {
     }
     // check tx pool state
     {
-        let mem_pool = smol::block_on(chain.mem_pool().as_ref().unwrap().lock());
+        let mem_pool = block_on(chain.mem_pool().as_ref().unwrap().lock());
         let snap = mem_pool.mem_pool_state().load();
         let state = snap.state().unwrap();
         assert_eq!(
@@ -204,7 +205,7 @@ fn test_deposit_and_withdrawal() {
     // check tx pool state
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mem_pool = smol::block_on(mem_pool.lock());
+        let mem_pool = block_on(mem_pool.lock());
         let snap = mem_pool.mem_pool_state().load();
         let state = snap.state().unwrap();
         assert_eq!(
@@ -273,7 +274,7 @@ fn test_overdraft() {
     // check tx pool state
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mem_pool = smol::block_on(mem_pool.lock());
+        let mem_pool = block_on(mem_pool.lock());
         let snap = mem_pool.mem_pool_state().load();
         let state = snap.state().unwrap();
         assert_eq!(

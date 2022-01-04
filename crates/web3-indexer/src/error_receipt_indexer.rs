@@ -1,10 +1,11 @@
 use anyhow::Result;
 use gw_common::H256;
 use gw_mem_pool::traits::MemPoolErrorTxHandler;
+use gw_runtime::spawn;
 use gw_types::offchain::ErrorTxReceipt;
 use rust_decimal::Decimal;
-use smol::Task;
 use sqlx::PgPool;
+use tokio::task::JoinHandle;
 
 use crate::helper::{hex, parse_log, GwLog};
 
@@ -58,7 +59,7 @@ impl ErrorReceiptIndexer {
 }
 
 impl MemPoolErrorTxHandler for ErrorReceiptIndexer {
-    fn handle_error_receipt(&mut self, receipt: ErrorTxReceipt) -> Task<Result<()>> {
+    fn handle_error_receipt(&mut self, receipt: ErrorTxReceipt) -> JoinHandle<Result<()>> {
         if self.latest_block < receipt.block_number {
             self.latest_block = receipt.block_number;
 
@@ -66,17 +67,16 @@ impl MemPoolErrorTxHandler for ErrorReceiptIndexer {
             let expired_block = self
                 .latest_block
                 .saturating_sub(MAX_ERROR_TX_RECEIPT_BLOCKS);
-            smol::spawn(async move {
+            spawn(async move {
                 if let Err(err) = Self::clear_expired_block_error_receipt(pool, expired_block).await
                 {
                     log::error!("clear expired block error receipt {}", err);
                 }
-            })
-            .detach();
+            });
         }
 
         let pool = self.pool.clone();
-        smol::spawn(async move {
+        spawn(async move {
             if let Err(err) = Self::insert_error_tx_receipt(pool, receipt).await {
                 log::error!("insert error tx receipt {}", err);
             }

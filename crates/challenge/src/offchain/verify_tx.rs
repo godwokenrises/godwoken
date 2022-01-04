@@ -18,6 +18,7 @@ use gw_jsonrpc_types::{
     ckb_jsonrpc_types,
     debugger::{ReprMockCellDep, ReprMockInfo, ReprMockInput, ReprMockTransaction},
 };
+use gw_runtime::block_on;
 use gw_types::offchain::InputCellInfo;
 
 use std::collections::{HashMap, HashSet};
@@ -88,7 +89,7 @@ pub fn verify_tx(
 
     let resolved_tx = data_loader.resolve_tx(&tx_with_context.tx)?;
 
-    let hardfork_switch = smol::block_on(async {
+    let hardfork_switch = block_on(async {
         let switch = &*GLOBAL_HARDFORK_SWITCH.lock().await;
         HardForkSwitch::new_without_any_enabled()
             .as_builder()
@@ -105,7 +106,7 @@ pub fn verify_tx(
     let consensus = ConsensusBuilder::default()
         .hardfork_switch(hardfork_switch)
         .build();
-    let current_epoch_number = smol::block_on(async { *GLOBAL_CURRENT_EPOCH_NUMBER.lock().await });
+    let current_epoch_number = block_on(async { *GLOBAL_CURRENT_EPOCH_NUMBER.lock().await });
     let tx_verify_env = TxVerifyEnv::new_submit(
         &HeaderView::new_advanced_builder()
             .epoch(current_epoch_number.pack())

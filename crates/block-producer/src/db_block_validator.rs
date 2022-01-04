@@ -12,6 +12,7 @@ use gw_common::H256;
 use gw_config::{Config, DBBlockValidatorConfig, DebugConfig};
 use gw_generator::Generator;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType as JsonChallengeTargetType;
+use gw_runtime::block_on;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     core::{ChallengeTargetType, Status},
@@ -50,7 +51,7 @@ fn build_validator(config: Config) -> Result<DBBlockCancelChallengeValidator> {
     let wallet =
         Wallet::from_config(&block_producer_config.wallet_config).with_context(|| "init wallet")?;
     let poa = base.init_poa(&wallet, &block_producer_config);
-    let mut offchain_mock_context = smol::block_on(async {
+    let mut offchain_mock_context = block_on(async {
         let poa = poa.lock().await;
         base.init_offchain_mock_context(&poa, &block_producer_config)
             .await
