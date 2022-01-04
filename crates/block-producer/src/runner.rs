@@ -6,7 +6,7 @@ use crate::{
     test_mode_control::TestModeControl,
     types::ChainEvent,
 };
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use ckb_types::core::hardfork::HardForkSwitch;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
@@ -135,52 +135,62 @@ async fn poll_loop(
             let event = event.clone();
             let inner = inner.clone();
             let mut inner = inner.lock().await;
-            inner
-                .chain_updater
-                .handle_event(event.clone())
-                .await
-                .map_err(|err| {
-                    anyhow!(
-                        "Error occured when polling chain_updater, event: {}, error: {}",
-                        event,
-                        err
-                    )
-                })?;
+            if let Err(err) = inner.chain_updater.handle_event(event.clone()).await {
+                if is_ckb_or_indexer_client_error(&err) {
+                    log::error!("[polling] chain_updater event: {} error: {}", event, err);
+                    smol::Timer::after(poll_interval).await;
+                    continue;
+                }
+                bail!(
+                    "Error occurred when polling chain_updater, event: {}, error: {}",
+                    event,
+                    err
+                );
+            }
 
             if let Some(ref mut challenger) = inner.challenger {
-                challenger
-                    .handle_event(event.clone())
-                    .await
-                    .map_err(|err| {
-                        anyhow!(
-                            "Error occured when polling challenger, event: {}, error: {}",
-                            event,
-                            err
-                        )
-                    })?;
+                if let Err(err) = challenger.handle_event(event.clone()).await {
+                    if is_ckb_or_indexer_client_error(&err) {
+                        log::error!("[polling] challenger event: {} error: {}", event, err);
+                        smol::Timer::after(poll_interval).await;
+                        continue;
+                    }
+                    bail!(
+                        "Error occurred when polling challenger, event: {}, error: {}",
+                        event,
+                        err
+                    );
+                }
             }
 
             if let Some(ref mut block_producer) = inner.block_producer {
-                block_producer
-                    .handle_event(event.clone())
-                    .await
-                    .map_err(|err| {
-                        anyhow!(
-                            "Error occured when polling block_producer, event: {}, error: {}",
-                            event,
-                            err
-                        )
-                    })?;
+                if let Err(err) = block_producer.handle_event(event.clone()).await {
+                    if is_ckb_or_indexer_client_error(&err) {
+                        log::error!("[polling] block producer event: {} error: {}", event, err);
+                        smol::Timer::after(poll_interval).await;
+                        continue;
+                    }
+                    bail!(
+                        "Error occurred when polling block_producer, event: {}, error: {}",
+                        event,
+                        err
+                    );
+                }
             }
 
             if let Some(ref cleaner) = inner.cleaner {
-                cleaner.handle_event(event.clone()).await.map_err(|err| {
-                    anyhow!(
-                        "Error occured when polling block_producer, event: {}, error: {}",
+                if let Err(err) = cleaner.handle_event(event.clone()).await {
+                    if is_ckb_or_indexer_client_error(&err) {
+                        log::error!("[polling] cleaner event: {} error: {}", event, err);
+                        smol::Timer::after(poll_interval).await;
+                        continue;
+                    }
+                    bail!(
+                        "Error occurred when polling block_producer, event: {}, error: {}",
                         event,
                         err
-                    )
-                })?;
+                    );
+                }
             }
 
             // update tip
@@ -916,4 +926,15 @@ fn is_hardfork_switch_eq(l: &HardForkSwitch, r: &HardForkSwitch) -> bool {
         && l.rfc_0032() == r.rfc_0032()
         && l.rfc_0036() == r.rfc_0036()
         && l.rfc_0038() == r.rfc_0038()
+}
+
+// TODO: inspect error method?
+fn is_ckb_or_indexer_client_error(err: &anyhow::Error) -> bool {
+    // rpc-client/src/ckb_client.rs
+    const CKB_CLIENT_ERROR: &str = "ckb client error, method";
+    // rpc-client/src/indexer_client.rs
+    const CKB_INDEXER_CLIENT_ERROR: &str = "ckb indexer client error, method";
+
+    let err_msg = err.to_string();
+    err_msg.contains(CKB_CLIENT_ERROR) || err_msg.contains(CKB_INDEXER_CLIENT_ERROR)
 }
