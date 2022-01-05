@@ -3,7 +3,7 @@ use std::{collections::HashSet, time::Duration};
 use gw_common::{merkle_utils::calculate_state_checkpoint, H256};
 use gw_types::{
     offchain::{CollectedCustodianCells, DepositInfo},
-    packed::{self, AccountMerkleState, BlockInfo, L2Block, TxReceipt},
+    packed::{self, AccountMerkleState, BlockInfo, L2Block},
     prelude::*,
 };
 
@@ -35,8 +35,12 @@ pub struct MemBlock {
     block_info: BlockInfo,
     /// Mem block prev merkle state
     prev_merkle_state: AccountMerkleState,
-    /// touched keys
+    /// Touched keys
     touched_keys: HashSet<H256>,
+    /// Merkle states
+    merkle_states: Vec<AccountMerkleState>,
+    /// Touched keys vector
+    touched_keys_vec: Vec<Vec<H256>>,
 }
 
 impl MemBlock {
@@ -92,6 +96,8 @@ impl MemBlock {
         self.state_checkpoints.clear();
         self.txs_prev_state_checkpoint = None;
         self.touched_keys.clear();
+        self.merkle_states.clear();
+        self.touched_keys_vec.clear();
     }
 
     pub fn push_withdrawal(&mut self, withdrawal_hash: H256, state_checkpoint: H256) {
@@ -127,8 +133,7 @@ impl MemBlock {
         self.txs_prev_state_checkpoint = Some(prev_state_checkpoint);
     }
 
-    pub fn push_tx(&mut self, tx_hash: H256, receipt: &TxReceipt) {
-        let post_state = receipt.post_state();
+    pub fn push_tx(&mut self, tx_hash: H256, post_state: &AccountMerkleState) {
         let state_checkpoint = calculate_state_checkpoint(
             &post_state.merkle_root().unpack(),
             post_state.count().unpack(),
@@ -158,6 +163,14 @@ impl MemBlock {
         self.touched_keys.clear();
         self.state_checkpoints.clear();
         self.txs_prev_state_checkpoint = None;
+    }
+
+    pub fn push_merkle_state(&mut self, state: AccountMerkleState) {
+        self.merkle_states.push(state);
+    }
+
+    pub fn push_touched_keys_vec<I: Iterator<Item = H256>>(&mut self, keys: I) {
+        self.touched_keys_vec.push(keys.collect())
     }
 
     pub fn append_touched_keys<I: Iterator<Item = H256>>(&mut self, keys: I) {
@@ -206,6 +219,14 @@ impl MemBlock {
 
     pub fn prev_merkle_state(&self) -> &AccountMerkleState {
         &self.prev_merkle_state
+    }
+
+    pub fn merkle_states(&self) -> &Vec<AccountMerkleState> {
+        &self.merkle_states
+    }
+
+    pub fn touched_keys_vec(&self) -> &Vec<Vec<H256>> {
+        &self.touched_keys_vec
     }
 
     pub fn pack_compact(&self) -> packed::CompactMemBlock {
