@@ -182,6 +182,7 @@ impl ChainUpdater {
     pub async fn update(&mut self, txs: &[Tx]) -> anyhow::Result<()> {
         for tx in txs.iter() {
             self.update_single(&tx.tx_hash).await?;
+            self.last_tx_hash = Some(tx.tx_hash.clone());
         }
 
         Ok(())
@@ -194,7 +195,6 @@ impl ChainUpdater {
                 return Ok(());
             }
         }
-        self.last_tx_hash = Some(tx_hash.clone());
 
         let tx: Option<TransactionWithStatus> = self
             .rpc_client
@@ -204,14 +204,21 @@ impl ChainUpdater {
                 Some(ClientParams::Array(vec![json!(tx_hash)])),
             )
             .await?;
-        let tx_with_status =
-            tx.ok_or_else(|| anyhow::anyhow!("Cannot locate transaction: {:x}", tx_hash))?;
+        let tx_with_status = tx.ok_or_else(|| {
+            anyhow::anyhow!(
+                "poller l1 tx error, cannot locate transaction: {:x}",
+                tx_hash
+            )
+        })?;
         let tx = {
             let tx: ckb_types::packed::Transaction = tx_with_status.transaction.inner.into();
             Transaction::new_unchecked(tx.as_bytes())
         };
         let block_hash = tx_with_status.tx_status.block_hash.ok_or_else(|| {
-            anyhow::anyhow!("Transaction {:x} is not committed on chain!", tx_hash)
+            anyhow::anyhow!(
+                "poller l1 tx error, transaction {:x} is not committed on chain!",
+                tx_hash
+            )
         })?;
         let header_view: Option<HeaderView> = self
             .rpc_client
@@ -221,8 +228,9 @@ impl ChainUpdater {
                 Some(ClientParams::Array(vec![json!(block_hash)])),
             )
             .await?;
-        let header_view =
-            header_view.ok_or_else(|| anyhow::anyhow!("Cannot locate block: {:x}", block_hash))?;
+        let header_view = header_view.ok_or_else(|| {
+            anyhow::anyhow!("poller l1 tx error, cannot locate block: {:x}", block_hash)
+        })?;
         let l2block_committed_info = L2BlockCommittedInfo::new_builder()
             .number(header_view.inner.number.value().pack())
             .block_hash(block_hash.0.pack())
@@ -465,8 +473,12 @@ impl ChainUpdater {
                     Some(ClientParams::Array(vec![json!(tx_hash)])),
                 )
                 .await?;
-            let tx_with_status =
-                tx.ok_or_else(|| anyhow::anyhow!("Cannot locate transaction: {:x}", tx_hash))?;
+            let tx_with_status = tx.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "poller l1 tx error, cannot locate transaction: {:x}",
+                    tx_hash
+                )
+            })?;
             let tx = {
                 let tx: ckb_types::packed::Transaction = tx_with_status.transaction.inner.into();
                 Transaction::new_unchecked(tx.as_bytes())
