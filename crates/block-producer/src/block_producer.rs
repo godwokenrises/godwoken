@@ -269,7 +269,7 @@ impl BlockProducer {
                 < WAIT_PRODUCE_BLOCK_SECONDS
         {
             log::debug!(
-                "skip produce new block, last committed is {}s ago",
+                "skip producing new block, last committed is {}s ago",
                 self.last_committed_l2_block
                     .committed_at
                     .elapsed()
@@ -570,6 +570,7 @@ impl BlockProducer {
                     block_number,
                     hex::encode(tx_hash.as_slice())
                 );
+                Ok(SubmitResult::Submitted)
             }
             Err(err) => {
                 log::error!("Submitting l2 block error: {}", err);
@@ -587,14 +588,33 @@ impl BlockProducer {
                         tx.clone(),
                     )
                     .await;
-                    return Err(anyhow!("Submitting l2 block error: {}", err));
+                    Err(anyhow!("Submitting l2 block error: {}", err))
                 } else {
                     // ignore non script error
-                    log::debug!("Skip dumping non-script-error tx");
+                    let since_last_committed_secs = self
+                        .last_committed_l2_block
+                        .committed_at
+                        .elapsed()
+                        .as_secs();
+                    if since_last_committed_secs < WAIT_PRODUCE_BLOCK_SECONDS {
+                        log::debug!(
+                            "last committed is {}s ago, dump tx",
+                            since_last_committed_secs
+                        );
+                        // dumping failed tx
+                        utils::dump_transaction(
+                            &self.debug_config.debug_tx_dump_path,
+                            &self.rpc_client,
+                            tx.clone(),
+                        )
+                        .await;
+                    } else {
+                        log::debug!("Skip dumping non-script-error tx");
+                    }
+                    Ok(SubmitResult::Skip)
                 }
             }
         }
-        Ok(SubmitResult::Submitted)
     }
 
     async fn complete_tx_skeleton(
