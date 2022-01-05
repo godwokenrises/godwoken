@@ -1,4 +1,7 @@
-use crate::utils::{to_result, DEFAULT_HTTP_TIMEOUT};
+use crate::{
+    error::RPCRequestError,
+    utils::{to_result, DEFAULT_HTTP_TIMEOUT},
+};
 use anyhow::{anyhow, bail, Result};
 use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use gw_jsonrpc_types::blockchain::CellDep;
@@ -33,7 +36,7 @@ impl CKBClient {
             .client()
             .request(method, params)
             .await
-            .map_err(|err| anyhow!("ckb client error, method: {} error: {}", method, err))?;
+            .map_err(|err| RPCRequestError::new("ckb client", method.to_string(), err))?;
         let response_str = response.to_string();
         match to_result::<T>(response) {
             Ok(r) => Ok(r),
