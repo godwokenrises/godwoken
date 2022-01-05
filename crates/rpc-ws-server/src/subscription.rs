@@ -184,8 +184,10 @@ impl SubscriptionRpcImpl {
 
                 let subscribers = subscribers.read().expect("acquiring subscribers read lock");
                 if let Some(subscribers) = subscribers.get(&Topic::NewErrorTxReceipt) {
-                    for sink in subscribers.values() {
-                        let _ = sink.notify(Ok(json_err_receipt.clone()));
+                    for (subscriber, sink) in subscribers.iter() {
+                        if let Err(err) = sink.notify(Ok(json_err_receipt.clone())) {
+                            log::error!("[error tx receipt] sink notify {:?} {}", subscriber, err);
+                        }
                     }
                 }
             }
