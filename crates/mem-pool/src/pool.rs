@@ -106,6 +106,17 @@ pub struct MemPool {
     mem_pool_state: Arc<MemPoolState>,
 }
 
+pub struct MemPoolCreateArgs {
+    pub block_producer_id: u32,
+    pub store: Store,
+    pub generator: Arc<Generator>,
+    pub provider: Box<dyn MemPoolProvider + Send>,
+    pub error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
+    pub error_tx_receipt_notifier: Option<NotifyController>,
+    pub config: MemPoolConfig,
+    pub node_mode: NodeMode,
+}
+
 impl Drop for MemPool {
     fn drop(&mut self) {
         log::info!("Saving mem block to {:?}", self.restore_manager().path());
@@ -117,16 +128,18 @@ impl Drop for MemPool {
 }
 
 impl MemPool {
-    pub fn create(
-        block_producer_id: u32,
-        store: Store,
-        generator: Arc<Generator>,
-        provider: Box<dyn MemPoolProvider + Send>,
-        error_tx_handler: Option<Box<dyn MemPoolErrorTxHandler + Send>>,
-        error_tx_receipt_notifier: Option<NotifyController>,
-        config: MemPoolConfig,
-        node_mode: NodeMode,
-    ) -> Result<Self> {
+    pub fn create(args: MemPoolCreateArgs) -> Result<Self> {
+        let MemPoolCreateArgs {
+            block_producer_id,
+            store,
+            generator,
+            provider,
+            error_tx_handler,
+            error_tx_receipt_notifier,
+            config,
+            node_mode,
+        } = args;
+
         let pending = Default::default();
 
         let tip_block = {

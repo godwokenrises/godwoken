@@ -25,7 +25,9 @@ use gw_generator::{
     Generator,
 };
 use gw_mem_pool::{
-    default_provider::DefaultMemPoolProvider, pool::MemPool, spawn_sub_mem_pool_task,
+    default_provider::DefaultMemPoolProvider,
+    pool::{MemPool, MemPoolCreateArgs},
+    spawn_sub_mem_pool_task,
     traits::MemPoolErrorTxHandler,
 };
 use gw_poa::PoA;
@@ -539,19 +541,21 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     let opt_ws_listen = config.rpc_server.err_receipt_ws_listen.as_ref();
                     opt_ws_listen.map(|_| NotifyService::new().start())
                 };
-                let mem_pool = Arc::new(Mutex::new(
-                    MemPool::create(
-                        block_producer_config.account_id,
-                        base.store.clone(),
-                        base.generator.clone(),
-                        Box::new(mem_pool_provider),
+                let mem_pool = {
+                    let args = MemPoolCreateArgs {
+                        block_producer_id: block_producer_config.account_id,
+                        store: base.store.clone(),
+                        generator: base.generator.clone(),
+                        provider: Box::new(mem_pool_provider),
                         error_tx_handler,
-                        notify_controller.clone(),
-                        config.mem_pool.clone(),
-                        config.node_mode,
-                    )
-                    .with_context(|| "create mem-pool")?,
-                ));
+                        error_tx_receipt_notifier: notify_controller.clone(),
+                        config: config.mem_pool.clone(),
+                        node_mode: config.node_mode,
+                    };
+                    Arc::new(Mutex::new(
+                        MemPool::create(args).with_context(|| "create mem-pool")?,
+                    ))
+                };
                 (
                     Some(mem_pool),
                     Some(wallet),
