@@ -89,7 +89,7 @@ impl NotifyService {
                         }
                     },
                     opt_receipt = err_receipt_rx.next() => match opt_receipt {
-                        Some(err_receipt) => self.handle_notify_new_error_tx_receipt(err_receipt),
+                        Some(err_receipt) => self.handle_notify_new_error_tx_receipt(err_receipt).await,
                         None => {
                             log::error!("[error tx receipt] receipt sender dropped");
                             return;
@@ -129,12 +129,20 @@ impl NotifyService {
         }
     }
 
-    fn handle_notify_new_error_tx_receipt(&self, err_receipt: Arc<ErrorTxReceipt>) {
+    async fn handle_notify_new_error_tx_receipt(&mut self, err_receipt: Arc<ErrorTxReceipt>) {
         log::trace!("[error tx receipt] new receipt {:?}", err_receipt);
 
         // notify all subscribers
-        for subscriber in self.error_receipt_subscribers.values() {
-            let _ = subscriber.send(Arc::clone(&err_receipt));
+        let mut closed_subscriber = vec![];
+        for (name, subscriber) in self.error_receipt_subscribers.iter() {
+            if let Err(err) = subscriber.send(Arc::clone(&err_receipt)).await {
+                log::info!("[error tx receipt] subscriber {} closed {}", name, err);
+            }
+            closed_subscriber.push(name.to_owned());
+        }
+        for subscriber in closed_subscriber {
+            self.error_receipt_subscribers.remove(&subscriber);
+            log::debug!("[error tx receipt] remove subscriber {}", subscriber);
         }
     }
 }
