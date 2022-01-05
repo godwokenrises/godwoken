@@ -9,7 +9,6 @@ pub async fn start_jsonrpc_ws_server(
     ws_rpc_address: &str,
     notify_controller: NotifyController,
 ) -> Result<()> {
-    // TODO: read url from config
     let ws_listen_address = ws_rpc_address
         .to_socket_addrs()?
         .next()
