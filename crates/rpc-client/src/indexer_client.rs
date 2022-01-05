@@ -1,5 +1,6 @@
 #![allow(clippy::mutable_key_type)]
 
+use crate::error::RPCRequestError;
 use crate::indexer_types::{Cell, Order, Pagination, ScriptType, SearchKey, SearchKeyFilter};
 use crate::utils::{to_result, DEFAULT_HTTP_TIMEOUT, DEFAULT_QUERY_LIMIT};
 use anyhow::{anyhow, Result};
@@ -42,13 +43,10 @@ impl CKBIndexerClient {
         method: &str,
         params: Option<ClientParams>,
     ) -> Result<T> {
-        let response = self.client().request(method, params).await.map_err(|err| {
-            anyhow!(
-                "ckb indexer client error, method: {} error: {}",
-                method,
-                err
-            )
-        })?;
+        let response =
+            self.client().request(method, params).await.map_err(|err| {
+                RPCRequestError::new("ckb indexer client", method.to_string(), err)
+            })?;
         let response_str = response.to_string();
         match to_result(response) {
             Ok(r) => Ok(r),
