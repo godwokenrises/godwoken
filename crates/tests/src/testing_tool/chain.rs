@@ -10,7 +10,7 @@ use gw_generator::{
     genesis::init_genesis,
     Generator,
 };
-use gw_mem_pool::pool::{MemPool, OutputParam};
+use gw_mem_pool::pool::{MemPool, MemPoolCreateArgs, OutputParam};
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     bytes::Bytes,
@@ -196,17 +196,17 @@ pub fn setup_chain_with_account_lock_manage(
         Default::default(),
     ));
     let provider = opt_mem_pool_provider.unwrap_or_default();
-    let mem_pool = MemPool::create(
-        0,
-        store.clone(),
-        Arc::clone(&generator),
-        Box::new(provider),
-        None,
-        None,
-        mem_pool_config,
-        gw_config::NodeMode::FullNode,
-    )
-    .unwrap();
+    let args = MemPoolCreateArgs {
+        block_producer_id: 0,
+        store: store.clone(),
+        generator: Arc::clone(&generator),
+        provider: Box::new(provider),
+        error_tx_handler: None,
+        error_tx_receipt_notifier: None,
+        config: mem_pool_config,
+        node_mode: gw_config::NodeMode::FullNode,
+    };
+    let mem_pool = MemPool::create(args).unwrap();
     Chain::create(
         &rollup_config,
         &rollup_type_script,
