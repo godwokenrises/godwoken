@@ -9,7 +9,7 @@ use gw_tx_filter::{
 use crate::{fee_config::FeeConfigManager, whitelist_config::WhilteListConfigManager};
 
 // Some configs can be hot reloaded through DynamicConfigManager.
-// So that we don't need to restart to take an effect every time.
+// So that we don't need to restart to take effect every time.
 #[derive(Default)]
 pub struct DynamicConfigManager {
     config_github_url: Option<String>,
