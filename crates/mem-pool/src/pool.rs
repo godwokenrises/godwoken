@@ -39,9 +39,11 @@ use gw_types::{
     },
     prelude::{Entity, Unpack},
 };
+use smol::lock::{RwLock, RwLockReadGuard};
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
+    future::Future,
     iter::FromIterator,
     ops::Shr,
     sync::Arc,
@@ -93,7 +95,7 @@ pub struct MemPool {
     /// memory block
     mem_block: MemBlock,
     /// Mem pool provider
-    provider: Box<dyn MemPoolProvider + Send + Sync>,
+    provider: Arc<RwLock<Box<dyn MemPoolProvider + Send + Sync>>>,
     /// Pending deposits
     pending_deposits: Vec<DepositInfo>,
     /// Mem block save and restore
@@ -139,7 +141,6 @@ impl MemPool {
             config,
             node_mode,
         } = args;
-
         let pending = Default::default();
 
         let tip_block = {
@@ -187,7 +188,7 @@ impl MemPool {
             error_tx_receipt_notifier,
             pending,
             mem_block,
-            provider,
+            provider: Arc::new(RwLock::new(provider)),
             pending_deposits,
             restore_manager: restore_manager.clone(),
             pending_restored_tx_hashes,
@@ -304,7 +305,9 @@ impl MemPool {
         log::debug!("[push tx] finalize tx time: {}ms", t.elapsed().as_millis());
 
         // save tx receipt in mem pool
-        self.mem_block.push_tx(tx_hash, &tx_receipt);
+        let post_state = tx_receipt.post_state();
+        self.mem_block.push_tx(tx_hash, &post_state);
+        self.mem_block.push_merkle_state(post_state);
         db.insert_mem_pool_transaction_receipt(&tx_hash, tx_receipt)?;
 
         // Add to pool
@@ -392,6 +395,7 @@ impl MemPool {
                 .rollup_context()
                 .last_finalized_block_number(self.current_tip.1);
             self.provider
+                .read()
                 .query_available_custodians(
                     vec![withdrawal.request()],
                     last_finalized_block_number,
@@ -457,191 +461,214 @@ impl MemPool {
     }
 
     /// output mem block
-    pub async fn output_mem_block(
+    pub fn output_mem_block(
         &self,
-        output_param: &OutputParam,
-    ) -> Result<(Option<CollectedCustodianCells>, BlockParam)> {
-        let (mem_block, post_merkle_state) = self.package_mem_block(output_param).await?;
-
+        output_param: OutputParam,
+    ) -> impl Future<Output = Result<(Option<CollectedCustodianCells>, BlockParam)>> {
+        let mem_block = self.mem_block.clone();
+        let current_tip = self.current_tip;
         let db = self.store.begin_transaction();
-        // generate kv state & merkle proof from tip state
-        let chain_state = db.state_tree(StateContext::ReadOnly)?;
-
-        let kv_state: Vec<(H256, H256)> = mem_block
-            .touched_keys()
-            .iter()
-            .map(|k| {
-                chain_state
-                    .get_raw(k)
-                    .map(|v| (*k, v))
-                    .map_err(|err| anyhow!("can't fetch value error: {:?}", err))
-            })
-            .collect::<Result<_>>()?;
-        let kv_state_proof = if kv_state.is_empty() {
-            // nothing need to prove
-            Vec::new()
-        } else {
-            let account_smt = db.account_smt()?;
-
-            account_smt
-                .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
-                .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
-                .compile(kv_state.clone())?
-                .0
+        let last_finalized_block_number = {
+            let context = self.generator.rollup_context();
+            context.last_finalized_block_number(current_tip.1)
         };
+        let provider = Arc::clone(&self.provider);
 
-        let txs: Vec<_> = mem_block
-            .txs()
-            .iter()
-            .map(|tx_hash| {
-                db.get_mem_pool_transaction(tx_hash)?
-                    .ok_or_else(|| anyhow!("can't find tx_hash from mem pool"))
-            })
-            .collect::<Result<_>>()?;
-        let deposits: Vec<_> = mem_block.deposits().to_vec();
-        let withdrawals: Vec<_> = mem_block
-            .withdrawals()
-            .iter()
-            .map(|withdrawal_hash| {
-                db.get_mem_pool_withdrawal(withdrawal_hash)?.ok_or_else(|| {
-                    anyhow!(
-                        "can't find withdrawal_hash from mem pool {}",
-                        hex::encode(withdrawal_hash.as_slice())
-                    )
+        async move {
+            let (mem_block, post_merkle_state) = Self::package_mem_block(mem_block, &output_param)?;
+
+            // generate kv state & merkle proof from tip state
+            let chain_state = db.state_tree(StateContext::ReadOnly)?;
+
+            let kv_state: Vec<(H256, H256)> = mem_block
+                .touched_keys()
+                .iter()
+                .map(|k| {
+                    chain_state
+                        .get_raw(k)
+                        .map(|v| (*k, v))
+                        .map_err(|err| anyhow!("can't fetch value error: {:?}", err))
                 })
-            })
-            .collect::<Result<_>>()?;
-        let state_checkpoint_list = mem_block.state_checkpoints().to_vec();
-        let txs_prev_state_checkpoint = mem_block
-            .txs_prev_state_checkpoint()
-            .ok_or_else(|| anyhow!("Mem block has no txs prev state checkpoint"))?;
-        let prev_merkle_state = mem_block.prev_merkle_state().clone();
-        let parent_block = db
-            .get_block(&self.current_tip.0)?
-            .ok_or_else(|| anyhow!("can't found tip block"))?;
+                .collect::<Result<_>>()?;
+            let kv_state_proof = if kv_state.is_empty() {
+                // nothing need to prove
+                Vec::new()
+            } else {
+                let account_smt = db.account_smt()?;
 
-        // check output block state consistent
-        {
-            let tip_block = db.get_last_valid_tip_block()?;
-            assert_eq!(
-                parent_block.hash(),
-                tip_block.hash(),
-                "check tip block consistent"
-            );
-            assert_eq!(
-                prev_merkle_state,
-                parent_block.raw().post_account(),
-                "check mem block prev merkle state"
-            );
+                account_smt
+                    .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
+                    .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
+                    .compile(kv_state.clone())?
+                    .0
+            };
 
-            // check smt root
-            let expected_kv_state_root: H256 = prev_merkle_state.merkle_root().unpack();
-            let smt = db.account_smt()?;
-            assert_eq!(
-                smt.root(),
-                &expected_kv_state_root,
-                "check smt root consistent"
-            );
+            let txs: Vec<_> = mem_block
+                .txs()
+                .iter()
+                .map(|tx_hash| {
+                    db.get_mem_pool_transaction(tx_hash)?
+                        .ok_or_else(|| anyhow!("can't find tx_hash from mem pool"))
+                })
+                .collect::<Result<_>>()?;
+            let deposits: Vec<_> = mem_block.deposits().to_vec();
+            let withdrawals: Vec<_> = mem_block
+                .withdrawals()
+                .iter()
+                .map(|withdrawal_hash| {
+                    db.get_mem_pool_withdrawal(withdrawal_hash)?.ok_or_else(|| {
+                        anyhow!(
+                            "can't find withdrawal_hash from mem pool {}",
+                            hex::encode(withdrawal_hash.as_slice())
+                        )
+                    })
+                })
+                .collect::<Result<_>>()?;
+            let state_checkpoint_list = mem_block.state_checkpoints().to_vec();
+            let txs_prev_state_checkpoint = mem_block
+                .txs_prev_state_checkpoint()
+                .ok_or_else(|| anyhow!("Mem block has no txs prev state checkpoint"))?;
+            let prev_merkle_state = mem_block.prev_merkle_state().clone();
+            let parent_block = db
+                .get_block(&current_tip.0)?
+                .ok_or_else(|| anyhow!("can't found tip block"))?;
 
-            if !kv_state_proof.is_empty() {
-                log::debug!("[output mem-block] check merkle proof");
-                // check state merkle proof before output
-                let prev_kv_state_root = CompiledMerkleProof(kv_state_proof.clone())
-                    .compute_root::<Blake2bHasher>(kv_state.clone())?;
+            // check output block state consistent
+            {
+                let tip_block = db.get_last_valid_tip_block()?;
+                assert_eq!(
+                    parent_block.hash(),
+                    tip_block.hash(),
+                    "check tip block consistent"
+                );
+                assert_eq!(
+                    prev_merkle_state,
+                    parent_block.raw().post_account(),
+                    "check mem block prev merkle state"
+                );
+
+                // check smt root
                 let expected_kv_state_root: H256 = prev_merkle_state.merkle_root().unpack();
+                let smt = db.account_smt()?;
                 assert_eq!(
-                    expected_kv_state_root, prev_kv_state_root,
-                    "check state merkle proof"
+                    smt.root(),
+                    &expected_kv_state_root,
+                    "check smt root consistent"
                 );
-            }
 
-            let tip_block_post_account = tip_block.raw().post_account();
-            assert_eq!(
-                prev_merkle_state, tip_block_post_account,
-                "check output mem block txs prev state"
-            );
-            if withdrawals.is_empty() && deposits.is_empty() {
-                let post_block_checkpoint = calculate_state_checkpoint(
-                    &tip_block_post_account.merkle_root().unpack(),
-                    tip_block_post_account.count().unpack(),
-                );
-                assert_eq!(
-                    txs_prev_state_checkpoint, post_block_checkpoint,
-                    "check mem block txs prev state"
-                );
-                if txs.is_empty() {
+                if !kv_state_proof.is_empty() {
+                    log::debug!("[output mem-block] check merkle proof");
+                    // check state merkle proof before output
+                    let prev_kv_state_root = CompiledMerkleProof(kv_state_proof.clone())
+                        .compute_root::<Blake2bHasher>(kv_state.clone())?;
+                    let expected_kv_state_root: H256 = prev_merkle_state.merkle_root().unpack();
                     assert_eq!(
-                        post_merkle_state, tip_block_post_account,
-                        "check mem block post account"
-                    )
+                        expected_kv_state_root, prev_kv_state_root,
+                        "check state merkle proof"
+                    );
+                }
+
+                let tip_block_post_account = tip_block.raw().post_account();
+                assert_eq!(
+                    prev_merkle_state, tip_block_post_account,
+                    "check output mem block txs prev state"
+                );
+                if withdrawals.is_empty() && deposits.is_empty() {
+                    let post_block_checkpoint = calculate_state_checkpoint(
+                        &tip_block_post_account.merkle_root().unpack(),
+                        tip_block_post_account.count().unpack(),
+                    );
+                    assert_eq!(
+                        txs_prev_state_checkpoint, post_block_checkpoint,
+                        "check mem block txs prev state"
+                    );
+                    if txs.is_empty() {
+                        assert_eq!(
+                            post_merkle_state, tip_block_post_account,
+                            "check mem block post account"
+                        )
+                    }
                 }
             }
+
+            let block_info = mem_block.block_info();
+            let param = BlockParam {
+                number: block_info.number().unpack(),
+                block_producer_id: block_info.block_producer_id().unpack(),
+                timestamp: block_info.timestamp().unpack(),
+                txs,
+                deposits,
+                withdrawals,
+                state_checkpoint_list,
+                parent_block,
+                txs_prev_state_checkpoint,
+                prev_merkle_state,
+                post_merkle_state,
+                kv_state,
+                kv_state_proof,
+            };
+
+            let finalized_custodians = {
+                let collected = mem_block
+                    .finalized_custodians()
+                    .cloned()
+                    .unwrap_or_default();
+                let last_finalized_block_number = self
+                    .generator
+                    .rollup_context()
+                    .last_finalized_block_number(self.current_tip.1);
+                let task = self
+                    .provider
+                    .read()
+                    .await
+                    .query_mergeable_custodians(collected, last_finalized_block_number);
+                Some(task.await?)
+            };
+
+            log::debug!(
+                "finalized custodians {:?}",
+                finalized_custodians.cells_info.len()
+            );
+            log::debug!(
+                "output mem block, txs: {} tx withdrawals: {} state_checkpoints: {}",
+                mem_block.txs().len(),
+                mem_block.withdrawals().len(),
+                mem_block.state_checkpoints().len(),
+            );
+
+            Ok((Some(finalized_custodians), param))
         }
-
-        let block_info = mem_block.block_info();
-        let param = BlockParam {
-            number: block_info.number().unpack(),
-            block_producer_id: block_info.block_producer_id().unpack(),
-            timestamp: block_info.timestamp().unpack(),
-            txs,
-            deposits,
-            withdrawals,
-            state_checkpoint_list,
-            parent_block,
-            txs_prev_state_checkpoint,
-            prev_merkle_state,
-            post_merkle_state,
-            kv_state,
-            kv_state_proof,
-        };
-
-        let finalized_custodians = {
-            let collected = mem_block
-                .finalized_custodians()
-                .cloned()
-                .unwrap_or_default();
-            let last_finalized_block_number = self
-                .generator
-                .rollup_context()
-                .last_finalized_block_number(self.current_tip.1);
-            let task = self
-                .provider
-                .query_mergeable_custodians(collected, last_finalized_block_number);
-            Some(task.await?)
-        };
-
-        log::debug!(
-            "finalized custodians {:?}",
-            finalized_custodians.as_ref().map(|c| c.cells_info.len())
-        );
-        log::debug!(
-            "output mem block, txs: {} tx withdrawals: {} state_checkpoints: {}",
-            mem_block.txs().len(),
-            mem_block.withdrawals().len(),
-            mem_block.state_checkpoints().len(),
-        );
-
-        Ok((finalized_custodians, param))
     }
 
-    async fn package_mem_block(
-        &self,
+    fn package_mem_block(
+        mut mem_block: MemBlock,
         output_param: &OutputParam,
     ) -> Result<(MemBlock, AccountMerkleState)> {
-        let db = self.store.begin_transaction();
-        let retry_count = output_param.retry_count;
+        assert_eq!(mem_block.touched_keys_vec().len(), {
+            mem_block.withdrawals().len() + mem_block.deposits().len() + mem_block.txs().len()
+        });
 
         // first time package, return the whole mem block
+        let retry_count = output_param.retry_count;
         if retry_count == 0 {
-            let mem_block = self.mem_block.clone();
-            let snap = self.mem_pool_state.load();
-            let state = snap.state()?;
-            return Ok((mem_block, state.merkle_state()?));
+            assert!(mem_block.touched_keys().is_empty(), "append before package");
+            let touched_keys = {
+                let keys = mem_block.touched_keys_vec().iter();
+                keys.flatten().cloned().collect::<Vec<_>>()
+            };
+            mem_block.append_touched_keys(touched_keys.into_iter());
+
+            let post_state = {
+                let last = mem_block.merkle_states().last();
+                last.unwrap_or_else(|| mem_block.prev_merkle_state())
+                    .to_owned()
+            };
+
+            return Ok((mem_block, post_state));
         }
 
         // if first package failed, we should try to package less txs and withdrawals
         log::info!("[mem-pool] package mem block, retry count {}", retry_count);
-        let mem_block = &self.mem_block;
         let (withdrawal_hashes, deposits, tx_hashes) = {
             let total =
                 mem_block.withdrawals().len() + mem_block.deposits().len() + mem_block.txs().len();
@@ -673,104 +700,70 @@ impl MemPool {
         assert!(new_mem_block.finalized_custodians().is_none());
         assert!(new_mem_block.deposits().is_empty());
         assert!(new_mem_block.txs().is_empty());
+        assert!(new_mem_block.touched_keys().is_empty());
 
-        // start a new mem_state
-        let new_snapshot = self.store.get_snapshot();
-        assert_eq!(
-            db.get_tip_block_hash()?,
-            new_snapshot.get_tip_block_hash()?,
-            "snapshot consistent"
-        );
-        // use a new mem_store to package block
-        let new_mem_store = MemStore::new(new_snapshot);
-        let mut mem_state = new_mem_store.state()?;
-
-        // NOTE: Must have at least one tx to have correct post block state
-        if withdrawal_hashes.len() == mem_block.withdrawals().len()
-            && deposits.len() == mem_block.deposits().len()
-            && tx_hashes.len() > 0
+        let withdrawals_len = withdrawal_hashes.len();
+        assert!(mem_block.state_checkpoints().len() >= withdrawals_len);
+        for ((hash, checkpoint), touched_keys) in withdrawal_hashes
+            .zip(mem_block.state_checkpoints().iter())
+            .zip(mem_block.touched_keys_vec().iter())
         {
-            // Simply reuse mem block withdrawals and depoist result
-            assert!(mem_block.state_checkpoints().len() >= withdrawal_hashes.len());
-            for (hash, checkpoint) in withdrawal_hashes.zip(mem_block.state_checkpoints().iter()) {
-                new_mem_block.push_withdrawal(*hash, *checkpoint);
-            }
+            new_mem_block.push_withdrawal(*hash, *checkpoint);
+            new_mem_block.append_touched_keys(touched_keys.clone().into_iter());
+        }
+        if !new_mem_block.withdrawals().is_empty() {
             if let Some(finalized_custodians) = mem_block.finalized_custodians() {
                 new_mem_block.set_finalized_custodians(finalized_custodians.to_owned());
             }
+        }
 
-            let deposit_cells = mem_block.deposits().to_vec();
-            let prev_state_checkpoint = mem_block
-                .txs_prev_state_checkpoint()
-                .ok_or_else(|| anyhow!("repackage mem block but no prev state checkpoint"))?;
-            new_mem_block.push_deposits(deposit_cells, prev_state_checkpoint);
+        let deposits = deposits.cloned().collect::<Vec<_>>();
+        let deposit_offset = mem_block.withdrawals().len();
+        let (touched_keys, prev_txs_state) =
+            match (new_mem_block.withdrawals().is_empty(), deposits.is_empty()) {
+                (true, true) => {
+                    // No withdrawals and deposits, use parent block post state
+                    (vec![], mem_block.prev_merkle_state())
+                }
+                (false, true) => {
+                    // No depoists, use withdrawals post state
+                    let prev_txs_state_offset = withdrawals_len.saturating_sub(1);
+                    (vec![], &mem_block.merkle_states()[prev_txs_state_offset])
+                }
+                (true, false) | (false, false) => {
+                    // At least one deposit, use deposits post state
+                    let prev_txs_state_offset = (deposit_offset + deposits.len()).saturating_sub(1);
 
-            new_mem_block.append_touched_keys(mem_block.touched_keys().clone().into_iter());
-        } else {
-            assert_eq!(tx_hashes.len(), 0, "must drop txs first");
-            log::info!(
-                "[mem-pool] repackage withdrawals {} and deposits {}",
-                withdrawal_hashes.len(),
-                deposits.len()
-            );
+                    let touched_keys = mem_block.touched_keys_vec()
+                        [deposit_offset..deposit_offset + deposits.len()]
+                        .iter();
 
-            mem_state.tracker_mut().enable();
-
-            // Repackage withdrawals
-            let to_withdaral = |hash: &H256| -> Result<_> {
-                db.get_mem_pool_withdrawal(hash)?
-                    .ok_or_else(|| anyhow!("repackage {:?} withdrawal not found", hash))
+                    (
+                        touched_keys.flatten().cloned().collect(),
+                        &mem_block.merkle_states()[prev_txs_state_offset],
+                    )
+                }
             };
-            let withdrawals: Vec<_> = withdrawal_hashes.map(to_withdaral).collect::<Result<_>>()?;
 
-            for withdrawal in withdrawals.iter() {
-                mem_state.apply_withdrawal_request(
-                    self.generator.rollup_context(),
-                    mem_block.block_producer_id(),
-                    &withdrawal.request(),
-                )?;
+        let prev_state_checkpoint = {
+            let root = prev_txs_state.merkle_root().unpack();
+            let count = prev_txs_state.count().unpack();
+            calculate_state_checkpoint(&root, count)
+        };
+        new_mem_block.push_deposits(deposits, prev_state_checkpoint);
+        new_mem_block.append_touched_keys(touched_keys.into_iter());
 
-                new_mem_block.push_withdrawal(
-                    withdrawal.hash().into(),
-                    mem_state.calculate_state_checkpoint()?,
-                );
-            }
-            if let Some(finalized_custodians) = mem_block.finalized_custodians() {
-                new_mem_block.set_finalized_custodians(finalized_custodians.to_owned());
-            }
-
-            // Repackage deposits
-            let deposit_cells: Vec<_> = deposits.cloned().collect();
-            let deposits: Vec<_> = deposit_cells.iter().map(|i| i.request.clone()).collect();
-            mem_state.apply_deposit_requests(self.generator.rollup_context(), &deposits)?;
-            let prev_state_checkpoint = mem_state.calculate_state_checkpoint()?;
-            new_mem_block.push_deposits(deposit_cells, prev_state_checkpoint);
-
-            let touched_keys = mem_state
-                .tracker_mut()
-                .touched_keys()
-                .expect("touched keys");
-            new_mem_block.append_touched_keys(touched_keys.lock().unwrap().iter().cloned());
+        let tx_offset = mem_block.withdrawals().len() + mem_block.deposits().len();
+        let tx_end = tx_offset + tx_hashes.len();
+        for (tx_hash, tx_post_state) in
+            tx_hashes.zip(mem_block.merkle_states()[tx_offset..tx_end].iter())
+        {
+            new_mem_block.push_tx(*tx_hash, tx_post_state);
         }
 
-        // Repackage txs
-        let mut post_tx_merkle_state = None;
-        let tx_len = tx_hashes.len();
-        for (idx, tx_hash) in tx_hashes.into_iter().enumerate() {
-            let tx_receipt = db
-                .get_mem_pool_transaction_receipt(tx_hash)?
-                .ok_or_else(|| anyhow!("tx {:?} receipt not found", tx_hash))?;
-
-            new_mem_block.push_tx(*tx_hash, &tx_receipt);
-
-            if idx + 1 == tx_len {
-                post_tx_merkle_state = Some(tx_receipt.post_state())
-            }
-        }
-
-        let post_merkle_state = match post_tx_merkle_state {
-            Some(state) => state,
-            None => mem_state.merkle_state()?,
+        let post_merkle_state = match mem_block.merkle_states().get(tx_end.saturating_sub(1)) {
+            Some(state) => state.to_owned(),
+            None => mem_block.prev_merkle_state().to_owned(),
         };
 
         Ok((new_mem_block, post_merkle_state))
@@ -873,7 +866,7 @@ impl MemPool {
         }
 
         // estimate next l2block timestamp
-        let estimated_timestamp = self.provider.estimate_next_blocktime().await?;
+        let estimated_timestamp = self.provider.read().await.estimate_next_blocktime().await?;
         // reset mem block state
         {
             let snapshot = self.store.get_snapshot();
@@ -1056,7 +1049,7 @@ impl MemPool {
             }
 
             // query deposit live cell
-            tasks.push(self.provider.get_cell(deposit.cell.out_point.clone()));
+            tasks.push(self.provider().get_cell(deposit.cell.out_point.clone()));
         }
 
         // check cell is available
@@ -1132,10 +1125,17 @@ impl MemPool {
     async fn finalize_deposits(&mut self, deposit_cells: Vec<DepositInfo>) -> Result<()> {
         let snap = self.mem_pool_state.load();
         let mut state = snap.state()?;
-        // update deposits
-        let deposits: Vec<_> = deposit_cells.iter().map(|c| c.request.clone()).collect();
         state.tracker_mut().enable();
-        state.apply_deposit_requests(self.generator.rollup_context(), &deposits)?;
+        // update deposits
+        let deposits: Vec<_> = deposit_cells.iter().map(|c| [c.request.clone()]).collect();
+        for deposit in deposits {
+            state.apply_deposit_requests(self.generator.rollup_context(), &deposit)?;
+
+            self.mem_block.push_merkle_state(state.get_merkle_state());
+            let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
+            self.mem_block
+                .push_touched_keys_vec(touched_keys.lock().unwrap().drain());
+        }
         // calculate state after withdrawals & deposits
         let prev_state_checkpoint = state.calculate_state_checkpoint()?;
         log::debug!("[finalize deposits] deposits: {} state root: {}, account count: {}, prev_state_checkpoint {}",
@@ -1143,9 +1143,6 @@ impl MemPool {
         self.mem_block
             .push_deposits(deposit_cells, prev_state_checkpoint);
         state.submit_tree_to_mem_block();
-        let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
-        self.mem_block
-            .append_touched_keys(touched_keys.lock().unwrap().iter().cloned());
         Ok(())
     }
 
@@ -1178,6 +1175,8 @@ impl MemPool {
                 .rollup_context()
                 .last_finalized_block_number(self.current_tip.1);
             self.provider
+                .read()
+                .await
                 .query_available_custodians(
                     withdrawals.iter().map(|w| w.request()).collect(),
                     last_finalized_block_number,
@@ -1265,6 +1264,11 @@ impl MemPool {
                         withdrawal.hash().into(),
                         state.calculate_state_checkpoint()?,
                     );
+
+                    self.mem_block.push_merkle_state(state.get_merkle_state());
+                    let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
+                    self.mem_block
+                        .push_touched_keys_vec(touched_keys.lock().unwrap().drain());
                 }
                 Err(err) => {
                     log::info!("[mem-pool] withdrawal execution failed : {}", err);
@@ -1273,9 +1277,6 @@ impl MemPool {
             }
         }
         state.submit_tree_to_mem_block();
-        let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
-        self.mem_block
-            .append_touched_keys(touched_keys.lock().unwrap().iter().cloned());
         self.mem_block
             .set_finalized_custodians(finalized_custodians);
 
