@@ -158,6 +158,7 @@ impl Generator {
                 .instruction_cycle_func(Box::new(instruction_cycles));
             let default_machine = machine_builder.build();
 
+            #[cfg(has_asm)]
             let aot_code_opt = self
                 .backend_manage
                 .get_aot_code(&backend.validator_script_type_hash, global_vm_version);

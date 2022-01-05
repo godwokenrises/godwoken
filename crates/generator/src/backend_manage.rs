@@ -4,6 +4,7 @@ use gw_config::{BackendConfig, BackendType};
 use gw_types::bytes::Bytes;
 use std::{collections::HashMap, fs};
 
+#[cfg(feature = "aot")]
 use crate::AotCode;
 
 #[derive(Clone)]
@@ -108,11 +109,6 @@ impl BackendManage {
                 None
             }
         }
-    }
-
-    #[cfg(not(feature = "aot"))]
-    pub(crate) fn get_aot_code(&self, _code_hash: &H256, _vm_version: u32) -> Option<&AotCode> {
-        None
     }
 
     pub fn get_backends(&self) -> &HashMap<H256, Backend> {
