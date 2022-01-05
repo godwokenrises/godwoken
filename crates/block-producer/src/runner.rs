@@ -136,7 +136,7 @@ async fn poll_loop(
             let inner = inner.clone();
             let mut inner = inner.lock().await;
             if let Err(err) = inner.chain_updater.handle_event(event.clone()).await {
-                if is_ckb_or_indexer_client_error(&err) {
+                if is_l1_query_error(&err) {
                     log::error!("[polling] chain_updater event: {} error: {}", event, err);
                     smol::Timer::after(poll_interval).await;
                     continue;
@@ -150,7 +150,7 @@ async fn poll_loop(
 
             if let Some(ref mut challenger) = inner.challenger {
                 if let Err(err) = challenger.handle_event(event.clone()).await {
-                    if is_ckb_or_indexer_client_error(&err) {
+                    if is_l1_query_error(&err) {
                         log::error!("[polling] challenger event: {} error: {}", event, err);
                         smol::Timer::after(poll_interval).await;
                         continue;
@@ -165,7 +165,7 @@ async fn poll_loop(
 
             if let Some(ref mut block_producer) = inner.block_producer {
                 if let Err(err) = block_producer.handle_event(event.clone()).await {
-                    if is_ckb_or_indexer_client_error(&err) {
+                    if is_l1_query_error(&err) {
                         log::error!("[polling] block producer event: {} error: {}", event, err);
                         smol::Timer::after(poll_interval).await;
                         continue;
@@ -180,7 +180,7 @@ async fn poll_loop(
 
             if let Some(ref cleaner) = inner.cleaner {
                 if let Err(err) = cleaner.handle_event(event.clone()).await {
-                    if is_ckb_or_indexer_client_error(&err) {
+                    if is_l1_query_error(&err) {
                         log::error!("[polling] cleaner event: {} error: {}", event, err);
                         smol::Timer::after(poll_interval).await;
                         continue;
@@ -929,12 +929,16 @@ fn is_hardfork_switch_eq(l: &HardForkSwitch, r: &HardForkSwitch) -> bool {
 }
 
 // TODO: inspect error method?
-fn is_ckb_or_indexer_client_error(err: &anyhow::Error) -> bool {
+fn is_l1_query_error(err: &anyhow::Error) -> bool {
     // rpc-client/src/ckb_client.rs
     const CKB_CLIENT_ERROR: &str = "ckb client error, method";
     // rpc-client/src/indexer_client.rs
     const CKB_INDEXER_CLIENT_ERROR: &str = "ckb indexer client error, method";
+    // block-producer/src/poller.rs
+    const POLLER_L1_TX_ERROR: &str = "poller l1 tx error";
 
     let err_msg = err.to_string();
-    err_msg.contains(CKB_CLIENT_ERROR) || err_msg.contains(CKB_INDEXER_CLIENT_ERROR)
+    err_msg.contains(CKB_CLIENT_ERROR)
+        || err_msg.contains(CKB_INDEXER_CLIENT_ERROR)
+        || err_msg.contains(POLLER_L1_TX_ERROR)
 }
