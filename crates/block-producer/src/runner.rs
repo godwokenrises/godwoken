@@ -919,17 +919,11 @@ fn is_hardfork_switch_eq(l: &HardForkSwitch, r: &HardForkSwitch) -> bool {
         && l.rfc_0038() == r.rfc_0038()
 }
 
-// TODO: inspect error method?
 fn is_l1_query_error(err: &anyhow::Error) -> bool {
-    // rpc-client/src/ckb_client.rs
-    const CKB_CLIENT_ERROR: &str = "ckb client error, method";
-    // rpc-client/src/indexer_client.rs
-    const CKB_INDEXER_CLIENT_ERROR: &str = "ckb indexer client error, method";
-    // block-producer/src/poller.rs
-    const POLLER_L1_TX_ERROR: &str = "poller l1 tx error";
+    use crate::poller::QueryL1TxError;
+    use gw_rpc_client::error::RPCRequestError;
 
-    let err_msg = err.to_string();
-    err_msg.contains(CKB_CLIENT_ERROR)
-        || err_msg.contains(CKB_INDEXER_CLIENT_ERROR)
-        || err_msg.contains(POLLER_L1_TX_ERROR)
+    // TODO: filter rpc request method?
+    err.downcast_ref::<RPCRequestError>().is_some()
+        || err.downcast_ref::<QueryL1TxError>().is_some()
 }
