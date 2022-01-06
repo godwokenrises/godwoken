@@ -13,7 +13,7 @@ use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
 use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION};
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
-use gw_db::{schema::COLUMNS, RocksDB};
+use gw_db::migrate::open_or_create_db;
 use gw_generator::{
     account_lock_manage::{
         secp256k1::{Secp256k1Eth, Secp256k1Tron},
@@ -325,7 +325,7 @@ impl BaseInitComponents {
             log::warn!("config.store.path is blank, using temporary store");
             Store::open_tmp().with_context(|| "init store")?
         } else {
-            Store::new(RocksDB::open(&config.store, COLUMNS))
+            Store::new(open_or_create_db(&config.store)?)
         };
         let elapsed_ms = timer.elapsed().as_millis();
         log::debug!("Open rocksdb costs: {}ms.", elapsed_ms);
