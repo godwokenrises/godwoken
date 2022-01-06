@@ -129,8 +129,8 @@ impl NotifyService {
         for (name, subscriber) in self.error_receipt_subscribers.iter() {
             if let Err(err) = subscriber.send(Arc::clone(&err_receipt)).await {
                 log::info!("[error tx receipt] subscriber {} closed {}", name, err);
+                closed_subscriber.push(name.to_owned());
             }
-            closed_subscriber.push(name.to_owned());
         }
         for subscriber in closed_subscriber {
             self.error_receipt_subscribers.remove(&subscriber);
@@ -169,5 +169,4 @@ impl NotifyController {
             log::error!("[error tx receipt] stop notify service {}", err);
         }
     }
-
 }
