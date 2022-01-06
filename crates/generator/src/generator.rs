@@ -87,6 +87,26 @@ impl From<WithdrawalCellError> for Error {
     }
 }
 
+pub enum UnlockWithdrawal {
+    WithoutOwnerLock,
+    WithOwnerLock { lock: Script },
+}
+
+impl From<Option<Script>> for UnlockWithdrawal {
+    fn from(opt_lock: Option<Script>) -> UnlockWithdrawal {
+        match opt_lock {
+            Some(lock) => UnlockWithdrawal::WithOwnerLock { lock },
+            None => UnlockWithdrawal::WithoutOwnerLock,
+        }
+    }
+}
+
+impl From<Script> for UnlockWithdrawal {
+    fn from(lock: Script) -> UnlockWithdrawal {
+        UnlockWithdrawal::WithOwnerLock { lock }
+    }
+}
+
 pub struct Generator {
     backend_manage: BackendManage,
     account_lock_manage: AccountLockManage,
@@ -235,7 +255,7 @@ impl Generator {
             &H256::one(),
             1,
             asset_script,
-            opt_owner_lock,
+            UnlockWithdrawal::from(opt_owner_lock),
         )?;
 
         // find user account
@@ -790,7 +810,7 @@ impl Generator {
         block_hash: &H256,
         block_number: u64,
         opt_asset_script: Option<Script>,
-        opt_owner_lock: Option<Script>,
+        unlock_withdrawal: UnlockWithdrawal,
     ) -> Result<(CellOutput, Bytes), WithdrawalCellError> {
         let withdrawal_capacity: u64 = req.raw().capacity().unpack();
         let lock_args: Bytes = {
@@ -808,7 +828,7 @@ impl Generator {
             let mut args = Vec::new();
             args.extend_from_slice(rollup_context.rollup_script_hash.as_slice());
             args.extend_from_slice(withdrawal_lock_args.as_slice());
-            if let Some(owner_lock) = opt_owner_lock {
+            if let UnlockWithdrawal::WithOwnerLock { lock: owner_lock } = unlock_withdrawal {
                 let owner_lock_hash: [u8; 32] = req.raw().owner_lock_hash().unpack();
                 if owner_lock_hash != owner_lock.hash() {
                     return Err(WithdrawalCellError::OwnerLock(owner_lock_hash.into()));
@@ -892,7 +912,7 @@ mod test {
     use gw_types::packed::{Fee, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest};
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
-    use crate::generator::WithdrawalCellError;
+    use crate::generator::{UnlockWithdrawal, WithdrawalCellError};
     use crate::Generator;
 
     #[test]
@@ -944,7 +964,7 @@ mod test {
             &block_hash,
             block_number,
             Some(sudt_script.clone()),
-            Some(owner_lock.clone()),
+            UnlockWithdrawal::from(owner_lock.clone()),
         )
         .unwrap();
 
@@ -999,7 +1019,7 @@ mod test {
             &block_hash,
             block_number,
             None,
-            Some(owner_lock.clone()),
+            UnlockWithdrawal::from(owner_lock.clone()),
         )
         .unwrap();
 
@@ -1016,7 +1036,7 @@ mod test {
             &block_hash,
             block_number,
             Some(sudt_script.clone()),
-            None,
+            UnlockWithdrawal::WithoutOwnerLock,
         )
         .unwrap();
 
@@ -1053,7 +1073,7 @@ mod test {
             &block_hash,
             block_number,
             Some(sudt_script.clone()),
-            Some(owner_lock),
+            UnlockWithdrawal::from(owner_lock),
         )
         .unwrap_err();
         assert!(matches!(
@@ -1076,7 +1096,7 @@ mod test {
             &block_hash,
             block_number,
             Some(sudt_script),
-            Some(err_owner_lock),
+            UnlockWithdrawal::from(err_owner_lock),
         )
         .unwrap_err();
 
