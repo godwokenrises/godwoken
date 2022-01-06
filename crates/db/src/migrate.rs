@@ -39,7 +39,6 @@ pub fn open_or_create_db(config: &StoreConfig) -> Result<RocksDB> {
                 // TODO: Currently, there is only one migration: Add db version.
                 // So we can add db version by running default migration here.
                 // We should stop the process if we have more migrations and use **migration** command to run migration instead.
-                let factory = init_migration_factory();
                 let db = RocksDB::open(config, COLUMNS);
                 let _ = factory.migrate(db)?;
 
