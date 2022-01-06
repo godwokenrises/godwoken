@@ -805,12 +805,14 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             ws_listen.expect("err receipt ws listen").to_owned()
         };
         rpc_ws_task = Some(smol::spawn(async move {
-            if let Err(err) = start_jsonrpc_ws_server(&rpc_ws_addr, notify_controller).await {
+            if let Err(err) = start_jsonrpc_ws_server(&rpc_ws_addr, notify_controller.clone()).await
+            {
                 log::error!("Error running JSONRPC WebSockert server: {:?}", err);
             }
             if let Err(err) = exit_sender.send(()).await {
                 log::error!("send exit signal error: {}", err);
             }
+            notify_controller.stop();
         }));
     }
 

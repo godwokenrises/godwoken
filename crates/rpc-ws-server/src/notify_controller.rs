@@ -39,14 +39,6 @@ pub struct NotifyController {
     err_receipt_tx: Sender<Arc<ErrorTxReceipt>>,
 }
 
-impl Drop for NotifyController {
-    fn drop(&mut self) {
-        if let Err(err) = self.stop_tx.try_send(()) {
-            log::error!("[error tx receipt] stop notify service {}", err);
-        }
-    }
-}
-
 pub struct NotifyService {
     error_receipt_subscribers: HashMap<String, Sender<Arc<ErrorTxReceipt>>>,
 }
@@ -171,4 +163,11 @@ impl NotifyController {
             }
         }
     }
+
+    pub fn stop(&self) {
+        if let Err(err) = self.stop_tx.try_send(()) {
+            log::error!("[error tx receipt] stop notify service {}", err);
+        }
+    }
+
 }
