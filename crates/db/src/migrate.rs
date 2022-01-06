@@ -170,7 +170,7 @@ mod tests {
         RocksDB,
     };
 
-    use super::{init_migration_factory, open_or_create_db, MigrationFactory};
+    use super::{init_migration_factory, open_or_create_db};
     #[test]
     fn test_migration() -> Result<()> {
         let dir = tempfile::tempdir().expect("create temp dir");
