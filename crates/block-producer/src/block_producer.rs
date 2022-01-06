@@ -607,7 +607,7 @@ impl BlockProducer {
                         utils::dump_transaction(
                             &self.debug_config.debug_tx_dump_path,
                             &self.rpc_client,
-                            tx.clone(),
+                            &tx,
                         )
                         .await;
                     } else {
