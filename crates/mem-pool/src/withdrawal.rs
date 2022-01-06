@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use gw_common::H256;
-use gw_generator::generator::WithdrawalCellError;
+use gw_generator::generator::{UnlockWithdrawal, WithdrawalCellError};
 use gw_types::{
     bytes::Bytes,
     offchain::RollupContext,
@@ -108,7 +108,7 @@ impl<'a> Generator<'a> {
             &block_hash,
             block_number,
             sudt_script,
-            req_extra.owner_lock().to_opt(),
+            UnlockWithdrawal::from(req_extra.owner_lock().to_opt()),
         ) {
             Ok(output) => output,
             Err(WithdrawalCellError::OwnerLock(lock_hash)) => {
@@ -298,6 +298,7 @@ mod test {
 
     use gw_common::h256_ext::H256Ext;
     use gw_common::H256;
+    use gw_generator::generator::UnlockWithdrawal;
     use gw_types::offchain::RollupContext;
     use gw_types::packed::{
         Fee, L2Block, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest,
@@ -371,7 +372,7 @@ mod test {
                 &block.hash().into(),
                 block.raw().number().unpack(),
                 Some(sudt_script.clone()),
-                None,
+                UnlockWithdrawal::WithoutOwnerLock,
             )
             .unwrap();
 
@@ -391,7 +392,7 @@ mod test {
                 &block.hash().into(),
                 block.raw().number().unpack(),
                 Some(sudt_script),
-                Some(owner_lock),
+                UnlockWithdrawal::from(owner_lock),
             )
             .unwrap();
 

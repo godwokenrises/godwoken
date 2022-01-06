@@ -37,7 +37,7 @@ fn verify_finalized_owner_lock(info: &CellInfo, last_finalized_block_number: u64
     let args: Bytes = info.output.lock().args().unpack();
 
     let lock_args_end = 32 + WithdrawalLockArgs::TOTAL_SIZE;
-    let owner_lock_start = lock_args_end + 4;
+    let owner_lock_start = lock_args_end + 4; // u32 owner lock length
     if args.len() <= owner_lock_start {
         bail!("no owner lock");
     }
