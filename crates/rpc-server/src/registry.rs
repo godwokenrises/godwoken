@@ -1425,6 +1425,7 @@ async fn dump_jemalloc_profiling() -> Result<()> {
     Ok(())
 }
 
+// Reload config dynamically and return the defference between two configs.
 async fn reload_config(
     dynamic_config_manager: Data<Arc<RwLock<DynamicConfigManager>>>,
 ) -> Result<()> {

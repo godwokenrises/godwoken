@@ -8,13 +8,15 @@ use gw_tx_filter::{
 pub struct WhilteListConfigManager {
     sudt_proxy_account_whitelist: SUDTProxyAccountAllowlist,
     polyjuice_contract_creator_allowlist: Option<PolyjuiceContractCreatorAllowList>,
+    rpc_config: RPCConfig,
 }
 
 impl WhilteListConfigManager {
     pub fn create(rpc_config: RPCConfig) -> WhilteListConfigManager {
         let (polyjuice_contract_creator_allowlist, sudt_proxy_account_whitelist) =
-            get_allow_list(rpc_config);
+            get_allow_list(rpc_config.clone());
         Self {
+            rpc_config,
             sudt_proxy_account_whitelist,
             polyjuice_contract_creator_allowlist,
         }
