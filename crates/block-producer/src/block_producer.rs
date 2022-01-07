@@ -463,6 +463,7 @@ impl BlockProducer {
         }
 
         // composite tx
+        let t = Instant::now();
         let tx = match self
             .complete_tx_skeleton(
                 deposit_cells,
@@ -483,6 +484,10 @@ impl BlockProducer {
                 return Err(err);
             }
         };
+        log::debug!(
+            "[compose_next_block_submit_tx] complete tx skeleton {}ms",
+            t.elapsed().as_millis()
+        );
         if tx.as_slice().len() <= MAX_BLOCK_BYTES as usize
             && tx
                 .witnesses()
@@ -513,6 +518,7 @@ impl BlockProducer {
         block_number: u64,
         tx: Transaction,
     ) -> Result<SubmitResult> {
+        let t = Instant::now();
         let cycles = match self.rpc_client.dry_run_transaction(tx.clone()).await {
             Ok(cycles) => {
                 log::info!(
@@ -543,6 +549,10 @@ impl BlockProducer {
                 }
             }
         };
+        log::debug!(
+            "[compose_next_block_submit_tx] dry run {}ms",
+            t.elapsed().as_millis()
+        );
 
         if cycles > self.debug_config.expected_l1_tx_upper_bound_cycles {
             log::warn!(
