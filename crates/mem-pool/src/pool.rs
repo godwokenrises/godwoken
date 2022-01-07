@@ -39,7 +39,6 @@ use gw_types::{
     },
     prelude::{Entity, Unpack},
 };
-use smol::lock::{RwLock, RwLockReadGuard};
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
@@ -95,7 +94,7 @@ pub struct MemPool {
     /// memory block
     mem_block: MemBlock,
     /// Mem pool provider
-    provider: Arc<RwLock<Box<dyn MemPoolProvider + Send + Sync>>>,
+    provider: Box<dyn MemPoolProvider + Send + Sync>,
     /// Pending deposits
     pending_deposits: Vec<DepositInfo>,
     /// Mem block save and restore
@@ -188,7 +187,7 @@ impl MemPool {
             error_tx_receipt_notifier,
             pending,
             mem_block,
-            provider: Arc::new(RwLock::new(provider)),
+            provider,
             pending_deposits,
             restore_manager: restore_manager.clone(),
             pending_restored_tx_hashes,
@@ -395,7 +394,6 @@ impl MemPool {
                 .rollup_context()
                 .last_finalized_block_number(self.current_tip.1);
             self.provider
-                .read()
                 .query_available_custodians(
                     vec![withdrawal.request()],
                     last_finalized_block_number,
@@ -468,11 +466,18 @@ impl MemPool {
         let mem_block = self.mem_block.clone();
         let current_tip = self.current_tip;
         let db = self.store.begin_transaction();
-        let last_finalized_block_number = {
-            let context = self.generator.rollup_context();
-            context.last_finalized_block_number(current_tip.1)
+        let query_and_merge_finalized_custodians_fut = {
+            let last_finalized_block_number = {
+                let context = self.generator.rollup_context();
+                context.last_finalized_block_number(current_tip.1)
+            };
+            let collected = mem_block
+                .finalized_custodians()
+                .cloned()
+                .unwrap_or_default();
+            self.provider
+                .query_mergeable_custodians(collected, last_finalized_block_number)
         };
-        let provider = Arc::clone(&self.provider);
 
         async move {
             let (mem_block, post_merkle_state) = Self::package_mem_block(mem_block, &output_param)?;
@@ -608,27 +613,12 @@ impl MemPool {
                 kv_state_proof,
             };
 
-            let finalized_custodians = {
-                let collected = mem_block
-                    .finalized_custodians()
-                    .cloned()
-                    .unwrap_or_default();
-                let last_finalized_block_number = self
-                    .generator
-                    .rollup_context()
-                    .last_finalized_block_number(self.current_tip.1);
-                let task = self
-                    .provider
-                    .read()
-                    .await
-                    .query_mergeable_custodians(collected, last_finalized_block_number);
-                Some(task.await?)
-            };
-
+            let finalized_custodians = query_and_merge_finalized_custodians_fut.await?;
             log::debug!(
                 "finalized custodians {:?}",
                 finalized_custodians.cells_info.len()
             );
+
             log::debug!(
                 "output mem block, txs: {} tx withdrawals: {} state_checkpoints: {}",
                 mem_block.txs().len(),
@@ -866,7 +856,7 @@ impl MemPool {
         }
 
         // estimate next l2block timestamp
-        let estimated_timestamp = self.provider.read().await.estimate_next_blocktime().await?;
+        let estimated_timestamp = self.provider.estimate_next_blocktime().await?;
         // reset mem block state
         {
             let snapshot = self.store.get_snapshot();
@@ -1049,7 +1039,7 @@ impl MemPool {
             }
 
             // query deposit live cell
-            tasks.push(self.provider().get_cell(deposit.cell.out_point.clone()));
+            tasks.push(self.provider.get_cell(deposit.cell.out_point.clone()));
         }
 
         // check cell is available
@@ -1175,8 +1165,6 @@ impl MemPool {
                 .rollup_context()
                 .last_finalized_block_number(self.current_tip.1);
             self.provider
-                .read()
-                .await
                 .query_available_custodians(
                     withdrawals.iter().map(|w| w.request()).collect(),
                     last_finalized_block_number,
