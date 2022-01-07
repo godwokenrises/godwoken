@@ -7,26 +7,55 @@ use gw_types::{
 use rdkafka::{
     consumer::{BaseConsumer, CommitMode, Consumer as RdConsumer},
     message::ToBytes,
-    producer::{BaseProducer, BaseRecord},
-    ClientConfig, Message,
+    producer::{BaseRecord, ProducerContext, ThreadedProducer},
+    ClientConfig, ClientContext, Message,
 };
 
 use crate::sync::subscribe::SubscribeMemPoolService;
 
 use super::{Consume, Produce};
+
+struct ProducerContextLogger;
+
+impl ClientContext for ProducerContextLogger {}
+impl ProducerContext for ProducerContextLogger {
+    type DeliveryOpaque = ();
+
+    fn delivery(
+        &self,
+        delivery_result: &rdkafka::producer::DeliveryResult<'_>,
+        _delivery_opaque: Self::DeliveryOpaque,
+    ) {
+        match delivery_result.as_ref() {
+            Ok(msg) => log::trace!(
+                "Produce message in offset {} of partition {}",
+                msg.offset(),
+                msg.partition()
+            ),
+            Err((err, msg)) => {
+                log::error!(
+                    "Producer message with error: {:?} in offset {} of partition {}",
+                    err,
+                    msg.offset(),
+                    msg.partition()
+                )
+            }
+        }
+    }
+}
 pub(crate) struct Producer {
-    producer: rdkafka::producer::BaseProducer,
+    producer: rdkafka::producer::ThreadedProducer<ProducerContextLogger>,
     topic: String,
 }
 
 impl Producer {
     pub(crate) fn connect(hosts: Vec<String>, topic: String) -> Result<Self> {
         let brokers = hosts.join(",");
-        let producer: BaseProducer = ClientConfig::new()
+        let producer: ThreadedProducer<ProducerContextLogger> = ClientConfig::new()
             .set("bootstrap.servers", brokers)
             .set("message.timeout.ms", "5000")
             .set("enable.idempotence", "true")
-            .create()?;
+            .create_with_context(ProducerContextLogger)?;
         Ok(Self { producer, topic })
     }
 }
