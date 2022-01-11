@@ -37,10 +37,13 @@ pub struct MemBlock {
     prev_merkle_state: AccountMerkleState,
     /// Touched keys
     touched_keys: HashSet<H256>,
-    /// Merkle states
-    merkle_states: Vec<AccountMerkleState>,
+    /// Post merkle states
+    withdrawal_post_states: Vec<AccountMerkleState>,
+    deposit_post_states: Vec<AccountMerkleState>,
+    tx_post_states: Vec<AccountMerkleState>,
     /// Touched keys vector
-    touched_keys_vec: Vec<Vec<H256>>,
+    withdrawal_touched_keys_vec: Vec<Vec<H256>>,
+    deposit_touched_keys_vec: Vec<Vec<H256>>,
 }
 
 impl MemBlock {
@@ -96,16 +99,34 @@ impl MemBlock {
         self.state_checkpoints.clear();
         self.txs_prev_state_checkpoint = None;
         self.touched_keys.clear();
-        self.merkle_states.clear();
-        self.touched_keys_vec.clear();
+        self.withdrawal_post_states.clear();
+        self.deposit_post_states.clear();
+        self.tx_post_states.clear();
+        self.withdrawal_touched_keys_vec.clear();
+        self.deposit_touched_keys_vec.clear();
     }
 
-    pub fn push_withdrawal(&mut self, withdrawal_hash: H256, state_checkpoint: H256) {
+    pub fn push_withdrawal<I: IntoIterator<Item = H256>>(
+        &mut self,
+        withdrawal_hash: H256,
+        post_state: AccountMerkleState,
+        touched_keys: I,
+    ) {
         assert!(self.txs.is_empty());
         assert!(self.deposits.is_empty());
+
+        let touched_keys: Vec<_> = touched_keys.into_iter().collect();
         self.withdrawals.push(withdrawal_hash);
         self.withdrawals_set.insert(withdrawal_hash);
-        self.state_checkpoints.push(state_checkpoint);
+        self.withdrawal_post_states.push(post_state.clone());
+        self.withdrawal_touched_keys_vec.push(touched_keys.clone());
+
+        let checkpoint = calculate_state_checkpoint(
+            &post_state.merkle_root().unpack(),
+            post_state.count().unpack(),
+        );
+        self.state_checkpoints.push(checkpoint);
+        self.append_touched_keys(touched_keys);
     }
 
     pub fn force_reinject_withdrawal_hashes(&mut self, withdrawal_hashes: &[H256]) {
@@ -127,13 +148,33 @@ impl MemBlock {
         self.finalized_custodians = Some(finalized_custodians);
     }
 
-    pub fn push_deposits(&mut self, deposit_cells: Vec<DepositInfo>, prev_state_checkpoint: H256) {
+    pub fn push_deposits(
+        &mut self,
+        deposit_cells: Vec<DepositInfo>,
+        post_states: Vec<AccountMerkleState>,
+        touched_keys_vec: Vec<Vec<H256>>,
+        txs_prev_state_checkpoint: H256,
+    ) {
         assert!(self.txs_prev_state_checkpoint.is_none());
+        assert_eq!(deposit_cells.len(), post_states.len());
+        assert_eq!(deposit_cells.len(), touched_keys_vec.len());
+
+        if let Some(txs_prev_state) = post_states.last().as_ref() {
+            let checkpoint = calculate_state_checkpoint(
+                &txs_prev_state.merkle_root().unpack(),
+                txs_prev_state.count().unpack(),
+            );
+            assert_eq!(checkpoint, txs_prev_state_checkpoint);
+        }
+
         self.deposits = deposit_cells;
-        self.txs_prev_state_checkpoint = Some(prev_state_checkpoint);
+        self.deposit_post_states = post_states;
+        self.deposit_touched_keys_vec = touched_keys_vec.clone();
+        self.txs_prev_state_checkpoint = Some(txs_prev_state_checkpoint);
+        self.append_touched_keys(touched_keys_vec.into_iter().flatten());
     }
 
-    pub fn push_tx(&mut self, tx_hash: H256, post_state: &AccountMerkleState) {
+    pub fn push_tx(&mut self, tx_hash: H256, post_state: AccountMerkleState) {
         let state_checkpoint = calculate_state_checkpoint(
             &post_state.merkle_root().unpack(),
             post_state.count().unpack(),
@@ -145,6 +186,8 @@ impl MemBlock {
         );
         self.txs.push(tx_hash);
         self.txs_set.insert(tx_hash);
+        self.tx_post_states.push(post_state);
+
         self.state_checkpoints.push(state_checkpoint);
     }
 
@@ -163,17 +206,10 @@ impl MemBlock {
         self.touched_keys.clear();
         self.state_checkpoints.clear();
         self.txs_prev_state_checkpoint = None;
+        self.tx_post_states.clear();
     }
 
-    pub fn push_merkle_state(&mut self, state: AccountMerkleState) {
-        self.merkle_states.push(state);
-    }
-
-    pub fn push_touched_keys_vec<I: Iterator<Item = H256>>(&mut self, keys: I) {
-        self.touched_keys_vec.push(keys.collect())
-    }
-
-    pub fn append_touched_keys<I: Iterator<Item = H256>>(&mut self, keys: I) {
+    pub fn append_touched_keys<I: IntoIterator<Item = H256>>(&mut self, keys: I) {
         self.touched_keys.extend(keys)
     }
 
@@ -221,12 +257,117 @@ impl MemBlock {
         &self.prev_merkle_state
     }
 
-    pub fn merkle_states(&self) -> &Vec<AccountMerkleState> {
-        &self.merkle_states
+    pub fn withdrawal_post_states(&self) -> &[AccountMerkleState] {
+        &self.withdrawal_post_states
     }
 
-    pub fn touched_keys_vec(&self) -> &Vec<Vec<H256>> {
-        &self.touched_keys_vec
+    pub fn deposit_post_states(&self) -> &[AccountMerkleState] {
+        &self.deposit_post_states
+    }
+
+    pub fn tx_post_states(&self) -> &[AccountMerkleState] {
+        &self.tx_post_states
+    }
+
+    pub fn withdrawal_touched_keys_vec(&self) -> &[Vec<H256>] {
+        &self.withdrawal_touched_keys_vec
+    }
+
+    pub fn deposit_touched_keys_vec(&self) -> &[Vec<H256>] {
+        &self.deposit_touched_keys_vec
+    }
+
+    // False positive: deposit_post_states.clone(),
+    #[allow(clippy::redundant_clone)]
+    pub fn repackage(
+        &self,
+        withdrawals_count: usize,
+        deposits_count: usize,
+        txs_count: usize,
+    ) -> (MemBlock, AccountMerkleState) {
+        assert_eq!(
+            self.withdrawal_post_states().len(),
+            self.withdrawals().len()
+        );
+        assert_eq!(
+            self.withdrawal_touched_keys_vec().len(),
+            self.withdrawals().len()
+        );
+        assert_eq!(self.deposit_post_states().len(), self.deposits().len());
+        assert_eq!(self.deposit_touched_keys_vec().len(), self.deposits().len());
+        assert_eq!(self.tx_post_states().len(), self.txs().len());
+
+        if withdrawals_count == self.withdrawals().len()
+            && deposits_count == self.deposits().len()
+            && txs_count == self.txs().len()
+        {
+            let post_state = {
+                let state = { vec![self.prev_merkle_state()].into_iter() }
+                    .chain(self.withdrawal_post_states())
+                    .chain(self.deposit_post_states())
+                    .chain(self.tx_post_states());
+                // We have at least one state, mem_block.prev_merkle_state
+                state.last().unwrap().clone()
+            };
+
+            return (self.clone(), post_state);
+        }
+
+        let mut packaged_states = vec![self.prev_merkle_state()];
+        let mut new_mem_block = MemBlock::new(
+            self.block_info().to_owned(),
+            self.prev_merkle_state().to_owned(),
+        );
+
+        assert!(new_mem_block.state_checkpoints().is_empty());
+        assert!(new_mem_block.withdrawals().is_empty());
+        assert!(new_mem_block.finalized_custodians().is_none());
+        assert!(new_mem_block.deposits().is_empty());
+        assert!(new_mem_block.txs().is_empty());
+        assert!(new_mem_block.touched_keys().is_empty());
+
+        for ((hash, touched_keys), post_state) in { self.withdrawals.iter() }
+            .zip(self.withdrawal_touched_keys_vec.iter())
+            .zip(self.withdrawal_post_states.iter())
+            .take(withdrawals_count)
+        {
+            new_mem_block.push_withdrawal(*hash, post_state.clone(), touched_keys.clone());
+            packaged_states.push(post_state);
+        }
+        new_mem_block.finalized_custodians = self.finalized_custodians.clone();
+
+        let deposits = self.deposits.iter().take(deposits_count).cloned();
+        let deposit_post_states: Vec<_> = { self.deposit_post_states.iter().take(deposits_count) }
+            .cloned()
+            .collect();
+        let deposit_touched_keys_vec =
+            { self.deposit_touched_keys_vec.iter().take(deposits_count) }.cloned();
+
+        packaged_states.extend(&deposit_post_states);
+        let txs_prev_state_checkpoint = {
+            // Always havs prev_merkle_state, it's safe to unwrap
+            let state = packaged_states.last().unwrap();
+            calculate_state_checkpoint(&state.merkle_root().unpack(), state.count().unpack())
+        };
+        new_mem_block.push_deposits(
+            deposits.collect(),
+            deposit_post_states.clone(),
+            deposit_touched_keys_vec.collect(),
+            txs_prev_state_checkpoint,
+        );
+
+        for (hash, post_state) in { self.txs.iter() }
+            .zip(self.tx_post_states.iter())
+            .take(txs_count)
+        {
+            new_mem_block.push_tx(*hash, post_state.clone());
+            packaged_states.push(post_state);
+        }
+
+        // Always havs prev_merkle_state, it's safe to unwrap
+        let post_state = (*packaged_states.last().unwrap()).to_owned();
+
+        (new_mem_block, post_state)
     }
 
     pub fn pack_compact(&self) -> packed::CompactMemBlock {
@@ -255,19 +396,10 @@ impl MemBlock {
             .touched_keys(touched_keys.pack())
             .build()
     }
-}
 
-#[cfg(test)]
-#[derive(Debug, PartialEq, Eq)]
-pub enum MemBlockCmp {
-    Same,
-    Diff(&'static str),
-}
-
-impl MemBlock {
     // Output diff for debug
     #[cfg(test)]
-    pub(crate) fn cmp(&self, other: &MemBlock) -> MemBlockCmp {
+    pub fn cmp(&self, other: &MemBlock) -> MemBlockCmp {
         use MemBlockCmp::*;
 
         if self.block_producer_id != other.block_producer_id {
@@ -320,16 +452,76 @@ impl MemBlock {
             return Diff("touched keys");
         }
 
-        if self.merkle_states.clone().pack().as_slice()
-            != other.merkle_states.clone().pack().as_slice()
+        if self.withdrawal_post_states.clone().pack().as_slice()
+            != other.withdrawal_post_states.clone().pack().as_slice()
         {
-            return Diff("merkle_states");
+            return Diff("withdrawal merkle_states");
         }
 
-        if self.touched_keys_vec != other.touched_keys_vec {
-            return Diff("touched keys vec");
+        if self.deposit_post_states.clone().pack().as_slice()
+            != other.deposit_post_states.clone().pack().as_slice()
+        {
+            return Diff("deposit merkle_states");
+        }
+
+        if self.tx_post_states.clone().pack().as_slice()
+            != other.tx_post_states.clone().pack().as_slice()
+        {
+            return Diff("tx merkle_states");
+        }
+
+        if self.withdrawal_touched_keys_vec != other.withdrawal_touched_keys_vec {
+            return Diff("withdrawal touched keys vec");
+        }
+
+        if self.deposit_touched_keys_vec != other.deposit_touched_keys_vec {
+            return Diff("deposit touched keys vec");
         }
 
         Same
+    }
+}
+
+#[cfg(test)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum MemBlockCmp {
+    Same,
+    Diff(&'static str),
+}
+
+#[cfg(test)]
+mod test {
+    use gw_common::H256;
+    use gw_types::packed::{AccountMerkleState, BlockInfo};
+    use gw_types::prelude::{Builder, Entity, Pack};
+
+    use super::MemBlock;
+
+    #[test]
+    #[should_panic]
+    fn test_push_deposit_withdrawal_wrong_txs_prev_state_checkpoint() {
+        let block_info = BlockInfo::new_builder()
+            .block_producer_id(1u32.pack())
+            .build();
+        let prev_merkle_state = AccountMerkleState::new_builder().count(3u32.pack()).build();
+
+        let mut mem_block = MemBlock::new(block_info, prev_merkle_state);
+        mem_block.push_deposits(
+            vec![Default::default()],
+            vec![random_state()],
+            vec![vec![random_hash()]],
+            random_hash(),
+        );
+    }
+
+    fn random_hash() -> H256 {
+        rand::random::<[u8; 32]>().into()
+    }
+
+    fn random_state() -> AccountMerkleState {
+        AccountMerkleState::new_builder()
+            .merkle_root(random_hash().pack())
+            .count(rand::random::<u32>().pack())
+            .build()
     }
 }
