@@ -123,6 +123,13 @@ impl FeeQueue {
             }
         }
 
+        log::debug!(
+            "QueueLen: {} | fetched items {} count {}",
+            self.len(),
+            fetched_items.len(),
+            count
+        );
+
         Ok(fetched_items)
     }
 }
