@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{blake2b::new_blake2b, state::State, H256};
 use gw_config::{FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
-use gw_dynamic_config::manager::DynamicConfigManager;
+use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
@@ -1428,7 +1428,7 @@ async fn dump_jemalloc_profiling() -> Result<()> {
 // Reload config dynamically and return the defference between two configs.
 async fn reload_config(
     dynamic_config_manager: Data<Arc<RwLock<DynamicConfigManager>>>,
-) -> Result<()> {
+) -> Result<DynamicConfigReloadResponse> {
     let mut config = dynamic_config_manager.write().await;
     config.reload()
 }

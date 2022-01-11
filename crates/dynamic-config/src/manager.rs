@@ -1,10 +1,11 @@
 use anyhow::{anyhow, Result};
 
-use gw_config::{Config, FeeConfig};
+use gw_config::{Config, DynamicConfig, FeeConfig};
 use gw_tx_filter::{
     erc20_creator_allowlist::SUDTProxyAccountAllowlist,
     polyjuice_contract_creator_allowlist::PolyjuiceContractCreatorAllowList,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::{fee_config::FeeConfigManager, whitelist_config::WhilteListConfigManager};
 
@@ -25,8 +26,8 @@ impl DynamicConfigManager {
                 r.org, r.repo, r.branch, r.path, r.token
             )
         });
-        let fee_manager = FeeConfigManager::create(config.fee.clone());
-        let whitelist_manager = WhilteListConfigManager::create(config.rpc);
+        let fee_manager = FeeConfigManager::create(config.dynamic_config.fee_config.clone());
+        let whitelist_manager = WhilteListConfigManager::create(config.dynamic_config.rpc_config);
 
         Self {
             config_github_url,
@@ -35,7 +36,7 @@ impl DynamicConfigManager {
         }
     }
 
-    pub fn reload(&mut self) -> Result<()> {
+    pub fn reload(&mut self) -> Result<DynamicConfigReloadResponse> {
         // Fetch latest config.
         let new_config = if let Some(url) = &self.config_github_url {
             get_github_config(url)?
@@ -43,10 +44,19 @@ impl DynamicConfigManager {
             return Err(anyhow!("Github config url is absent!"));
         };
 
-        self.fee_manager.reload(new_config.fee);
-        self.whitelist_manager.reload(new_config.rpc);
-
-        Ok(())
+        let new_config = new_config.dynamic_config;
+        let backup_config = new_config.clone();
+        let old_fee_config = self.fee_manager.reload(new_config.fee_config);
+        let old_rpc_config = self.whitelist_manager.reload(new_config.rpc_config);
+        let old_config = DynamicConfig {
+            fee_config: old_fee_config,
+            rpc_config: old_rpc_config,
+        };
+        let res = DynamicConfigReloadResponse {
+            old: old_config,
+            new: backup_config,
+        };
+        Ok(res)
     }
 
     pub fn get_fee_config(&self) -> &FeeConfig {
@@ -69,4 +79,10 @@ fn get_github_config(url: &str) -> Result<Config> {
     let res = reqwest::blocking::get(url)?.text()?;
     let config = toml::from_str(&res)?;
     Ok(config)
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DynamicConfigReloadResponse {
+    old: DynamicConfig,
+    new: DynamicConfig,
 }

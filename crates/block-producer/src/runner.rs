@@ -776,7 +776,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         mem_pool_config: config.mem_pool.clone(),
         node_mode: config.node_mode,
         rpc_client: rpc_client.clone(),
-        send_tx_rate_limit: config.rpc.send_tx_rate_limit.clone(),
+        send_tx_rate_limit: config.dynamic_config.rpc_config.send_tx_rate_limit.clone(),
         server_config: config.rpc_server.clone(),
         dynamic_config_manager,
         last_submitted_tx_hash: block_producer
