@@ -2437,10 +2437,8 @@ dependencies = [
  "gw-types",
  "jsonrpc-core 18.0.0",
  "jsonrpc-derive",
- "jsonrpc-http-server",
  "jsonrpc-pubsub",
  "jsonrpc-server-utils",
- "jsonrpc-tcp-server",
  "jsonrpc-ws-server",
  "lazy_static",
  "log",
@@ -3093,22 +3091,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonrpc-http-server"
-version = "18.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1dea6e07251d9ce6a552abfb5d7ad6bc290a4596c8dcc3d795fae2bbdc1f3ff"
-dependencies = [
- "futures",
- "hyper",
- "jsonrpc-core 18.0.0",
- "jsonrpc-server-utils",
- "log",
- "net2",
- "parking_lot",
- "unicase",
-]
-
-[[package]]
 name = "jsonrpc-pubsub"
 version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3139,19 +3121,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "unicase",
-]
-
-[[package]]
-name = "jsonrpc-tcp-server"
-version = "18.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60a0a0d35558123e93743d467285196905da1368500378cb5352b71856377874"
-dependencies = [
- "jsonrpc-core 18.0.0",
- "jsonrpc-server-utils",
- "log",
- "parking_lot",
- "tower-service",
 ]
 
 [[package]]
