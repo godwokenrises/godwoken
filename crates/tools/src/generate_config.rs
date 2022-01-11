@@ -240,7 +240,6 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         chain,
         rpc_client,
         rpc_server,
-        rpc: Default::default(),
         consensus,
         block_producer,
         web3_indexer,
@@ -250,9 +249,9 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         mem_pool: Default::default(),
         db_block_validator: Default::default(),
         store,
-        fee: Default::default(),
         sentry_dsn: None,
         reload_config_github_url: None,
+        dynamic_config: Default::default(),
     };
 
     Ok(config)

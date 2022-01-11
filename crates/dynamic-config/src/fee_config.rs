@@ -14,7 +14,10 @@ impl FeeConfigManager {
         &self.fee_config
     }
 
-    pub fn reload(&mut self, fee_config: FeeConfig) {
+    // Returns old config.
+    pub fn reload(&mut self, fee_config: FeeConfig) -> FeeConfig {
+        let old_config = self.fee_config.clone();
         self.fee_config = fee_config;
+        old_config
     }
 }

@@ -32,11 +32,15 @@ impl WhilteListConfigManager {
         &self.sudt_proxy_account_whitelist
     }
 
-    pub fn reload(&mut self, rpc_config: RPCConfig) {
+    // Return old config
+    pub fn reload(&mut self, rpc_config: RPCConfig) -> RPCConfig {
         let (polyjuice_contract_creator_allowlist, sudt_proxy_account_whitelist) =
-            get_allow_list(rpc_config);
+            get_allow_list(rpc_config.clone());
         self.polyjuice_contract_creator_allowlist = polyjuice_contract_creator_allowlist;
         self.sudt_proxy_account_whitelist = sudt_proxy_account_whitelist;
+        let old_config = self.rpc_config.clone();
+        self.rpc_config = rpc_config;
+        old_config
     }
 }
 

@@ -19,8 +19,6 @@ pub struct Config {
     pub rpc_client: RPCClientConfig,
     pub rpc_server: RPCServerConfig,
     #[serde(default)]
-    pub rpc: RPCConfig,
-    #[serde(default)]
     pub debug: DebugConfig,
     pub block_producer: Option<BlockProducerConfig>,
     pub web3_indexer: Option<Web3IndexerConfig>,
@@ -32,12 +30,12 @@ pub struct Config {
     pub db_block_validator: Option<DBBlockValidatorConfig>,
     #[serde(default)]
     pub store: StoreConfig,
-    #[serde(default)]
-    pub fee: FeeConfig,
     pub sentry_dsn: Option<String>,
     #[serde(default)]
     pub consensus: ConsensusConfig,
     pub reload_config_github_url: Option<GithubConfigUrl>,
+    #[serde(default)]
+    pub dynamic_config: DynamicConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -406,6 +404,13 @@ pub struct GithubConfigUrl {
     pub branch: String,
     pub path: String,
     pub token: String,
+}
+
+// Configs in DynamicConfig can be hot reloaded from remote. But GithubConfigUrl must be setup.
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DynamicConfig {
+    pub fee_config: FeeConfig,
+    pub rpc_config: RPCConfig,
 }
 
 #[cfg(test)]
