@@ -79,7 +79,7 @@ pub enum TxStatus {
     Committed,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DepositInfo {
     pub request: DepositRequest,
     pub cell: CellInfo,

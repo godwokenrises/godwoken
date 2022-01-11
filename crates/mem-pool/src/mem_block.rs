@@ -256,3 +256,80 @@ impl MemBlock {
             .build()
     }
 }
+
+#[cfg(test)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum MemBlockCmp {
+    Same,
+    Diff(&'static str),
+}
+
+impl MemBlock {
+    // Output diff for debug
+    #[cfg(test)]
+    pub(crate) fn cmp(&self, other: &MemBlock) -> MemBlockCmp {
+        use MemBlockCmp::*;
+
+        if self.block_producer_id != other.block_producer_id {
+            return Diff("block producer id");
+        }
+
+        if self.txs != other.txs {
+            return Diff("txs");
+        }
+
+        if self.txs_set != other.txs_set {
+            return Diff("txs set");
+        }
+
+        if self.withdrawals != other.withdrawals {
+            return Diff("withdrawals");
+        }
+
+        if self.finalized_custodians.pack().as_slice()
+            != other.finalized_custodians.pack().as_slice()
+        {
+            return Diff("finalized custodians");
+        }
+
+        if self.withdrawals_set != other.withdrawals_set {
+            return Diff("withdrawals set");
+        }
+
+        if self.deposits.pack().as_slice() != other.deposits.pack().as_slice() {
+            return Diff("deposits ");
+        }
+
+        if self.state_checkpoints != other.state_checkpoints {
+            return Diff("state checkpoints");
+        }
+
+        if self.txs_prev_state_checkpoint != other.txs_prev_state_checkpoint {
+            return Diff("txs prev state checkpoint");
+        }
+
+        if self.block_info.as_slice() != other.block_info.as_slice() {
+            return Diff("block info");
+        }
+
+        if self.prev_merkle_state.as_slice() != other.prev_merkle_state.as_slice() {
+            return Diff("prev merkle state");
+        }
+
+        if self.touched_keys != other.touched_keys {
+            return Diff("touched keys");
+        }
+
+        if self.merkle_states.clone().pack().as_slice()
+            != other.merkle_states.clone().pack().as_slice()
+        {
+            return Diff("merkle_states");
+        }
+
+        if self.touched_keys_vec != other.touched_keys_vec {
+            return Diff("touched keys vec");
+        }
+
+        Same
+    }
+}

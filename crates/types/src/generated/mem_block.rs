@@ -2484,6 +2484,279 @@ impl molecule::prelude::Builder for CollectedCustodianCellsOptBuilder {
     }
 }
 #[derive(Clone)]
+pub struct AccountMerkleStateVec(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for AccountMerkleStateVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for AccountMerkleStateVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for AccountMerkleStateVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl ::core::default::Default for AccountMerkleStateVec {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![0, 0, 0, 0];
+        AccountMerkleStateVec::new_unchecked(v.into())
+    }
+}
+impl AccountMerkleStateVec {
+    pub const ITEM_SIZE: usize = 36;
+    pub fn total_size(&self) -> usize {
+        molecule::NUMBER_SIZE + Self::ITEM_SIZE * self.item_count()
+    }
+    pub fn item_count(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<AccountMerkleState> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> AccountMerkleState {
+        let start = molecule::NUMBER_SIZE + Self::ITEM_SIZE * idx;
+        let end = start + Self::ITEM_SIZE;
+        AccountMerkleState::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn as_reader<'r>(&'r self) -> AccountMerkleStateVecReader<'r> {
+        AccountMerkleStateVecReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for AccountMerkleStateVec {
+    type Builder = AccountMerkleStateVecBuilder;
+    const NAME: &'static str = "AccountMerkleStateVec";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        AccountMerkleStateVec(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        AccountMerkleStateVecReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        AccountMerkleStateVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().extend(self.into_iter())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct AccountMerkleStateVecReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for AccountMerkleStateVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for AccountMerkleStateVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for AccountMerkleStateVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl<'r> AccountMerkleStateVecReader<'r> {
+    pub const ITEM_SIZE: usize = 36;
+    pub fn total_size(&self) -> usize {
+        molecule::NUMBER_SIZE + Self::ITEM_SIZE * self.item_count()
+    }
+    pub fn item_count(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<AccountMerkleStateReader<'r>> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> AccountMerkleStateReader<'r> {
+        let start = molecule::NUMBER_SIZE + Self::ITEM_SIZE * idx;
+        let end = start + Self::ITEM_SIZE;
+        AccountMerkleStateReader::new_unchecked(&self.as_slice()[start..end])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for AccountMerkleStateVecReader<'r> {
+    type Entity = AccountMerkleStateVec;
+    const NAME: &'static str = "AccountMerkleStateVecReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        AccountMerkleStateVecReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let item_count = molecule::unpack_number(slice) as usize;
+        if item_count == 0 {
+            if slice_len != molecule::NUMBER_SIZE {
+                return ve!(Self, TotalSizeNotMatch, molecule::NUMBER_SIZE, slice_len);
+            }
+            return Ok(());
+        }
+        let total_size = molecule::NUMBER_SIZE + Self::ITEM_SIZE * item_count;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct AccountMerkleStateVecBuilder(pub(crate) Vec<AccountMerkleState>);
+impl AccountMerkleStateVecBuilder {
+    pub const ITEM_SIZE: usize = 36;
+    pub fn set(mut self, v: Vec<AccountMerkleState>) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn push(mut self, v: AccountMerkleState) -> Self {
+        self.0.push(v);
+        self
+    }
+    pub fn extend<T: ::core::iter::IntoIterator<Item = AccountMerkleState>>(
+        mut self,
+        iter: T,
+    ) -> Self {
+        for elem in iter {
+            self.0.push(elem);
+        }
+        self
+    }
+}
+impl molecule::prelude::Builder for AccountMerkleStateVecBuilder {
+    type Entity = AccountMerkleStateVec;
+    const NAME: &'static str = "AccountMerkleStateVecBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE + Self::ITEM_SIZE * self.0.len()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        writer.write_all(&molecule::pack_number(self.0.len() as molecule::Number))?;
+        for inner in &self.0[..] {
+            writer.write_all(inner.as_slice())?;
+        }
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        AccountMerkleStateVec::new_unchecked(inner.into())
+    }
+}
+pub struct AccountMerkleStateVecIterator(AccountMerkleStateVec, usize, usize);
+impl ::core::iter::Iterator for AccountMerkleStateVecIterator {
+    type Item = AccountMerkleState;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl ::core::iter::ExactSizeIterator for AccountMerkleStateVecIterator {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+impl ::core::iter::IntoIterator for AccountMerkleStateVec {
+    type Item = AccountMerkleState;
+    type IntoIter = AccountMerkleStateVecIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        let len = self.len();
+        AccountMerkleStateVecIterator(self, 0, len)
+    }
+}
+impl<'r> AccountMerkleStateVecReader<'r> {
+    pub fn iter<'t>(&'t self) -> AccountMerkleStateVecReaderIterator<'t, 'r> {
+        AccountMerkleStateVecReaderIterator(&self, 0, self.len())
+    }
+}
+pub struct AccountMerkleStateVecReaderIterator<'t, 'r>(
+    &'t AccountMerkleStateVecReader<'r>,
+    usize,
+    usize,
+);
+impl<'t: 'r, 'r> ::core::iter::Iterator for AccountMerkleStateVecReaderIterator<'t, 'r> {
+    type Item = AccountMerkleStateReader<'t>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for AccountMerkleStateVecReaderIterator<'t, 'r> {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+#[derive(Clone)]
 pub struct CompactMemBlock(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for CompactMemBlock {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -2810,7 +3083,6 @@ impl ::core::fmt::Display for MemBlock {
         )?;
         write!(f, ", {}: {}", "block_info", self.block_info())?;
         write!(f, ", {}: {}", "prev_merkle_state", self.prev_merkle_state())?;
-        write!(f, ", {}: {}", "post_merkle_state", self.post_merkle_state())?;
         write!(f, ", {}: {}", "touched_keys", self.touched_keys())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -2822,18 +3094,17 @@ impl ::core::fmt::Display for MemBlock {
 impl ::core::default::Default for MemBlock {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            164, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 60, 0, 0, 0, 60, 0, 0, 0, 64, 0,
-            0, 0, 68, 0, 0, 0, 68, 0, 0, 0, 88, 0, 0, 0, 124, 0, 0, 0, 160, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            124, 0, 0, 0, 44, 0, 0, 0, 48, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 56, 0, 0, 0, 60, 0,
+            0, 0, 64, 0, 0, 0, 64, 0, 0, 0, 84, 0, 0, 0, 120, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         MemBlock::new_unchecked(v.into())
     }
 }
 impl MemBlock {
-    pub const FIELD_COUNT: usize = 11;
+    pub const FIELD_COUNT: usize = 10;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -2904,17 +3175,11 @@ impl MemBlock {
         let end = molecule::unpack_number(&slice[40..]) as usize;
         AccountMerkleState::new_unchecked(self.0.slice(start..end))
     }
-    pub fn post_merkle_state(&self) -> AccountMerkleState {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[40..]) as usize;
-        let end = molecule::unpack_number(&slice[44..]) as usize;
-        AccountMerkleState::new_unchecked(self.0.slice(start..end))
-    }
     pub fn touched_keys(&self) -> Byte32Vec {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[44..]) as usize;
+        let start = molecule::unpack_number(&slice[40..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[48..]) as usize;
+            let end = molecule::unpack_number(&slice[44..]) as usize;
             Byte32Vec::new_unchecked(self.0.slice(start..end))
         } else {
             Byte32Vec::new_unchecked(self.0.slice(start..))
@@ -2956,7 +3221,6 @@ impl molecule::prelude::Entity for MemBlock {
             .txs_prev_state_checkpoint(self.txs_prev_state_checkpoint())
             .block_info(self.block_info())
             .prev_merkle_state(self.prev_merkle_state())
-            .post_merkle_state(self.post_merkle_state())
             .touched_keys(self.touched_keys())
     }
 }
@@ -2998,7 +3262,6 @@ impl<'r> ::core::fmt::Display for MemBlockReader<'r> {
         )?;
         write!(f, ", {}: {}", "block_info", self.block_info())?;
         write!(f, ", {}: {}", "prev_merkle_state", self.prev_merkle_state())?;
-        write!(f, ", {}: {}", "post_merkle_state", self.post_merkle_state())?;
         write!(f, ", {}: {}", "touched_keys", self.touched_keys())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -3008,7 +3271,7 @@ impl<'r> ::core::fmt::Display for MemBlockReader<'r> {
     }
 }
 impl<'r> MemBlockReader<'r> {
-    pub const FIELD_COUNT: usize = 11;
+    pub const FIELD_COUNT: usize = 10;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -3079,17 +3342,11 @@ impl<'r> MemBlockReader<'r> {
         let end = molecule::unpack_number(&slice[40..]) as usize;
         AccountMerkleStateReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn post_merkle_state(&self) -> AccountMerkleStateReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[40..]) as usize;
-        let end = molecule::unpack_number(&slice[44..]) as usize;
-        AccountMerkleStateReader::new_unchecked(&self.as_slice()[start..end])
-    }
     pub fn touched_keys(&self) -> Byte32VecReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[44..]) as usize;
+        let start = molecule::unpack_number(&slice[40..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[48..]) as usize;
+            let end = molecule::unpack_number(&slice[44..]) as usize;
             Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             Byte32VecReader::new_unchecked(&self.as_slice()[start..])
@@ -3154,8 +3411,7 @@ impl<'r> molecule::prelude::Reader<'r> for MemBlockReader<'r> {
         Byte32OptReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
         BlockInfoReader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
         AccountMerkleStateReader::verify(&slice[offsets[8]..offsets[9]], compatible)?;
-        AccountMerkleStateReader::verify(&slice[offsets[9]..offsets[10]], compatible)?;
-        Byte32VecReader::verify(&slice[offsets[10]..offsets[11]], compatible)?;
+        Byte32VecReader::verify(&slice[offsets[9]..offsets[10]], compatible)?;
         Ok(())
     }
 }
@@ -3170,11 +3426,10 @@ pub struct MemBlockBuilder {
     pub(crate) txs_prev_state_checkpoint: Byte32Opt,
     pub(crate) block_info: BlockInfo,
     pub(crate) prev_merkle_state: AccountMerkleState,
-    pub(crate) post_merkle_state: AccountMerkleState,
     pub(crate) touched_keys: Byte32Vec,
 }
 impl MemBlockBuilder {
-    pub const FIELD_COUNT: usize = 11;
+    pub const FIELD_COUNT: usize = 10;
     pub fn block_producer_id(mut self, v: Uint32) -> Self {
         self.block_producer_id = v;
         self
@@ -3211,10 +3466,6 @@ impl MemBlockBuilder {
         self.prev_merkle_state = v;
         self
     }
-    pub fn post_merkle_state(mut self, v: AccountMerkleState) -> Self {
-        self.post_merkle_state = v;
-        self
-    }
     pub fn touched_keys(mut self, v: Byte32Vec) -> Self {
         self.touched_keys = v;
         self
@@ -3234,7 +3485,6 @@ impl molecule::prelude::Builder for MemBlockBuilder {
             + self.txs_prev_state_checkpoint.as_slice().len()
             + self.block_info.as_slice().len()
             + self.prev_merkle_state.as_slice().len()
-            + self.post_merkle_state.as_slice().len()
             + self.touched_keys.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
@@ -3259,8 +3509,6 @@ impl molecule::prelude::Builder for MemBlockBuilder {
         offsets.push(total_size);
         total_size += self.prev_merkle_state.as_slice().len();
         offsets.push(total_size);
-        total_size += self.post_merkle_state.as_slice().len();
-        offsets.push(total_size);
         total_size += self.touched_keys.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
@@ -3275,7 +3523,6 @@ impl molecule::prelude::Builder for MemBlockBuilder {
         writer.write_all(self.txs_prev_state_checkpoint.as_slice())?;
         writer.write_all(self.block_info.as_slice())?;
         writer.write_all(self.prev_merkle_state.as_slice())?;
-        writer.write_all(self.post_merkle_state.as_slice())?;
         writer.write_all(self.touched_keys.as_slice())?;
         Ok(())
     }

@@ -27,3 +27,4 @@ async-trait = "0.1"
 
 [dev-dependencies]
 tempfile = "3.2"
+rand = "0.8"
