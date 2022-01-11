@@ -404,39 +404,39 @@ impl RequestSubmitter {
         loop {
             // check mem block empty slots
             loop {
-                if !self.submit_rx.is_empty() {
-                    log::debug!("[Mem-pool background job] check mem-pool acquire mem_pool",);
-                    let t = Instant::now();
-                    let mem_pool = self.mem_pool.lock().await;
-                    log::debug!(
-                        "[Mem-pool background job] check-mem-pool unlock mem_pool {}ms",
-                        t.elapsed().as_millis()
-                    );
-                    // continue to batch process if we have enough mem block slots
-                    if !mem_pool.is_mem_txs_full(Self::MAX_BATCH_SIZE) {
-                        break;
-                    }
+                log::debug!("[Mem-pool background job] check mem-pool acquire mem_pool",);
+                let t = Instant::now();
+                let mem_pool = self.mem_pool.lock().await;
+                log::debug!(
+                    "[Mem-pool background job] check-mem-pool unlock mem_pool {}ms",
+                    t.elapsed().as_millis()
+                );
+                // continue to batch process if we have enough mem block slots
+                if !mem_pool.is_mem_txs_full(Self::MAX_BATCH_SIZE) {
+                    break;
                 }
                 // sleep and try again
                 smol::Timer::after(Self::INTERVAL_MS).await;
             }
 
-            let req = match self.submit_rx.recv().await {
-                Ok(req) => req,
-                Err(_) if self.submit_rx.is_closed() => {
-                    log::error!("rpc submit tx is closed");
-                    return;
-                }
-                Err(err) => {
-                    log::debug!("rpc submit rx err {}", err);
-                    async_std::task::sleep(Self::INTERVAL_MS).await;
-                    continue;
-                }
-            };
-
-            // push items to fee priority queue
+            // mem-pool can process more txs
             let mut queue = self.queue.lock().await;
-            {
+
+            // wait next tx if queue is empty
+            if queue.is_empty() {
+                // blocking current task until we receive a tx
+                let req = match self.submit_rx.recv().await {
+                    Ok(req) => req,
+                    Err(_) if self.submit_rx.is_closed() => {
+                        log::error!("rpc submit tx is closed");
+                        return;
+                    }
+                    Err(err) => {
+                        log::debug!("rpc submit rx err {}", err);
+                        async_std::task::sleep(Self::INTERVAL_MS).await;
+                        continue;
+                    }
+                };
                 let snap = self.mem_pool_state.load();
                 let state = snap.state().expect("get mem state");
                 let kind = req.kind();
@@ -454,42 +454,44 @@ impl RequestSubmitter {
                         );
                     }
                 }
-                while let Ok(req) = self.submit_rx.try_recv() {
-                    let kind = req.kind();
-                    let hash = req.hash();
-                    match self.req_to_entry(req, &state, queue.len()) {
-                        Ok(entry) => {
-                            queue.add(entry);
-                        }
-                        Err(err) => {
-                            log::error!(
-                                "Failed to convert req to entry kind: {}, hash: {}, err: {}",
-                                kind,
-                                hash,
-                                err
-                            );
-                        }
+            }
+
+            // push txs to fee priority queue
+            let snap = self.mem_pool_state.load();
+            let state = snap.state().expect("get mem state");
+            while let Ok(req) = self.submit_rx.try_recv() {
+                let kind = req.kind();
+                let hash = req.hash();
+                match self.req_to_entry(req, &state, queue.len()) {
+                    Ok(entry) => {
+                        queue.add(entry);
+                    }
+                    Err(err) => {
+                        log::error!(
+                            "Failed to convert req to entry kind: {}, hash: {}, err: {}",
+                            kind,
+                            hash,
+                            err
+                        );
                     }
                 }
             }
 
             // fetch items from PQ
-            let items = {
-                let snap = self.mem_pool_state.load();
-                let state = snap.state().expect("get mem state");
-                match queue.fetch(&state, Self::MAX_BATCH_SIZE) {
-                    Ok(items) => items,
-                    Err(err) => {
-                        log::error!(
-                            "Fetch items({}) from queue({}) error: {}",
-                            Self::MAX_BATCH_SIZE,
-                            queue.len(),
-                            err
-                        );
-                        continue;
-                    }
+            let items = match queue.fetch(&state, Self::MAX_BATCH_SIZE) {
+                Ok(items) => items,
+                Err(err) => {
+                    log::error!(
+                        "Fetch items({}) from queue({}) error: {}",
+                        Self::MAX_BATCH_SIZE,
+                        queue.len(),
+                        err
+                    );
+                    continue;
                 }
             };
+            // release lock
+            drop(queue);
 
             if !items.is_empty() {
                 log::debug!("[Mem-pool background job] acquire mem_pool",);
