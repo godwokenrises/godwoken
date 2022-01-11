@@ -460,10 +460,10 @@ impl MemPool {
     /// output mem block
     pub fn output_mem_block(
         &self,
-        output_param: OutputParam,
+        output_param: &OutputParam,
     ) -> impl Future<Output = Result<(Option<CollectedCustodianCells>, BlockParam)>> {
         let (mem_block, post_merkle_state) =
-            Self::package_mem_block(self.mem_block(), &output_param);
+            Self::package_mem_block(self.mem_block(), output_param);
         let current_tip = self.current_tip;
         let db = self.store.begin_transaction();
         let query_and_merge_finalized_custodians_fut = {
