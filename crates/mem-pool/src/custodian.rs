@@ -11,6 +11,7 @@ use gw_types::{
     packed::{CellOutput, CustodianLockArgs, DepositLockArgs, Script, WithdrawalRequest},
     prelude::*,
 };
+use tracing::instrument;
 
 use crate::constants::MAX_CUSTODIANS;
 
@@ -118,6 +119,7 @@ pub fn sum_withdrawals<Iter: Iterator<Item = WithdrawalRequest>>(reqs: Iter) -> 
     )
 }
 
+#[instrument(skip_all, fields(last_finalized_block_number = last_finalized_block_number))]
 pub async fn query_finalized_custodians<WithdrawalIter: Iterator<Item = WithdrawalRequest>>(
     rpc_client: &RPCClient,
     db: &impl ChainStore,
@@ -183,6 +185,7 @@ pub fn generate_finalized_custodian(
     (output, data)
 }
 
+#[instrument(skip_all, fields(withdrawals_amount = ?withdrawals_amount))]
 fn sum_change_capacity(
     db: &impl ChainStore,
     rollup_context: &RollupContext,

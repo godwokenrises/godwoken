@@ -46,6 +46,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 static PROFILER_GUARD: Lazy<tokio::sync::Mutex<Option<ProfilerGuard>>> =
     Lazy::new(|| tokio::sync::Mutex::new(None));
@@ -354,6 +355,7 @@ struct RequestSubmitter {
     store: Store,
 }
 
+#[instrument(skip_all, fields(req_kind = req.kind()))]
 fn req_to_entry(
     fee_config: &FeeConfig,
     generator: Arc<Generator>,
@@ -735,6 +737,7 @@ async fn get_transaction_receipt(
         .map(Into::into))
 }
 
+#[instrument(skip_all)]
 async fn execute_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     ctx: Data<ExecutionTransactionContext>,
@@ -812,6 +815,7 @@ enum ExecuteRawL2TransactionParams {
     Number((JsonBytes, Option<GwUint64>)),
 }
 
+#[instrument(skip_all)]
 async fn execute_raw_l2transaction(
     Params(params): Params<ExecuteRawL2TransactionParams>,
     mem_pool_config: Data<MemPoolConfig>,
@@ -913,6 +917,7 @@ async fn execute_raw_l2transaction(
     Ok(run_result.into())
 }
 
+#[instrument(skip_all)]
 async fn submit_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
     submit_tx: Data<async_channel::Sender<Request>>,
@@ -987,6 +992,7 @@ async fn submit_l2transaction(
     Ok(tx_hash)
 }
 
+#[instrument(skip_all)]
 async fn submit_withdrawal_request(
     Params((withdrawal_request,)): Params<(JsonBytes,)>,
     generator: Data<Generator>,

@@ -50,6 +50,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 const MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT: usize = 10;
 const TRANSACTION_SCRIPT_ERROR: &str = "TransactionScriptError";
@@ -79,7 +80,9 @@ fn generate_custodian_cells(
     deposit_cells.iter().map(to_custodian).collect()
 }
 
+#[instrument(skip_all)]
 async fn resolve_tx_deps(rpc_client: &RPCClient, tx_hash: [u8; 32]) -> Result<Vec<CellInfo>> {
+    #[instrument(skip_all)]
     async fn resolve_dep_group(rpc_client: &RPCClient, dep: CellDep) -> Result<Vec<CellDep>> {
         // return dep
         if dep.dep_type() == DepType::Code.into() {
@@ -237,6 +240,7 @@ impl BlockProducer {
         self.last_submitted_tx_hash.clone()
     }
 
+    #[instrument(skip_all, fields(event = %event))]
     pub async fn handle_event(&mut self, event: ChainEvent) -> Result<()> {
         if let Some(ref tests_control) = self.tests_control {
             match tests_control.payload().await {
@@ -372,6 +376,7 @@ impl BlockProducer {
         Ok(())
     }
 
+    #[instrument(skip_all, fields(retry_count = retry_count))]
     async fn compose_next_block_submit_tx(
         &mut self,
         median_time: Duration,
@@ -535,6 +540,7 @@ impl BlockProducer {
         }
     }
 
+    #[instrument(skip_all, fields(block = block_number))]
     async fn submit_block_tx(
         &mut self,
         block_number: u64,
@@ -645,6 +651,7 @@ impl BlockProducer {
         }
     }
 
+    #[instrument(skip_all, fields(block = args.block.raw().number().unpack()))]
     async fn complete_tx_skeleton(&self, args: CompleteTxArgs) -> Result<Transaction> {
         let CompleteTxArgs {
             deposit_cells,

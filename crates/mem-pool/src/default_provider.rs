@@ -13,6 +13,7 @@ use gw_types::{
     prelude::*,
 };
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 use crate::{
     constants::{MAX_MEM_BLOCK_DEPOSITS, MIN_CKB_DEPOSIT_CAPACITY, MIN_SUDT_DEPOSIT_CAPACITY},
@@ -40,6 +41,7 @@ impl DefaultMemPoolProvider {
 
 #[async_trait]
 impl MemPoolProvider for DefaultMemPoolProvider {
+    #[instrument(skip_all)]
     async fn estimate_next_blocktime(&self) -> Result<Duration> {
         // estimate next l2block timestamp
         let poa = self.poa.lock().await;
@@ -60,6 +62,7 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         Ok(timestamp)
     }
 
+    #[instrument(skip_all)]
     async fn collect_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
         let rpc_client = self.rpc_client.clone();
         rpc_client
@@ -71,10 +74,12 @@ impl MemPoolProvider for DefaultMemPoolProvider {
             .await
     }
 
+    #[instrument(skip_all)]
     async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellWithStatus>> {
         self.rpc_client.get_cell(out_point).await
     }
 
+    #[instrument(skip_all)]
     async fn query_available_custodians(
         &self,
         withdrawals: Vec<WithdrawalRequest>,
