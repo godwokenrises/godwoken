@@ -277,8 +277,6 @@ impl MemBlock {
         &self.deposit_touched_keys_vec
     }
 
-    // False positive: deposit_post_states.clone(),
-    #[allow(clippy::redundant_clone)]
     pub fn repackage(
         &self,
         withdrawals_count: usize,
@@ -353,13 +351,11 @@ impl MemBlock {
         new_mem_block.finalized_custodians = self.finalized_custodians.clone();
 
         let deposits = self.deposits.iter().take(deposits_count).cloned();
-        let deposit_post_states: Vec<_> = { self.deposit_post_states.iter().take(deposits_count) }
-            .cloned()
-            .collect();
+        let deposit_post_states = self.deposit_post_states.iter().take(deposits_count);
         let deposit_touched_keys_vec =
             { self.deposit_touched_keys_vec.iter().take(deposits_count) }.cloned();
 
-        packaged_states.extend(&deposit_post_states);
+        packaged_states.extend(deposit_post_states.clone().collect::<Vec<_>>());
         let txs_prev_state_checkpoint = {
             // Always havs prev_merkle_state, it's safe to unwrap
             let state = packaged_states.last().unwrap();
@@ -367,7 +363,7 @@ impl MemBlock {
         };
         new_mem_block.push_deposits(
             deposits.collect(),
-            deposit_post_states.clone(),
+            deposit_post_states.cloned().collect(),
             deposit_touched_keys_vec.collect(),
             txs_prev_state_checkpoint,
         );
