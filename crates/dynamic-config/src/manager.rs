@@ -5,6 +5,7 @@ use gw_tx_filter::{
     erc20_creator_allowlist::SUDTProxyAccountAllowlist,
     polyjuice_contract_creator_allowlist::PolyjuiceContractCreatorAllowList,
 };
+use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::{fee_config::FeeConfigManager, whitelist_config::WhilteListConfigManager};
@@ -13,7 +14,8 @@ use crate::{fee_config::FeeConfigManager, whitelist_config::WhilteListConfigMana
 // So that we don't need to restart to take effect every time.
 #[derive(Default)]
 pub struct DynamicConfigManager {
-    config_github_url: Option<String>,
+    config_github_url: Option<(String, String)>, // url and token
+
     fee_manager: FeeConfigManager,
     whitelist_manager: WhilteListConfigManager,
 }
@@ -21,9 +23,12 @@ pub struct DynamicConfigManager {
 impl DynamicConfigManager {
     pub fn create(config: Config) -> Self {
         let config_github_url = config.reload_config_github_url.as_ref().map(|r| {
-            format!(
-                "https://raw.githubusercontent.com/{}/{}/{}/{}?token={}",
-                r.org, r.repo, r.branch, r.path, r.token
+            (
+                format!(
+                    "https://raw.githubusercontent.com/{}/{}/{}/{}",
+                    r.org, r.repo, r.branch, r.path
+                ),
+                r.token.clone(),
             )
         });
         let fee_manager = FeeConfigManager::create(config.dynamic_config.fee_config.clone());
@@ -38,8 +43,8 @@ impl DynamicConfigManager {
 
     pub fn reload(&mut self) -> Result<DynamicConfigReloadResponse> {
         // Fetch latest config.
-        let new_config = if let Some(url) = &self.config_github_url {
-            get_github_config(url)?
+        let new_config = if let Some((url, token)) = &self.config_github_url {
+            get_github_config(url, token)?
         } else {
             return Err(anyhow!("Github config url is absent!"));
         };
@@ -75,8 +80,14 @@ impl DynamicConfigManager {
     }
 }
 
-fn get_github_config(url: &str) -> Result<Config> {
-    let res = reqwest::blocking::get(url)?.text()?;
+fn get_github_config(url: &str, token: &str) -> Result<Config> {
+    let token = format!("token {}", token);
+    let res = Client::builder()
+        .build()?
+        .get(url)
+        .header("Authorization", token)
+        .send()?
+        .text()?;
     let config = toml::from_str(&res)?;
     Ok(config)
 }
