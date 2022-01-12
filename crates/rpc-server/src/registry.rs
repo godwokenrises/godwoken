@@ -1,8 +1,10 @@
 use anyhow::{anyhow, Result};
+use async_std::sync::RwLock;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{blake2b::new_blake2b, state::State, H256};
 use gw_config::{FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
+use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
@@ -125,7 +127,7 @@ pub struct RegistryArgs<T> {
     pub rpc_client: RPCClient,
     pub send_tx_rate_limit: Option<RPCRateLimit>,
     pub server_config: RPCServerConfig,
-    pub fee_config: FeeConfig,
+    pub dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
     pub last_submitted_tx_hash: Option<Arc<smol::lock::RwLock<H256>>>,
 }
 
@@ -142,7 +144,7 @@ pub struct Registry {
     rpc_client: RPCClient,
     send_tx_rate_limit: Option<RPCRateLimit>,
     server_config: RPCServerConfig,
-    fee_config: FeeConfig,
+    dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
     last_submitted_tx_hash: Option<Arc<smol::lock::RwLock<H256>>>,
     mem_pool_state: Arc<MemPoolState>,
 }
@@ -163,7 +165,7 @@ impl Registry {
             rpc_client,
             send_tx_rate_limit,
             server_config,
-            fee_config,
+            dynamic_config_manager,
             last_submitted_tx_hash,
         } = args;
 
@@ -184,7 +186,7 @@ impl Registry {
                 mem_pool: Arc::clone(mem_pool),
                 submit_rx,
                 queue: Arc::new(Mutex::new(FeeQueue::new())),
-                fee_config: fee_config.clone(),
+                dynamic_config_manager: dynamic_config_manager.clone(),
                 generator: generator.clone(),
                 mem_pool_state: mem_pool_state.clone(),
                 store: store.clone(),
@@ -206,7 +208,7 @@ impl Registry {
             rpc_client,
             send_tx_rate_limit,
             server_config,
-            fee_config,
+            dynamic_config_manager,
             last_submitted_tx_hash,
             mem_pool_state,
         }
@@ -231,7 +233,7 @@ impl Registry {
             .with_data(Data::new(self.rpc_client))
             .with_data(Data::new(self.send_tx_rate_limit))
             .with_data(Data::new(send_transaction_rate_limiter))
-            .with_data(Data::new(self.fee_config))
+            .with_data(Data::new(self.dynamic_config_manager.clone()))
             .with_data(Data::new(self.mem_pool_state))
             .with_method("gw_ping", ping)
             .with_method("gw_get_tip_block_hash", get_tip_block_hash)
@@ -263,7 +265,8 @@ impl Registry {
                 compute_l2_sudt_script_hash,
             )
             .with_method("gw_get_fee_config", get_fee_config)
-            .with_method("gw_get_node_info", get_node_info);
+            .with_method("gw_get_node_info", get_node_info)
+            .with_method("reload_config", reload_config);
 
         if self.node_mode != NodeMode::ReadOnly {
             server = server
@@ -331,48 +334,48 @@ struct RequestSubmitter {
     mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
     submit_rx: smol::channel::Receiver<Request>,
     queue: Arc<Mutex<FeeQueue>>,
-    fee_config: FeeConfig,
+    dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
     generator: Arc<Generator>,
     mem_pool_state: Arc<MemPoolState>,
     store: Store,
+}
+
+fn req_to_entry(
+    fee_config: &FeeConfig,
+    generator: Arc<Generator>,
+    req: Request,
+    state: &(impl State + CodeStore),
+    order: usize,
+) -> Result<FeeEntry> {
+    match req {
+        Request::Tx(tx) => {
+            let receiver: u32 = tx.raw().to_id().unpack();
+            let script_hash = state.get_script_hash(receiver)?;
+            let backend_type = generator
+                .load_backend(state, &script_hash)
+                .ok_or_else(|| anyhow!("can't find backend for receiver: {}", receiver))?
+                .backend_type;
+            FeeEntry::from_tx(tx, fee_config, backend_type, order)
+        }
+        Request::Withdrawal(withdraw) => {
+            let script_hash = withdraw.raw().account_script_hash().unpack();
+            let sender = state
+                .get_account_id_by_script_hash(&script_hash)?
+                .ok_or_else(|| {
+                    anyhow!(
+                        "can't find id by script hash {}",
+                        withdraw.raw().account_script_hash()
+                    )
+                })?;
+            FeeEntry::from_withdrawal(withdraw, sender, fee_config, order)
+        }
+    }
 }
 
 impl RequestSubmitter {
     const MAX_CHANNEL_SIZE: usize = 10000;
     const MAX_BATCH_SIZE: usize = 20;
     const INTERVAL_MS: Duration = Duration::from_millis(100);
-
-    fn req_to_entry(
-        &self,
-        req: Request,
-        state: &(impl State + CodeStore),
-        order: usize,
-    ) -> Result<FeeEntry> {
-        match req {
-            Request::Tx(tx) => {
-                let receiver: u32 = tx.raw().to_id().unpack();
-                let script_hash = state.get_script_hash(receiver)?;
-                let backend_type = self
-                    .generator
-                    .load_backend(state, &script_hash)
-                    .ok_or_else(|| anyhow!("can't find backend for receiver: {}", receiver))?
-                    .backend_type;
-                FeeEntry::from_tx(tx, &self.fee_config, backend_type, order)
-            }
-            Request::Withdrawal(withdraw) => {
-                let script_hash = withdraw.raw().account_script_hash().unpack();
-                let sender = state
-                    .get_account_id_by_script_hash(&script_hash)?
-                    .ok_or_else(|| {
-                        anyhow!(
-                            "can't find id by script hash {}",
-                            withdraw.raw().account_script_hash()
-                        )
-                    })?;
-                FeeEntry::from_withdrawal(withdraw, sender, &self.fee_config, order)
-            }
-        }
-    }
 
     async fn in_background(self) {
         // First mem pool reinject txs
@@ -441,7 +444,9 @@ impl RequestSubmitter {
                 let state = snap.state().expect("get mem state");
                 let kind = req.kind();
                 let hash = req.hash();
-                match self.req_to_entry(req, &state, queue.len()) {
+                let dynamic_config_manager = &self.dynamic_config_manager.read().await;
+                let fee_config = dynamic_config_manager.get_fee_config();
+                match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
                     Ok(entry) => {
                         queue.add(entry);
                     }
@@ -462,7 +467,9 @@ impl RequestSubmitter {
             while let Ok(req) = self.submit_rx.try_recv() {
                 let kind = req.kind();
                 let hash = req.hash();
-                match self.req_to_entry(req, &state, queue.len()) {
+                let dynamic_config_manager = &self.dynamic_config_manager.read().await;
+                let fee_config = dynamic_config_manager.get_fee_config();
+                match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
                     Ok(entry) => {
                         queue.add(entry);
                     }
@@ -1319,7 +1326,11 @@ async fn get_last_submitted_info(
     })
 }
 
-async fn get_fee_config(fee: Data<FeeConfig>) -> Result<gw_jsonrpc_types::godwoken::FeeConfig> {
+async fn get_fee_config(
+    config: Data<Arc<RwLock<DynamicConfigManager>>>,
+) -> Result<gw_jsonrpc_types::godwoken::FeeConfig> {
+    let config = config.read().await;
+    let fee = config.get_fee_config();
     let fee_config = gw_jsonrpc_types::godwoken::FeeConfig {
         meta_cycles_limit: fee.meta_cycles_limit.into(),
         sudt_cycles_limit: fee.sudt_cycles_limit.into(),
@@ -1412,4 +1423,11 @@ async fn dump_jemalloc_profiling() -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn reload_config(
+    dynamic_config_manager: Data<Arc<RwLock<DynamicConfigManager>>>,
+) -> Result<()> {
+    let mut config = dynamic_config_manager.write().await;
+    config.reload()
 }

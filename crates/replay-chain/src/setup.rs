@@ -111,7 +111,7 @@ pub fn setup(args: SetupArgs) -> Result<Context> {
             backend_manage,
             account_lock_manage,
             rollup_context,
-            Some(config.rpc.clone()),
+            Default::default(),
         ))
     };
 

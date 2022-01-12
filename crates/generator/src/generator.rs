@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    sync::Arc,
     time::Instant,
 };
 
@@ -7,7 +8,6 @@ use crate::{
     account_lock_manage::AccountLockManage,
     backend_manage::BackendManage,
     constants::{L2TX_MAX_CYCLES, MAX_READ_DATA_BYTES_LIMIT, MAX_WRITE_DATA_BYTES_LIMIT},
-    erc20_creator_allowlist::SUDTProxyAccountAllowlist,
     error::{BlockError, TransactionValidateError, WithdrawalError},
     vm_cost_model::instruction_cycles,
     VMVersion,
@@ -28,10 +28,9 @@ use gw_common::{
     state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE_TYPE},
     H256,
 };
-use gw_config::RPCConfig;
+use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
 use gw_traits::{ChainView, CodeStore};
-use gw_tx_filter::polyjuice_contract_creator_allowlist::PolyjuiceContractCreatorAllowList;
 use gw_types::{
     bytes::Bytes,
     core::{ChallengeTargetType, ScriptHashType},
@@ -48,6 +47,7 @@ use ckb_vm::{DefaultMachineBuilder, SupportMachine};
 
 #[cfg(not(has_asm))]
 use ckb_vm::TraceMachine;
+use smol::lock::RwLock;
 
 pub struct ApplyBlockArgs {
     pub l2block: L2Block,
@@ -111,8 +111,7 @@ pub struct Generator {
     backend_manage: BackendManage,
     account_lock_manage: AccountLockManage,
     rollup_context: RollupContext,
-    sudt_proxy_account_whitelist: SUDTProxyAccountAllowlist,
-    polyjuice_contract_creator_allowlist: Option<PolyjuiceContractCreatorAllowList>,
+    dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
 }
 
 impl Generator {
@@ -120,36 +119,13 @@ impl Generator {
         backend_manage: BackendManage,
         account_lock_manage: AccountLockManage,
         rollup_context: RollupContext,
-        rpc_config: Option<RPCConfig>,
+        dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
     ) -> Self {
-        let polyjuice_contract_creator_allowlist;
-        let sudt_proxy_account_whitelist;
-        match rpc_config {
-            Some(rpc_config) => {
-                polyjuice_contract_creator_allowlist =
-                    PolyjuiceContractCreatorAllowList::from_rpc_config(&rpc_config);
-
-                sudt_proxy_account_whitelist = SUDTProxyAccountAllowlist::new(
-                    rpc_config.allowed_sudt_proxy_creator_account_id,
-                    rpc_config
-                        .sudt_proxy_code_hashes
-                        .into_iter()
-                        .map(|hash| hash.0.into())
-                        .collect(),
-                );
-            }
-            None => {
-                polyjuice_contract_creator_allowlist = None;
-                sudt_proxy_account_whitelist = Default::default();
-            }
-        }
-
         Generator {
             backend_manage,
             account_lock_manage,
             rollup_context,
-            sudt_proxy_account_whitelist,
-            polyjuice_contract_creator_allowlist,
+            dynamic_config_manager,
         }
     }
 
@@ -726,7 +702,9 @@ impl Generator {
         max_cycles: u64,
     ) -> Result<RunResult, TransactionError> {
         if let Some(polyjuice_contract_creator_allowlist) =
-            self.polyjuice_contract_creator_allowlist.as_ref()
+            smol::block_on(self.dynamic_config_manager.read())
+                .get_polyjuice_contract_creator_allowlist()
+                .as_ref()
         {
             use gw_tx_filter::polyjuice_contract_creator_allowlist::Error;
             match polyjuice_contract_creator_allowlist.validate_with_state(state, raw_tx) {
@@ -792,8 +770,8 @@ impl Generator {
         }
         // check account id of sudt proxy contract creator is from whitelist
         let from_id = raw_tx.from_id().unpack();
-        if self
-            .sudt_proxy_account_whitelist
+        if smol::block_on(self.dynamic_config_manager.read())
+            .get_sudt_proxy_account_whitelist()
             .validate(&run_result, from_id)
         {
             Ok(run_result)

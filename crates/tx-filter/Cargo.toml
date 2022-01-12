@@ -12,3 +12,5 @@ gw-config = { path = "../config" }
 gw-traits = { path = "../traits" }
 gw-types = { path = "../types" }
 thiserror = "1.0"
+log = "0.4"
+hex = "0.4"

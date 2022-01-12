@@ -37,6 +37,7 @@ pub struct Config {
     pub sentry_dsn: Option<String>,
     #[serde(default)]
     pub consensus: ConsensusConfig,
+    pub reload_config_github_url: Option<GithubConfigUrl>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -396,6 +397,15 @@ impl Default for FeeConfig {
             sudt_fee_rate_weight,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GithubConfigUrl {
+    pub org: String,
+    pub repo: String,
+    pub branch: String,
+    pub path: String,
+    pub token: String,
 }
 
 #[cfg(test)]

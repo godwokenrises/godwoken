@@ -2108,6 +2108,7 @@ dependencies = [
  "gw-common",
  "gw-config",
  "gw-db",
+ "gw-dynamic-config",
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
@@ -2218,6 +2219,7 @@ version = "0.1.0"
 dependencies = [
  "ckb-fixed-hash 0.100.0",
  "gw-jsonrpc-types",
+ "reqwest",
  "serde",
  "toml",
 ]
@@ -2236,6 +2238,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "gw-dynamic-config"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ckb-fixed-hash 0.100.0",
+ "gw-config",
+ "gw-jsonrpc-types",
+ "gw-tx-filter",
+ "reqwest",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "gw-generator"
 version = "0.2.0"
 dependencies = [
@@ -2245,6 +2261,7 @@ dependencies = [
  "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
+ "gw-dynamic-config",
  "gw-store",
  "gw-traits",
  "gw-tx-filter",
@@ -2405,6 +2422,7 @@ dependencies = [
  "gw-challenge",
  "gw-common",
  "gw-config",
+ "gw-dynamic-config",
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
@@ -2492,6 +2510,7 @@ dependencies = [
  "gw-common",
  "gw-config",
  "gw-db",
+ "gw-dynamic-config",
  "gw-generator",
  "gw-mem-pool",
  "gw-rpc-client",
@@ -2571,6 +2590,8 @@ dependencies = [
  "gw-config",
  "gw-traits",
  "gw-types",
+ "hex",
+ "log",
  "thiserror",
 ]
 
