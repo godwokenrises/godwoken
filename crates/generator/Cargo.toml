@@ -34,6 +34,7 @@ hex = "0.4"
 tokio = "1.15"
 arc-swap = "1.5"
 ethabi = "16.0.0"
+tracing = { version = "0.1", features = ["attributes"] }
 
 [dev-dependencies]
 gw-utils = {path = "../utils" }

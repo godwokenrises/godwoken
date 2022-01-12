@@ -1,6 +1,7 @@
 use anyhow::Result;
 use gw_common::state::State;
 use std::collections::{BinaryHeap, HashMap};
+use tracing::instrument;
 
 /// Max queue size
 const MAX_QUEUE_SIZE: usize = 10000;
@@ -31,6 +32,7 @@ impl FeeQueue {
     }
 
     /// Add item to queue
+    #[instrument(skip_all, fields(count = self.len()))]
     pub fn add(&mut self, entry: FeeEntry) {
         // push to queue
         log::debug!(
@@ -66,6 +68,7 @@ impl FeeQueue {
     }
 
     /// Fetch items by fee sort
+    #[instrument(skip_all, fields(count = count))]
     pub fn fetch(&mut self, state: &impl State, count: usize) -> Result<Vec<FeeEntry>> {
         // sorted fee items
         let mut fetched_items = Vec::with_capacity(count as usize);

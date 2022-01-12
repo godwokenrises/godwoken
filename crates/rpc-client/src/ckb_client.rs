@@ -7,6 +7,7 @@ use async_jsonrpc_client::{HttpClient, Params as ClientParams, Transport};
 use gw_jsonrpc_types::blockchain::CellDep;
 use serde::de::DeserializeOwned;
 use serde_json::json;
+use tracing::instrument;
 
 #[derive(Clone)]
 pub struct CKBClient(HttpClient);
@@ -27,6 +28,7 @@ impl CKBClient {
         &self.0
     }
 
+    #[instrument(skip_all, fields(method = method))]
     pub async fn request<T: DeserializeOwned>(
         &self,
         method: &str,
@@ -51,6 +53,7 @@ impl CKBClient {
         }
     }
 
+    #[instrument(skip_all)]
     pub async fn query_type_script(
         &self,
         contract: &str,

@@ -7,7 +7,6 @@ use clap::{App, Arg, SubCommand};
 use gw_block_producer::{db_block_validator, runner};
 use gw_config::Config;
 use gw_version::Version;
-use sentry_log::LogFilter;
 use std::{fs, path::Path};
 
 const COMMAND_RUN: &str = "run";
@@ -130,20 +129,39 @@ async fn run_cli() -> Result<()> {
 /// Default to number of cpus, pass `worker_threads` to manually configure workers.
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
-    init_log();
-    run_cli().await.expect("run cli");
+    init_tracing();
+    let ret = run_cli().await;
+    opentelemetry::global::shutdown_tracer_provider(); // Sending remaining spans
+    ret.expect("run cli");
 }
 
-fn init_log() {
-    let logger = env_logger::builder()
-        .parse_env(env_logger::Env::default().default_filter_or("info"))
-        .build();
-    let level = logger.filter();
-    let logger = sentry_log::SentryLogger::with_dest(logger).filter(|md| match md.level() {
-        log::Level::Error | log::Level::Warn => LogFilter::Event,
-        _ => LogFilter::Ignore,
+fn init_tracing() {
+    use sentry_tracing::EventFilter;
+    use tracing_subscriber::prelude::*;
+
+    opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
+
+    let env_filter_layer = tracing_subscriber::EnvFilter::try_from_default_env()
+        .or_else(|_| tracing_subscriber::EnvFilter::try_new("info"))
+        .unwrap();
+
+    let sentry_layer = sentry_tracing::layer().event_filter(|md| match md.level() {
+        &tracing::Level::ERROR | &tracing::Level::WARN => EventFilter::Event,
+        _ => EventFilter::Ignore,
     });
-    log::set_boxed_logger(Box::new(logger))
-        .map(|()| log::set_max_level(level))
-        .expect("set log");
+
+    let opentelemetry_layer = {
+        let tracer = opentelemetry_jaeger::new_pipeline()
+            .with_service_name("godwoken")
+            .install_batch(opentelemetry::runtime::Tokio)
+            .expect("tracer");
+        tracing_opentelemetry::layer().with_tracer(tracer)
+    };
+
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(env_filter_layer)
+        .with(opentelemetry_layer)
+        .with(sentry_layer)
+        .init()
 }

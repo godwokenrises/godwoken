@@ -48,6 +48,7 @@ use ckb_vm::{DefaultMachineBuilder, SupportMachine};
 
 #[cfg(not(has_asm))]
 use ckb_vm::TraceMachine;
+use tracing::instrument;
 
 pub struct ApplyBlockArgs {
     pub l2block: L2Block,
@@ -115,6 +116,7 @@ impl Generator {
         &self.account_lock_manage
     }
 
+    #[instrument(skip_all, fields(backend = ?backend.backend_type))]
     fn machine_run<'a, S: State + CodeStore, C: ChainView>(
         &'a self,
         chain: &'a C,
@@ -184,6 +186,7 @@ impl Generator {
 
     /// Verify withdrawal request
     /// Notice this function do not perform signature check
+    #[instrument(skip_all)]
     pub fn verify_withdrawal_request<S: State + CodeStore>(
         &self,
         state: &S,
@@ -255,6 +258,7 @@ impl Generator {
     }
 
     /// Check withdrawal request signature
+    #[instrument(skip_all)]
     pub fn check_withdrawal_signature<S: State + CodeStore>(
         &self,
         state: &S,
@@ -294,6 +298,7 @@ impl Generator {
 
     /// verify transaction
     /// Notice this function do not perform signature check
+    #[instrument(skip_all)]
     pub fn verify_transaction<S: State + CodeStore>(
         &self,
         state: &S,
@@ -318,6 +323,7 @@ impl Generator {
     }
 
     // Check transaction signature
+    #[instrument(skip_all)]
     pub fn check_transaction_signature<S: State + CodeStore>(
         &self,
         state: &S,
@@ -359,6 +365,7 @@ impl Generator {
     }
 
     /// Apply l2 state transition
+    #[instrument(skip_all, fields(block = args.l2block.raw().number().unpack(), deposits_count = args.deposit_requests.len()))]
     pub fn verify_and_apply_block<C: ChainView>(
         &self,
         db: &StoreTransaction,
@@ -621,6 +628,7 @@ impl Generator {
         }
     }
 
+    #[instrument(skip_all, fields(script_hash = %script_hash.pack()))]
     pub fn load_backend<S: State + CodeStore>(
         &self,
         state: &S,
@@ -650,6 +658,7 @@ impl Generator {
     }
 
     /// execute a layer2 tx
+    #[instrument(skip_all)]
     pub fn execute_transaction<S: State + CodeStore, C: ChainView>(
         &self,
         chain: &C,
@@ -675,6 +684,7 @@ impl Generator {
     }
 
     /// execute a layer2 tx, doesn't check exit code
+    #[instrument(skip_all, fields(block = block_info.number().unpack(), tx_hash = %raw_tx.hash().pack()))]
     pub fn unchecked_execute_transaction<S: State + CodeStore, C: ChainView>(
         &self,
         chain: &C,

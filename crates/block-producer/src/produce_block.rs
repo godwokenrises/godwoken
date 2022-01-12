@@ -26,6 +26,7 @@ use gw_types::{
     },
     prelude::*,
 };
+use tracing::instrument;
 
 #[derive(Clone)]
 pub struct ProduceBlockResult {
@@ -45,6 +46,7 @@ pub struct ProduceBlockParam {
 /// this method take txs & withdrawal requests from tx pool and produce a new block
 /// the package method should packs the items in order:
 /// withdrawals, then deposits, finally the txs. Thus, the state-validator can verify this correctly
+#[instrument(skip_all)]
 pub fn produce_block(
     db: &StoreTransaction,
     generator: &Generator,
@@ -172,6 +174,7 @@ pub fn produce_block(
 }
 
 // Generate produce block param
+#[instrument(skip_all, fields(mem_block = mem_block.block_info().number().unpack()))]
 pub fn generate_produce_block_param(
     store: &Store,
     mut mem_block: MemBlock,
