@@ -266,7 +266,7 @@ impl Registry {
             )
             .with_method("gw_get_fee_config", get_fee_config)
             .with_method("gw_get_node_info", get_node_info)
-            .with_method("reload_config", reload_config);
+            .with_method("gw_reload_config", reload_config);
 
         if self.node_mode != NodeMode::ReadOnly {
             server = server
