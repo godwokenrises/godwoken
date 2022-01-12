@@ -4,6 +4,7 @@ use gw_mem_pool::traits::MemPoolErrorTxHandler;
 use gw_types::offchain::ErrorTxReceipt;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
+use tracing::instrument;
 
 use crate::helper::{hex, parse_log, GwLog};
 
@@ -58,6 +59,7 @@ impl ErrorReceiptIndexer {
 
 #[gw_mem_pool::async_trait]
 impl MemPoolErrorTxHandler for ErrorReceiptIndexer {
+    #[instrument(skip_all)]
     async fn handle_error_receipt(&mut self, receipt: ErrorTxReceipt) -> Result<()> {
         if self.latest_block < receipt.block_number {
             self.latest_block = receipt.block_number;

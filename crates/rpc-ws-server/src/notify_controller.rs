@@ -4,6 +4,7 @@ use futures::{FutureExt, StreamExt};
 use gw_types::offchain::ErrorTxReceipt;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tracing::instrument;
 
 pub const SIGNAL_CHANNEL_SIZE: usize = 1;
 pub const REGISTER_CHANNEL_SIZE: usize = 2;
@@ -146,6 +147,7 @@ impl NotifyController {
         Request::call(&self.subscribe_err_receipt_tx, name.to_string()).await
     }
 
+    #[instrument(skip_all)]
     pub fn notify_new_error_tx_receipt(&self, error_tx_receipt: ErrorTxReceipt) {
         let err_receipt = Arc::new(error_tx_receipt);
         if let Err(err) = self.err_receipt_tx.try_send(Arc::clone(&err_receipt)) {

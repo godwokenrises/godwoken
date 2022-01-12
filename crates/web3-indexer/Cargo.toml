@@ -29,3 +29,4 @@ log = "0.4"
 rlp = "0.5"
 sha3 = "0.9.1"
 ethabi = "15.0.0"
+tracing = { version = "0.1", features = ["attributes"] }

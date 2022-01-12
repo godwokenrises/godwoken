@@ -29,6 +29,7 @@ use gw_web3_indexer::indexer::Web3Indexer;
 use serde_json::json;
 use std::{collections::HashSet, sync::Arc};
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 #[derive(thiserror::Error, Debug)]
 #[error("chain updater query l1 tx {tx_hash} error {source}")]
@@ -79,6 +80,7 @@ impl ChainUpdater {
     }
 
     // Start syncing
+    #[instrument(skip_all, fields(event = %_event))]
     pub async fn handle_event(&mut self, _event: ChainEvent) -> Result<()> {
         let initial_syncing = !self.initialized;
         // Always start from last valid tip on l1
@@ -135,6 +137,7 @@ impl ChainUpdater {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     pub async fn try_sync(&mut self) -> anyhow::Result<()> {
         let valid_tip_l1_block_number = {
             let chain = self.chain.lock().await;
@@ -195,6 +198,7 @@ impl ChainUpdater {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     pub async fn update(&mut self, txs: &[Tx]) -> anyhow::Result<()> {
         for tx in txs.iter() {
             self.update_single(&tx.tx_hash).await?;
@@ -204,6 +208,7 @@ impl ChainUpdater {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     async fn update_single(&mut self, tx_hash: &H256) -> anyhow::Result<()> {
         if let Some(last_tx_hash) = &self.last_tx_hash {
             if last_tx_hash == tx_hash {
@@ -306,6 +311,7 @@ impl ChainUpdater {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     async fn find_l2block_on_l1(&self, committed_info: L2BlockCommittedInfo) -> Result<bool> {
         let rpc_client = &self.rpc_client;
         let tx_hash: gw_common::H256 =
@@ -320,6 +326,7 @@ impl ChainUpdater {
         Ok(l1_block_hash == Some(block_hash))
     }
 
+    #[instrument(skip_all)]
     async fn revert_to_valid_tip_on_l1(&mut self) -> Result<()> {
         let db = { self.chain.lock().await.store().begin_transaction() };
         let mut revert_l1_actions = Vec::new();
@@ -404,6 +411,7 @@ impl ChainUpdater {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn extract_rollup_action(&self, tx: &Transaction) -> Result<RollupAction> {
         let rollup_type_hash: [u8; 32] = {
             let hash = self.rollup_type_script.calc_script_hash();
@@ -438,6 +446,7 @@ impl ChainUpdater {
         RollupAction::from_slice(&output_type).map_err(|e| anyhow!("invalid rollup action {}", e))
     }
 
+    #[instrument(skip_all)]
     async fn extract_challenge_context(
         &self,
         tx: &Transaction,
@@ -485,6 +494,7 @@ impl ChainUpdater {
         unreachable!("challenge output not found");
     }
 
+    #[instrument(skip_all)]
     async fn extract_deposit_requests(
         &self,
         tx: &Transaction,
@@ -534,6 +544,7 @@ impl ChainUpdater {
     }
 }
 
+#[instrument(skip_all)]
 fn try_parse_deposit_request(
     cell_output: &CellOutput,
     cell_data: &Bytes,

@@ -502,16 +502,20 @@ impl BaseInitComponents {
 
 pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     // Set up sentry.
+    // TODO: add traces_sample_rate to config
+    // FIXME: value after table error toml
     let _guard = match &config.sentry_dsn.as_ref() {
         Some(sentry_dsn) => sentry::init((
             sentry_dsn.as_str(),
             sentry::ClientOptions {
                 release: sentry::release_name!(),
+                traces_sample_rate: 0.0,
                 ..Default::default()
             },
         )),
         None => sentry::init(()),
     };
+
     // Enable smol threads before smol::spawn
     let runtime_threads = match std::env::var(SMOL_THREADS_ENV_VAR) {
         Ok(s) => s.parse()?,
