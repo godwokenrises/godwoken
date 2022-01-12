@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::testing_tool::chain::{
@@ -12,6 +13,7 @@ use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::state::{to_short_address, State};
 use gw_common::H256;
 use gw_config::RPCClientConfig;
+use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_rpc_client::ckb_client::CKBClient;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use gw_rpc_client::rpc_client::RPCClient;
@@ -24,6 +26,7 @@ use gw_types::packed::{
     RawL2Transaction, RawWithdrawalRequest, SUDTArgs, SUDTTransfer, Script, WithdrawalRequest,
 };
 use gw_types::prelude::Pack;
+use smol::lock::RwLock;
 
 const CKB: u64 = 100000000;
 
@@ -211,6 +214,7 @@ fn test_restore_mem_block() {
                 indexer_client,
             )
         };
+        let dynamic_config_manager = Arc::new(RwLock::new(DynamicConfigManager::default()));
         let args: RegistryArgs<TestModeControl> = RegistryArgs {
             store,
             mem_pool,
@@ -222,7 +226,7 @@ fn test_restore_mem_block() {
             rpc_client,
             send_tx_rate_limit: Default::default(),
             server_config: Default::default(),
-            fee_config: Default::default(),
+            dynamic_config_manager,
             last_submitted_tx_hash: None,
         };
 

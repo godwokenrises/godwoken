@@ -1,1 +1,2 @@
+pub mod erc20_creator_allowlist;
 pub mod polyjuice_contract_creator_allowlist;

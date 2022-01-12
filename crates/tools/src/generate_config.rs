@@ -252,6 +252,7 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         store,
         fee: Default::default(),
         sentry_dsn: None,
+        reload_config_github_url: None,
     };
 
     Ok(config)

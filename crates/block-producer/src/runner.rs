@@ -8,6 +8,7 @@ use crate::{
     withdrawal_unlocker::FinalizedWithdrawalUnlocker,
 };
 use anyhow::{anyhow, bail, Context, Result};
+use async_std::sync::RwLock;
 use ckb_types::core::hardfork::HardForkSwitch;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
@@ -15,6 +16,7 @@ use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBA
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::migrate::open_or_create_db;
+use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
     account_lock_manage::{
         secp256k1::{Secp256k1Eth, Secp256k1Tron},
@@ -271,6 +273,7 @@ pub struct BaseInitComponents {
     pub store: Store,
     pub generator: Arc<Generator>,
     pub contracts_dep_manager: Option<ContractsCellDepManager>,
+    pub dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
 }
 
 impl BaseInitComponents {
@@ -363,6 +366,8 @@ impl BaseInitComponents {
         )
         .with_context(|| "init genesis")?;
 
+        let dynamic_config_manager =
+            Arc::new(RwLock::new(DynamicConfigManager::create(config.clone())));
         let rollup_config_hash: H256 = rollup_config.hash().into();
         let generator = {
             let backend_manage = BackendManage::from_config(config.backends.clone())
@@ -385,7 +390,7 @@ impl BaseInitComponents {
                 backend_manage,
                 account_lock_manage,
                 rollup_context.clone(),
-                Some(config.rpc.clone()),
+                dynamic_config_manager.clone(),
             ))
         };
 
@@ -419,6 +424,7 @@ impl BaseInitComponents {
             store,
             generator,
             contracts_dep_manager,
+            dynamic_config_manager,
         };
 
         Ok(base)
@@ -579,6 +585,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         store,
         generator,
         contracts_dep_manager,
+        dynamic_config_manager,
         ..
     } = base;
 
@@ -771,7 +778,7 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         rpc_client: rpc_client.clone(),
         send_tx_rate_limit: config.rpc.send_tx_rate_limit.clone(),
         server_config: config.rpc_server.clone(),
-        fee_config: config.fee.clone(),
+        dynamic_config_manager,
         last_submitted_tx_hash: block_producer
             .as_ref()
             .map(|bp| bp.last_submitted_tx_hash()),
