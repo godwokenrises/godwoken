@@ -313,18 +313,34 @@ impl MemBlock {
             return (self.clone(), post_state);
         }
 
-        let mut packaged_states = vec![self.prev_merkle_state()];
-        let mut new_mem_block = MemBlock::new(
-            self.block_info().to_owned(),
-            self.prev_merkle_state().to_owned(),
-        );
+        // Make sure we drop tx first, then deposits.
+        if deposits_count != self.deposits().len() {
+            assert_eq!(txs_count, 0);
+        }
+        if withdrawals_count != self.withdrawals().len() {
+            assert_eq!(txs_count, 0);
+            assert_eq!(deposits_count, 0);
+        }
 
-        assert!(new_mem_block.state_checkpoints().is_empty());
-        assert!(new_mem_block.withdrawals().is_empty());
-        assert!(new_mem_block.finalized_custodians().is_none());
-        assert!(new_mem_block.deposits().is_empty());
-        assert!(new_mem_block.txs().is_empty());
-        assert!(new_mem_block.touched_keys().is_empty());
+        let mut packaged_states = vec![self.prev_merkle_state()];
+        let mut new_mem_block = MemBlock {
+            block_producer_id: self.block_producer_id,
+            block_info: self.block_info.clone(),
+            prev_merkle_state: self.prev_merkle_state.clone(),
+            ..Default::default()
+        };
+
+        assert!(new_mem_block.state_checkpoints.is_empty());
+        assert!(new_mem_block.withdrawals.is_empty());
+        assert!(new_mem_block.finalized_custodians.is_none());
+        assert!(new_mem_block.deposits.is_empty());
+        assert!(new_mem_block.txs.is_empty());
+        assert!(new_mem_block.touched_keys.is_empty());
+        assert!(new_mem_block.withdrawal_post_states.is_empty());
+        assert!(new_mem_block.deposit_post_states.is_empty());
+        assert!(new_mem_block.tx_post_states.is_empty());
+        assert!(new_mem_block.withdrawal_touched_keys_vec.is_empty());
+        assert!(new_mem_block.deposit_touched_keys_vec.is_empty());
 
         for ((hash, touched_keys), post_state) in { self.withdrawals.iter() }
             .zip(self.withdrawal_touched_keys_vec.iter())
@@ -491,9 +507,10 @@ pub enum MemBlockCmp {
 
 #[cfg(test)]
 mod test {
+    use gw_common::merkle_utils::calculate_state_checkpoint;
     use gw_common::H256;
     use gw_types::packed::{AccountMerkleState, BlockInfo};
-    use gw_types::prelude::{Builder, Entity, Pack};
+    use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
     use super::MemBlock;
 
@@ -512,6 +529,64 @@ mod test {
             vec![vec![random_hash()]],
             random_hash(),
         );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_repackage_drop_deposits_but_not_txs() {
+        let mut mem_block = MemBlock::default();
+
+        {
+            let state = random_state();
+            let txs_prev_state_checkpoint =
+                calculate_state_checkpoint(&state.merkle_root().unpack(), state.count().unpack());
+            mem_block.push_deposits(
+                vec![Default::default()],
+                vec![state],
+                vec![vec![random_hash()]],
+                txs_prev_state_checkpoint,
+            );
+        }
+
+        mem_block.push_tx(random_hash(), random_state());
+
+        // Should drop tx first
+        mem_block.repackage(0, 0, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_repackage_drop_withdrawals_but_not_txs() {
+        let mut mem_block = MemBlock::default();
+
+        mem_block.push_withdrawal(random_hash(), random_state(), vec![random_hash()]);
+        mem_block.push_tx(random_hash(), random_state());
+
+        // Should drop tx first
+        mem_block.repackage(0, 0, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_repackage_drop_withdrawals_but_not_deposits() {
+        let mut mem_block = MemBlock::default();
+
+        mem_block.push_withdrawal(random_hash(), random_state(), vec![random_hash()]);
+
+        {
+            let state = random_state();
+            let txs_prev_state_checkpoint =
+                calculate_state_checkpoint(&state.merkle_root().unpack(), state.count().unpack());
+            mem_block.push_deposits(
+                vec![Default::default()],
+                vec![state],
+                vec![vec![random_hash()]],
+                txs_prev_state_checkpoint,
+            );
+        }
+
+        // Should drop deposit first
+        mem_block.repackage(0, 1, 0);
     }
 
     fn random_hash() -> H256 {
