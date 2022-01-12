@@ -233,11 +233,7 @@ fn test_build_unlock_to_owner_tx() {
     // Generate random withdrawals(w/wo owner lock)
     const WITHDRAWAL_CAPACITY: u64 = 1000 * CKB;
     const WITHDRAWAL_AMOUNT: u128 = 100;
-    let mut no_owner_lock_count =
-        (rand::random::<u8>() % (accounts.len() as u8 / 2 + 1) + 1) as usize;
-    if no_owner_lock_count as usize == accounts.len() {
-        no_owner_lock_count = accounts.len() / 2;
-    }
+    let no_owner_lock_count = accounts.len() / 2;
     let withdrawals_no_lock = {
         let accounts = accounts.iter().take(no_owner_lock_count);
         accounts.map(|account_script| {
