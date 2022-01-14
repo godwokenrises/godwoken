@@ -6,7 +6,7 @@ use ckb_types::{
 use gw_config::ContractsCellDep;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::{
-    core::{DepType, ScriptHashType},
+    core::ScriptHashType,
     offchain::{CellInfo, InputCellInfo, RollupContext},
     packed::{CellDep, CellInput, CellOutput, L2Block, Script, StakeLockArgs},
     prelude::{Pack, Unpack},
@@ -20,7 +20,7 @@ pub struct GeneratedStake {
 }
 
 pub async fn generate(
-    rollup_cell: &CellInfo,
+    _rollup_cell: &CellInfo,
     rollup_context: &RollupContext,
     block: &L2Block,
     contracts_dep: &ContractsCellDep,
@@ -61,10 +61,6 @@ pub async fn generate(
         .await?
     {
         let stake_lock_dep = contracts_dep.stake_cell_lock.clone();
-        let rollup_cell_dep = CellDep::new_builder()
-            .out_point(rollup_cell.out_point.to_owned())
-            .dep_type(DepType::Code.into())
-            .build();
 
         let stake_cell = CellOutput::new_builder()
             .capacity(unlocked_stake.output.capacity())
@@ -79,7 +75,7 @@ pub async fn generate(
         };
 
         let generated_stake = GeneratedStake {
-            deps: vec![stake_lock_dep.into(), rollup_cell_dep],
+            deps: vec![stake_lock_dep.into()],
             inputs: vec![input_unlocked_stake],
             output: stake_cell,
             output_data: Bytes::new(),
