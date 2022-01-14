@@ -10,6 +10,8 @@ use crate::pool::MemPool;
 
 use super::mq::{gw_kafka, Consume};
 
+const CONSUME_LATENCY: u64 = 200;
+
 pub(crate) struct SubscribeMemPoolService {
     mem_pool: Arc<Mutex<MemPool>>,
 }
@@ -69,7 +71,10 @@ pub fn spawn_sub_mem_pool_task(
     smol::spawn(async move {
         log::info!("Spawn fan in mem_block task");
         loop {
-            let _ = smol::Timer::after(Duration::from_secs(5)).await;
+            // This controls the latency of the consumer.
+            // When some tx mutates mem state in the fullnode, the readonly node
+            // will follow up after **CONSUME_LATENCY**ms at least.
+            let _ = smol::Timer::after(Duration::from_millis(CONSUME_LATENCY)).await;
             if let Err(err) = consumer.poll() {
                 log::error!("consume error: {:?}", err);
             }
