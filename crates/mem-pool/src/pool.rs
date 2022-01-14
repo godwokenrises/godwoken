@@ -277,8 +277,11 @@ impl MemPool {
             ));
         }
 
-        // verification
-        self.verify_tx(state, &tx)?;
+        // Skip verification on readonly node in case of inconsistent nonce value.
+        if self.node_mode == NodeMode::FullNode {
+            // verification
+            self.verify_tx(state, &tx)?;
+        }
 
         // instantly run tx in background & update local state
         let t = Instant::now();
@@ -1389,9 +1392,7 @@ impl MemPool {
             // txs from the past block should be ignored
             return Ok(());
         }
-        let db = self.store.begin_transaction();
-        self.finalize_tx(&db, tx).await?;
-        db.commit()?;
+        self.push_transaction(tx).await?;
         Ok(())
     }
 }
