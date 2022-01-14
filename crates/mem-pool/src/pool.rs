@@ -277,11 +277,8 @@ impl MemPool {
             ));
         }
 
-        // Skip verification on readonly node in case of inconsistent nonce value.
-        if self.node_mode == NodeMode::FullNode {
-            // verification
-            self.verify_tx(state, &tx)?;
-        }
+        // verification
+        self.verify_tx(state, &tx)?;
 
         // instantly run tx in background & update local state
         let t = Instant::now();
