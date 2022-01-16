@@ -1,4 +1,4 @@
-use criterion::{async_executor::AsyncExecutor, *};
+use criterion::*;
 use gw_common::{
     state::{to_short_address, State},
     H256,
@@ -117,7 +117,7 @@ pub fn bench(c: &mut Criterion) {
     group.throughput(Throughput::Elements(1u64));
     let rt = tokio::runtime::Runtime::new().unwrap();
     group.bench_function("sudt", move |b| {
-        b.to_async(rt).iter_batched(
+        b.to_async(&rt).iter_batched(
             || {
                 let mut tree = DummyState::default();
 
@@ -182,7 +182,7 @@ pub fn bench(c: &mut Criterion) {
                     block_info,
                 )
             },
-            |(mut tree, rollup_config, sudt_id, a_id, b_script_hash, block_info)| async {
+            |(mut tree, rollup_config, sudt_id, a_id, b_script_hash, block_info)| {
                 // transfer from A to B
                 let value = 4000u128;
                 let fee = 42u128;
@@ -196,16 +196,18 @@ pub fn bench(c: &mut Criterion) {
                             .build(),
                     )
                     .build();
-                run_contract(
-                    &rollup_config,
-                    &mut tree,
-                    a_id,
-                    sudt_id,
-                    args.as_bytes(),
-                    &block_info,
-                )
-                .await
-                .expect("execute")
+                async move {
+                    run_contract(
+                        &rollup_config,
+                        &mut tree,
+                        a_id,
+                        sudt_id,
+                        args.as_bytes(),
+                        &block_info,
+                    )
+                    .await
+                    .expect("execute")
+                }
             },
             BatchSize::SmallInput,
         );
