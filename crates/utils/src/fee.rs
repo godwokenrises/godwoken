@@ -41,9 +41,7 @@ pub async fn fill_tx_fee(
     };
 
     // calculate required fee
-    // NOTE: Poa will insert a owner cell to inputs if there isn't one in ```fill_poa()```,
-    // so most of time, paid_fee should already cover tx_fee. The first thing we need to do
-    // is try to generate a change output cell.
+    // Try to generate a change output cell. If input cannot cover fee, query an owner cell.
     let tx_size = estimate_tx_size_with_change(tx_skeleton)?;
     let tx_fee = calculate_required_tx_fee(tx_size);
     let max_paid_fee = tx_skeleton

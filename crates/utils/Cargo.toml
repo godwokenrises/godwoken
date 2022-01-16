@@ -7,7 +7,6 @@ edition = "2018"
 
 [dependencies]
 gw-types = { path = "../types" }
-gw-poa = { path = "../poa" }
 gw-config = { path = "../config" }
 gw-common = { path = "../common" }
 gw-rpc-client = { path = "../rpc-client" }

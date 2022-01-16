@@ -20,7 +20,6 @@ use gw_mem_pool::{
     custodian::to_custodian_cell,
     pool::{MemPool, OutputParam},
 };
-use gw_poa::{PoA, ShouldIssueBlock};
 use gw_rpc_client::{contract::ContractsCellDepManager, rpc_client::RPCClient};
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
@@ -149,7 +148,6 @@ pub struct BlockProducer {
     chain: Arc<Mutex<Chain>>,
     mem_pool: Arc<Mutex<MemPool>>,
     generator: Arc<Generator>,
-    poa: PoA,
     wallet: Wallet,
     config: BlockProducerConfig,
     debug_config: DebugConfig,
@@ -192,12 +190,6 @@ impl BlockProducer {
         } = args;
 
         let wallet = Wallet::from_config(&config.wallet_config).with_context(|| "init wallet")?;
-        let poa = PoA::new(
-            rpc_client.clone(),
-            wallet.lock_script().clone(),
-            config.poa_lock_dep.clone().into(),
-            config.poa_state_dep.clone().into(),
-        );
 
         let block_producer = BlockProducer {
             rollup_config_hash,
@@ -206,7 +198,6 @@ impl BlockProducer {
             mem_pool,
             rpc_client,
             wallet,
-            poa,
             ckb_genesis_info,
             config,
             debug_config,
@@ -305,68 +296,60 @@ impl BlockProducer {
             Some(time) => time,
             None => return Ok(()),
         };
-        let poa_cell_input = InputCellInfo {
-            input: CellInput::new_builder()
-                .previous_output(rollup_cell.out_point.clone())
-                .build(),
-            cell: rollup_cell.clone(),
-        };
 
         // try issue next block
-        if let ShouldIssueBlock::Yes = self
-            .poa
-            .should_issue_next_block(median_time, &poa_cell_input)
-            .await?
-        {
-            let mut retry_count = 0;
-            while retry_count <= MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT {
-                let (block_number, tx) = match self
-                    .compose_next_block_submit_tx(median_time, rollup_cell.clone(), retry_count)
-                    .await
-                {
-                    Ok((block_number, tx)) => (block_number, tx),
-                    Err(err) => {
-                        retry_count += 1;
-                        log::warn!("[produce block] retry compose next block submit tx, retry: {}, reason: {}", retry_count, err);
-                        continue;
-                    }
-                };
-
-                let expected_next_block_number = global_state.block().count().unpack();
-                if expected_next_block_number != block_number {
-                    log::warn!("produce unexpected next block, expect {} produce {}, wait until chain is synced to latest block", expected_next_block_number, block_number);
-                    return Ok(());
+        let mut retry_count = 0;
+        while retry_count <= MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT {
+            let (block_number, tx) = match self
+                .compose_next_block_submit_tx(median_time, rollup_cell.clone(), retry_count)
+                .await
+            {
+                Ok((block_number, tx)) => (block_number, tx),
+                Err(err) => {
+                    retry_count += 1;
+                    log::warn!(
+                        "[produce block] retry compose next block submit tx, retry: {}, reason: {}",
+                        retry_count,
+                        err
+                    );
+                    continue;
                 }
+            };
 
-                let submitted_tx_hash = tx.hash();
-                match self.submit_block_tx(block_number, tx).await {
-                    Ok(SubmitResult::Submitted) => {
-                        self.last_committed_l2_block = LastCommittedL2Block {
-                            committed_tip_block_hash: l2_tip_block_hash,
-                            committed_at: Instant::now(),
-                        };
-                        let mut last_submitted_tx_hash = self.last_submitted_tx_hash.write().await;
-                        *last_submitted_tx_hash = submitted_tx_hash.into();
-                    }
-                    Ok(SubmitResult::Skip) => {}
-                    Err(err) => {
-                        retry_count += 1;
-                        log::warn!(
-                            "[produce block] retry submit block tx , retry: {}, reason: {}",
-                            retry_count,
-                            err
-                        );
-                        continue;
-                    }
-                }
-
+            let expected_next_block_number = global_state.block().count().unpack();
+            if expected_next_block_number != block_number {
+                log::warn!("produce unexpected next block, expect {} produce {}, wait until chain is synced to latest block", expected_next_block_number, block_number);
                 return Ok(());
             }
-            return Err(anyhow!(
-                "[produce_next_block] produce block reach max retry"
-            ));
+
+            let submitted_tx_hash = tx.hash();
+            match self.submit_block_tx(block_number, tx).await {
+                Ok(SubmitResult::Submitted) => {
+                    self.last_committed_l2_block = LastCommittedL2Block {
+                        committed_tip_block_hash: l2_tip_block_hash,
+                        committed_at: Instant::now(),
+                    };
+                    let mut last_submitted_tx_hash = self.last_submitted_tx_hash.write().await;
+                    *last_submitted_tx_hash = submitted_tx_hash.into();
+                }
+                Ok(SubmitResult::Skip) => {}
+                Err(err) => {
+                    retry_count += 1;
+                    log::warn!(
+                        "[produce block] retry submit block tx , retry: {}, reason: {}",
+                        retry_count,
+                        err
+                    );
+                    continue;
+                }
+            }
+
+            return Ok(());
         }
-        Ok(())
+
+        return Err(anyhow!(
+            "[produce_next_block] produce block reach max retry"
+        ));
     }
 
     async fn compose_next_block_submit_tx(
@@ -578,7 +561,6 @@ impl BlockProducer {
             }
             Err(err) => {
                 log::error!("Submitting l2 block error: {}", err);
-                self.poa.reset_current_round();
 
                 // dumping script error transactions
                 let err_str = err.to_string();
@@ -634,11 +616,11 @@ impl BlockProducer {
 
         let rollup_context = self.generator.rollup_context();
         let mut tx_skeleton = TransactionSkeleton::default();
-        let rollup_cell_input_index = tx_skeleton.inputs().len();
         // rollup cell
         tx_skeleton.inputs_mut().push(InputCellInfo {
             input: CellInput::new_builder()
                 .previous_output(rollup_cell.out_point.clone())
+                .since(input_since_from(median_time).pack())
                 .build(),
             cell: rollup_cell.clone(),
         });
@@ -802,15 +784,7 @@ impl BlockProducer {
         // custodian cells
         let custodian_cells = generate_custodian_cells(rollup_context, &block, &deposit_cells);
         tx_skeleton.outputs_mut().extend(custodian_cells);
-        // fill PoA cells
-        {
-            let rollup_cell_input = &tx_skeleton.inputs()[rollup_cell_input_index];
-            let generated_poa = self
-                .poa
-                .generate(rollup_cell_input, tx_skeleton.inputs(), median_time)
-                .await?;
-            tx_skeleton.fill_poa(generated_poa, rollup_cell_input_index)?;
-        }
+
         // stake cell
         let generated_stake = crate::stake::generate(
             &rollup_cell,
@@ -925,6 +899,12 @@ impl BlockProducer {
         log::debug!("final tx size: {}", tx.as_slice().len());
         Ok(tx)
     }
+}
+
+fn input_since_from(median_time: Duration) -> u64 {
+    /// Transaction since flag
+    const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
+    SINCE_BLOCK_TIMESTAMP_FLAG | median_time.as_secs()
 }
 
 struct CompleteTxArgs {

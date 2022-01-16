@@ -99,18 +99,6 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
             rollup_result.rollup_config_cell_dep.clone().into();
         gw_types::packed::CellDep::new_unchecked(cell_dep.as_bytes()).into()
     };
-    let poa_lock_dep = {
-        let dep: ckb_types::packed::CellDep = scripts_deployment
-            .state_validator_lock
-            .cell_dep
-            .clone()
-            .into();
-        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
-    };
-    let poa_state_dep = {
-        let dep: ckb_types::packed::CellDep = scripts_deployment.poa_state.cell_dep.clone().into();
-        gw_types::packed::CellDep::new_unchecked(dep.as_bytes()).into()
-    };
     let (_data, secp_data_dep) =
         get_secp_data(&mut rpc_client).map_err(|err| anyhow!("get secp data {}", err))?;
 
@@ -199,8 +187,6 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         account_id,
         // cell deps
         rollup_config_cell_dep,
-        poa_lock_dep,
-        poa_state_dep,
         challenger_config,
         wallet_config,
         check_mem_block_before_submit: false,

@@ -31,7 +31,6 @@ use gw_mem_pool::{
     spawn_sub_mem_pool_task,
     traits::MemPoolErrorTxHandler,
 };
-use gw_poa::PoA;
 use gw_rpc_client::{
     ckb_client::CKBClient, contract::ContractsCellDepManager, indexer_client::CKBIndexerClient,
     rpc_client::RPCClient,
@@ -431,23 +430,8 @@ impl BaseInitComponents {
         Ok(base)
     }
 
-    pub fn init_poa(
-        &self,
-        wallet: &Wallet,
-        block_producer_config: &BlockProducerConfig,
-    ) -> Arc<Mutex<PoA>> {
-        let poa = PoA::new(
-            self.rpc_client.clone(),
-            wallet.lock_script().to_owned(),
-            block_producer_config.poa_lock_dep.clone().into(),
-            block_producer_config.poa_state_dep.clone().into(),
-        );
-        Arc::new(tokio::sync::Mutex::new(poa))
-    }
-
     pub async fn init_offchain_mock_context(
         &self,
-        poa: &PoA,
         block_producer_config: &BlockProducerConfig,
     ) -> Result<OffChainMockContext> {
         let ckb_genesis_info = gw_challenge::offchain::CKBGenesisInfo {
@@ -464,7 +448,6 @@ impl BaseInitComponents {
 
         let build_args = OffChainMockContextBuildArgs {
             rpc_client: &self.rpc_client,
-            poa,
             rollup_context: self.rollup_context.clone(),
             wallet,
             config: block_producer_config.clone(),
@@ -505,22 +488,16 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     );
 
     let base = BaseInitComponents::init(&config, skip_config_check).await?;
-    let (mem_pool, wallet, poa, offchain_mock_context, pg_pool, err_receipt_notify_ctrl) =
+    let (mem_pool, wallet, offchain_mock_context, pg_pool, err_receipt_notify_ctrl) =
         match config.block_producer.as_ref() {
             Some(block_producer_config) => {
                 let wallet = Wallet::from_config(&block_producer_config.wallet_config)
                     .with_context(|| "init wallet")?;
-                let poa = base.init_poa(&wallet, block_producer_config);
-                let offchain_mock_context = {
-                    let poa = poa.lock().await;
-                    base.init_offchain_mock_context(&poa, block_producer_config)
-                        .await?
-                };
-                let mem_pool_provider = DefaultMemPoolProvider::new(
-                    base.rpc_client.clone(),
-                    Arc::clone(&poa),
-                    base.store.clone(),
-                );
+                let offchain_mock_context = base
+                    .init_offchain_mock_context(block_producer_config)
+                    .await?;
+                let mem_pool_provider =
+                    DefaultMemPoolProvider::new(base.rpc_client.clone(), base.store.clone());
                 let pg_pool = match config.web3_indexer.as_ref() {
                     Some(web3_indexer_config) => {
                         let mut opts: PgConnectOptions =
@@ -563,13 +540,12 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 (
                     Some(mem_pool),
                     Some(wallet),
-                    Some(poa),
                     Some(offchain_mock_context),
                     pg_pool,
                     notify_controller,
                 )
             }
-            None => (None, None, None, None, None, None),
+            None => (None, None, None, None, None),
         };
 
     let BaseInitComponents {
@@ -671,16 +647,11 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 wallet.ok_or_else(|| anyhow!("wallet must be enabled in mode: {:?}", mode))?;
             let offchain_mock_context = {
                 let ctx = offchain_mock_context;
-                let msg = "offchain mock require block producer config, wallet and poa in mode: ";
+                let msg = "offchain mock require block producer config and wallet in mode: ";
                 ctx.ok_or_else(|| anyhow!("{} {:?}", msg, mode))?
             };
-            let poa = poa.ok_or_else(|| anyhow!("poa must be enabled in mode: {:?}", mode))?;
             let tests_control = if let NodeMode::Test = config.node_mode {
-                Some(TestModeControl::new(
-                    rpc_client.clone(),
-                    Arc::clone(&poa),
-                    store.clone(),
-                ))
+                Some(TestModeControl::new(rpc_client.clone(), store.clone()))
             } else {
                 None
             };
@@ -726,7 +697,6 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                 builtin_load_data,
                 ckb_genesis_info: ckb_genesis_info.clone(),
                 chain: Arc::clone(&chain),
-                poa: Arc::clone(&poa),
                 tests_control: tests_control.clone(),
                 cleaner: Arc::clone(&cleaner),
                 offchain_mock_context,
