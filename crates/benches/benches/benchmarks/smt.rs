@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use criterion::{
-    async_executor::AsyncExecutor, criterion_group, BenchmarkId, Criterion, Throughput,
-};
+use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
 use gw_common::{
     blake2b::new_blake2b,
     builtins::CKB_SUDT_ACCOUNT_ID,
@@ -78,7 +76,7 @@ pub fn bench_ckb_transfer(c: &mut Criterion) {
         group.sample_size(10);
         group.throughput(Throughput::Elements(txs));
         group.bench_with_input(BenchmarkId::from_parameter(txs), &txs, |b, txs| {
-            b.to_async(rt)
+            b.to_async(&rt)
                 .iter(|| ee.accounts_transfer(7000, *txs as usize));
         });
     }
