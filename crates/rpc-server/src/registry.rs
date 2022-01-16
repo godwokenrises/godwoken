@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use async_std::sync::RwLock;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{blake2b::new_blake2b, state::State, H256};
@@ -46,7 +47,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::Mutex;
-use tokio::sync::RwLock;
 
 static PROFILER_GUARD: Lazy<tokio::sync::Mutex<Option<ProfilerGuard>>> =
     Lazy::new(|| tokio::sync::Mutex::new(None));
@@ -752,7 +752,7 @@ async fn execute_l2transaction(
         .build();
 
     let tx_hash = tx.hash();
-    let mut run_result = tokio::task::spawn(async move {
+    let mut run_result = tokio::task::spawn_blocking(move || {
         let db = store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
@@ -764,9 +764,13 @@ async fn execute_l2transaction(
         generator.verify_transaction(&state, &tx)?;
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = generator
-            .unchecked_execute_transaction(&chain_view, &state, &block_info, &raw_tx, 100000000)
-            .await?;
+        let run_result = generator.unchecked_execute_transaction(
+            &chain_view,
+            &state,
+            &block_info,
+            &raw_tx,
+            100000000,
+        )?;
 
         Result::<_, anyhow::Error>::Ok(run_result)
     })
@@ -847,7 +851,7 @@ async fn execute_raw_l2transaction(
     let block_number: u64 = block_info.number().unpack();
 
     // execute tx in task
-    let mut run_result = tokio::task::spawn(async move {
+    let mut run_result = tokio::task::spawn_blocking(move || {
         let chain_view = {
             let tip_block_hash = db.get_last_valid_tip_block_hash()?;
             ChainView::new(&db, tip_block_hash)
@@ -856,28 +860,24 @@ async fn execute_raw_l2transaction(
         let run_result = match block_number_opt {
             Some(block_number) => {
                 let state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
-                generator
-                    .unchecked_execute_transaction(
-                        &chain_view,
-                        &state,
-                        &block_info,
-                        &raw_l2tx,
-                        execute_l2tx_max_cycles,
-                    )
-                    .await?
+                generator.unchecked_execute_transaction(
+                    &chain_view,
+                    &state,
+                    &block_info,
+                    &raw_l2tx,
+                    execute_l2tx_max_cycles,
+                )?
             }
             None => {
                 let snap = mem_pool_state.load();
                 let state = snap.state()?;
-                generator
-                    .unchecked_execute_transaction(
-                        &chain_view,
-                        &state,
-                        &block_info,
-                        &raw_l2tx,
-                        execute_l2tx_max_cycles,
-                    )
-                    .await?
+                generator.unchecked_execute_transaction(
+                    &chain_view,
+                    &state,
+                    &block_info,
+                    &raw_l2tx,
+                    execute_l2tx_max_cycles,
+                )?
             }
         };
         Result::<_, anyhow::Error>::Ok(run_result)

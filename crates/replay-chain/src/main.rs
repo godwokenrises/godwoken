@@ -106,7 +106,7 @@ async fn run_cli() -> Result<()> {
                 from_db_columns,
             };
             let context = setup(args).await.expect("setup");
-            replay_chain(context).await.expect("replay");
+            replay_chain(context).expect("replay");
         }
         ("detach", Some(m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
