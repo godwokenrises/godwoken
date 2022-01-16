@@ -16,4 +16,5 @@ pub mod traits;
 mod types;
 pub mod withdrawal;
 
+pub use async_trait::*;
 pub use sync::subscribe::spawn_sub_mem_pool_task;
