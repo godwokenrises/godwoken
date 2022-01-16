@@ -19,7 +19,7 @@ fn read_config<P: AsRef<Path>>(path: P) -> Result<Config> {
     Ok(config)
 }
 
-fn run_cli() -> Result<()> {
+async fn run_cli() -> Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     let app = App::new("gw-chain-replay")
         .about("The layer2 rollup built upon Nervos CKB.")
@@ -105,7 +105,7 @@ fn run_cli() -> Result<()> {
                 to_db_store,
                 from_db_columns,
             };
-            let context = setup(args).expect("setup");
+            let context = setup(args).await.expect("setup");
             replay_chain(context).expect("replay");
         }
         ("detach", Some(m)) => {
@@ -124,7 +124,7 @@ fn run_cli() -> Result<()> {
                 to_db_store,
                 from_db_columns,
             };
-            let context = setup(args).expect("setup");
+            let context = setup(args).await.expect("setup");
             detach_chain(context).expect("detach");
         }
         _ => {
@@ -134,6 +134,7 @@ fn run_cli() -> Result<()> {
     Ok(())
 }
 
-fn main() {
-    run_cli().expect("cli");
+#[tokio::main(flavor = "multi_thread")]
+async fn main() {
+    run_cli().await.expect("cli");
 }

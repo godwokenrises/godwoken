@@ -1,4 +1,3 @@
-use gw_runtime::{block_on, spawn};
 use gw_types::{
     offchain::DepositInfo,
     packed::{
@@ -48,24 +47,25 @@ impl MemPoolPublishService {
         let (sender, receiver) = tokio::sync::mpsc::channel(CHANNEL_BUFFER_SIZE);
 
         let actor = PublishMemPoolActor::new(receiver, producer);
-        spawn(publish_handle(actor));
+        tokio::spawn(publish_handle(actor));
         Self { sender }
     }
 
-    pub(crate) fn new_tx(&self, tx: L2Transaction, current_tip_block_number: u64) {
+    pub(crate) async fn new_tx(&self, tx: L2Transaction, current_tip_block_number: u64) {
         let next_tx = NextL2Transaction::new_builder()
             .tx(tx)
             .mem_block_number(current_tip_block_number.pack())
             .build();
-        if let Err(err) = block_on(
-            self.sender
-                .send(RefreshMemBlockMessageUnion::NextL2Transaction(next_tx)),
-        ) {
+        if let Err(err) = self
+            .sender
+            .send(RefreshMemBlockMessageUnion::NextL2Transaction(next_tx))
+            .await
+        {
             log::error!("Send new tx message with error: {:?}", err);
         }
     }
 
-    pub(crate) fn next_mem_block(
+    pub(crate) async fn next_mem_block(
         &self,
         withdrawals: Vec<WithdrawalRequest>,
         deposits: Vec<DepositInfo>,
@@ -77,7 +77,7 @@ impl MemPoolPublishService {
             .deposits(deposits.pack())
             .build();
         let msg = RefreshMemBlockMessageUnion::NextMemBlock(next_mem_block);
-        if let Err(err) = block_on(self.sender.send(msg)) {
+        if let Err(err) = self.sender.send(msg).await {
             log::error!("Send mem block message with error: {:?}", err);
         }
     }

@@ -1,9 +1,10 @@
-use std::{cell::RefCell, collections::HashSet};
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 
 use gw_common::H256;
 
 pub struct StateTracker {
-    touched_keys: Option<RefCell<HashSet<H256>>>,
+    touched_keys: Option<Arc<Mutex<HashSet<H256>>>>,
 }
 
 impl Default for StateTracker {
@@ -25,14 +26,14 @@ impl StateTracker {
     }
 
     /// Return touched keys
-    pub fn touched_keys(&self) -> Option<&RefCell<HashSet<H256>>> {
-        self.touched_keys.as_ref()
+    pub fn touched_keys(&self) -> Option<Arc<Mutex<HashSet<H256>>>> {
+        self.touched_keys.as_ref().cloned()
     }
 
     /// Record a key in the tracker
     pub fn touch_key(&self, key: &H256) {
         if let Some(touched_keys) = self.touched_keys.as_ref() {
-            touched_keys.borrow_mut().insert(*key);
+            touched_keys.lock().unwrap().insert(*key);
         }
     }
 }

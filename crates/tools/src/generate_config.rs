@@ -13,7 +13,6 @@ use gw_config::{
 };
 use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
 use gw_rpc_client::ckb_client::CKBClient;
-use gw_runtime::block_on;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
 use std::collections::HashMap;
 use std::iter::FromIterator;
@@ -32,7 +31,7 @@ pub struct GenerateNodeConfigArgs<'a> {
     pub node_mode: NodeMode,
 }
 
-pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
+pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Config> {
     let GenerateNodeConfigArgs {
         rollup_result,
         scripts_deployment,
@@ -116,12 +115,10 @@ pub fn generate_node_config(args: GenerateNodeConfigArgs) -> Result<Config> {
         get_secp_data(&mut rpc_client).map_err(|err| anyhow!("get secp data {}", err))?;
 
     let ckb_client = CKBClient::with_url(&ckb_url)?;
-    let contract_type_scripts = block_on(query_contracts_script(
-        &ckb_client,
-        scripts_deployment,
-        user_rollup_config,
-    ))
-    .map_err(|err| anyhow!("query contracts script {}", err))?;
+    let contract_type_scripts =
+        query_contracts_script(&ckb_client, scripts_deployment, user_rollup_config)
+            .await
+            .map_err(|err| anyhow!("query contracts script {}", err))?;
 
     let challenger_config = ChallengerConfig {
         rewards_receiver_lock: {

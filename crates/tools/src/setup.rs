@@ -55,7 +55,7 @@ pub struct SetupArgs<'a> {
     pub wallet_network: WalletNetwork,
 }
 
-pub fn setup(args: SetupArgs<'_>) {
+pub async fn setup(args: SetupArgs<'_>) {
     let SetupArgs {
         ckb_rpc_url,
         indexer_url,
@@ -161,35 +161,31 @@ pub fn setup(args: SetupArgs<'_>) {
     };
 
     // generate node config
-    nodes
-        .iter()
-        .enumerate()
-        .for_each(|(index, (node_name, _node_wallet))| {
-            let privkey_path = output_dir.join(&node_name).join("pk");
-            let output_file_path = output_dir.join(node_name).join("config.toml");
-            // set the first node to fullnode
-            let node_mode = if index == 0 {
-                NodeMode::FullNode
-            } else {
-                NodeMode::ReadOnly
-            };
-            let args = GenerateNodeConfigArgs {
-                rollup_result: &rollup_result,
-                scripts_deployment: &deploy_scripts_result,
-                privkey_path: &privkey_path,
-                ckb_url: ckb_rpc_url.to_string(),
-                indexer_url: indexer_url.to_string(),
-                database_url: None,
-                build_scripts_result: &build_scripts_result,
-                server_url: server_url.to_string(),
-                user_rollup_config: &rollup_config,
-                node_mode,
-            };
-            let config = generate_node_config(args).expect("generate_config");
-            let output_content =
-                toml::to_string_pretty(&config).expect("serde toml to string pretty");
-            fs::write(output_file_path, output_content.as_bytes()).unwrap();
-        });
+    for (index, (node_name, _node_wallet)) in nodes.iter().enumerate() {
+        let privkey_path = output_dir.join(&node_name).join("pk");
+        let output_file_path = output_dir.join(node_name).join("config.toml");
+        // set the first node to fullnode
+        let node_mode = if index == 0 {
+            NodeMode::FullNode
+        } else {
+            NodeMode::ReadOnly
+        };
+        let args = GenerateNodeConfigArgs {
+            rollup_result: &rollup_result,
+            scripts_deployment: &deploy_scripts_result,
+            privkey_path: &privkey_path,
+            ckb_url: ckb_rpc_url.to_string(),
+            indexer_url: indexer_url.to_string(),
+            database_url: None,
+            build_scripts_result: &build_scripts_result,
+            server_url: server_url.to_string(),
+            user_rollup_config: &rollup_config,
+            node_mode,
+        };
+        let config = generate_node_config(args).await.expect("generate_config");
+        let output_content = toml::to_string_pretty(&config).expect("serde toml to string pretty");
+        fs::write(output_file_path, output_content.as_bytes()).unwrap();
+    }
 
     log::info!("Finish");
 }

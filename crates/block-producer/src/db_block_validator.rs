@@ -12,7 +12,6 @@ use gw_common::H256;
 use gw_config::{Config, DBBlockValidatorConfig, DebugConfig};
 use gw_generator::Generator;
 use gw_jsonrpc_types::godwoken::ChallengeTargetType as JsonChallengeTargetType;
-use gw_runtime::block_on;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     core::{ChallengeTargetType, Status},
@@ -30,7 +29,7 @@ use std::{
 
 use crate::runner::BaseInitComponents;
 
-pub fn verify(config: Config, from_block: Option<u64>, to_block: Option<u64>) -> Result<()> {
+pub async fn verify(config: Config, from_block: Option<u64>, to_block: Option<u64>) -> Result<()> {
     if config.store.path.as_os_str().is_empty() {
         bail!("empty store path, no db block to verify");
     }
@@ -38,24 +37,24 @@ pub fn verify(config: Config, from_block: Option<u64>, to_block: Option<u64>) ->
         bail!("db block validator require block producer config");
     }
 
-    let validator = build_validator(config)?;
+    let validator = build_validator(config).await?;
     validator.verify_db(from_block, to_block)?;
 
     Ok(())
 }
 
-fn build_validator(config: Config) -> Result<DBBlockCancelChallengeValidator> {
-    let base = BaseInitComponents::init(&config, true)?;
+async fn build_validator(config: Config) -> Result<DBBlockCancelChallengeValidator> {
+    let base = BaseInitComponents::init(&config, true).await?;
     let block_producer_config = config.block_producer.expect("block producer config");
 
     let wallet =
         Wallet::from_config(&block_producer_config.wallet_config).with_context(|| "init wallet")?;
     let poa = base.init_poa(&wallet, &block_producer_config);
-    let mut offchain_mock_context = block_on(async {
+    let mut offchain_mock_context = {
         let poa = poa.lock().await;
         base.init_offchain_mock_context(&poa, &block_producer_config)
-            .await
-    })?;
+            .await?
+    };
 
     let validator_config = config.db_block_validator.as_ref();
     if let Some(Some(scripts)) = validator_config.map(|c| c.replace_scripts.as_ref()) {
