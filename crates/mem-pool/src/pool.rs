@@ -391,12 +391,13 @@ impl MemPool {
                 .generator
                 .rollup_context()
                 .last_finalized_block_number(self.current_tip.1);
-            let task = self.provider.query_available_custodians(
-                vec![withdrawal.request()],
-                last_finalized_block_number,
-                self.generator.rollup_context().to_owned(),
-            );
-            task.await??
+            self.provider
+                .query_available_custodians(
+                    vec![withdrawal.request()],
+                    last_finalized_block_number,
+                    self.generator.rollup_context().to_owned(),
+                )
+                .await?
         };
         let avaliable_custodians = AvailableCustodians::from(&finalized_custodians);
         let withdrawal_generator =
@@ -606,7 +607,7 @@ impl MemPool {
             let task = self
                 .provider
                 .query_mergeable_custodians(collected, last_finalized_block_number);
-            Some(task.await??)
+            Some(task.await?)
         };
 
         log::debug!(
@@ -872,7 +873,7 @@ impl MemPool {
         }
 
         // estimate next l2block timestamp
-        let estimated_timestamp = self.provider.estimate_next_blocktime().await??;
+        let estimated_timestamp = self.provider.estimate_next_blocktime().await?;
         // reset mem block state
         {
             let snapshot = self.store.get_snapshot();
@@ -1060,7 +1061,7 @@ impl MemPool {
 
         // check cell is available
         for task in tasks {
-            match task.await?? {
+            match task.await? {
                 Some(cell_with_status) => {
                     if cell_with_status.status != CellStatus::Live {
                         force_expired = true;
@@ -1095,7 +1096,7 @@ impl MemPool {
                     mem_account_count,
                     tip_account_count
                 );
-            let cells = self.provider.collect_deposit_cells().await??;
+            let cells = self.provider.collect_deposit_cells().await?;
             self.pending_deposits = {
                 let cells = cells
                     .into_iter()
@@ -1176,12 +1177,13 @@ impl MemPool {
                 .generator
                 .rollup_context()
                 .last_finalized_block_number(self.current_tip.1);
-            let task = self.provider.query_available_custodians(
-                withdrawals.iter().map(|w| w.request()).collect(),
-                last_finalized_block_number,
-                self.generator.rollup_context().to_owned(),
-            );
-            task.await??
+            self.provider
+                .query_available_custodians(
+                    withdrawals.iter().map(|w| w.request()).collect(),
+                    last_finalized_block_number,
+                    self.generator.rollup_context().to_owned(),
+                )
+                .await?
         };
 
         let available_custodians = AvailableCustodians::from(&finalized_custodians);
@@ -1317,7 +1319,9 @@ impl MemPool {
             };
             if let Some(ref mut error_tx_handler) = self.error_tx_handler {
                 let t = Instant::now();
-                error_tx_handler.handle_error_receipt(receipt.clone());
+                if let Err(err) = error_tx_handler.handle_error_receipt(receipt.clone()).await {
+                    log::warn!("handle error receipt {}", err);
+                }
                 log::debug!(
                     "[finalize tx] handle error tx: {}ms",
                     t.elapsed().as_millis()

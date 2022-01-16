@@ -6,7 +6,6 @@ use gw_types::{
     offchain::{CellStatus, CellWithStatus, CollectedCustodianCells, DepositInfo, RollupContext},
     packed::{OutPoint, WithdrawalRequest},
 };
-use tokio::task::JoinHandle;
 
 #[derive(Debug, Default)]
 pub struct DummyMemPoolProvider {
@@ -15,37 +14,33 @@ pub struct DummyMemPoolProvider {
     pub collected_custodians: CollectedCustodianCells,
 }
 
+#[gw_mem_pool::async_trait]
 impl MemPoolProvider for DummyMemPoolProvider {
-    fn estimate_next_blocktime(&self) -> JoinHandle<Result<Duration>> {
-        let fake_blocktime = self.fake_blocktime;
-        tokio::spawn(async move { Ok(fake_blocktime) })
+    async fn estimate_next_blocktime(&self) -> Result<Duration> {
+        Ok(self.fake_blocktime)
     }
-    fn collect_deposit_cells(&self) -> JoinHandle<Result<Vec<DepositInfo>>> {
-        let deposit_cells = self.deposit_cells.clone();
-        tokio::spawn(async move { Ok(deposit_cells) })
+    async fn collect_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
+        Ok(self.deposit_cells.clone())
     }
-    fn query_available_custodians(
+    async fn query_available_custodians(
         &self,
         _withdrawals: Vec<WithdrawalRequest>,
         _last_finalized_block_number: u64,
         _rollup_context: RollupContext,
-    ) -> JoinHandle<Result<CollectedCustodianCells>> {
-        let collected_custodians = self.collected_custodians.clone();
-        tokio::spawn(async move { Ok(collected_custodians) })
+    ) -> Result<CollectedCustodianCells> {
+        Ok(self.collected_custodians.clone())
     }
-    fn get_cell(&self, _out_point: OutPoint) -> JoinHandle<Result<Option<CellWithStatus>>> {
-        tokio::spawn(async {
-            Ok(Some(CellWithStatus {
-                cell: Some(Default::default()),
-                status: CellStatus::Live,
-            }))
-        })
+    async fn get_cell(&self, _out_point: OutPoint) -> Result<Option<CellWithStatus>> {
+        Ok(Some(CellWithStatus {
+            cell: Some(Default::default()),
+            status: CellStatus::Live,
+        }))
     }
-    fn query_mergeable_custodians(
+    async fn query_mergeable_custodians(
         &self,
         collected_custodians: CollectedCustodianCells,
         _last_finalized_block_number: u64,
-    ) -> JoinHandle<Result<CollectedCustodianCells>> {
-        tokio::spawn(async move { Ok(collected_custodians) })
+    ) -> Result<CollectedCustodianCells> {
+        Ok(collected_custodians)
     }
 }
