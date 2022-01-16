@@ -20,7 +20,10 @@ use gw_jsonrpc_types::{
 };
 use gw_types::offchain::InputCellInfo;
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::atomic::Ordering,
+};
 use std::{convert::TryFrom, fs::read, path::PathBuf, sync::Arc};
 
 pub struct TxWithContext {
@@ -89,7 +92,7 @@ pub fn verify_tx(
     let resolved_tx = data_loader.resolve_tx(&tx_with_context.tx)?;
 
     let hardfork_switch = {
-        let switch = &*GLOBAL_HARDFORK_SWITCH.blocking_lock();
+        let switch = GLOBAL_HARDFORK_SWITCH.load();
         HardForkSwitch::new_without_any_enabled()
             .as_builder()
             .rfc_0028(switch.rfc_0028())
@@ -105,7 +108,7 @@ pub fn verify_tx(
     let consensus = ConsensusBuilder::default()
         .hardfork_switch(hardfork_switch)
         .build();
-    let current_epoch_number = *GLOBAL_CURRENT_EPOCH_NUMBER.blocking_lock();
+    let current_epoch_number = GLOBAL_CURRENT_EPOCH_NUMBER.load(Ordering::SeqCst);
     let tx_verify_env = TxVerifyEnv::new_submit(
         &HeaderView::new_advanced_builder()
             .epoch(current_epoch_number.pack())

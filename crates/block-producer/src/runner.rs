@@ -59,7 +59,7 @@ use sqlx::{
 use std::{
     collections::HashMap,
     net::{SocketAddr, ToSocketAddrs},
-    sync::Arc,
+    sync::{atomic::Ordering, Arc},
     time::{Duration, Instant},
 };
 use tokio::{spawn, sync::Mutex};
@@ -216,16 +216,16 @@ async fn poll_loop(
             // update global hardfork info
             let hardfork_switch = rpc_client.get_hardfork_switch().await?;
             let rpc32_epoch_number = hardfork_switch.rfc_0032();
-            let mut global_hardfork_switch = GLOBAL_HARDFORK_SWITCH.lock().await;
+            let global_hardfork_switch = GLOBAL_HARDFORK_SWITCH.load();
             if !is_hardfork_switch_eq(&*global_hardfork_switch, &hardfork_switch) {
-                *global_hardfork_switch = hardfork_switch
+                GLOBAL_HARDFORK_SWITCH.store(Arc::new(hardfork_switch));
             }
 
             // update global current epoch number
             let current_epoch_number = rpc_client.get_current_epoch_number().await?;
-            let mut global_epoch_number = GLOBAL_CURRENT_EPOCH_NUMBER.lock().await;
-            if *global_epoch_number != current_epoch_number {
-                *global_epoch_number = current_epoch_number;
+            let global_epoch_number = GLOBAL_CURRENT_EPOCH_NUMBER.load(Ordering::SeqCst);
+            if global_epoch_number != current_epoch_number {
+                GLOBAL_CURRENT_EPOCH_NUMBER.store(current_epoch_number, Ordering::SeqCst);
             }
 
             // update global vm version
@@ -234,9 +234,9 @@ async fn poll_loop(
             } else {
                 0
             };
-            let mut global_vm_version = GLOBAL_VM_VERSION.lock().await;
-            if *global_vm_version != vm_version {
-                *global_vm_version = vm_version;
+            let global_vm_version = GLOBAL_VM_VERSION.load(Ordering::SeqCst);
+            if global_vm_version != vm_version {
+                GLOBAL_VM_VERSION.store(vm_version, Ordering::SeqCst);
             }
             last_event_time = Instant::now();
         } else {
@@ -779,7 +779,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
             .map(|bp| bp.last_submitted_tx_hash()),
     };
 
-    let rpc_registry = Registry::new(args);
+    let rpc_registry = Registry::create(args).await;
 
     let (exit_sender, exit_recv) = async_channel::bounded(100);
     let handle = {
