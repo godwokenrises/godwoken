@@ -1299,13 +1299,16 @@ impl MemPool {
 
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = self.generator.unchecked_execute_transaction(
-            &chain_view,
-            &state,
-            block_info,
-            &raw_tx,
-            L2TX_MAX_CYCLES,
-        )?;
+        let run_result = self
+            .generator
+            .unchecked_execute_transaction(
+                &chain_view,
+                &state,
+                block_info,
+                &raw_tx,
+                L2TX_MAX_CYCLES,
+            )
+            .await?;
 
         if run_result.exit_code != 0 {
             let tx_hash: H256 = tx.hash().into();

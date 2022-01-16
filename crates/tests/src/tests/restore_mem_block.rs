@@ -28,7 +28,7 @@ use gw_types::packed::{
     RawL2Transaction, RawWithdrawalRequest, SUDTArgs, SUDTTransfer, Script, WithdrawalRequest,
 };
 use gw_types::prelude::Pack;
-use smol::lock::RwLock;
+use tokio::sync::RwLock;
 
 const CKB: u64 = 100000000;
 

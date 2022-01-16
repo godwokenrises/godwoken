@@ -10,7 +10,7 @@ description = "Godwoken benchmarks."
 [dependencies]
 
 [dev-dependencies]
-criterion = { version = "0.3", features = ["html_reports"] }
+criterion = { version = "0.3", features = ["html_reports", "async_tokio"] }
 pprof = { version = "0.6", features = ["flamegraph", "criterion"] }
 gw-store = { path = "../store" }
 gw-common = { path = "../common" }
@@ -20,6 +20,7 @@ gw-types = { path = "../types" }
 gw-traits = { path = "../traits" }
 gw-db = { path = "../db" }
 gw-config = { path = "../config" }
+tokio = { version = "1", features = ["full"]}
 
 [[bench]]
 name = "bench_main"

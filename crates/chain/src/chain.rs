@@ -253,7 +253,6 @@ impl Chain {
             if !self.complete_initial_syncing {
                 // Do first notify
                 let tip_block_hash: H256 = self.local_state.tip.hash().into();
-
                 log::debug!("[complete_initial_syncing] acquire mem-pool",);
                 let t = Instant::now();
                 mem_pool.lock().await.notify_new_tip(tip_block_hash).await?;
@@ -304,7 +303,7 @@ impl Chain {
     }
 
     /// update a layer1 action
-    fn update_l1action(&mut self, db: &StoreTransaction, action: L1Action) -> Result<()> {
+    async fn update_l1action(&mut self, db: &StoreTransaction, action: L1Action) -> Result<()> {
         let L1Action {
             transaction,
             l2block_committed_info,
@@ -326,281 +325,281 @@ impl Chain {
             Status::try_from(status).expect("invalid status")
         };
 
-        let update = || -> Result<SyncEvent> {
-            match (status, context) {
-                (
-                    Status::Running,
-                    L1ActionContext::SubmitBlock {
-                        l2block,
-                        deposit_requests,
-                        deposit_asset_scripts,
-                    },
-                ) => {
-                    let local_tip = self.local_state.tip();
-                    let parent_block_hash: [u8; 32] = l2block.raw().parent_block_hash().unpack();
-                    if parent_block_hash != local_tip.hash() {
-                        return Err(anyhow!("fork detected"));
-                    }
+        self.last_sync_event = self
+            .update(db, &global_state, status, context, &l2block_committed_info)
+            .await?;
+        self.local_state.last_global_state = global_state;
+        self.local_state.last_synced = l2block_committed_info;
+        log::debug!("last sync event {:?}", self.last_sync_event);
 
-                    // Reverted block root should not change
-                    let local_reverted_block_root = db.get_reverted_block_smt_root()?;
-                    let global_reverted_block_root: H256 =
-                        global_state.reverted_block_root().unpack();
-                    assert_eq!(local_reverted_block_root, global_reverted_block_root);
+        Ok(())
+    }
 
-                    // Check bad block challenge target
-                    let challenge_target =
-                        db.get_bad_block_challenge_target(&l2block.hash().into())?;
-                    if self.challenge_target.is_none() && challenge_target.is_some() {
-                        self.challenge_target = challenge_target;
-                    }
+    async fn update(
+        &mut self,
+        db: &StoreTransaction,
+        global_state: &GlobalState,
+        status: Status,
+        context: L1ActionContext,
+        l2block_committed_info: &L2BlockCommittedInfo,
+    ) -> Result<SyncEvent> {
+        match (status, context) {
+            (
+                Status::Running,
+                L1ActionContext::SubmitBlock {
+                    l2block,
+                    deposit_requests,
+                    deposit_asset_scripts,
+                },
+            ) => {
+                let local_tip = self.local_state.tip();
+                let parent_block_hash: [u8; 32] = l2block.raw().parent_block_hash().unpack();
+                if parent_block_hash != local_tip.hash() {
+                    return Err(anyhow!("fork detected"));
+                }
 
-                    if let Some(ref target) = self.challenge_target {
-                        db.insert_bad_block(&l2block, &l2block_committed_info, &global_state)?;
-                        log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
+                // Reverted block root should not change
+                let local_reverted_block_root = db.get_reverted_block_smt_root()?;
+                let global_reverted_block_root: H256 = global_state.reverted_block_root().unpack();
+                assert_eq!(local_reverted_block_root, global_reverted_block_root);
 
-                        let global_block_root: H256 = global_state.block().merkle_root().unpack();
-                        let local_block_root = db.get_block_smt_root()?;
-                        assert_eq!(local_block_root, global_block_root, "block root fork");
+                // Check bad block challenge target
+                let challenge_target = db.get_bad_block_challenge_target(&l2block.hash().into())?;
+                if self.challenge_target.is_none() && challenge_target.is_some() {
+                    self.challenge_target = challenge_target;
+                }
 
-                        self.local_state.tip = l2block;
+                if let Some(ref target) = self.challenge_target {
+                    db.insert_bad_block(&l2block, l2block_committed_info, global_state)?;
+                    log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
 
-                        let context =
-                            gw_challenge::context::build_challenge_context(db, target.to_owned())?;
-                        return Ok(SyncEvent::BadBlock { context });
-                    }
+                    let global_block_root: H256 = global_state.block().merkle_root().unpack();
+                    let local_block_root = db.get_block_smt_root()?;
+                    assert_eq!(local_block_root, global_block_root, "block root fork");
 
-                    if let Some(challenge_target) = self.process_block(
+                    self.local_state.tip = l2block;
+
+                    let context =
+                        gw_challenge::context::build_challenge_context(db, target.to_owned())?;
+                    return Ok(SyncEvent::BadBlock { context });
+                }
+
+                if let Some(challenge_target) = self
+                    .process_block(
                         db,
                         l2block.clone(),
                         l2block_committed_info.clone(),
                         global_state.clone(),
                         deposit_requests,
                         deposit_asset_scripts,
-                    )? {
-                        db.rollback()?;
+                    )
+                    .await?
+                {
+                    db.rollback()?;
 
-                        let block_number = l2block.raw().number().unpack();
-                        log::warn!("bad block #{} found, rollback db", block_number,);
+                    let block_number = l2block.raw().number().unpack();
+                    log::warn!("bad block #{} found, rollback db", block_number,);
 
-                        db.insert_bad_block(&l2block, &l2block_committed_info, &global_state)?;
-                        log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
-
-                        let global_block_root: H256 = global_state.block().merkle_root().unpack();
-                        let local_block_root = db.get_block_smt_root()?;
-                        assert_eq!(local_block_root, global_block_root, "block root fork");
-
-                        assert!(self.challenge_target.is_none());
-                        db.set_bad_block_challenge_target(
-                            &l2block.hash().into(),
-                            &challenge_target,
-                        )?;
-                        self.challenge_target = Some(challenge_target.clone());
-                        self.local_state.tip = l2block;
-
-                        let context =
-                            gw_challenge::context::build_challenge_context(db, challenge_target)?;
-                        Ok(SyncEvent::BadBlock { context })
-                    } else {
-                        let block_number = l2block.raw().number().unpack();
-                        log::info!("sync new block #{} success", block_number);
-
-                        Ok(SyncEvent::Success)
-                    }
-                }
-                (
-                    Status::Running,
-                    L1ActionContext::Challenge {
-                        cell,
-                        target,
-                        witness,
-                    },
-                ) => {
-                    let status: u8 = global_state.status().into();
-                    assert_eq!(Status::try_from(status), Ok(Status::Halting));
+                    db.insert_bad_block(&l2block, l2block_committed_info, global_state)?;
+                    log::info!("insert bad block 0x{}", hex::encode(l2block.hash()));
 
                     let global_block_root: H256 = global_state.block().merkle_root().unpack();
-                    if global_block_root != db.get_block_smt_root()? {
-                        return Err(anyhow!("fork detected"));
-                    }
+                    let local_block_root = db.get_block_smt_root()?;
+                    assert_eq!(local_block_root, global_block_root, "block root fork");
 
-                    let challenge_block_number = witness.raw_l2block().number().unpack();
-                    let local_bad_block_number = {
-                        let block_hash: Option<H256> = self.bad_block_hash();
-                        let to_number = block_hash.map(|hash| db.get_block_number(&hash));
-                        to_number.transpose()?.flatten()
-                    };
+                    assert!(self.challenge_target.is_none());
+                    db.set_bad_block_challenge_target(&l2block.hash().into(), &challenge_target)?;
+                    self.challenge_target = Some(challenge_target.clone());
+                    self.local_state.tip = l2block;
 
-                    // Challenge we can cancel:
-                    // 1. no bad block found (aka self.bad_block is none)
-                    // 2. challenge block number is smaller than local bad block
-                    let local_tip_block_number = self.local_state.tip.raw().number().unpack();
-                    if (self.challenge_target.is_none()
-                        && local_tip_block_number >= challenge_block_number)
-                        || local_bad_block_number > Some(challenge_block_number)
-                    {
-                        log::info!("challenge cancelable, build verify context");
+                    let context =
+                        gw_challenge::context::build_challenge_context(db, challenge_target)?;
+                    Ok(SyncEvent::BadBlock { context })
+                } else {
+                    let block_number = l2block.raw().number().unpack();
+                    log::info!("sync new block #{} success", block_number);
 
-                        let generator = Arc::clone(&self.generator);
-                        let context = Box::new(gw_challenge::context::build_verify_context(
-                            generator, db, &target,
-                        )?);
-
-                        return Ok(SyncEvent::BadChallenge { cell, context });
-                    }
-
-                    if self.challenge_target.is_none()
-                        && local_tip_block_number < challenge_block_number
-                    {
-                        unreachable!("impossible challenge")
-                    }
-
-                    // Now either a valid challenge or we don't have correct state to verify
-                    // it (aka challenge block after our local bad block)
-                    // If block is same, we don't care about target index and type, just want this
-                    // bad block to be reverted anyway.
-                    let revert_blocks = package_bad_blocks(db, &target.block_hash().unpack())?;
-                    let context = gw_challenge::context::build_revert_context(db, &revert_blocks)?;
-                    // NOTE: Ensure db is rollback. build_revert_context will modify reverted_block_smt
-                    // to compute merkle proof and root, so must rollback changes.
-                    db.rollback()?;
-                    log::info!("rollback db after prepare context for revert");
-
-                    Ok(SyncEvent::WaitChallenge { cell, context })
-                }
-                (Status::Halting, L1ActionContext::CancelChallenge) => {
-                    let status: u8 = global_state.status().into();
-                    assert_eq!(Status::try_from(status), Ok(Status::Running));
-
-                    log::info!("challenge cancelled");
-                    match self.challenge_target {
-                        // Previous challenge miss right target, we should challenge it
-                        Some(ref target) => {
-                            let context = gw_challenge::context::build_challenge_context(
-                                db,
-                                target.to_owned(),
-                            )?;
-                            Ok(SyncEvent::BadBlock { context })
-                        }
-                        None => Ok(SyncEvent::Success),
-                    }
-                }
-                (Status::Halting, L1ActionContext::Revert { reverted_blocks }) => {
-                    let status: u8 = global_state.status().into();
-                    assert_eq!(Status::try_from(status), Ok(Status::Running));
-
-                    let first_reverted_block = reverted_blocks.first().expect("first block");
-                    let first_reverted_block_number =
-                        db.get_block_number(&first_reverted_block.hash().into())?;
-                    if first_reverted_block_number.is_none() {
-                        return Err(anyhow!("chain fork, can't find first reverted block"));
-                    }
-
-                    // Ensure no valid block is reverted
-                    if self.challenge_target.is_none() {
-                        panic!("a valid block is reverted");
-                    }
-
-                    if let Some(block_hash) = self.bad_block_hash() {
-                        let local_bad_block = db.get_block(&block_hash)?;
-                        let local_bad_block_number =
-                            local_bad_block.map(|b| b.raw().number().unpack());
-
-                        assert!(first_reverted_block_number >= local_bad_block_number);
-                    }
-
-                    // Both bad blocks and reverted_blocks should be ascended and matched
-                    let local_reverted_blocks =
-                        package_bad_blocks(db, &first_reverted_block.hash().into())?;
-                    let local_slice: Vec<[u8; 32]> =
-                        local_reverted_blocks.iter().map(|b| b.hash()).collect();
-                    let submit_slice: Vec<[u8; 32]> =
-                        reverted_blocks.iter().map(|b| b.hash()).collect();
-                    assert_eq!(local_slice, submit_slice);
-
-                    // Revert bad blocks
-                    db.revert_bad_blocks(&local_reverted_blocks)?;
-                    log::debug!("bad blocks reverted");
-
-                    let reverted_block_hashes =
-                        local_reverted_blocks.iter().map(|b| b.hash().into());
-                    db.set_reverted_block_hashes(
-                        &db.get_reverted_block_smt_root()?,
-                        reverted_block_hashes.collect(),
-                    )?;
-
-                    // Check reverted block root
-                    let global_reverted_block_root: H256 =
-                        global_state.reverted_block_root().unpack();
-                    let local_reverted_block_root = db.get_reverted_block_smt_root()?;
-                    assert_eq!(local_reverted_block_root, global_reverted_block_root);
-
-                    // Check block smt
-                    let global_block_smt = global_state.block();
-                    let local_block_smt = {
-                        let root: [u8; 32] = db.get_block_smt_root()?.into();
-                        BlockMerkleState::new_builder()
-                            .merkle_root(root.pack())
-                            .count(first_reverted_block.number())
-                            .build()
-                    };
-                    assert_eq!(local_block_smt.as_slice(), global_block_smt.as_slice());
-
-                    // Check db tip block, update local state tip block
-                    let parent_block_hash: H256 = first_reverted_block.parent_block_hash().unpack();
-                    let global_tip_block_hash: H256 = global_state.tip_block_hash().unpack();
-                    assert_eq!(parent_block_hash, global_tip_block_hash);
-
-                    let local_tip_block_hash: H256 = db.get_tip_block_hash()?;
-                    assert_eq!(local_tip_block_hash, global_tip_block_hash);
-
-                    let local_tip_block = db.get_tip_block()?;
-                    self.local_state.tip = local_tip_block;
-                    log::debug!("revert chain local state tip block");
-
-                    let local_tip_block_number = self.local_state.tip.raw().number().unpack();
-                    log::info!("revert to block {}", local_tip_block_number);
-
-                    // Check whether our bad block is reverted
-                    if Some(H256::from(first_reverted_block.hash())) == self.bad_block_hash() {
-                        self.challenge_target = None;
-                        log::info!("clear local bad block");
-                    }
-
-                    // NOTE: Ensure account smt is valid only when bad block is reverted
-                    if self.bad_block_hash().is_none() {
-                        let prev_account_smt = first_reverted_block.prev_account();
-                        let global_account_smt = global_state.account();
-                        assert_eq!(prev_account_smt.as_slice(), global_account_smt.as_slice());
-                    }
-
-                    // If our bad block isn't reverted, just challenge it
-                    match self.challenge_target {
-                        Some(ref target) => {
-                            let context = gw_challenge::context::build_challenge_context(
-                                db,
-                                target.to_owned(),
-                            )?;
-                            Ok(SyncEvent::BadBlock { context })
-                        }
-                        None => Ok(SyncEvent::Success),
-                    }
-                }
-                (status, context) => {
-                    panic!(
-                        "unsupported syncing state: status {:?} context {:?}",
-                        status, context
-                    );
+                    Ok(SyncEvent::Success)
                 }
             }
-        };
+            (
+                Status::Running,
+                L1ActionContext::Challenge {
+                    cell,
+                    target,
+                    witness,
+                },
+            ) => {
+                let status: u8 = global_state.status().into();
+                assert_eq!(Status::try_from(status), Ok(Status::Halting));
 
-        self.last_sync_event = update()?;
-        self.local_state.last_global_state = global_state;
-        self.local_state.last_synced = l2block_committed_info;
-        log::debug!("last sync event {:?}", self.last_sync_event);
+                let global_block_root: H256 = global_state.block().merkle_root().unpack();
+                if global_block_root != db.get_block_smt_root()? {
+                    return Err(anyhow!("fork detected"));
+                }
 
-        Ok(())
+                let challenge_block_number = witness.raw_l2block().number().unpack();
+                let local_bad_block_number = {
+                    let block_hash: Option<H256> = self.bad_block_hash();
+                    let to_number = block_hash.map(|hash| db.get_block_number(&hash));
+                    to_number.transpose()?.flatten()
+                };
+
+                // Challenge we can cancel:
+                // 1. no bad block found (aka self.bad_block is none)
+                // 2. challenge block number is smaller than local bad block
+                let local_tip_block_number = self.local_state.tip.raw().number().unpack();
+                if (self.challenge_target.is_none()
+                    && local_tip_block_number >= challenge_block_number)
+                    || local_bad_block_number > Some(challenge_block_number)
+                {
+                    log::info!("challenge cancelable, build verify context");
+
+                    let generator = Arc::clone(&self.generator);
+                    let context = Box::new(gw_challenge::context::build_verify_context(
+                        generator, db, &target,
+                    )?);
+
+                    return Ok(SyncEvent::BadChallenge { cell, context });
+                }
+
+                if self.challenge_target.is_none()
+                    && local_tip_block_number < challenge_block_number
+                {
+                    unreachable!("impossible challenge")
+                }
+
+                // Now either a valid challenge or we don't have correct state to verify
+                // it (aka challenge block after our local bad block)
+                // If block is same, we don't care about target index and type, just want this
+                // bad block to be reverted anyway.
+                let revert_blocks = package_bad_blocks(db, &target.block_hash().unpack())?;
+                let context = gw_challenge::context::build_revert_context(db, &revert_blocks)?;
+                // NOTE: Ensure db is rollback. build_revert_context will modify reverted_block_smt
+                // to compute merkle proof and root, so must rollback changes.
+                db.rollback()?;
+                log::info!("rollback db after prepare context for revert");
+
+                Ok(SyncEvent::WaitChallenge { cell, context })
+            }
+            (Status::Halting, L1ActionContext::CancelChallenge) => {
+                let status: u8 = global_state.status().into();
+                assert_eq!(Status::try_from(status), Ok(Status::Running));
+
+                log::info!("challenge cancelled");
+                match self.challenge_target {
+                    // Previous challenge miss right target, we should challenge it
+                    Some(ref target) => {
+                        let context =
+                            gw_challenge::context::build_challenge_context(db, target.to_owned())?;
+                        Ok(SyncEvent::BadBlock { context })
+                    }
+                    None => Ok(SyncEvent::Success),
+                }
+            }
+            (Status::Halting, L1ActionContext::Revert { reverted_blocks }) => {
+                let status: u8 = global_state.status().into();
+                assert_eq!(Status::try_from(status), Ok(Status::Running));
+
+                let first_reverted_block = reverted_blocks.first().expect("first block");
+                let first_reverted_block_number =
+                    db.get_block_number(&first_reverted_block.hash().into())?;
+                if first_reverted_block_number.is_none() {
+                    return Err(anyhow!("chain fork, can't find first reverted block"));
+                }
+
+                // Ensure no valid block is reverted
+                if self.challenge_target.is_none() {
+                    panic!("a valid block is reverted");
+                }
+
+                if let Some(block_hash) = self.bad_block_hash() {
+                    let local_bad_block = db.get_block(&block_hash)?;
+                    let local_bad_block_number = local_bad_block.map(|b| b.raw().number().unpack());
+
+                    assert!(first_reverted_block_number >= local_bad_block_number);
+                }
+
+                // Both bad blocks and reverted_blocks should be ascended and matched
+                let local_reverted_blocks =
+                    package_bad_blocks(db, &first_reverted_block.hash().into())?;
+                let local_slice: Vec<[u8; 32]> =
+                    local_reverted_blocks.iter().map(|b| b.hash()).collect();
+                let submit_slice: Vec<[u8; 32]> =
+                    reverted_blocks.iter().map(|b| b.hash()).collect();
+                assert_eq!(local_slice, submit_slice);
+
+                // Revert bad blocks
+                db.revert_bad_blocks(&local_reverted_blocks)?;
+                log::debug!("bad blocks reverted");
+
+                let reverted_block_hashes = local_reverted_blocks.iter().map(|b| b.hash().into());
+                db.set_reverted_block_hashes(
+                    &db.get_reverted_block_smt_root()?,
+                    reverted_block_hashes.collect(),
+                )?;
+
+                // Check reverted block root
+                let global_reverted_block_root: H256 = global_state.reverted_block_root().unpack();
+                let local_reverted_block_root = db.get_reverted_block_smt_root()?;
+                assert_eq!(local_reverted_block_root, global_reverted_block_root);
+
+                // Check block smt
+                let global_block_smt = global_state.block();
+                let local_block_smt = {
+                    let root: [u8; 32] = db.get_block_smt_root()?.into();
+                    BlockMerkleState::new_builder()
+                        .merkle_root(root.pack())
+                        .count(first_reverted_block.number())
+                        .build()
+                };
+                assert_eq!(local_block_smt.as_slice(), global_block_smt.as_slice());
+
+                // Check db tip block, update local state tip block
+                let parent_block_hash: H256 = first_reverted_block.parent_block_hash().unpack();
+                let global_tip_block_hash: H256 = global_state.tip_block_hash().unpack();
+                assert_eq!(parent_block_hash, global_tip_block_hash);
+
+                let local_tip_block_hash: H256 = db.get_tip_block_hash()?;
+                assert_eq!(local_tip_block_hash, global_tip_block_hash);
+
+                let local_tip_block = db.get_tip_block()?;
+                self.local_state.tip = local_tip_block;
+                log::debug!("revert chain local state tip block");
+
+                let local_tip_block_number = self.local_state.tip.raw().number().unpack();
+                log::info!("revert to block {}", local_tip_block_number);
+
+                // Check whether our bad block is reverted
+                if Some(H256::from(first_reverted_block.hash())) == self.bad_block_hash() {
+                    self.challenge_target = None;
+                    log::info!("clear local bad block");
+                }
+
+                // NOTE: Ensure account smt is valid only when bad block is reverted
+                if self.bad_block_hash().is_none() {
+                    let prev_account_smt = first_reverted_block.prev_account();
+                    let global_account_smt = global_state.account();
+                    assert_eq!(prev_account_smt.as_slice(), global_account_smt.as_slice());
+                }
+
+                // If our bad block isn't reverted, just challenge it
+                match self.challenge_target {
+                    Some(ref target) => {
+                        let context =
+                            gw_challenge::context::build_challenge_context(db, target.to_owned())?;
+                        Ok(SyncEvent::BadBlock { context })
+                    }
+                    None => Ok(SyncEvent::Success),
+                }
+            }
+            (status, context) => {
+                panic!(
+                    "unsupported syncing state: status {:?} context {:?}",
+                    status, context
+                );
+            }
+        }
     }
 
     /// revert a layer1 action
@@ -821,7 +820,7 @@ impl Chain {
 
         // update layer1 actions
         for action in param.updates {
-            self.update_l1action(&db, action)?;
+            self.update_l1action(&db, action).await?;
             match self.last_sync_event() {
                 SyncEvent::Success => (),
                 _ => db.commit()?,
@@ -868,7 +867,7 @@ impl Chain {
         Ok(())
     }
 
-    pub fn process_block(
+    pub async fn process_block(
         &mut self,
         db: &StoreTransaction,
         l2block: L2Block,
@@ -916,6 +915,7 @@ impl Chain {
         let generator = &self.generator;
         let (withdrawal_receipts, prev_txs_state, tx_receipts) = match generator
             .verify_and_apply_block(db, &chain_view, args, &self.skipped_invalid_block_list)
+            .await
         {
             ApplyBlockResult::Success {
                 tx_receipts,
