@@ -8,6 +8,6 @@ edition = "2018"
 
 [dependencies]
 lazy_static = "1.4"
-tokio = "1.2.5"
+tokio = "1.15"
 ckb-types = "0.100.0"
 arc-swap = "1.5"

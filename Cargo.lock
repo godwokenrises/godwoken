@@ -1775,7 +1775,6 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
- "gw-runtime",
  "gw-store",
  "gw-traits",
  "gw-types",
@@ -1807,7 +1806,6 @@ dependencies = [
  "gw-jsonrpc-types",
  "gw-poa",
  "gw-rpc-client",
- "gw-runtime",
  "gw-store",
  "gw-traits",
  "gw-types",
@@ -1939,7 +1937,6 @@ dependencies = [
  "gw-poa",
  "gw-rpc-client",
  "gw-rpc-ws-server",
- "gw-runtime",
  "gw-store",
  "gw-traits",
  "gw-types",
@@ -1986,7 +1983,6 @@ dependencies = [
  "gw-jsonrpc-types",
  "gw-mem-pool",
  "gw-rpc-client",
- "gw-runtime",
  "gw-store",
  "gw-traits",
  "gw-types",
@@ -2084,7 +2080,6 @@ dependencies = [
  "ckb-types",
  "futures",
  "gw-jsonrpc-types",
- "gw-runtime",
  "gw-types",
  "jsonrpc-core 18.0.0",
  "jsonrpc-derive",
@@ -2096,15 +2091,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_plain",
-]
-
-[[package]]
-name = "gw-runtime"
-version = "0.1.0"
-dependencies = [
- "crossbeam-channel",
- "num_cpus",
- "once_cell",
  "tokio",
 ]
 
@@ -2192,7 +2178,6 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-rpc-client",
- "gw-runtime",
  "gw-types",
  "gw-utils",
  "hex",
@@ -2281,7 +2266,6 @@ dependencies = [
  "gw-db",
  "gw-generator",
  "gw-mem-pool",
- "gw-runtime",
  "gw-store",
  "gw-traits",
  "gw-types",

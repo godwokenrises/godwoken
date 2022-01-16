@@ -17,12 +17,11 @@ gw-store = { path = "../store" }
 gw-traits = { path = "../traits" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-utils = { path = "../utils" }
-gw-runtime = { path = "../runtime" }
 ckb-fixed-hash = "0.100.0"
 anyhow = "1.0"
 thiserror = "1.0"
 lazy_static = "1.4"
-tokio = "1.2.5"
+tokio = "1.15"
 crossbeam-channel = "0.5"
 toml = "0.5"
 log = "0.4"
