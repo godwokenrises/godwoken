@@ -1,7 +1,6 @@
 use anyhow::Result;
 use gw_common::H256;
 use gw_mem_pool::traits::MemPoolErrorTxHandler;
-use gw_runtime::spawn;
 use gw_types::offchain::ErrorTxReceipt;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -67,7 +66,7 @@ impl MemPoolErrorTxHandler for ErrorReceiptIndexer {
             let expired_block = self
                 .latest_block
                 .saturating_sub(MAX_ERROR_TX_RECEIPT_BLOCKS);
-            spawn(async move {
+            tokio::spawn(async move {
                 if let Err(err) = Self::clear_expired_block_error_receipt(pool, expired_block).await
                 {
                     log::error!("clear expired block error receipt {}", err);
@@ -76,7 +75,7 @@ impl MemPoolErrorTxHandler for ErrorReceiptIndexer {
         }
 
         let pool = self.pool.clone();
-        spawn(async move {
+        tokio::spawn(async move {
             if let Err(err) = Self::insert_error_tx_receipt(pool, receipt).await {
                 log::error!("insert error tx receipt {}", err);
             }

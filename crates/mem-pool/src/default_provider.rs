@@ -3,7 +3,6 @@ use std::{sync::Arc, time::Duration};
 use anyhow::{anyhow, Result};
 use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_runtime::spawn;
 use gw_store::Store;
 use gw_types::{
     offchain::{
@@ -43,7 +42,7 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         // estimate next l2block timestamp
         let poa = Arc::clone(&self.poa);
         let rpc_client = self.rpc_client.clone();
-        spawn(async move {
+        tokio::spawn(async move {
             let poa = poa.lock().await;
             let rollup_cell = rpc_client
                 .query_rollup_cell()
@@ -64,7 +63,7 @@ impl MemPoolProvider for DefaultMemPoolProvider {
 
     fn collect_deposit_cells(&self) -> JoinHandle<Result<Vec<DepositInfo>>> {
         let rpc_client = self.rpc_client.clone();
-        spawn(async move {
+        tokio::spawn(async move {
             rpc_client
                 .query_deposit_cells(
                     MAX_MEM_BLOCK_DEPOSITS,
@@ -77,7 +76,7 @@ impl MemPoolProvider for DefaultMemPoolProvider {
 
     fn get_cell(&self, out_point: OutPoint) -> JoinHandle<Result<Option<CellWithStatus>>> {
         let rpc_client = self.rpc_client.clone();
-        spawn(async move { rpc_client.get_cell(out_point).await })
+        tokio::spawn(async move { rpc_client.get_cell(out_point).await })
     }
 
     fn query_available_custodians(
@@ -88,7 +87,7 @@ impl MemPoolProvider for DefaultMemPoolProvider {
     ) -> JoinHandle<Result<CollectedCustodianCells>> {
         let rpc_client = self.rpc_client.clone();
         let db = self.store.begin_transaction();
-        spawn(async move {
+        tokio::spawn(async move {
             let r = query_finalized_custodians(
                 &rpc_client,
                 &db,
@@ -107,7 +106,7 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         last_finalized_block_number: u64,
     ) -> JoinHandle<Result<CollectedCustodianCells>> {
         let rpc_client = self.rpc_client.clone();
-        spawn(async move {
+        tokio::spawn(async move {
             let r = query_mergeable_custodians(
                 &rpc_client,
                 collected_custodians,

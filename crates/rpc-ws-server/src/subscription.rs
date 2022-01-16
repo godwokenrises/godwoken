@@ -1,4 +1,3 @@
-use gw_runtime::spawn;
 use jsonrpc_core::{Metadata, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{
@@ -162,7 +161,7 @@ impl SubscriptionRpcImpl {
         let subscription_rpc_impl = SubscriptionRpcImpl::default();
         let subscribers = Arc::clone(&subscription_rpc_impl.subscribers);
 
-        spawn(async move {
+        tokio::spawn(async move {
             loop {
                 let err_receipt = match err_receipt_rx.recv().await {
                     Ok(err_receipt) => err_receipt,

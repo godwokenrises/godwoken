@@ -17,7 +17,6 @@ gw-rpc-client = { path = "../rpc-client" }
 gw-poa = { path = "../poa" }
 gw-config = { path = "../config" }
 gw-utils = { path = "../utils" }
-gw-runtime = { path = "../runtime" }
 rdkafka = { version = "0.25", default-features = false }
 gw-rpc-ws-server = { path = "../rpc-ws-server" }
 tokio = "1.15"
