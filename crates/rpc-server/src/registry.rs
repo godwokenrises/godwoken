@@ -13,7 +13,7 @@ use gw_jsonrpc_types::{
         L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, LastL2BlockCommittedInfo,
         NodeInfo, RunResult, SUDTFeeConfig, TxReceipt, WithdrawalStatus, WithdrawalWithStatus,
     },
-    test_mode::{ShouldProduceBlock, TestModePayload},
+    test_mode::TestModePayload,
 };
 use gw_mem_pool::{
     custodian::AvailableCustodians,
@@ -102,7 +102,6 @@ fn invalid_param_err(msg: &'static str) -> RpcError {
 pub trait TestModeRPC {
     async fn get_global_state(&self) -> Result<GlobalState>;
     async fn produce_block(&self, payload: TestModePayload) -> Result<()>;
-    async fn should_produce_block(&self) -> Result<ShouldProduceBlock>;
 }
 
 fn to_h256(v: JsonH256) -> H256 {
@@ -299,7 +298,6 @@ impl Registry {
             server = server
                 .with_data(Data(Arc::clone(&tests_rpc_impl)))
                 .with_method("tests_produce_block", tests_produce_block)
-                .with_method("tests_should_produce_block", tests_should_produce_block)
                 .with_method("tests_get_global_state", tests_get_global_state);
         }
 
@@ -1370,12 +1368,6 @@ async fn tests_produce_block(
 
 async fn tests_get_global_state(tests_rpc_impl: Data<BoxedTestsRPCImpl>) -> Result<GlobalState> {
     tests_rpc_impl.get_global_state().await
-}
-
-async fn tests_should_produce_block(
-    tests_rpc_impl: Data<BoxedTestsRPCImpl>,
-) -> Result<ShouldProduceBlock> {
-    tests_rpc_impl.should_produce_block().await
 }
 
 async fn start_profiler() -> Result<()> {

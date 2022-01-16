@@ -6,7 +6,6 @@ use anyhow::{anyhow, bail, Result};
 use ckb_chain_spec::consensus::MAX_BLOCK_BYTES;
 use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig, OffChainValidatorConfig};
-use gw_poa::PoA;
 use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::state::mem_state_db::MemStateTree;
@@ -16,7 +15,7 @@ use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, RunResult};
 use gw_types::packed::{
     CellDep, CellInput, L2Block, L2Transaction, OutPoint, OutPointVec, Uint32, WithdrawalRequest,
 };
-use gw_types::prelude::{Builder, Entity};
+use gw_types::prelude::{Builder, Entity, Unpack};
 use gw_utils::wallet::Wallet;
 
 use std::{
@@ -27,7 +26,6 @@ use std::{
 };
 
 pub mod mock_block;
-pub mod mock_poa;
 pub mod mock_tx;
 pub mod verify_tx;
 pub use mock_block::RollBackSavePointError;
@@ -36,7 +34,6 @@ pub use verify_tx::dump_tx;
 
 use self::{
     mock_block::MockBlockParam,
-    mock_poa::MockPoA,
     mock_tx::{MockOutput, MockRollup},
     verify_tx::{verify_tx, RollupCellDeps, TxWithContext},
 };
@@ -60,12 +57,10 @@ pub struct OffChainMockContext {
     pub contracts_dep_manager: ContractsCellDepManager,
     pub rollup_cell_deps: RollupCellDeps,
     pub mock_rollup: Arc<MockRollup>,
-    pub mock_poa: Arc<MockPoA>,
 }
 
 pub struct OffChainMockContextBuildArgs<'a> {
     pub rpc_client: &'a RPCClient,
-    pub poa: &'a PoA,
     pub rollup_context: RollupContext,
     pub wallet: Wallet,
     pub config: BlockProducerConfig,
@@ -78,7 +73,6 @@ impl OffChainMockContext {
     pub async fn build(args: OffChainMockContextBuildArgs<'_>) -> Result<Self> {
         let OffChainMockContextBuildArgs {
             rpc_client,
-            poa,
             rollup_context,
             wallet,
             config,
@@ -91,13 +85,18 @@ impl OffChainMockContext {
             let query = rpc_client.query_rollup_cell().await?;
             into_input_cell_info(query.ok_or_else(|| anyhow!("can't found rollup cell"))?)
         };
-        let mock_poa = Arc::new(MockPoA::build(rpc_client, poa, &rollup_cell).await?);
 
+        let median_time = {
+            let tip_block_hash = rpc_client.get_tip().await?.block_hash().unpack();
+            let opt_time = rpc_client.get_block_median_time(tip_block_hash).await?;
+            opt_time.ok_or_else(|| anyhow!("[offchain] tip block median time not found"))?
+        };
         let rollup_type_script = rollup_cell.cell.output.type_();
         let mock_rollup = {
             let mock = MockRollup {
                 rollup_type_script,
                 rollup_context,
+                median_time,
                 wallet,
                 config,
                 ckb_genesis_info,
@@ -125,7 +124,6 @@ impl OffChainMockContext {
                 eoa_deps.into_values().map(CellDep::from)
             });
             deps.extend(mock_rollup.builtin_load_data.values().cloned());
-            deps.extend(mock_poa.cell_deps.clone());
 
             deps
         };
@@ -136,7 +134,6 @@ impl OffChainMockContext {
             contracts_dep_manager,
             rollup_cell_deps,
             mock_rollup,
-            mock_poa,
         };
 
         Ok(mock_context)
@@ -147,7 +144,6 @@ impl OffChainMockContext {
             contracts_dep_manager: self.contracts_dep_manager.clone(),
             rollup_cell_deps: self.rollup_cell_deps.replace_scripts(scripts)?,
             mock_rollup: Arc::clone(&self.mock_rollup),
-            mock_poa: Arc::clone(&self.mock_poa),
         };
 
         Ok(mock_context)
@@ -160,7 +156,6 @@ pub struct OffChainValidatorContext {
     pub debug_config: Arc<DebugConfig>,
     pub rollup_cell_deps: RollupCellDeps,
     pub mock_rollup: Arc<MockRollup>,
-    pub mock_poa: Arc<MockPoA>,
 }
 
 impl OffChainValidatorContext {
@@ -178,7 +173,6 @@ impl OffChainValidatorContext {
 
         let rollup_cell_deps = mock_context.rollup_cell_deps.clone();
         let mock_rollup = mock_context.mock_rollup.clone();
-        let mock_poa = mock_context.mock_poa.clone();
 
         let debug_config = Arc::new(debug_config);
         let validator_config = Arc::new(validator_config);
@@ -188,7 +182,6 @@ impl OffChainValidatorContext {
             debug_config,
             rollup_cell_deps,
             mock_rollup,
-            mock_poa,
         })
     }
 }
@@ -267,7 +260,6 @@ impl OffChainCancelChallengeValidator {
             let challenge = block_param.challenge_last_withdrawal(db, mem_tree)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
                 &validator_ctx.mock_rollup,
-                &validator_ctx.mock_poa,
                 challenge.global_state,
                 challenge.challenge_target,
                 challenge.verify_context,
@@ -346,7 +338,6 @@ impl OffChainCancelChallengeValidator {
             let challenge = block_param.challenge_last_tx_signature(db, mem_tree)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
                 &validator_ctx.mock_rollup,
-                &validator_ctx.mock_poa,
                 challenge.global_state,
                 challenge.challenge_target,
                 challenge.verify_context,
@@ -382,7 +373,6 @@ impl OffChainCancelChallengeValidator {
             let challenge = block_param.challenge_last_tx_execution(db, mem_tree, run_result)?;
             let mock_output = mock_tx::mock_cancel_challenge_tx(
                 &validator_ctx.mock_rollup,
-                &validator_ctx.mock_poa,
                 challenge.global_state,
                 challenge.challenge_target,
                 challenge.verify_context,

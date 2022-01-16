@@ -26,7 +26,6 @@ gw-rpc-server = { path = "../rpc-server" }
 gw-rpc-client = { path = "../rpc-client" }
 gw-rpc-ws-server = { path = "../rpc-ws-server" }
 gw-web3-indexer = { path = "../web3-indexer" }
-gw-poa = { path = "../poa" }
 gw-utils = { path = "../utils" }
 gw-version = { path = "../version" }
 gw-ckb-hardfork = { path = "../ckb-hardfork" }

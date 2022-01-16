@@ -2,7 +2,7 @@ use crate::deploy_genesis::{deploy_rollup_cell, DeployRollupCellArgs};
 use crate::deploy_scripts::deploy_scripts;
 use crate::generate_config::{generate_node_config, GenerateNodeConfigArgs};
 use crate::prepare_scripts::{self, prepare_scripts, ScriptsBuildMode};
-use crate::types::{PoAConfig, PoASetup, SetupConfig, UserRollupConfig};
+use crate::types::{SetupConfig, UserRollupConfig};
 use crate::utils;
 use crate::utils::transaction::run_in_output_mode;
 use anyhow::Result;
@@ -117,16 +117,6 @@ pub async fn setup(args: SetupArgs<'_>) {
         wallet_network,
     );
 
-    // setup POA config
-    let poa_config = {
-        let poa_config_path = output_dir.join("poa-config.json");
-        let poa_config = generate_poa_config(&nodes);
-        let output_content =
-            serde_json::to_string_pretty(&poa_config).expect("serde json to string pretty");
-        fs::write(poa_config_path, output_content.as_bytes()).expect("output config");
-        poa_config
-    };
-
     // setup rollup config
     let rollup_config = {
         let rollup_config_path = output_dir.join("rollup-config.json");
@@ -147,7 +137,7 @@ pub async fn setup(args: SetupArgs<'_>) {
             ckb_rpc_url,
             scripts_result: &deploy_scripts_result,
             user_rollup_config: &rollup_config,
-            poa_config: &poa_config,
+            rollup_cell_address: setup_config.rollup_cell_address.as_deref(),
             timestamp: None,
             skip_config_check: false,
         };
@@ -238,26 +228,6 @@ fn init_node_wallet(
     }
     log::info!("node's wallet capacity: {}", current_capacity);
     wallet_info
-}
-
-fn generate_poa_config(nodes: &[(String, NodeWalletInfo)]) -> PoAConfig {
-    let identities: Vec<_> = nodes
-        .iter()
-        .map(|(_, node)| {
-            let lock_hash = hex::decode(&node.lock_hash.trim_start_matches("0x")).unwrap();
-            ckb_jsonrpc_types::JsonBytes::from_vec(lock_hash)
-        })
-        .collect();
-    PoAConfig {
-        poa_setup: PoASetup {
-            identity_size: 32,
-            round_interval_uses_seconds: true,
-            aggregator_change_threshold: identities.len() as u8,
-            identities,
-            round_intervals: 24,
-            subblocks_per_round: 1,
-        },
-    }
 }
 
 fn generate_rollup_config(setup_config: &SetupConfig) -> Result<UserRollupConfig> {

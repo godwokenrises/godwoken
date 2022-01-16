@@ -15,7 +15,6 @@ gw-store = { path = "../store" }
 gw-generator = { path = "../generator" }
 gw-jsonrpc-types = { path = "../jsonrpc-types" }
 gw-rpc-client = { path = "../rpc-client" }
-gw-poa = { path = "../poa" }
 gw-traits = { path = "../traits" }
 gw-utils = { path = "../utils" }
 gw-ckb-hardfork = { path = "../ckb-hardfork" }

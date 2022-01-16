@@ -289,7 +289,6 @@ impl Chain {
 
         let mock_output = gw_challenge::offchain::mock_cancel_challenge_tx(
             &offchain_mock_context.mock_rollup,
-            &offchain_mock_context.mock_poa,
             global_state,
             target,
             verify_context,

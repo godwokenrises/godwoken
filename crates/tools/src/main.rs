@@ -39,8 +39,7 @@ use std::{
     str::FromStr,
 };
 use types::{
-    BuildScriptsResult, PoAConfig, RollupDeploymentResult, ScriptsDeploymentResult,
-    UserRollupConfig,
+    BuildScriptsResult, RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig,
 };
 use utils::{cli_args, transaction::read_config};
 
@@ -134,11 +133,10 @@ async fn run_cli() -> Result<()> {
                         .help("The user rollup config json file path"),
                 )
                 .arg(
-                    Arg::with_name("poa-config-path")
-                        .short("p")
+                    Arg::with_name("rollup-cell-address")
+                        .long("rollup-cell-address")
                         .takes_value(true)
-                        .required(true)
-                        .help("The poa config json file path"),
+                        .help("The rollup cell address, use address from privkey-path if not provide"),
                 )
                 .arg(
                     Arg::with_name("output-path")
@@ -840,8 +838,8 @@ async fn run_cli() -> Result<()> {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap();
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let user_rollup_path = Path::new(m.value_of("user-rollup-config-path").unwrap());
-            let poa_config_path = Path::new(m.value_of("poa-config-path").unwrap());
             let output_path = Path::new(m.value_of("output-path").unwrap());
+            let rollup_cell_address = m.value_of("rollup-cell-address");
             let timestamp = m
                 .value_of("genesis-timestamp")
                 .map(|s| s.parse().expect("timestamp in milliseconds"));
@@ -855,18 +853,14 @@ async fn run_cli() -> Result<()> {
                 let content = std::fs::read(user_rollup_path)?;
                 serde_json::from_slice(&content)?
             };
-            let poa_config: PoAConfig = {
-                let content = std::fs::read(poa_config_path)?;
-                serde_json::from_slice(&content)?
-            };
 
             let args = DeployRollupCellArgs {
                 skip_config_check,
                 privkey_path,
                 ckb_rpc_url,
+                rollup_cell_address,
                 scripts_result: &script_results,
                 user_rollup_config: &user_rollup_config,
-                poa_config: &poa_config,
                 timestamp,
             };
 
