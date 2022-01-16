@@ -23,7 +23,6 @@ use gw_common::smt::SMT;
 use gw_common::sparse_merkle_tree::default_store::DefaultStore;
 use gw_common::H256;
 use gw_config::ContractsCellDep;
-use gw_runtime::block_on;
 use gw_types::bytes::Bytes;
 use gw_types::core::{DepType, ScriptHashType};
 use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext};
@@ -39,8 +38,8 @@ use gw_utils::transaction_skeleton::TransactionSkeleton;
 const CKB: u64 = 100000000;
 const MAX_MEM_BLOCK_WITHDRAWALS: u8 = 50;
 
-#[test]
-fn test_build_unlock_to_owner_tx() {
+#[tokio::test]
+async fn test_build_unlock_to_owner_tx() {
     let _ = env_logger::builder().is_test(true).try_init();
 
     const CONTRACT_CELL_CAPACITY: u64 = 1000 * CKB;
@@ -154,7 +153,8 @@ fn test_build_unlock_to_owner_tx() {
             .type_(Some(rollup_type_script.clone()).pack())
             .build(),
     };
-    let mut chain = setup_chain_with_config(rollup_type_script.clone(), rollup_config.clone());
+    let mut chain =
+        setup_chain_with_config(rollup_type_script.clone(), rollup_config.clone()).await;
     let rollup_context = RollupContext {
         rollup_script_hash,
         rollup_config,
@@ -199,8 +199,10 @@ fn test_build_unlock_to_owner_tx() {
 
     let deposit_block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        construct_block(&chain, &mut mem_pool, deposits.clone().collect()).unwrap()
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(&chain, &mut mem_pool, deposits.clone().collect())
+            .await
+            .unwrap()
     };
     let apply_deposits = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -217,7 +219,7 @@ fn test_build_unlock_to_owner_tx() {
         updates: vec![apply_deposits],
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     let input_rollup_cell = CellInfo {
@@ -281,7 +283,7 @@ fn test_build_unlock_to_owner_tx() {
 
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
+        let mut mem_pool = mem_pool.lock().await;
         let provider = DummyMemPoolProvider {
             deposit_cells: vec![],
             fake_blocktime: Duration::from_millis(0),
@@ -290,18 +292,20 @@ fn test_build_unlock_to_owner_tx() {
         mem_pool.set_provider(Box::new(provider));
 
         for withdrawal in withdrawals_no_lock.chain(withdrawals_lock) {
-            block_on(mem_pool.push_withdrawal_request(withdrawal)).unwrap();
+            mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
         }
 
-        block_on(mem_pool.reset_mem_block()).unwrap();
+        mem_pool.reset_mem_block().await.unwrap();
         assert_eq!(mem_pool.mem_block().withdrawals().len(), accounts.len());
     }
 
     const BLOCK_TIMESTAMP: u64 = 10000u64;
     let withdrawal_block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        construct_block_with_timestamp(&chain, &mut mem_pool, vec![], BLOCK_TIMESTAMP).unwrap()
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block_with_timestamp(&chain, &mut mem_pool, vec![], BLOCK_TIMESTAMP)
+            .await
+            .unwrap()
     };
     assert_eq!(
         withdrawal_block_result.block.withdrawals().len(),
@@ -484,7 +488,9 @@ fn test_build_unlock_to_owner_tx() {
     ];
 
     let unlocked = Default::default();
-    let (tx, to_unlock) = block_on(unlocker.query_and_unlock_to_owner(&unlocked))
+    let (tx, to_unlock) = unlocker
+        .query_and_unlock_to_owner(&unlocked)
+        .await
         .expect("unlock")
         .expect("skip no owner lock");
     assert_eq!(to_unlock.len(), accounts.len() - no_owner_lock_count);
@@ -520,7 +526,9 @@ fn test_build_unlock_to_owner_tx() {
     );
 
     unlocker.withdrawals = unlockable_random_withdrawals.clone();
-    let (tx, _to_unlock) = block_on(unlocker.query_and_unlock_to_owner(&unlocked))
+    let (tx, _to_unlock) = unlocker
+        .query_and_unlock_to_owner(&unlocked)
+        .await
         .expect("unlock")
         .expect("some withdrawals tx");
 
@@ -542,12 +550,14 @@ fn test_build_unlock_to_owner_tx() {
     const BLOCK_TIMESTAMP2: u64 = BLOCK_TIMESTAMP * 2;
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
+        let mut mem_pool = mem_pool.lock().await;
         // Reset finalized custodian should stale all withdrawals
         let provider = DummyMemPoolProvider::default();
         mem_pool.set_provider(Box::new(provider));
-        block_on(mem_pool.reset_mem_block()).unwrap();
-        construct_block_with_timestamp(&chain, &mut mem_pool, vec![], BLOCK_TIMESTAMP2).unwrap()
+        mem_pool.reset_mem_block().await.unwrap();
+        construct_block_with_timestamp(&chain, &mut mem_pool, vec![], BLOCK_TIMESTAMP2)
+            .await
+            .unwrap()
     };
     assert_eq!(block_result.block.withdrawals().len(), 0);
 

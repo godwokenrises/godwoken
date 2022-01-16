@@ -16,7 +16,6 @@ use gw_common::{
     state::{to_short_address, State},
     H256,
 };
-use gw_runtime::block_on;
 use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore};
 use gw_types::{
     bytes::Bytes,
@@ -30,7 +29,7 @@ use gw_types::{
 
 const CKB: u64 = 100000000;
 
-fn produce_a_block(
+async fn produce_a_block(
     chain: &mut Chain,
     deposit: DepositRequest,
     rollup_cell: CellOutput,
@@ -38,8 +37,10 @@ fn produce_a_block(
 ) -> SyncParam {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        construct_block(chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(chain, &mut mem_pool, vec![deposit.clone()])
+            .await
+            .unwrap()
     };
     let l2block = block_result.block.clone();
     let transaction = build_sync_tx(rollup_cell, block_result);
@@ -60,7 +61,7 @@ fn produce_a_block(
         updates: vec![update],
         reverts: Default::default(),
     };
-    chain.sync(param.clone()).unwrap();
+    chain.sync(param.clone()).await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     assert_eq!(
@@ -79,11 +80,11 @@ fn produce_a_block(
     param
 }
 
-#[test]
-fn test_produce_blocks() {
+#[tokio::test]
+async fn test_produce_blocks() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
-    let mut chain = setup_chain(rollup_type_script.clone());
+    let mut chain = setup_chain(rollup_type_script.clone()).await;
 
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script).pack())
@@ -103,14 +104,14 @@ fn test_produce_blocks() {
         .capacity((290u64 * CKB).pack())
         .script(user_script_a.clone())
         .build();
-    produce_a_block(&mut chain, deposit, rollup_cell.clone(), 1);
+    produce_a_block(&mut chain, deposit, rollup_cell.clone(), 1).await;
 
     // block #2
     let deposit = DepositRequest::new_builder()
         .capacity((400u64 * CKB).pack())
         .script(user_script_a.clone())
         .build();
-    produce_a_block(&mut chain, deposit, rollup_cell.clone(), 2);
+    produce_a_block(&mut chain, deposit, rollup_cell.clone(), 2).await;
 
     // block #3
     let user_script_b = Script::new_builder()
@@ -126,7 +127,7 @@ fn test_produce_blocks() {
         .capacity((500u64 * CKB).pack())
         .script(user_script_b.clone())
         .build();
-    produce_a_block(&mut chain, deposit, rollup_cell, 3);
+    produce_a_block(&mut chain, deposit, rollup_cell, 3).await;
 
     // check state
     {
@@ -158,11 +159,11 @@ fn test_produce_blocks() {
     drop(chain);
 }
 
-#[test]
-fn test_layer1_fork() {
+#[tokio::test]
+async fn test_layer1_fork() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
-    let mut chain = setup_chain(rollup_type_script.clone());
+    let mut chain = setup_chain(rollup_type_script.clone()).await;
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script.clone()).pack())
         .build();
@@ -183,10 +184,12 @@ fn test_layer1_fork() {
             .capacity((290u64 * CKB).pack())
             .script(charlie_script)
             .build();
-        let chain = setup_chain(rollup_type_script);
+        let chain = setup_chain(rollup_type_script).await;
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        let block_result = construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap();
+        let mut mem_pool = mem_pool.lock().await;
+        let block_result = construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+            .await
+            .unwrap();
 
         L1Action {
             context: L1ActionContext::SubmitBlock {
@@ -216,8 +219,10 @@ fn test_layer1_fork() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+            .await
+            .unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -234,7 +239,7 @@ fn test_layer1_fork() {
         updates: vec![action1],
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
     // update block 2
     let bob_script = Script::new_builder()
@@ -252,8 +257,10 @@ fn test_layer1_fork() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+            .await
+            .unwrap()
     };
     let action2 = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -270,7 +277,7 @@ fn test_layer1_fork() {
         updates: vec![action2],
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
     let tip_block = chain.store().get_tip_block().unwrap();
     let tip_block_number: u64 = tip_block.raw().number().unpack();
@@ -321,7 +328,7 @@ fn test_layer1_fork() {
         updates: forks,
         reverts: vec![revert_action2, revert_action1],
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     let tip_block = chain.store().get_tip_block().unwrap();
@@ -341,11 +348,11 @@ fn test_layer1_fork() {
     }
 }
 
-#[test]
-fn test_layer1_revert() {
+#[tokio::test]
+async fn test_layer1_revert() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
-    let mut chain = setup_chain(rollup_type_script.clone());
+    let mut chain = setup_chain(rollup_type_script.clone()).await;
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script).pack())
         .build();
@@ -374,8 +381,10 @@ fn test_layer1_revert() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+            .await
+            .unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -392,7 +401,7 @@ fn test_layer1_revert() {
         updates: vec![action1],
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
     // update block 2
     let bob_script = Script::new_builder()
@@ -410,8 +419,10 @@ fn test_layer1_revert() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+            .await
+            .unwrap()
     };
     let action2 = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -428,7 +439,7 @@ fn test_layer1_revert() {
         updates: vec![action2.clone()],
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
     let tip_block = chain.store().get_tip_block().unwrap();
     let tip_block_number: u64 = tip_block.raw().number().unpack();
@@ -463,7 +474,7 @@ fn test_layer1_revert() {
         updates: Default::default(),
         reverts,
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     let tip_block = chain.store().get_tip_block().unwrap();
@@ -505,7 +516,7 @@ fn test_layer1_revert() {
         updates,
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     // check block2 agnain
@@ -550,12 +561,12 @@ fn test_layer1_revert() {
     }
 }
 
-#[test]
-fn test_sync_blocks() {
+#[tokio::test]
+async fn test_sync_blocks() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
-    let mut chain1 = setup_chain(rollup_type_script.clone());
-    let mut chain2 = setup_chain(rollup_type_script.clone());
+    let mut chain1 = setup_chain(rollup_type_script.clone()).await;
+    let mut chain2 = setup_chain(rollup_type_script.clone()).await;
 
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script).pack())
@@ -577,14 +588,14 @@ fn test_sync_blocks() {
         .script(user_script_a.clone())
         .sudt_script_hash(sudt_script_hash.pack())
         .build();
-    let sync_1 = produce_a_block(&mut chain1, deposit, rollup_cell.clone(), 1);
+    let sync_1 = produce_a_block(&mut chain1, deposit, rollup_cell.clone(), 1).await;
 
     // block #2
     let deposit = DepositRequest::new_builder()
         .capacity((400u64 * CKB).pack())
         .script(user_script_a.clone())
         .build();
-    let sync_2 = produce_a_block(&mut chain1, deposit, rollup_cell.clone(), 2);
+    let sync_2 = produce_a_block(&mut chain1, deposit, rollup_cell.clone(), 2).await;
 
     // block #3
     let user_script_b = Script::new_builder()
@@ -601,17 +612,17 @@ fn test_sync_blocks() {
         .script(user_script_b.clone())
         .sudt_script_hash(sudt_script_hash.pack())
         .build();
-    let sync_3 = produce_a_block(&mut chain1, deposit, rollup_cell, 3);
+    let sync_3 = produce_a_block(&mut chain1, deposit, rollup_cell, 3).await;
 
     drop(chain1);
 
-    chain2.sync(sync_1).expect("success");
+    chain2.sync(sync_1).await.expect("success");
     assert!(chain2.last_sync_event().is_success());
 
-    chain2.sync(sync_2).expect("success");
+    chain2.sync(sync_2).await.expect("success");
     assert!(chain2.last_sync_event().is_success());
 
-    chain2.sync(sync_3).expect("success");
+    chain2.sync(sync_3).await.expect("success");
     assert!(chain2.last_sync_event().is_success());
 
     // check state
@@ -650,11 +661,11 @@ fn test_sync_blocks() {
     drop(chain2);
 }
 
-#[test]
-fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
+#[tokio::test]
+async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
-    let mut chain = setup_chain(rollup_type_script.clone());
+    let mut chain = setup_chain(rollup_type_script.clone()).await;
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script.clone()).pack())
         .build();
@@ -675,8 +686,10 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+            .await
+            .unwrap()
     };
     let action1 = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -693,12 +706,12 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         updates: vec![action1],
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     // with for deposit finalize
     for _ in 0..DEFAULT_FINALITY_BLOCKS {
-        produce_empty_block(&mut chain, rollup_cell.clone());
+        produce_empty_block(&mut chain, rollup_cell.clone()).await;
     }
 
     // update bad block
@@ -712,9 +725,14 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
     };
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        block_on(mem_pool.push_withdrawal_request(withdrawal.into())).unwrap();
-        construct_block(&chain, &mut mem_pool, Vec::default()).unwrap()
+        let mut mem_pool = mem_pool.lock().await;
+        mem_pool
+            .push_withdrawal_request(withdrawal.into())
+            .await
+            .unwrap();
+        construct_block(&chain, &mut mem_pool, Vec::default())
+            .await
+            .unwrap()
     };
     let bad_block_result = {
         let ProduceBlockResult {
@@ -745,7 +763,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         updates: vec![update_bad_block],
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(matches!(
         chain.last_sync_event(),
         SyncEvent::BadBlock { .. }
@@ -800,7 +818,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         updates: vec![challenge_bad_block],
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(matches!(
         chain.last_sync_event(),
         SyncEvent::WaitChallenge { .. }
@@ -856,7 +874,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         updates: vec![revert_bad_block],
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     let local_reverted_block_smt_root = db.get_reverted_block_smt_root().unwrap();
@@ -864,7 +882,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
 
     //  Rewind to last tip
     //  IMPORTANT: simulate restart process
-    let mut chain = restart_chain(&chain, rollup_type_script, None);
+    let mut chain = restart_chain(&chain, rollup_type_script, None).await;
     let last_valid_tip_global_state = db
         .get_block_post_global_state(&last_valid_tip_block_hash)
         .unwrap();
@@ -880,7 +898,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         reverts: vec![rewind],
         updates: vec![],
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
 
     let local_reverted_block_smt_root = db.get_reverted_block_smt_root().unwrap();
     assert_eq!(
@@ -904,8 +922,10 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         .build();
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        construct_block(&chain, &mut mem_pool, vec![deposit.clone()]).unwrap()
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(&chain, &mut mem_pool, vec![deposit.clone()])
+            .await
+            .unwrap()
     };
     let new_block = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -922,7 +942,7 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
         updates: vec![new_block],
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     let tip_block = chain.store().get_tip_block().unwrap();
@@ -930,11 +950,13 @@ fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
     assert_eq!(tip_block_number, 8);
 }
 
-fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) {
+async fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        construct_block(chain, &mut mem_pool, Default::default()).unwrap()
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(chain, &mut mem_pool, Default::default())
+            .await
+            .unwrap()
     };
     let db = chain.store().begin_transaction();
     let tip_block_hash = db.get_tip_block_hash().unwrap();
@@ -960,7 +982,7 @@ fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) {
         updates: vec![update],
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
 }
 
