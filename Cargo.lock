@@ -1825,6 +1825,7 @@ dependencies = [
 name = "gw-ckb-hardfork"
 version = "0.1.0"
 dependencies = [
+ "arc-swap",
  "ckb-types",
  "lazy_static",
  "tokio",

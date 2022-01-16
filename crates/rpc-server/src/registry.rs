@@ -150,7 +150,7 @@ pub struct Registry {
 }
 
 impl Registry {
-    pub fn new<T>(args: RegistryArgs<T>) -> Self
+    pub async fn create<T>(args: RegistryArgs<T>) -> Self
     where
         T: TestModeRPC + Send + Sync + 'static,
     {
@@ -173,7 +173,7 @@ impl Registry {
 
         let mem_pool_state = match mem_pool.as_ref() {
             Some(pool) => {
-                let mem_pool = pool.blocking_lock();
+                let mem_pool = pool.lock().await;
                 mem_pool.mem_pool_state()
             }
             None => Arc::new(MemPoolState::new(Arc::new(MemStore::new(

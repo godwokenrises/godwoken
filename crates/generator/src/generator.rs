@@ -156,7 +156,7 @@ impl Generator {
 
         {
             let t = Instant::now();
-            let global_vm_version = *GLOBAL_VM_VERSION.blocking_lock();
+            let global_vm_version = GLOBAL_VM_VERSION.load(SeqCst);
             let vm_version = match global_vm_version {
                 0 => VMVersion::V0,
                 1 => VMVersion::V1,

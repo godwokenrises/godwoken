@@ -237,7 +237,7 @@ async fn test_restore_mem_block() {
             last_submitted_tx_hash: None,
         };
 
-        Registry::new(args)
+        Registry::create(args).await
     };
 
     // Check restore withdrawals, deposits and txs

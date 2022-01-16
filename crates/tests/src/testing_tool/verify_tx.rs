@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryFrom};
+use std::{collections::HashMap, convert::TryFrom, sync::atomic::Ordering::SeqCst};
 
 use anyhow::{anyhow, Result};
 use ckb_chain_spec::consensus::ConsensusBuilder;
@@ -32,7 +32,7 @@ pub fn verify_tx(tx_with_context: TxWithContext, max_cycles: u64) -> Result<u64>
     let resolved_tx = data_loader.resolve_tx(&tx_with_context.tx)?;
 
     let hardfork_switch = {
-        let switch = &*GLOBAL_HARDFORK_SWITCH.blocking_lock();
+        let switch = GLOBAL_HARDFORK_SWITCH.load();
         HardForkSwitch::new_without_any_enabled()
             .as_builder()
             .rfc_0028(switch.rfc_0028())
@@ -48,7 +48,7 @@ pub fn verify_tx(tx_with_context: TxWithContext, max_cycles: u64) -> Result<u64>
     let consensus = ConsensusBuilder::default()
         .hardfork_switch(hardfork_switch)
         .build();
-    let current_epoch_number = *GLOBAL_CURRENT_EPOCH_NUMBER.blocking_lock();
+    let current_epoch_number = GLOBAL_CURRENT_EPOCH_NUMBER.load(SeqCst);
     let tx_verify_env = TxVerifyEnv::new_submit(
         &HeaderView::new_advanced_builder()
             .epoch(current_epoch_number.pack())
