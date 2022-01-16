@@ -12,7 +12,6 @@ use gw_generator::{
 };
 
 use gw_mem_pool::pool::{MemPool, MemPoolCreateArgs, OutputParam};
-use gw_runtime::block_on;
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     bytes::Bytes,
@@ -159,7 +158,7 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
     BackendManage::from_config(configs).expect("default backend")
 }
 
-pub fn setup_chain(rollup_type_script: Script) -> Chain {
+pub async fn setup_chain(rollup_type_script: Script) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
     let rollup_config = RollupConfig::new_builder()
         .allowed_eoa_type_hashes(vec![*ALWAYS_SUCCESS_CODE_HASH].pack())
@@ -174,12 +173,16 @@ pub fn setup_chain(rollup_type_script: Script) -> Chain {
         None,
         None,
         None,
-    );
-    chain.complete_initial_syncing().unwrap();
+    )
+    .await;
+    chain.complete_initial_syncing().await.unwrap();
     chain
 }
 
-pub fn setup_chain_with_config(rollup_type_script: Script, rollup_config: RollupConfig) -> Chain {
+pub async fn setup_chain_with_config(
+    rollup_type_script: Script,
+    rollup_config: RollupConfig,
+) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
     account_lock_manage
         .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
@@ -190,13 +193,14 @@ pub fn setup_chain_with_config(rollup_type_script: Script, rollup_config: Rollup
         None,
         None,
         None,
-    );
-    chain.complete_initial_syncing().unwrap();
+    )
+    .await;
+    chain.complete_initial_syncing().await.unwrap();
     chain
 }
 
 // Simulate process restart
-pub fn restart_chain(
+pub async fn restart_chain(
     chain: &Chain,
     rollup_type_script: Script,
     opt_provider: Option<DummyMemPoolProvider>,
@@ -207,7 +211,7 @@ pub fn restart_chain(
         .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
     let restore_path = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mem_pool = block_on(mem_pool.lock());
+        let mem_pool = mem_pool.lock().await;
         mem_pool.restore_manager().path().to_path_buf()
     };
     let mem_pool_config = MemPoolConfig {
@@ -221,8 +225,9 @@ pub fn restart_chain(
         Some(chain.store().to_owned()),
         Some(mem_pool_config),
         opt_provider,
-    );
-    chain.complete_initial_syncing().unwrap();
+    )
+    .await;
+    chain.complete_initial_syncing().await.unwrap();
     chain
 }
 
@@ -244,7 +249,7 @@ pub fn chain_generator(chain: &Chain, rollup_type_script: Script) -> Arc<Generat
     ))
 }
 
-pub fn setup_chain_with_account_lock_manage(
+pub async fn setup_chain_with_account_lock_manage(
     rollup_type_script: Script,
     rollup_config: RollupConfig,
     account_lock_manage: AccountLockManage,
@@ -295,7 +300,7 @@ pub fn setup_chain_with_account_lock_manage(
         config: mem_pool_config,
         node_mode: gw_config::NodeMode::FullNode,
     };
-    let mem_pool = MemPool::create(args).unwrap();
+    let mem_pool = MemPool::create(args).await.unwrap();
     Chain::create(
         &rollup_config,
         &rollup_type_script,
@@ -335,7 +340,7 @@ pub fn build_sync_tx(
         .build()
 }
 
-pub fn apply_block_result(
+pub async fn apply_block_result(
     chain: &mut Chain,
     rollup_cell: CellOutput,
     block_result: ProduceBlockResult,
@@ -359,19 +364,19 @@ pub fn apply_block_result(
         updates: vec![update],
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
 }
 
-pub fn construct_block(
+pub async fn construct_block(
     chain: &Chain,
     mem_pool: &mut MemPool,
     deposit_requests: Vec<DepositRequest>,
 ) -> anyhow::Result<ProduceBlockResult> {
-    construct_block_with_timestamp(chain, mem_pool, deposit_requests, 0)
+    construct_block_with_timestamp(chain, mem_pool, deposit_requests, 0).await
 }
 
-pub fn construct_block_with_timestamp(
+pub async fn construct_block_with_timestamp(
     chain: &Chain,
     mem_pool: &mut MemPool,
     deposit_requests: Vec<DepositRequest>,
@@ -442,7 +447,7 @@ pub fn construct_block_with_timestamp(
     };
     mem_pool.set_provider(Box::new(provider));
     // refresh mem block
-    block_on(mem_pool.reset_mem_block())?;
+    mem_pool.reset_mem_block().await?;
     let provider = DummyMemPoolProvider {
         deposit_cells: Vec::default(),
         fake_blocktime: Duration::from_millis(0),
@@ -450,8 +455,10 @@ pub fn construct_block_with_timestamp(
     };
     mem_pool.set_provider(Box::new(provider));
 
-    let (_custodians, block_param) =
-        block_on(mem_pool.output_mem_block(&OutputParam::default())).unwrap();
+    let (_custodians, block_param) = mem_pool
+        .output_mem_block(&OutputParam::default())
+        .await
+        .unwrap();
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash,
         rollup_config_hash,

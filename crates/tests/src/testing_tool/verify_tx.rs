@@ -15,7 +15,6 @@ use ckb_types::{
     prelude::{Entity, Pack},
 };
 use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH};
-use gw_runtime::block_on;
 use gw_types::offchain::InputCellInfo;
 
 pub struct TxWithContext {
@@ -32,8 +31,8 @@ pub fn verify_tx(tx_with_context: TxWithContext, max_cycles: u64) -> Result<u64>
 
     let resolved_tx = data_loader.resolve_tx(&tx_with_context.tx)?;
 
-    let hardfork_switch = block_on(async {
-        let switch = &*GLOBAL_HARDFORK_SWITCH.lock().await;
+    let hardfork_switch = {
+        let switch = &*GLOBAL_HARDFORK_SWITCH.blocking_lock();
         HardForkSwitch::new_without_any_enabled()
             .as_builder()
             .rfc_0028(switch.rfc_0028())
@@ -44,12 +43,12 @@ pub fn verify_tx(tx_with_context: TxWithContext, max_cycles: u64) -> Result<u64>
             .rfc_0036(switch.rfc_0036())
             .rfc_0038(switch.rfc_0038())
             .build()
-            .map_err(|err| anyhow!(err))
-    })?;
+            .map_err(|err| anyhow!(err))?
+    };
     let consensus = ConsensusBuilder::default()
         .hardfork_switch(hardfork_switch)
         .build();
-    let current_epoch_number = block_on(async { *GLOBAL_CURRENT_EPOCH_NUMBER.lock().await });
+    let current_epoch_number = *GLOBAL_CURRENT_EPOCH_NUMBER.blocking_lock();
     let tx_verify_env = TxVerifyEnv::new_submit(
         &HeaderView::new_advanced_builder()
             .epoch(current_epoch_number.pack())

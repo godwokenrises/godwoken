@@ -20,7 +20,6 @@ use gw_rpc_client::ckb_client::CKBClient;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::registry::{Registry, RegistryArgs};
-use gw_runtime::block_on;
 use gw_store::state::state_db::StateContext;
 use gw_types::core::ScriptHashType;
 use gw_types::offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext};
@@ -33,8 +32,8 @@ use smol::lock::RwLock;
 
 const CKB: u64 = 100000000;
 
-#[test]
-fn test_restore_mem_block() {
+#[tokio::test]
+async fn test_restore_mem_block() {
     let _ = env_logger::builder().is_test(true).try_init();
 
     let rollup_type_script = Script::default();
@@ -42,7 +41,7 @@ fn test_restore_mem_block() {
     let rollup_cell = CellOutput::new_builder()
         .type_(Some(rollup_type_script.clone()).pack())
         .build();
-    let mut chain = setup_chain(rollup_type_script.clone());
+    let mut chain = setup_chain(rollup_type_script.clone()).await;
 
     // Deposit 20 accounts
     const DEPOSIT_CAPACITY: u64 = 1000000 * CKB;
@@ -60,8 +59,10 @@ fn test_restore_mem_block() {
 
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        construct_block(&chain, &mut mem_pool, deposits.clone().collect()).unwrap()
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(&chain, &mut mem_pool, deposits.clone().collect())
+            .await
+            .unwrap()
     };
     let apply_deposits = L1Action {
         context: L1ActionContext::SubmitBlock {
@@ -78,7 +79,7 @@ fn test_restore_mem_block() {
         updates: vec![apply_deposits],
         reverts: Default::default(),
     };
-    chain.sync(param).unwrap();
+    chain.sync(param).await.unwrap();
     assert!(chain.last_sync_event().is_success());
 
     // Generate random withdrawals, deposits, txs
@@ -149,7 +150,7 @@ fn test_restore_mem_block() {
     };
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
+        let mut mem_pool = mem_pool.lock().await;
         let provider = DummyMemPoolProvider {
             deposit_cells: random_deposits.clone(),
             fake_blocktime: Duration::from_millis(0),
@@ -157,11 +158,14 @@ fn test_restore_mem_block() {
         };
         mem_pool.set_provider(Box::new(provider));
         for withdrawal in random_withdrawals.clone() {
-            block_on(mem_pool.push_withdrawal_request(withdrawal.into())).unwrap();
+            mem_pool
+                .push_withdrawal_request(withdrawal.into())
+                .await
+                .unwrap();
         }
-        block_on(mem_pool.reset_mem_block()).unwrap();
+        mem_pool.reset_mem_block().await.unwrap();
         for tx in random_txs.clone() {
-            block_on(mem_pool.push_transaction(tx)).unwrap();
+            mem_pool.push_transaction(tx).await.unwrap();
         }
 
         let mem_block = mem_pool.mem_block();
@@ -179,10 +183,10 @@ fn test_restore_mem_block() {
         fake_blocktime: Duration::from_millis(0),
         collected_custodians: finalized_custodians,
     };
-    let chain = restart_chain(&chain, rollup_type_script.clone(), Some(provider));
+    let chain = restart_chain(&chain, rollup_type_script.clone(), Some(provider)).await;
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
+        let mut mem_pool = mem_pool.lock().await;
 
         let mem_block = mem_pool.mem_block();
         assert_eq!(mem_block.withdrawals().len(), random_withdrawals.len());
@@ -242,19 +246,19 @@ fn test_restore_mem_block() {
         while count > 0 {
             {
                 let mem_pool = chain.mem_pool().as_ref().unwrap();
-                let mut mem_pool = block_on(mem_pool.lock());
+                let mut mem_pool = mem_pool.lock().await;
 
                 if mem_pool.pending_restored_tx_hashes().is_empty() {
                     // Restored txs are processed
                     break;
                 }
             }
-            block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
+            tokio::time::sleep(Duration::from_secs(1)).await;
             count -= 1;
         }
 
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
+        let mut mem_pool = mem_pool.lock().await;
         if count == 0 && !mem_pool.pending_restored_tx_hashes().is_empty() {
             panic!("mem block restored txs aren't reinjected");
         }

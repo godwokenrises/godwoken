@@ -16,7 +16,6 @@ use gw_generator::{
     error::{DepositError, WithdrawalError},
     Error,
 };
-use gw_runtime::block_on;
 use gw_store::state::state_db::StateContext;
 use gw_types::{
     core::ScriptHashType,
@@ -26,20 +25,20 @@ use gw_types::{
 
 use std::{collections::HashSet, iter::FromIterator};
 
-fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) -> Result<()> {
+async fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) -> Result<()> {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        construct_block(chain, &mut mem_pool, Default::default())?
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(chain, &mut mem_pool, Default::default()).await?
     };
     let asset_scripts = HashSet::new();
 
     // deposit
-    apply_block_result(chain, rollup_cell, block_result, vec![], asset_scripts);
+    apply_block_result(chain, rollup_cell, block_result, vec![], asset_scripts).await;
     Ok(())
 }
 
-fn deposite_to_chain(
+async fn deposite_to_chain(
     chain: &mut Chain,
     rollup_cell: CellOutput,
     user_script: Script,
@@ -56,8 +55,8 @@ fn deposite_to_chain(
         .build()];
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        construct_block(chain, &mut mem_pool, deposit_requests.clone())?
+        let mut mem_pool = mem_pool.lock().await;
+        construct_block(chain, &mut mem_pool, deposit_requests.clone()).await?
     };
     let asset_scripts = if sudt_script_hash == H256::zero() {
         HashSet::new()
@@ -72,11 +71,12 @@ fn deposite_to_chain(
         block_result,
         deposit_requests,
         asset_scripts,
-    );
+    )
+    .await;
     Ok(())
 }
 
-fn withdrawal_from_chain(
+async fn withdrawal_from_chain(
     chain: &mut Chain,
     rollup_cell: CellOutput,
     user_script_hash: H256,
@@ -95,22 +95,24 @@ fn withdrawal_from_chain(
     };
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mut mem_pool = block_on(mem_pool.lock());
-        block_on(mem_pool.push_withdrawal_request(withdrawal.into()))?;
-        construct_block(chain, &mut mem_pool, Vec::default()).unwrap()
+        let mut mem_pool = mem_pool.lock().await;
+        mem_pool.push_withdrawal_request(withdrawal.into()).await?;
+        construct_block(chain, &mut mem_pool, Vec::default())
+            .await
+            .unwrap()
     };
 
     // deposit
-    apply_block_result(chain, rollup_cell, block_result, Vec::new(), HashSet::new());
+    apply_block_result(chain, rollup_cell, block_result, Vec::new(), HashSet::new()).await;
     Ok(())
 }
 
-#[test]
-fn test_deposit_and_withdrawal() {
+#[tokio::test]
+async fn test_deposit_and_withdrawal() {
     env_logger::init();
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
-    let mut chain = setup_chain(rollup_type_script.clone());
+    let mut chain = setup_chain(rollup_type_script.clone()).await;
     let capacity = 600_00000000;
     let user_script = Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
@@ -135,9 +137,10 @@ fn test_deposit_and_withdrawal() {
         Script::default(),
         0,
     )
+    .await
     .unwrap();
     let (user_id, user_script_hash, ckb_balance) = {
-        let mem_pool = block_on(chain.mem_pool().as_ref().unwrap().lock());
+        let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
         let snap = mem_pool.mem_pool_state().load();
         let tree = snap.state().unwrap();
         // check user account
@@ -161,11 +164,13 @@ fn test_deposit_and_withdrawal() {
 
     // wait for deposit finalize
     for _ in 0..DEFAULT_FINALITY_BLOCKS {
-        produce_empty_block(&mut chain, rollup_cell.clone()).unwrap();
+        produce_empty_block(&mut chain, rollup_cell.clone())
+            .await
+            .unwrap();
     }
     // check tx pool state
     {
-        let mem_pool = block_on(chain.mem_pool().as_ref().unwrap().lock());
+        let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
         let snap = mem_pool.mem_pool_state().load();
         let state = snap.state().unwrap();
         assert_eq!(
@@ -192,6 +197,7 @@ fn test_deposit_and_withdrawal() {
         H256::zero(),
         0,
     )
+    .await
     .unwrap();
     // check status
     let db = chain.store().begin_transaction();
@@ -205,7 +211,7 @@ fn test_deposit_and_withdrawal() {
     // check tx pool state
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mem_pool = block_on(mem_pool.lock());
+        let mem_pool = mem_pool.lock().await;
         let snap = mem_pool.mem_pool_state().load();
         let state = snap.state().unwrap();
         assert_eq!(
@@ -225,11 +231,11 @@ fn test_deposit_and_withdrawal() {
     }
 }
 
-#[test]
-fn test_overdraft() {
+#[tokio::test]
+async fn test_overdraft() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
-    let mut chain = setup_chain(rollup_type_script.clone());
+    let mut chain = setup_chain(rollup_type_script.clone()).await;
     let capacity = 500_00000000;
     let user_script = Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
@@ -254,6 +260,7 @@ fn test_overdraft() {
         Script::default(),
         0,
     )
+    .await
     .unwrap();
 
     // withdrawal
@@ -266,6 +273,7 @@ fn test_overdraft() {
         H256::zero(),
         0,
     )
+    .await
     .unwrap_err();
     assert_eq!(
         err.downcast::<gw_generator::Error>().unwrap(),
@@ -274,7 +282,7 @@ fn test_overdraft() {
     // check tx pool state
     {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
-        let mem_pool = block_on(mem_pool.lock());
+        let mem_pool = mem_pool.lock().await;
         let snap = mem_pool.mem_pool_state().load();
         let state = snap.state().unwrap();
         assert_eq!(
@@ -289,11 +297,11 @@ fn test_overdraft() {
     }
 }
 
-#[test]
-fn test_deposit_faked_ckb() {
+#[tokio::test]
+async fn test_deposit_faked_ckb() {
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
-    let mut chain = setup_chain(rollup_type_script.clone());
+    let mut chain = setup_chain(rollup_type_script.clone()).await;
     let capacity = 500_00000000;
     let user_script = Script::new_builder()
         .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
@@ -317,6 +325,7 @@ fn test_deposit_faked_ckb() {
         Script::default(),
         42_00000000,
     )
+    .await
     .unwrap_err();
     let err: Error = err.downcast().unwrap();
     assert_eq!(err, Error::Deposit(DepositError::DepositFakedCKB));

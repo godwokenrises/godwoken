@@ -12,7 +12,6 @@ use gw_block_producer::{
 use gw_common::H256;
 use gw_generator::traits::StateExt;
 use gw_mem_pool::pool::OutputParam;
-use gw_runtime::block_on;
 use gw_store::{mem_pool_state::MemStore, traits::chain_store::ChainStore};
 use gw_types::{
     core::ScriptHashType,
@@ -23,14 +22,14 @@ use gw_types::{
 
 use std::time::Duration;
 
-#[test]
-fn test_repackage_mem_block() {
+#[tokio::test]
+async fn test_repackage_mem_block() {
     const DEPOSIT_CAPACITY: u64 = 1000_00000000;
     const DEPOSIT_AMOUNT: u128 = 0;
 
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash().into();
-    let chain = setup_chain(rollup_type_script);
+    let chain = setup_chain(rollup_type_script).await;
 
     let users = (0..10).map(|_| random_always_success_script(&rollup_script_hash));
     let deposits = users.map(|user_script| {
@@ -48,14 +47,14 @@ fn test_repackage_mem_block() {
         .collect();
 
     let mem_pool = chain.mem_pool().as_ref().unwrap();
-    let mut mem_pool = block_on(mem_pool.lock());
+    let mut mem_pool = mem_pool.lock().await;
     let provider = DummyMemPoolProvider {
         deposit_cells,
         fake_blocktime: Duration::from_millis(0),
         collected_custodians: CollectedCustodianCells::default(),
     };
     mem_pool.set_provider(Box::new(provider));
-    block_on(mem_pool.reset_mem_block()).unwrap();
+    mem_pool.reset_mem_block().await.unwrap();
 
     {
         let snap = chain.store().get_snapshot();
@@ -69,8 +68,10 @@ fn test_repackage_mem_block() {
         );
     }
 
-    let (_, block_param) =
-        block_on(mem_pool.output_mem_block(&OutputParam { retry_count: 1 })).unwrap();
+    let (_, block_param) = mem_pool
+        .output_mem_block(&OutputParam { retry_count: 1 })
+        .await
+        .unwrap();
 
     let deposit_cells = block_param.deposits.clone();
 
