@@ -1,4 +1,4 @@
-use criterion::*;
+use criterion::{async_executor::AsyncExecutor, *};
 use gw_common::{
     state::{to_short_address, State},
     H256,
@@ -66,7 +66,7 @@ fn new_block_info(block_producer_id: u32, number: u64, timestamp: u64) -> BlockI
         .build()
 }
 
-fn run_contract_get_result<S: State + CodeStore>(
+async fn run_contract_get_result<S: State + CodeStore>(
     rollup_config: &RollupConfig,
     tree: &mut S,
     from_id: u32,
@@ -92,13 +92,14 @@ fn run_contract_get_result<S: State + CodeStore>(
         Default::default(),
     );
     let chain_view = DummyChainStore;
-    let run_result =
-        generator.execute_transaction(&chain_view, tree, block_info, &raw_tx, L2TX_MAX_CYCLES)?;
+    let run_result = generator
+        .execute_transaction(&chain_view, tree, block_info, &raw_tx, L2TX_MAX_CYCLES)
+        .await?;
     tree.apply_run_result(&run_result).expect("update state");
     Ok(run_result)
 }
 
-fn run_contract<S: State + CodeStore>(
+async fn run_contract<S: State + CodeStore>(
     rollup_config: &RollupConfig,
     tree: &mut S,
     from_id: u32,
@@ -107,15 +108,16 @@ fn run_contract<S: State + CodeStore>(
     block_info: &BlockInfo,
 ) -> Result<Vec<u8>, TransactionError> {
     let run_result =
-        run_contract_get_result(rollup_config, tree, from_id, to_id, args, block_info)?;
+        run_contract_get_result(rollup_config, tree, from_id, to_id, args, block_info).await?;
     Ok(run_result.return_data)
 }
 
 pub fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("throughput");
     group.throughput(Throughput::Elements(1u64));
+    let rt = tokio::runtime::Runtime::new().unwrap();
     group.bench_function("sudt", move |b| {
-        b.iter_batched(
+        b.to_async(rt).iter_batched(
             || {
                 let mut tree = DummyState::default();
 
@@ -180,7 +182,7 @@ pub fn bench(c: &mut Criterion) {
                     block_info,
                 )
             },
-            |(mut tree, rollup_config, sudt_id, a_id, b_script_hash, block_info)| {
+            |(mut tree, rollup_config, sudt_id, a_id, b_script_hash, block_info)| async {
                 // transfer from A to B
                 let value = 4000u128;
                 let fee = 42u128;
@@ -202,7 +204,8 @@ pub fn bench(c: &mut Criterion) {
                     args.as_bytes(),
                     &block_info,
                 )
-                .expect("execute");
+                .await
+                .expect("execute")
             },
             BatchSize::SmallInput,
         );

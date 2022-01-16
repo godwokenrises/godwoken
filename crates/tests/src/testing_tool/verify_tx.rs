@@ -15,6 +15,7 @@ use ckb_types::{
     prelude::{Entity, Pack},
 };
 use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH};
+
 use gw_types::offchain::InputCellInfo;
 
 pub struct TxWithContext {

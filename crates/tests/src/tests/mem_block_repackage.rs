@@ -100,6 +100,7 @@ async fn test_repackage_mem_block() {
         &block_result.block,
         deposit_requests.as_slice(),
     )
+    .await
     .unwrap()
 }
 
