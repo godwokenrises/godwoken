@@ -4,7 +4,6 @@ use ckb_sdk::HttpRpcClient;
 use ckb_types::prelude::{Entity, Unpack as CKBUnpack};
 use gw_config::WalletConfig;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
-use gw_runtime::block_on;
 use gw_types::{
     offchain::{CellInfo, InputCellInfo},
     packed::{CellInput, CellOutput, OutPoint},
@@ -18,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 use crate::utils::transaction::wait_for_tx;
 
-pub fn update_cell<P: AsRef<Path>>(
+pub async fn update_cell<P: AsRef<Path>>(
     ckb_rpc_url: &str,
     indexer_rpc_url: &str,
     tx_hash: [u8; 32],
@@ -105,11 +104,7 @@ pub fn update_cell<P: AsRef<Path>>(
     // use same lock of existed cell to pay fee
     let payment_lock = existed_cell.lock();
     // tx fee cell
-    block_on(fill_tx_fee(
-        &mut tx_skeleton,
-        &indexer_client,
-        payment_lock.clone(),
-    ))?;
+    fill_tx_fee(&mut tx_skeleton, &indexer_client, payment_lock.clone()).await?;
     // sign
     let wallet = Wallet::from_config(&WalletConfig {
         privkey_path: pk_path,

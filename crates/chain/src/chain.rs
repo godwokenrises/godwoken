@@ -11,7 +11,6 @@ use gw_generator::{
 };
 use gw_jsonrpc_types::debugger::ReprMockTransaction;
 use gw_mem_pool::pool::MemPool;
-use gw_runtime::block_on;
 use gw_store::{
     chain_view::ChainView, state::state_db::StateContext, traits::chain_store::ChainStore,
     transaction::StoreTransaction, Store,
@@ -249,22 +248,19 @@ impl Chain {
             .map(|t| t.block_hash().unpack())
     }
 
-    pub fn complete_initial_syncing(&mut self) -> Result<()> {
+    pub async fn complete_initial_syncing(&mut self) -> Result<()> {
         if let Some(mem_pool) = &self.mem_pool {
             if !self.complete_initial_syncing {
                 // Do first notify
                 let tip_block_hash: H256 = self.local_state.tip.hash().into();
 
-                block_on(async {
-                    log::debug!("[complete_initial_syncing] acquire mem-pool",);
-                    let t = Instant::now();
-                    mem_pool.lock().await.notify_new_tip(tip_block_hash).await?;
-                    log::debug!(
-                        "[complete_initial_syncing] unlock mem-pool {}ms",
-                        t.elapsed().as_millis()
-                    );
-                    Ok::<(), anyhow::Error>(())
-                })?;
+                log::debug!("[complete_initial_syncing] acquire mem-pool",);
+                let t = Instant::now();
+                mem_pool.lock().await.notify_new_tip(tip_block_hash).await?;
+                log::debug!(
+                    "[complete_initial_syncing] unlock mem-pool {}ms",
+                    t.elapsed().as_millis()
+                );
             }
         }
         self.complete_initial_syncing = true;
@@ -812,7 +808,7 @@ impl Chain {
     }
 
     /// Sync chain from layer1
-    pub fn sync(&mut self, param: SyncParam) -> Result<()> {
+    pub async fn sync(&mut self, param: SyncParam) -> Result<()> {
         let db = self.store.begin_transaction();
         let is_revert_happend = !param.reverts.is_empty();
         // revert layer1 actions
@@ -841,13 +837,10 @@ impl Chain {
                 && (is_revert_happend || self.complete_initial_syncing)
             {
                 // update mem pool state
-                block_on(async {
-                    log::debug!("[sync] acquire mem-pool",);
-                    let t = Instant::now();
-                    mem_pool.lock().await.notify_new_tip(tip_block_hash).await?;
-                    log::debug!("[sync] unlock mem-pool {}ms", t.elapsed().as_millis());
-                    Ok::<(), anyhow::Error>(())
-                })?;
+                log::debug!("[sync] acquire mem-pool",);
+                let t = Instant::now();
+                mem_pool.lock().await.notify_new_tip(tip_block_hash).await?;
+                log::debug!("[sync] unlock mem-pool {}ms", t.elapsed().as_millis());
             }
         }
 

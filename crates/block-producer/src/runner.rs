@@ -42,7 +42,6 @@ use gw_rpc_server::{
     server::start_jsonrpc_server,
 };
 use gw_rpc_ws_server::{notify_controller::NotifyService, server::start_jsonrpc_ws_server};
-use gw_runtime::{block_on, spawn};
 use gw_store::Store;
 use gw_types::{
     bytes::Bytes,
@@ -63,7 +62,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::sync::Mutex;
+use tokio::{spawn, sync::Mutex};
 
 const MIN_CKB_VERSION: &str = "0.40.0";
 const SMOL_THREADS_ENV_VAR: &str = "SMOL_THREADS";
@@ -279,7 +278,7 @@ pub struct BaseInitComponents {
 
 impl BaseInitComponents {
     #[allow(deprecated)]
-    pub fn init(config: &Config, skip_config_check: bool) -> Result<Self> {
+    pub async fn init(config: &Config, skip_config_check: bool) -> Result<Self> {
         let rollup_config: RollupConfig = config.genesis.rollup_config.clone().into();
         let rollup_context = RollupContext {
             rollup_config: rollup_config.clone(),
@@ -311,28 +310,25 @@ impl BaseInitComponents {
 
             if check_script(&script_config, &rollup_config, rollup_type_script).is_err() {
                 let now = Instant::now();
-                script_config = block_on(query_type_script_from_old_config(
-                    &rpc_client,
-                    block_producer_config,
-                ))?;
+                script_config =
+                    query_type_script_from_old_config(&rpc_client, block_producer_config).await?;
                 log::trace!("[contracts dep] old config {}ms", now.elapsed().as_millis());
 
                 check_script(&script_config, &rollup_config, rollup_type_script)?;
             }
 
-            contracts_dep_manager = Some(block_on(ContractsCellDepManager::build(
-                rpc_client.clone(),
-                script_config,
-            ))?);
+            contracts_dep_manager =
+                Some(ContractsCellDepManager::build(rpc_client.clone(), script_config).await?);
         }
 
         if !skip_config_check {
-            check_ckb_version(&rpc_client)?;
+            check_ckb_version(&rpc_client).await?;
             // TODO: check ckb indexer version
             if NodeMode::ReadOnly != config.node_mode {
                 let block_producer_config =
                     opt_block_producer_config.ok_or_else(|| anyhow!("not set block producer"))?;
-                check_rollup_config_cell(block_producer_config, &rollup_config, &rpc_client)?;
+                check_rollup_config_cell(block_producer_config, &rollup_config, &rpc_client)
+                    .await?;
                 check_locks(block_producer_config, &rollup_config)?;
             }
         }
@@ -350,7 +346,9 @@ impl BaseInitComponents {
 
         let secp_data: Bytes = {
             let out_point = config.genesis.secp_data_dep.out_point.clone();
-            block_on(rpc_client.get_transaction(out_point.tx_hash.0.into()))?
+            rpc_client
+                .get_transaction(out_point.tx_hash.0.into())
+                .await?
                 .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?
                 .raw()
                 .outputs_data()
@@ -396,7 +394,9 @@ impl BaseInitComponents {
         };
 
         let ckb_genesis_info = {
-            let ckb_genesis = block_on(async { rpc_client.get_block_by_number(0).await })?
+            let ckb_genesis = rpc_client
+                .get_block_by_number(0)
+                .await?
                 .ok_or_else(|| anyhow!("can't found CKB genesis block"))?;
             CKBGenesisInfo::from_block(&ckb_genesis)?
         };
@@ -477,7 +477,7 @@ impl BaseInitComponents {
     }
 }
 
-pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
+pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
     // Set up sentry.
     let _guard = match &config.sentry_dsn.as_ref() {
         Some(sentry_dsn) => sentry::init((
@@ -504,41 +504,36 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         SMOL_THREADS_ENV_VAR
     );
 
-    let base = BaseInitComponents::init(&config, skip_config_check)?;
+    let base = BaseInitComponents::init(&config, skip_config_check).await?;
     let (mem_pool, wallet, poa, offchain_mock_context, pg_pool, err_receipt_notify_ctrl) =
         match config.block_producer.as_ref() {
             Some(block_producer_config) => {
                 let wallet = Wallet::from_config(&block_producer_config.wallet_config)
                     .with_context(|| "init wallet")?;
                 let poa = base.init_poa(&wallet, block_producer_config);
-                let offchain_mock_context = block_on(async {
+                let offchain_mock_context = {
                     let poa = poa.lock().await;
                     base.init_offchain_mock_context(&poa, block_producer_config)
-                        .await
-                })?;
+                        .await?
+                };
                 let mem_pool_provider = DefaultMemPoolProvider::new(
                     base.rpc_client.clone(),
                     Arc::clone(&poa),
                     base.store.clone(),
                 );
-                let pg_pool = {
-                    let config = config.web3_indexer.as_ref();
-                    let init_pool = config.map(|web3_indexer_config| {
-                        block_on(async {
-                            let mut opts: PgConnectOptions =
-                                web3_indexer_config.database_url.parse()?;
-                            opts.log_statements(log::LevelFilter::Debug)
-                                .log_slow_statements(
-                                    log::LevelFilter::Warn,
-                                    Duration::from_secs(5),
-                                );
-                            PgPoolOptions::new()
-                                .max_connections(5)
-                                .connect_with(opts)
-                                .await
-                        })
-                    });
-                    init_pool.transpose()?
+                let pg_pool = match config.web3_indexer.as_ref() {
+                    Some(web3_indexer_config) => {
+                        let mut opts: PgConnectOptions =
+                            web3_indexer_config.database_url.parse()?;
+                        opts.log_statements(log::LevelFilter::Debug)
+                            .log_slow_statements(log::LevelFilter::Warn, Duration::from_secs(5));
+                        let pool = PgPoolOptions::new()
+                            .max_connections(5)
+                            .connect_with(opts)
+                            .await?;
+                        Some(pool)
+                    }
+                    None => None,
                 };
                 let error_tx_handler = pg_pool.clone().map(|pool| {
                     Box::new(ErrorReceiptIndexer::new(pool))
@@ -560,7 +555,9 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         node_mode: config.node_mode,
                     };
                     Arc::new(Mutex::new(
-                        MemPool::create(args).with_context(|| "create mem-pool")?,
+                        MemPool::create(args)
+                            .await
+                            .with_context(|| "create mem-pool")?,
                     ))
                 };
                 (
@@ -628,11 +625,8 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
             );
             // fix missing genesis block
             log::info!("Check web3 indexing...");
-            block_on(async {
-                web3_indexer.store_genesis(&store).await?;
-                web3_indexer.fix_missing_blocks(&store).await?;
-                Ok::<(), anyhow::Error>(())
-            })?;
+            web3_indexer.store_genesis(&store).await?;
+            web3_indexer.fix_missing_blocks(&store).await?;
             Some(web3_indexer)
         }
         None => None,
@@ -871,22 +865,20 @@ pub fn run(config: Config, skip_config_check: bool) -> Result<()> {
         }));
     }
 
-    block_on(async {
-        let _ = exit_recv.recv().await;
-        log::info!("Exiting...");
+    let _ = exit_recv.recv().await;
+    log::info!("Exiting...");
 
-        if let Some(rpc_ws_task) = rpc_ws_task {
-            rpc_ws_task.abort();
-        }
-        rpc_task.abort();
-        chain_task.abort();
-    });
+    if let Some(rpc_ws_task) = rpc_ws_task {
+        rpc_ws_task.abort();
+    }
+    rpc_task.abort();
+    chain_task.abort();
 
     Ok(())
 }
 
-fn check_ckb_version(rpc_client: &RPCClient) -> Result<()> {
-    let ckb_version = block_on(rpc_client.get_ckb_version())?;
+async fn check_ckb_version(rpc_client: &RPCClient) -> Result<()> {
+    let ckb_version = rpc_client.get_ckb_version().await?;
     let ckb_version = ckb_version.split('(').collect::<Vec<&str>>()[0].trim_end();
     if Version::parse(ckb_version)? < Version::parse(MIN_CKB_VERSION)? {
         return Err(anyhow!(
@@ -898,22 +890,22 @@ fn check_ckb_version(rpc_client: &RPCClient) -> Result<()> {
     Ok(())
 }
 
-fn check_rollup_config_cell(
+async fn check_rollup_config_cell(
     block_producer_config: &BlockProducerConfig,
     rollup_config: &RollupConfig,
     rpc_client: &RPCClient,
 ) -> Result<()> {
-    let rollup_config_cell = block_on(
-        rpc_client.get_cell(
+    let rollup_config_cell = rpc_client
+        .get_cell(
             block_producer_config
                 .rollup_config_cell_dep
                 .out_point
                 .clone()
                 .into(),
-        ),
-    )?
-    .and_then(|cell_with_status| cell_with_status.cell)
-    .ok_or_else(|| anyhow!("can't find rollup config cell"))?;
+        )
+        .await?
+        .and_then(|cell_with_status| cell_with_status.cell)
+        .ok_or_else(|| anyhow!("can't find rollup config cell"))?;
     let cell_data = RollupConfig::from_slice(&rollup_config_cell.data.to_vec())?;
     let eoa_set = rollup_config
         .allowed_eoa_type_hashes()

@@ -2,7 +2,6 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use gw_config::SubscribeMemPoolConfig;
-use gw_runtime::{block_on, spawn};
 use gw_types::packed::*;
 use gw_types::prelude::Unpack;
 use tokio::sync::Mutex;
@@ -22,7 +21,7 @@ impl SubscribeMemPoolService {
         Self { mem_pool }
     }
 
-    pub(crate) fn next_tx(&self, next: NextL2Transaction) -> Result<()> {
+    pub(crate) async fn next_tx(&self, next: NextL2Transaction) -> Result<()> {
         let tx = next.tx();
         let block_number = next.mem_block_number().unpack();
         let tx_hash = tx.raw().hash();
@@ -31,16 +30,14 @@ impl SubscribeMemPoolService {
             hex::encode(&tx_hash),
             block_number
         );
-        block_on(async {
-            let mut mem_pool = self.mem_pool.lock().await;
-            if let Err(err) = mem_pool.append_tx(tx, block_number).await {
-                log::error!("Sync tx from full node failed: {:?}", err);
-            }
-        });
+        let mut mem_pool = self.mem_pool.lock().await;
+        if let Err(err) = mem_pool.append_tx(tx, block_number).await {
+            log::error!("Sync tx from full node failed: {:?}", err);
+        }
         Ok(())
     }
 
-    pub(crate) fn next_mem_block(&self, next_mem_block: NextMemBlock) -> Result<Option<u64>> {
+    pub(crate) async fn next_mem_block(&self, next_mem_block: NextMemBlock) -> Result<Option<u64>> {
         log::info!(
             "Refresh next mem block: {}",
             next_mem_block.block_info().number().unpack()
@@ -49,12 +46,10 @@ impl SubscribeMemPoolService {
         let withdrawals = next_mem_block.withdrawals().into_iter().collect();
         let deposits = next_mem_block.deposits().unpack();
 
-        block_on(async {
-            let mut mem_pool = self.mem_pool.lock().await;
-            mem_pool
-                .refresh_mem_block(block_info, withdrawals, deposits)
-                .await
-        })
+        let mut mem_pool = self.mem_pool.lock().await;
+        mem_pool
+            .refresh_mem_block(block_info, withdrawals, deposits)
+            .await
     }
 }
 
@@ -69,14 +64,14 @@ pub fn spawn_sub_mem_pool_task(
         group,
     } = mem_block_config;
     let mut consumer = gw_kafka::Consumer::start(hosts, topic, group, fan_in)?;
-    spawn(async move {
+    tokio::spawn(async move {
         log::info!("Spawn fan in mem_block task");
         loop {
             // This controls the latency of the consumer.
             // When some tx mutates mem state in the fullnode, the readonly node
             // will follow up after **CONSUME_LATENCY**ms at least.
             let _ = tokio::time::sleep(Duration::from_millis(CONSUME_LATENCY)).await;
-            if let Err(err) = consumer.poll() {
+            if let Err(err) = consumer.poll().await {
                 log::error!("consume error: {:?}", err);
             }
         }

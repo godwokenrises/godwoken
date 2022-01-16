@@ -22,7 +22,6 @@ use gw_generator::{
     constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
 };
 use gw_rpc_ws_server::notify_controller::NotifyController;
-use gw_runtime::{block_on, spawn};
 use gw_store::{
     chain_view::ChainView,
     mem_pool_state::{MemPoolState, MemStore},
@@ -129,7 +128,7 @@ impl Drop for MemPool {
 }
 
 impl MemPool {
-    pub fn create(args: MemPoolCreateArgs) -> Result<Self> {
+    pub async fn create(args: MemPoolCreateArgs) -> Result<Self> {
         let MemPoolCreateArgs {
             block_producer_id,
             store,
@@ -201,9 +200,9 @@ impl MemPool {
         let snap = mem_pool.mem_pool_state().load();
         snap.update_mem_pool_block_info(mem_pool.mem_block.block_info())?;
         // set tip
-        block_on(mem_pool.reset(None, Some(tip.0)))?;
+        mem_pool.reset(None, Some(tip.0)).await?;
         // clear stored mem blocks
-        spawn(async move {
+        tokio::spawn(async move {
             restore_manager.delete_before_one_hour();
         });
 
@@ -351,7 +350,7 @@ impl MemPool {
         // basic verification
         let snap = self.mem_pool_state.load();
         let state = snap.state()?;
-        self.verify_withdrawal_request(&withdrawal, &state)?;
+        self.verify_withdrawal_request(&withdrawal, &state).await?;
 
         // Check replace-by-fee
         // TODO
@@ -371,7 +370,7 @@ impl MemPool {
 
     // Withdrawal request verification
     // TODO: duplicate withdrawal check
-    fn verify_withdrawal_request(
+    async fn verify_withdrawal_request(
         &self,
         withdrawal: &WithdrawalRequestExtra,
         state: &(impl State + CodeStore),
@@ -397,7 +396,7 @@ impl MemPool {
                 last_finalized_block_number,
                 self.generator.rollup_context().to_owned(),
             );
-            block_on(task)??
+            task.await??
         };
         let avaliable_custodians = AvailableCustodians::from(&finalized_custodians);
         let withdrawal_generator =
@@ -607,7 +606,7 @@ impl MemPool {
             let task = self
                 .provider
                 .query_mergeable_custodians(collected, last_finalized_block_number);
-            Some(block_on(task)??)
+            Some(task.await??)
         };
 
         log::debug!(
@@ -750,7 +749,7 @@ impl MemPool {
                 .tracker_mut()
                 .touched_keys()
                 .expect("touched keys");
-            new_mem_block.append_touched_keys(touched_keys.borrow().iter().cloned());
+            new_mem_block.append_touched_keys(touched_keys.lock().unwrap().iter().cloned());
         }
 
         // Repackage txs
@@ -873,7 +872,7 @@ impl MemPool {
         }
 
         // estimate next l2block timestamp
-        let estimated_timestamp = block_on(self.provider.estimate_next_blocktime())??;
+        let estimated_timestamp = self.provider.estimate_next_blocktime().await??;
         // reset mem block state
         {
             let snapshot = self.store.get_snapshot();
@@ -1004,11 +1003,13 @@ impl MemPool {
         // Fan-out next mem block to readonly node
         if let Some(handler) = &self.mem_pool_publish_service {
             let withdrawals = withdrawals.into_iter().map(|w| w.request()).collect();
-            handler.next_mem_block(
-                withdrawals,
-                deposit_cells,
-                self.mem_block.block_info().clone(),
-            )
+            handler
+                .next_mem_block(
+                    withdrawals,
+                    deposit_cells,
+                    self.mem_block.block_info().clone(),
+                )
+                .await
         }
 
         // deposits
@@ -1094,8 +1095,7 @@ impl MemPool {
                     mem_account_count,
                     tip_account_count
                 );
-            let task = self.provider.collect_deposit_cells();
-            let cells = block_on(task)??;
+            let cells = self.provider.collect_deposit_cells().await??;
             self.pending_deposits = {
                 let cells = cells
                     .into_iter()
@@ -1144,7 +1144,7 @@ impl MemPool {
         state.submit_tree_to_mem_block();
         let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
         self.mem_block
-            .append_touched_keys(touched_keys.borrow().iter().cloned());
+            .append_touched_keys(touched_keys.lock().unwrap().iter().cloned());
         Ok(())
     }
 
@@ -1181,7 +1181,7 @@ impl MemPool {
                 last_finalized_block_number,
                 self.generator.rollup_context().to_owned(),
             );
-            block_on(task)??
+            task.await??
         };
 
         let available_custodians = AvailableCustodians::from(&finalized_custodians);
@@ -1273,7 +1273,7 @@ impl MemPool {
         state.submit_tree_to_mem_block();
         let touched_keys = state.tracker_mut().touched_keys().expect("touched keys");
         self.mem_block
-            .append_touched_keys(touched_keys.borrow().iter().cloned());
+            .append_touched_keys(touched_keys.lock().unwrap().iter().cloned());
         self.mem_block
             .set_finalized_custodians(finalized_custodians);
 
@@ -1351,7 +1351,7 @@ impl MemPool {
 
         // fan-out to readonly mem block
         if let Some(handler) = &self.mem_pool_publish_service {
-            handler.new_tx(tx, self.current_tip.1)
+            handler.new_tx(tx, self.current_tip.1).await
         }
 
         Ok(tx_receipt)

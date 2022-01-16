@@ -46,12 +46,13 @@ use utils::{cli_args, transaction::read_config};
 
 use crate::{setup::SetupArgs, sudt::account::build_l1_sudt_type_script};
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
-    run_cli().unwrap();
+    run_cli().await.unwrap();
 }
 
-fn run_cli() -> Result<()> {
+async fn run_cli() -> Result<()> {
     let arg_privkey_path = Arg::with_name("privkey-path")
         .long("privkey-path")
         .short("k")
@@ -922,7 +923,7 @@ fn run_cli() -> Result<()> {
                 node_mode: gw_config::NodeMode::ReadOnly,
             };
 
-            match generate_config::generate_node_config(args) {
+            match generate_config::generate_node_config(args).await {
                 Ok(config) => {
                     let content = toml::to_string_pretty(&config).unwrap();
                     std::fs::write(output_path, content).unwrap();
@@ -977,7 +978,8 @@ fn run_cli() -> Result<()> {
                 type_id,
                 cell_data_path,
                 pk_path,
-            )?;
+            )
+            .await?;
         }
         ("deposit-ckb", Some(m)) => {
             let ckb_rpc_url = m.value_of("ckb-rpc-url").unwrap().to_string();
@@ -1055,7 +1057,7 @@ fn run_cli() -> Result<()> {
                 setup_config_path,
                 output_dir,
             };
-            setup::setup(args);
+            setup::setup(args).await;
         }
         ("transfer", Some(m)) => {
             let privkey_path = Path::new(m.value_of("privkey-path").unwrap());
@@ -1396,7 +1398,8 @@ fn run_cli() -> Result<()> {
                 &custodian_script_type_hash.into(),
                 Some(min_capacity),
                 last_finalized_block_number,
-            )?;
+            )
+            .await?;
 
             let ckb = stat.total_capacity / ONE_CKB as u128;
             let shannon = stat.total_capacity - (ckb * ONE_CKB as u128);

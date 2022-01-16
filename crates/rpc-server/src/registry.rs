@@ -24,7 +24,6 @@ use gw_mem_pool::{
     },
 };
 use gw_rpc_client::rpc_client::RPCClient;
-use gw_runtime::{block_on, spawn, spawn_blocking};
 use gw_store::{
     chain_view::ChainView,
     mem_pool_state::{MemPoolState, MemStore},
@@ -49,8 +48,8 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-static PROFILER_GUARD: Lazy<std::sync::Mutex<Option<ProfilerGuard>>> =
-    Lazy::new(|| std::sync::Mutex::new(None));
+static PROFILER_GUARD: Lazy<tokio::sync::Mutex<Option<ProfilerGuard>>> =
+    Lazy::new(|| tokio::sync::Mutex::new(None));
 
 // type alias
 type RPCServer = Arc<Server<MapRouter>>;
@@ -174,7 +173,7 @@ impl Registry {
 
         let mem_pool_state = match mem_pool.as_ref() {
             Some(pool) => {
-                let mem_pool = block_on(pool.lock());
+                let mem_pool = pool.blocking_lock();
                 mem_pool.mem_pool_state()
             }
             None => Arc::new(MemPoolState::new(Arc::new(MemStore::new(
@@ -192,7 +191,7 @@ impl Registry {
                 mem_pool_state: mem_pool_state.clone(),
                 store: store.clone(),
             };
-            spawn(submitter.in_background());
+            tokio::spawn(submitter.in_background());
         }
 
         Self {
@@ -391,7 +390,7 @@ impl RequestSubmitter {
             while let Some(hash) = mem_pool.pending_restored_tx_hashes().pop_front() {
                 match db.get_mem_pool_transaction(&hash) {
                     Ok(Some(tx)) => {
-                        if let Err(err) = block_on(mem_pool.push_transaction(tx)) {
+                        if let Err(err) = mem_pool.push_transaction(tx).await {
                             log::error!("reinject mem block tx {} failed {}", hash.pack(), err);
                         }
                     }
@@ -511,9 +510,9 @@ impl RequestSubmitter {
                 );
                 for entry in items {
                     let maybe_ok = match entry.item.clone() {
-                        FeeItem::Tx(tx) => block_on(mem_pool.push_transaction(tx)),
+                        FeeItem::Tx(tx) => mem_pool.push_transaction(tx).await,
                         FeeItem::Withdrawal(withdrawal) => {
-                            block_on(mem_pool.push_withdrawal_request(withdrawal))
+                            mem_pool.push_withdrawal_request(withdrawal).await
                         }
                     };
 
@@ -753,7 +752,7 @@ async fn execute_l2transaction(
         .build();
 
     let tx_hash = tx.hash();
-    let mut run_result = spawn_blocking(move || {
+    let mut run_result = tokio::task::spawn_blocking(move || {
         let db = store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
@@ -852,7 +851,7 @@ async fn execute_raw_l2transaction(
     let block_number: u64 = block_info.number().unpack();
 
     // execute tx in task
-    let mut run_result = spawn_blocking(move || {
+    let mut run_result = tokio::task::spawn_blocking(move || {
         let chain_view = {
             let tip_block_hash = db.get_last_valid_tip_block_hash()?;
             ChainView::new(&db, tip_block_hash)
@@ -1370,29 +1369,27 @@ async fn tests_should_produce_block(
 
 async fn start_profiler() -> Result<()> {
     log::info!("profiler started");
-    *PROFILER_GUARD.lock().unwrap() = Some(ProfilerGuard::new(100).unwrap());
+    *PROFILER_GUARD.lock().await = Some(ProfilerGuard::new(100).unwrap());
     Ok(())
 }
 
 async fn report_pprof() -> Result<()> {
-    if let Some(profiler) = PROFILER_GUARD.lock().unwrap().take() {
-        spawn(async move {
-            if let Ok(report) = profiler.report().build() {
-                let file = std::fs::File::create("/code/workspace/flamegraph.svg").unwrap();
-                let mut options = pprof::flamegraph::Options::default();
-                options.image_width = Some(2500);
-                report.flamegraph_with_options(file, &mut options).unwrap();
+    if let Some(profiler) = PROFILER_GUARD.lock().await.take() {
+        if let Ok(report) = profiler.report().build() {
+            let file = std::fs::File::create("/code/workspace/flamegraph.svg").unwrap();
+            let mut options = pprof::flamegraph::Options::default();
+            options.image_width = Some(2500);
+            report.flamegraph_with_options(file, &mut options).unwrap();
 
-                // output profile.proto with protobuf feature enabled
-                // > https://github.com/tikv/pprof-rs#use-with-pprof
-                use pprof::protos::Message;
-                let mut file = std::fs::File::create("/code/workspace/profile.pb").unwrap();
-                let profile = report.pprof().unwrap();
-                let mut content = Vec::new();
-                profile.encode(&mut content).unwrap();
-                std::io::Write::write_all(&mut file, &content).unwrap();
-            }
-        });
+            // output profile.proto with protobuf feature enabled
+            // > https://github.com/tikv/pprof-rs#use-with-pprof
+            use pprof::protos::Message;
+            let mut file = std::fs::File::create("/code/workspace/profile.pb").unwrap();
+            let profile = report.pprof().unwrap();
+            let mut content = Vec::new();
+            profile.encode(&mut content).unwrap();
+            std::io::Write::write_all(&mut file, &content).unwrap();
+        }
     }
     Ok(())
 }

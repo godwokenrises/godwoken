@@ -17,7 +17,6 @@ use gw_generator::{
 use gw_rpc_client::{
     ckb_client::CKBClient, indexer_client::CKBIndexerClient, rpc_client::RPCClient,
 };
-use gw_runtime::block_on;
 use gw_store::Store;
 use gw_types::{offchain::RollupContext, packed::RollupConfig, prelude::Unpack};
 
@@ -34,7 +33,7 @@ pub struct Context {
     pub local_store: Store,
 }
 
-pub fn setup(args: SetupArgs) -> Result<Context> {
+pub async fn setup(args: SetupArgs) -> Result<Context> {
     let SetupArgs {
         from_db_store,
         to_db_store,
@@ -75,7 +74,9 @@ pub fn setup(args: SetupArgs) -> Result<Context> {
             )
         };
         let out_point = config.genesis.secp_data_dep.out_point.clone();
-        block_on(rpc_client.get_transaction(out_point.tx_hash.0.into()))?
+        rpc_client
+            .get_transaction(out_point.tx_hash.0.into())
+            .await?
             .ok_or_else(|| anyhow!("can not found transaction: {:?}", out_point.tx_hash))?
             .raw()
             .outputs_data()

@@ -129,7 +129,7 @@ impl ChainUpdater {
 
         if initial_syncing {
             // Start notify mem pool after synced
-            self.chain.lock().await.complete_initial_syncing()?;
+            self.chain.lock().await.complete_initial_syncing().await?;
         }
 
         Ok(())
@@ -290,7 +290,7 @@ impl ChainUpdater {
             reverts: vec![],
             updates: vec![update],
         };
-        self.chain.lock().await.sync(sync_param)?;
+        self.chain.lock().await.sync(sync_param).await?;
 
         // TODO sync missed block
         match &self.web3_indexer {
@@ -380,10 +380,11 @@ impl ChainUpdater {
         }
 
         {
-            self.chain.lock().await.sync(SyncParam {
+            let param = SyncParam {
                 reverts: revert_l1_actions,
                 updates: vec![],
-            })?;
+            };
+            self.chain.lock().await.sync(param).await?;
         }
 
         // Also revert last tx hash

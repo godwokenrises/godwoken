@@ -28,7 +28,11 @@ use gw_common::{
     state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE_TYPE},
     H256,
 };
+<<<<<<< HEAD
 use gw_dynamic_config::manager::DynamicConfigManager;
+=======
+use gw_config::RPCConfig;
+>>>>>>> f963e136 (refactor: remove all block_on)
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
@@ -152,7 +156,7 @@ impl Generator {
 
         {
             let t = Instant::now();
-            let global_vm_version = block_on(async { *GLOBAL_VM_VERSION.lock().await });
+            let global_vm_version = *GLOBAL_VM_VERSION.blocking_lock();
             let vm_version = match global_vm_version {
                 0 => VMVersion::V0,
                 1 => VMVersion::V1,

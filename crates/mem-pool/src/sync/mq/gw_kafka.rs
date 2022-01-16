@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use gw_types::{
     bytes::Bytes,
     packed::{RefreshMemBlockMessage, RefreshMemBlockMessageUnion},
@@ -107,8 +108,9 @@ impl Consumer {
     }
 }
 
+#[async_trait]
 impl Consume for Consumer {
-    fn poll(&mut self) -> Result<()> {
+    async fn poll(&mut self) -> Result<()> {
         self.consumer.subscribe(&[&self.topic])?;
         for message in self.consumer.iter() {
             match message {
@@ -133,14 +135,14 @@ impl Consume for Consumer {
                             gw_types::packed::RefreshMemBlockMessageUnionReader::NextL2Transaction(
                                 next,
                             ) => {
-                                if let Err(err) = self.subscribe.next_tx(next.to_entity()) {
+                                if let Err(err) = self.subscribe.next_tx(next.to_entity()).await {
                                     log::error!("[Subscribe tx] error: {:?}", err);
                                 }
                             }
                             gw_types::packed::RefreshMemBlockMessageUnionReader::NextMemBlock(
                                 next,
                             ) => {
-                                match self.subscribe.next_mem_block(next.to_entity()) {
+                                match self.subscribe.next_mem_block(next.to_entity()).await {
                                     Ok(None) => {
                                         log::debug!(
                                             "Invalid tip. Wait for syncing to the new tip."

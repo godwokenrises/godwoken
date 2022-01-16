@@ -2,11 +2,10 @@ use anyhow::Result;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::H256;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
-use gw_runtime::block_on;
 use gw_types::{core::ScriptHashType, offchain::CustodianStat, packed::Script, prelude::Pack};
 
 /// Query custodian ckb from ckb-indexer
-pub fn stat_custodian_cells(
+pub async fn stat_custodian_cells(
     rpc_client: &CKBIndexerClient,
     rollup_type_hash: &H256,
     custodian_script_type_hash: &H256,
@@ -18,5 +17,7 @@ pub fn stat_custodian_cells(
         .hash_type(ScriptHashType::Type.into())
         .args(rollup_type_hash.as_slice().to_vec().pack())
         .build();
-    block_on(rpc_client.stat_custodian_cells(script, min_capacity, last_finalized_block_number))
+    rpc_client
+        .stat_custodian_cells(script, min_capacity, last_finalized_block_number)
+        .await
 }

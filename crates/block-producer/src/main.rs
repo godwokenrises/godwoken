@@ -35,7 +35,7 @@ fn generate_example_config<P: AsRef<Path>>(path: P) -> Result<()> {
     Ok(())
 }
 
-fn run_cli() -> Result<()> {
+async fn run_cli() -> Result<()> {
     let version = Version::current().to_string();
     let app = App::new("Godwoken")
         .about("The layer2 rollup built upon Nervos CKB.")
@@ -103,7 +103,7 @@ fn run_cli() -> Result<()> {
         (COMMAND_RUN, Some(m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
-            runner::run(config, m.is_present(ARG_SKIP_CONFIG_CHECK))?;
+            runner::run(config, m.is_present(ARG_SKIP_CONFIG_CHECK)).await?;
         }
         (COMMAND_EXAMPLE_CONFIG, Some(m)) => {
             let path = m.value_of(ARG_OUTPUT_PATH).unwrap();
@@ -114,22 +114,24 @@ fn run_cli() -> Result<()> {
             let config = read_config(&config_path)?;
             let from_block: Option<u64> = m.value_of(ARG_FROM_BLOCK).map(str::parse).transpose()?;
             let to_block: Option<u64> = m.value_of(ARG_TO_BLOCK).map(str::parse).transpose()?;
-            db_block_validator::verify(config, from_block, to_block)?;
+            db_block_validator::verify(config, from_block, to_block).await?;
         }
         _ => {
             // default command: start a Godwoken node
             let config_path = "./config.toml";
             let config = read_config(&config_path)?;
-            runner::run(config, false)?;
+            runner::run(config, false).await?;
         }
     };
     Ok(())
 }
 
 /// Godwoken entry
-fn main() {
+/// Default to number of cpus, pass `worker_threads` to manually configure workers.
+#[tokio::main(flavor = "multi_thread")]
+async fn main() {
     init_log();
-    run_cli().expect("run cli");
+    run_cli().await.expect("run cli");
 }
 
 fn init_log() {
