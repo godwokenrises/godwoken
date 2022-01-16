@@ -8,6 +8,7 @@ use crate::{
     withdrawal_unlocker::FinalizedWithdrawalUnlocker,
 };
 use anyhow::{anyhow, bail, Context, Result};
+use async_std::sync::RwLock;
 use ckb_types::core::hardfork::HardForkSwitch;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
@@ -61,7 +62,6 @@ use std::{
     sync::{atomic::Ordering, Arc},
     time::{Duration, Instant},
 };
-use tokio::sync::RwLock;
 use tokio::{spawn, sync::Mutex};
 
 const MIN_CKB_VERSION: &str = "0.40.0";

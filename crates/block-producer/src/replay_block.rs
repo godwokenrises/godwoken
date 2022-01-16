@@ -16,7 +16,7 @@ use gw_types::prelude::Unpack;
 pub struct ReplayBlock;
 
 impl ReplayBlock {
-    pub async fn replay(
+    pub fn replay(
         store: &Store,
         generator: &Generator,
         block: &L2Block,
@@ -109,9 +109,13 @@ impl ReplayBlock {
 
             // build call context
             // NOTICE users only allowed to send HandleMessage CallType txs
-            let run_result = generator
-                .execute_transaction(&chain_view, &state, &block_info, &raw_tx, L2TX_MAX_CYCLES)
-                .await?;
+            let run_result = generator.execute_transaction(
+                &chain_view,
+                &state,
+                &block_info,
+                &raw_tx,
+                L2TX_MAX_CYCLES,
+            )?;
 
             state.apply_run_result(&run_result)?;
             let account_state = state.get_merkle_state();

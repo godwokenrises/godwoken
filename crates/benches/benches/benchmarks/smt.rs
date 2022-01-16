@@ -69,15 +69,15 @@ pub fn bench_ckb_transfer(c: &mut Criterion) {
     };
     let store = Store::new(RocksDB::open(&config, COLUMNS));
     let ee = BenchExecutionEnvironment::new_with_accounts(store, 7000);
-    let rt = tokio::runtime::Runtime::new().unwrap();
 
     let mut group = c.benchmark_group("ckb_transfer");
     for txs in (500..=5000).step_by(500) {
         group.sample_size(10);
         group.throughput(Throughput::Elements(txs));
         group.bench_with_input(BenchmarkId::from_parameter(txs), &txs, |b, txs| {
-            b.to_async(&rt)
-                .iter(|| ee.accounts_transfer(7000, *txs as usize));
+            b.iter(|| {
+                ee.accounts_transfer(7000, *txs as usize);
+            });
         });
     }
     group.finish();
@@ -170,7 +170,7 @@ impl BenchExecutionEnvironment {
         }
     }
 
-    async fn accounts_transfer(&self, accounts: u32, count: usize) {
+    fn accounts_transfer(&self, accounts: u32, count: usize) {
         let snap = self.mem_pool_state.load();
         let mut state = snap.state().unwrap();
 
@@ -237,7 +237,6 @@ impl BenchExecutionEnvironment {
             let run_result = self
                 .generator
                 .execute_transaction(&self.chain, &state, &block_info, &raw_tx, L2TX_MAX_CYCLES)
-                .await
                 .unwrap();
 
             state.apply_run_result(&run_result).unwrap();

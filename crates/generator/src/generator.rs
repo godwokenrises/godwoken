@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{atomic::Ordering::SeqCst, Arc},
+    sync::Arc,
     time::Instant,
 };
 
@@ -28,7 +28,11 @@ use gw_common::{
     state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE_TYPE},
     H256,
 };
+<<<<<<< HEAD
 use gw_dynamic_config::manager::DynamicConfigManager;
+=======
+use gw_config::RPCConfig;
+>>>>>>> f963e136 (refactor: remove all block_on)
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
@@ -47,7 +51,7 @@ use ckb_vm::{DefaultMachineBuilder, SupportMachine};
 
 #[cfg(not(has_asm))]
 use ckb_vm::TraceMachine;
-use tokio::sync::RwLock;
+use smol::lock::RwLock;
 
 pub struct ApplyBlockArgs {
     pub l2block: L2Block,
@@ -402,7 +406,7 @@ impl Generator {
     }
 
     /// Apply l2 state transition
-    pub async fn verify_and_apply_block<C: ChainView>(
+    pub fn verify_and_apply_block<C: ChainView>(
         &self,
         db: &StoreTransaction,
         chain: &C,
@@ -538,10 +542,13 @@ impl Generator {
             // build call context
             // NOTICE users only allowed to send HandleMessage CallType txs
             let now = Instant::now();
-            let run_result = match self
-                .execute_transaction(chain, &state, &block_info, &raw_tx, L2TX_MAX_CYCLES)
-                .await
-            {
+            let run_result = match self.execute_transaction(
+                chain,
+                &state,
+                &block_info,
+                &raw_tx,
+                L2TX_MAX_CYCLES,
+            ) {
                 Ok(run_result) => run_result,
                 Err(err) => {
                     let target = build_challenge_target(
@@ -672,7 +679,7 @@ impl Generator {
     }
 
     /// execute a layer2 tx
-    pub async fn execute_transaction<S: State + CodeStore, C: ChainView>(
+    pub fn execute_transaction<S: State + CodeStore, C: ChainView>(
         &self,
         chain: &C,
         state: &S,
@@ -680,9 +687,8 @@ impl Generator {
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
     ) -> Result<RunResult, TransactionError> {
-        let run_result = self
-            .unchecked_execute_transaction(chain, state, block_info, raw_tx, max_cycles)
-            .await?;
+        let run_result =
+            self.unchecked_execute_transaction(chain, state, block_info, raw_tx, max_cycles)?;
         if 0 != run_result.exit_code {
             return Err(TransactionError::InvalidExitCode(run_result.exit_code));
         }
@@ -691,7 +697,7 @@ impl Generator {
     }
 
     /// execute a layer2 tx, doesn't check exit code
-    pub async fn unchecked_execute_transaction<S: State + CodeStore, C: ChainView>(
+    pub fn unchecked_execute_transaction<S: State + CodeStore, C: ChainView>(
         &self,
         chain: &C,
         state: &S,
@@ -699,12 +705,10 @@ impl Generator {
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
     ) -> Result<RunResult, TransactionError> {
-        if let Some(polyjuice_contract_creator_allowlist) = self
-            .dynamic_config_manager
-            .read()
-            .await
-            .get_polyjuice_contract_creator_allowlist()
-            .as_ref()
+        if let Some(polyjuice_contract_creator_allowlist) =
+            smol::block_on(self.dynamic_config_manager.read())
+                .get_polyjuice_contract_creator_allowlist()
+                .as_ref()
         {
             use gw_tx_filter::polyjuice_contract_creator_allowlist::Error;
             match polyjuice_contract_creator_allowlist.validate_with_state(state, raw_tx) {
@@ -770,10 +774,7 @@ impl Generator {
         }
         // check account id of sudt proxy contract creator is from whitelist
         let from_id = raw_tx.from_id().unpack();
-        if self
-            .dynamic_config_manager
-            .read()
-            .await
+        if smol::block_on(self.dynamic_config_manager.read())
             .get_sudt_proxy_account_whitelist()
             .validate(&run_result, from_id)
         {

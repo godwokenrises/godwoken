@@ -66,7 +66,7 @@ fn new_block_info(block_producer_id: u32, number: u64, timestamp: u64) -> BlockI
         .build()
 }
 
-async fn run_contract_get_result<S: State + CodeStore>(
+fn run_contract_get_result<S: State + CodeStore>(
     rollup_config: &RollupConfig,
     tree: &mut S,
     from_id: u32,
@@ -92,14 +92,13 @@ async fn run_contract_get_result<S: State + CodeStore>(
         Default::default(),
     );
     let chain_view = DummyChainStore;
-    let run_result = generator
-        .execute_transaction(&chain_view, tree, block_info, &raw_tx, L2TX_MAX_CYCLES)
-        .await?;
+    let run_result =
+        generator.execute_transaction(&chain_view, tree, block_info, &raw_tx, L2TX_MAX_CYCLES)?;
     tree.apply_run_result(&run_result).expect("update state");
     Ok(run_result)
 }
 
-async fn run_contract<S: State + CodeStore>(
+fn run_contract<S: State + CodeStore>(
     rollup_config: &RollupConfig,
     tree: &mut S,
     from_id: u32,
@@ -108,16 +107,15 @@ async fn run_contract<S: State + CodeStore>(
     block_info: &BlockInfo,
 ) -> Result<Vec<u8>, TransactionError> {
     let run_result =
-        run_contract_get_result(rollup_config, tree, from_id, to_id, args, block_info).await?;
+        run_contract_get_result(rollup_config, tree, from_id, to_id, args, block_info)?;
     Ok(run_result.return_data)
 }
 
 pub fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("throughput");
     group.throughput(Throughput::Elements(1u64));
-    let rt = tokio::runtime::Runtime::new().unwrap();
     group.bench_function("sudt", move |b| {
-        b.to_async(&rt).iter_batched(
+        b.iter_batched(
             || {
                 let mut tree = DummyState::default();
 
@@ -196,18 +194,15 @@ pub fn bench(c: &mut Criterion) {
                             .build(),
                     )
                     .build();
-                async move {
-                    run_contract(
-                        &rollup_config,
-                        &mut tree,
-                        a_id,
-                        sudt_id,
-                        args.as_bytes(),
-                        &block_info,
-                    )
-                    .await
-                    .expect("execute")
-                }
+                run_contract(
+                    &rollup_config,
+                    &mut tree,
+                    a_id,
+                    sudt_id,
+                    args.as_bytes(),
+                    &block_info,
+                )
+                .expect("execute");
             },
             BatchSize::SmallInput,
         );

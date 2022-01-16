@@ -30,7 +30,10 @@ gw-poa = { path = "../poa" }
 gw-utils = { path = "../utils" }
 gw-version = { path = "../version" }
 gw-ckb-hardfork = { path = "../ckb-hardfork" }
+<<<<<<< HEAD
 gw-dynamic-config = { path = "../dynamic-config"}
+=======
+>>>>>>> 5518eeaa (chore: remove gw-runtime crate)
 ckb-crypto = "0.100.0"
 ckb-fixed-hash = "0.100.0"
 ckb-types = "0.100.0"
