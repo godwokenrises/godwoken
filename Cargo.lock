@@ -1949,21 +1949,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gw-poa"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "gw-common",
- "gw-generator",
- "gw-rpc-client",
- "gw-traits",
- "gw-types",
- "hex",
- "log",
- "tokio",
-]
-
-[[package]]
 name = "gw-replay-chain"
 version = "0.1.0"
 dependencies = [

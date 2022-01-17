@@ -8,9 +8,6 @@ mod godwoken;
 
 #[cfg(feature = "std")]
 #[allow(clippy::all)]
-mod poa;
-#[cfg(feature = "std")]
-#[allow(clippy::all)]
 mod store;
 
 #[cfg(feature = "std")]
@@ -24,8 +21,6 @@ pub mod packed {
     pub use super::godwoken::*;
     #[cfg(feature = "std")]
     pub use super::mem_block::*;
-    #[cfg(feature = "std")]
-    pub use super::poa::*;
     #[cfg(feature = "std")]
     pub use super::store::*;
 }
