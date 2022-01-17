@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{future::Future, pin::Pin, time::Duration};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -20,11 +20,11 @@ pub trait MemPoolProvider {
         rollup_context: RollupContext,
     ) -> Result<CollectedCustodianCells>;
     async fn get_cell(&self, out_point: OutPoint) -> Result<Option<CellWithStatus>>;
-    async fn query_mergeable_custodians(
+    fn query_mergeable_custodians(
         &self,
         collected_custodians: CollectedCustodianCells,
         last_finalized_block_number: u64,
-    ) -> Result<CollectedCustodianCells>;
+    ) -> Pin<Box<dyn Future<Output = Result<CollectedCustodianCells>> + 'static + Send>>;
 }
 
 #[async_trait]
