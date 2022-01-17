@@ -1,6 +1,8 @@
 #![allow(clippy::mutable_key_type)]
 
-use gw_block_producer::produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult};
+use gw_block_producer::produce_block::{
+    generate_produce_block_param, produce_block, ProduceBlockParam, ProduceBlockResult,
+};
 use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BackendConfig, ChainConfig, GenesisConfig, MemPoolConfig};
@@ -30,7 +32,7 @@ use tokio::sync::Mutex;
 use std::{collections::HashSet, time::Duration};
 use std::{fs, io::Read, path::PathBuf, sync::Arc};
 
-use super::mem_pool_provider::DummyMemPoolProvider;
+use super::{custodian::DummyMergeableCustodians, mem_pool_provider::DummyMemPoolProvider};
 
 const SCRIPT_DIR: &str = "../../.tmp/binaries/godwoken-scripts";
 const ALWAYS_SUCCESS_PATH: &str = "always-success";
@@ -455,10 +457,15 @@ pub async fn construct_block_with_timestamp(
     };
     mem_pool.set_provider(Box::new(provider));
 
-    let (_custodians, block_param) = mem_pool
-        .output_mem_block(&OutputParam::default())
-        .await
-        .unwrap();
+    let (mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
+    let (_custodians, block_param) = generate_produce_block_param(
+        chain.store(),
+        chain.generator(),
+        &DummyMergeableCustodians {},
+        mem_block,
+        post_merkle_state,
+    )
+    .await?;
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash,
         rollup_config_hash,

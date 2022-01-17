@@ -47,7 +47,7 @@ pub struct MemBlock {
 }
 
 impl MemBlock {
-    pub fn new(block_info: BlockInfo, prev_merkle_state: AccountMerkleState) -> Self {
+    pub(crate) fn new(block_info: BlockInfo, prev_merkle_state: AccountMerkleState) -> Self {
         MemBlock {
             block_producer_id: block_info.block_producer_id().unpack(),
             block_info,
@@ -57,7 +57,7 @@ impl MemBlock {
     }
 
     /// Initialize MemBlock with block producer
-    pub fn with_block_producer(block_producer_id: u32) -> Self {
+    pub(crate) fn with_block_producer(block_producer_id: u32) -> Self {
         MemBlock {
             block_producer_id,
             ..Default::default()
@@ -68,7 +68,11 @@ impl MemBlock {
         &self.block_info
     }
 
-    pub fn reset(&mut self, tip: &L2Block, estimated_timestamp: Duration) -> MemBlockContent {
+    pub(crate) fn reset(
+        &mut self,
+        tip: &L2Block,
+        estimated_timestamp: Duration,
+    ) -> MemBlockContent {
         log::debug!("[mem-block] reset");
         // update block info
         let tip_number: u64 = tip.raw().number().unpack();
@@ -89,7 +93,7 @@ impl MemBlock {
         content
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.txs.clear();
         self.txs_set.clear();
         self.withdrawals.clear();
@@ -106,7 +110,7 @@ impl MemBlock {
         self.deposit_touched_keys_vec.clear();
     }
 
-    pub fn push_withdrawal<I: IntoIterator<Item = H256>>(
+    pub(crate) fn push_withdrawal<I: IntoIterator<Item = H256>>(
         &mut self,
         withdrawal_hash: H256,
         post_state: AccountMerkleState,
@@ -129,7 +133,7 @@ impl MemBlock {
         self.append_touched_keys(touched_keys);
     }
 
-    pub fn force_reinject_withdrawal_hashes(&mut self, withdrawal_hashes: &[H256]) {
+    pub(crate) fn force_reinject_withdrawal_hashes(&mut self, withdrawal_hashes: &[H256]) {
         assert!(self.withdrawals.is_empty());
         assert!(self.state_checkpoints.is_empty());
         assert!(self.deposits.is_empty());
@@ -143,12 +147,15 @@ impl MemBlock {
         }
     }
 
-    pub fn set_finalized_custodians(&mut self, finalized_custodians: CollectedCustodianCells) {
+    pub(crate) fn set_finalized_custodians(
+        &mut self,
+        finalized_custodians: CollectedCustodianCells,
+    ) {
         assert!(self.finalized_custodians.is_none());
         self.finalized_custodians = Some(finalized_custodians);
     }
 
-    pub fn push_deposits(
+    pub(crate) fn push_deposits(
         &mut self,
         deposit_cells: Vec<DepositInfo>,
         post_states: Vec<AccountMerkleState>,
@@ -174,7 +181,7 @@ impl MemBlock {
         self.append_touched_keys(touched_keys_vec.into_iter().flatten());
     }
 
-    pub fn push_tx(&mut self, tx_hash: H256, post_state: AccountMerkleState) {
+    pub(crate) fn push_tx(&mut self, tx_hash: H256, post_state: AccountMerkleState) {
         let state_checkpoint = calculate_state_checkpoint(
             &post_state.merkle_root().unpack(),
             post_state.count().unpack(),
@@ -191,7 +198,7 @@ impl MemBlock {
         self.state_checkpoints.push(state_checkpoint);
     }
 
-    pub fn force_reinject_tx_hashes(&mut self, tx_hashes: &[H256]) {
+    pub(crate) fn force_reinject_tx_hashes(&mut self, tx_hashes: &[H256]) {
         for tx_hash in tx_hashes {
             if !self.txs_set.contains(tx_hash) {
                 self.txs_set.insert(*tx_hash);
@@ -200,7 +207,7 @@ impl MemBlock {
         }
     }
 
-    pub fn clear_txs(&mut self) {
+    pub(crate) fn clear_txs(&mut self) {
         self.txs_set.clear();
         self.txs.clear();
         self.touched_keys.clear();
@@ -209,7 +216,7 @@ impl MemBlock {
         self.tx_post_states.clear();
     }
 
-    pub fn append_touched_keys<I: IntoIterator<Item = H256>>(&mut self, keys: I) {
+    pub(crate) fn append_touched_keys<I: IntoIterator<Item = H256>>(&mut self, keys: I) {
         self.touched_keys.extend(keys)
     }
 
@@ -382,7 +389,7 @@ impl MemBlock {
         (new_mem_block, post_state)
     }
 
-    pub fn pack_compact(&self) -> packed::CompactMemBlock {
+    pub(crate) fn pack_compact(&self) -> packed::CompactMemBlock {
         packed::CompactMemBlock::new_builder()
             .txs(self.txs.pack())
             .withdrawals(self.withdrawals.pack())
@@ -411,7 +418,7 @@ impl MemBlock {
 
     // Output diff for debug
     #[cfg(test)]
-    pub fn cmp(&self, other: &MemBlock) -> MemBlockCmp {
+    pub(crate) fn cmp(&self, other: &MemBlock) -> MemBlockCmp {
         use MemBlockCmp::*;
 
         if self.block_producer_id != other.block_producer_id {

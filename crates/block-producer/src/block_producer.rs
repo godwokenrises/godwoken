@@ -1,7 +1,10 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::{
-    produce_block::{produce_block, ProduceBlockParam, ProduceBlockResult},
+    produce_block::{
+        generate_produce_block_param, produce_block, DefaultMergeableCustodians, ProduceBlockParam,
+        ProduceBlockResult,
+    },
     replay_block::ReplayBlock,
     test_mode_control::TestModeControl,
     types::ChainEvent,
@@ -385,7 +388,7 @@ impl BlockProducer {
 
         // get txs & withdrawal requests from mem pool
         let (opt_finalized_custodians, block_param) = {
-            let output_fut = {
+            let (mem_block, post_block_state) = {
                 let t = Instant::now();
                 log::debug!("[compose_next_block_submit_tx] acquire mem-pool",);
                 let mem_pool = self.mem_pool.lock().await;
@@ -397,12 +400,19 @@ impl BlockProducer {
             };
 
             let t = Instant::now();
-            let output = output_fut.await?;
+            let param = generate_produce_block_param(
+                &self.store,
+                &self.generator,
+                &DefaultMergeableCustodians::new(self.rpc_client.clone()),
+                mem_block,
+                post_block_state,
+            )
+            .await?;
             log::debug!(
-                "[compose_next_block_submit_tx] output mem block {}ms",
+                "[compose_next_block_submit_tx] generate produce block param {}ms",
                 t.elapsed().as_millis()
             );
-            output
+            param
         };
         let deposit_cells = block_param.deposits.clone();
 

@@ -3,20 +3,28 @@
 //! A block producer can act without the ability of produce block.
 
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use gw_common::{
     h256_ext::H256Ext,
-    merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash},
+    merkle_utils::{calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash},
     smt::Blake2bHasher,
+    sparse_merkle_tree::CompiledMerkleProof,
+    state::State,
     H256,
 };
 use gw_generator::Generator;
-use gw_store::transaction::StoreTransaction;
+use gw_mem_pool::{custodian::query_mergeable_custodians, mem_block::MemBlock};
+use gw_rpc_client::rpc_client::RPCClient;
+use gw_store::{
+    state::state_db::StateContext, traits::chain_store::ChainStore, transaction::StoreTransaction,
+    Store,
+};
 use gw_types::{
     core::Status,
-    offchain::BlockParam,
+    offchain::{BlockParam, CollectedCustodianCells},
     packed::{
-        BlockMerkleState, GlobalState, L2Block, RawL2Block, SubmitTransactions, SubmitWithdrawals,
-        WithdrawalRequestExtra,
+        AccountMerkleState, BlockMerkleState, GlobalState, L2Block, RawL2Block, SubmitTransactions,
+        SubmitWithdrawals, WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -163,4 +171,213 @@ pub fn produce_block(
         global_state,
         withdrawal_extras: withdrawals,
     })
+}
+
+#[async_trait]
+pub trait MergeableCustodians {
+    async fn query(
+        &self,
+        collected_custodians: CollectedCustodianCells,
+        last_finalized_block_number: u64,
+    ) -> Result<CollectedCustodianCells>;
+}
+
+pub struct DefaultMergeableCustodians {
+    rpc_client: RPCClient,
+}
+
+impl DefaultMergeableCustodians {
+    pub fn new(rpc_client: RPCClient) -> Self {
+        DefaultMergeableCustodians { rpc_client }
+    }
+}
+
+#[async_trait]
+impl MergeableCustodians for DefaultMergeableCustodians {
+    async fn query(
+        &self,
+        collected_custodians: CollectedCustodianCells,
+        last_finalized_block_number: u64,
+    ) -> Result<CollectedCustodianCells> {
+        let query = query_mergeable_custodians(
+            &self.rpc_client,
+            collected_custodians,
+            last_finalized_block_number,
+        );
+        Ok(query.await?.expect_any())
+    }
+}
+
+// Generate produce block param
+pub async fn generate_produce_block_param(
+    store: &Store,
+    generator: &Generator,
+    mergeable_custodians: &impl MergeableCustodians,
+    mem_block: MemBlock,
+    post_merkle_state: AccountMerkleState,
+) -> Result<(Option<CollectedCustodianCells>, BlockParam)> {
+    let db = store.begin_transaction();
+    let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
+    let tip_block_hash = {
+        let opt = db.get_block_hash_by_number(tip_block_number)?;
+        opt.ok_or_else(|| anyhow!("[produce block] tip block {} not found", tip_block_number))?
+    };
+
+    // generate kv state & merkle proof from tip state
+    let chain_state = db.state_tree(StateContext::ReadOnly)?;
+
+    let kv_state: Vec<(H256, H256)> = mem_block
+        .touched_keys()
+        .iter()
+        .map(|k| {
+            chain_state
+                .get_raw(k)
+                .map(|v| (*k, v))
+                .map_err(|err| anyhow!("can't fetch value error: {:?}", err))
+        })
+        .collect::<Result<_>>()?;
+    let kv_state_proof = if kv_state.is_empty() {
+        // nothing need to prove
+        Vec::new()
+    } else {
+        let account_smt = db.account_smt()?;
+
+        account_smt
+            .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
+            .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
+            .compile(kv_state.clone())?
+            .0
+    };
+
+    let txs: Vec<_> = mem_block
+        .txs()
+        .iter()
+        .map(|tx_hash| {
+            db.get_mem_pool_transaction(tx_hash)?
+                .ok_or_else(|| anyhow!("can't find tx_hash from mem pool"))
+        })
+        .collect::<Result<_>>()?;
+    let deposits: Vec<_> = mem_block.deposits().to_vec();
+    let withdrawals: Vec<_> = mem_block
+        .withdrawals()
+        .iter()
+        .map(|withdrawal_hash| {
+            db.get_mem_pool_withdrawal(withdrawal_hash)?.ok_or_else(|| {
+                anyhow!(
+                    "can't find withdrawal_hash from mem pool {}",
+                    hex::encode(withdrawal_hash.as_slice())
+                )
+            })
+        })
+        .collect::<Result<_>>()?;
+    let state_checkpoint_list = mem_block.state_checkpoints().to_vec();
+    let txs_prev_state_checkpoint = mem_block
+        .txs_prev_state_checkpoint()
+        .ok_or_else(|| anyhow!("Mem block has no txs prev state checkpoint"))?;
+    let prev_merkle_state = mem_block.prev_merkle_state().clone();
+    let parent_block = db
+        .get_block(&tip_block_hash)?
+        .ok_or_else(|| anyhow!("can't found tip block"))?;
+
+    // check output block state consistent
+    {
+        let tip_block = db.get_last_valid_tip_block()?;
+        assert_eq!(
+            parent_block.hash(),
+            tip_block.hash(),
+            "check tip block consistent"
+        );
+        assert_eq!(
+            prev_merkle_state,
+            parent_block.raw().post_account(),
+            "check mem block prev merkle state"
+        );
+
+        // check smt root
+        let expected_kv_state_root: H256 = prev_merkle_state.merkle_root().unpack();
+        let smt = db.account_smt()?;
+        assert_eq!(
+            smt.root(),
+            &expected_kv_state_root,
+            "check smt root consistent"
+        );
+
+        if !kv_state_proof.is_empty() {
+            log::debug!("[output mem-block] check merkle proof");
+            // check state merkle proof before output
+            let prev_kv_state_root = CompiledMerkleProof(kv_state_proof.clone())
+                .compute_root::<Blake2bHasher>(kv_state.clone())?;
+            let expected_kv_state_root: H256 = prev_merkle_state.merkle_root().unpack();
+            assert_eq!(
+                expected_kv_state_root, prev_kv_state_root,
+                "check state merkle proof"
+            );
+        }
+
+        let tip_block_post_account = tip_block.raw().post_account();
+        assert_eq!(
+            prev_merkle_state, tip_block_post_account,
+            "check output mem block txs prev state"
+        );
+        if withdrawals.is_empty() && deposits.is_empty() {
+            let post_block_checkpoint = calculate_state_checkpoint(
+                &tip_block_post_account.merkle_root().unpack(),
+                tip_block_post_account.count().unpack(),
+            );
+            assert_eq!(
+                txs_prev_state_checkpoint, post_block_checkpoint,
+                "check mem block txs prev state"
+            );
+            if txs.is_empty() {
+                assert_eq!(
+                    post_merkle_state, tip_block_post_account,
+                    "check mem block post account"
+                )
+            }
+        }
+    }
+
+    let block_info = mem_block.block_info();
+    let param = BlockParam {
+        number: block_info.number().unpack(),
+        block_producer_id: block_info.block_producer_id().unpack(),
+        timestamp: block_info.timestamp().unpack(),
+        txs,
+        deposits,
+        withdrawals,
+        state_checkpoint_list,
+        parent_block,
+        txs_prev_state_checkpoint,
+        prev_merkle_state,
+        post_merkle_state,
+        kv_state,
+        kv_state_proof,
+    };
+
+    let finalized_custodians = {
+        let last_finalized_block_number = {
+            let context = generator.rollup_context();
+            context.last_finalized_block_number(tip_block_number)
+        };
+        let collected = mem_block
+            .finalized_custodians()
+            .cloned()
+            .unwrap_or_default();
+        mergeable_custodians
+            .query(collected, last_finalized_block_number)
+            .await?
+    };
+    log::debug!(
+        "finalized custodians {:?}",
+        finalized_custodians.cells_info.len()
+    );
+
+    log::debug!(
+        "output mem block, txs: {} tx withdrawals: {} state_checkpoints: {}",
+        mem_block.txs().len(),
+        mem_block.withdrawals().len(),
+        mem_block.state_checkpoints().len(),
+    );
+
+    Ok((Some(finalized_custodians), param))
 }
