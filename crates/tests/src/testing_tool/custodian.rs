@@ -1,5 +1,5 @@
 use anyhow::Result;
-use gw_block_producer::produce_block::MergeableCustodians;
+use gw_block_producer::custodian::MergeableCustodians;
 use gw_types::offchain::CollectedCustodianCells;
 
 #[derive(Debug, Default)]

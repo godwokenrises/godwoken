@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -16,7 +16,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     constants::{MAX_MEM_BLOCK_DEPOSITS, MIN_CKB_DEPOSIT_CAPACITY, MIN_SUDT_DEPOSIT_CAPACITY},
-    custodian::{query_finalized_custodians, query_mergeable_custodians},
+    custodian::query_finalized_custodians,
     traits::MemPoolProvider,
 };
 
@@ -91,23 +91,5 @@ impl MemPoolProvider for DefaultMemPoolProvider {
         )
         .await?;
         Ok(r.expect_any())
-    }
-
-    // Generate future ourself
-    fn query_mergeable_custodians(
-        &self,
-        collected_custodians: CollectedCustodianCells,
-        last_finalized_block_number: u64,
-    ) -> Pin<Box<dyn Future<Output = Result<CollectedCustodianCells>> + 'static + Send>> {
-        let rpc_client = self.rpc_client.clone();
-        Box::pin(async move {
-            let r = query_mergeable_custodians(
-                &rpc_client,
-                collected_custodians,
-                last_finalized_block_number,
-            )
-            .await?;
-            Ok(r.expect_any())
-        })
     }
 }
