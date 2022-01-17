@@ -297,6 +297,15 @@ impl BlockProducer {
             None => return Ok(()),
         };
 
+        let mem_block_timestamp = {
+            let mem_pool = self.mem_pool.lock().await;
+            mem_pool.mem_block().block_info().timestamp().unpack()
+        };
+        if (median_time.as_millis() as u64) < mem_block_timestamp {
+            // Wait next l1 tip block median time
+            return Ok(());
+        }
+
         // try issue next block
         let mut retry_count = 0;
         while retry_count <= MAX_BLOCK_OUTPUT_PARAM_RETRY_COUNT {
