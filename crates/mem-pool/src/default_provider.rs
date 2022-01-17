@@ -32,10 +32,13 @@ impl DefaultMemPoolProvider {
 impl MemPoolProvider for DefaultMemPoolProvider {
     async fn estimate_next_blocktime(&self) -> Result<Duration> {
         // estimate next l2block timestamp
+        const ONE_SECOND: Duration = Duration::from_secs(1);
         let rpc_client = &self.rpc_client;
         let tip_block_hash = rpc_client.get_tip().await?.block_hash().unpack();
         let opt_time = rpc_client.get_block_median_time(tip_block_hash).await?;
-        opt_time.ok_or_else(|| anyhow!("tip block median time not found"))
+        // Minus one second for first empty block
+        let minus_one_second = opt_time.map(|d| d - ONE_SECOND);
+        minus_one_second.ok_or_else(|| anyhow!("tip block median time not found"))
     }
 
     async fn collect_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
