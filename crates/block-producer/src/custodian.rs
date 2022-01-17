@@ -14,25 +14,25 @@ pub trait MergeableCustodians {
     ) -> Result<CollectedCustodianCells>;
 }
 
-pub struct DefaultMergeableCustodians {
-    rpc_client: RPCClient,
+pub struct DefaultMergeableCustodians<'a> {
+    rpc_client: &'a RPCClient,
 }
 
-impl DefaultMergeableCustodians {
-    pub fn new(rpc_client: RPCClient) -> Self {
+impl<'a> DefaultMergeableCustodians<'a> {
+    pub fn new(rpc_client: &'a RPCClient) -> Self {
         DefaultMergeableCustodians { rpc_client }
     }
 }
 
 #[async_trait]
-impl MergeableCustodians for DefaultMergeableCustodians {
+impl<'a> MergeableCustodians for DefaultMergeableCustodians<'a> {
     async fn query(
         &self,
         collected_custodians: CollectedCustodianCells,
         last_finalized_block_number: u64,
     ) -> Result<CollectedCustodianCells> {
         let query = query_mergeable_custodians(
-            &self.rpc_client,
+            self.rpc_client,
             collected_custodians,
             last_finalized_block_number,
         );

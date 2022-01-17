@@ -403,7 +403,7 @@ impl BlockProducer {
             let param = generate_produce_block_param(
                 &self.store,
                 &self.generator,
-                &DefaultMergeableCustodians::new(self.rpc_client.clone()),
+                &DefaultMergeableCustodians::new(&self.rpc_client),
                 mem_block,
                 post_block_state,
             )
