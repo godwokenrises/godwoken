@@ -8,7 +8,6 @@ use crate::{
     withdrawal_unlocker::FinalizedWithdrawalUnlocker,
 };
 use anyhow::{anyhow, bail, Context, Result};
-use async_std::sync::RwLock;
 use ckb_types::core::hardfork::HardForkSwitch;
 use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
@@ -24,7 +23,7 @@ use gw_generator::{
     },
     backend_manage::BackendManage,
     genesis::init_genesis,
-    Generator,
+    ArcSwap, Generator,
 };
 use gw_mem_pool::{
     default_provider::DefaultMemPoolProvider,
@@ -273,7 +272,7 @@ pub struct BaseInitComponents {
     pub store: Store,
     pub generator: Arc<Generator>,
     pub contracts_dep_manager: Option<ContractsCellDepManager>,
-    pub dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
+    pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
 }
 
 impl BaseInitComponents {
@@ -365,8 +364,9 @@ impl BaseInitComponents {
         )
         .with_context(|| "init genesis")?;
 
-        let dynamic_config_manager =
-            Arc::new(RwLock::new(DynamicConfigManager::create(config.clone())));
+        let dynamic_config_manager = Arc::new(ArcSwap::from_pointee(DynamicConfigManager::create(
+            config.clone(),
+        )));
         let rollup_config_hash: H256 = rollup_config.hash().into();
         let generator = {
             let backend_manage = BackendManage::from_config(config.backends.clone())

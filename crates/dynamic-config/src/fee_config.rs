@@ -1,6 +1,6 @@
 use gw_config::FeeConfig;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct FeeConfigManager {
     fee_config: FeeConfig,
 }
