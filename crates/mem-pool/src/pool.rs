@@ -11,9 +11,6 @@
 use anyhow::{anyhow, Result};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
-    merkle_utils::calculate_state_checkpoint,
-    smt::Blake2bHasher,
-    sparse_merkle_tree::CompiledMerkleProof,
     state::{to_short_address, State},
     H256,
 };
@@ -25,14 +22,13 @@ use gw_rpc_ws_server::notify_controller::NotifyController;
 use gw_store::{
     chain_view::ChainView,
     mem_pool_state::{MemPoolState, MemStore},
-    state::state_db::StateContext,
     traits::chain_store::ChainStore,
     transaction::StoreTransaction,
     Store,
 };
 use gw_traits::CodeStore;
 use gw_types::{
-    offchain::{BlockParam, CellStatus, CollectedCustodianCells, DepositInfo, ErrorTxReceipt},
+    offchain::{CellStatus, DepositInfo, ErrorTxReceipt},
     packed::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt,
         WithdrawalRequest, WithdrawalRequestExtra,
@@ -42,7 +38,6 @@ use gw_types::{
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
-    future::Future,
     iter::FromIterator,
     ops::Shr,
     sync::Arc,
@@ -458,174 +453,8 @@ impl MemPool {
     }
 
     /// output mem block
-    pub fn output_mem_block(
-        &self,
-        output_param: &OutputParam,
-    ) -> impl Future<Output = Result<(Option<CollectedCustodianCells>, BlockParam)>> {
-        let (mem_block, post_merkle_state) =
-            Self::package_mem_block(self.mem_block(), output_param);
-        let current_tip = self.current_tip;
-        let db = self.store.begin_transaction();
-        let query_and_merge_finalized_custodians_fut = {
-            let last_finalized_block_number = {
-                let context = self.generator.rollup_context();
-                context.last_finalized_block_number(current_tip.1)
-            };
-            let collected = mem_block
-                .finalized_custodians()
-                .cloned()
-                .unwrap_or_default();
-            self.provider
-                .query_mergeable_custodians(collected, last_finalized_block_number)
-        };
-
-        async move {
-            // generate kv state & merkle proof from tip state
-            let chain_state = db.state_tree(StateContext::ReadOnly)?;
-
-            let kv_state: Vec<(H256, H256)> = mem_block
-                .touched_keys()
-                .iter()
-                .map(|k| {
-                    chain_state
-                        .get_raw(k)
-                        .map(|v| (*k, v))
-                        .map_err(|err| anyhow!("can't fetch value error: {:?}", err))
-                })
-                .collect::<Result<_>>()?;
-            let kv_state_proof = if kv_state.is_empty() {
-                // nothing need to prove
-                Vec::new()
-            } else {
-                let account_smt = db.account_smt()?;
-
-                account_smt
-                    .merkle_proof(kv_state.iter().map(|(k, _v)| *k).collect())
-                    .map_err(|err| anyhow!("merkle proof error: {:?}", err))?
-                    .compile(kv_state.clone())?
-                    .0
-            };
-
-            let txs: Vec<_> = mem_block
-                .txs()
-                .iter()
-                .map(|tx_hash| {
-                    db.get_mem_pool_transaction(tx_hash)?
-                        .ok_or_else(|| anyhow!("can't find tx_hash from mem pool"))
-                })
-                .collect::<Result<_>>()?;
-            let deposits: Vec<_> = mem_block.deposits().to_vec();
-            let withdrawals: Vec<_> = mem_block
-                .withdrawals()
-                .iter()
-                .map(|withdrawal_hash| {
-                    db.get_mem_pool_withdrawal(withdrawal_hash)?.ok_or_else(|| {
-                        anyhow!(
-                            "can't find withdrawal_hash from mem pool {}",
-                            hex::encode(withdrawal_hash.as_slice())
-                        )
-                    })
-                })
-                .collect::<Result<_>>()?;
-            let state_checkpoint_list = mem_block.state_checkpoints().to_vec();
-            let txs_prev_state_checkpoint = mem_block
-                .txs_prev_state_checkpoint()
-                .ok_or_else(|| anyhow!("Mem block has no txs prev state checkpoint"))?;
-            let prev_merkle_state = mem_block.prev_merkle_state().clone();
-            let parent_block = db
-                .get_block(&current_tip.0)?
-                .ok_or_else(|| anyhow!("can't found tip block"))?;
-
-            // check output block state consistent
-            {
-                let tip_block = db.get_last_valid_tip_block()?;
-                assert_eq!(
-                    parent_block.hash(),
-                    tip_block.hash(),
-                    "check tip block consistent"
-                );
-                assert_eq!(
-                    prev_merkle_state,
-                    parent_block.raw().post_account(),
-                    "check mem block prev merkle state"
-                );
-
-                // check smt root
-                let expected_kv_state_root: H256 = prev_merkle_state.merkle_root().unpack();
-                let smt = db.account_smt()?;
-                assert_eq!(
-                    smt.root(),
-                    &expected_kv_state_root,
-                    "check smt root consistent"
-                );
-
-                if !kv_state_proof.is_empty() {
-                    log::debug!("[output mem-block] check merkle proof");
-                    // check state merkle proof before output
-                    let prev_kv_state_root = CompiledMerkleProof(kv_state_proof.clone())
-                        .compute_root::<Blake2bHasher>(kv_state.clone())?;
-                    let expected_kv_state_root: H256 = prev_merkle_state.merkle_root().unpack();
-                    assert_eq!(
-                        expected_kv_state_root, prev_kv_state_root,
-                        "check state merkle proof"
-                    );
-                }
-
-                let tip_block_post_account = tip_block.raw().post_account();
-                assert_eq!(
-                    prev_merkle_state, tip_block_post_account,
-                    "check output mem block txs prev state"
-                );
-                if withdrawals.is_empty() && deposits.is_empty() {
-                    let post_block_checkpoint = calculate_state_checkpoint(
-                        &tip_block_post_account.merkle_root().unpack(),
-                        tip_block_post_account.count().unpack(),
-                    );
-                    assert_eq!(
-                        txs_prev_state_checkpoint, post_block_checkpoint,
-                        "check mem block txs prev state"
-                    );
-                    if txs.is_empty() {
-                        assert_eq!(
-                            post_merkle_state, tip_block_post_account,
-                            "check mem block post account"
-                        )
-                    }
-                }
-            }
-
-            let block_info = mem_block.block_info();
-            let param = BlockParam {
-                number: block_info.number().unpack(),
-                block_producer_id: block_info.block_producer_id().unpack(),
-                timestamp: block_info.timestamp().unpack(),
-                txs,
-                deposits,
-                withdrawals,
-                state_checkpoint_list,
-                parent_block,
-                txs_prev_state_checkpoint,
-                prev_merkle_state,
-                post_merkle_state,
-                kv_state,
-                kv_state_proof,
-            };
-
-            let finalized_custodians = query_and_merge_finalized_custodians_fut.await?;
-            log::debug!(
-                "finalized custodians {:?}",
-                finalized_custodians.cells_info.len()
-            );
-
-            log::debug!(
-                "output mem block, txs: {} tx withdrawals: {} state_checkpoints: {}",
-                mem_block.txs().len(),
-                mem_block.withdrawals().len(),
-                mem_block.state_checkpoints().len(),
-            );
-
-            Ok((Some(finalized_custodians), param))
-        }
+    pub fn output_mem_block(&self, output_param: &OutputParam) -> (MemBlock, AccountMerkleState) {
+        Self::package_mem_block(&self.mem_block, output_param)
     }
 
     pub(crate) fn package_mem_block(

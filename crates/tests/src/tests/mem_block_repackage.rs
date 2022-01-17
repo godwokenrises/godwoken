@@ -2,11 +2,12 @@
 
 use crate::testing_tool::{
     chain::{setup_chain, ALWAYS_SUCCESS_CODE_HASH},
+    custodian::DummyMergeableCustodians,
     mem_pool_provider::DummyMemPoolProvider,
 };
 
 use gw_block_producer::{
-    produce_block::{produce_block, ProduceBlockParam},
+    produce_block::{generate_produce_block_param, produce_block, ProduceBlockParam},
     replay_block::ReplayBlock,
 };
 use gw_common::H256;
@@ -68,10 +69,16 @@ async fn test_repackage_mem_block() {
         );
     }
 
-    let (_, block_param) = mem_pool
-        .output_mem_block(&OutputParam { retry_count: 1 })
-        .await
-        .unwrap();
+    let (mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
+    let (_custodians, block_param) = generate_produce_block_param(
+        chain.store(),
+        chain.generator(),
+        &DummyMergeableCustodians {},
+        mem_block,
+        post_merkle_state,
+    )
+    .await
+    .unwrap();
 
     let deposit_cells = block_param.deposits.clone();
 
