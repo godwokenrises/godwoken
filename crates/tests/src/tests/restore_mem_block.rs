@@ -16,6 +16,7 @@ use gw_common::{
 };
 use gw_config::RPCClientConfig;
 use gw_dynamic_config::manager::DynamicConfigManager;
+use gw_generator::ArcSwap;
 use gw_rpc_client::ckb_client::CKBClient;
 use gw_rpc_client::indexer_client::CKBIndexerClient;
 use gw_rpc_client::rpc_client::RPCClient;
@@ -28,7 +29,6 @@ use gw_types::packed::{
     RawL2Transaction, RawWithdrawalRequest, SUDTArgs, SUDTTransfer, Script, WithdrawalRequest,
 };
 use gw_types::prelude::Pack;
-use smol::lock::RwLock;
 
 const CKB: u64 = 100000000;
 
@@ -221,7 +221,8 @@ async fn test_restore_mem_block() {
                 indexer_client,
             )
         };
-        let dynamic_config_manager = Arc::new(RwLock::new(DynamicConfigManager::default()));
+        let dynamic_config_manager =
+            Arc::new(ArcSwap::from_pointee(DynamicConfigManager::default()));
         let args: RegistryArgs<TestModeControl> = RegistryArgs {
             store,
             mem_pool,

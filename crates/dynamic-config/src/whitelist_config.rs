@@ -4,7 +4,7 @@ use gw_tx_filter::{
     polyjuice_contract_creator_allowlist::PolyjuiceContractCreatorAllowList,
 };
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct WhilteListConfigManager {
     sudt_proxy_account_whitelist: SUDTProxyAccountAllowlist,
     polyjuice_contract_creator_allowlist: Option<PolyjuiceContractCreatorAllowList>,

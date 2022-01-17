@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
+    sync::{atomic::Ordering::SeqCst, Arc},
     time::Instant,
 };
 
@@ -19,6 +19,7 @@ use crate::{
 };
 use crate::{error::AccountError, syscalls::L2Syscalls};
 use crate::{error::LockAlgorithmError, traits::StateExt};
+use arc_swap::ArcSwap;
 use gw_ckb_hardfork::GLOBAL_VM_VERSION;
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
@@ -28,11 +29,7 @@ use gw_common::{
     state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE_TYPE},
     H256,
 };
-<<<<<<< HEAD
 use gw_dynamic_config::manager::DynamicConfigManager;
-=======
-use gw_config::RPCConfig;
->>>>>>> f963e136 (refactor: remove all block_on)
 use gw_store::{state::state_db::StateContext, transaction::StoreTransaction};
 use gw_traits::{ChainView, CodeStore};
 use gw_types::{
@@ -51,7 +48,6 @@ use ckb_vm::{DefaultMachineBuilder, SupportMachine};
 
 #[cfg(not(has_asm))]
 use ckb_vm::TraceMachine;
-use smol::lock::RwLock;
 
 pub struct ApplyBlockArgs {
     pub l2block: L2Block,
@@ -115,7 +111,7 @@ pub struct Generator {
     backend_manage: BackendManage,
     account_lock_manage: AccountLockManage,
     rollup_context: RollupContext,
-    dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
+    dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
 }
 
 impl Generator {
@@ -123,7 +119,7 @@ impl Generator {
         backend_manage: BackendManage,
         account_lock_manage: AccountLockManage,
         rollup_context: RollupContext,
-        dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
+        dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     ) -> Self {
         Generator {
             backend_manage,
@@ -705,10 +701,11 @@ impl Generator {
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
     ) -> Result<RunResult, TransactionError> {
-        if let Some(polyjuice_contract_creator_allowlist) =
-            smol::block_on(self.dynamic_config_manager.read())
-                .get_polyjuice_contract_creator_allowlist()
-                .as_ref()
+        if let Some(polyjuice_contract_creator_allowlist) = self
+            .dynamic_config_manager
+            .load()
+            .get_polyjuice_contract_creator_allowlist()
+            .as_ref()
         {
             use gw_tx_filter::polyjuice_contract_creator_allowlist::Error;
             match polyjuice_contract_creator_allowlist.validate_with_state(state, raw_tx) {
@@ -774,7 +771,9 @@ impl Generator {
         }
         // check account id of sudt proxy contract creator is from whitelist
         let from_id = raw_tx.from_id().unpack();
-        if smol::block_on(self.dynamic_config_manager.read())
+        if self
+            .dynamic_config_manager
+            .load()
             .get_sudt_proxy_account_whitelist()
             .validate(&run_result, from_id)
         {

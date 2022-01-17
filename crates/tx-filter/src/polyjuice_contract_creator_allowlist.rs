@@ -24,6 +24,7 @@ impl From<gw_common::error::Error> for Error {
     }
 }
 
+#[derive(Clone)]
 pub struct PolyjuiceContractCreatorAllowList {
     pub polyjuice_code_hash: H256,
     pub allowed_creator_eth_address: HashSet<[u8; 20]>,

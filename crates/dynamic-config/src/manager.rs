@@ -12,7 +12,7 @@ use crate::{fee_config::FeeConfigManager, whitelist_config::WhilteListConfigMana
 
 // Some configs can be hot reloaded through DynamicConfigManager.
 // So that we don't need to restart to take effect every time.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct DynamicConfigManager {
     config_github_url: Option<(String, String)>, // url and token
 

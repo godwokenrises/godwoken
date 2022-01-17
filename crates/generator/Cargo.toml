@@ -32,6 +32,7 @@ sha3 = "0.9.1"
 log = "0.4"
 hex = "0.4"
 tokio = "1.15"
+arc-swap = "1.5"
 
 [dev-dependencies]
 gw-utils = {path = "../utils" }

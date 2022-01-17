@@ -1,11 +1,10 @@
 use anyhow::{anyhow, Result};
-use async_std::sync::RwLock;
 use async_trait::async_trait;
 use ckb_types::prelude::{Builder, Entity};
 use gw_common::{blake2b::new_blake2b, state::State, H256};
 use gw_config::{FeeConfig, MemPoolConfig, NodeMode, RPCMethods, RPCRateLimit, RPCServerConfig};
 use gw_dynamic_config::manager::{DynamicConfigManager, DynamicConfigReloadResponse};
-use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, Generator};
+use gw_generator::{error::TransactionError, sudt::build_l2_sudt_script, ArcSwap, Generator};
 use gw_jsonrpc_types::{
     blockchain::Script,
     ckb_jsonrpc_types::{JsonBytes, Uint128, Uint32},
@@ -127,7 +126,7 @@ pub struct RegistryArgs<T> {
     pub rpc_client: RPCClient,
     pub send_tx_rate_limit: Option<RPCRateLimit>,
     pub server_config: RPCServerConfig,
-    pub dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
+    pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     pub last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
 }
 
@@ -144,7 +143,7 @@ pub struct Registry {
     rpc_client: RPCClient,
     send_tx_rate_limit: Option<RPCRateLimit>,
     server_config: RPCServerConfig,
-    dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
+    dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     last_submitted_tx_hash: Option<Arc<tokio::sync::RwLock<H256>>>,
     mem_pool_state: Arc<MemPoolState>,
 }
@@ -334,7 +333,7 @@ struct RequestSubmitter {
     mem_pool: Arc<Mutex<gw_mem_pool::pool::MemPool>>,
     submit_rx: async_channel::Receiver<Request>,
     queue: Arc<Mutex<FeeQueue>>,
-    dynamic_config_manager: Arc<RwLock<DynamicConfigManager>>,
+    dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     generator: Arc<Generator>,
     mem_pool_state: Arc<MemPoolState>,
     store: Store,
@@ -444,7 +443,7 @@ impl RequestSubmitter {
                 let state = snap.state().expect("get mem state");
                 let kind = req.kind();
                 let hash = req.hash();
-                let dynamic_config_manager = &self.dynamic_config_manager.read().await;
+                let dynamic_config_manager = self.dynamic_config_manager.load();
                 let fee_config = dynamic_config_manager.get_fee_config();
                 match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
                     Ok(entry) => {
@@ -467,7 +466,7 @@ impl RequestSubmitter {
             while let Ok(req) = self.submit_rx.try_recv() {
                 let kind = req.kind();
                 let hash = req.hash();
-                let dynamic_config_manager = &self.dynamic_config_manager.read().await;
+                let dynamic_config_manager = self.dynamic_config_manager.load();
                 let fee_config = dynamic_config_manager.get_fee_config();
                 match req_to_entry(fee_config, self.generator.clone(), req, &state, queue.len()) {
                     Ok(entry) => {
@@ -1330,9 +1329,9 @@ async fn get_last_submitted_info(
 }
 
 async fn get_fee_config(
-    config: Data<Arc<RwLock<DynamicConfigManager>>>,
+    config: Data<Arc<ArcSwap<DynamicConfigManager>>>,
 ) -> Result<gw_jsonrpc_types::godwoken::FeeConfig> {
-    let config = config.read().await;
+    let config = config.load();
     let fee = config.get_fee_config();
     let fee_config = gw_jsonrpc_types::godwoken::FeeConfig {
         meta_cycles_limit: fee.meta_cycles_limit.into(),
@@ -1425,10 +1424,12 @@ async fn dump_jemalloc_profiling() -> Result<()> {
     Ok(())
 }
 
-// Reload config dynamically and return the defference between two configs.
+// Reload config dynamically and return the difference between two configs.
 async fn reload_config(
-    dynamic_config_manager: Data<Arc<RwLock<DynamicConfigManager>>>,
+    dynamic_config_manager: Data<Arc<ArcSwap<DynamicConfigManager>>>,
 ) -> Result<DynamicConfigReloadResponse> {
-    let mut config = dynamic_config_manager.write().await;
-    config.reload()
+    let mut config = (**dynamic_config_manager.load()).to_owned();
+    let resp = config.reload();
+    dynamic_config_manager.store(Arc::new(config));
+    resp
 }

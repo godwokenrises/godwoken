@@ -18,6 +18,7 @@ pub mod vm_cost_model;
 mod tests;
 
 // re-exports
+pub use arc_swap::*;
 pub use error::Error;
 pub use generator::Generator;
 pub use types::*;
