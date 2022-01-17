@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin, time::Duration};
+use std::time::Duration;
 
 use anyhow::Result;
 use gw_mem_pool::traits::MemPoolProvider;
@@ -35,12 +35,5 @@ impl MemPoolProvider for DummyMemPoolProvider {
             cell: Some(Default::default()),
             status: CellStatus::Live,
         }))
-    }
-    fn query_mergeable_custodians(
-        &self,
-        collected_custodians: CollectedCustodianCells,
-        _last_finalized_block_number: u64,
-    ) -> Pin<Box<dyn Future<Output = Result<CollectedCustodianCells>> + 'static + Send>> {
-        Box::pin(async move { Ok(collected_custodians) })
     }
 }

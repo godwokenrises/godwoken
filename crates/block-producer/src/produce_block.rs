@@ -3,7 +3,6 @@
 //! A block producer can act without the ability of produce block.
 
 use anyhow::{anyhow, Result};
-use async_trait::async_trait;
 use gw_common::{
     h256_ext::H256Ext,
     merkle_utils::{calculate_ckb_merkle_root, calculate_state_checkpoint, ckb_merkle_leaf_hash},
@@ -13,8 +12,7 @@ use gw_common::{
     H256,
 };
 use gw_generator::Generator;
-use gw_mem_pool::{custodian::query_mergeable_custodians, mem_block::MemBlock};
-use gw_rpc_client::rpc_client::RPCClient;
+use gw_mem_pool::mem_block::MemBlock;
 use gw_store::{
     state::state_db::StateContext, traits::chain_store::ChainStore, transaction::StoreTransaction,
     Store,
@@ -28,6 +26,8 @@ use gw_types::{
     },
     prelude::*,
 };
+
+use crate::custodian::MergeableCustodians;
 
 #[derive(Clone)]
 pub struct ProduceBlockResult {
@@ -171,41 +171,6 @@ pub fn produce_block(
         global_state,
         withdrawal_extras: withdrawals,
     })
-}
-
-#[async_trait]
-pub trait MergeableCustodians {
-    async fn query(
-        &self,
-        collected_custodians: CollectedCustodianCells,
-        last_finalized_block_number: u64,
-    ) -> Result<CollectedCustodianCells>;
-}
-
-pub struct DefaultMergeableCustodians {
-    rpc_client: RPCClient,
-}
-
-impl DefaultMergeableCustodians {
-    pub fn new(rpc_client: RPCClient) -> Self {
-        DefaultMergeableCustodians { rpc_client }
-    }
-}
-
-#[async_trait]
-impl MergeableCustodians for DefaultMergeableCustodians {
-    async fn query(
-        &self,
-        collected_custodians: CollectedCustodianCells,
-        last_finalized_block_number: u64,
-    ) -> Result<CollectedCustodianCells> {
-        let query = query_mergeable_custodians(
-            &self.rpc_client,
-            collected_custodians,
-            last_finalized_block_number,
-        );
-        Ok(query.await?.expect_any())
-    }
 }
 
 // Generate produce block param

@@ -1,9 +1,9 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::{
+    custodian::DefaultMergeableCustodians,
     produce_block::{
-        generate_produce_block_param, produce_block, DefaultMergeableCustodians, ProduceBlockParam,
-        ProduceBlockResult,
+        generate_produce_block_param, produce_block, ProduceBlockParam, ProduceBlockResult,
     },
     replay_block::ReplayBlock,
     test_mode_control::TestModeControl,
