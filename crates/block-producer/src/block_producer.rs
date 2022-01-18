@@ -1,7 +1,7 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::{
-    custodian::DefaultMergeableCustodians,
+    custodian::query_mergeable_custodians,
     produce_block::{
         generate_produce_block_param, produce_block, ProduceBlockParam, ProduceBlockResult,
     },
@@ -400,19 +400,31 @@ impl BlockProducer {
             };
 
             let t = Instant::now();
-            let param = generate_produce_block_param(
-                &self.store,
-                &self.generator,
-                &DefaultMergeableCustodians::new(&self.rpc_client),
-                mem_block,
-                post_block_state,
-            )
-            .await?;
+            let tip_block_number = mem_block.block_info().number().unpack().saturating_sub(1);
+            let (finalized_custodians, produce_block_param) =
+                generate_produce_block_param(&self.store, mem_block, post_block_state)?;
+            let finalized_custodians = {
+                let last_finalized_block_number = {
+                    let context = self.generator.rollup_context();
+                    context.last_finalized_block_number(tip_block_number)
+                };
+                let query = query_mergeable_custodians(
+                    &self.rpc_client,
+                    finalized_custodians.unwrap_or_default(),
+                    last_finalized_block_number,
+                );
+                query.await?.expect_any()
+            };
+            log::debug!(
+                "finalized custodians {:?}",
+                finalized_custodians.cells_info.len()
+            );
+
             log::debug!(
                 "[compose_next_block_submit_tx] generate produce block param {}ms",
                 t.elapsed().as_millis()
             );
-            param
+            (Some(finalized_custodians), produce_block_param)
         };
         let deposit_cells = block_param.deposits.clone();
 

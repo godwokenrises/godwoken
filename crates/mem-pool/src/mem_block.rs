@@ -228,6 +228,10 @@ impl MemBlock {
         self.finalized_custodians.as_ref()
     }
 
+    pub fn take_finalized_custodians(&mut self) -> Option<CollectedCustodianCells> {
+        self.finalized_custodians.take()
+    }
+
     pub fn withdrawals_set(&self) -> &HashSet<H256> {
         &self.withdrawals_set
     }

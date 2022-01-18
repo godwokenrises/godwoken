@@ -27,8 +27,6 @@ use gw_types::{
     prelude::*,
 };
 
-use crate::custodian::MergeableCustodians;
-
 #[derive(Clone)]
 pub struct ProduceBlockResult {
     pub block: L2Block,
@@ -174,11 +172,9 @@ pub fn produce_block(
 }
 
 // Generate produce block param
-pub async fn generate_produce_block_param(
+pub fn generate_produce_block_param(
     store: &Store,
-    generator: &Generator,
-    mergeable_custodians: &impl MergeableCustodians,
-    mem_block: MemBlock,
+    mut mem_block: MemBlock,
     post_merkle_state: AccountMerkleState,
 ) -> Result<(Option<CollectedCustodianCells>, BlockParam)> {
     let db = store.begin_transaction();
@@ -319,24 +315,6 @@ pub async fn generate_produce_block_param(
         kv_state_proof,
     };
 
-    let finalized_custodians = {
-        let last_finalized_block_number = {
-            let context = generator.rollup_context();
-            context.last_finalized_block_number(tip_block_number)
-        };
-        let collected = mem_block
-            .finalized_custodians()
-            .cloned()
-            .unwrap_or_default();
-        mergeable_custodians
-            .query(collected, last_finalized_block_number)
-            .await?
-    };
-    log::debug!(
-        "finalized custodians {:?}",
-        finalized_custodians.cells_info.len()
-    );
-
     log::debug!(
         "output mem block, txs: {} tx withdrawals: {} state_checkpoints: {}",
         mem_block.txs().len(),
@@ -344,5 +322,5 @@ pub async fn generate_produce_block_param(
         mem_block.state_checkpoints().len(),
     );
 
-    Ok((Some(finalized_custodians), param))
+    Ok((mem_block.take_finalized_custodians(), param))
 }

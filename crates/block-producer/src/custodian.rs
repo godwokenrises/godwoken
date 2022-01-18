@@ -1,44 +1,8 @@
 use anyhow::Result;
-use async_trait::async_trait;
 use gw_rpc_client::rpc_client::{QueryResult, RPCClient};
 use gw_types::offchain::CollectedCustodianCells;
 
 pub const MAX_CUSTODIANS: usize = 50;
-
-#[async_trait]
-pub trait MergeableCustodians {
-    async fn query(
-        &self,
-        collected_custodians: CollectedCustodianCells,
-        last_finalized_block_number: u64,
-    ) -> Result<CollectedCustodianCells>;
-}
-
-pub struct DefaultMergeableCustodians<'a> {
-    rpc_client: &'a RPCClient,
-}
-
-impl<'a> DefaultMergeableCustodians<'a> {
-    pub fn new(rpc_client: &'a RPCClient) -> Self {
-        DefaultMergeableCustodians { rpc_client }
-    }
-}
-
-#[async_trait]
-impl<'a> MergeableCustodians for DefaultMergeableCustodians<'a> {
-    async fn query(
-        &self,
-        collected_custodians: CollectedCustodianCells,
-        last_finalized_block_number: u64,
-    ) -> Result<CollectedCustodianCells> {
-        let query = query_mergeable_custodians(
-            self.rpc_client,
-            collected_custodians,
-            last_finalized_block_number,
-        );
-        Ok(query.await?.expect_any())
-    }
-}
 
 pub async fn query_mergeable_custodians(
     rpc_client: &RPCClient,

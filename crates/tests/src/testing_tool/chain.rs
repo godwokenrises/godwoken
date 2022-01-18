@@ -32,7 +32,7 @@ use tokio::sync::Mutex;
 use std::{collections::HashSet, time::Duration};
 use std::{fs, io::Read, path::PathBuf, sync::Arc};
 
-use super::{custodian::DummyMergeableCustodians, mem_pool_provider::DummyMemPoolProvider};
+use super::mem_pool_provider::DummyMemPoolProvider;
 
 const SCRIPT_DIR: &str = "../../.tmp/binaries/godwoken-scripts";
 const ALWAYS_SUCCESS_PATH: &str = "always-success";
@@ -458,14 +458,8 @@ pub async fn construct_block_with_timestamp(
     mem_pool.set_provider(Box::new(provider));
 
     let (mem_block, post_merkle_state) = mem_pool.output_mem_block(&OutputParam::default());
-    let (_custodians, block_param) = generate_produce_block_param(
-        chain.store(),
-        chain.generator(),
-        &DummyMergeableCustodians {},
-        mem_block,
-        post_merkle_state,
-    )
-    .await?;
+    let (_custodians, block_param) =
+        generate_produce_block_param(chain.store(), mem_block, post_merkle_state)?;
     let param = ProduceBlockParam {
         stake_cell_owner_lock_hash,
         rollup_config_hash,
