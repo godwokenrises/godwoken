@@ -33,6 +33,7 @@ pub const GW_DATA_HASH_TYPE: u8 = 4;
 pub const GW_SHORT_SCRIPT_HASH_TO_SCRIPT_HASH_TYPE: u8 = 5;
 
 pub const SUDT_KEY_FLAG_BALANCE: u32 = 1;
+pub const SUDT_KEY_FLAG_TOTAL_SUPPLY: u32 = 2;
 
 // 20 Bytes
 pub const DEFAULT_SHORT_SCRIPT_HASH_LEN: usize = 20;
@@ -192,6 +193,16 @@ pub trait State {
         Ok(balance.to_u128())
     }
 
+    fn get_sudt_total_supply(&self, sudt_id: u32) -> Result<u128, Error> {
+        let sudt_script_hash: [u8; 32] = self.get_script_hash(sudt_id)?.into();
+        let sudt_key = build_sudt_key(
+            SUDT_KEY_FLAG_TOTAL_SUPPLY,
+            &sudt_script_hash[..DEFAULT_SHORT_SCRIPT_HASH_LEN],
+        );
+        let total_supoly = self.get_raw(&build_account_key(sudt_id, &sudt_key))?;
+        Ok(total_supoly.to_u128())
+    }
+
     fn store_data_hash(&mut self, data_hash: H256) -> Result<(), Error> {
         let key = build_data_hash_key(data_hash.as_slice());
         self.update_raw(key, H256::one())?;
@@ -215,6 +226,20 @@ pub trait State {
         let mut balance = self.get_raw(&raw_key)?.to_u128();
         balance = balance.checked_add(amount).ok_or(Error::AmountOverflow)?;
         self.update_raw(raw_key, H256::from_u128(balance))?;
+
+        // update total supply
+        let sudt_script_hash: [u8; 32] = self.get_script_hash(sudt_id)?.into();
+        let sudt_key = build_sudt_key(
+            SUDT_KEY_FLAG_TOTAL_SUPPLY,
+            &sudt_script_hash[..DEFAULT_SHORT_SCRIPT_HASH_LEN],
+        );
+        let raw_key = build_account_key(sudt_id, &sudt_key);
+        let mut total_supply = self.get_raw(&raw_key)?.to_u128();
+        total_supply = total_supply
+            .checked_add(amount)
+            .ok_or(Error::AmountOverflow)?;
+        self.update_raw(raw_key, H256::from_u128(total_supply))?;
+
         Ok(())
     }
 
@@ -229,6 +254,20 @@ pub trait State {
         let mut balance = self.get_raw(&raw_key)?.to_u128();
         balance = balance.checked_sub(amount).ok_or(Error::AmountOverflow)?;
         self.update_raw(raw_key, H256::from_u128(balance))?;
+
+        // update total supply
+        let sudt_script_hash: [u8; 32] = self.get_script_hash(sudt_id)?.into();
+        let sudt_key = build_sudt_key(
+            SUDT_KEY_FLAG_TOTAL_SUPPLY,
+            &sudt_script_hash[..DEFAULT_SHORT_SCRIPT_HASH_LEN],
+        );
+        let raw_key = build_account_key(sudt_id, &sudt_key);
+        let mut total_supply = self.get_raw(&raw_key)?.to_u128();
+        total_supply = total_supply
+            .checked_sub(amount)
+            .ok_or(Error::AmountOverflow)?;
+        self.update_raw(raw_key, H256::from_u128(total_supply))?;
+
         Ok(())
     }
 
