@@ -153,12 +153,7 @@ impl BenchExecutionEnvironment {
             manage
         };
 
-        let generator = Generator::new(
-            backend_manage,
-            account_lock_manage,
-            rollup_context,
-            Default::default(),
-        );
+        let generator = Generator::new(backend_manage, account_lock_manage, rollup_context);
 
         Self::init_genesis(&store, &genesis_config, accounts);
         let mem_pool_state = MemPoolState::new(Arc::new(MemStore::new(store.get_snapshot())));
@@ -236,7 +231,14 @@ impl BenchExecutionEnvironment {
 
             let run_result = self
                 .generator
-                .execute_transaction(&self.chain, &state, &block_info, &raw_tx, L2TX_MAX_CYCLES)
+                .execute_transaction(
+                    &self.chain,
+                    &state,
+                    &block_info,
+                    &raw_tx,
+                    L2TX_MAX_CYCLES,
+                    None,
+                )
                 .unwrap();
 
             state.apply_run_result(&run_result).unwrap();
