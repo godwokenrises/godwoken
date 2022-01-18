@@ -10,10 +10,11 @@ use gw_chain::chain::Chain;
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
     state::{to_short_address, State},
-    H256,
+    H256, U256,
 };
 use gw_generator::{
     error::{DepositError, WithdrawalError},
+    sudt::build_l2_sudt_script,
     Error,
 };
 use gw_store::state::state_db::StateContext;
@@ -160,7 +161,7 @@ async fn test_deposit_and_withdrawal() {
             .unwrap();
         assert_eq!(ckb_balance, capacity as u128);
         let ckb_total_supply = tree.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap();
-        assert_eq!(ckb_total_supply, capacity as u128);
+        assert_eq!(ckb_total_supply, U256::from(&capacity));
         (user_id, user_script_hash, ckb_balance, ckb_total_supply)
     };
 
@@ -190,7 +191,7 @@ async fn test_deposit_and_withdrawal() {
         );
         assert_eq!(
             state.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap(),
-            capacity as u128
+            U256::from(&capacity)
         )
     }
     // withdrawal
@@ -215,7 +216,7 @@ async fn test_deposit_and_withdrawal() {
     let ckb_total_supply2 = tree.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap();
     assert_eq!(
         ckb_total_supply,
-        ckb_total_supply2 + withdraw_capacity as u128
+        ckb_total_supply2 + U256::from(&withdraw_capacity)
     );
     let nonce = tree.get_nonce(user_id).unwrap();
     assert_eq!(nonce, 1);
@@ -240,10 +241,140 @@ async fn test_deposit_and_withdrawal() {
         );
         assert_eq!(
             state.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap(),
-            ckb_balance2
+            U256::from(&ckb_balance2)
         );
         assert_eq!(state.get_nonce(user_id).unwrap(), nonce);
     }
+}
+
+#[tokio::test]
+async fn test_deposit_u128_overflow() {
+    env_logger::init();
+    let rollup_type_script = Script::default();
+    let rollup_script_hash = rollup_type_script.hash();
+    let mut chain = setup_chain(rollup_type_script.clone()).await;
+    let rollup_cell = CellOutput::new_builder()
+        .type_(Some(rollup_type_script).pack())
+        .build();
+
+    let sudt_script = Script::new_builder()
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(77);
+            args.pack()
+        })
+        .build();
+    let sudt_script_hash: H256 = sudt_script.hash().into();
+
+    let capacity = 600_00000000;
+    let alice_script = Script::new_builder()
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(42);
+            args.pack()
+        })
+        .build();
+    let alice_script_hash: H256 = alice_script.hash().into();
+
+    deposite_to_chain(
+        &mut chain,
+        rollup_cell.clone(),
+        alice_script,
+        capacity,
+        sudt_script_hash,
+        sudt_script.clone(),
+        u128::MAX,
+    )
+    .await
+    .unwrap();
+
+    let bob_script = Script::new_builder()
+        .code_hash(ALWAYS_SUCCESS_CODE_HASH.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args({
+            let mut args = rollup_script_hash.to_vec();
+            args.push(43);
+            args.pack()
+        })
+        .build();
+    let bob_script_hash: H256 = bob_script.hash().into();
+
+    deposite_to_chain(
+        &mut chain,
+        rollup_cell.clone(),
+        bob_script.clone(),
+        capacity,
+        sudt_script_hash,
+        sudt_script,
+        u128::MAX,
+    )
+    .await
+    .unwrap();
+
+    let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
+    let snap = mem_pool.mem_pool_state().load();
+    let tree = snap.state().unwrap();
+
+    // check user account
+    assert_eq!(
+        tree.get_account_count().unwrap(),
+        5,
+        "2 builtin accounts plus 2 deposit and 1 sudt"
+    );
+
+    let alice_id = tree
+        .get_account_id_by_script_hash(&alice_script_hash)
+        .unwrap()
+        .expect("account exists");
+    assert_ne!(alice_id, 0);
+
+    let alice_script_hash = tree.get_script_hash(alice_id).unwrap();
+    let ckb_balance = tree
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&alice_script_hash))
+        .unwrap();
+    assert_eq!(ckb_balance, capacity as u128);
+
+    let bob_id = tree
+        .get_account_id_by_script_hash(&bob_script_hash)
+        .unwrap()
+        .expect("account exists");
+    assert_ne!(bob_id, 0);
+
+    let bob_script_hash = tree.get_script_hash(bob_id).unwrap();
+    let ckb_balance = tree
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&bob_script_hash))
+        .unwrap();
+    assert_eq!(ckb_balance, capacity as u128);
+
+    let ckb_total_supply = tree.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap();
+    assert_eq!(ckb_total_supply, U256::from(&capacity * 2));
+
+    let l2_sudt_script_hash =
+        build_l2_sudt_script(&chain.generator().rollup_context(), &sudt_script_hash).hash();
+    let sudt_id = tree
+        .get_account_id_by_script_hash(&l2_sudt_script_hash.into())
+        .unwrap()
+        .expect("sudt exists");
+
+    let alice_sudt_balance = tree
+        .get_sudt_balance(sudt_id, to_short_address(&alice_script_hash))
+        .unwrap();
+    assert_eq!(alice_sudt_balance, u128::MAX);
+
+    let bob_sudt_balance = tree
+        .get_sudt_balance(sudt_id, to_short_address(&bob_script_hash))
+        .unwrap();
+    assert_eq!(bob_sudt_balance, u128::MAX);
+
+    let sudt_total_supply = tree.get_sudt_total_supply(sudt_id).unwrap();
+    assert_eq!(
+        sudt_total_supply,
+        U256::from(u128::MAX) + U256::from(u128::MAX)
+    );
 }
 
 #[tokio::test]

@@ -17,7 +17,7 @@
 // Thus, the first 5 bytes keeps uniqueness for different type of keys.
 
 use crate::error::Error;
-use crate::h256_ext::{H256Ext, H256};
+use crate::h256_ext::{H256Ext, H256, U256};
 use crate::vec::Vec;
 use crate::{blake2b::new_blake2b, merkle_utils::calculate_state_checkpoint};
 use core::mem::size_of;
@@ -193,11 +193,11 @@ pub trait State {
         Ok(balance.to_u128())
     }
 
-    fn get_sudt_total_supply(&self, sudt_id: u32) -> Result<u128, Error> {
+    fn get_sudt_total_supply(&self, sudt_id: u32) -> Result<U256, Error> {
         let sudt_script_hash: [u8; 32] = self.get_script_hash(sudt_id)?.into();
         let sudt_key = build_sudt_key(SUDT_KEY_FLAG_TOTAL_SUPPLY, &sudt_script_hash);
         let total_supoly = self.get_raw(&build_account_key(sudt_id, &sudt_key))?;
-        Ok(total_supoly.to_u128())
+        Ok(total_supoly.to_u256())
     }
 
     fn store_data_hash(&mut self, data_hash: H256) -> Result<(), Error> {
@@ -228,11 +228,11 @@ pub trait State {
         let sudt_script_hash: [u8; 32] = self.get_script_hash(sudt_id)?.into();
         let sudt_key = build_sudt_key(SUDT_KEY_FLAG_TOTAL_SUPPLY, &sudt_script_hash);
         let raw_key = build_account_key(sudt_id, &sudt_key);
-        let mut total_supply = self.get_raw(&raw_key)?.to_u128();
+        let mut total_supply = self.get_raw(&raw_key)?.to_u256();
         total_supply = total_supply
-            .checked_add(amount)
+            .checked_add(&U256::from(&amount))
             .ok_or(Error::AmountOverflow)?;
-        self.update_raw(raw_key, H256::from_u128(total_supply))?;
+        self.update_raw(raw_key, H256::from_u256(total_supply))?;
 
         Ok(())
     }
@@ -253,11 +253,11 @@ pub trait State {
         let sudt_script_hash: [u8; 32] = self.get_script_hash(sudt_id)?.into();
         let sudt_key = build_sudt_key(SUDT_KEY_FLAG_TOTAL_SUPPLY, &sudt_script_hash);
         let raw_key = build_account_key(sudt_id, &sudt_key);
-        let mut total_supply = self.get_raw(&raw_key)?.to_u128();
+        let mut total_supply = self.get_raw(&raw_key)?.to_u256();
         total_supply = total_supply
-            .checked_sub(amount)
+            .checked_sub(&U256::from(&amount))
             .ok_or(Error::AmountOverflow)?;
-        self.update_raw(raw_key, H256::from_u128(total_supply))?;
+        self.update_raw(raw_key, H256::from_u256(total_supply))?;
 
         Ok(())
     }
