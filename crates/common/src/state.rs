@@ -195,10 +195,7 @@ pub trait State {
 
     fn get_sudt_total_supply(&self, sudt_id: u32) -> Result<u128, Error> {
         let sudt_script_hash: [u8; 32] = self.get_script_hash(sudt_id)?.into();
-        let sudt_key = build_sudt_key(
-            SUDT_KEY_FLAG_TOTAL_SUPPLY,
-            &sudt_script_hash[..DEFAULT_SHORT_SCRIPT_HASH_LEN],
-        );
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_TOTAL_SUPPLY, &sudt_script_hash);
         let total_supoly = self.get_raw(&build_account_key(sudt_id, &sudt_key))?;
         Ok(total_supoly.to_u128())
     }
@@ -229,10 +226,7 @@ pub trait State {
 
         // update total supply
         let sudt_script_hash: [u8; 32] = self.get_script_hash(sudt_id)?.into();
-        let sudt_key = build_sudt_key(
-            SUDT_KEY_FLAG_TOTAL_SUPPLY,
-            &sudt_script_hash[..DEFAULT_SHORT_SCRIPT_HASH_LEN],
-        );
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_TOTAL_SUPPLY, &sudt_script_hash);
         let raw_key = build_account_key(sudt_id, &sudt_key);
         let mut total_supply = self.get_raw(&raw_key)?.to_u128();
         total_supply = total_supply
@@ -257,10 +251,7 @@ pub trait State {
 
         // update total supply
         let sudt_script_hash: [u8; 32] = self.get_script_hash(sudt_id)?.into();
-        let sudt_key = build_sudt_key(
-            SUDT_KEY_FLAG_TOTAL_SUPPLY,
-            &sudt_script_hash[..DEFAULT_SHORT_SCRIPT_HASH_LEN],
-        );
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_TOTAL_SUPPLY, &sudt_script_hash);
         let raw_key = build_account_key(sudt_id, &sudt_key);
         let mut total_supply = self.get_raw(&raw_key)?.to_u128();
         total_supply = total_supply
