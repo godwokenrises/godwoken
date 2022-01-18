@@ -113,7 +113,6 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
             backend_manage,
             account_lock_manage,
             rollup_context,
-            Default::default(),
         ))
     };
 

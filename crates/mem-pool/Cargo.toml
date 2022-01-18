@@ -17,8 +17,9 @@ gw-rpc-client = { path = "../rpc-client" }
 gw-poa = { path = "../poa" }
 gw-config = { path = "../config" }
 gw-utils = { path = "../utils" }
-rdkafka = { version = "0.25", default-features = false }
 gw-rpc-ws-server = { path = "../rpc-ws-server" }
+gw-dynamic-config = { path = "../dynamic-config" }
+rdkafka = { version = "0.25", default-features = false }
 tokio = "1.15"
 anyhow = "1.0"
 log = "0.4"
