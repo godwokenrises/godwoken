@@ -104,3 +104,4 @@ impl_conversion_for_option!(
     CollectedCustodianCellsOpt,
     CollectedCustodianCellsOptReader
 );
+impl_conversion_for_packed_iterator_pack!(DepositInfo, DepositInfoVec);
