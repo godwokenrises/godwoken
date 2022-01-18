@@ -85,15 +85,16 @@ fn run_contract_get_result<S: State + CodeStore>(
         rollup_config: rollup_config.clone(),
         rollup_script_hash: [42u8; 32].into(),
     };
-    let generator = Generator::new(
-        backend_manage,
-        account_lock_manage,
-        rollup_ctx,
-        Default::default(),
-    );
+    let generator = Generator::new(backend_manage, account_lock_manage, rollup_ctx);
     let chain_view = DummyChainStore;
-    let run_result =
-        generator.execute_transaction(&chain_view, tree, block_info, &raw_tx, L2TX_MAX_CYCLES)?;
+    let run_result = generator.execute_transaction(
+        &chain_view,
+        tree,
+        block_info,
+        &raw_tx,
+        L2TX_MAX_CYCLES,
+        None,
+    )?;
     tree.apply_run_result(&run_result).expect("update state");
     Ok(run_result)
 }
