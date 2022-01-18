@@ -111,7 +111,6 @@ pub struct Generator {
     backend_manage: BackendManage,
     account_lock_manage: AccountLockManage,
     rollup_context: RollupContext,
-    dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
 }
 
 impl Generator {
@@ -119,13 +118,11 @@ impl Generator {
         backend_manage: BackendManage,
         account_lock_manage: AccountLockManage,
         rollup_context: RollupContext,
-        dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
     ) -> Self {
         Generator {
             backend_manage,
             account_lock_manage,
             rollup_context,
-            dynamic_config_manager,
         }
     }
 
@@ -538,12 +535,15 @@ impl Generator {
             // build call context
             // NOTICE users only allowed to send HandleMessage CallType txs
             let now = Instant::now();
+
+            // skip whitelist validate since we are validating a committed block
             let run_result = match self.execute_transaction(
                 chain,
                 &state,
                 &block_info,
                 &raw_tx,
                 L2TX_MAX_CYCLES,
+                None,
             ) {
                 Ok(run_result) => run_result,
                 Err(err) => {
@@ -682,9 +682,16 @@ impl Generator {
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
+        dynamic_config_manager: Option<Arc<ArcSwap<DynamicConfigManager>>>,
     ) -> Result<RunResult, TransactionError> {
-        let run_result =
-            self.unchecked_execute_transaction(chain, state, block_info, raw_tx, max_cycles)?;
+        let run_result = self.unchecked_execute_transaction(
+            chain,
+            state,
+            block_info,
+            raw_tx,
+            max_cycles,
+            dynamic_config_manager,
+        )?;
         if 0 != run_result.exit_code {
             return Err(TransactionError::InvalidExitCode(run_result.exit_code));
         }
@@ -700,12 +707,15 @@ impl Generator {
         block_info: &BlockInfo,
         raw_tx: &RawL2Transaction,
         max_cycles: u64,
+        dynamic_config_manager: Option<Arc<ArcSwap<DynamicConfigManager>>>,
     ) -> Result<RunResult, TransactionError> {
-        if let Some(polyjuice_contract_creator_allowlist) = self
-            .dynamic_config_manager
-            .load()
-            .get_polyjuice_contract_creator_allowlist()
-            .as_ref()
+        if let Some(polyjuice_contract_creator_allowlist) =
+            dynamic_config_manager.as_ref().and_then(|manager| {
+                manager
+                    .load()
+                    .get_polyjuice_contract_creator_allowlist()
+                    .to_owned()
+            })
         {
             use gw_tx_filter::polyjuice_contract_creator_allowlist::Error;
             match polyjuice_contract_creator_allowlist.validate_with_state(state, raw_tx) {
@@ -771,18 +781,18 @@ impl Generator {
         }
         // check account id of sudt proxy contract creator is from whitelist
         let from_id = raw_tx.from_id().unpack();
-        if self
-            .dynamic_config_manager
-            .load()
-            .get_sudt_proxy_account_whitelist()
-            .validate(&run_result, from_id)
-        {
-            Ok(run_result)
-        } else {
-            Err(TransactionError::InvalidSUDTProxyCreatorAccount {
-                account_id: from_id,
-            })
+        if let Some(manager) = dynamic_config_manager.as_ref() {
+            if !manager
+                .load()
+                .get_sudt_proxy_account_whitelist()
+                .validate(&run_result, from_id)
+            {
+                return Err(TransactionError::InvalidSUDTProxyCreatorAccount {
+                    account_id: from_id,
+                });
+            }
         }
+        Ok(run_result)
     }
 
     pub fn build_withdrawal_cell_output(

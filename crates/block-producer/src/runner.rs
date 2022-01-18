@@ -389,7 +389,6 @@ impl BaseInitComponents {
                 backend_manage,
                 account_lock_manage,
                 rollup_context.clone(),
-                dynamic_config_manager.clone(),
             ))
         };
 
@@ -553,6 +552,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         error_tx_receipt_notifier: notify_controller.clone(),
                         config: config.mem_pool.clone(),
                         node_mode: config.node_mode,
+                        dynamic_config_manager: base.dynamic_config_manager.clone(),
                     };
                     Arc::new(Mutex::new(
                         MemPool::create(args)

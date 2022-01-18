@@ -18,8 +18,9 @@ use gw_common::{
     H256,
 };
 use gw_config::{MemPoolConfig, NodeMode};
+use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_generator::{
-    constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, Generator,
+    constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, ArcSwap, Generator,
 };
 use gw_rpc_ws_server::notify_controller::NotifyController;
 use gw_store::{
@@ -104,6 +105,7 @@ pub struct MemPool {
     mem_pool_publish_service: Option<MemPoolPublishService>,
     node_mode: NodeMode,
     mem_pool_state: Arc<MemPoolState>,
+    dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
 }
 
 pub struct MemPoolCreateArgs {
@@ -115,6 +117,7 @@ pub struct MemPoolCreateArgs {
     pub error_tx_receipt_notifier: Option<NotifyController>,
     pub config: MemPoolConfig,
     pub node_mode: NodeMode,
+    pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
 }
 
 impl Drop for MemPool {
@@ -138,6 +141,7 @@ impl MemPool {
             error_tx_receipt_notifier,
             config,
             node_mode,
+            dynamic_config_manager,
         } = args;
 
         let pending = Default::default();
@@ -194,6 +198,7 @@ impl MemPool {
             mem_pool_publish_service: fan_out_mem_block_handler,
             node_mode,
             mem_pool_state,
+            dynamic_config_manager,
         };
 
         // update mem block info
@@ -1305,6 +1310,7 @@ impl MemPool {
             block_info,
             &raw_tx,
             L2TX_MAX_CYCLES,
+            Some(self.dynamic_config_manager.clone()),
         )?;
 
         if run_result.exit_code != 0 {

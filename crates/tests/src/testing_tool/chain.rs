@@ -245,7 +245,6 @@ pub fn chain_generator(chain: &Chain, rollup_type_script: Script) -> Arc<Generat
         backend_manage,
         account_lock_manage,
         rollup_context,
-        Default::default(),
     ))
 }
 
@@ -287,7 +286,6 @@ pub async fn setup_chain_with_account_lock_manage(
         backend_manage,
         account_lock_manage,
         rollup_context,
-        Default::default(),
     ));
     let provider = opt_mem_pool_provider.unwrap_or_default();
     let args = MemPoolCreateArgs {
@@ -299,6 +297,7 @@ pub async fn setup_chain_with_account_lock_manage(
         error_tx_receipt_notifier: None,
         config: mem_pool_config,
         node_mode: gw_config::NodeMode::FullNode,
+        dynamic_config_manager: Default::default(),
     };
     let mem_pool = MemPool::create(args).await.unwrap();
     Chain::create(

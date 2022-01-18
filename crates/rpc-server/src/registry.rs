@@ -115,6 +115,14 @@ fn to_jsonh256(v: H256) -> JsonH256 {
     h.into()
 }
 
+pub struct ExecutionTransactionContext {
+    mem_pool: MemPool,
+    generator: Arc<Generator>,
+    store: Store,
+    mem_pool_state: Arc<MemPoolState>,
+    dynamic_config: Arc<ArcSwap<DynamicConfigManager>>,
+}
+
 pub struct RegistryArgs<T> {
     pub store: Store,
     pub mem_pool: MemPool,
@@ -222,6 +230,13 @@ impl Registry {
             .map(|send_tx_rate_limit| Mutex::new(lru::LruCache::new(send_tx_rate_limit.lru_size)));
 
         server = server
+            .with_data(Data::new(ExecutionTransactionContext {
+                mem_pool: self.mem_pool.clone(),
+                generator: self.generator.clone(),
+                store: self.store.clone(),
+                mem_pool_state: self.mem_pool_state.clone(),
+                dynamic_config: self.dynamic_config_manager.clone(),
+            }))
             .with_data(Data::new(self.mem_pool))
             .with_data(Data(self.generator.clone()))
             .with_data(Data::new(self.store))
@@ -722,21 +737,16 @@ async fn get_transaction_receipt(
 
 async fn execute_l2transaction(
     Params((l2tx,)): Params<(JsonBytes,)>,
-    mem_pool: Data<MemPool>,
-    generator: Data<Generator>,
-    store: Data<Store>,
-    mem_pool_state: Data<Arc<MemPoolState>>,
+    ctx: Data<ExecutionTransactionContext>,
 ) -> Result<RunResult, RpcError> {
-    let _mem_pool = match &*mem_pool {
-        Some(mem_pool) => mem_pool,
-        None => {
-            return Err(mem_pool_is_disabled_err());
-        }
-    };
+    if ctx.mem_pool.is_none() {
+        return Err(mem_pool_is_disabled_err());
+    }
+
     let l2tx_bytes = l2tx.into_bytes();
     let tx = packed::L2Transaction::from_slice(&l2tx_bytes)?;
 
-    let raw_block = store.get_snapshot().get_last_valid_tip_block()?.raw();
+    let raw_block = ctx.store.get_snapshot().get_last_valid_tip_block()?.raw();
     let block_producer_id = raw_block.block_producer_id();
     let timestamp = raw_block.timestamp();
     let number = {
@@ -752,23 +762,24 @@ async fn execute_l2transaction(
 
     let tx_hash = tx.hash();
     let mut run_result = tokio::task::spawn_blocking(move || {
-        let db = store.get_snapshot();
+        let db = ctx.store.get_snapshot();
         let tip_block_hash = db.get_last_valid_tip_block_hash()?;
         let chain_view = ChainView::new(&db, tip_block_hash);
-        let snap = mem_pool_state.load();
+        let snap = ctx.mem_pool_state.load();
         let state = snap.state()?;
         // verify tx signature
-        generator.check_transaction_signature(&state, &tx)?;
+        ctx.generator.check_transaction_signature(&state, &tx)?;
         // tx basic verification
-        generator.verify_transaction(&state, &tx)?;
+        ctx.generator.verify_transaction(&state, &tx)?;
         // execute tx
         let raw_tx = tx.raw();
-        let run_result = generator.unchecked_execute_transaction(
+        let run_result = ctx.generator.unchecked_execute_transaction(
             &chain_view,
             &state,
             &block_info,
             &raw_tx,
             100000000,
+            Some(ctx.dynamic_config.clone()),
         )?;
 
         Result::<_, anyhow::Error>::Ok(run_result)
@@ -804,9 +815,7 @@ enum ExecuteRawL2TransactionParams {
 async fn execute_raw_l2transaction(
     Params(params): Params<ExecuteRawL2TransactionParams>,
     mem_pool_config: Data<MemPoolConfig>,
-    store: Data<Store>,
-    generator: Data<Generator>,
-    mem_pool_state: Data<Arc<MemPoolState>>,
+    ctx: Data<ExecutionTransactionContext>,
 ) -> Result<RunResult, RpcError> {
     let (raw_l2tx, block_number_opt) = match params {
         ExecuteRawL2TransactionParams::Tip(p) => (p.0, None),
@@ -817,7 +826,7 @@ async fn execute_raw_l2transaction(
     let raw_l2tx_bytes = raw_l2tx.into_bytes();
     let raw_l2tx = packed::RawL2Transaction::from_slice(&raw_l2tx_bytes)?;
 
-    let db = store.begin_transaction();
+    let db = ctx.store.begin_transaction();
 
     let block_info = match block_number_opt {
         Some(block_number) => {
@@ -825,7 +834,7 @@ async fn execute_raw_l2transaction(
                 Some(block_hash) => block_hash,
                 None => return Err(header_not_found_err()),
             };
-            let raw_block = match store.get_block(&block_hash)? {
+            let raw_block = match ctx.store.get_block(&block_hash)? {
                 Some(block) => block.raw(),
                 None => return Err(header_not_found_err()),
             };
@@ -839,7 +848,8 @@ async fn execute_raw_l2transaction(
                 .number(number.pack())
                 .build()
         }
-        None => mem_pool_state
+        None => ctx
+            .mem_pool_state
             .load()
             .get_mem_pool_block_info()?
             .expect("get mem pool block info"),
@@ -859,23 +869,25 @@ async fn execute_raw_l2transaction(
         let run_result = match block_number_opt {
             Some(block_number) => {
                 let state = db.state_tree(StateContext::ReadOnlyHistory(block_number))?;
-                generator.unchecked_execute_transaction(
+                ctx.generator.unchecked_execute_transaction(
                     &chain_view,
                     &state,
                     &block_info,
                     &raw_l2tx,
                     execute_l2tx_max_cycles,
+                    Some(ctx.dynamic_config.clone()),
                 )?
             }
             None => {
-                let snap = mem_pool_state.load();
+                let snap = ctx.mem_pool_state.load();
                 let state = snap.state()?;
-                generator.unchecked_execute_transaction(
+                ctx.generator.unchecked_execute_transaction(
                     &chain_view,
                     &state,
                     &block_info,
                     &raw_l2tx,
                     execute_l2tx_max_cycles,
+                    Some(ctx.dynamic_config.clone()),
                 )?
             }
         };
