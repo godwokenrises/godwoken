@@ -139,7 +139,7 @@ async fn test_deposit_and_withdrawal() {
     )
     .await
     .unwrap();
-    let (user_id, user_script_hash, ckb_balance) = {
+    let (user_id, user_script_hash, ckb_balance, ckb_total_supply) = {
         let mem_pool = chain.mem_pool().as_ref().unwrap().lock().await;
         let snap = mem_pool.mem_pool_state().load();
         let tree = snap.state().unwrap();
@@ -159,7 +159,9 @@ async fn test_deposit_and_withdrawal() {
             .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&user_script_hash))
             .unwrap();
         assert_eq!(ckb_balance, capacity as u128);
-        (user_id, user_script_hash, ckb_balance)
+        let ckb_total_supply = tree.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap();
+        assert_eq!(ckb_total_supply, capacity as u128);
+        (user_id, user_script_hash, ckb_balance, ckb_total_supply)
     };
 
     // wait for deposit finalize
@@ -186,6 +188,10 @@ async fn test_deposit_and_withdrawal() {
                 .unwrap(),
             capacity as u128
         );
+        assert_eq!(
+            state.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap(),
+            capacity as u128
+        )
     }
     // withdrawal
     let withdraw_capacity = 300_00000000u64;
@@ -206,6 +212,11 @@ async fn test_deposit_and_withdrawal() {
         .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&user_script_hash))
         .unwrap();
     assert_eq!(ckb_balance, ckb_balance2 + withdraw_capacity as u128);
+    let ckb_total_supply2 = tree.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap();
+    assert_eq!(
+        ckb_total_supply,
+        ckb_total_supply2 + withdraw_capacity as u128
+    );
     let nonce = tree.get_nonce(user_id).unwrap();
     assert_eq!(nonce, 1);
     // check tx pool state
@@ -225,6 +236,10 @@ async fn test_deposit_and_withdrawal() {
             state
                 .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&user_script_hash))
                 .unwrap(),
+            ckb_balance2
+        );
+        assert_eq!(
+            state.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap(),
             ckb_balance2
         );
         assert_eq!(state.get_nonce(user_id).unwrap(), nonce);
