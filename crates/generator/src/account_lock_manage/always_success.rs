@@ -35,7 +35,7 @@ impl LockAlgorithm for AlwaysSuccess {
         _ctx: &RollupContext,
         _sender_script: Script,
         _receiver_script: Script,
-        _tx: &L2Transaction,
+        _tx: L2Transaction,
     ) -> Result<bool, LockAlgorithmError> {
         Ok(true)
     }
