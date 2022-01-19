@@ -12,7 +12,7 @@ sparse-merkle-tree = { version = "0.5.2-rc1", default-features = false }
 merkle-cbt = { version = "0.3.0", default-features = false }
 gw-hash = { path = "../hash" }
 thiserror = { version = "1.0", optional = true }
-numext-fixed-uint-core = "0.1"
+primitive-types = { version = "0.10", default-features = false }
 
 [features]
 default = ["std"]

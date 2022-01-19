@@ -1,6 +1,6 @@
-// type aliase
+// type aliases
 
-pub use numext_fixed_uint_core::U256;
+pub use primitive_types::U256;
 pub use sparse_merkle_tree::H256;
 
 pub trait H256Ext {
@@ -51,12 +51,12 @@ impl H256Ext for H256 {
     }
     fn from_u256(n: U256) -> H256 {
         let mut buf = [0u8; 32];
-        buf[..32].copy_from_slice(&n.to_le_bytes());
+        n.to_little_endian(&mut buf);
         buf.into()
     }
     fn to_u256(&self) -> U256 {
         let mut n_bytes = [0u8; 32];
         n_bytes.copy_from_slice(&self.as_slice()[..32]);
-        U256::from_le_bytes(&n_bytes)
+        U256::from_little_endian(&n_bytes)
     }
 }

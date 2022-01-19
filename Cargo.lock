@@ -1836,7 +1836,7 @@ dependencies = [
  "cfg-if 0.1.10",
  "gw-hash",
  "merkle-cbt",
- "numext-fixed-uint-core",
+ "primitive-types",
  "sparse-merkle-tree",
  "thiserror",
 ]
