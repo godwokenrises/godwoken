@@ -230,7 +230,7 @@ pub trait State {
         let raw_key = build_account_key(sudt_id, &sudt_key);
         let mut total_supply = self.get_raw(&raw_key)?.to_u256();
         total_supply = total_supply
-            .checked_add(&U256::from(&amount))
+            .checked_add(U256::from(amount))
             .ok_or(Error::AmountOverflow)?;
         self.update_raw(raw_key, H256::from_u256(total_supply))?;
 
@@ -255,7 +255,7 @@ pub trait State {
         let raw_key = build_account_key(sudt_id, &sudt_key);
         let mut total_supply = self.get_raw(&raw_key)?.to_u256();
         total_supply = total_supply
-            .checked_sub(&U256::from(&amount))
+            .checked_sub(U256::from(amount))
             .ok_or(Error::AmountOverflow)?;
         self.update_raw(raw_key, H256::from_u256(total_supply))?;
 
