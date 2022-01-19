@@ -110,7 +110,6 @@ async fn withdrawal_from_chain(
 
 #[tokio::test]
 async fn test_deposit_and_withdrawal() {
-    env_logger::init();
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
     let mut chain = setup_chain(rollup_type_script.clone()).await;
@@ -249,7 +248,6 @@ async fn test_deposit_and_withdrawal() {
 
 #[tokio::test]
 async fn test_deposit_u128_overflow() {
-    env_logger::init();
     let rollup_type_script = Script::default();
     let rollup_script_hash = rollup_type_script.hash();
     let mut chain = setup_chain(rollup_type_script.clone()).await;
@@ -354,7 +352,7 @@ async fn test_deposit_u128_overflow() {
     assert_eq!(ckb_total_supply, U256::from(&capacity * 2));
 
     let l2_sudt_script_hash =
-        build_l2_sudt_script(&chain.generator().rollup_context(), &sudt_script_hash).hash();
+        build_l2_sudt_script(chain.generator().rollup_context(), &sudt_script_hash).hash();
     let sudt_id = tree
         .get_account_id_by_script_hash(&l2_sudt_script_hash.into())
         .unwrap()
