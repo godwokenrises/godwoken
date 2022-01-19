@@ -181,7 +181,7 @@ async fn test_build_unlock_to_owner_tx() {
     // Deposit random accounts
     const DEPOSIT_CAPACITY: u64 = 1000000 * CKB;
     const DEPOSIT_AMOUNT: u128 = 1000;
-    let account_count = (rand::random::<u8>() % 100 + 5) % MAX_MEM_BLOCK_WITHDRAWALS;
+    let account_count = MAX_MEM_BLOCK_WITHDRAWALS;
     let accounts: Vec<_> = (0..account_count)
         .map(|_| {
             random_always_success_script(Some(&rollup_script_hash))
