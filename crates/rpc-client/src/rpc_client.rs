@@ -28,6 +28,7 @@ use gw_types::{
 use rand::prelude::*;
 use serde_json::json;
 
+use std::time::Instant;
 use std::{collections::HashSet, time::Duration};
 
 fn to_cell_info(cell: Cell) -> CellInfo {
@@ -974,6 +975,11 @@ impl RPCClient {
         max_cells: usize,
     ) -> Result<QueryResult<CollectedCustodianCells>> {
         const MAX_CELLS: usize = 50;
+
+        let mut query_indexer_times = 0;
+        let mut query_indexer_cells = 0;
+        let now = Instant::now();
+
         let rollup_context = &self.rollup_context;
 
         let parse_sudt_amount = |cell: &Cell| -> Result<u128> {
@@ -1002,7 +1008,8 @@ impl RPCClient {
             script_type: ScriptType::Lock,
             filter,
         };
-        let order = Order::Desc;
+        // order by ASC so we can search more cells
+        let order = Order::Asc;
         let limit = Uint32::from(DEFAULT_QUERY_LIMIT as u32);
 
         let mut collected = CollectedCustodianCells::default();
@@ -1035,6 +1042,9 @@ impl RPCClient {
                 return Ok(QueryResult::NotEnough(collected));
             }
             cursor = Some(cells.last_cursor);
+
+            query_indexer_times += 1;
+            query_indexer_cells += cells.objects.len();
 
             for cell in cells.objects.into_iter() {
                 if collected.cells_info.len() >= max_cells {
@@ -1130,12 +1140,14 @@ impl RPCClient {
                     if collected.capacity >= required_capacity {
                         break;
                     } else {
+                        log::debug!("[query finalized custodian cells] query indexer times: {} query indexer cells: {} duration: {}ms", query_indexer_times, query_indexer_cells, now.elapsed().as_millis());
                         return Ok(QueryResult::NotEnough(collected));
                     }
                 }
             }
         }
 
+        log::debug!("[query finalized custodian cells] query indexer times: {} query indexer cells: {} duration: {}ms", query_indexer_times, query_indexer_cells, now.elapsed().as_millis());
         Ok(QueryResult::Full(collected))
     }
 
