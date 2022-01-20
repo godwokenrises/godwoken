@@ -157,9 +157,8 @@ impl LockAlgorithm for Secp256k1Eth {
         receiver_script: Script,
         tx: L2Transaction,
     ) -> Result<bool, LockAlgorithmError> {
-        // FIXME pass a correct chain id
         if let Some(rlp_data) = try_assemble_polyjuice_args(
-            1, // ctx.rollup_config.compatible_chain_id().unpack(),
+            ctx.rollup_config.compatible_chain_id().unpack(),
             tx.raw(),
             receiver_script.clone(),
         ) {
@@ -377,6 +376,7 @@ fn try_assemble_polyjuice_args(
         return None;
     }
     stream.append(&args[52..52 + payload_length].to_vec());
+    // calculate chain id by concanate rollup_chain_id || polyjuice_chain_id
     let chain_id: u64 = ((rollup_chain_id as u64) << 32) | (polyjuice_chain_id as u64);
     stream.append(&chain_id);
     stream.append(&0u8);
@@ -401,7 +401,7 @@ mod tests {
         lock_args.extend(address);
         let eth = Secp256k1Eth {};
         let result = eth
-            .verify_withdrawal_signature(lock_args.into(), test_signature, message)
+            .verify_message(lock_args.into(), test_signature, message)
             .expect("verify signature");
         assert!(result);
     }
@@ -427,10 +427,9 @@ mod tests {
             .build();
         let mut signature = [0u8; 65];
         signature.copy_from_slice(&hex::decode("239ff31262bb6664d1857ea3bc5eecf3a4f74e32537c81de9fa1df2a2a48ef63115ffd8d6f5b4cc60b0fd4b02ab641106d024e49a9c0a9657c99361b39ce31ec00").expect("hex decode"));
-        let signature = Signature::from_slice(&signature[..]).unwrap();
         let tx = L2Transaction::new_builder()
             .raw(raw_tx)
-            .signature(signature)
+            .signature(signature.to_vec().pack())
             .build();
         let eth = Secp256k1Eth {};
 
@@ -481,10 +480,9 @@ mod tests {
             .build();
         let mut signature = [0u8; 65];
         signature.copy_from_slice(&hex::decode("c49f65d9aad3b417f7d04a5e9c458b3308556bdff5a625bf65bfdadd11a18bb004bdb522991ae8648d6a1332a09576c90c93e6f9ea101bf8b5b3a7523958b50800").expect("hex decode"));
-        let signature = Signature::from_slice(&signature[..]).unwrap();
         let tx = L2Transaction::new_builder()
             .raw(raw_tx)
-            .signature(signature)
+            .signature(signature.to_vec().pack())
             .build();
         let eth = Secp256k1Eth {};
 
@@ -543,10 +541,9 @@ mod tests {
             .build();
         let mut signature = [0u8; 65];
         signature.copy_from_slice(&hex::decode("5289a4c910f143a97ce6d8ce55a970863c115bb95b404518a183ec470734ce0c10594e911d54d8894d05381fbc0f052b7397cd25217f6f102d297387a4cb15d700").expect("hex decode"));
-        let signature = Signature::from_slice(&signature[..]).unwrap();
         let tx = L2Transaction::new_builder()
             .raw(raw_tx)
-            .signature(signature)
+            .signature(signature.to_vec().pack())
             .build();
         let eth = Secp256k1Eth {};
 
@@ -584,10 +581,9 @@ mod tests {
             .build();
         let mut signature = [0u8; 65];
         signature.copy_from_slice(&hex::decode("680e9afc606f3555d75fedb41f201ade6a5f270c3a2223730e25d93e764acc6a49ee917f9e3af4727286ae4bf3ce19a5b15f71ae359cf8c0c3fabc212cccca1e00").expect("hex decode"));
-        let signature = Signature::from_slice(&signature[..]).unwrap();
         let tx = L2Transaction::new_builder()
             .raw(raw_tx)
-            .signature(signature)
+            .signature(signature.to_vec().pack())
             .build();
         let eth = Secp256k1Eth {};
 
@@ -629,7 +625,7 @@ mod tests {
         lock_args.extend(address);
         let tron = Secp256k1Tron {};
         let result = tron
-            .verify_withdrawal_signature(lock_args.into(), test_signature, message)
+            .verify_message(lock_args.into(), test_signature, message)
             .expect("verify signature");
         assert!(result);
     }
