@@ -49,6 +49,7 @@ table RollupConfig {
     challenge_maturity_blocks: Uint64,
     finality_blocks: Uint64,
     reward_burn_rate: byte, // * reward_burn_rate / 100
+    compatible_chain_id: Uint32, // compatible chain id
     allowed_eoa_type_hashes: Byte32Vec, // list of script code_hash allowed an EOA(external owned account) to use
     allowed_contract_type_hashes: Byte32Vec, // list of script code_hash allowed a contract account to use
 }
@@ -67,7 +68,7 @@ table L2Transaction {
 
 vector L2TransactionVec <L2Transaction>;
 
-table SubmitTransactions {
+struct SubmitTransactions {
     tx_witness_root: Byte32,
     tx_count: Uint32,
     // hash(account_root | account_count) before apply all txs
@@ -144,7 +145,7 @@ table WithdrawalRequest {
 
 // --- contract execution ---
 
-table KVPair { k: Byte32, v: Byte32, }
+struct KVPair { k: Byte32, v: Byte32, }
 vector KVPairVec <KVPair>;
 
 struct BlockInfo {
