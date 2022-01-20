@@ -13,10 +13,16 @@ use hyper::{body::HttpBody, server::conn::AddrIncoming, Body, Method, Request, R
 use tokio::net::TcpSocket;
 
 use jsonrpc_v2::{RequestKind, ResponseObjects, Router, Server as JsonrpcServer};
+use tokio::sync::{broadcast, mpsc};
 
 use crate::registry::Registry;
 
-pub async fn start_jsonrpc_server(listen_addr: SocketAddr, registry: Registry) -> Result<()> {
+pub async fn start_jsonrpc_server(
+    listen_addr: SocketAddr,
+    registry: Registry,
+    _shutdown_send: mpsc::Sender<()>,
+    mut sub_shutdown: broadcast::Receiver<()>,
+) -> Result<()> {
     let rpc_server = registry.build_rpc_server()?;
     let socket = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None)?;
     let keepalive = socket2::TcpKeepalive::new().with_time(Duration::from_secs(10)); // Default 10s
@@ -40,12 +46,16 @@ pub async fn start_jsonrpc_server(listen_addr: SocketAddr, registry: Registry) -
     log::info!("JSONRPC server listening on {}", url);
 
     // Start a hyper server.
-    Server::builder(AddrIncoming::from_listener(listener)?)
-        .serve(make_service_fn(move |_| {
+    let server =
+        Server::builder(AddrIncoming::from_listener(listener)?).serve(make_service_fn(move |_| {
             let rpc_server = Arc::clone(&rpc_server);
             async { Ok::<_, Error>(service_fn(move |req| serve(Arc::clone(&rpc_server), req))) }
-        }))
-        .await?;
+        }));
+    let graceful = server.with_graceful_shutdown(async {
+        let _ = sub_shutdown.recv().await;
+        log::info!("rpc server exited successfully");
+    });
+    graceful.await?;
 
     Ok(())
 }
