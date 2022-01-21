@@ -8,24 +8,24 @@ use gw_types::{
 };
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use super::mq::{gw_kafka, Produce};
+use super::mq::{tokio_kafka, Produce};
 
 const CHANNEL_BUFFER_SIZE: usize = 1000;
 pub(crate) struct PublishMemPoolActor {
     receiver: Receiver<RefreshMemBlockMessageUnion>,
-    producer: gw_kafka::Producer,
+    producer: tokio_kafka::Producer,
 }
 
 impl PublishMemPoolActor {
     pub(crate) fn new(
         receiver: Receiver<RefreshMemBlockMessageUnion>,
-        producer: gw_kafka::Producer,
+        producer: tokio_kafka::Producer,
     ) -> Self {
         Self { receiver, producer }
     }
 
-    fn handle(&mut self, msg: RefreshMemBlockMessageUnion) {
-        if let Err(err) = self.producer.send(msg) {
+    async fn handle(&mut self, msg: RefreshMemBlockMessageUnion) {
+        if let Err(err) = self.producer.send(msg).await {
             log::error!("[Fan out mem block] message failed: {:?}", err);
         }
     }
@@ -34,7 +34,7 @@ impl PublishMemPoolActor {
 async fn publish_handle(mut actor: PublishMemPoolActor) {
     log::info!("Fanout handle is started.");
     while let Some(msg) = actor.receiver.recv().await {
-        actor.handle(msg);
+        actor.handle(msg).await;
     }
 }
 
@@ -43,7 +43,7 @@ pub(crate) struct MemPoolPublishService {
 }
 
 impl MemPoolPublishService {
-    pub(crate) fn start(producer: gw_kafka::Producer) -> Self {
+    pub(crate) fn start(producer: tokio_kafka::Producer) -> Self {
         let (sender, receiver) = tokio::sync::mpsc::channel(CHANNEL_BUFFER_SIZE);
 
         let actor = PublishMemPoolActor::new(receiver, producer);
