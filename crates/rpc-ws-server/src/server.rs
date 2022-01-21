@@ -32,11 +32,7 @@ pub async fn start_jsonrpc_ws_server(
             Some(SubscriptionSession::new(Session::new(context.sender())))
         },
     )
-    /*
-    FIXME: Remember to fix this when we decide to maintain tokio runtime manually.
-    Or we can share tokio runtime(from main) with ws server by:
     .event_loop_executor(tokio::runtime::Handle::current())
-    */
     .start(&ws_listen_address)
     .expect("Start Jsonrpc WebSocket service");
 
