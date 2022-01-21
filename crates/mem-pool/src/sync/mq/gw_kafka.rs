@@ -1,18 +1,16 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use gw_types::{
-    bytes::Bytes,
     packed::{RefreshMemBlockMessage, RefreshMemBlockMessageUnion},
     prelude::{Builder, Entity, Reader},
 };
 use rdkafka::{
     consumer::{BaseConsumer, CommitMode, Consumer as RdConsumer},
-    message::ToBytes,
     producer::{BaseRecord, ProducerContext, ThreadedProducer},
     ClientConfig, ClientContext, Message,
 };
 
-use crate::sync::subscribe::SubscribeMemPoolService;
+use crate::sync::{mq::RefreshMemBlockMessageFacade, subscribe::SubscribeMemPoolService};
 
 use super::{Consume, Produce};
 
@@ -50,6 +48,7 @@ pub(crate) struct Producer {
 }
 
 impl Producer {
+    #[allow(dead_code)]
     pub(crate) fn connect(hosts: Vec<String>, topic: String) -> Result<Self> {
         let brokers = hosts.join(",");
         let producer: ThreadedProducer<ProducerContextLogger> = ClientConfig::new()
@@ -61,10 +60,11 @@ impl Producer {
     }
 }
 
+#[async_trait]
 impl Produce for Producer {
     type Msg = RefreshMemBlockMessageUnion;
 
-    fn send(&mut self, message: Self::Msg) -> Result<()> {
+    async fn send(&mut self, message: Self::Msg) -> Result<()> {
         let msg = RefreshMemBlockMessage::new_builder().set(message).build();
         let bytes = msg.as_bytes();
         log::trace!("Producer send msg: {:?}", &bytes.to_vec());
@@ -86,6 +86,7 @@ pub(crate) struct Consumer {
 }
 
 impl Consumer {
+    #[allow(dead_code)]
     pub(crate) fn start(
         hosts: Vec<String>,
         topic: String,
@@ -169,12 +170,5 @@ impl Consume for Consumer {
         }
 
         Ok(())
-    }
-}
-
-struct RefreshMemBlockMessageFacade(Bytes);
-impl ToBytes for RefreshMemBlockMessageFacade {
-    fn to_bytes(&self) -> &[u8] {
-        &self.0
     }
 }

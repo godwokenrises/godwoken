@@ -52,7 +52,7 @@ use crate::{
     custodian::AvailableCustodians,
     mem_block::MemBlock,
     restore_manager::RestoreManager,
-    sync::{mq::gw_kafka, publish::MemPoolPublishService},
+    sync::{mq::tokio_kafka, publish::MemPoolPublishService},
     traits::{MemPoolErrorTxHandler, MemPoolProvider},
     types::EntryList,
     withdrawal::Generator as WithdrawalGenerator,
@@ -166,7 +166,7 @@ impl MemPool {
             .publish
             .map(|config| -> Result<MemPoolPublishService> {
                 log::info!("Setup fan out mem_block handler.");
-                let producer = gw_kafka::Producer::connect(config.hosts, config.topic)?;
+                let producer = tokio_kafka::Producer::connect(config.hosts, config.topic)?;
                 let handler = MemPoolPublishService::start(producer);
                 Ok(handler)
             })

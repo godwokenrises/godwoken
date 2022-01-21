@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 
 use crate::pool::MemPool;
 
-use super::mq::{gw_kafka, Consume};
+use super::mq::{tokio_kafka, Consume};
 
 const CONSUME_LATENCY: u64 = 200;
 
@@ -63,7 +63,7 @@ pub fn spawn_sub_mem_pool_task(
         topic,
         group,
     } = mem_block_config;
-    let mut consumer = gw_kafka::Consumer::start(hosts, topic, group, fan_in)?;
+    let mut consumer = tokio_kafka::Consumer::start(hosts, topic, group, fan_in)?;
     tokio::spawn(async move {
         log::info!("Spawn fan in mem_block task");
         loop {
