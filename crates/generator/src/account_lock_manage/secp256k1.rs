@@ -18,7 +18,10 @@ lazy_static! {
 
 fn convert_signature_to_byte65(signature: &[u8]) -> Result<[u8; 65], LockAlgorithmError> {
     if signature.len() != 65 {
-        return Err(LockAlgorithmError::InvalidSignature);
+        return Err(LockAlgorithmError::InvalidSignature(format!(
+            "Signature length is {}, expect 65",
+            signature.len()
+        )));
     }
 
     let mut buf = [0u8; 65];
@@ -38,16 +41,16 @@ impl LockAlgorithm for Secp256k1 {
         let signature: RecoverableSignature = {
             let signature = convert_signature_to_byte65(signature)?;
             let recid = RecoveryId::from_i32(signature[64] as i32)
-                .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+                .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
             let data = &signature[..64];
             RecoverableSignature::from_compact(data, recid)
-                .map_err(|_| LockAlgorithmError::InvalidSignature)?
+                .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?
         };
         let msg = secp256k1::Message::from_slice(message.as_slice())
-            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+            .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
         let pubkey = SECP256K1
             .recover(&msg, &signature)
-            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+            .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
 
         let mut buf = [0u8; 32];
         let mut hasher = new_blake2b();
@@ -131,16 +134,16 @@ impl LockAlgorithm for Secp256k1Eth {
         let signature: RecoverableSignature = {
             let signature = convert_signature_to_byte65(signature)?;
             let recid = RecoveryId::from_i32(signature[64] as i32)
-                .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+                .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
             let data = &signature[..64];
             RecoverableSignature::from_compact(data, recid)
-                .map_err(|_| LockAlgorithmError::InvalidSignature)?
+                .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?
         };
         let msg = secp256k1::Message::from_slice(message.as_slice())
-            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+            .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
         let pubkey = SECP256K1
             .recover(&msg, &signature)
-            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+            .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
 
         let mut hasher = Keccak256::new();
         hasher.update(&pubkey.serialize_uncompressed()[1..]);
@@ -228,17 +231,18 @@ impl LockAlgorithm for Secp256k1Tron {
                     28 => 1,
                     _ => 0,
                 };
-                RecoveryId::from_i32(rec_param).map_err(|_| LockAlgorithmError::InvalidSignature)?
+                RecoveryId::from_i32(rec_param)
+                    .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?
             };
             let data = &signature[..64];
             RecoverableSignature::from_compact(data, recid)
-                .map_err(|_| LockAlgorithmError::InvalidSignature)?
+                .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?
         };
         let msg = secp256k1::Message::from_slice(message.as_slice())
-            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+            .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
         let pubkey = SECP256K1
             .recover(&msg, &signature)
-            .map_err(|_| LockAlgorithmError::InvalidSignature)?;
+            .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
 
         let mut hasher = Keccak256::new();
         hasher.update(&pubkey.serialize_uncompressed()[1..]);

@@ -32,8 +32,8 @@ impl From<StateError> for Error {
 pub enum LockAlgorithmError {
     #[error("Invalid lock args")]
     InvalidLockArgs,
-    #[error("Invalid signature")]
-    InvalidSignature,
+    #[error("Invalid signature: {0}")]
+    InvalidSignature(String),
     #[error("Unknown account lock")]
     UnknownAccountLock,
     #[error("Invalid transaction args")]
