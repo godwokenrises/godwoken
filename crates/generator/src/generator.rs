@@ -323,7 +323,7 @@ impl Generator {
         )?;
 
         if !valid_signature {
-            return Err(LockAlgorithmError::InvalidSignature.into());
+            return Err(LockAlgorithmError::InvalidSignature("Wrong signature".to_string()).into());
         }
 
         Ok(())
@@ -393,7 +393,7 @@ impl Generator {
         let valid_signature =
             lock_algo.verify_tx(&self.rollup_context, script, receiver_script, tx.to_owned())?;
         if !valid_signature {
-            return Err(LockAlgorithmError::InvalidSignature.into());
+            return Err(LockAlgorithmError::InvalidSignature("Wrong signature".to_string()).into());
         }
         Ok(())
     }

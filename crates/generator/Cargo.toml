@@ -33,6 +33,7 @@ log = "0.4"
 hex = "0.4"
 tokio = "1.15"
 arc-swap = "1.5"
+ethabi = "16.0.0"
 
 [dev-dependencies]
 gw-utils = {path = "../utils" }

@@ -1250,6 +1250,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethabi"
+version = "16.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4c98847055d934070b90e806e12d3936b787d0a115068981c1d8dfd5dfef5a5"
+dependencies = [
+ "ethereum-types",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha3",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
 name = "ethbloom"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1851,6 +1866,7 @@ dependencies = [
  "arc-swap",
  "blake2b-rs 0.2.0",
  "ckb-vm",
+ "ethabi 16.0.0",
  "gw-ckb-hardfork",
  "gw-common",
  "gw-config",
@@ -2213,7 +2229,7 @@ dependencies = [
  "anyhow",
  "ckb-hash",
  "ckb-types",
- "ethabi",
+ "ethabi 15.0.0",
  "faster-hex 0.5.0",
  "gw-chain",
  "gw-common",
