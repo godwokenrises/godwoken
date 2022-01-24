@@ -1,3 +1,8 @@
+use std::convert::TryFrom;
+
+use anyhow::{anyhow, bail, Result};
+use gw_common::H256;
+use gw_types::{core::ScriptHashType, packed::RawWithdrawalRequest, prelude::Unpack};
 use sha3::{Digest, Keccak256};
 
 use super::traits::EIP712Encode;
@@ -84,6 +89,7 @@ impl EIP712Encode for Fee {
 // RawWithdrawalRequest
 pub struct Withdrawal {
     account_script_hash: [u8; 32],
+    nonce: u32,
     // layer1 lock to withdraw after challenge period
     layer1_owner_lock: Script,
     // CKB amount
@@ -98,7 +104,7 @@ impl EIP712Encode for Withdrawal {
     }
 
     fn encode_type(&self, buf: &mut Vec<u8>) {
-        buf.extend(b"Withdrawal(bytes32 accountScriptHash,Script layer1OwnerLock,WithdrawalAsset withdraw,Fee fee)");
+        buf.extend(b"Withdrawal(bytes32 accountScriptHash,uint256 nonce,Script layer1OwnerLock,WithdrawalAsset withdraw,Fee fee)");
         self.fee.encode_type(buf);
         self.layer1_owner_lock.encode_type(buf);
         self.withdraw.encode_type(buf);
@@ -109,6 +115,7 @@ impl EIP712Encode for Withdrawal {
         buf.extend(ethabi::encode(&[Token::Uint(
             self.account_script_hash.into(),
         )]));
+        buf.extend(ethabi::encode(&[Token::Uint(self.nonce.into())]));
         buf.extend(ethabi::encode(&[Token::Uint(
             self.layer1_owner_lock.hash_struct().into(),
         )]));
@@ -121,12 +128,61 @@ impl EIP712Encode for Withdrawal {
     }
 }
 
+impl Withdrawal {
+    pub fn from_withdrawal_request(
+        data: RawWithdrawalRequest,
+        owner_lock: gw_types::packed::Script,
+    ) -> Result<Self> {
+        // Disable sell withdrawal cell feature for now, we must ensure these fields are empty
+        {
+            let sell_capacity: u64 = data.sell_capacity().unpack();
+            if sell_capacity != 0 {
+                bail!("sell capacity must be zero");
+            }
+            let sell_amount: u128 = data.sell_amount().unpack();
+            if sell_amount != 0 {
+                bail!("sell amount must be zero");
+            }
+            let payment_lock_hash: [u8; 32] = data.payment_lock_hash().unpack();
+            if !H256::from(payment_lock_hash).is_zero() {
+                bail!("payment lock hash must be empty");
+            }
+        }
+
+        let hash_type = match ScriptHashType::try_from(owner_lock.hash_type())
+            .map_err(|hash_type| anyhow!("Invalid hash type: {}", hash_type))?
+        {
+            ScriptHashType::Data => "data",
+            ScriptHashType::Type => "type",
+        };
+        let withdrawal = Withdrawal {
+            nonce: data.nonce().unpack(),
+            account_script_hash: data.account_script_hash().unpack(),
+            withdraw: WithdrawalAsset {
+                ckb_capacity: data.capacity().unpack(),
+                udt_amount: data.amount().unpack(),
+                udt_script_hash: data.sudt_script_hash().unpack(),
+            },
+            layer1_owner_lock: Script {
+                code_hash: owner_lock.code_hash().unpack(),
+                hash_type: hash_type.to_string(),
+                args: owner_lock.args().unpack(),
+            },
+            fee: Fee {
+                udt_id: data.fee().sudt_id().unpack(),
+                udt_amount: data.fee().amount().unpack(),
+            },
+        };
+        Ok(withdrawal)
+    }
+}
+
 pub struct EIP712Domain {
-    name: String,
-    version: String,
-    chain_id: u64,
-    verifying_contract: Option<[u8; 20]>,
-    salt: Option<[u8; 32]>,
+    pub name: String,
+    pub version: String,
+    pub chain_id: u64,
+    pub verifying_contract: Option<[u8; 20]>,
+    pub salt: Option<[u8; 32]>,
 }
 
 impl EIP712Encode for EIP712Domain {
@@ -317,7 +373,7 @@ mod tests {
             buf[64] = v;
             buf
         };
-        let pubkey_hash = Secp256k1Eth::default()
+        let pubkey_hash = Secp256k1Eth::from_chain_id(1)
             .recover(message.into(), &signature)
             .unwrap();
         assert_eq!(hex::encode(mail.from.wallet), hex::encode(pubkey_hash));
@@ -332,6 +388,7 @@ mod tests {
             .unwrap()
             .try_into()
             .unwrap(),
+            nonce: 1,
             layer1_owner_lock: Script {
                 code_hash: hex::decode(
                     "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
@@ -367,8 +424,8 @@ mod tests {
             salt: None,
         };
         let message = withdrawal.eip712_message(domain_seperator.hash_struct());
-        let signature: [u8; 65] = hex::decode("ed612c71ae98ea3099a45f12f5a23548a25a66f66a2f16bd5fc3c8c905c1a6911199c6f62a8a24dafaf5105198b81f26d01d22c8a515c095e94a703259fc93f81c").unwrap().try_into().unwrap();
-        let pubkey_hash = Secp256k1Eth::default()
+        let signature: [u8; 65] = hex::decode("05843fcef82e3f584fdaa413d35913f6cdc9cd44724b41e0f84421ad3475fef90610961d6aee8473b4fc59fe8d00dbf037ce209d6bd66f74f18dc97227e8a4991b").unwrap().try_into().unwrap();
+        let pubkey_hash = Secp256k1Eth::from_chain_id(1)
             .recover(message.into(), &signature)
             .unwrap();
         assert_eq!(

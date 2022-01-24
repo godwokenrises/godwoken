@@ -27,6 +27,7 @@ use gw_types::offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupC
 use gw_types::packed::{
     CellOutput, DepositLockArgs, DepositRequest, L2BlockCommittedInfo, L2Transaction, OutPoint,
     RawL2Transaction, RawWithdrawalRequest, SUDTArgs, SUDTTransfer, Script, WithdrawalRequest,
+    WithdrawalRequestExtra,
 };
 use gw_types::prelude::Pack;
 
@@ -69,6 +70,7 @@ async fn test_restore_mem_block() {
             l2block: block_result.block.clone(),
             deposit_requests: deposits.collect(),
             deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell, block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -89,12 +91,18 @@ async fn test_restore_mem_block() {
         let withdrawal_accounts = accounts.iter().take(withdrawal_count as usize);
         withdrawal_accounts
             .map(|account_script| {
+                let owner_lock = Script::default();
                 let raw = RawWithdrawalRequest::new_builder()
                     .capacity(WITHDRAWAL_CAPACITY.pack())
                     .account_script_hash(account_script.hash().pack())
                     .sudt_script_hash(H256::zero().pack())
+                    .owner_lock_hash(owner_lock.hash().pack())
                     .build();
-                WithdrawalRequest::new_builder().raw(raw).build()
+                let withdrawal = WithdrawalRequest::new_builder().raw(raw).build();
+                WithdrawalRequestExtra::new_builder()
+                    .request(withdrawal)
+                    .owner_lock(owner_lock)
+                    .build()
             })
             .collect()
     };

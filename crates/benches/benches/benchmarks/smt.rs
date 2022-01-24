@@ -394,6 +394,7 @@ impl BenchExecutionEnvironment {
             prev_txs_state,
             Vec::new(),
             Vec::new(),
+            Vec::new(),
         )
         .unwrap();
 

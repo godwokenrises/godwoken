@@ -90,6 +90,8 @@ async fn test_repackage_mem_block() {
     };
     let store = chain.store();
     let db = store.begin_transaction();
+
+    let withdrawals = param.block_param.withdrawals.clone();
     let block_result = produce_block(&db, chain.generator(), param).unwrap();
 
     let deposit_requests: Vec<_> = deposit_cells.iter().map(|i| i.request.clone()).collect();
@@ -98,6 +100,7 @@ async fn test_repackage_mem_block() {
         chain.generator(),
         &block_result.block,
         deposit_requests.as_slice(),
+        &withdrawals,
     )
     .unwrap()
 }

@@ -2,6 +2,7 @@
 
 use super::blockchain::*;
 use super::godwoken::*;
+use super::store::*;
 use molecule::prelude::*;
 #[derive(Clone)]
 pub struct CellInfo(molecule::bytes::Bytes);
@@ -3595,11 +3596,11 @@ impl NextMemBlock {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         DepositInfoVec::new_unchecked(self.0.slice(start..end))
     }
-    pub fn withdrawals(&self) -> WithdrawalRequestVec {
+    pub fn withdrawals(&self) -> WithdrawalRequestExtraVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
-        WithdrawalRequestVec::new_unchecked(self.0.slice(start..end))
+        WithdrawalRequestExtraVec::new_unchecked(self.0.slice(start..end))
     }
     pub fn block_info(&self) -> BlockInfo {
         let slice = self.as_slice();
@@ -3696,11 +3697,11 @@ impl<'r> NextMemBlockReader<'r> {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         DepositInfoVecReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn withdrawals(&self) -> WithdrawalRequestVecReader<'r> {
+    pub fn withdrawals(&self) -> WithdrawalRequestExtraVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
-        WithdrawalRequestVecReader::new_unchecked(&self.as_slice()[start..end])
+        WithdrawalRequestExtraVecReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn block_info(&self) -> BlockInfoReader<'r> {
         let slice = self.as_slice();
@@ -3763,7 +3764,7 @@ impl<'r> molecule::prelude::Reader<'r> for NextMemBlockReader<'r> {
             return ve!(Self, OffsetsNotMatch);
         }
         DepositInfoVecReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        WithdrawalRequestVecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        WithdrawalRequestExtraVecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         BlockInfoReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
@@ -3771,7 +3772,7 @@ impl<'r> molecule::prelude::Reader<'r> for NextMemBlockReader<'r> {
 #[derive(Debug, Default)]
 pub struct NextMemBlockBuilder {
     pub(crate) deposits: DepositInfoVec,
-    pub(crate) withdrawals: WithdrawalRequestVec,
+    pub(crate) withdrawals: WithdrawalRequestExtraVec,
     pub(crate) block_info: BlockInfo,
 }
 impl NextMemBlockBuilder {
@@ -3780,7 +3781,7 @@ impl NextMemBlockBuilder {
         self.deposits = v;
         self
     }
-    pub fn withdrawals(mut self, v: WithdrawalRequestVec) -> Self {
+    pub fn withdrawals(mut self, v: WithdrawalRequestExtraVec) -> Self {
         self.withdrawals = v;
         self
     }

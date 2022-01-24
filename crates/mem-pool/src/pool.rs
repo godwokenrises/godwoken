@@ -392,7 +392,7 @@ impl MemPool {
 
         // verify withdrawal signature
         self.generator
-            .check_withdrawal_request_signature(state, &withdrawal.request())?;
+            .check_withdrawal_request_signature(state, withdrawal)?;
 
         // verify finalized custodian
         let finalized_custodians = {
@@ -417,9 +417,8 @@ impl MemPool {
         // withdrawal basic verification
         let db = self.store.begin_transaction();
         let asset_script = db.get_asset_script(&withdrawal.raw().sudt_script_hash().unpack())?;
-        let opt_owner_lock = withdrawal.opt_owner_lock();
         self.generator
-            .verify_withdrawal_request(state, &withdrawal.request(), asset_script, opt_owner_lock)
+            .verify_withdrawal_request(state, withdrawal, asset_script)
             .map_err(Into::into)
     }
 
@@ -515,7 +514,8 @@ impl MemPool {
                 let mut add = new_tip_block.clone();
                 let mut discarded_txs: VecDeque<L2Transaction> = Default::default();
                 let mut included_txs: HashSet<L2Transaction> = Default::default();
-                let mut discarded_withdrawals: VecDeque<WithdrawalRequest> = Default::default();
+                let mut discarded_withdrawals: VecDeque<WithdrawalRequestExtra> =
+                    Default::default();
                 let mut included_withdrawals: HashSet<WithdrawalRequest> = Default::default();
                 while rem.raw().number().unpack() > add.raw().number().unpack() {
                     // reverse push, so we can keep txs in block's order
@@ -524,7 +524,12 @@ impl MemPool {
                     }
                     // reverse push, so we can keep withdrawals in block's order
                     for index in (0..rem.withdrawals().len()).rev() {
-                        discarded_withdrawals.push_front(rem.withdrawals().get(index).unwrap());
+                        let withdrawal = rem.withdrawals().get(index).unwrap();
+                        let withdrawal_extra = self
+                            .store
+                            .get_withdrawal(&withdrawal.hash().into())?
+                            .expect("get withdrawal");
+                        discarded_withdrawals.push_front(withdrawal_extra);
                     }
                     rem = self
                         .store
@@ -546,7 +551,12 @@ impl MemPool {
                     }
                     // reverse push, so we can keep withdrawals in block's order
                     for index in (0..rem.withdrawals().len()).rev() {
-                        discarded_withdrawals.push_front(rem.withdrawals().get(index).unwrap());
+                        let withdrawal = rem.withdrawals().get(index).unwrap();
+                        let withdrawal_extra = self
+                            .store
+                            .get_withdrawal(&withdrawal.hash().into())?
+                            .expect("get withdrawal");
+                        discarded_withdrawals.push_front(withdrawal_extra);
                     }
                     rem = self
                         .store
@@ -564,7 +574,7 @@ impl MemPool {
                 reinject_txs = discarded_txs;
                 // remove included withdrawals
                 discarded_withdrawals
-                    .retain(|withdrawal| !included_withdrawals.contains(withdrawal));
+                    .retain(|withdrawal| !included_withdrawals.contains(&withdrawal.request()));
                 reinject_withdrawals = discarded_withdrawals
                     .into_iter()
                     .map(Into::<WithdrawalRequestExtra>::into)
@@ -714,7 +724,6 @@ impl MemPool {
         // Register eth eoa mapping
         // Fan-out next mem block to readonly node
         if let Some(handler) = &self.mem_pool_publish_service {
-            let withdrawals = withdrawals.into_iter().map(|w| w.request()).collect();
             handler
                 .next_mem_block(
                     withdrawals,
@@ -930,7 +939,7 @@ impl MemPool {
             // check withdrawal request
             if let Err(err) = self
                 .generator
-                .check_withdrawal_request_signature(&state, &withdrawal.request())
+                .check_withdrawal_request_signature(&state, &withdrawal)
             {
                 log::info!("[mem-pool] withdrawal signature error: {:?}", err);
                 unused_withdrawals.push(withdrawal_hash);
@@ -939,12 +948,10 @@ impl MemPool {
             let asset_script = asset_scripts
                 .get(&withdrawal.raw().sudt_script_hash().unpack())
                 .cloned();
-            if let Err(err) = self.generator.verify_withdrawal_request(
-                &state,
-                &withdrawal.request(),
-                asset_script,
-                withdrawal.opt_owner_lock(),
-            ) {
+            if let Err(err) =
+                self.generator
+                    .verify_withdrawal_request(&state, &withdrawal, asset_script)
+            {
                 log::info!("[mem-pool] withdrawal verification error: {:?}", err);
                 unused_withdrawals.push(withdrawal_hash);
                 continue;
@@ -1162,7 +1169,7 @@ impl MemPool {
     pub(crate) async fn refresh_mem_block(
         &mut self,
         block_info: BlockInfo,
-        withdrawals: Vec<WithdrawalRequest>,
+        withdrawals: Vec<WithdrawalRequestExtra>,
         deposits: Vec<DepositInfo>,
     ) -> Result<Option<u64>> {
         let next_block_number = block_info.number().unpack();

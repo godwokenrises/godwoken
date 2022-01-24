@@ -22,7 +22,7 @@ use gw_types::{
     packed::{
         BlockMerkleState, Byte32, CellInput, CellOutput, ChallengeTarget, ChallengeWitness,
         DepositRequest, GlobalState, L2Block, L2BlockCommittedInfo, RawL2Block, RollupConfig,
-        Script, Transaction,
+        Script, Transaction, WithdrawalRequestExtra,
     },
     prelude::{Builder as GWBuilder, Entity as GWEntity, Pack as GWPack, Unpack as GWUnpack},
 };
@@ -52,6 +52,7 @@ pub enum L1ActionContext {
         l2block: L2Block,
         deposit_requests: Vec<DepositRequest>,
         deposit_asset_scripts: HashSet<Script>,
+        withdrawals: Vec<WithdrawalRequestExtra>,
     },
     Challenge {
         cell: ChallengeCell,
@@ -333,6 +334,7 @@ impl Chain {
                         l2block,
                         deposit_requests,
                         deposit_asset_scripts,
+                        withdrawals,
                     },
                 ) => {
                     let local_tip = self.local_state.tip();
@@ -376,6 +378,7 @@ impl Chain {
                         global_state.clone(),
                         deposit_requests,
                         deposit_asset_scripts,
+                        withdrawals,
                     )? {
                         db.rollback()?;
 
@@ -867,6 +870,7 @@ impl Chain {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn process_block(
         &mut self,
         db: &StoreTransaction,
@@ -875,6 +879,7 @@ impl Chain {
         global_state: GlobalState,
         deposit_requests: Vec<DepositRequest>,
         deposit_asset_scripts: HashSet<Script>,
+        withdrawals: Vec<WithdrawalRequestExtra>,
     ) -> Result<Option<ChallengeTarget>> {
         let tip_number: u64 = self.local_state.tip.raw().number().unpack();
         let tip_block_hash = self.local_state.tip.raw().hash();
@@ -895,6 +900,7 @@ impl Chain {
         let args = ApplyBlockArgs {
             l2block: l2block.clone(),
             deposit_requests: deposit_requests.clone(),
+            withdrawals: withdrawals.clone(),
         };
         let tip_block_hash = self.local_state.tip().hash().into();
         let chain_view = ChainView::new(db, tip_block_hash);
@@ -946,6 +952,7 @@ impl Chain {
             prev_txs_state,
             tx_receipts,
             deposit_requests,
+            withdrawals,
         )?;
         db.insert_asset_scripts(deposit_asset_scripts)?;
         db.attach_block(l2block.clone())?;

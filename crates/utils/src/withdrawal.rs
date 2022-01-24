@@ -6,7 +6,7 @@ use gw_types::prelude::{Entity, Reader, Unpack};
 pub struct ParsedWithdrawalLockArgs {
     pub rollup_type_hash: [u8; 32],
     pub lock_args: WithdrawalLockArgs,
-    pub opt_owner_lock: Option<Script>,
+    pub owner_lock: Script,
 }
 
 pub fn parse_lock_args(args: &Bytes) -> Result<ParsedWithdrawalLockArgs> {
@@ -29,11 +29,7 @@ pub fn parse_lock_args(args: &Bytes) -> Result<ParsedWithdrawalLockArgs> {
 
     let owner_lock_start = lock_args_end + 4; // u32 length
     if args_len <= owner_lock_start {
-        return Ok(ParsedWithdrawalLockArgs {
-            rollup_type_hash,
-            lock_args,
-            opt_owner_lock: None,
-        });
+        bail!("invalid args len");
     }
 
     let mut owner_lock_len_buf = [0u8; 4];
@@ -59,6 +55,6 @@ pub fn parse_lock_args(args: &Bytes) -> Result<ParsedWithdrawalLockArgs> {
     Ok(ParsedWithdrawalLockArgs {
         rollup_type_hash,
         lock_args,
-        opt_owner_lock: Some(owner_lock),
+        owner_lock,
     })
 }

@@ -4,7 +4,7 @@ use gw_common::H256;
 use gw_types::{
     bytes::Bytes,
     offchain::RollupContext,
-    packed::{L2Transaction, Script},
+    packed::{L2Transaction, Script, WithdrawalRequestExtra},
 };
 
 #[cfg(any(debug_assertions, feature = "enable-always-success-lock"))]
@@ -17,20 +17,19 @@ use crate::error::LockAlgorithmError;
 pub trait LockAlgorithm {
     fn recover(&self, message: H256, signature: &[u8]) -> Result<Bytes, LockAlgorithmError>;
 
-    fn verify_message(
-        &self,
-        lock_args: Bytes,
-        signature: Bytes,
-        message: H256,
-    ) -> Result<bool, LockAlgorithmError>;
-
     fn verify_tx(
         &self,
         ctx: &RollupContext,
         sender_script: Script,
         receiver_script: Script,
         tx: L2Transaction,
-    ) -> Result<bool, LockAlgorithmError>;
+    ) -> Result<(), LockAlgorithmError>;
+
+    fn verify_withdrawal(
+        &self,
+        sender_script: Script,
+        withdrawal: &WithdrawalRequestExtra,
+    ) -> Result<(), LockAlgorithmError>;
 }
 
 pub struct AccountLockManage {

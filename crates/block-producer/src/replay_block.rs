@@ -10,7 +10,7 @@ use gw_store::chain_view::ChainView;
 use gw_store::mem_pool_state::MemStore;
 use gw_store::traits::chain_store::ChainStore;
 use gw_store::Store;
-use gw_types::packed::{BlockInfo, DepositRequest, L2Block, RawL2Block};
+use gw_types::packed::{BlockInfo, DepositRequest, L2Block, RawL2Block, WithdrawalRequestExtra};
 use gw_types::prelude::Unpack;
 
 pub struct ReplayBlock;
@@ -21,6 +21,7 @@ impl ReplayBlock {
         generator: &Generator,
         block: &L2Block,
         deposits: &[DepositRequest],
+        withdrawals: &[WithdrawalRequestExtra],
     ) -> Result<()> {
         let raw_block = block.raw();
         let block_info = get_block_info(&raw_block);
@@ -45,17 +46,16 @@ impl ReplayBlock {
         };
 
         // apply withdrawal to state
-        let withdrawal_requests: Vec<_> = block.withdrawals().into_iter().collect();
         let block_producer_id: u32 = block_info.block_producer_id().unpack();
         let state_checkpoint_list: Vec<H256> = raw_block.state_checkpoint_list().unpack();
 
-        for (wth_idx, request) in withdrawal_requests.iter().enumerate() {
-            generator.check_withdrawal_request_signature(&state, request)?;
+        for (wth_idx, withdrawal) in withdrawals.iter().enumerate() {
+            generator.check_withdrawal_request_signature(&state, withdrawal)?;
 
             state.apply_withdrawal_request(
                 generator.rollup_context(),
                 block_producer_id,
-                request,
+                &withdrawal.request(),
             )?;
 
             let account_state = state.get_merkle_state();
@@ -125,7 +125,7 @@ impl ReplayBlock {
                 &account_state.merkle_root().unpack(),
                 account_state.count().unpack(),
             );
-            let checkpoint_index = withdrawal_requests.len() + tx_index;
+            let checkpoint_index = withdrawals.len() + tx_index;
             let block_checkpoint: H256 = match state_checkpoint_list.get(checkpoint_index) {
                 Some(checkpoint) => *checkpoint,
                 None => bail!("tx {} checkpoint not found", tx_index),

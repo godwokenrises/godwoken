@@ -123,8 +123,10 @@ impl StoreTransaction {
         prev_txs_state: AccountMerkleState,
         tx_receipts: Vec<packed::TxReceipt>,
         deposit_requests: Vec<packed::DepositRequest>,
+        withdrawals: Vec<packed::WithdrawalRequestExtra>,
     ) -> Result<(), Error> {
         debug_assert_eq!(block.transactions().len(), tx_receipts.len());
+        debug_assert_eq!(block.withdrawals().len(), withdrawals.len());
         let block_hash = block.hash();
         self.insert_raw(COLUMN_BLOCK, &block_hash, block.as_slice())?;
         self.insert_raw(
@@ -192,7 +194,7 @@ impl StoreTransaction {
                 tx_receipt.as_slice(),
             )?;
         }
-        for (index, withdrawal) in block.withdrawals().into_iter().enumerate() {
+        for (index, withdrawal) in withdrawals.into_iter().enumerate() {
             let key = WithdrawalKey::build_withdrawal_key(block_hash.pack(), index as u32);
             self.insert_raw(COLUMN_WITHDRAWAL, key.as_slice(), withdrawal.as_slice())?;
         }

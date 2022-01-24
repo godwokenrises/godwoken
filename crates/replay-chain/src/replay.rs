@@ -51,6 +51,16 @@ pub fn replay_chain(ctx: ChainContext) -> Result<()> {
         let deposit_requests = from_store
             .get_block_deposit_requests(&block_hash)?
             .expect("block deposit requests");
+        let withdrawals = block
+            .withdrawals()
+            .into_iter()
+            .map(|withdrawal| {
+                from_store
+                    .get_withdrawal(&withdrawal.hash().into())
+                    .expect("query")
+                    .expect("block deposit requests")
+            })
+            .collect();
         let load_block_ms = now.elapsed().as_millis();
 
         let txs_len = block.transactions().item_count();
@@ -64,6 +74,7 @@ pub fn replay_chain(ctx: ChainContext) -> Result<()> {
             global_state,
             deposit_requests,
             Default::default(),
+            withdrawals,
         )? {
             let target_type: u8 = challenge.target_type().into();
             let target_type: ChallengeTargetType = target_type.try_into().unwrap();
