@@ -279,6 +279,7 @@ impl Registry {
                 compute_l2_sudt_script_hash,
             )
             .with_method("gw_get_fee_config", get_fee_config)
+            .with_method("gw_get_mem_pool_state_root", get_mem_pool_state_root)
             .with_method("gw_get_node_info", get_node_info)
             .with_method("gw_reload_config", reload_config);
 
@@ -1359,6 +1360,15 @@ async fn get_fee_config(
             .collect(),
     };
     Ok(fee_config)
+}
+
+async fn get_mem_pool_state_root(
+    mem_pool_state: Data<Arc<MemPoolState>>,
+) -> Result<JsonH256, RpcError> {
+    let snap = mem_pool_state.load();
+    let tree = snap.state()?;
+    let root = tree.calculate_root()?;
+    Ok(to_jsonh256(root))
 }
 
 async fn tests_produce_block(
