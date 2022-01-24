@@ -133,8 +133,14 @@ impl LockAlgorithm for Secp256k1Eth {
     fn recover(&self, message: H256, signature: &[u8]) -> Result<Bytes, LockAlgorithmError> {
         let signature: RecoverableSignature = {
             let signature = convert_signature_to_byte65(signature)?;
-            let recid = RecoveryId::from_i32(signature[64] as i32)
-                .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
+            let recid = {
+                let rec_param: i32 = match signature[64] {
+                    28 => 1,
+                    _ => 0,
+                };
+                RecoveryId::from_i32(rec_param)
+                    .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?
+            };
             let data = &signature[..64];
             RecoverableSignature::from_compact(data, recid)
                 .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?

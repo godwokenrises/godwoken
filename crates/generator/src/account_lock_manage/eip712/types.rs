@@ -14,7 +14,7 @@ impl EIP712Encode for Script {
     }
 
     fn encode_type(&self, buf: &mut Vec<u8>) {
-        buf.extend(b"Script(byte32 codeHash,string hashType,bytes args)");
+        buf.extend(b"Script(bytes32 codeHash,string hashType,bytes args)");
     }
 
     fn encode_data(&self, buf: &mut Vec<u8>) {
@@ -39,8 +39,8 @@ pub struct WithdrawalAsset {
     // CKB amount
     ckb_capacity: u64,
     // SUDT amount
-    sudt_amount: u128,
-    sudt_script_hash: [u8; 32],
+    udt_amount: u128,
+    udt_script_hash: [u8; 32],
 }
 
 impl EIP712Encode for WithdrawalAsset {
@@ -49,22 +49,20 @@ impl EIP712Encode for WithdrawalAsset {
     }
 
     fn encode_type(&self, buf: &mut Vec<u8>) {
-        buf.extend(
-            b"WithdrawalAsset(uint256 ckbCapacity,uint256 sudtAmount,byte32 sudtScriptHash)",
-        );
+        buf.extend(b"WithdrawalAsset(uint256 ckbCapacity,uint256 UDTAmount,bytes32 UDTScriptHash)");
     }
 
     fn encode_data(&self, buf: &mut Vec<u8>) {
         use ethabi::Token;
         buf.extend(ethabi::encode(&[Token::Uint(self.ckb_capacity.into())]));
-        buf.extend(ethabi::encode(&[Token::Uint(self.sudt_amount.into())]));
-        buf.extend(ethabi::encode(&[Token::Uint(self.sudt_script_hash.into())]));
+        buf.extend(ethabi::encode(&[Token::Uint(self.udt_amount.into())]));
+        buf.extend(ethabi::encode(&[Token::Uint(self.udt_script_hash.into())]));
     }
 }
 
 pub struct Fee {
-    sudt_id: u32,
-    sudt_amount: u128,
+    udt_id: u32,
+    udt_amount: u128,
 }
 
 impl EIP712Encode for Fee {
@@ -73,19 +71,18 @@ impl EIP712Encode for Fee {
     }
 
     fn encode_type(&self, buf: &mut Vec<u8>) {
-        buf.extend(b"Fee(uint256 sudtId,uint256 sudtAmount)");
+        buf.extend(b"Fee(uint256 UDTId,uint256 UDTAmount)");
     }
 
     fn encode_data(&self, buf: &mut Vec<u8>) {
         use ethabi::Token;
-        buf.extend(ethabi::encode(&[Token::Uint(self.sudt_id.into())]));
-        buf.extend(ethabi::encode(&[Token::Uint(self.sudt_amount.into())]));
+        buf.extend(ethabi::encode(&[Token::Uint(self.udt_id.into())]));
+        buf.extend(ethabi::encode(&[Token::Uint(self.udt_amount.into())]));
     }
 }
 
 // RawWithdrawalRequest
 pub struct Withdrawal {
-    nonce: u32,
     account_script_hash: [u8; 32],
     // layer1 lock to withdraw after challenge period
     layer1_owner_lock: Script,
@@ -101,7 +98,7 @@ impl EIP712Encode for Withdrawal {
     }
 
     fn encode_type(&self, buf: &mut Vec<u8>) {
-        buf.extend(b"Withdrawal(uint256 nonce,byte32 accountScriptHash,Script layer1OwnerLock,WithdrawalAsset withdraw,Fee fee)");
+        buf.extend(b"Withdrawal(bytes32 accountScriptHash,Script layer1OwnerLock,WithdrawalAsset withdraw,Fee fee)");
         self.fee.encode_type(buf);
         self.layer1_owner_lock.encode_type(buf);
         self.withdraw.encode_type(buf);
@@ -109,7 +106,6 @@ impl EIP712Encode for Withdrawal {
 
     fn encode_data(&self, buf: &mut Vec<u8>) {
         use ethabi::Token;
-        buf.extend(ethabi::encode(&[Token::Uint(self.nonce.into())]));
         buf.extend(ethabi::encode(&[Token::Uint(
             self.account_script_hash.into(),
         )]));
@@ -129,7 +125,7 @@ pub struct EIP712Domain {
     name: String,
     version: String,
     chain_id: u64,
-    verifying_contract: [u8; 20],
+    verifying_contract: Option<[u8; 20]>,
     salt: Option<[u8; 32]>,
 }
 
@@ -140,9 +136,12 @@ impl EIP712Encode for EIP712Domain {
 
     fn encode_type(&self, buf: &mut Vec<u8>) {
         buf.extend(b"EIP712Domain(");
-        buf.extend(b"string name,string version,uint256 chainId,address verifyingContract");
+        buf.extend(b"string name,string version,uint256 chainId");
+        if self.verifying_contract.is_some() {
+            buf.extend(b",address verifyingContract");
+        }
         if self.salt.is_some() {
-            buf.extend(b",byte32 salt");
+            buf.extend(b",bytes32 salt");
         }
         buf.extend(b")");
     }
@@ -163,9 +162,9 @@ impl EIP712Encode for EIP712Domain {
         };
         buf.extend(ethabi::encode(&[Token::Uint(version.into())]));
         buf.extend(ethabi::encode(&[Token::Uint(self.chain_id.into())]));
-        buf.extend(ethabi::encode(&[Token::Address(
-            self.verifying_contract.into(),
-        )]));
+        if let Some(verifying_contract) = self.verifying_contract {
+            buf.extend(ethabi::encode(&[Token::Address(verifying_contract.into())]));
+        }
         if let Some(salt) = self.salt {
             buf.extend(ethabi::encode(&[Token::Uint(salt.into())]));
         }
@@ -179,7 +178,12 @@ mod tests {
     use sha3::{Digest, Keccak256};
 
     use crate::account_lock_manage::{
-        eip712::traits::EIP712Encode, secp256k1::Secp256k1Eth, LockAlgorithm,
+        eip712::{
+            traits::EIP712Encode,
+            types::{Fee, Script, Withdrawal, WithdrawalAsset},
+        },
+        secp256k1::Secp256k1Eth,
+        LockAlgorithm,
     };
 
     use super::EIP712Domain;
@@ -253,10 +257,12 @@ mod tests {
             version: "1".to_string(),
             chain_id: 1,
             verifying_contract: {
-                hex::decode("CcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC")
-                    .unwrap()
-                    .try_into()
-                    .unwrap()
+                Some(
+                    hex::decode("CcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC")
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                )
             },
             salt: None,
         };
@@ -304,7 +310,7 @@ mod tests {
                 .unwrap();
             let s = hex::decode("07299936d304c153f6443dfa05f40ff007d72911b6f72307f996231605b91562")
                 .unwrap();
-            let v = 1;
+            let v = 28;
             let mut buf = [0u8; 65];
             buf[..32].copy_from_slice(&r);
             buf[32..64].copy_from_slice(&s);
@@ -315,5 +321,59 @@ mod tests {
             .recover(message.into(), &signature)
             .unwrap();
         assert_eq!(hex::encode(mail.from.wallet), hex::encode(pubkey_hash));
+    }
+
+    #[test]
+    fn test_sign_withdrawal_message() {
+        let withdrawal = Withdrawal {
+            account_script_hash: hex::decode(
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            )
+            .unwrap()
+            .try_into()
+            .unwrap(),
+            layer1_owner_lock: Script {
+                code_hash: hex::decode(
+                    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                )
+                .unwrap()
+                .try_into()
+                .unwrap(),
+                hash_type: "type".to_string(),
+                args: hex::decode("1234").unwrap(),
+            },
+            withdraw: WithdrawalAsset {
+                ckb_capacity: 1000,
+                udt_amount: 300,
+                udt_script_hash: hex::decode(
+                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                )
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            },
+            fee: Fee {
+                udt_id: 1,
+                udt_amount: 100,
+            },
+        };
+
+        // verify EIP 712 signature
+        let domain_seperator = EIP712Domain {
+            name: "Godwoken".to_string(),
+            version: "1".to_string(),
+            chain_id: 1,
+            verifying_contract: None,
+            salt: None,
+        };
+        let message = withdrawal.eip712_message(domain_seperator.hash_struct());
+        let signature: [u8; 65] = hex::decode("ed612c71ae98ea3099a45f12f5a23548a25a66f66a2f16bd5fc3c8c905c1a6911199c6f62a8a24dafaf5105198b81f26d01d22c8a515c095e94a703259fc93f81c").unwrap().try_into().unwrap();
+        let pubkey_hash = Secp256k1Eth::default()
+            .recover(message.into(), &signature)
+            .unwrap();
+        assert_eq!(
+            "898136badaf5fb2b8fb65ce832e7b6d13f89546a".to_string(),
+            hex::encode(pubkey_hash)
+        );
     }
 }
