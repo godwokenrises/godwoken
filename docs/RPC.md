@@ -952,3 +952,30 @@ Response
     }
 }
 ```
+
+### Method `gw_get_mem_pool_state_root`
+
+Get mem-pool state root.
+
+#### Examples
+
+Request
+
+``` json
+{
+    "id": 42,
+    "jsonrpc": "2.0",
+    "method": "gw_get_mem_pool_state_root",
+    "params": []
+}
+```
+
+Response
+
+``` json
+{
+    "id": 42,
+    "jsonrpc": "2.0",
+    "result": "0xf3349effe912609ab277e227925995070ea8f3e452854852ed7386206371f07d"
+}
+```
