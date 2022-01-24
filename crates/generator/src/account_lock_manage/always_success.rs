@@ -21,22 +21,21 @@ impl LockAlgorithm for AlwaysSuccess {
         Ok(Default::default())
     }
 
-    fn verify_message(
-        &self,
-        _lock_args: Bytes,
-        _signature: Bytes,
-        _message: H256,
-    ) -> Result<bool, LockAlgorithmError> {
-        Ok(true)
-    }
-
     fn verify_tx(
         &self,
         _ctx: &RollupContext,
         _sender_script: Script,
         _receiver_script: Script,
         _tx: L2Transaction,
-    ) -> Result<bool, LockAlgorithmError> {
-        Ok(true)
+    ) -> Result<(), LockAlgorithmError> {
+        Ok(())
+    }
+
+    fn verify_withdrawal(
+        &self,
+        _sender_script: Script,
+        _withdrawal: &gw_types::packed::WithdrawalRequestExtra,
+    ) -> Result<(), LockAlgorithmError> {
+        Ok(())
     }
 }

@@ -177,7 +177,7 @@ pub trait ChainStore: KVStoreRead {
     fn get_withdrawal(
         &self,
         withdrawal_hash: &H256,
-    ) -> Result<Option<packed::WithdrawalRequest>, Error> {
+    ) -> Result<Option<packed::WithdrawalRequestExtra>, Error> {
         match self.get_withdrawal_info(withdrawal_hash)? {
             Some(withdrawal_info) => self.get_withdrawal_by_key(&withdrawal_info.key()),
             None => Ok(None),
@@ -199,11 +199,12 @@ pub trait ChainStore: KVStoreRead {
     fn get_withdrawal_by_key(
         &self,
         withdrawal_key: &WithdrawalKey,
-    ) -> Result<Option<packed::WithdrawalRequest>, Error> {
+    ) -> Result<Option<packed::WithdrawalRequestExtra>, Error> {
         Ok(self
             .get(COLUMN_WITHDRAWAL, withdrawal_key.as_slice())
             .map(|slice| {
-                packed::WithdrawalRequestReader::from_slice_should_be_ok(slice.as_ref()).to_entity()
+                packed::WithdrawalRequestExtraReader::from_slice_should_be_ok(slice.as_ref())
+                    .to_entity()
             }))
     }
 
@@ -313,9 +314,7 @@ pub trait ChainStore: KVStoreRead {
     ) -> Result<Option<packed::WithdrawalRequestExtra>, Error> {
         let maybe_withdrawal =
             match self.get(COLUMN_MEM_POOL_WITHDRAWAL, withdrawal_hash.as_slice()) {
-                Some(slice) => {
-                    packed::WithdrawalRequestExtra::from_request_compitable_slice(slice.as_ref())
-                }
+                Some(slice) => packed::WithdrawalRequestExtra::from_slice(slice.as_ref()),
                 None => return Ok(None),
             };
 

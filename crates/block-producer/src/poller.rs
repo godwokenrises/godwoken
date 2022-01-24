@@ -20,14 +20,17 @@ use gw_types::{
     offchain::{RollupContext, TxStatus},
     packed::{
         CellInput, CellOutput, ChallengeLockArgs, ChallengeLockArgsReader, DepositLockArgs,
-        DepositRequest, L2BlockCommittedInfo, OutPoint, RollupAction, RollupActionUnion, Script,
-        Transaction, WitnessArgs, WitnessArgsReader,
+        DepositRequest, L2Block, L2BlockCommittedInfo, OutPoint, RollupAction, RollupActionUnion,
+        Script, Transaction, WithdrawalRequestExtra, WitnessArgs, WitnessArgsReader,
     },
     prelude::*,
 };
 use gw_web3_indexer::indexer::Web3Indexer;
 use serde_json::json;
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 
 #[derive(thiserror::Error, Debug)]
@@ -254,12 +257,15 @@ impl ChainUpdater {
         let rollup_action = self.extract_rollup_action(&tx)?;
         let context = match rollup_action.to_enum() {
             RollupActionUnion::RollupSubmitBlock(submitted) => {
+                let l2block = submitted.block();
                 let (requests, asset_type_scripts) = self.extract_deposit_requests(&tx).await?;
+                let withdrawals = self.extract_withdrawals(&tx, &l2block).await?;
 
                 L1ActionContext::SubmitBlock {
-                    l2block: submitted.block(),
+                    l2block,
                     deposit_requests: requests,
                     deposit_asset_scripts: asset_type_scripts,
+                    withdrawals,
                 }
             }
             RollupActionUnion::RollupEnterChallenge(entered) => {
@@ -532,6 +538,37 @@ impl ChainUpdater {
         }
         Ok((results, asset_type_scripts))
     }
+
+    async fn extract_withdrawals(
+        &self,
+        tx: &Transaction,
+        block: &L2Block,
+    ) -> Result<Vec<WithdrawalRequestExtra>> {
+        let mut owner_lock_map = HashMap::with_capacity(block.withdrawals().len());
+        for output in tx.raw().outputs().into_iter() {
+            if let Some(owner_lock) = try_parse_withdrawal_owner_lock(&output, &self.rollup_context)
+            {
+                owner_lock_map.insert(owner_lock.hash(), owner_lock);
+            }
+        }
+        // return in block's sort
+        let withdrawals = block
+            .withdrawals()
+            .into_iter()
+            .map(|withdrawal| {
+                let owner_lock_hash: [u8; 32] = withdrawal.raw().owner_lock_hash().unpack();
+                let owner_lock = owner_lock_map
+                    .get(&owner_lock_hash)
+                    .expect("must exist")
+                    .clone();
+                WithdrawalRequestExtra::new_builder()
+                    .request(withdrawal)
+                    .owner_lock(owner_lock)
+                    .build()
+            })
+            .collect();
+        Ok(withdrawals)
+    }
 }
 
 fn try_parse_deposit_request(
@@ -577,4 +614,25 @@ fn try_parse_deposit_request(
         .script(lock_args.layer2_lock())
         .build();
     Some(deposit_request)
+}
+
+fn try_parse_withdrawal_owner_lock(
+    cell_output: &CellOutput,
+    rollup_context: &RollupContext,
+) -> Option<Script> {
+    if cell_output.lock().code_hash() != rollup_context.rollup_config.withdrawal_script_type_hash()
+        || cell_output.lock().hash_type() != ScriptHashType::Type.into()
+    {
+        return None;
+    }
+    let args = cell_output.lock().args().raw_data();
+    if args.len() < 32 {
+        return None;
+    }
+    let rollup_type_script_hash: [u8; 32] = rollup_context.rollup_script_hash.into();
+    if args.slice(0..32) != rollup_type_script_hash[..] {
+        return None;
+    }
+    let result = gw_utils::withdrawal::parse_lock_args(&args).expect("parse withdrawal extra");
+    Some(result.owner_lock)
 }

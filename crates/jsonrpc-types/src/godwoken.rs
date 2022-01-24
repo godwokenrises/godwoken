@@ -529,7 +529,7 @@ impl Default for WithdrawalStatus {
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct WithdrawalWithStatus {
-    pub withdrawal: Option<WithdrawalRequest>,
+    pub withdrawal: Option<WithdrawalRequestExtra>,
     pub status: WithdrawalStatus,
 }
 
@@ -757,6 +757,35 @@ impl From<packed::DepositRequest> for DepositRequest {
             sudt_script_hash: deposit_request.sudt_script_hash().unpack(),
             amount: amount.into(),
             capacity: capacity.into(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct WithdrawalRequestExtra {
+    pub request: WithdrawalRequest,
+    pub owner_lock: Script,
+}
+
+impl From<WithdrawalRequestExtra> for packed::WithdrawalRequestExtra {
+    fn from(json: WithdrawalRequestExtra) -> packed::WithdrawalRequestExtra {
+        let WithdrawalRequestExtra {
+            request,
+            owner_lock,
+        } = json;
+        packed::WithdrawalRequestExtra::new_builder()
+            .request(request.into())
+            .owner_lock(owner_lock.into())
+            .build()
+    }
+}
+
+impl From<packed::WithdrawalRequestExtra> for WithdrawalRequestExtra {
+    fn from(withdrawal: packed::WithdrawalRequestExtra) -> WithdrawalRequestExtra {
+        Self {
+            request: withdrawal.request().into(),
+            owner_lock: withdrawal.owner_lock().into(),
         }
     }
 }

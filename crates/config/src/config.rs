@@ -28,7 +28,6 @@ pub struct Config {
     pub mem_pool: MemPoolConfig,
     #[serde(default)]
     pub db_block_validator: Option<DBBlockValidatorConfig>,
-    #[serde(default)]
     pub store: StoreConfig,
     pub sentry_dsn: Option<String>,
     #[serde(default)]
@@ -38,6 +37,13 @@ pub struct Config {
     pub dynamic_config: DynamicConfig,
     #[serde(default)]
     pub eth_eoa_mapping_config: Option<EthEoaMappingConfig>,
+    pub eth_compatible_config: ETHCompatibleConfig,
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ETHCompatibleConfig {
+    /// Used in Godwoken withdrawal signing
+    pub eip712_domain_chain_id: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]

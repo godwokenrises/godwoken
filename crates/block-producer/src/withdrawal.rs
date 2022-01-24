@@ -244,13 +244,7 @@ pub fn unlock_to_owner(
         let owner_lock = {
             let args: Bytes = withdrawal_cell.output.lock().args().unpack();
             match gw_utils::withdrawal::parse_lock_args(&args) {
-                Ok(parsed) => match parsed.opt_owner_lock {
-                    Some(owner_lock) => owner_lock,
-                    None => {
-                        log::error!("[unlock withdrawal] impossible, already pass verify_unlockable_to_owner above");
-                        continue;
-                    }
-                },
+                Ok(parsed) => parsed.owner_lock,
                 Err(_) => {
                     log::error!("[unlock withdrawal] impossible, already pass verify_unlockable_to_owner above");
                     continue;
@@ -311,7 +305,6 @@ mod test {
 
     use gw_common::{h256_ext::H256Ext, H256};
     use gw_config::ContractsCellDep;
-    use gw_generator::generator::UnlockWithdrawal;
     use gw_types::core::{DepType, ScriptHashType};
     use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo};
     use gw_types::packed::{
@@ -385,42 +378,13 @@ mod test {
 
         let contracts_dep = ContractsCellDep::default();
 
-        // ## No owner lock
-        let withdrawal_extra = WithdrawalRequestExtra::new_builder()
-            .request(withdrawal.clone())
-            .build();
-        let withdrawal_extras = HashMap::from_iter([(withdrawal.hash().into(), withdrawal_extra)]);
-
-        let generated = generate(
-            &rollup_context,
-            finalized_custodians.clone(),
-            &block,
-            &contracts_dep,
-            &withdrawal_extras,
-        )
-        .unwrap();
-        let (output, data) = generated.unwrap().outputs.first().unwrap().to_owned();
-
-        let (expected_output, expected_data) =
-            gw_generator::Generator::build_withdrawal_cell_output(
-                &rollup_context,
-                &withdrawal,
-                &block.hash().into(),
-                block.raw().number().unpack(),
-                Some(sudt_script.clone()),
-                UnlockWithdrawal::WithoutOwnerLock,
-            )
-            .unwrap();
-
-        assert_eq!(expected_output.as_slice(), output.as_slice());
-        assert_eq!(expected_data, data);
-
         // ## With owner lock
         let withdrawal_extra = WithdrawalRequestExtra::new_builder()
             .request(withdrawal.clone())
-            .owner_lock(Some(owner_lock.clone()).pack())
+            .owner_lock(owner_lock.clone())
             .build();
-        let withdrawal_extras = HashMap::from_iter([(withdrawal.hash().into(), withdrawal_extra)]);
+        let withdrawal_extras =
+            HashMap::from_iter([(withdrawal.hash().into(), withdrawal_extra.clone())]);
 
         let generated = generate(
             &rollup_context,
@@ -435,11 +399,10 @@ mod test {
         let (expected_output, expected_data) =
             gw_generator::Generator::build_withdrawal_cell_output(
                 &rollup_context,
-                &withdrawal,
+                &withdrawal_extra,
                 &block.hash().into(),
                 block.raw().number().unpack(),
                 Some(sudt_script.clone()),
-                UnlockWithdrawal::from(owner_lock),
             )
             .unwrap();
 

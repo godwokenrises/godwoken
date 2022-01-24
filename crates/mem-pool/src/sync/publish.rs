@@ -2,7 +2,7 @@ use gw_types::{
     offchain::DepositInfo,
     packed::{
         BlockInfo, L2Transaction, NextL2Transaction, NextMemBlock, RefreshMemBlockMessageUnion,
-        WithdrawalRequest,
+        WithdrawalRequestExtra,
     },
     prelude::{Builder, Entity, Pack, PackVec},
 };
@@ -67,7 +67,7 @@ impl MemPoolPublishService {
 
     pub(crate) async fn next_mem_block(
         &self,
-        withdrawals: Vec<WithdrawalRequest>,
+        withdrawals: Vec<WithdrawalRequestExtra>,
         deposits: Vec<DepositInfo>,
         block_info: BlockInfo,
     ) {

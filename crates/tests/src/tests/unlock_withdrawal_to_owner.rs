@@ -209,6 +209,7 @@ async fn test_build_unlock_to_owner_tx() {
             l2block: deposit_block_result.block.clone(),
             deposit_requests: deposits.collect(),
             deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.output.clone(), deposit_block_result.clone()),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -236,23 +237,8 @@ async fn test_build_unlock_to_owner_tx() {
     // Generate random withdrawals(w/wo owner lock)
     const WITHDRAWAL_CAPACITY: u64 = 1000 * CKB;
     const WITHDRAWAL_AMOUNT: u128 = 100;
-    let no_owner_lock_count = accounts.len() / 2;
-    let withdrawals_no_lock = {
-        let accounts = accounts.iter().take(no_owner_lock_count);
-        accounts.map(|account_script| {
-            let raw = RawWithdrawalRequest::new_builder()
-                .capacity(WITHDRAWAL_CAPACITY.pack())
-                .amount(WITHDRAWAL_AMOUNT.pack())
-                .account_script_hash(account_script.hash().pack())
-                .owner_lock_hash(account_script.hash().pack())
-                .sudt_script_hash(sudt_script.hash().pack())
-                .build();
-            WithdrawalRequest::new_builder().raw(raw).build().into()
-        })
-    };
     let withdrawals_lock = {
-        let accounts = accounts.iter().skip(no_owner_lock_count);
-        accounts.map(|account_script| {
+        accounts.iter().map(|account_script| {
             let raw = RawWithdrawalRequest::new_builder()
                 .capacity(WITHDRAWAL_CAPACITY.pack())
                 .amount(WITHDRAWAL_AMOUNT.pack())
@@ -263,7 +249,7 @@ async fn test_build_unlock_to_owner_tx() {
             let req = WithdrawalRequest::new_builder().raw(raw).build();
             WithdrawalRequestExtra::new_builder()
                 .request(req)
-                .owner_lock(Some(account_script.to_owned()).pack())
+                .owner_lock(account_script.to_owned())
                 .build()
         })
     };
@@ -291,7 +277,7 @@ async fn test_build_unlock_to_owner_tx() {
         };
         mem_pool.set_provider(Box::new(provider));
 
-        for withdrawal in withdrawals_no_lock.chain(withdrawals_lock) {
+        for withdrawal in withdrawals_lock {
             mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
         }
 
@@ -493,7 +479,7 @@ async fn test_build_unlock_to_owner_tx() {
         .await
         .expect("unlock")
         .expect("skip no owner lock");
-    assert_eq!(to_unlock.len(), accounts.len() - no_owner_lock_count);
+    assert_eq!(to_unlock.len(), accounts.len());
 
     let inputs = {
         let cells = random_withdrawal_cells.clone().into_iter();
@@ -520,10 +506,7 @@ async fn test_build_unlock_to_owner_tx() {
             .is_ok()
         })
         .collect();
-    assert_eq!(
-        unlockable_random_withdrawals.len(),
-        accounts.len() - no_owner_lock_count
-    );
+    assert_eq!(unlockable_random_withdrawals.len(), accounts.len());
 
     unlocker.withdrawals = unlockable_random_withdrawals.clone();
     let (tx, _to_unlock) = unlocker

@@ -993,11 +993,7 @@ async fn submit_withdrawal_request(
     rpc_client: Data<RPCClient>,
 ) -> Result<JsonH256, RpcError> {
     let withdrawal_bytes = withdrawal_request.into_bytes();
-    let withdrawal = {
-        let w = packed::WithdrawalRequestExtra::from_request_compitable_slice(&withdrawal_bytes)?;
-        w.as_builder().owner_lock(Pack::pack(&None)).build()
-    };
-    assert!(withdrawal.opt_owner_lock().is_none());
+    let withdrawal = packed::WithdrawalRequestExtra::from_slice(&withdrawal_bytes)?;
     let withdrawal_hash = withdrawal.hash();
 
     // verify finalized custodian
@@ -1111,9 +1107,7 @@ async fn get_withdrawal(
             status = WithdrawalStatus::Committed;
         }
         None => {
-            withdrawal_opt = db
-                .get_mem_pool_withdrawal(&withdrawal_hash)?
-                .map(|w| w.request());
+            withdrawal_opt = db.get_mem_pool_withdrawal(&withdrawal_hash)?;
             status = WithdrawalStatus::Pending;
         }
     };

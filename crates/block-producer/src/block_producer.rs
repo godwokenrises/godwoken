@@ -419,6 +419,7 @@ impl BlockProducer {
             (Some(finalized_custodians), produce_block_param)
         };
         let deposit_cells = block_param.deposits.clone();
+        let withdrawals = block_param.withdrawals.clone();
 
         // produce block
         let reverted_block_root: H256 = {
@@ -448,7 +449,8 @@ impl BlockProducer {
                 &self.store,
                 &self.generator,
                 &block,
-                deposit_requests.as_slice(),
+                &deposit_requests,
+                &withdrawals,
             ) {
                 let mut mem_pool = self.mem_pool.lock().await;
                 mem_pool.save_mem_block_with_suffix(&format!("invalid_block_{}", number))?;

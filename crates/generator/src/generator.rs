@@ -39,7 +39,7 @@ use gw_types::{
     packed::{
         AccountMerkleState, BlockInfo, CellOutput, ChallengeTarget, DepositRequest, L2Block,
         L2Transaction, RawL2Block, RawL2Transaction, Script, TxReceipt, WithdrawalLockArgs,
-        WithdrawalReceipt, WithdrawalRequest,
+        WithdrawalReceipt, WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -52,6 +52,7 @@ use ckb_vm::TraceMachine;
 pub struct ApplyBlockArgs {
     pub l2block: L2Block,
     pub deposit_requests: Vec<DepositRequest>,
+    pub withdrawals: Vec<WithdrawalRequestExtra>,
 }
 
 pub enum ApplyBlockResult {
@@ -84,26 +85,6 @@ impl From<WithdrawalCellError> for Error {
             .into(),
             WithdrawalCellError::OwnerLock(hash) => WithdrawalError::OwnerLock(hash.pack()).into(),
         }
-    }
-}
-
-pub enum UnlockWithdrawal {
-    WithoutOwnerLock,
-    WithOwnerLock { lock: Script },
-}
-
-impl From<Option<Script>> for UnlockWithdrawal {
-    fn from(opt_lock: Option<Script>) -> UnlockWithdrawal {
-        match opt_lock {
-            Some(lock) => UnlockWithdrawal::WithOwnerLock { lock },
-            None => UnlockWithdrawal::WithoutOwnerLock,
-        }
-    }
-}
-
-impl From<Script> for UnlockWithdrawal {
-    fn from(lock: Script) -> UnlockWithdrawal {
-        UnlockWithdrawal::WithOwnerLock { lock }
     }
 }
 
@@ -206,11 +187,10 @@ impl Generator {
     pub fn verify_withdrawal_request<S: State + CodeStore>(
         &self,
         state: &S,
-        withdrawal_request: &WithdrawalRequest,
+        withdrawal: &WithdrawalRequestExtra,
         asset_script: Option<Script>,
-        opt_owner_lock: Option<Script>,
     ) -> Result<(), Error> {
-        let raw = withdrawal_request.raw();
+        let raw = withdrawal.request().raw();
         let account_script_hash: H256 = raw.account_script_hash().unpack();
         let sudt_script_hash: H256 = raw.sudt_script_hash().unpack();
         let amount: u128 = raw.amount().unpack();
@@ -224,11 +204,10 @@ impl Generator {
         let rollup_context = self.rollup_context();
         Self::build_withdrawal_cell_output(
             rollup_context,
-            withdrawal_request,
+            withdrawal,
             &H256::one(),
             1,
             asset_script,
-            UnlockWithdrawal::from(opt_owner_lock),
         )?;
 
         // find user account
@@ -300,9 +279,9 @@ impl Generator {
     pub fn check_withdrawal_request_signature<S: State + CodeStore>(
         &self,
         state: &S,
-        withdrawal_request: &WithdrawalRequest,
+        withdrawal: &WithdrawalRequestExtra,
     ) -> Result<(), Error> {
-        let raw = withdrawal_request.raw();
+        let raw = withdrawal.request().raw();
         let account_script_hash: [u8; 32] = raw.account_script_hash().unpack();
 
         // check signature
@@ -315,16 +294,7 @@ impl Generator {
             .get_lock_algorithm(&lock_code_hash.into())
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
 
-        let message = raw.calc_message(&self.rollup_context.rollup_script_hash);
-        let valid_signature = lock_algo.verify_message(
-            account_script.args().unpack(),
-            withdrawal_request.signature().unpack(),
-            message,
-        )?;
-
-        if !valid_signature {
-            return Err(LockAlgorithmError::InvalidSignature("Wrong signature".to_string()).into());
-        }
+        lock_algo.verify_withdrawal(account_script, withdrawal)?;
 
         Ok(())
     }
@@ -390,11 +360,8 @@ impl Generator {
             .account_lock_manage()
             .get_lock_algorithm(&lock_code_hash.into())
             .ok_or(LockAlgorithmError::UnknownAccountLock)?;
-        let valid_signature =
-            lock_algo.verify_tx(&self.rollup_context, script, receiver_script, tx.to_owned())?;
-        if !valid_signature {
-            return Err(LockAlgorithmError::InvalidSignature("Wrong signature".to_string()).into());
-        }
+
+        lock_algo.verify_tx(&self.rollup_context, script, receiver_script, tx.to_owned())?;
         Ok(())
     }
 
@@ -409,6 +376,11 @@ impl Generator {
         let raw_block = args.l2block.raw();
         let block_info = get_block_info(&raw_block);
         let block_number = raw_block.number().unpack();
+        assert_eq!(
+            args.l2block.withdrawals().len(),
+            args.withdrawals.len(),
+            "withdrawal count"
+        );
 
         let mut state = match db.state_tree(StateContext::AttachBlock(block_number)) {
             Ok(state) => state,
@@ -419,7 +391,6 @@ impl Generator {
         };
 
         // apply withdrawal to state
-        let withdrawal_requests: Vec<_> = args.l2block.withdrawals().into_iter().collect();
         let block_hash = raw_block.hash();
         let block_producer_id: u32 = block_info.block_producer_id().unpack();
         let state_checkpoint_list: Vec<H256> = raw_block.state_checkpoint_list().unpack();
@@ -427,8 +398,19 @@ impl Generator {
         let mut check_signature_total_ms = 0;
         let mut execute_tx_total_ms = 0;
         let mut apply_state_total_ms = 0;
-        let mut withdrawal_receipts = Vec::with_capacity(withdrawal_requests.len());
-        for (wth_idx, request) in withdrawal_requests.into_iter().enumerate() {
+        let mut withdrawal_receipts = Vec::with_capacity(args.withdrawals.len());
+        for (wth_idx, request) in args.withdrawals.into_iter().enumerate() {
+            debug_assert_eq!(
+                request.request(),
+                args.l2block.withdrawals().get(wth_idx).expect("withdrawal")
+            );
+            debug_assert_eq!(
+                {
+                    let hash: [u8; 32] = request.request().raw().owner_lock_hash().unpack();
+                    hash
+                },
+                request.owner_lock().hash()
+            );
             let now = Instant::now();
             if let Err(error) = self.check_withdrawal_request_signature(&state, &request) {
                 let target = build_challenge_target(
@@ -444,7 +426,7 @@ impl Generator {
             let withdrawal_receipt = match state.apply_withdrawal_request(
                 &self.rollup_context,
                 block_producer_id,
-                &request,
+                &request.request(),
             ) {
                 Ok(receipt) => receipt,
                 Err(err) => return ApplyBlockResult::Error(err),
@@ -797,11 +779,10 @@ impl Generator {
 
     pub fn build_withdrawal_cell_output(
         rollup_context: &RollupContext,
-        req: &WithdrawalRequest,
+        req: &WithdrawalRequestExtra,
         block_hash: &H256,
         block_number: u64,
         opt_asset_script: Option<Script>,
-        unlock_withdrawal: UnlockWithdrawal,
     ) -> Result<(CellOutput, Bytes), WithdrawalCellError> {
         let withdrawal_capacity: u64 = req.raw().capacity().unpack();
         let lock_args: Bytes = {
@@ -819,15 +800,13 @@ impl Generator {
             let mut args = Vec::new();
             args.extend_from_slice(rollup_context.rollup_script_hash.as_slice());
             args.extend_from_slice(withdrawal_lock_args.as_slice());
-            if let UnlockWithdrawal::WithOwnerLock { lock: owner_lock } = unlock_withdrawal {
-                let owner_lock_hash: [u8; 32] = req.raw().owner_lock_hash().unpack();
-                if owner_lock_hash != owner_lock.hash() {
-                    return Err(WithdrawalCellError::OwnerLock(owner_lock_hash.into()));
-                }
-
-                args.extend_from_slice(&(owner_lock.as_slice().len() as u32).to_be_bytes());
-                args.extend_from_slice(owner_lock.as_slice());
+            let owner_lock = req.owner_lock();
+            let owner_lock_hash: [u8; 32] = req.raw().owner_lock_hash().unpack();
+            if owner_lock_hash != owner_lock.hash() {
+                return Err(WithdrawalCellError::OwnerLock(owner_lock_hash.into()));
             }
+            args.extend_from_slice(&(owner_lock.as_slice().len() as u32).to_be_bytes());
+            args.extend_from_slice(owner_lock.as_slice());
 
             Bytes::from(args)
         };
@@ -900,10 +879,12 @@ mod test {
     use gw_types::bytes::Bytes;
     use gw_types::core::ScriptHashType;
     use gw_types::offchain::RollupContext;
-    use gw_types::packed::{Fee, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest};
+    use gw_types::packed::{
+        Fee, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
+    };
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
-    use crate::generator::{UnlockWithdrawal, WithdrawalCellError};
+    use crate::generator::WithdrawalCellError;
     use crate::Generator;
 
     #[test]
@@ -946,16 +927,19 @@ mod test {
                 .signature(vec![6u8; 65].pack())
                 .build()
         };
+        let withdrawal = WithdrawalRequestExtra::new_builder()
+            .request(req.clone())
+            .owner_lock(owner_lock.clone())
+            .build();
 
         let block_hash = H256::from_u32(11);
         let block_number = 11u64;
         let (output, data) = Generator::build_withdrawal_cell_output(
             &rollup_context,
-            &req,
+            &withdrawal,
             &block_hash,
             block_number,
             Some(sudt_script.clone()),
-            UnlockWithdrawal::from(owner_lock.clone()),
         )
         .unwrap();
 
@@ -979,10 +963,7 @@ mod test {
             parsed_args.rollup_type_hash.pack(),
             rollup_context.rollup_script_hash.pack()
         );
-        assert_eq!(
-            parsed_args.opt_owner_lock.map(|l| l.hash()),
-            Some(owner_lock.hash())
-        );
+        assert_eq!(parsed_args.owner_lock.hash(), owner_lock.hash());
 
         let lock_args = parsed_args.lock_args.clone();
         assert_eq!(
@@ -1006,11 +987,10 @@ mod test {
         // ## None asset script
         let (output2, data2) = Generator::build_withdrawal_cell_output(
             &rollup_context,
-            &req,
+            &withdrawal,
             &block_hash,
             block_number,
             None,
-            UnlockWithdrawal::from(owner_lock.clone()),
         )
         .unwrap();
 
@@ -1019,35 +999,6 @@ mod test {
 
         assert_eq!(output2.capacity().unpack(), output.capacity().unpack());
         assert_eq!(output2.lock().hash(), output.lock().hash());
-
-        // ## None owner script
-        let (output3, data3) = Generator::build_withdrawal_cell_output(
-            &rollup_context,
-            &req,
-            &block_hash,
-            block_number,
-            Some(sudt_script.clone()),
-            UnlockWithdrawal::WithoutOwnerLock,
-        )
-        .unwrap();
-
-        let parsed_args3 =
-            gw_utils::withdrawal::parse_lock_args(&output3.lock().args().unpack()).unwrap();
-        assert!(parsed_args3.opt_owner_lock.is_none());
-
-        assert_eq!(output3.capacity().unpack(), output.capacity().unpack());
-        assert_eq!(data3, data);
-        assert_eq!(output3.type_().as_slice(), output.type_().as_slice());
-        assert_eq!(
-            output3.lock().code_hash(),
-            rollup_context.rollup_config.withdrawal_script_type_hash()
-        );
-        assert_eq!(output3.lock().hash_type(), ScriptHashType::Type.into());
-        assert_eq!(parsed_args3.rollup_type_hash, parsed_args.rollup_type_hash);
-        assert_eq!(
-            parsed_args3.lock_args.as_slice(),
-            parsed_args.lock_args.as_slice()
-        );
 
         // ## Min capacity error
         let err_req = {
@@ -1060,11 +1011,13 @@ mod test {
 
         let err = Generator::build_withdrawal_cell_output(
             &rollup_context,
-            &err_req,
+            &WithdrawalRequestExtra::new_builder()
+                .request(err_req)
+                .owner_lock(owner_lock)
+                .build(),
             &block_hash,
             block_number,
             Some(sudt_script.clone()),
-            UnlockWithdrawal::from(owner_lock),
         )
         .unwrap_err();
         assert!(matches!(
@@ -1083,11 +1036,13 @@ mod test {
             .build();
         let err = Generator::build_withdrawal_cell_output(
             &rollup_context,
-            &req,
+            &WithdrawalRequestExtra::new_builder()
+                .request(req.clone())
+                .owner_lock(err_owner_lock)
+                .build(),
             &block_hash,
             block_number,
             Some(sudt_script),
-            UnlockWithdrawal::from(err_owner_lock),
         )
         .unwrap_err();
 

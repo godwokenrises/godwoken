@@ -20,7 +20,10 @@ use gw_generator::{
 use gw_store::state::state_db::StateContext;
 use gw_types::{
     core::ScriptHashType,
-    packed::{CellOutput, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest},
+    packed::{
+        CellOutput, DepositRequest, RawWithdrawalRequest, Script, WithdrawalRequest,
+        WithdrawalRequestExtra,
+    },
     prelude::*,
 };
 
@@ -86,18 +89,24 @@ async fn withdrawal_from_chain(
     amount: u128,
 ) -> Result<()> {
     let withdrawal = {
+        let owner_lock = Script::default();
         let raw = RawWithdrawalRequest::new_builder()
             .capacity(capacity.pack())
             .account_script_hash(user_script_hash.pack())
             .sudt_script_hash(sudt_script_hash.pack())
             .amount(amount.pack())
+            .owner_lock_hash(owner_lock.hash().pack())
             .build();
-        WithdrawalRequest::new_builder().raw(raw).build()
+        let withdrawal = WithdrawalRequest::new_builder().raw(raw).build();
+        WithdrawalRequestExtra::new_builder()
+            .request(withdrawal)
+            .owner_lock(owner_lock)
+            .build()
     };
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        mem_pool.push_withdrawal_request(withdrawal.into()).await?;
+        mem_pool.push_withdrawal_request(withdrawal).await?;
         construct_block(chain, &mut mem_pool, Vec::default())
             .await
             .unwrap()
@@ -194,7 +203,7 @@ async fn test_deposit_and_withdrawal() {
         )
     }
     // withdrawal
-    let withdraw_capacity = 300_00000000u64;
+    let withdraw_capacity = 322_00000000u64;
     withdrawal_from_chain(
         &mut chain,
         rollup_cell,

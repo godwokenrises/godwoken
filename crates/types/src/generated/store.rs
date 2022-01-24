@@ -3410,14 +3410,16 @@ impl ::core::fmt::Display for WithdrawalRequestExtra {
 impl ::core::default::Default for WithdrawalRequestExtra {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            228, 0, 0, 0, 12, 0, 0, 0, 228, 0, 0, 0, 216, 0, 0, 0, 12, 0, 0, 0, 212, 0, 0, 0, 0, 0,
+            25, 1, 0, 0, 12, 0, 0, 0, 228, 0, 0, 0, 216, 0, 0, 0, 12, 0, 0, 0, 212, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53,
+            0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         WithdrawalRequestExtra::new_unchecked(v.into())
     }
@@ -3446,14 +3448,14 @@ impl WithdrawalRequestExtra {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         WithdrawalRequest::new_unchecked(self.0.slice(start..end))
     }
-    pub fn owner_lock(&self) -> ScriptOpt {
+    pub fn owner_lock(&self) -> Script {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[12..]) as usize;
-            ScriptOpt::new_unchecked(self.0.slice(start..end))
+            Script::new_unchecked(self.0.slice(start..end))
         } else {
-            ScriptOpt::new_unchecked(self.0.slice(start..))
+            Script::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> WithdrawalRequestExtraReader<'r> {
@@ -3539,14 +3541,14 @@ impl<'r> WithdrawalRequestExtraReader<'r> {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         WithdrawalRequestReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn owner_lock(&self) -> ScriptOptReader<'r> {
+    pub fn owner_lock(&self) -> ScriptReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[12..]) as usize;
-            ScriptOptReader::new_unchecked(&self.as_slice()[start..end])
+            ScriptReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            ScriptOptReader::new_unchecked(&self.as_slice()[start..])
+            ScriptReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -3600,14 +3602,14 @@ impl<'r> molecule::prelude::Reader<'r> for WithdrawalRequestExtraReader<'r> {
             return ve!(Self, OffsetsNotMatch);
         }
         WithdrawalRequestReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        ScriptOptReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        ScriptReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct WithdrawalRequestExtraBuilder {
     pub(crate) request: WithdrawalRequest,
-    pub(crate) owner_lock: ScriptOpt,
+    pub(crate) owner_lock: Script,
 }
 impl WithdrawalRequestExtraBuilder {
     pub const FIELD_COUNT: usize = 2;
@@ -3615,7 +3617,7 @@ impl WithdrawalRequestExtraBuilder {
         self.request = v;
         self
     }
-    pub fn owner_lock(mut self, v: ScriptOpt) -> Self {
+    pub fn owner_lock(mut self, v: Script) -> Self {
         self.owner_lock = v;
         self
     }
@@ -3648,6 +3650,350 @@ impl molecule::prelude::Builder for WithdrawalRequestExtraBuilder {
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
         WithdrawalRequestExtra::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct WithdrawalRequestExtraVec(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for WithdrawalRequestExtraVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for WithdrawalRequestExtraVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for WithdrawalRequestExtraVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl ::core::default::Default for WithdrawalRequestExtraVec {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![4, 0, 0, 0];
+        WithdrawalRequestExtraVec::new_unchecked(v.into())
+    }
+}
+impl WithdrawalRequestExtraVec {
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn item_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<WithdrawalRequestExtra> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> WithdrawalRequestExtra {
+        let slice = self.as_slice();
+        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
+        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
+        if idx == self.len() - 1 {
+            WithdrawalRequestExtra::new_unchecked(self.0.slice(start..))
+        } else {
+            let end_idx = start_idx + molecule::NUMBER_SIZE;
+            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
+            WithdrawalRequestExtra::new_unchecked(self.0.slice(start..end))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> WithdrawalRequestExtraVecReader<'r> {
+        WithdrawalRequestExtraVecReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for WithdrawalRequestExtraVec {
+    type Builder = WithdrawalRequestExtraVecBuilder;
+    const NAME: &'static str = "WithdrawalRequestExtraVec";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        WithdrawalRequestExtraVec(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        WithdrawalRequestExtraVecReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        WithdrawalRequestExtraVecReader::from_compatible_slice(slice)
+            .map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().extend(self.into_iter())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct WithdrawalRequestExtraVecReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for WithdrawalRequestExtraVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for WithdrawalRequestExtraVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for WithdrawalRequestExtraVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl<'r> WithdrawalRequestExtraVecReader<'r> {
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn item_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<WithdrawalRequestExtraReader<'r>> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> WithdrawalRequestExtraReader<'r> {
+        let slice = self.as_slice();
+        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
+        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
+        if idx == self.len() - 1 {
+            WithdrawalRequestExtraReader::new_unchecked(&self.as_slice()[start..])
+        } else {
+            let end_idx = start_idx + molecule::NUMBER_SIZE;
+            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
+            WithdrawalRequestExtraReader::new_unchecked(&self.as_slice()[start..end])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for WithdrawalRequestExtraVecReader<'r> {
+    type Entity = WithdrawalRequestExtraVec;
+    const NAME: &'static str = "WithdrawalRequestExtraVecReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        WithdrawalRequestExtraVecReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(
+                Self,
+                TotalSizeNotMatch,
+                molecule::NUMBER_SIZE * 2,
+                slice_len
+            );
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        for pair in offsets.windows(2) {
+            let start = pair[0];
+            let end = pair[1];
+            WithdrawalRequestExtraReader::verify(&slice[start..end], compatible)?;
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct WithdrawalRequestExtraVecBuilder(pub(crate) Vec<WithdrawalRequestExtra>);
+impl WithdrawalRequestExtraVecBuilder {
+    pub fn set(mut self, v: Vec<WithdrawalRequestExtra>) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn push(mut self, v: WithdrawalRequestExtra) -> Self {
+        self.0.push(v);
+        self
+    }
+    pub fn extend<T: ::core::iter::IntoIterator<Item = WithdrawalRequestExtra>>(
+        mut self,
+        iter: T,
+    ) -> Self {
+        for elem in iter {
+            self.0.push(elem);
+        }
+        self
+    }
+}
+impl molecule::prelude::Builder for WithdrawalRequestExtraVecBuilder {
+    type Entity = WithdrawalRequestExtraVec;
+    const NAME: &'static str = "WithdrawalRequestExtraVecBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (self.0.len() + 1)
+            + self
+                .0
+                .iter()
+                .map(|inner| inner.as_slice().len())
+                .sum::<usize>()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        let item_count = self.0.len();
+        if item_count == 0 {
+            writer.write_all(&molecule::pack_number(
+                molecule::NUMBER_SIZE as molecule::Number,
+            ))?;
+        } else {
+            let (total_size, offsets) = self.0.iter().fold(
+                (
+                    molecule::NUMBER_SIZE * (item_count + 1),
+                    Vec::with_capacity(item_count),
+                ),
+                |(start, mut offsets), inner| {
+                    offsets.push(start);
+                    (start + inner.as_slice().len(), offsets)
+                },
+            );
+            writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+            for offset in offsets.into_iter() {
+                writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+            }
+            for inner in self.0.iter() {
+                writer.write_all(inner.as_slice())?;
+            }
+        }
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        WithdrawalRequestExtraVec::new_unchecked(inner.into())
+    }
+}
+pub struct WithdrawalRequestExtraVecIterator(WithdrawalRequestExtraVec, usize, usize);
+impl ::core::iter::Iterator for WithdrawalRequestExtraVecIterator {
+    type Item = WithdrawalRequestExtra;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl ::core::iter::ExactSizeIterator for WithdrawalRequestExtraVecIterator {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+impl ::core::iter::IntoIterator for WithdrawalRequestExtraVec {
+    type Item = WithdrawalRequestExtra;
+    type IntoIter = WithdrawalRequestExtraVecIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        let len = self.len();
+        WithdrawalRequestExtraVecIterator(self, 0, len)
+    }
+}
+impl<'r> WithdrawalRequestExtraVecReader<'r> {
+    pub fn iter<'t>(&'t self) -> WithdrawalRequestExtraVecReaderIterator<'t, 'r> {
+        WithdrawalRequestExtraVecReaderIterator(&self, 0, self.len())
+    }
+}
+pub struct WithdrawalRequestExtraVecReaderIterator<'t, 'r>(
+    &'t WithdrawalRequestExtraVecReader<'r>,
+    usize,
+    usize,
+);
+impl<'t: 'r, 'r> ::core::iter::Iterator for WithdrawalRequestExtraVecReaderIterator<'t, 'r> {
+    type Item = WithdrawalRequestExtraReader<'t>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator
+    for WithdrawalRequestExtraVecReaderIterator<'t, 'r>
+{
+    fn len(&self) -> usize {
+        self.2 - self.1
     }
 }
 #[derive(Clone)]

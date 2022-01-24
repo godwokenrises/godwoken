@@ -23,6 +23,7 @@ use gw_types::{
     packed::{
         BlockMerkleState, CellInput, CellOutput, DepositRequest, GlobalState, L2Block,
         L2BlockCommittedInfo, RawWithdrawalRequest, Script, SubmitWithdrawals, WithdrawalRequest,
+        WithdrawalRequestExtra,
     },
     prelude::*,
 };
@@ -53,6 +54,7 @@ async fn produce_a_block(
             l2block,
             deposit_requests: vec![deposit],
             deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
         },
         transaction,
         l2block_committed_info,
@@ -196,6 +198,7 @@ async fn test_layer1_fork() {
                 l2block: block_result.block.clone(),
                 deposit_requests: vec![deposit],
                 deposit_asset_scripts: Default::default(),
+                withdrawals: Default::default(),
             },
             transaction: build_sync_tx(rollup_cell.clone(), block_result),
             l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -229,6 +232,7 @@ async fn test_layer1_fork() {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit],
             deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -267,6 +271,7 @@ async fn test_layer1_fork() {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit],
             deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell, block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -391,6 +396,7 @@ async fn test_layer1_revert() {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit],
             deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -429,6 +435,7 @@ async fn test_layer1_revert() {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit],
             deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell, block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -702,6 +709,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit],
             deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -722,12 +730,18 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
 
     // update bad block
     let withdrawal = {
+        let owner_lock = Script::default();
         let raw = RawWithdrawalRequest::new_builder()
             .capacity((1000 * CKB).pack())
             .account_script_hash(alice_script.hash().pack())
             .sudt_script_hash(H256::zero().pack())
+            .owner_lock_hash(owner_lock.hash().pack())
             .build();
-        WithdrawalRequest::new_builder().raw(raw).build()
+        let withdrawal = WithdrawalRequest::new_builder().raw(raw).build();
+        WithdrawalRequestExtra::new_builder()
+            .request(withdrawal)
+            .owner_lock(owner_lock)
+            .build()
     };
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
@@ -745,8 +759,18 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             block,
             global_state,
             withdrawal_extras,
-        } = block_result;
-        let (bad_block, bad_global_state) = generate_bad_block(&chain, block, global_state);
+        } = block_result.clone();
+        let (bad_block, bad_global_state) = generate_bad_block(&chain, block.clone(), global_state);
+        let withdrawal_extras = withdrawal_extras
+            .into_iter()
+            .enumerate()
+            .map(|(i, withdraw)| {
+                withdraw
+                    .as_builder()
+                    .request(bad_block.withdrawals().get(i).unwrap())
+                    .build()
+            })
+            .collect();
         ProduceBlockResult {
             block: bad_block,
             global_state: bad_global_state,
@@ -759,6 +783,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             l2block: bad_block_result.block.clone(),
             deposit_requests: vec![],
             deposit_asset_scripts: Default::default(),
+            withdrawals: bad_block_result.withdrawal_extras.clone(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), bad_block_result.clone()),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -938,6 +963,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             l2block: block_result.block.clone(),
             deposit_requests: vec![deposit],
             deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell, block_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -980,6 +1006,7 @@ async fn produce_empty_block(chain: &mut Chain, rollup_cell: CellOutput) {
             l2block,
             deposit_requests: Default::default(),
             deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
         },
         transaction,
         l2block_committed_info,

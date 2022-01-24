@@ -98,6 +98,7 @@ impl_conversion_for_packed_iterator_pack!(AccountMerkleState, AccountMerkleState
 impl_conversion_for_vector!(DepositInfo, DepositInfoVec, DepositInfoVecReader);
 impl_conversion_for_vector!(CellInfo, CellInfoVec, CellInfoVecReader);
 impl_conversion_for_vector!(SudtCustodian, SudtCustodianVec, SudtCustodianVecReader);
+impl_conversion_for_packed_iterator_pack!(WithdrawalRequestExtra, WithdrawalRequestExtraVec);
 impl_conversion_for_option!(H256, Byte32Opt, Byte32OptReader);
 impl_conversion_for_option!(
     CollectedCustodianCells,

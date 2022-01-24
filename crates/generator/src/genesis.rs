@@ -215,6 +215,7 @@ pub fn init_genesis(
         prev_txs_state,
         Vec::new(),
         Vec::new(),
+        Vec::new(),
     )?;
     db.attach_block(genesis)?;
     db.commit()?;

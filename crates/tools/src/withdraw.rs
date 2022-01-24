@@ -109,7 +109,7 @@ pub fn withdraw(
     let owner_lock = gw_types::packed::Script::new_unchecked(owner_lock_script.as_bytes());
     let withdrawal_request_extra = WithdrawalRequestExtra::new_builder()
         .request(withdrawal_request)
-        .owner_lock(Some(owner_lock).pack())
+        .owner_lock(owner_lock)
         .build();
 
     log::info!("withdrawal_request_extra: {}", withdrawal_request_extra);

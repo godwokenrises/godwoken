@@ -49,8 +49,10 @@ table WithdrawalReceipt {
 
 table WithdrawalRequestExtra {
     request: WithdrawalRequest,
-    owner_lock: ScriptOpt,
+    owner_lock: Script,
 }
+
+vector WithdrawalRequestExtraVec <WithdrawalRequestExtra>;
 
 struct SMTBranchKey {
     height: byte,

@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use gw_common::H256;
-use gw_generator::generator::{UnlockWithdrawal, WithdrawalCellError};
+use gw_generator::generator::WithdrawalCellError;
 use gw_types::{
     bytes::Bytes,
     offchain::RollupContext,
@@ -104,11 +104,10 @@ impl<'a> Generator<'a> {
         let block_number = block.raw().number().unpack();
         let output = match gw_generator::Generator::build_withdrawal_cell_output(
             self.rollup_context,
-            &req,
+            req_extra,
             &block_hash,
             block_number,
             sudt_script,
-            UnlockWithdrawal::from(req_extra.owner_lock().to_opt()),
         ) {
             Ok(output) => output,
             Err(WithdrawalCellError::OwnerLock(lock_hash)) => {
@@ -298,7 +297,6 @@ mod test {
 
     use gw_common::h256_ext::H256Ext;
     use gw_common::H256;
-    use gw_generator::generator::UnlockWithdrawal;
     use gw_types::offchain::RollupContext;
     use gw_types::packed::{
         Fee, L2Block, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest,
@@ -364,35 +362,21 @@ mod test {
         let req_extra = WithdrawalRequestExtra::new_builder()
             .request(req.clone())
             .build();
-        let (output, data) = generator.verified_output(&req_extra, &block).unwrap();
-        let (expected_output, expected_data) =
-            gw_generator::Generator::build_withdrawal_cell_output(
-                &rollup_context,
-                &req,
-                &block.hash().into(),
-                block.raw().number().unpack(),
-                Some(sudt_script.clone()),
-                UnlockWithdrawal::WithoutOwnerLock,
-            )
-            .unwrap();
-
-        assert_eq!(output.as_slice(), expected_output.as_slice());
-        assert_eq!(data, expected_data);
+        let _err = generator.verified_output(&req_extra, &block).unwrap_err();
 
         // ## With owner lock
         let req_extra = req_extra
             .as_builder()
-            .owner_lock(Some(owner_lock.clone()).pack())
+            .owner_lock(owner_lock.clone())
             .build();
         let (output, data) = generator.verified_output(&req_extra, &block).unwrap();
         let (expected_output, expected_data) =
             gw_generator::Generator::build_withdrawal_cell_output(
                 &rollup_context,
-                &req,
+                &req_extra,
                 &block.hash().into(),
                 block.raw().number().unpack(),
                 Some(sudt_script),
-                UnlockWithdrawal::from(owner_lock),
             )
             .unwrap();
 
@@ -422,7 +406,7 @@ mod test {
             req_extra
                 .clone()
                 .as_builder()
-                .owner_lock(Some(err_owner_lock).pack())
+                .owner_lock(err_owner_lock)
                 .build()
         };
         let err = generator
