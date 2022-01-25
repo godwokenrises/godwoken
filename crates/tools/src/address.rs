@@ -12,7 +12,7 @@ use ckb_types::{
 };
 use gw_types::{bytes::Bytes as GwBytes, packed::Script, prelude::Pack as GwPack};
 
-pub fn to_godwoken_short_address(
+pub fn to_godwoken_short_script_hash(
     eth_eoa_address: &str,
     config_path: &Path,
     scripts_deployment_path: &Path,
@@ -44,26 +44,31 @@ pub fn to_godwoken_short_address(
         .build();
 
     let l2_lock_hash = l2_lock.hash();
-    let godwoken_address = &l2_lock_hash[..20];
+    let short_script_hash = &l2_lock_hash[..20];
 
-    log::info!("godwoken address: 0x{}", hex::encode(godwoken_address));
+    log::info!(
+        "godwoken short script hash: 0x{}",
+        hex::encode(short_script_hash)
+    );
 
     Ok(())
 }
 
-pub fn to_eth_eoa_address(godwoken_rpc_url: &str, godwoken_short_address: &str) -> Result<()> {
-    if godwoken_short_address.len() != 42 || !godwoken_short_address.starts_with("0x") {
+pub fn to_eth_eoa_address(godwoken_rpc_url: &str, godwoken_short_script_hash: &str) -> Result<()> {
+    if godwoken_short_script_hash.len() != 42 || !godwoken_short_script_hash.starts_with("0x") {
         return Err(anyhow!("godwoken short address format error!"));
     }
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
-    let short_address = GwBytes::from(hex::decode(
-        godwoken_short_address.trim_start_matches("0x").as_bytes(),
+    let short_script_hash = GwBytes::from(hex::decode(
+        godwoken_short_script_hash
+            .trim_start_matches("0x")
+            .as_bytes(),
     )?);
 
     let script_hash = godwoken_rpc_client
-        .get_script_hash_by_short_address(JsonBytes::from_bytes(short_address))?;
+        .get_script_hash_by_short_script_hash(JsonBytes::from_bytes(short_script_hash))?;
 
     let script = match script_hash {
         Some(h) => godwoken_rpc_client.get_script(h)?,

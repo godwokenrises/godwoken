@@ -11,7 +11,7 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_block_producer::test_mode_control::TestModeControl;
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
 use gw_common::{
-    state::{to_short_address, State},
+    state::{to_short_script_hash, State},
     H256,
 };
 use gw_config::RPCClientConfig;
@@ -129,7 +129,7 @@ async fn test_restore_mem_block() {
                 let to_script = random_always_success_script(&rollup_script_hash);
                 let transfer = SUDTTransfer::new_builder()
                     .amount((DEPOSIT_CAPACITY as u128 / 2).pack())
-                    .to(to_short_address(&to_script.hash().into()).pack())
+                    .to(to_short_script_hash(&to_script.hash().into()).pack())
                     .build();
                 let args = SUDTArgs::new_builder().set(transfer).build();
                 let raw = RawL2Transaction::new_builder()

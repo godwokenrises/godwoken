@@ -182,7 +182,7 @@ mod tests {
         fn get_script(&self, script_hash: &H256) -> Option<Script> {
             self.scripts.get(script_hash).cloned()
         }
-        fn get_script_hash_by_short_address(&self, script_hash_prefix: &[u8]) -> Option<H256> {
+        fn get_script_hash_by_short_script_hash(&self, script_hash_prefix: &[u8]) -> Option<H256> {
             self.scripts.iter().find_map(|(script_hash, _script)| {
                 let prefix_len = script_hash_prefix.len();
                 if &script_hash.as_slice()[..prefix_len] == script_hash_prefix {

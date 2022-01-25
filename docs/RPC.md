@@ -472,7 +472,7 @@ Response
 }
 ```
 
-### Method `gw_get_script_hash_by_short_address`
+### Method `gw_get_script_hash_by_short_script_hash`
 
 Get script hash by short address.
 
@@ -488,7 +488,7 @@ Request
 {
     "id": 42,
     "jsonrpc": "2.0",
-    "method": "gw_get_script_hash_by_short_address",
+    "method": "gw_get_script_hash_by_short_script_hash",
     "params": ["0xdfb94d6794165b96668b4308607afc05790dc211"]
 }
 ```

@@ -11,7 +11,7 @@
 use anyhow::{anyhow, Result};
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
-    state::{to_short_address, State},
+    state::{to_short_script_hash, State},
     H256,
 };
 use gw_config::{MemPoolConfig, NodeMode};
@@ -648,7 +648,7 @@ impl MemPool {
             // Drop all withdrawals that are have no enough balance
             let script_hash = state.get_script_hash(account_id)?;
             let capacity =
-                state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash))?;
+                state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&script_hash))?;
             let deprecated_withdrawals = list.remove_lower_nonce_withdrawals(nonce, capacity);
             for withdrawal in deprecated_withdrawals {
                 let withdrawal_hash: H256 = withdrawal.hash().into();

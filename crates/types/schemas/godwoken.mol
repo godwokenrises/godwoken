@@ -243,12 +243,12 @@ union SUDTArgs {
 }
 
 table SUDTQuery {
-    // godwoken short address (script_hash[0..n])
-    short_address: Bytes,
+    // godwoken short script hash (script_hash[0..n])
+    short_script_hash: Bytes,
 }
 
 table SUDTTransfer {
-    // godwoken short address (script_hash[0..n])
+    // godwoken short script hash (script_hash[0..n])
     to: Bytes,
     amount: Uint128,
     fee: Uint128,

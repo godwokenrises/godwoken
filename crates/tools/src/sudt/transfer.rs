@@ -1,6 +1,6 @@
 use crate::account::{
-    eth_sign, parse_account_short_address, privkey_to_short_address, read_privkey,
-    short_address_to_account_id,
+    eth_sign, parse_account_short_script_hash, privkey_to_short_script_hash, read_privkey,
+    short_script_hash_to_account_id,
 };
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::types::ScriptsDeploymentResult;
@@ -34,7 +34,7 @@ pub fn transfer(
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
-    let to_address = parse_account_short_address(&mut godwoken_rpc_client, to)?;
+    let to_address = parse_account_short_script_hash(&mut godwoken_rpc_client, to)?;
 
     let config = read_config(config_path)?;
     let rollup_type_hash = &config.genesis.rollup_type_hash;
@@ -42,8 +42,9 @@ pub fn transfer(
     let privkey = read_privkey(privkey_path)?;
 
     // get from_id
-    let from_address = privkey_to_short_address(&privkey, rollup_type_hash, &scripts_deployment)?;
-    let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
+    let from_address =
+        privkey_to_short_script_hash(&privkey, rollup_type_hash, &scripts_deployment)?;
+    let from_id = short_script_hash_to_account_id(&mut godwoken_rpc_client, &from_address)?;
     let from_id = from_id.expect("from id not found!");
 
     let nonce = godwoken_rpc_client.get_nonce(from_id)?;

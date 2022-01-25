@@ -8,7 +8,9 @@ use gw_types::{
 use std::path::Path;
 
 use crate::{
-    account::{eth_sign, privkey_to_short_address, read_privkey, short_address_to_account_id},
+    account::{
+        eth_sign, privkey_to_short_script_hash, read_privkey, short_script_hash_to_account_id,
+    },
     godwoken_rpc::GodwokenRpcClient,
     types::ScriptsDeploymentResult,
     utils::{
@@ -38,8 +40,9 @@ pub fn create_creator_account(
     let rollup_type_hash = &config.genesis.rollup_type_hash;
 
     let privkey = read_privkey(privkey_path)?;
-    let from_address = privkey_to_short_address(&privkey, rollup_type_hash, &scripts_deployment)?;
-    let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
+    let from_address =
+        privkey_to_short_script_hash(&privkey, rollup_type_hash, &scripts_deployment)?;
+    let from_id = short_script_hash_to_account_id(&mut godwoken_rpc_client, &from_address)?;
     let from_id = from_id.expect("Account id of provided privkey not found!");
     log::info!("from id: {}", from_id);
 

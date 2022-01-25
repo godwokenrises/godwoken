@@ -9,8 +9,8 @@ use anyhow::Result;
 use gw_chain::chain::Chain;
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
-    state::{to_short_address, State},
-    H256, U256,
+    state::{to_short_script_hash, State},
+    H256,
 };
 use gw_generator::{
     error::{DepositError, WithdrawalError},
@@ -156,7 +156,7 @@ async fn test_deposit_and_withdrawal() {
         assert_ne!(user_id, 0);
         let user_script_hash = tree.get_script_hash(user_id).unwrap();
         let ckb_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&user_script_hash))
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&user_script_hash))
             .unwrap();
         assert_eq!(ckb_balance, capacity as u128);
         let ckb_total_supply = tree.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap();
@@ -184,7 +184,7 @@ async fn test_deposit_and_withdrawal() {
         );
         assert_eq!(
             state
-                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&user_script_hash))
+                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&user_script_hash))
                 .unwrap(),
             capacity as u128
         );
@@ -209,7 +209,7 @@ async fn test_deposit_and_withdrawal() {
     let db = chain.store().begin_transaction();
     let tree = db.state_tree(StateContext::ReadOnly).unwrap();
     let ckb_balance2 = tree
-        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&user_script_hash))
+        .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&user_script_hash))
         .unwrap();
     assert_eq!(ckb_balance, ckb_balance2 + withdraw_capacity as u128);
     let ckb_total_supply2 = tree.get_sudt_total_supply(CKB_SUDT_ACCOUNT_ID).unwrap();
@@ -234,7 +234,7 @@ async fn test_deposit_and_withdrawal() {
         );
         assert_eq!(
             state
-                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&user_script_hash))
+                .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&user_script_hash))
                 .unwrap(),
             ckb_balance2
         );
@@ -433,7 +433,7 @@ async fn test_overdraft() {
             state
                 .get_sudt_balance(
                     CKB_SUDT_ACCOUNT_ID,
-                    to_short_address(&user_script_hash.into())
+                    to_short_script_hash(&user_script_hash.into())
                 )
                 .unwrap(),
             capacity as u128

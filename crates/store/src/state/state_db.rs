@@ -239,7 +239,7 @@ impl<'a> CodeStore for StateTree<'a> {
             .map(|slice| packed::ScriptReader::from_slice_should_be_ok(slice.as_ref()).to_entity())
     }
 
-    fn get_script_hash_by_short_address(&self, script_hash_prefix: &[u8]) -> Option<H256> {
+    fn get_script_hash_by_short_script_hash(&self, script_hash_prefix: &[u8]) -> Option<H256> {
         match self.db().get(COLUMN_SCRIPT_PREFIX, script_hash_prefix) {
             Some(slice) => {
                 let mut hash = [0u8; 32];

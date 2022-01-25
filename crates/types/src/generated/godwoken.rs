@@ -10023,7 +10023,7 @@ impl ::core::fmt::Debug for SUDTQuery {
 impl ::core::fmt::Display for SUDTQuery {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "short_address", self.short_address())?;
+        write!(f, "{}: {}", "short_script_hash", self.short_script_hash())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -10055,7 +10055,7 @@ impl SUDTQuery {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn short_address(&self) -> Bytes {
+    pub fn short_script_hash(&self) -> Bytes {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         if self.has_extra_fields() {
@@ -10091,7 +10091,7 @@ impl molecule::prelude::Entity for SUDTQuery {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder().short_address(self.short_address())
+        Self::new_builder().short_script_hash(self.short_script_hash())
     }
 }
 #[derive(Clone, Copy)]
@@ -10113,7 +10113,7 @@ impl<'r> ::core::fmt::Debug for SUDTQueryReader<'r> {
 impl<'r> ::core::fmt::Display for SUDTQueryReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "short_address", self.short_address())?;
+        write!(f, "{}: {}", "short_script_hash", self.short_script_hash())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -10139,7 +10139,7 @@ impl<'r> SUDTQueryReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn short_address(&self) -> BytesReader<'r> {
+    pub fn short_script_hash(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         if self.has_extra_fields() {
@@ -10205,12 +10205,12 @@ impl<'r> molecule::prelude::Reader<'r> for SUDTQueryReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct SUDTQueryBuilder {
-    pub(crate) short_address: Bytes,
+    pub(crate) short_script_hash: Bytes,
 }
 impl SUDTQueryBuilder {
     pub const FIELD_COUNT: usize = 1;
-    pub fn short_address(mut self, v: Bytes) -> Self {
-        self.short_address = v;
+    pub fn short_script_hash(mut self, v: Bytes) -> Self {
+        self.short_script_hash = v;
         self
     }
 }
@@ -10218,18 +10218,18 @@ impl molecule::prelude::Builder for SUDTQueryBuilder {
     type Entity = SUDTQuery;
     const NAME: &'static str = "SUDTQueryBuilder";
     fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1) + self.short_address.as_slice().len()
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1) + self.short_script_hash.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
-        total_size += self.short_address.as_slice().len();
+        total_size += self.short_script_hash.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.short_address.as_slice())?;
+        writer.write_all(self.short_script_hash.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {

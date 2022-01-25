@@ -440,7 +440,7 @@ async fn run_cli() -> Result<()> {
                         .long("to")
                         .takes_value(true)
                         .required(true)
-                        .help("to short address OR to account id"),
+                        .help("to short script hash OR to account id"),
                 )
                 .arg(
                     Arg::with_name("sudt-id")
@@ -532,7 +532,7 @@ async fn run_cli() -> Result<()> {
                         .short("a")
                         .long("account")
                         .takes_value(true)
-                        .help("short address OR account id"),
+                        .help("short script hash OR account id"),
                 )
                 .arg(
                     Arg::with_name("sudt-id")
@@ -707,8 +707,8 @@ async fn run_cli() -> Result<()> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("to-short-address")
-                .about("Eth eoa address to godwoken short address")
+            SubCommand::with_name("to-short-script-hash")
+                .about("Eth eoa address to godwoken short script hash")
                 .arg(arg_config_path.clone())
                 .arg(arg_deployment_results_path.clone())
                 .arg(
@@ -721,14 +721,14 @@ async fn run_cli() -> Result<()> {
         )
         .subcommand(
             SubCommand::with_name("to-eth-address")
-                .about("Godwoken short address to eth eoa address")
+                .about("Godwoken short script hash to eth eoa address")
                 .arg(arg_godwoken_rpc_url.clone())
                 .arg(
-                    Arg::with_name("short-address")
+                    Arg::with_name("short-script-hash")
                         .short("a")
-                        .long("short-address")
+                        .long("short-script-hash")
                         .takes_value(true)
-                        .help("godwoken short address"),
+                        .help("godwoken short script hash"),
                 ),
         )
         .subcommand(
@@ -1309,25 +1309,25 @@ async fn run_cli() -> Result<()> {
                 std::process::exit(-1);
             };
         }
-        ("to-short-address", Some(m)) => {
+        ("to-short-script-hash", Some(m)) => {
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let eth_address = m.value_of("eth-address").unwrap();
 
-            if let Err(err) = address::to_godwoken_short_address(
+            if let Err(err) = address::to_godwoken_short_script_hash(
                 eth_address,
                 config_path,
                 scripts_deployment_path,
             ) {
-                log::error!("To short address error: {}", err);
+                log::error!("To short script hash error: {}", err);
                 std::process::exit(-1);
             };
         }
         ("to-eth-address", Some(m)) => {
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
-            let short_address = m.value_of("short-address").unwrap();
+            let short_script_hash = m.value_of("short-script-hash").unwrap();
 
-            if let Err(err) = address::to_eth_eoa_address(godwoken_rpc_url, short_address) {
+            if let Err(err) = address::to_eth_eoa_address(godwoken_rpc_url, short_script_hash) {
                 log::error!("To eth address error: {}", err);
                 std::process::exit(-1);
             };

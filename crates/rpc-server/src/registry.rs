@@ -265,8 +265,8 @@ impl Registry {
             .with_method("gw_get_script", get_script)
             .with_method("gw_get_script_hash", get_script_hash)
             .with_method(
-                "gw_get_script_hash_by_short_address",
-                get_script_hash_by_short_address,
+                "gw_get_script_hash_by_short_script_hash",
+                get_script_hash_by_short_script_hash,
             )
             .with_method("gw_get_data", get_data)
             .with_method("gw_get_transaction", get_transaction)
@@ -1132,7 +1132,7 @@ async fn get_withdrawal(
     }))
 }
 
-// short_address, sudt_id, block_number
+// short_script_hash, sudt_id, block_number
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 enum GetBalanceParams {
@@ -1145,7 +1145,7 @@ async fn get_balance(
     store: Data<Store>,
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<Uint128, RpcError> {
-    let (short_address, sudt_id, block_number) = match params {
+    let (short_script_hash, sudt_id, block_number) = match params {
         GetBalanceParams::Tip(p) => (p.0, p.1, None),
         GetBalanceParams::Number(p) => p,
     };
@@ -1154,12 +1154,12 @@ async fn get_balance(
         Some(block_number) => {
             let db = store.begin_transaction();
             let tree = db.state_tree(StateContext::ReadOnlyHistory(block_number.into()))?;
-            tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?
+            tree.get_sudt_balance(sudt_id.into(), short_script_hash.as_bytes())?
         }
         None => {
             let snap = mem_pool_state.load();
             let tree = snap.state()?;
-            tree.get_sudt_balance(sudt_id.into(), short_address.as_bytes())?
+            tree.get_sudt_balance(sudt_id.into(), short_script_hash.as_bytes())?
         }
     };
     Ok(balance.into())
@@ -1276,13 +1276,14 @@ async fn get_script_hash(
     Ok(to_jsonh256(script_hash))
 }
 
-async fn get_script_hash_by_short_address(
-    Params((short_address,)): Params<(JsonBytes,)>,
+async fn get_script_hash_by_short_script_hash(
+    Params((short_script_hash,)): Params<(JsonBytes,)>,
     mem_pool_state: Data<Arc<MemPoolState>>,
 ) -> Result<Option<JsonH256>, RpcError> {
     let snap = mem_pool_state.load();
     let tree = snap.state()?;
-    let script_hash_opt = tree.get_script_hash_by_short_address(&short_address.into_bytes());
+    let script_hash_opt =
+        tree.get_script_hash_by_short_script_hash(&short_script_hash.into_bytes());
     Ok(script_hash_opt.map(to_jsonh256))
 }
 
