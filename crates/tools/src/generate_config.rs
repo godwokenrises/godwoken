@@ -248,6 +248,7 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         db_block_validator: Default::default(),
         store,
         sentry_dsn: None,
+        trace: None,
         reload_config_github_url: None,
         dynamic_config: Default::default(),
     };

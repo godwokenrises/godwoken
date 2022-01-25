@@ -11,6 +11,7 @@ pub mod replay_block;
 pub mod runner;
 pub mod stake;
 pub mod test_mode_control;
+pub mod trace;
 pub mod types;
 pub mod utils;
 pub mod withdrawal;
