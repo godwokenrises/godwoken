@@ -9,6 +9,12 @@ use std::{
     path::PathBuf,
 };
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum Trace {
+    Jaeger,
+}
+
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub node_mode: NodeMode,
@@ -29,6 +35,8 @@ pub struct Config {
     pub db_block_validator: Option<DBBlockValidatorConfig>,
     pub store: StoreConfig,
     pub sentry_dsn: Option<String>,
+    #[serde(default)]
+    pub trace: Option<Trace>,
     #[serde(default)]
     pub consensus: ConsensusConfig,
     pub reload_config_github_url: Option<GithubConfigUrl>,
