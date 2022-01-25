@@ -452,15 +452,22 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                 // then called this syscal to record the fee only after the success of the transfer.
 
                 // fetch short script hash
-                let short_address = {
-                    let short_address_addr = machine.registers()[A0].to_u64();
-                    let short_address_len = machine.registers()[A1].to_u64();
-                    // check short address len
-                    if short_address_len != DEFAULT_SHORT_SCRIPT_HASH_LEN as u64 {
-                        log::error!("unexpected script hash short length: {}", short_address_len);
+                let short_script_hash = {
+                    let short_script_hash_addr = machine.registers()[A0].to_u64();
+                    let short_script_hash_len = machine.registers()[A1].to_u64();
+                    // check short script hash len
+                    if short_script_hash_len != DEFAULT_SHORT_SCRIPT_HASH_LEN as u64 {
+                        log::error!(
+                            "unexpected script hash short length: {}",
+                            short_script_hash_len
+                        );
                         return Err(VMError::Unexpected);
                     }
-                    load_bytes(machine, short_address_addr, short_address_len as usize)?
+                    load_bytes(
+                        machine,
+                        short_script_hash_addr,
+                        short_script_hash_len as usize,
+                    )?
                 };
                 let sudt_id = machine.registers()[A2].to_u8();
                 let amount = {
@@ -471,7 +478,7 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                 // TODO record fee payment in the generator context
                 log::debug!(
                     "[contract syscall: SYS_PAY_FEE] payer: {}, sudt_id: {}, amount: {}",
-                    hex::encode(&short_address),
+                    hex::encode(&short_script_hash),
                     sudt_id,
                     amount
                 );

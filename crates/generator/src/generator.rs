@@ -26,7 +26,7 @@ use gw_common::{
     error::Error as StateError,
     h256_ext::H256Ext,
     merkle_utils::calculate_state_checkpoint,
-    state::{build_account_field_key, to_short_address, State, GW_ACCOUNT_NONCE_TYPE},
+    state::{build_account_field_key, to_short_script_hash, State, GW_ACCOUNT_NONCE_TYPE},
     H256,
 };
 use gw_dynamic_config::manager::DynamicConfigManager;
@@ -218,7 +218,7 @@ impl Generator {
         let fee = raw.fee();
         let fee_sudt_id: u32 = fee.sudt_id().unpack();
         let fee_amount: u128 = fee.amount().unpack();
-        let account_short_address = to_short_address(&account_script_hash);
+        let account_short_script_hash = to_short_script_hash(&account_script_hash);
 
         // check capacity (use dummy block hash and number)
         let rollup_context = self.rollup_context();
@@ -248,7 +248,7 @@ impl Generator {
         }
 
         // check CKB balance
-        let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, account_short_address)?;
+        let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, account_short_script_hash)?;
         let required_ckb_capacity = {
             let mut required_capacity = capacity as u128;
             // Count withdrawal fee
@@ -276,7 +276,7 @@ impl Generator {
             if sudt_id == fee_sudt_id {
                 required_amount = required_amount.saturating_add(fee_amount);
             }
-            let balance = state.get_sudt_balance(sudt_id, account_short_address)?;
+            let balance = state.get_sudt_balance(sudt_id, account_short_script_hash)?;
             if required_amount > balance {
                 return Err(WithdrawalError::Overdraft.into());
             }
@@ -287,7 +287,7 @@ impl Generator {
 
         // check fees if it isn't been checked yet
         if fee_sudt_id != CKB_SUDT_ACCOUNT_ID && fee_sudt_id != sudt_id && fee_amount > 0 {
-            let balance = state.get_sudt_balance(fee_sudt_id, account_short_address)?;
+            let balance = state.get_sudt_balance(fee_sudt_id, account_short_script_hash)?;
             if fee_amount > balance {
                 return Err(WithdrawalError::Overdraft.into());
             }

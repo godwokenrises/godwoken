@@ -13,7 +13,7 @@ use gw_common::{
     h256_ext::H256Ext,
     merkle_utils::{calculate_ckb_merkle_root, ckb_merkle_leaf_hash},
     smt::Blake2bHasher,
-    state::{to_short_address, State},
+    state::{to_short_script_hash, State},
     H256,
 };
 use gw_store::{state::state_db::StateContext, traits::chain_store::ChainStore};
@@ -147,10 +147,10 @@ async fn test_produce_blocks() {
         assert_eq!(id_a, 2);
         assert_eq!(id_b, 3);
         let balance_a = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash_a))
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&script_hash_a))
             .unwrap();
         let balance_b = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash_b))
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&script_hash_b))
             .unwrap();
         assert_eq!(balance_a, 690 * CKB as u128);
         assert_eq!(balance_b, 500 * CKB as u128);
@@ -500,7 +500,7 @@ async fn test_layer1_revert() {
             .unwrap();
         assert_eq!(alice_id, 2);
         let alice_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&alice_script_hash))
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&alice_script_hash))
             .unwrap();
         assert_eq!(alice_balance, 400 * CKB as u128);
 
@@ -543,7 +543,7 @@ async fn test_layer1_revert() {
             .unwrap();
         assert_eq!(alice_id, 2);
         let alice_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&alice_script_hash))
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&alice_script_hash))
             .unwrap();
         assert_eq!(alice_balance, 400 * CKB as u128);
 
@@ -555,7 +555,7 @@ async fn test_layer1_revert() {
         assert_eq!(bob_id, 3);
 
         let bob_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&bob_script_hash))
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&bob_script_hash))
             .unwrap();
         assert_eq!(bob_balance, 500 * CKB as u128);
     }
@@ -649,10 +649,10 @@ async fn test_sync_blocks() {
         assert_eq!(id_a, 2);
         assert_eq!(id_b, 4);
         let balance_a = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash_a))
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&script_hash_a))
             .unwrap();
         let balance_b = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_address(&script_hash_b))
+            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&script_hash_b))
             .unwrap();
         assert_eq!(balance_a, 800 * CKB as u128);
         assert_eq!(balance_b, 500 * CKB as u128);

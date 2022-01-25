@@ -7,8 +7,8 @@ use std::path::Path;
 
 use crate::{
     account::{
-        eth_sign, l2_script_hash_to_short_address, parse_account_short_address,
-        privkey_to_l2_script_hash, read_privkey, short_address_to_account_id,
+        eth_sign, l2_script_hash_to_short_script_hash, parse_account_short_script_hash,
+        privkey_to_l2_script_hash, read_privkey, short_script_hash_to_account_id,
     },
     godwoken_rpc::GodwokenRpcClient,
     types::ScriptsDeploymentResult,
@@ -125,18 +125,18 @@ pub fn polyjuice_call(
         to_address_str.trim_start_matches("0x").as_bytes(),
     )?);
 
-    let from_address = parse_account_short_address(&mut godwoken_rpc_client, from)?;
-    let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
+    let from_address = parse_account_short_script_hash(&mut godwoken_rpc_client, from)?;
+    let from_id = short_script_hash_to_account_id(&mut godwoken_rpc_client, &from_address)?;
     let from_id = from_id.expect("from account not found!");
     let nonce = godwoken_rpc_client.get_nonce(from_id)?;
 
     let to_script_hash = match godwoken_rpc_client
-        .get_script_hash_by_short_address(JsonBytes::from_bytes(to_address))?
+        .get_script_hash_by_short_script_hash(JsonBytes::from_bytes(to_address))?
     {
         Some(h) => h,
         None => {
             return Err(anyhow!(
-                "script hash by short address {} not found",
+                "script hash by short script hash {} not found",
                 to_address_str
             ))
         }
@@ -186,8 +186,8 @@ fn send(
     };
 
     let l2_script_hash = privkey_to_l2_script_hash(privkey, rollup_type_hash, scripts_deployment)?;
-    let from_address = l2_script_hash_to_short_address(&l2_script_hash);
-    let from_id = short_address_to_account_id(godwoken_rpc_client, &from_address)?
+    let from_address = l2_script_hash_to_short_script_hash(&l2_script_hash);
+    let from_id = short_script_hash_to_account_id(godwoken_rpc_client, &from_address)?
         .expect("Can find account id by privkey!");
 
     let nonce = godwoken_rpc_client.get_nonce(from_id)?;
@@ -196,7 +196,7 @@ fn send(
         None => creator_account_id,
         Some(addr) => {
             let script_hash = godwoken_rpc_client
-                .get_script_hash_by_short_address(JsonBytes::from_bytes(addr))?;
+                .get_script_hash_by_short_script_hash(JsonBytes::from_bytes(addr))?;
             let script_hash = script_hash.expect("to script_hash not found!");
             let id = godwoken_rpc_client.get_account_id_by_script_hash(script_hash)?;
 
