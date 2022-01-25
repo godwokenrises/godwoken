@@ -170,8 +170,12 @@ pub fn bench(c: &mut Criterion) {
                 let block_info = new_block_info(block_producer_id, 1, 0);
 
                 // init balance for a
-                tree.mint_sudt(sudt_id, to_short_script_hash(&a_script_hash), init_a_balance)
-                    .expect("init balance");
+                tree.mint_sudt(
+                    sudt_id,
+                    to_short_script_hash(&a_script_hash),
+                    init_a_balance,
+                )
+                .expect("init balance");
                 (
                     tree,
                     rollup_config,
