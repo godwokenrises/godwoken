@@ -500,7 +500,10 @@ async fn test_layer1_revert() {
             .unwrap();
         assert_eq!(alice_id, 2);
         let alice_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&alice_script_hash))
+            .get_sudt_balance(
+                CKB_SUDT_ACCOUNT_ID,
+                to_short_script_hash(&alice_script_hash),
+            )
             .unwrap();
         assert_eq!(alice_balance, 400 * CKB as u128);
 
@@ -543,7 +546,10 @@ async fn test_layer1_revert() {
             .unwrap();
         assert_eq!(alice_id, 2);
         let alice_balance = tree
-            .get_sudt_balance(CKB_SUDT_ACCOUNT_ID, to_short_script_hash(&alice_script_hash))
+            .get_sudt_balance(
+                CKB_SUDT_ACCOUNT_ID,
+                to_short_script_hash(&alice_script_hash),
+            )
             .unwrap();
         assert_eq!(alice_balance, 400 * CKB as u128);
 

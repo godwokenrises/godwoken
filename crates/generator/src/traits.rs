@@ -212,7 +212,8 @@ impl<S: State + CodeStore> StateExt for S {
             let sudt_id: u32 = raw.fee().sudt_id().unpack();
             let amount: u128 = raw.fee().amount().unpack();
             let block_producer_script_hash = self.get_script_hash(block_producer_id)?;
-            let block_producer_short_script_hash = to_short_script_hash(&block_producer_script_hash);
+            let block_producer_short_script_hash =
+                to_short_script_hash(&block_producer_script_hash);
             self.pay_fee(
                 withdrawal_short_script_hash,
                 block_producer_short_script_hash,
