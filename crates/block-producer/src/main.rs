@@ -4,7 +4,7 @@ static GLOBAL_ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 use anyhow::{Context, Result};
 use clap::{App, Arg, SubCommand};
-use gw_block_producer::{db_block_validator, runner};
+use gw_block_producer::{db_block_validator, runner, trace};
 use gw_config::Config;
 use gw_version::Version;
 use std::{fs, path::Path};
@@ -102,15 +102,18 @@ async fn run_cli() -> Result<()> {
         (COMMAND_RUN, Some(m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
+            let _guard = trace::init(config.trace)?;
             runner::run(config, m.is_present(ARG_SKIP_CONFIG_CHECK)).await?;
         }
         (COMMAND_EXAMPLE_CONFIG, Some(m)) => {
             let path = m.value_of(ARG_OUTPUT_PATH).unwrap();
+            let _guard = trace::init(None)?;
             generate_example_config(path)?;
         }
         (COMMAND_VERIFY_DB_BLOCK, Some(m)) => {
             let config_path = m.value_of(ARG_CONFIG).unwrap();
             let config = read_config(&config_path)?;
+            let _guard = trace::init(None)?;
             let from_block: Option<u64> = m.value_of(ARG_FROM_BLOCK).map(str::parse).transpose()?;
             let to_block: Option<u64> = m.value_of(ARG_TO_BLOCK).map(str::parse).transpose()?;
             db_block_validator::verify(config, from_block, to_block).await?;
@@ -119,6 +122,7 @@ async fn run_cli() -> Result<()> {
             // default command: start a Godwoken node
             let config_path = "./config.toml";
             let config = read_config(&config_path)?;
+            let _guard = trace::init(config.trace)?;
             runner::run(config, false).await?;
         }
     };
@@ -129,39 +133,5 @@ async fn run_cli() -> Result<()> {
 /// Default to number of cpus, pass `worker_threads` to manually configure workers.
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
-    init_tracing();
-    let ret = run_cli().await;
-    opentelemetry::global::shutdown_tracer_provider(); // Sending remaining spans
-    ret.expect("run cli");
-}
-
-fn init_tracing() {
-    use sentry_tracing::EventFilter;
-    use tracing_subscriber::prelude::*;
-
-    opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
-
-    let env_filter_layer = tracing_subscriber::EnvFilter::try_from_default_env()
-        .or_else(|_| tracing_subscriber::EnvFilter::try_new("info"))
-        .unwrap();
-
-    let sentry_layer = sentry_tracing::layer().event_filter(|md| match md.level() {
-        &tracing::Level::ERROR | &tracing::Level::WARN => EventFilter::Event,
-        _ => EventFilter::Ignore,
-    });
-
-    let opentelemetry_layer = {
-        let tracer = opentelemetry_jaeger::new_pipeline()
-            .with_service_name("godwoken")
-            .install_batch(opentelemetry::runtime::Tokio)
-            .expect("tracer");
-        tracing_opentelemetry::layer().with_tracer(tracer)
-    };
-
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .with(env_filter_layer)
-        .with(opentelemetry_layer)
-        .with(sentry_layer)
-        .init()
+    run_cli().await.expect("run cli");
 }
