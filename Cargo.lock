@@ -1837,7 +1837,8 @@ name = "gw-dynamic-config"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ckb-fixed-hash",
+ "arc-swap",
+ "ckb-fixed-hash 0.100.0",
  "gw-config",
  "gw-jsonrpc-types",
  "gw-tx-filter",

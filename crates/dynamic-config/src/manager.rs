@@ -1,11 +1,14 @@
+use std::sync::Arc;
+
 use anyhow::{anyhow, Result};
 
+use arc_swap::ArcSwap;
 use gw_config::{Config, DynamicConfig, FeeConfig};
 use gw_tx_filter::{
     erc20_creator_allowlist::SUDTProxyAccountAllowlist,
     polyjuice_contract_creator_allowlist::PolyjuiceContractCreatorAllowList,
 };
-use reqwest::blocking::Client;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::{fee_config::FeeConfigManager, whitelist_config::WhilteListConfigManager};
@@ -41,10 +44,10 @@ impl DynamicConfigManager {
         }
     }
 
-    pub fn reload(&mut self) -> Result<DynamicConfigReloadResponse> {
+    pub async fn reload(&mut self) -> Result<DynamicConfigReloadResponse> {
         // Fetch latest config.
         let new_config = if let Some((url, token)) = &self.config_github_url {
-            get_github_config(url, token)?
+            get_github_config(url, token).await?
         } else {
             return Err(anyhow!("Github config url is absent!"));
         };
@@ -80,14 +83,16 @@ impl DynamicConfigManager {
     }
 }
 
-fn get_github_config(url: &str, token: &str) -> Result<Config> {
+async fn get_github_config(url: &str, token: &str) -> Result<Config> {
     let token = format!("token {}", token);
     let res = Client::builder()
         .build()?
         .get(url)
         .header("Authorization", token)
-        .send()?
-        .text()?;
+        .send()
+        .await?
+        .text()
+        .await?;
     let config = toml::from_str(&res)?;
     Ok(config)
 }
@@ -96,4 +101,27 @@ fn get_github_config(url: &str, token: &str) -> Result<Config> {
 pub struct DynamicConfigReloadResponse {
     old: DynamicConfig,
     new: DynamicConfig,
+}
+
+pub async fn reload(
+    manager: Arc<ArcSwap<DynamicConfigManager>>,
+) -> Result<DynamicConfigReloadResponse> {
+    let mut config = (**manager.load()).to_owned();
+    let resp = config.reload().await;
+    manager.store(Arc::new(config));
+    resp
+}
+
+pub async fn try_reload(
+    manager: Arc<ArcSwap<DynamicConfigManager>>,
+) -> Option<Result<DynamicConfigReloadResponse>> {
+    let mut config = (**manager.load()).to_owned();
+    match config.config_github_url {
+        Some(_) => {
+            let resp = config.reload().await;
+            manager.store(Arc::new(config));
+            Some(resp)
+        }
+        None => None,
+    }
 }
