@@ -107,11 +107,11 @@ pub fn deposit_ckb(
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
-    let short_address = &l2_lock_hash.as_bytes()[..20];
-    log::info!("short address: 0x{}", hex::encode(short_address));
+    let short_script_hash = &l2_lock_hash.as_bytes()[..20];
+    log::info!("short script hash: 0x{}", hex::encode(short_script_hash));
 
     let init_balance =
-        get_balance_by_short_address(&mut godwoken_rpc_client, short_address.to_vec())?;
+        get_balance_by_short_script_hash(&mut godwoken_rpc_client, short_script_hash.to_vec())?;
 
     let output = run_cmd(vec![
         "--url",
@@ -165,8 +165,9 @@ fn wait_for_balance_change(
     while start_time.elapsed() < retry_timeout {
         std::thread::sleep(Duration::from_secs(2));
 
-        let short_address = &from_script_hash.as_bytes()[..20];
-        let balance = get_balance_by_short_address(godwoken_rpc_client, short_address.to_vec())?;
+        let short_script_hash = &from_script_hash.as_bytes()[..20];
+        let balance =
+            get_balance_by_short_script_hash(godwoken_rpc_client, short_script_hash.to_vec())?;
         log::info!(
             "current balance: {}, waiting for {} secs.",
             balance,
@@ -185,11 +186,11 @@ fn wait_for_balance_change(
     Err(anyhow!("Timeout: {:?}", retry_timeout))
 }
 
-fn get_balance_by_short_address(
+fn get_balance_by_short_script_hash(
     godwoken_rpc_client: &mut GodwokenRpcClient,
-    short_address: Vec<u8>,
+    short_script_hash: Vec<u8>,
 ) -> Result<u128> {
-    let bytes = JsonBytes::from_vec(short_address);
+    let bytes = JsonBytes::from_vec(short_script_hash);
     let balance = godwoken_rpc_client.get_balance(bytes, 1)?;
     Ok(balance)
 }

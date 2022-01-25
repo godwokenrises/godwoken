@@ -4,7 +4,7 @@ use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
 use gw_common::{
     blake2b::new_blake2b,
     builtins::CKB_SUDT_ACCOUNT_ID,
-    state::{to_short_address, State},
+    state::{to_short_script_hash, State},
     H256,
 };
 use gw_config::{BackendConfig, GenesisConfig, StoreConfig};
@@ -186,13 +186,13 @@ impl BenchExecutionEnvironment {
         let block_producer_balance = state
             .get_sudt_balance(
                 CKB_SUDT_ACCOUNT_ID,
-                to_short_address(&block_producer_script.hash().into()),
+                to_short_script_hash(&block_producer_script.hash().into()),
             )
             .unwrap();
 
-        let short_addresses = (0..=accounts)
+        let short_script_hashes = (0..=accounts)
             .map(Account::build_script)
-            .map(|s| to_short_address(&s.hash().into()).to_vec())
+            .map(|s| to_short_script_hash(&s.hash().into()).to_vec())
             .collect::<Vec<Vec<u8>>>();
 
         let address_offset = block_producer_id; // start from block producer
@@ -208,7 +208,7 @@ impl BenchExecutionEnvironment {
                 if to_id > end_account_id {
                     to_id = start_account_id;
                 }
-                short_addresses
+                short_script_hashes
                     .get((to_id - address_offset) as usize)
                     .unwrap()
             };
@@ -255,7 +255,7 @@ impl BenchExecutionEnvironment {
         let post_block_producer_balance = state
             .get_sudt_balance(
                 CKB_SUDT_ACCOUNT_ID,
-                to_short_address(&block_producer_script.hash().into()),
+                to_short_script_hash(&block_producer_script.hash().into()),
             )
             .unwrap();
 
@@ -272,12 +272,12 @@ impl BenchExecutionEnvironment {
         let build_account = |idx: u32| -> Account {
             let account_script = Account::build_script(idx);
             let account_script_hash: H256 = account_script.hash().into();
-            let short_address = to_short_address(&account_script_hash);
+            let short_script_hash = to_short_script_hash(&account_script_hash);
 
             let account_id = state.create_account(account_script_hash).unwrap();
             state.insert_script(account_script_hash, account_script);
             state
-                .mint_sudt(CKB_SUDT_ACCOUNT_ID, short_address, CKB_BALANCE)
+                .mint_sudt(CKB_SUDT_ACCOUNT_ID, short_script_hash, CKB_BALANCE)
                 .unwrap();
 
             Account { id: account_id }

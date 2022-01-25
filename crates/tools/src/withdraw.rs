@@ -1,5 +1,5 @@
 use crate::account::{
-    eth_sign, privkey_to_short_address, read_privkey, short_address_to_account_id,
+    eth_sign, privkey_to_short_script_hash, read_privkey, short_script_hash_to_account_id,
 };
 use crate::godwoken_rpc::GodwokenRpcClient;
 use crate::hasher::{CkbHasher, EthHasher};
@@ -75,10 +75,11 @@ pub fn withdraw(
 
     let privkey = read_privkey(privkey_path)?;
 
-    let from_address = privkey_to_short_address(&privkey, rollup_type_hash, &scripts_deployment)?;
+    let from_address =
+        privkey_to_short_script_hash(&privkey, rollup_type_hash, &scripts_deployment)?;
 
     // get from_id
-    let from_id = short_address_to_account_id(&mut godwoken_rpc_client, &from_address)?;
+    let from_id = short_script_hash_to_account_id(&mut godwoken_rpc_client, &from_address)?;
     let from_id = from_id.expect("from id not found!");
     let nonce = godwoken_rpc_client.get_nonce(from_id)?;
 

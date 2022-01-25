@@ -81,34 +81,34 @@ pub fn privkey_to_l2_script_hash(
     Ok(script_hash)
 }
 
-pub fn l2_script_hash_to_short_address(script_hash: &H256) -> GwBytes {
-    let short_address = &script_hash.as_bytes()[..20];
+pub fn l2_script_hash_to_short_script_hash(script_hash: &H256) -> GwBytes {
+    let short_script_hash = &script_hash.as_bytes()[..20];
 
-    GwBytes::from(short_address.to_vec())
+    GwBytes::from(short_script_hash.to_vec())
 }
 
-pub fn privkey_to_short_address(
+pub fn privkey_to_short_script_hash(
     privkey: &H256,
     rollup_type_hash: &H256,
     scripts_deployment: &ScriptsDeploymentResult,
 ) -> Result<GwBytes> {
     let script_hash = privkey_to_l2_script_hash(privkey, rollup_type_hash, scripts_deployment)?;
 
-    let short_address = l2_script_hash_to_short_address(&script_hash);
-    Ok(short_address)
+    let short_script_hash = l2_script_hash_to_short_script_hash(&script_hash);
+    Ok(short_script_hash)
 }
 
-pub fn short_address_to_account_id(
+pub fn short_script_hash_to_account_id(
     godwoken_rpc_client: &mut GodwokenRpcClient,
-    short_address: &GwBytes,
+    short_script_hash: &GwBytes,
 ) -> Result<Option<u32>> {
-    let bytes = JsonBytes::from_bytes(short_address.clone());
-    let script_hash = match godwoken_rpc_client.get_script_hash_by_short_address(bytes)? {
+    let bytes = JsonBytes::from_bytes(short_script_hash.clone());
+    let script_hash = match godwoken_rpc_client.get_script_hash_by_short_script_hash(bytes)? {
         Some(h) => h,
         None => {
             return Err(anyhow!(
-                "script hash by short address: 0x{} not found",
-                hex::encode(short_address.to_vec()),
+                "script hash by short script hash: 0x{} not found",
+                hex::encode(short_script_hash.to_vec()),
             ))
         }
     };
@@ -118,11 +118,11 @@ pub fn short_address_to_account_id(
 }
 
 // address: 0x... / id: 1
-pub fn parse_account_short_address(
+pub fn parse_account_short_script_hash(
     godwoken: &mut GodwokenRpcClient,
     account: &str,
 ) -> Result<GwBytes> {
-    // if match short address
+    // if match short script hash
     if account.starts_with("0x") && account.len() == 42 {
         let r = GwBytes::from(hex::decode(account[2..].as_bytes())?);
         return Ok(r);
@@ -134,8 +134,8 @@ pub fn parse_account_short_address(
         Err(_) => return Err(anyhow!("account id parse error!")),
     };
     let script_hash = godwoken.get_script_hash(account_id)?;
-    let short_address = GwBytes::from((&script_hash.as_bytes()[..20]).to_vec());
-    Ok(short_address)
+    let short_script_hash = GwBytes::from((&script_hash.as_bytes()[..20]).to_vec());
+    Ok(short_script_hash)
 }
 
 pub fn read_privkey(privkey_path: &Path) -> Result<H256> {

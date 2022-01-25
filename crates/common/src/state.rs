@@ -53,11 +53,11 @@ pub fn build_account_key(id: u32, key: &[u8]) -> H256 {
     raw_key.into()
 }
 
-pub fn build_sudt_key(key_flag: u32, short_address: &[u8]) -> Vec<u8> {
-    let mut key = Vec::with_capacity(short_address.len() + 8);
+pub fn build_sudt_key(key_flag: u32, short_script_hash: &[u8]) -> Vec<u8> {
+    let mut key = Vec::with_capacity(short_script_hash.len() + 8);
     key.extend(&key_flag.to_le_bytes());
-    key.extend(&(short_address.len() as u32).to_le_bytes());
-    key.extend(short_address);
+    key.extend(&(short_script_hash.len() as u32).to_le_bytes());
+    key.extend(short_script_hash);
     key
 }
 
@@ -101,7 +101,7 @@ pub fn build_short_script_hash_to_script_hash_key(short_script_hash: &[u8]) -> H
 }
 
 /// NOTE: the length `20` is a hard-coded value, may be `16` for some LockAlgorithm.
-pub fn to_short_address(script_hash: &H256) -> &[u8] {
+pub fn to_short_script_hash(script_hash: &H256) -> &[u8] {
     &script_hash.as_slice()[0..20]
 }
 
@@ -183,12 +183,12 @@ pub trait State {
         Ok(Some(id))
     }
 
-    fn get_sudt_balance(&self, sudt_id: u32, short_address: &[u8]) -> Result<u128, Error> {
-        if short_address.len() != 20 {
+    fn get_sudt_balance(&self, sudt_id: u32, short_script_hash: &[u8]) -> Result<u128, Error> {
+        if short_script_hash.len() != 20 {
             return Err(Error::InvalidShortAddress);
         }
         // get balance
-        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_address);
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_script_hash);
         let balance = self.get_raw(&build_account_key(sudt_id, &sudt_key))?;
         Ok(balance.to_u128())
     }
@@ -213,11 +213,16 @@ pub trait State {
     }
 
     /// Mint SUDT token on layer2
-    fn mint_sudt(&mut self, sudt_id: u32, short_address: &[u8], amount: u128) -> Result<(), Error> {
-        if short_address.len() != 20 {
+    fn mint_sudt(
+        &mut self,
+        sudt_id: u32,
+        short_script_hash: &[u8],
+        amount: u128,
+    ) -> Result<(), Error> {
+        if short_script_hash.len() != 20 {
             return Err(Error::InvalidShortAddress);
         }
-        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_address);
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_script_hash);
         let raw_key = build_account_key(sudt_id, &sudt_key);
         // calculate balance
         let mut balance = self.get_raw(&raw_key)?.to_u128();
@@ -238,11 +243,16 @@ pub trait State {
     }
 
     /// burn SUDT
-    fn burn_sudt(&mut self, sudt_id: u32, short_address: &[u8], amount: u128) -> Result<(), Error> {
-        if short_address.len() != 20 {
+    fn burn_sudt(
+        &mut self,
+        sudt_id: u32,
+        short_script_hash: &[u8],
+        amount: u128,
+    ) -> Result<(), Error> {
+        if short_script_hash.len() != 20 {
             return Err(Error::InvalidShortAddress);
         }
-        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_address);
+        let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_script_hash);
         let raw_key = build_account_key(sudt_id, &sudt_key);
         // calculate balance
         let mut balance = self.get_raw(&raw_key)?.to_u128();

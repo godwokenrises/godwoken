@@ -2,7 +2,7 @@ use crate::error::{AccountError, DepositError, Error, WithdrawalError};
 use crate::sudt::build_l2_sudt_script;
 use gw_common::{
     builtins::CKB_SUDT_ACCOUNT_ID,
-    state::{to_short_address, State},
+    state::{to_short_script_hash, State},
     CKB_SUDT_SCRIPT_ARGS, H256,
 };
 use gw_traits::CodeStore;
@@ -45,8 +45,8 @@ pub trait StateExt {
 
     fn pay_fee(
         &mut self,
-        payer_short_address: &[u8],
-        block_producer_short_address: &[u8],
+        payer_short_script_hash: &[u8],
+        block_producer_short_script_hash: &[u8],
         sudt_id: u32,
         amount: u128,
     ) -> Result<(), Error>;
@@ -109,20 +109,20 @@ impl<S: State + CodeStore> StateExt for S {
 
     fn pay_fee(
         &mut self,
-        payer_short_address: &[u8],
-        block_producer_short_address: &[u8],
+        payer_short_script_hash: &[u8],
+        block_producer_short_script_hash: &[u8],
         sudt_id: u32,
         amount: u128,
     ) -> Result<(), Error> {
         log::debug!(
             "account: 0x{} pay fee to block_producer: 0x{}, sudt_id: {}, amount: {}",
-            hex::encode(&payer_short_address),
-            hex::encode(&block_producer_short_address),
+            hex::encode(&payer_short_script_hash),
+            hex::encode(&block_producer_short_script_hash),
             sudt_id,
             &amount
         );
-        self.burn_sudt(sudt_id, payer_short_address, amount)?;
-        self.mint_sudt(sudt_id, block_producer_short_address, amount)?;
+        self.burn_sudt(sudt_id, payer_short_script_hash, amount)?;
+        self.mint_sudt(sudt_id, block_producer_short_script_hash, amount)?;
         Ok(())
     }
 
@@ -150,7 +150,7 @@ impl<S: State + CodeStore> StateExt for S {
         // NOTE: the length `20` is a hard-coded value, may be `16` for some LockAlgorithm.
         self.mint_sudt(
             CKB_SUDT_ACCOUNT_ID,
-            to_short_address(&account_script_hash),
+            to_short_script_hash(&account_script_hash),
             capacity.into(),
         )?;
         log::debug!(
@@ -176,7 +176,7 @@ impl<S: State + CodeStore> StateExt for S {
                 return Err(AccountError::InvalidSUDTOperation.into());
             }
             // mint SUDT
-            self.mint_sudt(sudt_id, to_short_address(&account_script_hash), amount)?;
+            self.mint_sudt(sudt_id, to_short_script_hash(&account_script_hash), amount)?;
             log::debug!(
                 "[generator] mint {} amount sUDT {} to account {}",
                 amount,
@@ -201,7 +201,7 @@ impl<S: State + CodeStore> StateExt for S {
         let l2_sudt_script_hash: [u8; 32] =
             build_l2_sudt_script(ctx, &raw.sudt_script_hash().unpack()).hash();
         let amount: u128 = raw.amount().unpack();
-        let withdrawal_short_address = to_short_address(&account_script_hash);
+        let withdrawal_short_script_hash = to_short_script_hash(&account_script_hash);
         // find user account
         let id = self
             .get_account_id_by_script_hash(&account_script_hash)?
@@ -212,10 +212,10 @@ impl<S: State + CodeStore> StateExt for S {
             let sudt_id: u32 = raw.fee().sudt_id().unpack();
             let amount: u128 = raw.fee().amount().unpack();
             let block_producer_script_hash = self.get_script_hash(block_producer_id)?;
-            let block_producer_short_address = to_short_address(&block_producer_script_hash);
+            let block_producer_short_script_hash = to_short_script_hash(&block_producer_script_hash);
             self.pay_fee(
-                withdrawal_short_address,
-                block_producer_short_address,
+                withdrawal_short_script_hash,
+                block_producer_short_script_hash,
                 sudt_id,
                 amount,
             )?;
@@ -223,7 +223,7 @@ impl<S: State + CodeStore> StateExt for S {
         // burn CKB
         self.burn_sudt(
             CKB_SUDT_ACCOUNT_ID,
-            withdrawal_short_address,
+            withdrawal_short_script_hash,
             capacity.into(),
         )?;
         let sudt_id = self
@@ -231,7 +231,7 @@ impl<S: State + CodeStore> StateExt for S {
             .ok_or(AccountError::UnknownSUDT)?;
         if sudt_id != CKB_SUDT_ACCOUNT_ID {
             // burn sudt
-            self.burn_sudt(sudt_id, withdrawal_short_address, amount)?;
+            self.burn_sudt(sudt_id, withdrawal_short_script_hash, amount)?;
         } else if amount != 0 {
             return Err(WithdrawalError::WithdrawFakedCKB.into());
         }
