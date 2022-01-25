@@ -362,3 +362,27 @@ union RollupAction {
     RollupRevert,
 }
 // --- end of Rollup ---
+
+
+// --- ETH Address Registry ---
+array Byte20 [byte; 20];
+
+union ETHAddrRegArgs {
+    EthToGw,
+    GwToEth,
+    SetMapping,
+}
+
+struct EthToGw {
+    eth_address: Byte20,
+}
+
+struct GwToEth {
+    gw_script_hash: Byte32,
+}
+
+struct SetMapping {
+    gw_script_hash: Byte32,
+    fee: Fee,
+}
+// --- end of ETH Address Registry ---
