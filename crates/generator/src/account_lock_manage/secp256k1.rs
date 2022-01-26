@@ -3,6 +3,7 @@ use super::LockAlgorithm;
 use crate::account_lock_manage::eip712::traits::EIP712Encode;
 use crate::account_lock_manage::eip712::types::Withdrawal;
 use crate::error::LockAlgorithmError;
+use gw_common::blake2b::new_blake2b;
 use gw_common::H256;
 use gw_types::offchain::RollupContext;
 use gw_types::packed::WithdrawalRequestExtra;
@@ -30,6 +31,93 @@ fn convert_signature_to_byte65(signature: &[u8]) -> Result<[u8; 65], LockAlgorit
     let mut buf = [0u8; 65];
     buf.copy_from_slice(signature);
     Ok(buf)
+}
+
+#[derive(Debug, Default)]
+pub struct Secp256k1;
+
+impl Secp256k1 {
+    fn verify_message(
+        &self,
+        lock_args: Bytes,
+        signature: Bytes,
+        message: H256,
+    ) -> Result<(), LockAlgorithmError> {
+        if lock_args.len() != 52 {
+            return Err(LockAlgorithmError::InvalidLockArgs);
+        }
+        let mut expected_pubkey_hash = [0u8; 20];
+        expected_pubkey_hash.copy_from_slice(&lock_args[32..52]);
+        let pubkey_hash = self.recover(message, signature.as_ref())?;
+        if pubkey_hash.as_ref() != expected_pubkey_hash {
+            return Err(LockAlgorithmError::InvalidSignature(
+                "Mismatch pubkey hash".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Usage
+/// register an algorithm to AccountLockManage
+///
+/// manage.register_lock_algorithm(code_hash, Box::new(AlwaysSuccess::default()));
+impl LockAlgorithm for Secp256k1 {
+    fn recover(&self, message: H256, signature: &[u8]) -> Result<Bytes, LockAlgorithmError> {
+        let signature: RecoverableSignature = {
+            let signature = convert_signature_to_byte65(signature)?;
+            let recid = RecoveryId::from_i32(signature[64] as i32)
+                .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
+            let data = &signature[..64];
+            RecoverableSignature::from_compact(data, recid)
+                .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?
+        };
+        let msg = secp256k1::Message::from_slice(message.as_slice())
+            .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
+        let pubkey = SECP256K1
+            .recover(&msg, &signature)
+            .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?;
+
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&pubkey.serialize());
+        hasher.finalize(&mut buf);
+        let mut pubkey_hash = vec![0u8; 20];
+        pubkey_hash.copy_from_slice(&buf[..20]);
+        Ok(Bytes::from(pubkey_hash))
+    }
+
+    fn verify_tx(
+        &self,
+        ctx: &RollupContext,
+        sender_script: Script,
+        receiver_script: Script,
+        tx: L2Transaction,
+    ) -> Result<(), LockAlgorithmError> {
+        let message = calc_godwoken_signing_message(
+            &ctx.rollup_script_hash,
+            &sender_script,
+            &receiver_script,
+            &tx,
+        );
+
+        self.verify_message(
+            sender_script.args().unpack(),
+            tx.signature().unpack(),
+            message,
+        )
+    }
+
+    fn verify_withdrawal(
+        &self,
+        sender_script: Script,
+        withdrawal: &WithdrawalRequestExtra,
+    ) -> Result<(), LockAlgorithmError> {
+        let lock_args: Bytes = sender_script.args().unpack();
+        let message = withdrawal.raw().hash().into();
+        let signature: Bytes = withdrawal.request().signature().unpack();
+        self.verify_message(lock_args, signature, message)
+    }
 }
 
 #[derive(Debug)]
