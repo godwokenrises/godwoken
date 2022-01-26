@@ -1450,8 +1450,5 @@ async fn dump_jemalloc_profiling() -> Result<()> {
 async fn reload_config(
     dynamic_config_manager: Data<Arc<ArcSwap<DynamicConfigManager>>>,
 ) -> Result<DynamicConfigReloadResponse> {
-    let mut config = (**dynamic_config_manager.load()).to_owned();
-    let resp = config.reload();
-    dynamic_config_manager.store(Arc::new(config));
-    resp
+    gw_dynamic_config::reload(dynamic_config_manager.clone()).await
 }

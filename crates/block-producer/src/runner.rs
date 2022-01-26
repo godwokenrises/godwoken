@@ -367,6 +367,11 @@ impl BaseInitComponents {
         let dynamic_config_manager = Arc::new(ArcSwap::from_pointee(DynamicConfigManager::create(
             config.clone(),
         )));
+
+        //Reload config
+        if let Some(res) = gw_dynamic_config::try_reload(dynamic_config_manager.clone()).await {
+            log::info!("Reload dynamic config: {:?}", res);
+        }
         let rollup_config_hash: H256 = rollup_config.hash().into();
         let generator = {
             let backend_manage = BackendManage::from_config(config.backends.clone())
