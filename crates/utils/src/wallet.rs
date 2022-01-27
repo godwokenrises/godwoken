@@ -1,13 +1,15 @@
 use anyhow::{anyhow, Context, Result};
 use ckb_crypto::secp::Privkey;
 use faster_hex::hex_decode;
-use gw_common::blake2b::new_blake2b;
+use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::WalletConfig;
 use gw_types::{
     bytes::Bytes,
+    core::ScriptHashType,
     packed::{Script, Transaction},
-    prelude::{Entity, Unpack},
+    prelude::{Builder, Entity, Pack, Unpack},
 };
+use sha3::{Digest, Keccak256};
 
 use crate::transaction_skeleton::TransactionSkeleton;
 
@@ -38,6 +40,38 @@ impl Wallet {
 
     pub fn lock_script(&self) -> &Script {
         &self.lock
+    }
+
+    pub fn eth_lock_script(
+        &self,
+        rollup_script_hash: H256,
+        eth_account_lock_code_hash: H256,
+    ) -> Result<Script> {
+        let pubkey = {
+            let maybe_key = self.privkey.pubkey();
+            let key = maybe_key.map_err(|err| anyhow!("invalid privkey {}", err))?;
+            secp256k1::PublicKey::from_slice(&key.serialize())?
+        };
+        let pubkey_hash = {
+            let mut hasher = Keccak256::new();
+            hasher.update(&pubkey.serialize_uncompressed()[1..]);
+            let buf = hasher.finalize();
+            let mut pubkey_hash = [0u8; 20];
+            pubkey_hash.copy_from_slice(&buf[12..]);
+            pubkey_hash
+        };
+
+        let mut args = Vec::with_capacity(32 + 20);
+        args.extend(rollup_script_hash.as_slice());
+        args.extend(&pubkey_hash);
+
+        let script = Script::new_builder()
+            .code_hash(eth_account_lock_code_hash.pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(args.pack())
+            .build();
+
+        Ok(script)
     }
 
     // sign message

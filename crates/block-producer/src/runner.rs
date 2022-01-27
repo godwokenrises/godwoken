@@ -530,6 +530,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         config: config.mem_pool.clone(),
                         node_mode: config.node_mode,
                         dynamic_config_manager: base.dynamic_config_manager.clone(),
+                        eth_eoa_mapping_register: None,
                     };
                     Arc::new(Mutex::new(
                         MemPool::create(args)

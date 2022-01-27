@@ -3,7 +3,7 @@ use gw_common::H256;
 use gw_config::{BackendType, FeeConfig};
 use gw_types::{
     packed::{
-        ETHAddrRegArgs, ETHAddrRegArgsUnion, L2Transaction, MetaContractArgs,
+        ETHAddrRegArgs, ETHAddrRegArgsUnion, Fee, L2Transaction, MetaContractArgs,
         MetaContractArgsUnion, SUDTArgs, SUDTArgsUnion, WithdrawalRequestExtra,
     },
     prelude::{Entity, Unpack},
@@ -214,24 +214,27 @@ fn parse_l2tx_fee_rate(
         }
         BackendType::EthAddrReg => {
             let eth_addr_reg_args = ETHAddrRegArgs::from_slice(raw_l2tx_args.as_ref())?;
+            let calc_fee_rate = |fee: Fee| -> Result<u128> {
+                let sudt_id: u32 = fee.sudt_id().unpack();
+                let fee_amount: u128 = fee.amount().unpack();
+                let cycles_limit: u64 = fee_config.eth_addr_reg_cycles_limit;
+                let fee_rate_weight = fee_config
+                    .sudt_fee_rate_weight
+                    .get(&sudt_id.into())
+                    .cloned()
+                    .unwrap_or(DEFAULT_SUDT_FEE_RATE);
+                // fee rate = fee / cycles_limit * (weight / FEE_RATE_WEIGHT_BASE)
+                let rate = fee_amount
+                    .saturating_mul(fee_rate_weight.into())
+                    .checked_div(cycles_limit.saturating_mul(FEE_RATE_WEIGHT_BASE).into())
+                    .ok_or(anyhow!("can't calculate fee"))?;
+
+                Ok(rate)
+            };
             let fee_rate: u128 = match eth_addr_reg_args.to_enum() {
                 ETHAddrRegArgsUnion::EthToGw(_) | ETHAddrRegArgsUnion::GwToEth(_) => 0,
-                ETHAddrRegArgsUnion::SetMapping(args) => {
-                    let fee = args.fee();
-                    let sudt_id: u32 = fee.sudt_id().unpack();
-                    let fee_amount: u128 = fee.amount().unpack();
-                    let cycles_limit: u64 = fee_config.eth_addr_reg_cycles_limit;
-                    let fee_rate_weight = fee_config
-                        .sudt_fee_rate_weight
-                        .get(&sudt_id.into())
-                        .cloned()
-                        .unwrap_or(DEFAULT_SUDT_FEE_RATE);
-                    // fee rate = fee / cycles_limit * (weight / FEE_RATE_WEIGHT_BASE)
-                    fee_amount
-                        .saturating_mul(fee_rate_weight.into())
-                        .checked_div(cycles_limit.saturating_mul(FEE_RATE_WEIGHT_BASE).into())
-                        .ok_or(anyhow!("can't calculate fee"))?
-                }
+                ETHAddrRegArgsUnion::SetMapping(args) => calc_fee_rate(args.fee())?,
+                ETHAddrRegArgsUnion::BatchSetMapping(args) => calc_fee_rate(args.fee())?,
             };
             Ok(L2Fee {
                 fee_rate: fee_rate.try_into()?,
