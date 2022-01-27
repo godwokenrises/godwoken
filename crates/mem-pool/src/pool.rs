@@ -392,7 +392,7 @@ impl MemPool {
 
         // verify withdrawal signature
         self.generator
-            .check_withdrawal_request_signature(state, withdrawal)?;
+            .check_withdrawal_signature(state, withdrawal)?;
 
         // verify finalized custodian
         let finalized_custodians = {
@@ -939,7 +939,7 @@ impl MemPool {
             // check withdrawal request
             if let Err(err) = self
                 .generator
-                .check_withdrawal_request_signature(&state, &withdrawal)
+                .check_withdrawal_signature(&state, &withdrawal)
             {
                 log::info!("[mem-pool] withdrawal signature error: {:?}", err);
                 unused_withdrawals.push(withdrawal_hash);

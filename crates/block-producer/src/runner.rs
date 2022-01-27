@@ -378,9 +378,7 @@ impl BaseInitComponents {
                 .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
             account_lock_manage.register_lock_algorithm(
                 eth_lock_script_type_hash.unpack(),
-                Box::new(Secp256k1Eth::from_chain_id(
-                    config.eth_compatible_config.eip712_domain_chain_id,
-                )),
+                Box::new(Secp256k1Eth::default()),
             );
             let tron_lock_script_type_hash = rollup_config.allowed_eoa_type_hashes().get(1);
             if let Some(code_hash) = tron_lock_script_type_hash {

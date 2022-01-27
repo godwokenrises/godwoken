@@ -120,27 +120,18 @@ impl LockAlgorithm for Secp256k1 {
     }
 }
 
-#[derive(Debug)]
-pub struct Secp256k1Eth {
-    domain_seperator: [u8; 32],
-}
+#[derive(Debug, Default)]
+pub struct Secp256k1Eth;
 
 impl Secp256k1Eth {
-    pub fn new(domain_seperator: EIP712Domain) -> Self {
-        Self {
-            domain_seperator: domain_seperator.hash_struct(),
-        }
-    }
-
-    pub fn from_chain_id(chain_id: u64) -> Self {
-        let domain_seperator = EIP712Domain {
+    fn domain_with_chain_id(chain_id: u64) -> EIP712Domain {
+        EIP712Domain {
             name: "Godwoken".to_string(),
             chain_id,
             version: "1".to_string(),
             verifying_contract: None,
             salt: None,
-        };
-        Self::new(domain_seperator)
+        }
     }
 
     fn verify_alone(
@@ -276,7 +267,9 @@ impl LockAlgorithm for Secp256k1Eth {
                         err
                     ))
                 })?;
-        let message = typed_message.eip712_message(self.domain_seperator);
+        let message = typed_message.eip712_message(
+            Self::domain_with_chain_id(withdrawal.raw().chain_id().unpack()).hash_struct(),
+        );
         self.verify_alone(
             sender_script.args().unpack(),
             withdrawal.request().signature().unpack(),
@@ -492,7 +485,7 @@ mod tests {
         );
         let mut lock_args = vec![0u8; 32];
         lock_args.extend(address);
-        let eth = Secp256k1Eth::from_chain_id(1);
+        let eth = Secp256k1Eth::default();
         eth.verify_message(lock_args.into(), test_signature, message)
             .expect("verify signature");
     }
@@ -522,7 +515,7 @@ mod tests {
             .raw(raw_tx)
             .signature(signature.to_vec().pack())
             .build();
-        let eth = Secp256k1Eth::from_chain_id(1);
+        let eth = Secp256k1Eth::default();
 
         let rollup_type_hash = vec![0u8; 32];
 
@@ -573,7 +566,7 @@ mod tests {
             .raw(raw_tx)
             .signature(signature.to_vec().pack())
             .build();
-        let eth = Secp256k1Eth::from_chain_id(1);
+        let eth = Secp256k1Eth::default();
 
         // This rollup type hash is used, so the receiver script hash is:
         // 00002b003de527c1d67f2a2a348683ecc9598647c30884c89c5dcf6da1afbddd,
@@ -632,7 +625,7 @@ mod tests {
             .raw(raw_tx)
             .signature(signature.to_vec().pack())
             .build();
-        let eth = Secp256k1Eth::from_chain_id(1);
+        let eth = Secp256k1Eth::default();
 
         let rollup_type_hash = vec![0u8; 32];
 
@@ -670,7 +663,7 @@ mod tests {
             .raw(raw_tx)
             .signature(signature.to_vec().pack())
             .build();
-        let eth = Secp256k1Eth::from_chain_id(1);
+        let eth = Secp256k1Eth::default();
 
         let rollup_type_hash = vec![0u8; 32];
 

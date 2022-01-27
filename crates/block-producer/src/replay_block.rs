@@ -50,7 +50,7 @@ impl ReplayBlock {
         let state_checkpoint_list: Vec<H256> = raw_block.state_checkpoint_list().unpack();
 
         for (wth_idx, withdrawal) in withdrawals.iter().enumerate() {
-            generator.check_withdrawal_request_signature(&state, withdrawal)?;
+            generator.check_withdrawal_signature(&state, withdrawal)?;
 
             state.apply_withdrawal_request(
                 generator.rollup_context(),

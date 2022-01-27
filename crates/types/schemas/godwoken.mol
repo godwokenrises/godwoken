@@ -118,6 +118,8 @@ vector DepositRequestVec <DepositRequest>;
 
 struct RawWithdrawalRequest {
     nonce: Uint32,
+    // chain id
+    chain_id: Uint64,
     // CKB amount
     capacity: Uint64,
     // SUDT amount
@@ -125,13 +127,8 @@ struct RawWithdrawalRequest {
     sudt_script_hash: Byte32,
     // layer2 account_script_hash
     account_script_hash: Byte32,
-    // buyer can pay sell_amount and sell_capacity to unlock
-    sell_amount: Uint128,
-    sell_capacity: Uint64,
     // layer1 lock to withdraw after challenge period
     owner_lock_hash: Byte32,
-    // layer1 lock to receive the payment, must exists on the chain
-    payment_lock_hash: Byte32,
     // withdrawal fee, paid to block producer
     fee: Fee,
 }
@@ -188,28 +185,18 @@ struct WithdrawalLockArgs {
     account_script_hash: Byte32,
     withdrawal_block_hash: Byte32,
     withdrawal_block_number: Uint64,
-    // buyer can pay sell_amount token to unlock
-    sudt_script_hash: Byte32,
-    sell_amount: Uint128,
-    sell_capacity: Uint64,
     // layer1 lock to withdraw after challenge period
     owner_lock_hash: Byte32,
-    // layer1 lock to receive the payment, must exists on the chain
-    payment_lock_hash: Byte32,
 }
 
 union UnlockWithdrawalWitness {
     UnlockWithdrawalViaFinalize,
     UnlockWithdrawalViaRevert,
-    UnlockWithdrawalViaTrade,
 }
 table UnlockWithdrawalViaFinalize {
 }
 struct UnlockWithdrawalViaRevert {
     custodian_lock_hash: Byte32,
-}
-table UnlockWithdrawalViaTrade {
-    owner_lock: Script,
 }
 // --- end of withdrawal lock ---
 

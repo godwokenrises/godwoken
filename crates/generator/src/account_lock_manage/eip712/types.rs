@@ -1,7 +1,6 @@
 use std::convert::TryFrom;
 
-use anyhow::{anyhow, bail, Result};
-use gw_common::H256;
+use anyhow::{anyhow, Result};
 use gw_types::{core::ScriptHashType, packed::RawWithdrawalRequest, prelude::Unpack};
 use sha3::{Digest, Keccak256};
 
@@ -133,22 +132,6 @@ impl Withdrawal {
         data: RawWithdrawalRequest,
         owner_lock: gw_types::packed::Script,
     ) -> Result<Self> {
-        // Disable sell withdrawal cell feature for now, we must ensure these fields are empty
-        {
-            let sell_capacity: u64 = data.sell_capacity().unpack();
-            if sell_capacity != 0 {
-                bail!("sell capacity must be zero");
-            }
-            let sell_amount: u128 = data.sell_amount().unpack();
-            if sell_amount != 0 {
-                bail!("sell amount must be zero");
-            }
-            let payment_lock_hash: [u8; 32] = data.payment_lock_hash().unpack();
-            if !H256::from(payment_lock_hash).is_zero() {
-                bail!("payment lock hash must be empty");
-            }
-        }
-
         let hash_type = match ScriptHashType::try_from(owner_lock.hash_type())
             .map_err(|hash_type| anyhow!("Invalid hash type: {}", hash_type))?
         {
@@ -373,7 +356,7 @@ mod tests {
             buf[64] = v;
             buf
         };
-        let pubkey_hash = Secp256k1Eth::from_chain_id(1)
+        let pubkey_hash = Secp256k1Eth::default()
             .recover(message.into(), &signature)
             .unwrap();
         assert_eq!(hex::encode(mail.from.wallet), hex::encode(pubkey_hash));
@@ -425,7 +408,7 @@ mod tests {
         };
         let message = withdrawal.eip712_message(domain_seperator.hash_struct());
         let signature: [u8; 65] = hex::decode("05843fcef82e3f584fdaa413d35913f6cdc9cd44724b41e0f84421ad3475fef90610961d6aee8473b4fc59fe8d00dbf037ce209d6bd66f74f18dc97227e8a4991b").unwrap().try_into().unwrap();
-        let pubkey_hash = Secp256k1Eth::from_chain_id(1)
+        let pubkey_hash = Secp256k1Eth::default()
             .recover(message.into(), &signature)
             .unwrap();
         assert_eq!(
