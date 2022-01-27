@@ -13,7 +13,8 @@ use gw_store::transaction::StoreTransaction;
 use gw_types::core::DepType;
 use gw_types::offchain::{CellInfo, InputCellInfo, RollupContext, RunResult};
 use gw_types::packed::{
-    CellDep, CellInput, L2Block, L2Transaction, OutPoint, OutPointVec, Uint32, WithdrawalRequest,
+    CellDep, CellInput, L2Block, L2Transaction, OutPoint, OutPointVec, Uint32,
+    WithdrawalRequestExtra,
 };
 use gw_types::prelude::{Builder, Entity, Unpack};
 use gw_utils::wallet::Wallet;
@@ -241,7 +242,7 @@ impl OffChainCancelChallengeValidator {
         &mut self,
         db: &StoreTransaction,
         mem_tree: &mut MemTree<'_>,
-        req: WithdrawalRequest,
+        req: WithdrawalRequestExtra,
     ) -> Result<Option<u64>> {
         let block_param = &mut self.block_param;
         let safe_margin = &mut self.safe_margin;

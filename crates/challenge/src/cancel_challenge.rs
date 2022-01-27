@@ -7,9 +7,9 @@ use gw_config::ContractsCellDep;
 use gw_types::core::{DepType, SigningType, Status};
 use gw_types::offchain::{CellInfo, InputCellInfo, RecoverAccount, RollupContext};
 use gw_types::packed::{
-    CellDep, CellInput, CellOutput, GlobalState, OutPoint, RollupAction, RollupActionUnion,
-    RollupCancelChallenge, Script, VerifyTransactionSignatureWitness, VerifyTransactionWitness,
-    VerifyWithdrawalWitness, WitnessArgs,
+    CCTransactionSignatureWitness, CCTransactionWitness, CCWithdrawalWitness, CellDep, CellInput,
+    CellOutput, GlobalState, OutPoint, RollupAction, RollupActionUnion, RollupCancelChallenge,
+    Script, WitnessArgs,
 };
 use gw_types::prelude::Unpack;
 use gw_types::{bytes::Bytes, prelude::Pack as GWPack};
@@ -130,13 +130,13 @@ pub fn build_output(
             let verifier_lock = context.sender_script;
 
             let verifier_witness = {
-                let signature = witness.withdrawal_request().signature();
+                let signature = witness.withdrawal().signature();
                 WitnessArgs::new_builder()
                     .lock(Some(signature).pack())
                     .build()
             };
 
-            let cancel: CancelChallenge<VerifyWithdrawalWitness> = CancelChallenge::new(
+            let cancel: CancelChallenge<CCWithdrawalWitness> = CancelChallenge::new(
                 prev_global_state,
                 rollup_context,
                 challenge_cell,
@@ -162,7 +162,7 @@ pub fn build_output(
                     .build()
             };
 
-            let cancel: CancelChallenge<VerifyTransactionSignatureWitness> = CancelChallenge::new(
+            let cancel: CancelChallenge<CCTransactionSignatureWitness> = CancelChallenge::new(
                 prev_global_state,
                 rollup_context,
                 challenge_cell,
@@ -198,11 +198,7 @@ pub fn build_output(
             let load_data: Vec<Bytes> = load_data.into_iter().map(|(_, v)| v.unpack()).collect();
             let (witness, load_data_cells) = match load_data_strategy.unwrap_or_default() {
                 LoadDataStrategy::Witness => {
-                    let context = {
-                        let builder = witness.context().as_builder();
-                        builder.load_data(load_data.pack()).build()
-                    };
-                    let witness = witness.as_builder().context(context).build();
+                    let witness = witness.as_builder().load_data(load_data.pack()).build();
                     (witness, vec![])
                 }
                 LoadDataStrategy::CellDep => {
@@ -212,7 +208,7 @@ pub fn build_output(
                 }
             };
 
-            let cancel: CancelChallenge<VerifyTransactionWitness> = CancelChallenge::new(
+            let cancel: CancelChallenge<CCTransactionWitness> = CancelChallenge::new(
                 prev_global_state,
                 rollup_context,
                 challenge_cell,
@@ -403,13 +399,13 @@ impl<'a, W: Entity> CancelChallenge<'a, W> {
     }
 }
 
-impl<'a> CancelChallenge<'a, VerifyTransactionWitness> {
+impl<'a> CancelChallenge<'a, CCTransactionWitness> {
     fn build_verifier_data(&self) -> Bytes {
         self.owner_lock.hash().to_vec().into()
     }
 }
 
-impl<'a> CancelChallenge<'a, VerifyTransactionSignatureWitness> {
+impl<'a> CancelChallenge<'a, CCTransactionSignatureWitness> {
     // owner_lock_hash(32 bytes) | message(32 bytes)
     pub fn build_verifier_data(&self, receiver_script_hash: H256) -> Bytes {
         let owner_lock_hash = self.owner_lock.hash();
@@ -434,7 +430,7 @@ impl<'a> CancelChallenge<'a, VerifyTransactionSignatureWitness> {
     }
 }
 
-impl<'a> CancelChallenge<'a, VerifyWithdrawalWitness> {
+impl<'a> CancelChallenge<'a, CCWithdrawalWitness> {
     // owner_lock_hash(32 bytes) | message(32 bytes)
     pub fn build_verifier_data(&self) -> Bytes {
         let owner_lock_hash = self.owner_lock.hash();
@@ -448,7 +444,7 @@ impl<'a> CancelChallenge<'a, VerifyWithdrawalWitness> {
     }
 
     fn calc_withdrawal_message(&self) -> [u8; 32] {
-        let raw_withdrawal = self.verify_witness.withdrawal_request().raw();
+        let raw_withdrawal = self.verify_witness.withdrawal().raw();
         raw_withdrawal.calc_message(&self.rollup_type_hash).into()
     }
 }

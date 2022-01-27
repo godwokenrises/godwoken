@@ -21,11 +21,10 @@ use gw_traits::CodeStore;
 use gw_types::core::ChallengeTargetType;
 use gw_types::offchain::RecoverAccount;
 use gw_types::packed::{
-    BlockHashEntry, BlockHashEntryVec, BlockInfo, Byte32, Bytes, CKBMerkleProof, ChallengeTarget,
-    ChallengeWitness, KVPairVec, L2Block, L2Transaction, RawL2Block, RawL2BlockVec,
-    RawL2Transaction, Script, ScriptReader, ScriptVec, Uint32, VerifyTransactionContext,
-    VerifyTransactionSignatureContext, VerifyTransactionSignatureWitness, VerifyTransactionWitness,
-    VerifyWithdrawalWitness,
+    BlockHashEntry, BlockHashEntryVec, BlockInfo, Byte32, Bytes, CCTransactionSignatureWitness,
+    CCTransactionWitness, CCWithdrawalWitness, CKBMerkleProof, ChallengeTarget, ChallengeWitness,
+    KVPairVec, L2Block, L2Transaction, RawL2Block, RawL2BlockVec, RawL2Transaction, Script,
+    ScriptReader, ScriptVec, Uint32, WithdrawalKey,
 };
 use gw_types::prelude::{Builder, Entity, FromSliceShouldBeOk, Pack, Reader, Unpack};
 
@@ -151,7 +150,14 @@ fn build_verify_withdrawal_witness(
         .map(|(idx, withdrawal)| {
             let hash: H256 = withdrawal.witness_hash().into();
             if idx == withdrawal_index as usize {
-                target = Some(withdrawal);
+                target = Some(
+                    db.get_withdrawal_by_key(&WithdrawalKey::build_withdrawal_key(
+                        block_hash.pack(),
+                        idx as u32,
+                    ))
+                    .expect("get withdrawal from db")
+                    .expect("must exist"),
+                );
             }
             ckb_merkle_leaf_hash(idx as u32, &hash)
         })
@@ -171,9 +177,11 @@ fn build_verify_withdrawal_witness(
             .ok_or_else(|| anyhow!("sender script not found"))?
     };
 
-    let verify_witness = VerifyWithdrawalWitness::new_builder()
+    let verify_witness = CCWithdrawalWitness::new_builder()
         .raw_l2block(block.raw())
-        .withdrawal_request(withdrawal)
+        .withdrawal(withdrawal.request())
+        .sender(sender_script.clone())
+        .owner_lock(withdrawal.owner_lock())
         .withdrawal_proof(proof)
         .build();
 
@@ -210,18 +218,15 @@ fn build_verify_transaction_signature_witness(
     let kv_witness = build_tx_kv_witness(db, &block, &tx.raw(), tx_index, TxKvState::Signature)?;
     log::debug!("build kv witness");
 
-    let context = VerifyTransactionSignatureContext::new_builder()
-        .account_count(kv_witness.account_count)
-        .kv_state(kv_witness.kv_state)
-        .scripts(kv_witness.scripts)
-        .build();
-
-    let verify_witness = VerifyTransactionSignatureWitness::new_builder()
+    let verify_witness = CCTransactionSignatureWitness::new_builder()
         .raw_l2block(block.raw())
         .l2tx(tx)
         .tx_proof(tx_proof)
         .kv_state_proof(kv_witness.kv_state_proof.0.pack())
-        .context(context)
+        .account_count(kv_witness.account_count)
+        .kv_state(kv_witness.kv_state)
+        .sender(kv_witness.sender_script.clone())
+        .receiver(kv_witness.receiver_script.clone())
         .build();
 
     Ok(VerifyContext {
@@ -254,19 +259,15 @@ fn build_verify_transaction_witness(
         .expect("execution return data hash not found");
 
     // TODO: block hashes and proof?
-    let context = VerifyTransactionContext::new_builder()
-        .account_count(kv_witness.account_count)
-        .kv_state(kv_witness.kv_state)
-        .scripts(kv_witness.scripts)
-        .return_data_hash(return_data_hash)
-        .build();
-
-    let verify_witness = VerifyTransactionWitness::new_builder()
+    let verify_witness = CCTransactionWitness::new_builder()
         .l2tx(tx)
         .raw_l2block(raw_block)
         .tx_proof(tx_proof)
         .kv_state_proof(kv_witness.kv_state_proof.0.pack())
-        .context(context)
+        .account_count(kv_witness.account_count)
+        .kv_state(kv_witness.kv_state)
+        .scripts(kv_witness.scripts)
+        .return_data_hash(return_data_hash)
         .build();
 
     Ok(VerifyContext {

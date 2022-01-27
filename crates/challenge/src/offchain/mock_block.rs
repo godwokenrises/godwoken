@@ -19,11 +19,10 @@ use gw_traits::CodeStore;
 use gw_types::core::{ChallengeTargetType, Status};
 use gw_types::offchain::{RollupContext, RunResult};
 use gw_types::packed::{
-    AccountMerkleState, BlockMerkleState, Byte32, Bytes, CKBMerkleProof, ChallengeTarget,
-    GlobalState, L2Block, L2Transaction, RawL2Block, Script, ScriptReader, ScriptVec,
-    SubmitTransactions, SubmitWithdrawals, Uint32, Uint64, VerifyTransactionContext,
-    VerifyTransactionSignatureContext, VerifyTransactionSignatureWitness, VerifyTransactionWitness,
-    VerifyWithdrawalWitness, WithdrawalRequest,
+    AccountMerkleState, BlockMerkleState, Byte32, Bytes, CCTransactionSignatureWitness,
+    CCTransactionWitness, CCWithdrawalWitness, CKBMerkleProof, ChallengeTarget, GlobalState,
+    L2Block, L2Transaction, RawL2Block, Script, ScriptReader, ScriptVec, SubmitTransactions,
+    SubmitWithdrawals, Uint32, Uint64, WithdrawalRequestExtra,
 };
 use gw_types::prelude::*;
 
@@ -99,7 +98,7 @@ impl MockBlockParam {
     pub fn push_withdrawal_request(
         &mut self,
         mem_tree: &mut MemTree<'_>,
-        req: WithdrawalRequest,
+        req: WithdrawalRequestExtra,
     ) -> Result<()> {
         if self.withdrawals.contains(&req) {
             bail!("duplicate withdrawal {}", req.hash().pack());
@@ -108,7 +107,7 @@ impl MockBlockParam {
         mem_tree.apply_withdrawal_request(
             &self.rollup_context,
             self.block_producer_id.unpack(),
-            &req,
+            &req.request(),
         )?;
         let post_account = mem_tree.merkle_state()?;
         let checkpoint = calculate_state_checkpoint(
@@ -184,12 +183,13 @@ impl MockBlockParam {
         let raw_block = self.build_block(post_account.clone())?;
         let raw_block_size = raw_block.as_slice().len() as u64;
 
+        let withdrawal = self.withdrawals.inner.last().expect("should exists");
         let sender_script = {
-            let req = self.withdrawals.inner.last().expect("should exists");
-            let sender_script_hash = req.raw().account_script_hash().unpack();
+            let sender_script_hash = withdrawal.raw().account_script_hash().unpack();
             let get = mem_tree.get_script(&sender_script_hash);
             get.ok_or_else(|| anyhow!("withdrawal sender script not found"))?
         };
+        let owner_lock = withdrawal.owner_lock();
 
         let global_state = self.build_global_state(db, post_account, &raw_block)?;
         let challenge_target = ChallengeTarget::new_builder()
@@ -197,7 +197,8 @@ impl MockBlockParam {
             .target_index(target_index.pack())
             .target_type(target_type.into())
             .build();
-        let verify_context = self.build_withdrawal_verify_context(raw_block, sender_script)?;
+        let verify_context =
+            self.build_withdrawal_verify_context(raw_block, sender_script, owner_lock)?;
 
         Ok(MockChallengeOutput {
             raw_block_size,
@@ -338,6 +339,7 @@ impl MockBlockParam {
         &self,
         raw_block: RawL2Block,
         sender_script: Script,
+        owner_lock: Script,
     ) -> Result<VerifyContext> {
         let mut tree: SMT<DefaultStore<H256>> = Default::default();
         for (index, witness_hash) in self.withdrawals.witness_hashes.iter().enumerate() {
@@ -356,9 +358,11 @@ impl MockBlockParam {
             build_cbmt_merkle_proof(leaves, indices).with_context(|| "withdrawal proof")?
         };
 
-        let verify_witness = VerifyWithdrawalWitness::new_builder()
+        let verify_witness = CCWithdrawalWitness::new_builder()
             .raw_l2block(raw_block)
-            .withdrawal_request(withdrawal)
+            .withdrawal(withdrawal.request())
+            .sender(sender_script.clone())
+            .owner_lock(owner_lock)
             .withdrawal_proof(withdrawal_proof)
             .build();
 
@@ -406,30 +410,22 @@ impl MockBlockParam {
             smt.merkle_proof(touched_keys)?.compile(kv_state.clone())?
         };
 
-        let scripts = ScriptVec::new_builder()
-            .push(sender_script.clone())
-            .push(receiver_script.clone())
-            .build();
-
         let account_count = mem_tree.get_account_count()?;
-        let context = VerifyTransactionSignatureContext::new_builder()
-            .account_count(account_count.pack())
-            .kv_state(kv_state.pack())
-            .scripts(scripts)
-            .build();
-
         let tx_proof = {
             let indices = &[self.transactions.inner.len().saturating_sub(1) as u32];
             let leaves = &self.transactions.merkle_leaf_hashes;
             build_cbmt_merkle_proof(leaves, indices).with_context(|| "tx proof")?
         };
 
-        let verify_witness = VerifyTransactionSignatureWitness::new_builder()
+        let verify_witness = CCTransactionSignatureWitness::new_builder()
             .raw_l2block(raw_block)
             .l2tx(tx)
             .tx_proof(tx_proof)
             .kv_state_proof(kv_state_proof.0.pack())
-            .context(context)
+            .account_count(account_count.pack())
+            .kv_state(kv_state.pack())
+            .sender(sender_script.clone())
+            .receiver(receiver_script.clone())
             .build();
 
         Ok(VerifyContext {
@@ -537,25 +533,21 @@ impl MockBlockParam {
         };
 
         let account_count = mem_tree.get_account_count()?;
-        let context = VerifyTransactionContext::new_builder()
-            .account_count(account_count.pack())
-            .kv_state(kv_state.pack())
-            .scripts(scripts)
-            .return_data_hash(return_data_hash)
-            .build();
-
         let tx_proof = {
             let indices = &[self.transactions.inner.len().saturating_sub(1) as u32];
             let leaves = &self.transactions.merkle_leaf_hashes;
             build_cbmt_merkle_proof(leaves, indices).with_context(|| "tx proof")?
         };
 
-        let verify_witness = VerifyTransactionWitness::new_builder()
+        let verify_witness = CCTransactionWitness::new_builder()
             .l2tx(tx)
             .raw_l2block(raw_block)
             .tx_proof(tx_proof)
             .kv_state_proof(kv_state_proof.0.pack())
-            .context(context)
+            .account_count(account_count.pack())
+            .kv_state(kv_state.pack())
+            .scripts(scripts)
+            .return_data_hash(return_data_hash)
             .build();
 
         Ok(VerifyContext {
@@ -571,7 +563,7 @@ impl MockBlockParam {
 }
 
 struct RawBlockWithdrawalRequests {
-    inner: Vec<WithdrawalRequest>,
+    inner: Vec<WithdrawalRequestExtra>,
     witness_hashes: Vec<H256>,
     merkle_leaf_hashes: Vec<H256>,
     post_accounts: Vec<AccountMerkleState>,
@@ -587,11 +579,11 @@ impl RawBlockWithdrawalRequests {
         }
     }
 
-    fn contains(&self, req: &WithdrawalRequest) -> bool {
+    fn contains(&self, req: &WithdrawalRequestExtra) -> bool {
         self.witness_hashes.contains(&req.witness_hash().into())
     }
 
-    fn push(&mut self, req: WithdrawalRequest, post_account: AccountMerkleState) {
+    fn push(&mut self, req: WithdrawalRequestExtra, post_account: AccountMerkleState) {
         let wth_index = self.witness_hashes.len() as u32;
         let witness_hash: H256 = req.witness_hash().into();
         let merkle_leaf_hash = ckb_merkle_leaf_hash(wth_index, &witness_hash);
