@@ -822,15 +822,10 @@ pub struct RawWithdrawalRequest {
     pub nonce: Uint32,
     pub capacity: Uint64,
     pub amount: Uint128,
-    // buyer can pay sell_amount and sell_capacity to unlock
-    pub sell_amount: Uint128,
-    pub sell_capacity: Uint64,
     pub sudt_script_hash: H256,
     pub account_script_hash: H256,
     // layer1 lock to withdraw after challenge period
     pub owner_lock_hash: H256,
-    // layer1 lock to receive the payment, must exists on the chain
-    pub payment_lock_hash: H256,
     pub fee: Fee,
 }
 
@@ -840,24 +835,18 @@ impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
             nonce,
             capacity,
             amount,
-            sell_amount,
-            sell_capacity,
             sudt_script_hash,
             account_script_hash,
             owner_lock_hash,
-            payment_lock_hash,
             fee,
         } = json;
         packed::RawWithdrawalRequest::new_builder()
             .nonce(u32::from(nonce).pack())
             .capacity(u64::from(capacity).pack())
             .amount(u128::from(amount).pack())
-            .sell_amount(u128::from(sell_amount).pack())
-            .sell_capacity(u64::from(sell_capacity).pack())
             .sudt_script_hash(sudt_script_hash.pack())
             .account_script_hash(account_script_hash.pack())
             .owner_lock_hash(owner_lock_hash.pack())
-            .payment_lock_hash(payment_lock_hash.pack())
             .fee(fee.into())
             .build()
     }
@@ -868,18 +857,13 @@ impl From<packed::RawWithdrawalRequest> for RawWithdrawalRequest {
         let nonce: u32 = raw_withdrawal_request.nonce().unpack();
         let capacity: u64 = raw_withdrawal_request.capacity().unpack();
         let amount: u128 = raw_withdrawal_request.amount().unpack();
-        let sell_capacity: u64 = raw_withdrawal_request.sell_capacity().unpack();
-        let sell_amount: u128 = raw_withdrawal_request.sell_amount().unpack();
         Self {
             nonce: nonce.into(),
             capacity: capacity.into(),
             amount: amount.into(),
-            sell_capacity: sell_capacity.into(),
-            sell_amount: sell_amount.into(),
             sudt_script_hash: raw_withdrawal_request.sudt_script_hash().unpack(),
             account_script_hash: raw_withdrawal_request.account_script_hash().unpack(),
             owner_lock_hash: raw_withdrawal_request.owner_lock_hash().unpack(),
-            payment_lock_hash: raw_withdrawal_request.payment_lock_hash().unpack(),
             fee: raw_withdrawal_request.fee().into(),
         }
     }
@@ -1136,14 +1120,8 @@ pub struct WithdrawalLockArgs {
     pub account_script_hash: H256,
     pub withdrawal_block_hash: H256,
     pub withdrawal_block_number: Uint64,
-    // buyer can pay sell_amount token to unlock
-    pub sudt_script_hash: H256,
-    pub sell_amount: Uint128,
-    pub sell_capacity: Uint64,
     // layer1 lock to withdraw after challenge period
     pub owner_lock_hash: H256,
-    // layer1 lock to receive the payment, must exists on the chain
-    pub payment_lock_hash: H256,
 }
 
 impl From<WithdrawalLockArgs> for packed::WithdrawalLockArgs {
@@ -1152,37 +1130,23 @@ impl From<WithdrawalLockArgs> for packed::WithdrawalLockArgs {
             account_script_hash,
             withdrawal_block_hash,
             withdrawal_block_number,
-            sudt_script_hash,
-            sell_amount,
-            sell_capacity,
             owner_lock_hash,
-            payment_lock_hash,
         } = json;
         packed::WithdrawalLockArgs::new_builder()
             .account_script_hash(account_script_hash.pack())
             .withdrawal_block_hash(withdrawal_block_hash.pack())
             .withdrawal_block_number(withdrawal_block_number.value().pack())
-            .sudt_script_hash(sudt_script_hash.pack())
-            .sell_amount(sell_amount.value().pack())
-            .sell_capacity(sell_capacity.value().pack())
             .owner_lock_hash(owner_lock_hash.pack())
-            .payment_lock_hash(payment_lock_hash.pack())
             .build()
     }
 }
 
 impl From<packed::WithdrawalLockArgs> for WithdrawalLockArgs {
     fn from(data: packed::WithdrawalLockArgs) -> WithdrawalLockArgs {
-        let sell_capacity: u64 = data.sell_capacity().unpack();
-        let sell_amount: u128 = data.sell_amount().unpack();
         let withdrawal_block_number: u64 = data.withdrawal_block_number().unpack();
         Self {
-            sell_capacity: sell_capacity.into(),
-            sell_amount: sell_amount.into(),
-            sudt_script_hash: data.sudt_script_hash().unpack(),
             account_script_hash: data.account_script_hash().unpack(),
             owner_lock_hash: data.owner_lock_hash().unpack(),
-            payment_lock_hash: data.payment_lock_hash().unpack(),
             withdrawal_block_hash: data.withdrawal_block_hash().unpack(),
             withdrawal_block_number: withdrawal_block_number.into(),
         }

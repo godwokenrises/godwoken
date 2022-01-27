@@ -276,13 +276,27 @@ impl Generator {
     }
 
     /// Check withdrawal request signature
-    pub fn check_withdrawal_request_signature<S: State + CodeStore>(
+    pub fn check_withdrawal_signature<S: State + CodeStore>(
         &self,
         state: &S,
         withdrawal: &WithdrawalRequestExtra,
     ) -> Result<(), Error> {
         let raw = withdrawal.request().raw();
         let account_script_hash: [u8; 32] = raw.account_script_hash().unpack();
+
+        // check chain_id
+        let chain_id: u64 = raw.chain_id().unpack();
+        let rollup_chain_id = (chain_id >> 32) as u32;
+        let expected_rollup_chain_id: u32 = self
+            .rollup_context()
+            .rollup_config
+            .compatible_chain_id()
+            .unpack();
+        if expected_rollup_chain_id != rollup_chain_id {
+            return Err(
+                LockAlgorithmError::InvalidSignature("Wrong rollup_chain_id".to_string()).into(),
+            );
+        }
 
         // check signature
         let account_script = state
@@ -412,7 +426,7 @@ impl Generator {
                 request.owner_lock().hash()
             );
             let now = Instant::now();
-            if let Err(error) = self.check_withdrawal_request_signature(&state, &request) {
+            if let Err(error) = self.check_withdrawal_signature(&state, &request) {
                 let target = build_challenge_target(
                     block_hash.into(),
                     ChallengeTargetType::Withdrawal,
@@ -790,11 +804,7 @@ impl Generator {
                 .account_script_hash(req.raw().account_script_hash())
                 .withdrawal_block_hash(Into::<[u8; 32]>::into(*block_hash).pack())
                 .withdrawal_block_number(block_number.pack())
-                .sudt_script_hash(req.raw().sudt_script_hash())
-                .sell_amount(req.raw().sell_amount())
-                .sell_capacity(req.raw().sell_capacity())
                 .owner_lock_hash(req.raw().owner_lock_hash())
-                .payment_lock_hash(req.raw().payment_lock_hash())
                 .build();
 
             let mut args = Vec::new();
@@ -916,10 +926,7 @@ mod test {
                 .amount(20u128.pack())
                 .sudt_script_hash(sudt_script.hash().pack())
                 .account_script_hash(H256::from_u32(10).pack())
-                .sell_amount(99999u128.pack())
-                .sell_capacity(99999u64.pack())
                 .owner_lock_hash(owner_lock.hash().pack())
-                .payment_lock_hash(owner_lock.hash().pack())
                 .fee(fee)
                 .build();
             WithdrawalRequest::new_builder()
@@ -972,17 +979,7 @@ mod test {
         );
         assert_eq!(lock_args.withdrawal_block_hash(), block_hash.pack());
         assert_eq!(lock_args.withdrawal_block_number().unpack(), block_number);
-        assert_eq!(lock_args.sudt_script_hash(), sudt_script.hash().pack());
-        assert_eq!(
-            lock_args.sell_amount().unpack(),
-            req.raw().sell_amount().unpack()
-        );
-        assert_eq!(
-            lock_args.sell_capacity().unpack(),
-            req.raw().sell_capacity().unpack()
-        );
         assert_eq!(lock_args.owner_lock_hash(), owner_lock.hash().pack());
-        assert_eq!(lock_args.payment_lock_hash(), owner_lock.hash().pack());
 
         // ## None asset script
         let (output2, data2) = Generator::build_withdrawal_cell_output(

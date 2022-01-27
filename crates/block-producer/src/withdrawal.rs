@@ -358,10 +358,7 @@ mod test {
                 .amount(20u128.pack())
                 .sudt_script_hash(sudt_script.hash().pack())
                 .account_script_hash(H256::from_u32(10).pack())
-                .sell_amount(99999u128.pack())
-                .sell_capacity(99999u64.pack())
                 .owner_lock_hash(owner_lock.hash().pack())
-                .payment_lock_hash(owner_lock.hash().pack())
                 .fee(fee)
                 .build();
             WithdrawalRequest::new_builder()

@@ -5071,6 +5071,7 @@ impl ::core::fmt::Display for RawWithdrawalRequest {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "nonce", self.nonce())?;
+        write!(f, ", {}: {}", "chain_id", self.chain_id())?;
         write!(f, ", {}: {}", "capacity", self.capacity())?;
         write!(f, ", {}: {}", "amount", self.amount())?;
         write!(f, ", {}: {}", "sudt_script_hash", self.sudt_script_hash())?;
@@ -5080,10 +5081,7 @@ impl ::core::fmt::Display for RawWithdrawalRequest {
             "account_script_hash",
             self.account_script_hash()
         )?;
-        write!(f, ", {}: {}", "sell_amount", self.sell_amount())?;
-        write!(f, ", {}: {}", "sell_capacity", self.sell_capacity())?;
         write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
-        write!(f, ", {}: {}", "payment_lock_hash", self.payment_lock_hash())?;
         write!(f, ", {}: {}", "fee", self.fee())?;
         write!(f, " }}")
     }
@@ -5096,45 +5094,38 @@ impl ::core::default::Default for RawWithdrawalRequest {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
         ];
         RawWithdrawalRequest::new_unchecked(v.into())
     }
 }
 impl RawWithdrawalRequest {
-    pub const TOTAL_SIZE: usize = 200;
-    pub const FIELD_SIZES: [usize; 10] = [4, 8, 16, 32, 32, 16, 8, 32, 32, 20];
-    pub const FIELD_COUNT: usize = 10;
+    pub const TOTAL_SIZE: usize = 152;
+    pub const FIELD_SIZES: [usize; 8] = [4, 8, 8, 16, 32, 32, 32, 20];
+    pub const FIELD_COUNT: usize = 8;
     pub fn nonce(&self) -> Uint32 {
         Uint32::new_unchecked(self.0.slice(0..4))
     }
-    pub fn capacity(&self) -> Uint64 {
+    pub fn chain_id(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(4..12))
     }
+    pub fn capacity(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(12..20))
+    }
     pub fn amount(&self) -> Uint128 {
-        Uint128::new_unchecked(self.0.slice(12..28))
+        Uint128::new_unchecked(self.0.slice(20..36))
     }
     pub fn sudt_script_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(28..60))
+        Byte32::new_unchecked(self.0.slice(36..68))
     }
     pub fn account_script_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(60..92))
-    }
-    pub fn sell_amount(&self) -> Uint128 {
-        Uint128::new_unchecked(self.0.slice(92..108))
-    }
-    pub fn sell_capacity(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(108..116))
+        Byte32::new_unchecked(self.0.slice(68..100))
     }
     pub fn owner_lock_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(116..148))
-    }
-    pub fn payment_lock_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(148..180))
+        Byte32::new_unchecked(self.0.slice(100..132))
     }
     pub fn fee(&self) -> Fee {
-        Fee::new_unchecked(self.0.slice(180..200))
+        Fee::new_unchecked(self.0.slice(132..152))
     }
     pub fn as_reader<'r>(&'r self) -> RawWithdrawalRequestReader<'r> {
         RawWithdrawalRequestReader::new_unchecked(self.as_slice())
@@ -5164,14 +5155,12 @@ impl molecule::prelude::Entity for RawWithdrawalRequest {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .nonce(self.nonce())
+            .chain_id(self.chain_id())
             .capacity(self.capacity())
             .amount(self.amount())
             .sudt_script_hash(self.sudt_script_hash())
             .account_script_hash(self.account_script_hash())
-            .sell_amount(self.sell_amount())
-            .sell_capacity(self.sell_capacity())
             .owner_lock_hash(self.owner_lock_hash())
-            .payment_lock_hash(self.payment_lock_hash())
             .fee(self.fee())
     }
 }
@@ -5195,6 +5184,7 @@ impl<'r> ::core::fmt::Display for RawWithdrawalRequestReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "nonce", self.nonce())?;
+        write!(f, ", {}: {}", "chain_id", self.chain_id())?;
         write!(f, ", {}: {}", "capacity", self.capacity())?;
         write!(f, ", {}: {}", "amount", self.amount())?;
         write!(f, ", {}: {}", "sudt_script_hash", self.sudt_script_hash())?;
@@ -5204,47 +5194,38 @@ impl<'r> ::core::fmt::Display for RawWithdrawalRequestReader<'r> {
             "account_script_hash",
             self.account_script_hash()
         )?;
-        write!(f, ", {}: {}", "sell_amount", self.sell_amount())?;
-        write!(f, ", {}: {}", "sell_capacity", self.sell_capacity())?;
         write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
-        write!(f, ", {}: {}", "payment_lock_hash", self.payment_lock_hash())?;
         write!(f, ", {}: {}", "fee", self.fee())?;
         write!(f, " }}")
     }
 }
 impl<'r> RawWithdrawalRequestReader<'r> {
-    pub const TOTAL_SIZE: usize = 200;
-    pub const FIELD_SIZES: [usize; 10] = [4, 8, 16, 32, 32, 16, 8, 32, 32, 20];
-    pub const FIELD_COUNT: usize = 10;
+    pub const TOTAL_SIZE: usize = 152;
+    pub const FIELD_SIZES: [usize; 8] = [4, 8, 8, 16, 32, 32, 32, 20];
+    pub const FIELD_COUNT: usize = 8;
     pub fn nonce(&self) -> Uint32Reader<'r> {
         Uint32Reader::new_unchecked(&self.as_slice()[0..4])
     }
-    pub fn capacity(&self) -> Uint64Reader<'r> {
+    pub fn chain_id(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[4..12])
     }
+    pub fn capacity(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[12..20])
+    }
     pub fn amount(&self) -> Uint128Reader<'r> {
-        Uint128Reader::new_unchecked(&self.as_slice()[12..28])
+        Uint128Reader::new_unchecked(&self.as_slice()[20..36])
     }
     pub fn sudt_script_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[28..60])
+        Byte32Reader::new_unchecked(&self.as_slice()[36..68])
     }
     pub fn account_script_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[60..92])
-    }
-    pub fn sell_amount(&self) -> Uint128Reader<'r> {
-        Uint128Reader::new_unchecked(&self.as_slice()[92..108])
-    }
-    pub fn sell_capacity(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[108..116])
+        Byte32Reader::new_unchecked(&self.as_slice()[68..100])
     }
     pub fn owner_lock_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[116..148])
-    }
-    pub fn payment_lock_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[148..180])
+        Byte32Reader::new_unchecked(&self.as_slice()[100..132])
     }
     pub fn fee(&self) -> FeeReader<'r> {
-        FeeReader::new_unchecked(&self.as_slice()[180..200])
+        FeeReader::new_unchecked(&self.as_slice()[132..152])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for RawWithdrawalRequestReader<'r> {
@@ -5271,22 +5252,24 @@ impl<'r> molecule::prelude::Reader<'r> for RawWithdrawalRequestReader<'r> {
 #[derive(Debug, Default)]
 pub struct RawWithdrawalRequestBuilder {
     pub(crate) nonce: Uint32,
+    pub(crate) chain_id: Uint64,
     pub(crate) capacity: Uint64,
     pub(crate) amount: Uint128,
     pub(crate) sudt_script_hash: Byte32,
     pub(crate) account_script_hash: Byte32,
-    pub(crate) sell_amount: Uint128,
-    pub(crate) sell_capacity: Uint64,
     pub(crate) owner_lock_hash: Byte32,
-    pub(crate) payment_lock_hash: Byte32,
     pub(crate) fee: Fee,
 }
 impl RawWithdrawalRequestBuilder {
-    pub const TOTAL_SIZE: usize = 200;
-    pub const FIELD_SIZES: [usize; 10] = [4, 8, 16, 32, 32, 16, 8, 32, 32, 20];
-    pub const FIELD_COUNT: usize = 10;
+    pub const TOTAL_SIZE: usize = 152;
+    pub const FIELD_SIZES: [usize; 8] = [4, 8, 8, 16, 32, 32, 32, 20];
+    pub const FIELD_COUNT: usize = 8;
     pub fn nonce(mut self, v: Uint32) -> Self {
         self.nonce = v;
+        self
+    }
+    pub fn chain_id(mut self, v: Uint64) -> Self {
+        self.chain_id = v;
         self
     }
     pub fn capacity(mut self, v: Uint64) -> Self {
@@ -5305,20 +5288,8 @@ impl RawWithdrawalRequestBuilder {
         self.account_script_hash = v;
         self
     }
-    pub fn sell_amount(mut self, v: Uint128) -> Self {
-        self.sell_amount = v;
-        self
-    }
-    pub fn sell_capacity(mut self, v: Uint64) -> Self {
-        self.sell_capacity = v;
-        self
-    }
     pub fn owner_lock_hash(mut self, v: Byte32) -> Self {
         self.owner_lock_hash = v;
-        self
-    }
-    pub fn payment_lock_hash(mut self, v: Byte32) -> Self {
-        self.payment_lock_hash = v;
         self
     }
     pub fn fee(mut self, v: Fee) -> Self {
@@ -5334,14 +5305,12 @@ impl molecule::prelude::Builder for RawWithdrawalRequestBuilder {
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         writer.write_all(self.nonce.as_slice())?;
+        writer.write_all(self.chain_id.as_slice())?;
         writer.write_all(self.capacity.as_slice())?;
         writer.write_all(self.amount.as_slice())?;
         writer.write_all(self.sudt_script_hash.as_slice())?;
         writer.write_all(self.account_script_hash.as_slice())?;
-        writer.write_all(self.sell_amount.as_slice())?;
-        writer.write_all(self.sell_capacity.as_slice())?;
         writer.write_all(self.owner_lock_hash.as_slice())?;
-        writer.write_all(self.payment_lock_hash.as_slice())?;
         writer.write_all(self.fee.as_slice())?;
         Ok(())
     }
@@ -5724,14 +5693,12 @@ impl ::core::fmt::Display for WithdrawalRequest {
 impl ::core::default::Default for WithdrawalRequest {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            216, 0, 0, 0, 12, 0, 0, 0, 212, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            168, 0, 0, 0, 12, 0, 0, 0, 164, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         WithdrawalRequest::new_unchecked(v.into())
     }
@@ -7367,11 +7334,7 @@ impl ::core::fmt::Display for WithdrawalLockArgs {
             "withdrawal_block_number",
             self.withdrawal_block_number()
         )?;
-        write!(f, ", {}: {}", "sudt_script_hash", self.sudt_script_hash())?;
-        write!(f, ", {}: {}", "sell_amount", self.sell_amount())?;
-        write!(f, ", {}: {}", "sell_capacity", self.sell_capacity())?;
         write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
-        write!(f, ", {}: {}", "payment_lock_hash", self.payment_lock_hash())?;
         write!(f, " }}")
     }
 }
@@ -7381,18 +7344,15 @@ impl ::core::default::Default for WithdrawalLockArgs {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         WithdrawalLockArgs::new_unchecked(v.into())
     }
 }
 impl WithdrawalLockArgs {
-    pub const TOTAL_SIZE: usize = 192;
-    pub const FIELD_SIZES: [usize; 8] = [32, 32, 8, 32, 16, 8, 32, 32];
-    pub const FIELD_COUNT: usize = 8;
+    pub const TOTAL_SIZE: usize = 104;
+    pub const FIELD_SIZES: [usize; 4] = [32, 32, 8, 32];
+    pub const FIELD_COUNT: usize = 4;
     pub fn account_script_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
@@ -7402,20 +7362,8 @@ impl WithdrawalLockArgs {
     pub fn withdrawal_block_number(&self) -> Uint64 {
         Uint64::new_unchecked(self.0.slice(64..72))
     }
-    pub fn sudt_script_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(72..104))
-    }
-    pub fn sell_amount(&self) -> Uint128 {
-        Uint128::new_unchecked(self.0.slice(104..120))
-    }
-    pub fn sell_capacity(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(120..128))
-    }
     pub fn owner_lock_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(128..160))
-    }
-    pub fn payment_lock_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(160..192))
+        Byte32::new_unchecked(self.0.slice(72..104))
     }
     pub fn as_reader<'r>(&'r self) -> WithdrawalLockArgsReader<'r> {
         WithdrawalLockArgsReader::new_unchecked(self.as_slice())
@@ -7447,11 +7395,7 @@ impl molecule::prelude::Entity for WithdrawalLockArgs {
             .account_script_hash(self.account_script_hash())
             .withdrawal_block_hash(self.withdrawal_block_hash())
             .withdrawal_block_number(self.withdrawal_block_number())
-            .sudt_script_hash(self.sudt_script_hash())
-            .sell_amount(self.sell_amount())
-            .sell_capacity(self.sell_capacity())
             .owner_lock_hash(self.owner_lock_hash())
-            .payment_lock_hash(self.payment_lock_hash())
     }
 }
 #[derive(Clone, Copy)]
@@ -7491,18 +7435,14 @@ impl<'r> ::core::fmt::Display for WithdrawalLockArgsReader<'r> {
             "withdrawal_block_number",
             self.withdrawal_block_number()
         )?;
-        write!(f, ", {}: {}", "sudt_script_hash", self.sudt_script_hash())?;
-        write!(f, ", {}: {}", "sell_amount", self.sell_amount())?;
-        write!(f, ", {}: {}", "sell_capacity", self.sell_capacity())?;
         write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
-        write!(f, ", {}: {}", "payment_lock_hash", self.payment_lock_hash())?;
         write!(f, " }}")
     }
 }
 impl<'r> WithdrawalLockArgsReader<'r> {
-    pub const TOTAL_SIZE: usize = 192;
-    pub const FIELD_SIZES: [usize; 8] = [32, 32, 8, 32, 16, 8, 32, 32];
-    pub const FIELD_COUNT: usize = 8;
+    pub const TOTAL_SIZE: usize = 104;
+    pub const FIELD_SIZES: [usize; 4] = [32, 32, 8, 32];
+    pub const FIELD_COUNT: usize = 4;
     pub fn account_script_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
@@ -7512,20 +7452,8 @@ impl<'r> WithdrawalLockArgsReader<'r> {
     pub fn withdrawal_block_number(&self) -> Uint64Reader<'r> {
         Uint64Reader::new_unchecked(&self.as_slice()[64..72])
     }
-    pub fn sudt_script_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[72..104])
-    }
-    pub fn sell_amount(&self) -> Uint128Reader<'r> {
-        Uint128Reader::new_unchecked(&self.as_slice()[104..120])
-    }
-    pub fn sell_capacity(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[120..128])
-    }
     pub fn owner_lock_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[128..160])
-    }
-    pub fn payment_lock_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[160..192])
+        Byte32Reader::new_unchecked(&self.as_slice()[72..104])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for WithdrawalLockArgsReader<'r> {
@@ -7554,16 +7482,12 @@ pub struct WithdrawalLockArgsBuilder {
     pub(crate) account_script_hash: Byte32,
     pub(crate) withdrawal_block_hash: Byte32,
     pub(crate) withdrawal_block_number: Uint64,
-    pub(crate) sudt_script_hash: Byte32,
-    pub(crate) sell_amount: Uint128,
-    pub(crate) sell_capacity: Uint64,
     pub(crate) owner_lock_hash: Byte32,
-    pub(crate) payment_lock_hash: Byte32,
 }
 impl WithdrawalLockArgsBuilder {
-    pub const TOTAL_SIZE: usize = 192;
-    pub const FIELD_SIZES: [usize; 8] = [32, 32, 8, 32, 16, 8, 32, 32];
-    pub const FIELD_COUNT: usize = 8;
+    pub const TOTAL_SIZE: usize = 104;
+    pub const FIELD_SIZES: [usize; 4] = [32, 32, 8, 32];
+    pub const FIELD_COUNT: usize = 4;
     pub fn account_script_hash(mut self, v: Byte32) -> Self {
         self.account_script_hash = v;
         self
@@ -7576,24 +7500,8 @@ impl WithdrawalLockArgsBuilder {
         self.withdrawal_block_number = v;
         self
     }
-    pub fn sudt_script_hash(mut self, v: Byte32) -> Self {
-        self.sudt_script_hash = v;
-        self
-    }
-    pub fn sell_amount(mut self, v: Uint128) -> Self {
-        self.sell_amount = v;
-        self
-    }
-    pub fn sell_capacity(mut self, v: Uint64) -> Self {
-        self.sell_capacity = v;
-        self
-    }
     pub fn owner_lock_hash(mut self, v: Byte32) -> Self {
         self.owner_lock_hash = v;
-        self
-    }
-    pub fn payment_lock_hash(mut self, v: Byte32) -> Self {
-        self.payment_lock_hash = v;
         self
     }
 }
@@ -7607,11 +7515,7 @@ impl molecule::prelude::Builder for WithdrawalLockArgsBuilder {
         writer.write_all(self.account_script_hash.as_slice())?;
         writer.write_all(self.withdrawal_block_hash.as_slice())?;
         writer.write_all(self.withdrawal_block_number.as_slice())?;
-        writer.write_all(self.sudt_script_hash.as_slice())?;
-        writer.write_all(self.sell_amount.as_slice())?;
-        writer.write_all(self.sell_capacity.as_slice())?;
         writer.write_all(self.owner_lock_hash.as_slice())?;
-        writer.write_all(self.payment_lock_hash.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -7651,7 +7555,7 @@ impl ::core::default::Default for UnlockWithdrawalWitness {
     }
 }
 impl UnlockWithdrawalWitness {
-    pub const ITEMS_COUNT: usize = 3;
+    pub const ITEMS_COUNT: usize = 2;
     pub fn item_id(&self) -> molecule::Number {
         molecule::unpack_number(self.as_slice())
     }
@@ -7660,7 +7564,6 @@ impl UnlockWithdrawalWitness {
         match self.item_id() {
             0 => UnlockWithdrawalViaFinalize::new_unchecked(inner).into(),
             1 => UnlockWithdrawalViaRevert::new_unchecked(inner).into(),
-            2 => UnlockWithdrawalViaTrade::new_unchecked(inner).into(),
             _ => panic!("{}: invalid data", Self::NAME),
         }
     }
@@ -7717,7 +7620,7 @@ impl<'r> ::core::fmt::Display for UnlockWithdrawalWitnessReader<'r> {
     }
 }
 impl<'r> UnlockWithdrawalWitnessReader<'r> {
-    pub const ITEMS_COUNT: usize = 3;
+    pub const ITEMS_COUNT: usize = 2;
     pub fn item_id(&self) -> molecule::Number {
         molecule::unpack_number(self.as_slice())
     }
@@ -7726,7 +7629,6 @@ impl<'r> UnlockWithdrawalWitnessReader<'r> {
         match self.item_id() {
             0 => UnlockWithdrawalViaFinalizeReader::new_unchecked(inner).into(),
             1 => UnlockWithdrawalViaRevertReader::new_unchecked(inner).into(),
-            2 => UnlockWithdrawalViaTradeReader::new_unchecked(inner).into(),
             _ => panic!("{}: invalid data", Self::NAME),
         }
     }
@@ -7754,7 +7656,6 @@ impl<'r> molecule::prelude::Reader<'r> for UnlockWithdrawalWitnessReader<'r> {
         match item_id {
             0 => UnlockWithdrawalViaFinalizeReader::verify(inner_slice, compatible),
             1 => UnlockWithdrawalViaRevertReader::verify(inner_slice, compatible),
-            2 => UnlockWithdrawalViaTradeReader::verify(inner_slice, compatible),
             _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
         }?;
         Ok(())
@@ -7763,7 +7664,7 @@ impl<'r> molecule::prelude::Reader<'r> for UnlockWithdrawalWitnessReader<'r> {
 #[derive(Debug, Default)]
 pub struct UnlockWithdrawalWitnessBuilder(pub(crate) UnlockWithdrawalWitnessUnion);
 impl UnlockWithdrawalWitnessBuilder {
-    pub const ITEMS_COUNT: usize = 3;
+    pub const ITEMS_COUNT: usize = 2;
     pub fn set<I>(mut self, v: I) -> Self
     where
         I: ::core::convert::Into<UnlockWithdrawalWitnessUnion>,
@@ -7793,13 +7694,11 @@ impl molecule::prelude::Builder for UnlockWithdrawalWitnessBuilder {
 pub enum UnlockWithdrawalWitnessUnion {
     UnlockWithdrawalViaFinalize(UnlockWithdrawalViaFinalize),
     UnlockWithdrawalViaRevert(UnlockWithdrawalViaRevert),
-    UnlockWithdrawalViaTrade(UnlockWithdrawalViaTrade),
 }
 #[derive(Debug, Clone, Copy)]
 pub enum UnlockWithdrawalWitnessUnionReader<'r> {
     UnlockWithdrawalViaFinalize(UnlockWithdrawalViaFinalizeReader<'r>),
     UnlockWithdrawalViaRevert(UnlockWithdrawalViaRevertReader<'r>),
-    UnlockWithdrawalViaTrade(UnlockWithdrawalViaTradeReader<'r>),
 }
 impl ::core::default::Default for UnlockWithdrawalWitnessUnion {
     fn default() -> Self {
@@ -7829,15 +7728,6 @@ impl ::core::fmt::Display for UnlockWithdrawalWitnessUnion {
                     item
                 )
             }
-            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(ref item) => {
-                write!(
-                    f,
-                    "{}::{}({})",
-                    Self::NAME,
-                    UnlockWithdrawalViaTrade::NAME,
-                    item
-                )
-            }
         }
     }
 }
@@ -7862,15 +7752,6 @@ impl<'r> ::core::fmt::Display for UnlockWithdrawalWitnessUnionReader<'r> {
                     item
                 )
             }
-            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(ref item) => {
-                write!(
-                    f,
-                    "{}::{}({})",
-                    Self::NAME,
-                    UnlockWithdrawalViaTrade::NAME,
-                    item
-                )
-            }
         }
     }
 }
@@ -7881,9 +7762,6 @@ impl UnlockWithdrawalWitnessUnion {
                 write!(f, "{}", item)
             }
             UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(ref item) => {
-                write!(f, "{}", item)
-            }
-            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(ref item) => {
                 write!(f, "{}", item)
             }
         }
@@ -7898,9 +7776,6 @@ impl<'r> UnlockWithdrawalWitnessUnionReader<'r> {
             UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaRevert(ref item) => {
                 write!(f, "{}", item)
             }
-            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(ref item) => {
-                write!(f, "{}", item)
-            }
         }
     }
 }
@@ -7912,11 +7787,6 @@ impl ::core::convert::From<UnlockWithdrawalViaFinalize> for UnlockWithdrawalWitn
 impl ::core::convert::From<UnlockWithdrawalViaRevert> for UnlockWithdrawalWitnessUnion {
     fn from(item: UnlockWithdrawalViaRevert) -> Self {
         UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(item)
-    }
-}
-impl ::core::convert::From<UnlockWithdrawalViaTrade> for UnlockWithdrawalWitnessUnion {
-    fn from(item: UnlockWithdrawalViaTrade) -> Self {
-        UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(item)
     }
 }
 impl<'r> ::core::convert::From<UnlockWithdrawalViaFinalizeReader<'r>>
@@ -7933,34 +7803,24 @@ impl<'r> ::core::convert::From<UnlockWithdrawalViaRevertReader<'r>>
         UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaRevert(item)
     }
 }
-impl<'r> ::core::convert::From<UnlockWithdrawalViaTradeReader<'r>>
-    for UnlockWithdrawalWitnessUnionReader<'r>
-{
-    fn from(item: UnlockWithdrawalViaTradeReader<'r>) -> Self {
-        UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(item)
-    }
-}
 impl UnlockWithdrawalWitnessUnion {
     pub const NAME: &'static str = "UnlockWithdrawalWitnessUnion";
     pub fn as_bytes(&self) -> molecule::bytes::Bytes {
         match self {
             UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(item) => item.as_bytes(),
             UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(item) => item.as_bytes(),
-            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(item) => item.as_bytes(),
         }
     }
     pub fn as_slice(&self) -> &[u8] {
         match self {
             UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(item) => item.as_slice(),
             UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(item) => item.as_slice(),
-            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(item) => item.as_slice(),
         }
     }
     pub fn item_id(&self) -> molecule::Number {
         match self {
             UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaFinalize(_) => 0,
             UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(_) => 1,
-            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(_) => 2,
         }
     }
     pub fn item_name(&self) -> &str {
@@ -7971,7 +7831,6 @@ impl UnlockWithdrawalWitnessUnion {
             UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(_) => {
                 "UnlockWithdrawalViaRevert"
             }
-            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(_) => "UnlockWithdrawalViaTrade",
         }
     }
     pub fn as_reader<'r>(&'r self) -> UnlockWithdrawalWitnessUnionReader<'r> {
@@ -7982,7 +7841,6 @@ impl UnlockWithdrawalWitnessUnion {
             UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaRevert(item) => {
                 item.as_reader().into()
             }
-            UnlockWithdrawalWitnessUnion::UnlockWithdrawalViaTrade(item) => item.as_reader().into(),
         }
     }
 }
@@ -7994,14 +7852,12 @@ impl<'r> UnlockWithdrawalWitnessUnionReader<'r> {
                 item.as_slice()
             }
             UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaRevert(item) => item.as_slice(),
-            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(item) => item.as_slice(),
         }
     }
     pub fn item_id(&self) -> molecule::Number {
         match self {
             UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaFinalize(_) => 0,
             UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaRevert(_) => 1,
-            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(_) => 2,
         }
     }
     pub fn item_name(&self) -> &str {
@@ -8011,9 +7867,6 @@ impl<'r> UnlockWithdrawalWitnessUnionReader<'r> {
             }
             UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaRevert(_) => {
                 "UnlockWithdrawalViaRevert"
-            }
-            UnlockWithdrawalWitnessUnionReader::UnlockWithdrawalViaTrade(_) => {
-                "UnlockWithdrawalViaTrade"
             }
         }
     }
@@ -8354,246 +8207,6 @@ impl molecule::prelude::Builder for UnlockWithdrawalViaRevertBuilder {
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
         UnlockWithdrawalViaRevert::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct UnlockWithdrawalViaTrade(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for UnlockWithdrawalViaTrade {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for UnlockWithdrawalViaTrade {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for UnlockWithdrawalViaTrade {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "owner_lock", self.owner_lock())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for UnlockWithdrawalViaTrade {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            61, 0, 0, 0, 8, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0,
-        ];
-        UnlockWithdrawalViaTrade::new_unchecked(v.into())
-    }
-}
-impl UnlockWithdrawalViaTrade {
-    pub const FIELD_COUNT: usize = 1;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn owner_lock(&self) -> Script {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[8..]) as usize;
-            Script::new_unchecked(self.0.slice(start..end))
-        } else {
-            Script::new_unchecked(self.0.slice(start..))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> UnlockWithdrawalViaTradeReader<'r> {
-        UnlockWithdrawalViaTradeReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for UnlockWithdrawalViaTrade {
-    type Builder = UnlockWithdrawalViaTradeBuilder;
-    const NAME: &'static str = "UnlockWithdrawalViaTrade";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        UnlockWithdrawalViaTrade(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        UnlockWithdrawalViaTradeReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        UnlockWithdrawalViaTradeReader::from_compatible_slice(slice)
-            .map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().owner_lock(self.owner_lock())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct UnlockWithdrawalViaTradeReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for UnlockWithdrawalViaTradeReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for UnlockWithdrawalViaTradeReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for UnlockWithdrawalViaTradeReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "owner_lock", self.owner_lock())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl<'r> UnlockWithdrawalViaTradeReader<'r> {
-    pub const FIELD_COUNT: usize = 1;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn owner_lock(&self) -> ScriptReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[8..]) as usize;
-            ScriptReader::new_unchecked(&self.as_slice()[start..end])
-        } else {
-            ScriptReader::new_unchecked(&self.as_slice()[start..])
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for UnlockWithdrawalViaTradeReader<'r> {
-    type Entity = UnlockWithdrawalViaTrade;
-    const NAME: &'static str = "UnlockWithdrawalViaTradeReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        UnlockWithdrawalViaTradeReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        if slice_len < offset_first {
-            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
-        }
-        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
-        if field_count < Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        } else if !compatible && field_count > Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        };
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
-            .chunks_exact(molecule::NUMBER_SIZE)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        ScriptReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct UnlockWithdrawalViaTradeBuilder {
-    pub(crate) owner_lock: Script,
-}
-impl UnlockWithdrawalViaTradeBuilder {
-    pub const FIELD_COUNT: usize = 1;
-    pub fn owner_lock(mut self, v: Script) -> Self {
-        self.owner_lock = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for UnlockWithdrawalViaTradeBuilder {
-    type Entity = UnlockWithdrawalViaTrade;
-    const NAME: &'static str = "UnlockWithdrawalViaTradeBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1) + self.owner_lock.as_slice().len()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
-        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.owner_lock.as_slice().len();
-        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-        for offset in offsets.into_iter() {
-            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-        }
-        writer.write_all(self.owner_lock.as_slice())?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        UnlockWithdrawalViaTrade::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -13031,7 +12644,7 @@ impl ::core::fmt::Display for CCWithdrawalWitness {
 impl ::core::default::Default for CCWithdrawalWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            162, 2, 0, 0, 24, 0, 0, 0, 76, 1, 0, 0, 36, 2, 0, 0, 89, 2, 0, 0, 142, 2, 0, 0, 52, 1,
+            114, 2, 0, 0, 24, 0, 0, 0, 76, 1, 0, 0, 244, 1, 0, 0, 41, 2, 0, 0, 94, 2, 0, 0, 52, 1,
             0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0, 0, 0, 128, 0, 0, 0,
             164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -13042,19 +12655,18 @@ impl ::core::default::Default for CCWithdrawalWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 216, 0, 0, 0, 12, 0,
-            0, 0, 212, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 168, 0, 0, 0, 12, 0,
+            0, 0, 164, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0,
+            0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0,
         ];
         CCWithdrawalWitness::new_unchecked(v.into())
     }

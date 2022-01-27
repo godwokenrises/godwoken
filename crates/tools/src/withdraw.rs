@@ -45,8 +45,6 @@ pub fn withdraw(
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
 
-    let sell_capacity = 100u64 * 10u64.pow(8);
-
     let config = read_config(&config_path)?;
     let rollup_type_hash = &config.genesis.rollup_type_hash;
 
@@ -60,8 +58,6 @@ pub fn withdraw(
         );
         return Err(msg);
     }
-
-    let payment_lock_hash = H256::from([0u8; 32]);
 
     // owner_ckb_address -> owner_lock_hash
     let owner_lock_script = {
@@ -93,10 +89,7 @@ pub fn withdraw(
         &fee,
         &sudt_script_hash,
         &account_script_hash,
-        &sell_capacity,
-        &0u128,
         &owner_lock_hash,
-        &payment_lock_hash,
     )?;
 
     let message = generate_withdrawal_message_to_sign(&raw_request, rollup_type_hash);
@@ -134,10 +127,7 @@ fn create_raw_withdrawal_request(
     fee: &u64,
     sudt_script_hash: &H256,
     account_script_hash: &H256,
-    sell_capacity: &u64,
-    sell_amount: &u128,
     owner_lock_hash: &H256,
-    payment_lock_hash: &H256,
 ) -> Result<RawWithdrawalRequest> {
     let fee = gw_types::packed::Fee::new_builder()
         .amount(GwPack::pack(&(*fee as u128)))
@@ -150,10 +140,7 @@ fn create_raw_withdrawal_request(
         .amount(GwPack::pack(amount))
         .sudt_script_hash(h256_to_byte32(sudt_script_hash)?)
         .account_script_hash(h256_to_byte32(account_script_hash)?)
-        .sell_capacity(GwPack::pack(sell_capacity))
-        .sell_amount(GwPack::pack(sell_amount))
         .owner_lock_hash(h256_to_byte32(owner_lock_hash)?)
-        .payment_lock_hash(h256_to_byte32(payment_lock_hash)?)
         .fee(fee)
         .build();
 
@@ -227,11 +214,7 @@ fn minimal_withdrawal_capacity(is_sudt: bool) -> Result<u64> {
         .account_script_hash(dummy_hash.pack())
         .withdrawal_block_hash(dummy_hash.pack())
         .withdrawal_block_number(dummy_block_number.pack())
-        .sudt_script_hash(dummy_hash.pack())
-        .sell_amount(0.pack())
-        .sell_capacity(0.pack())
         .owner_lock_hash(dummy_hash.pack())
-        .payment_lock_hash(dummy_hash.pack())
         .build();
 
     let args: gw_types::bytes::Bytes = dummy_rollup_type_hash
