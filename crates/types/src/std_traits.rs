@@ -77,7 +77,7 @@ impl_std_eq!(RollupConfig);
 impl_std_eq!(StakeLockArgs);
 impl_std_eq!(L2Transaction);
 impl_std_eq!(WithdrawalRequest);
-impl_std_eq!(VerifyTransactionWitness);
+impl_std_eq!(CCTransactionWitness);
 impl_std_eq!(AccountMerkleState);
 
 /* readers */
@@ -95,7 +95,7 @@ impl_std_reader_eq!(RollupConfigReader);
 impl_std_reader_eq!(StakeLockArgsReader);
 impl_std_reader_eq!(L2TransactionReader);
 impl_std_reader_eq!(WithdrawalRequestReader);
-impl_std_reader_eq!(VerifyTransactionWitnessReader);
+impl_std_reader_eq!(CCTransactionWitnessReader);
 impl_std_reader_eq!(AccountMerkleStateReader);
 
 cfg_if::cfg_if! {

@@ -11784,373 +11784,6 @@ impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for BlockHashEntryVecReaderIter
     }
 }
 #[derive(Clone)]
-pub struct VerifyTransactionContext(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for VerifyTransactionContext {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for VerifyTransactionContext {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for VerifyTransactionContext {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "account_count", self.account_count())?;
-        write!(f, ", {}: {}", "kv_state", self.kv_state())?;
-        write!(f, ", {}: {}", "load_data", self.load_data())?;
-        write!(f, ", {}: {}", "scripts", self.scripts())?;
-        write!(f, ", {}: {}", "return_data_hash", self.return_data_hash())?;
-        write!(f, ", {}: {}", "block_hashes", self.block_hashes())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for VerifyTransactionContext {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            80, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 36, 0, 0, 0, 40, 0, 0, 0, 44, 0, 0, 0, 76, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-        VerifyTransactionContext::new_unchecked(v.into())
-    }
-}
-impl VerifyTransactionContext {
-    pub const FIELD_COUNT: usize = 6;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn account_count(&self) -> Uint32 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        Uint32::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn kv_state(&self) -> KVPairVec {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        KVPairVec::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn load_data(&self) -> BytesVec {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
-        BytesVec::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn scripts(&self) -> ScriptVec {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
-        let end = molecule::unpack_number(&slice[20..]) as usize;
-        ScriptVec::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn return_data_hash(&self) -> Byte32 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[20..]) as usize;
-        let end = molecule::unpack_number(&slice[24..]) as usize;
-        Byte32::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn block_hashes(&self) -> BlockHashEntryVec {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[24..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[28..]) as usize;
-            BlockHashEntryVec::new_unchecked(self.0.slice(start..end))
-        } else {
-            BlockHashEntryVec::new_unchecked(self.0.slice(start..))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> VerifyTransactionContextReader<'r> {
-        VerifyTransactionContextReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for VerifyTransactionContext {
-    type Builder = VerifyTransactionContextBuilder;
-    const NAME: &'static str = "VerifyTransactionContext";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        VerifyTransactionContext(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        VerifyTransactionContextReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        VerifyTransactionContextReader::from_compatible_slice(slice)
-            .map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .account_count(self.account_count())
-            .kv_state(self.kv_state())
-            .load_data(self.load_data())
-            .scripts(self.scripts())
-            .return_data_hash(self.return_data_hash())
-            .block_hashes(self.block_hashes())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct VerifyTransactionContextReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for VerifyTransactionContextReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for VerifyTransactionContextReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for VerifyTransactionContextReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "account_count", self.account_count())?;
-        write!(f, ", {}: {}", "kv_state", self.kv_state())?;
-        write!(f, ", {}: {}", "load_data", self.load_data())?;
-        write!(f, ", {}: {}", "scripts", self.scripts())?;
-        write!(f, ", {}: {}", "return_data_hash", self.return_data_hash())?;
-        write!(f, ", {}: {}", "block_hashes", self.block_hashes())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl<'r> VerifyTransactionContextReader<'r> {
-    pub const FIELD_COUNT: usize = 6;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn account_count(&self) -> Uint32Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        Uint32Reader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn kv_state(&self) -> KVPairVecReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        KVPairVecReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn load_data(&self) -> BytesVecReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
-        BytesVecReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn scripts(&self) -> ScriptVecReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
-        let end = molecule::unpack_number(&slice[20..]) as usize;
-        ScriptVecReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn return_data_hash(&self) -> Byte32Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[20..]) as usize;
-        let end = molecule::unpack_number(&slice[24..]) as usize;
-        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn block_hashes(&self) -> BlockHashEntryVecReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[24..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[28..]) as usize;
-            BlockHashEntryVecReader::new_unchecked(&self.as_slice()[start..end])
-        } else {
-            BlockHashEntryVecReader::new_unchecked(&self.as_slice()[start..])
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for VerifyTransactionContextReader<'r> {
-    type Entity = VerifyTransactionContext;
-    const NAME: &'static str = "VerifyTransactionContextReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        VerifyTransactionContextReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        if slice_len < offset_first {
-            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
-        }
-        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
-        if field_count < Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        } else if !compatible && field_count > Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        };
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
-            .chunks_exact(molecule::NUMBER_SIZE)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        Uint32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        KVPairVecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        BytesVecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        ScriptVecReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
-        Byte32Reader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
-        BlockHashEntryVecReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct VerifyTransactionContextBuilder {
-    pub(crate) account_count: Uint32,
-    pub(crate) kv_state: KVPairVec,
-    pub(crate) load_data: BytesVec,
-    pub(crate) scripts: ScriptVec,
-    pub(crate) return_data_hash: Byte32,
-    pub(crate) block_hashes: BlockHashEntryVec,
-}
-impl VerifyTransactionContextBuilder {
-    pub const FIELD_COUNT: usize = 6;
-    pub fn account_count(mut self, v: Uint32) -> Self {
-        self.account_count = v;
-        self
-    }
-    pub fn kv_state(mut self, v: KVPairVec) -> Self {
-        self.kv_state = v;
-        self
-    }
-    pub fn load_data(mut self, v: BytesVec) -> Self {
-        self.load_data = v;
-        self
-    }
-    pub fn scripts(mut self, v: ScriptVec) -> Self {
-        self.scripts = v;
-        self
-    }
-    pub fn return_data_hash(mut self, v: Byte32) -> Self {
-        self.return_data_hash = v;
-        self
-    }
-    pub fn block_hashes(mut self, v: BlockHashEntryVec) -> Self {
-        self.block_hashes = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for VerifyTransactionContextBuilder {
-    type Entity = VerifyTransactionContext;
-    const NAME: &'static str = "VerifyTransactionContextBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.account_count.as_slice().len()
-            + self.kv_state.as_slice().len()
-            + self.load_data.as_slice().len()
-            + self.scripts.as_slice().len()
-            + self.return_data_hash.as_slice().len()
-            + self.block_hashes.as_slice().len()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
-        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.account_count.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.kv_state.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.load_data.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.scripts.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.return_data_hash.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.block_hashes.as_slice().len();
-        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-        for offset in offsets.into_iter() {
-            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-        }
-        writer.write_all(self.account_count.as_slice())?;
-        writer.write_all(self.kv_state.as_slice())?;
-        writer.write_all(self.load_data.as_slice())?;
-        writer.write_all(self.scripts.as_slice())?;
-        writer.write_all(self.return_data_hash.as_slice())?;
-        writer.write_all(self.block_hashes.as_slice())?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        VerifyTransactionContext::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
 pub struct CKBMerkleProof(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for CKBMerkleProof {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -12415,8 +12048,8 @@ impl molecule::prelude::Builder for CKBMerkleProofBuilder {
     }
 }
 #[derive(Clone)]
-pub struct VerifyTransactionWitness(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for VerifyTransactionWitness {
+pub struct CCTransactionWitness(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for CCTransactionWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -12425,12 +12058,12 @@ impl ::core::fmt::LowerHex for VerifyTransactionWitness {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for VerifyTransactionWitness {
+impl ::core::fmt::Debug for CCTransactionWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for VerifyTransactionWitness {
+impl ::core::fmt::Display for CCTransactionWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "l2tx", self.l2tx())?;
@@ -12443,7 +12076,12 @@ impl ::core::fmt::Display for VerifyTransactionWitness {
             "block_hashes_proof",
             self.block_hashes_proof()
         )?;
-        write!(f, ", {}: {}", "context", self.context())?;
+        write!(f, ", {}: {}", "account_count", self.account_count())?;
+        write!(f, ", {}: {}", "kv_state", self.kv_state())?;
+        write!(f, ", {}: {}", "load_data", self.load_data())?;
+        write!(f, ", {}: {}", "scripts", self.scripts())?;
+        write!(f, ", {}: {}", "return_data_hash", self.return_data_hash())?;
+        write!(f, ", {}: {}", "block_hashes", self.block_hashes())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -12451,14 +12089,15 @@ impl ::core::fmt::Display for VerifyTransactionWitness {
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for VerifyTransactionWitness {
+impl ::core::default::Default for CCTransactionWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            240, 1, 0, 0, 28, 0, 0, 0, 80, 0, 0, 0, 132, 1, 0, 0, 152, 1, 0, 0, 156, 1, 0, 0, 160,
-            1, 0, 0, 52, 0, 0, 0, 12, 0, 0, 0, 48, 0, 0, 0, 36, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0,
-            28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            52, 1, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0, 0, 0, 128, 0,
-            0, 0, 164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            232, 1, 0, 0, 48, 0, 0, 0, 100, 0, 0, 0, 152, 1, 0, 0, 172, 1, 0, 0, 176, 1, 0, 0, 180,
+            1, 0, 0, 184, 1, 0, 0, 188, 1, 0, 0, 192, 1, 0, 0, 196, 1, 0, 0, 228, 1, 0, 0, 52, 0,
+            0, 0, 12, 0, 0, 0, 48, 0, 0, 0, 36, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 52, 1, 0, 0, 44,
+            0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0, 0, 0, 128, 0, 0, 0, 164, 0, 0,
+            0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -12467,17 +12106,16 @@ impl ::core::default::Default for VerifyTransactionWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0,
-            12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 80, 0, 0, 0,
-            28, 0, 0, 0, 32, 0, 0, 0, 36, 0, 0, 0, 40, 0, 0, 0, 44, 0, 0, 0, 76, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 12, 0, 0, 0, 16, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0,
+            0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
-        VerifyTransactionWitness::new_unchecked(v.into())
+        CCTransactionWitness::new_unchecked(v.into())
     }
 }
-impl VerifyTransactionWitness {
-    pub const FIELD_COUNT: usize = 6;
+impl CCTransactionWitness {
+    pub const FIELD_COUNT: usize = 11;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -12524,25 +12162,55 @@ impl VerifyTransactionWitness {
         let end = molecule::unpack_number(&slice[24..]) as usize;
         Bytes::new_unchecked(self.0.slice(start..end))
     }
-    pub fn context(&self) -> VerifyTransactionContext {
+    pub fn account_count(&self) -> Uint32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        Uint32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn kv_state(&self) -> KVPairVec {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
+        let end = molecule::unpack_number(&slice[32..]) as usize;
+        KVPairVec::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn load_data(&self) -> BytesVec {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[32..]) as usize;
+        let end = molecule::unpack_number(&slice[36..]) as usize;
+        BytesVec::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn scripts(&self) -> ScriptVec {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[36..]) as usize;
+        let end = molecule::unpack_number(&slice[40..]) as usize;
+        ScriptVec::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn return_data_hash(&self) -> Byte32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[40..]) as usize;
+        let end = molecule::unpack_number(&slice[44..]) as usize;
+        Byte32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn block_hashes(&self) -> BlockHashEntryVec {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[44..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[28..]) as usize;
-            VerifyTransactionContext::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[48..]) as usize;
+            BlockHashEntryVec::new_unchecked(self.0.slice(start..end))
         } else {
-            VerifyTransactionContext::new_unchecked(self.0.slice(start..))
+            BlockHashEntryVec::new_unchecked(self.0.slice(start..))
         }
     }
-    pub fn as_reader<'r>(&'r self) -> VerifyTransactionWitnessReader<'r> {
-        VerifyTransactionWitnessReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> CCTransactionWitnessReader<'r> {
+        CCTransactionWitnessReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for VerifyTransactionWitness {
-    type Builder = VerifyTransactionWitnessBuilder;
-    const NAME: &'static str = "VerifyTransactionWitness";
+impl molecule::prelude::Entity for CCTransactionWitness {
+    type Builder = CCTransactionWitnessBuilder;
+    const NAME: &'static str = "CCTransactionWitness";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        VerifyTransactionWitness(data)
+        CCTransactionWitness(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -12551,11 +12219,10 @@ impl molecule::prelude::Entity for VerifyTransactionWitness {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        VerifyTransactionWitnessReader::from_slice(slice).map(|reader| reader.to_entity())
+        CCTransactionWitnessReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        VerifyTransactionWitnessReader::from_compatible_slice(slice)
-            .map(|reader| reader.to_entity())
+        CCTransactionWitnessReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -12567,12 +12234,17 @@ impl molecule::prelude::Entity for VerifyTransactionWitness {
             .tx_proof(self.tx_proof())
             .kv_state_proof(self.kv_state_proof())
             .block_hashes_proof(self.block_hashes_proof())
-            .context(self.context())
+            .account_count(self.account_count())
+            .kv_state(self.kv_state())
+            .load_data(self.load_data())
+            .scripts(self.scripts())
+            .return_data_hash(self.return_data_hash())
+            .block_hashes(self.block_hashes())
     }
 }
 #[derive(Clone, Copy)]
-pub struct VerifyTransactionWitnessReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for VerifyTransactionWitnessReader<'r> {
+pub struct CCTransactionWitnessReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for CCTransactionWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -12581,12 +12253,12 @@ impl<'r> ::core::fmt::LowerHex for VerifyTransactionWitnessReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for VerifyTransactionWitnessReader<'r> {
+impl<'r> ::core::fmt::Debug for CCTransactionWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for VerifyTransactionWitnessReader<'r> {
+impl<'r> ::core::fmt::Display for CCTransactionWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "l2tx", self.l2tx())?;
@@ -12599,7 +12271,12 @@ impl<'r> ::core::fmt::Display for VerifyTransactionWitnessReader<'r> {
             "block_hashes_proof",
             self.block_hashes_proof()
         )?;
-        write!(f, ", {}: {}", "context", self.context())?;
+        write!(f, ", {}: {}", "account_count", self.account_count())?;
+        write!(f, ", {}: {}", "kv_state", self.kv_state())?;
+        write!(f, ", {}: {}", "load_data", self.load_data())?;
+        write!(f, ", {}: {}", "scripts", self.scripts())?;
+        write!(f, ", {}: {}", "return_data_hash", self.return_data_hash())?;
+        write!(f, ", {}: {}", "block_hashes", self.block_hashes())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -12607,8 +12284,8 @@ impl<'r> ::core::fmt::Display for VerifyTransactionWitnessReader<'r> {
         write!(f, " }}")
     }
 }
-impl<'r> VerifyTransactionWitnessReader<'r> {
-    pub const FIELD_COUNT: usize = 6;
+impl<'r> CCTransactionWitnessReader<'r> {
+    pub const FIELD_COUNT: usize = 11;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -12655,25 +12332,55 @@ impl<'r> VerifyTransactionWitnessReader<'r> {
         let end = molecule::unpack_number(&slice[24..]) as usize;
         BytesReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn context(&self) -> VerifyTransactionContextReader<'r> {
+    pub fn account_count(&self) -> Uint32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        Uint32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn kv_state(&self) -> KVPairVecReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
+        let end = molecule::unpack_number(&slice[32..]) as usize;
+        KVPairVecReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn load_data(&self) -> BytesVecReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[32..]) as usize;
+        let end = molecule::unpack_number(&slice[36..]) as usize;
+        BytesVecReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn scripts(&self) -> ScriptVecReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[36..]) as usize;
+        let end = molecule::unpack_number(&slice[40..]) as usize;
+        ScriptVecReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn return_data_hash(&self) -> Byte32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[40..]) as usize;
+        let end = molecule::unpack_number(&slice[44..]) as usize;
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn block_hashes(&self) -> BlockHashEntryVecReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[44..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[28..]) as usize;
-            VerifyTransactionContextReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[48..]) as usize;
+            BlockHashEntryVecReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            VerifyTransactionContextReader::new_unchecked(&self.as_slice()[start..])
+            BlockHashEntryVecReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for VerifyTransactionWitnessReader<'r> {
-    type Entity = VerifyTransactionWitness;
-    const NAME: &'static str = "VerifyTransactionWitnessReader";
+impl<'r> molecule::prelude::Reader<'r> for CCTransactionWitnessReader<'r> {
+    type Entity = CCTransactionWitness;
+    const NAME: &'static str = "CCTransactionWitnessReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        VerifyTransactionWitnessReader(slice)
+        CCTransactionWitnessReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -12720,21 +12427,31 @@ impl<'r> molecule::prelude::Reader<'r> for VerifyTransactionWitnessReader<'r> {
         CKBMerkleProofReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         BytesReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         BytesReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
-        VerifyTransactionContextReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
+        Uint32Reader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
+        KVPairVecReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
+        BytesVecReader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
+        ScriptVecReader::verify(&slice[offsets[8]..offsets[9]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[9]..offsets[10]], compatible)?;
+        BlockHashEntryVecReader::verify(&slice[offsets[10]..offsets[11]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
-pub struct VerifyTransactionWitnessBuilder {
+pub struct CCTransactionWitnessBuilder {
     pub(crate) l2tx: L2Transaction,
     pub(crate) raw_l2block: RawL2Block,
     pub(crate) tx_proof: CKBMerkleProof,
     pub(crate) kv_state_proof: Bytes,
     pub(crate) block_hashes_proof: Bytes,
-    pub(crate) context: VerifyTransactionContext,
+    pub(crate) account_count: Uint32,
+    pub(crate) kv_state: KVPairVec,
+    pub(crate) load_data: BytesVec,
+    pub(crate) scripts: ScriptVec,
+    pub(crate) return_data_hash: Byte32,
+    pub(crate) block_hashes: BlockHashEntryVec,
 }
-impl VerifyTransactionWitnessBuilder {
-    pub const FIELD_COUNT: usize = 6;
+impl CCTransactionWitnessBuilder {
+    pub const FIELD_COUNT: usize = 11;
     pub fn l2tx(mut self, v: L2Transaction) -> Self {
         self.l2tx = v;
         self
@@ -12755,14 +12472,34 @@ impl VerifyTransactionWitnessBuilder {
         self.block_hashes_proof = v;
         self
     }
-    pub fn context(mut self, v: VerifyTransactionContext) -> Self {
-        self.context = v;
+    pub fn account_count(mut self, v: Uint32) -> Self {
+        self.account_count = v;
+        self
+    }
+    pub fn kv_state(mut self, v: KVPairVec) -> Self {
+        self.kv_state = v;
+        self
+    }
+    pub fn load_data(mut self, v: BytesVec) -> Self {
+        self.load_data = v;
+        self
+    }
+    pub fn scripts(mut self, v: ScriptVec) -> Self {
+        self.scripts = v;
+        self
+    }
+    pub fn return_data_hash(mut self, v: Byte32) -> Self {
+        self.return_data_hash = v;
+        self
+    }
+    pub fn block_hashes(mut self, v: BlockHashEntryVec) -> Self {
+        self.block_hashes = v;
         self
     }
 }
-impl molecule::prelude::Builder for VerifyTransactionWitnessBuilder {
-    type Entity = VerifyTransactionWitness;
-    const NAME: &'static str = "VerifyTransactionWitnessBuilder";
+impl molecule::prelude::Builder for CCTransactionWitnessBuilder {
+    type Entity = CCTransactionWitness;
+    const NAME: &'static str = "CCTransactionWitnessBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.l2tx.as_slice().len()
@@ -12770,7 +12507,12 @@ impl molecule::prelude::Builder for VerifyTransactionWitnessBuilder {
             + self.tx_proof.as_slice().len()
             + self.kv_state_proof.as_slice().len()
             + self.block_hashes_proof.as_slice().len()
-            + self.context.as_slice().len()
+            + self.account_count.as_slice().len()
+            + self.kv_state.as_slice().len()
+            + self.load_data.as_slice().len()
+            + self.scripts.as_slice().len()
+            + self.return_data_hash.as_slice().len()
+            + self.block_hashes.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -12786,7 +12528,17 @@ impl molecule::prelude::Builder for VerifyTransactionWitnessBuilder {
         offsets.push(total_size);
         total_size += self.block_hashes_proof.as_slice().len();
         offsets.push(total_size);
-        total_size += self.context.as_slice().len();
+        total_size += self.account_count.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.kv_state.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.load_data.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.scripts.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.return_data_hash.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.block_hashes.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -12796,309 +12548,24 @@ impl molecule::prelude::Builder for VerifyTransactionWitnessBuilder {
         writer.write_all(self.tx_proof.as_slice())?;
         writer.write_all(self.kv_state_proof.as_slice())?;
         writer.write_all(self.block_hashes_proof.as_slice())?;
-        writer.write_all(self.context.as_slice())?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        VerifyTransactionWitness::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct VerifyTransactionSignatureContext(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for VerifyTransactionSignatureContext {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for VerifyTransactionSignatureContext {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for VerifyTransactionSignatureContext {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "account_count", self.account_count())?;
-        write!(f, ", {}: {}", "kv_state", self.kv_state())?;
-        write!(f, ", {}: {}", "scripts", self.scripts())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for VerifyTransactionSignatureContext {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            28, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0,
-        ];
-        VerifyTransactionSignatureContext::new_unchecked(v.into())
-    }
-}
-impl VerifyTransactionSignatureContext {
-    pub const FIELD_COUNT: usize = 3;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn account_count(&self) -> Uint32 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        Uint32::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn kv_state(&self) -> KVPairVec {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        KVPairVec::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn scripts(&self) -> ScriptVec {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            ScriptVec::new_unchecked(self.0.slice(start..end))
-        } else {
-            ScriptVec::new_unchecked(self.0.slice(start..))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> VerifyTransactionSignatureContextReader<'r> {
-        VerifyTransactionSignatureContextReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for VerifyTransactionSignatureContext {
-    type Builder = VerifyTransactionSignatureContextBuilder;
-    const NAME: &'static str = "VerifyTransactionSignatureContext";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        VerifyTransactionSignatureContext(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        VerifyTransactionSignatureContextReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        VerifyTransactionSignatureContextReader::from_compatible_slice(slice)
-            .map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .account_count(self.account_count())
-            .kv_state(self.kv_state())
-            .scripts(self.scripts())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct VerifyTransactionSignatureContextReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for VerifyTransactionSignatureContextReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for VerifyTransactionSignatureContextReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for VerifyTransactionSignatureContextReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "account_count", self.account_count())?;
-        write!(f, ", {}: {}", "kv_state", self.kv_state())?;
-        write!(f, ", {}: {}", "scripts", self.scripts())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
-    }
-}
-impl<'r> VerifyTransactionSignatureContextReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn account_count(&self) -> Uint32Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        Uint32Reader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn kv_state(&self) -> KVPairVecReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        KVPairVecReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn scripts(&self) -> ScriptVecReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            ScriptVecReader::new_unchecked(&self.as_slice()[start..end])
-        } else {
-            ScriptVecReader::new_unchecked(&self.as_slice()[start..])
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for VerifyTransactionSignatureContextReader<'r> {
-    type Entity = VerifyTransactionSignatureContext;
-    const NAME: &'static str = "VerifyTransactionSignatureContextReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        VerifyTransactionSignatureContextReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        if slice_len < offset_first {
-            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
-        }
-        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
-        if field_count < Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        } else if !compatible && field_count > Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        };
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
-            .chunks_exact(molecule::NUMBER_SIZE)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        Uint32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        KVPairVecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        ScriptVecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct VerifyTransactionSignatureContextBuilder {
-    pub(crate) account_count: Uint32,
-    pub(crate) kv_state: KVPairVec,
-    pub(crate) scripts: ScriptVec,
-}
-impl VerifyTransactionSignatureContextBuilder {
-    pub const FIELD_COUNT: usize = 3;
-    pub fn account_count(mut self, v: Uint32) -> Self {
-        self.account_count = v;
-        self
-    }
-    pub fn kv_state(mut self, v: KVPairVec) -> Self {
-        self.kv_state = v;
-        self
-    }
-    pub fn scripts(mut self, v: ScriptVec) -> Self {
-        self.scripts = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for VerifyTransactionSignatureContextBuilder {
-    type Entity = VerifyTransactionSignatureContext;
-    const NAME: &'static str = "VerifyTransactionSignatureContextBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.account_count.as_slice().len()
-            + self.kv_state.as_slice().len()
-            + self.scripts.as_slice().len()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
-        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.account_count.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.kv_state.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.scripts.as_slice().len();
-        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-        for offset in offsets.into_iter() {
-            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-        }
         writer.write_all(self.account_count.as_slice())?;
         writer.write_all(self.kv_state.as_slice())?;
+        writer.write_all(self.load_data.as_slice())?;
         writer.write_all(self.scripts.as_slice())?;
+        writer.write_all(self.return_data_hash.as_slice())?;
+        writer.write_all(self.block_hashes.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        VerifyTransactionSignatureContext::new_unchecked(inner.into())
+        CCTransactionWitness::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
-pub struct VerifyTransactionSignatureWitness(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for VerifyTransactionSignatureWitness {
+pub struct CCTransactionSignatureWitness(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for CCTransactionSignatureWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -13107,19 +12574,22 @@ impl ::core::fmt::LowerHex for VerifyTransactionSignatureWitness {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for VerifyTransactionSignatureWitness {
+impl ::core::fmt::Debug for CCTransactionSignatureWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for VerifyTransactionSignatureWitness {
+impl ::core::fmt::Display for CCTransactionSignatureWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "raw_l2block", self.raw_l2block())?;
         write!(f, ", {}: {}", "l2tx", self.l2tx())?;
         write!(f, ", {}: {}", "tx_proof", self.tx_proof())?;
+        write!(f, ", {}: {}", "kv_state", self.kv_state())?;
         write!(f, ", {}: {}", "kv_state_proof", self.kv_state_proof())?;
-        write!(f, ", {}: {}", "context", self.context())?;
+        write!(f, ", {}: {}", "account_count", self.account_count())?;
+        write!(f, ", {}: {}", "sender", self.sender())?;
+        write!(f, ", {}: {}", "receiver", self.receiver())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -13127,12 +12597,13 @@ impl ::core::fmt::Display for VerifyTransactionSignatureWitness {
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for VerifyTransactionSignatureWitness {
+impl ::core::default::Default for CCTransactionSignatureWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            180, 1, 0, 0, 24, 0, 0, 0, 76, 1, 0, 0, 128, 1, 0, 0, 148, 1, 0, 0, 152, 1, 0, 0, 52,
-            1, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0, 0, 0, 128, 0, 0,
-            0, 164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            22, 2, 0, 0, 36, 0, 0, 0, 88, 1, 0, 0, 140, 1, 0, 0, 160, 1, 0, 0, 164, 1, 0, 0, 168,
+            1, 0, 0, 172, 1, 0, 0, 225, 1, 0, 0, 52, 1, 0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0,
+            0, 88, 0, 0, 0, 120, 0, 0, 0, 128, 0, 0, 0, 164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0,
+            240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -13141,17 +12612,20 @@ impl ::core::default::Default for VerifyTransactionSignatureWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 52, 0, 0, 0, 12,
-            0, 0, 0, 48, 0, 0, 0, 36, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 12, 0, 0, 0,
-            16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 28, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0,
-            24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 52, 0, 0, 0, 12, 0, 0, 0, 48, 0, 0, 0, 36, 0, 0, 0, 20, 0, 0,
+            0, 24, 0, 0, 0, 28, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0,
         ];
-        VerifyTransactionSignatureWitness::new_unchecked(v.into())
+        CCTransactionSignatureWitness::new_unchecked(v.into())
     }
 }
-impl VerifyTransactionSignatureWitness {
-    pub const FIELD_COUNT: usize = 5;
+impl CCTransactionSignatureWitness {
+    pub const FIELD_COUNT: usize = 8;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -13186,31 +12660,49 @@ impl VerifyTransactionSignatureWitness {
         let end = molecule::unpack_number(&slice[16..]) as usize;
         CKBMerkleProof::new_unchecked(self.0.slice(start..end))
     }
-    pub fn kv_state_proof(&self) -> Bytes {
+    pub fn kv_state(&self) -> KVPairVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         let end = molecule::unpack_number(&slice[20..]) as usize;
-        Bytes::new_unchecked(self.0.slice(start..end))
+        KVPairVec::new_unchecked(self.0.slice(start..end))
     }
-    pub fn context(&self) -> VerifyTransactionSignatureContext {
+    pub fn kv_state_proof(&self) -> Bytes {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[20..]) as usize;
+        let end = molecule::unpack_number(&slice[24..]) as usize;
+        Bytes::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn account_count(&self) -> Uint32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        Uint32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn sender(&self) -> Script {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
+        let end = molecule::unpack_number(&slice[32..]) as usize;
+        Script::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn receiver(&self) -> Script {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[32..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[24..]) as usize;
-            VerifyTransactionSignatureContext::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[36..]) as usize;
+            Script::new_unchecked(self.0.slice(start..end))
         } else {
-            VerifyTransactionSignatureContext::new_unchecked(self.0.slice(start..))
+            Script::new_unchecked(self.0.slice(start..))
         }
     }
-    pub fn as_reader<'r>(&'r self) -> VerifyTransactionSignatureWitnessReader<'r> {
-        VerifyTransactionSignatureWitnessReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> CCTransactionSignatureWitnessReader<'r> {
+        CCTransactionSignatureWitnessReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for VerifyTransactionSignatureWitness {
-    type Builder = VerifyTransactionSignatureWitnessBuilder;
-    const NAME: &'static str = "VerifyTransactionSignatureWitness";
+impl molecule::prelude::Entity for CCTransactionSignatureWitness {
+    type Builder = CCTransactionSignatureWitnessBuilder;
+    const NAME: &'static str = "CCTransactionSignatureWitness";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        VerifyTransactionSignatureWitness(data)
+        CCTransactionSignatureWitness(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -13219,10 +12711,10 @@ impl molecule::prelude::Entity for VerifyTransactionSignatureWitness {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        VerifyTransactionSignatureWitnessReader::from_slice(slice).map(|reader| reader.to_entity())
+        CCTransactionSignatureWitnessReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        VerifyTransactionSignatureWitnessReader::from_compatible_slice(slice)
+        CCTransactionSignatureWitnessReader::from_compatible_slice(slice)
             .map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
@@ -13233,13 +12725,16 @@ impl molecule::prelude::Entity for VerifyTransactionSignatureWitness {
             .raw_l2block(self.raw_l2block())
             .l2tx(self.l2tx())
             .tx_proof(self.tx_proof())
+            .kv_state(self.kv_state())
             .kv_state_proof(self.kv_state_proof())
-            .context(self.context())
+            .account_count(self.account_count())
+            .sender(self.sender())
+            .receiver(self.receiver())
     }
 }
 #[derive(Clone, Copy)]
-pub struct VerifyTransactionSignatureWitnessReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for VerifyTransactionSignatureWitnessReader<'r> {
+pub struct CCTransactionSignatureWitnessReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for CCTransactionSignatureWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -13248,19 +12743,22 @@ impl<'r> ::core::fmt::LowerHex for VerifyTransactionSignatureWitnessReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for VerifyTransactionSignatureWitnessReader<'r> {
+impl<'r> ::core::fmt::Debug for CCTransactionSignatureWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for VerifyTransactionSignatureWitnessReader<'r> {
+impl<'r> ::core::fmt::Display for CCTransactionSignatureWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "raw_l2block", self.raw_l2block())?;
         write!(f, ", {}: {}", "l2tx", self.l2tx())?;
         write!(f, ", {}: {}", "tx_proof", self.tx_proof())?;
+        write!(f, ", {}: {}", "kv_state", self.kv_state())?;
         write!(f, ", {}: {}", "kv_state_proof", self.kv_state_proof())?;
-        write!(f, ", {}: {}", "context", self.context())?;
+        write!(f, ", {}: {}", "account_count", self.account_count())?;
+        write!(f, ", {}: {}", "sender", self.sender())?;
+        write!(f, ", {}: {}", "receiver", self.receiver())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -13268,8 +12766,8 @@ impl<'r> ::core::fmt::Display for VerifyTransactionSignatureWitnessReader<'r> {
         write!(f, " }}")
     }
 }
-impl<'r> VerifyTransactionSignatureWitnessReader<'r> {
-    pub const FIELD_COUNT: usize = 5;
+impl<'r> CCTransactionSignatureWitnessReader<'r> {
+    pub const FIELD_COUNT: usize = 8;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -13304,31 +12802,49 @@ impl<'r> VerifyTransactionSignatureWitnessReader<'r> {
         let end = molecule::unpack_number(&slice[16..]) as usize;
         CKBMerkleProofReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn kv_state_proof(&self) -> BytesReader<'r> {
+    pub fn kv_state(&self) -> KVPairVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         let end = molecule::unpack_number(&slice[20..]) as usize;
-        BytesReader::new_unchecked(&self.as_slice()[start..end])
+        KVPairVecReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn context(&self) -> VerifyTransactionSignatureContextReader<'r> {
+    pub fn kv_state_proof(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[20..]) as usize;
+        let end = molecule::unpack_number(&slice[24..]) as usize;
+        BytesReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn account_count(&self) -> Uint32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        Uint32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn sender(&self) -> ScriptReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
+        let end = molecule::unpack_number(&slice[32..]) as usize;
+        ScriptReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn receiver(&self) -> ScriptReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[32..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[24..]) as usize;
-            VerifyTransactionSignatureContextReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[36..]) as usize;
+            ScriptReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            VerifyTransactionSignatureContextReader::new_unchecked(&self.as_slice()[start..])
+            ScriptReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for VerifyTransactionSignatureWitnessReader<'r> {
-    type Entity = VerifyTransactionSignatureWitness;
-    const NAME: &'static str = "VerifyTransactionSignatureWitnessReader";
+impl<'r> molecule::prelude::Reader<'r> for CCTransactionSignatureWitnessReader<'r> {
+    type Entity = CCTransactionSignatureWitness;
+    const NAME: &'static str = "CCTransactionSignatureWitnessReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        VerifyTransactionSignatureWitnessReader(slice)
+        CCTransactionSignatureWitnessReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -13373,24 +12889,27 @@ impl<'r> molecule::prelude::Reader<'r> for VerifyTransactionSignatureWitnessRead
         RawL2BlockReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         L2TransactionReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         CKBMerkleProofReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        BytesReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
-        VerifyTransactionSignatureContextReader::verify(
-            &slice[offsets[4]..offsets[5]],
-            compatible,
-        )?;
+        KVPairVecReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        BytesReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
+        Uint32Reader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
+        ScriptReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
+        ScriptReader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
-pub struct VerifyTransactionSignatureWitnessBuilder {
+pub struct CCTransactionSignatureWitnessBuilder {
     pub(crate) raw_l2block: RawL2Block,
     pub(crate) l2tx: L2Transaction,
     pub(crate) tx_proof: CKBMerkleProof,
+    pub(crate) kv_state: KVPairVec,
     pub(crate) kv_state_proof: Bytes,
-    pub(crate) context: VerifyTransactionSignatureContext,
+    pub(crate) account_count: Uint32,
+    pub(crate) sender: Script,
+    pub(crate) receiver: Script,
 }
-impl VerifyTransactionSignatureWitnessBuilder {
-    pub const FIELD_COUNT: usize = 5;
+impl CCTransactionSignatureWitnessBuilder {
+    pub const FIELD_COUNT: usize = 8;
     pub fn raw_l2block(mut self, v: RawL2Block) -> Self {
         self.raw_l2block = v;
         self
@@ -13403,25 +12922,40 @@ impl VerifyTransactionSignatureWitnessBuilder {
         self.tx_proof = v;
         self
     }
+    pub fn kv_state(mut self, v: KVPairVec) -> Self {
+        self.kv_state = v;
+        self
+    }
     pub fn kv_state_proof(mut self, v: Bytes) -> Self {
         self.kv_state_proof = v;
         self
     }
-    pub fn context(mut self, v: VerifyTransactionSignatureContext) -> Self {
-        self.context = v;
+    pub fn account_count(mut self, v: Uint32) -> Self {
+        self.account_count = v;
+        self
+    }
+    pub fn sender(mut self, v: Script) -> Self {
+        self.sender = v;
+        self
+    }
+    pub fn receiver(mut self, v: Script) -> Self {
+        self.receiver = v;
         self
     }
 }
-impl molecule::prelude::Builder for VerifyTransactionSignatureWitnessBuilder {
-    type Entity = VerifyTransactionSignatureWitness;
-    const NAME: &'static str = "VerifyTransactionSignatureWitnessBuilder";
+impl molecule::prelude::Builder for CCTransactionSignatureWitnessBuilder {
+    type Entity = CCTransactionSignatureWitness;
+    const NAME: &'static str = "CCTransactionSignatureWitnessBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.raw_l2block.as_slice().len()
             + self.l2tx.as_slice().len()
             + self.tx_proof.as_slice().len()
+            + self.kv_state.as_slice().len()
             + self.kv_state_proof.as_slice().len()
-            + self.context.as_slice().len()
+            + self.account_count.as_slice().len()
+            + self.sender.as_slice().len()
+            + self.receiver.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -13433,9 +12967,15 @@ impl molecule::prelude::Builder for VerifyTransactionSignatureWitnessBuilder {
         offsets.push(total_size);
         total_size += self.tx_proof.as_slice().len();
         offsets.push(total_size);
+        total_size += self.kv_state.as_slice().len();
+        offsets.push(total_size);
         total_size += self.kv_state_proof.as_slice().len();
         offsets.push(total_size);
-        total_size += self.context.as_slice().len();
+        total_size += self.account_count.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.sender.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.receiver.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -13443,20 +12983,23 @@ impl molecule::prelude::Builder for VerifyTransactionSignatureWitnessBuilder {
         writer.write_all(self.raw_l2block.as_slice())?;
         writer.write_all(self.l2tx.as_slice())?;
         writer.write_all(self.tx_proof.as_slice())?;
+        writer.write_all(self.kv_state.as_slice())?;
         writer.write_all(self.kv_state_proof.as_slice())?;
-        writer.write_all(self.context.as_slice())?;
+        writer.write_all(self.account_count.as_slice())?;
+        writer.write_all(self.sender.as_slice())?;
+        writer.write_all(self.receiver.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        VerifyTransactionSignatureWitness::new_unchecked(inner.into())
+        CCTransactionSignatureWitness::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
-pub struct VerifyWithdrawalWitness(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for VerifyWithdrawalWitness {
+pub struct CCWithdrawalWitness(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for CCWithdrawalWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -13465,21 +13008,18 @@ impl ::core::fmt::LowerHex for VerifyWithdrawalWitness {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for VerifyWithdrawalWitness {
+impl ::core::fmt::Debug for CCWithdrawalWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for VerifyWithdrawalWitness {
+impl ::core::fmt::Display for CCWithdrawalWitness {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "raw_l2block", self.raw_l2block())?;
-        write!(
-            f,
-            ", {}: {}",
-            "withdrawal_request",
-            self.withdrawal_request()
-        )?;
+        write!(f, ", {}: {}", "withdrawal", self.withdrawal())?;
+        write!(f, ", {}: {}", "sender", self.sender())?;
+        write!(f, ", {}: {}", "owner_lock", self.owner_lock())?;
         write!(f, ", {}: {}", "withdrawal_proof", self.withdrawal_proof())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -13488,12 +13028,12 @@ impl ::core::fmt::Display for VerifyWithdrawalWitness {
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for VerifyWithdrawalWitness {
+impl ::core::default::Default for CCWithdrawalWitness {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            48, 2, 0, 0, 16, 0, 0, 0, 68, 1, 0, 0, 28, 2, 0, 0, 52, 1, 0, 0, 44, 0, 0, 0, 52, 0, 0,
-            0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0, 0, 0, 128, 0, 0, 0, 164, 0, 0, 0, 200, 0, 0, 0,
-            204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            162, 2, 0, 0, 24, 0, 0, 0, 76, 1, 0, 0, 36, 2, 0, 0, 89, 2, 0, 0, 142, 2, 0, 0, 52, 1,
+            0, 0, 44, 0, 0, 0, 52, 0, 0, 0, 56, 0, 0, 0, 88, 0, 0, 0, 120, 0, 0, 0, 128, 0, 0, 0,
+            164, 0, 0, 0, 200, 0, 0, 0, 204, 0, 0, 0, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -13502,21 +13042,25 @@ impl ::core::default::Default for VerifyWithdrawalWitness {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 216, 0, 0, 0, 12, 0, 0, 0, 212, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 216, 0, 0, 0, 12, 0,
+            0, 0, 212, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0,
-            0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
-        VerifyWithdrawalWitness::new_unchecked(v.into())
+        CCWithdrawalWitness::new_unchecked(v.into())
     }
 }
-impl VerifyWithdrawalWitness {
-    pub const FIELD_COUNT: usize = 3;
+impl CCWithdrawalWitness {
+    pub const FIELD_COUNT: usize = 5;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -13539,31 +13083,43 @@ impl VerifyWithdrawalWitness {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         RawL2Block::new_unchecked(self.0.slice(start..end))
     }
-    pub fn withdrawal_request(&self) -> WithdrawalRequest {
+    pub fn withdrawal(&self) -> WithdrawalRequest {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
         WithdrawalRequest::new_unchecked(self.0.slice(start..end))
     }
-    pub fn withdrawal_proof(&self) -> CKBMerkleProof {
+    pub fn sender(&self) -> Script {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Script::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn owner_lock(&self) -> Script {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
+        let end = molecule::unpack_number(&slice[20..]) as usize;
+        Script::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn withdrawal_proof(&self) -> CKBMerkleProof {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[20..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
+            let end = molecule::unpack_number(&slice[24..]) as usize;
             CKBMerkleProof::new_unchecked(self.0.slice(start..end))
         } else {
             CKBMerkleProof::new_unchecked(self.0.slice(start..))
         }
     }
-    pub fn as_reader<'r>(&'r self) -> VerifyWithdrawalWitnessReader<'r> {
-        VerifyWithdrawalWitnessReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> CCWithdrawalWitnessReader<'r> {
+        CCWithdrawalWitnessReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for VerifyWithdrawalWitness {
-    type Builder = VerifyWithdrawalWitnessBuilder;
-    const NAME: &'static str = "VerifyWithdrawalWitness";
+impl molecule::prelude::Entity for CCWithdrawalWitness {
+    type Builder = CCWithdrawalWitnessBuilder;
+    const NAME: &'static str = "CCWithdrawalWitness";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        VerifyWithdrawalWitness(data)
+        CCWithdrawalWitness(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -13572,10 +13128,10 @@ impl molecule::prelude::Entity for VerifyWithdrawalWitness {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        VerifyWithdrawalWitnessReader::from_slice(slice).map(|reader| reader.to_entity())
+        CCWithdrawalWitnessReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        VerifyWithdrawalWitnessReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        CCWithdrawalWitnessReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -13583,13 +13139,15 @@ impl molecule::prelude::Entity for VerifyWithdrawalWitness {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .raw_l2block(self.raw_l2block())
-            .withdrawal_request(self.withdrawal_request())
+            .withdrawal(self.withdrawal())
+            .sender(self.sender())
+            .owner_lock(self.owner_lock())
             .withdrawal_proof(self.withdrawal_proof())
     }
 }
 #[derive(Clone, Copy)]
-pub struct VerifyWithdrawalWitnessReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for VerifyWithdrawalWitnessReader<'r> {
+pub struct CCWithdrawalWitnessReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for CCWithdrawalWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -13598,21 +13156,18 @@ impl<'r> ::core::fmt::LowerHex for VerifyWithdrawalWitnessReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for VerifyWithdrawalWitnessReader<'r> {
+impl<'r> ::core::fmt::Debug for CCWithdrawalWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for VerifyWithdrawalWitnessReader<'r> {
+impl<'r> ::core::fmt::Display for CCWithdrawalWitnessReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "raw_l2block", self.raw_l2block())?;
-        write!(
-            f,
-            ", {}: {}",
-            "withdrawal_request",
-            self.withdrawal_request()
-        )?;
+        write!(f, ", {}: {}", "withdrawal", self.withdrawal())?;
+        write!(f, ", {}: {}", "sender", self.sender())?;
+        write!(f, ", {}: {}", "owner_lock", self.owner_lock())?;
         write!(f, ", {}: {}", "withdrawal_proof", self.withdrawal_proof())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -13621,8 +13176,8 @@ impl<'r> ::core::fmt::Display for VerifyWithdrawalWitnessReader<'r> {
         write!(f, " }}")
     }
 }
-impl<'r> VerifyWithdrawalWitnessReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
+impl<'r> CCWithdrawalWitnessReader<'r> {
+    pub const FIELD_COUNT: usize = 5;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -13645,31 +13200,43 @@ impl<'r> VerifyWithdrawalWitnessReader<'r> {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         RawL2BlockReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn withdrawal_request(&self) -> WithdrawalRequestReader<'r> {
+    pub fn withdrawal(&self) -> WithdrawalRequestReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
         WithdrawalRequestReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn withdrawal_proof(&self) -> CKBMerkleProofReader<'r> {
+    pub fn sender(&self) -> ScriptReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        ScriptReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn owner_lock(&self) -> ScriptReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
+        let end = molecule::unpack_number(&slice[20..]) as usize;
+        ScriptReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn withdrawal_proof(&self) -> CKBMerkleProofReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[20..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
+            let end = molecule::unpack_number(&slice[24..]) as usize;
             CKBMerkleProofReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             CKBMerkleProofReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for VerifyWithdrawalWitnessReader<'r> {
-    type Entity = VerifyWithdrawalWitness;
-    const NAME: &'static str = "VerifyWithdrawalWitnessReader";
+impl<'r> molecule::prelude::Reader<'r> for CCWithdrawalWitnessReader<'r> {
+    type Entity = CCWithdrawalWitness;
+    const NAME: &'static str = "CCWithdrawalWitnessReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        VerifyWithdrawalWitnessReader(slice)
+        CCWithdrawalWitnessReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -13713,24 +13280,36 @@ impl<'r> molecule::prelude::Reader<'r> for VerifyWithdrawalWitnessReader<'r> {
         }
         RawL2BlockReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         WithdrawalRequestReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        CKBMerkleProofReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        ScriptReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        ScriptReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        CKBMerkleProofReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
-pub struct VerifyWithdrawalWitnessBuilder {
+pub struct CCWithdrawalWitnessBuilder {
     pub(crate) raw_l2block: RawL2Block,
-    pub(crate) withdrawal_request: WithdrawalRequest,
+    pub(crate) withdrawal: WithdrawalRequest,
+    pub(crate) sender: Script,
+    pub(crate) owner_lock: Script,
     pub(crate) withdrawal_proof: CKBMerkleProof,
 }
-impl VerifyWithdrawalWitnessBuilder {
-    pub const FIELD_COUNT: usize = 3;
+impl CCWithdrawalWitnessBuilder {
+    pub const FIELD_COUNT: usize = 5;
     pub fn raw_l2block(mut self, v: RawL2Block) -> Self {
         self.raw_l2block = v;
         self
     }
-    pub fn withdrawal_request(mut self, v: WithdrawalRequest) -> Self {
-        self.withdrawal_request = v;
+    pub fn withdrawal(mut self, v: WithdrawalRequest) -> Self {
+        self.withdrawal = v;
+        self
+    }
+    pub fn sender(mut self, v: Script) -> Self {
+        self.sender = v;
+        self
+    }
+    pub fn owner_lock(mut self, v: Script) -> Self {
+        self.owner_lock = v;
         self
     }
     pub fn withdrawal_proof(mut self, v: CKBMerkleProof) -> Self {
@@ -13738,13 +13317,15 @@ impl VerifyWithdrawalWitnessBuilder {
         self
     }
 }
-impl molecule::prelude::Builder for VerifyWithdrawalWitnessBuilder {
-    type Entity = VerifyWithdrawalWitness;
-    const NAME: &'static str = "VerifyWithdrawalWitnessBuilder";
+impl molecule::prelude::Builder for CCWithdrawalWitnessBuilder {
+    type Entity = CCWithdrawalWitness;
+    const NAME: &'static str = "CCWithdrawalWitnessBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.raw_l2block.as_slice().len()
-            + self.withdrawal_request.as_slice().len()
+            + self.withdrawal.as_slice().len()
+            + self.sender.as_slice().len()
+            + self.owner_lock.as_slice().len()
             + self.withdrawal_proof.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
@@ -13753,7 +13334,11 @@ impl molecule::prelude::Builder for VerifyWithdrawalWitnessBuilder {
         offsets.push(total_size);
         total_size += self.raw_l2block.as_slice().len();
         offsets.push(total_size);
-        total_size += self.withdrawal_request.as_slice().len();
+        total_size += self.withdrawal.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.sender.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.owner_lock.as_slice().len();
         offsets.push(total_size);
         total_size += self.withdrawal_proof.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
@@ -13761,7 +13346,9 @@ impl molecule::prelude::Builder for VerifyWithdrawalWitnessBuilder {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
         writer.write_all(self.raw_l2block.as_slice())?;
-        writer.write_all(self.withdrawal_request.as_slice())?;
+        writer.write_all(self.withdrawal.as_slice())?;
+        writer.write_all(self.sender.as_slice())?;
+        writer.write_all(self.owner_lock.as_slice())?;
         writer.write_all(self.withdrawal_proof.as_slice())?;
         Ok(())
     }
@@ -13769,7 +13356,7 @@ impl molecule::prelude::Builder for VerifyWithdrawalWitnessBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        VerifyWithdrawalWitness::new_unchecked(inner.into())
+        CCWithdrawalWitness::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
