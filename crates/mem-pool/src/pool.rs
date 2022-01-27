@@ -34,7 +34,7 @@ use gw_types::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt,
         WithdrawalRequest, WithdrawalRequestExtra,
     },
-    prelude::{Entity, Unpack},
+    prelude::{Entity, Pack, Unpack},
 };
 use std::{
     cmp::{max, min},
@@ -48,6 +48,7 @@ use std::{
 use crate::{
     constants::{MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS, MAX_TX_SIZE, MAX_WITHDRAWAL_SIZE},
     custodian::AvailableCustodians,
+    eoa_mapping_register::EthEoaMappingRegister,
     mem_block::MemBlock,
     restore_manager::RestoreManager,
     sync::{mq::gw_kafka, publish::MemPoolPublishService},
@@ -102,6 +103,7 @@ pub struct MemPool {
     node_mode: NodeMode,
     mem_pool_state: Arc<MemPoolState>,
     dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
+    eth_eoa_mapping_register: Option<EthEoaMappingRegister>,
 }
 
 pub struct MemPoolCreateArgs {
@@ -114,6 +116,7 @@ pub struct MemPoolCreateArgs {
     pub config: MemPoolConfig,
     pub node_mode: NodeMode,
     pub dynamic_config_manager: Arc<ArcSwap<DynamicConfigManager>>,
+    pub eth_eoa_mapping_register: Option<EthEoaMappingRegister>,
 }
 
 impl Drop for MemPool {
@@ -138,6 +141,7 @@ impl MemPool {
             config,
             node_mode,
             dynamic_config_manager,
+            eth_eoa_mapping_register,
         } = args;
         let pending = Default::default();
 
@@ -194,6 +198,7 @@ impl MemPool {
             node_mode,
             mem_pool_state,
             dynamic_config_manager,
+            eth_eoa_mapping_register,
         };
 
         // update mem block info
@@ -832,8 +837,23 @@ impl MemPool {
     async fn finalize_deposits(&mut self, deposit_cells: Vec<DepositInfo>) -> Result<()> {
         let snap = self.mem_pool_state.load();
         let mut state = snap.state()?;
-        state.tracker_mut().enable();
+
+        let mut new_eth_account_hashes: Vec<H256> = Vec::with_capacity(deposit_cells.len());
+        if let Some(eth_eoa_mapping_register) = self.eth_eoa_mapping_register.as_ref() {
+            for cell in deposit_cells.iter() {
+                let lock_script = cell.request.script();
+                let lock_script_hash = lock_script.hash().into();
+                let opt_id = state.get_account_id_by_script_hash(&lock_script_hash)?;
+                if opt_id.is_none()
+                    && lock_script.code_hash() == eth_eoa_mapping_register.lock_code_hash().pack()
+                {
+                    new_eth_account_hashes.push(lock_script_hash);
+                }
+            }
+        }
+
         // update deposits
+        state.tracker_mut().enable();
         let deposits: Vec<_> = deposit_cells.iter().map(|c| [c.request.clone()]).collect();
         let mut post_states = Vec::with_capacity(deposits.len());
         let mut touched_keys_vec = Vec::with_capacity(deposits.len());
@@ -855,7 +875,23 @@ impl MemPool {
             touched_keys_vec,
             prev_state_checkpoint,
         );
+
+        if let Some(eth_eoa_mapping_register) = self.eth_eoa_mapping_register.as_ref() {
+            if !new_eth_account_hashes.is_empty() {
+                log::debug!(
+                    "[finalize deposits] batch register {} eth account(s)",
+                    new_eth_account_hashes.len()
+                );
+
+                let tx = eth_eoa_mapping_register.build_register_tx(new_eth_account_hashes)?;
+                let db = self.store.begin_transaction();
+
+                self.finalize_tx(&db, tx).await?;
+            }
+        }
+
         state.submit_tree_to_mem_block();
+
         Ok(())
     }
 

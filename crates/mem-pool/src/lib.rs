@@ -7,6 +7,7 @@ mod constants;
 pub mod custodian;
 pub mod default_provider;
 mod deposit;
+pub mod eoa_mapping_register;
 pub mod fee;
 pub mod mem_block;
 pub mod pool;
