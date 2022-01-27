@@ -15945,7 +15945,7 @@ impl ::core::default::Default for ETHAddrRegArgs {
     }
 }
 impl ETHAddrRegArgs {
-    pub const ITEMS_COUNT: usize = 3;
+    pub const ITEMS_COUNT: usize = 4;
     pub fn item_id(&self) -> molecule::Number {
         molecule::unpack_number(self.as_slice())
     }
@@ -15955,6 +15955,7 @@ impl ETHAddrRegArgs {
             0 => EthToGw::new_unchecked(inner).into(),
             1 => GwToEth::new_unchecked(inner).into(),
             2 => SetMapping::new_unchecked(inner).into(),
+            3 => BatchSetMapping::new_unchecked(inner).into(),
             _ => panic!("{}: invalid data", Self::NAME),
         }
     }
@@ -16011,7 +16012,7 @@ impl<'r> ::core::fmt::Display for ETHAddrRegArgsReader<'r> {
     }
 }
 impl<'r> ETHAddrRegArgsReader<'r> {
-    pub const ITEMS_COUNT: usize = 3;
+    pub const ITEMS_COUNT: usize = 4;
     pub fn item_id(&self) -> molecule::Number {
         molecule::unpack_number(self.as_slice())
     }
@@ -16021,6 +16022,7 @@ impl<'r> ETHAddrRegArgsReader<'r> {
             0 => EthToGwReader::new_unchecked(inner).into(),
             1 => GwToEthReader::new_unchecked(inner).into(),
             2 => SetMappingReader::new_unchecked(inner).into(),
+            3 => BatchSetMappingReader::new_unchecked(inner).into(),
             _ => panic!("{}: invalid data", Self::NAME),
         }
     }
@@ -16049,6 +16051,7 @@ impl<'r> molecule::prelude::Reader<'r> for ETHAddrRegArgsReader<'r> {
             0 => EthToGwReader::verify(inner_slice, compatible),
             1 => GwToEthReader::verify(inner_slice, compatible),
             2 => SetMappingReader::verify(inner_slice, compatible),
+            3 => BatchSetMappingReader::verify(inner_slice, compatible),
             _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
         }?;
         Ok(())
@@ -16057,7 +16060,7 @@ impl<'r> molecule::prelude::Reader<'r> for ETHAddrRegArgsReader<'r> {
 #[derive(Debug, Default)]
 pub struct ETHAddrRegArgsBuilder(pub(crate) ETHAddrRegArgsUnion);
 impl ETHAddrRegArgsBuilder {
-    pub const ITEMS_COUNT: usize = 3;
+    pub const ITEMS_COUNT: usize = 4;
     pub fn set<I>(mut self, v: I) -> Self
     where
         I: ::core::convert::Into<ETHAddrRegArgsUnion>,
@@ -16088,12 +16091,14 @@ pub enum ETHAddrRegArgsUnion {
     EthToGw(EthToGw),
     GwToEth(GwToEth),
     SetMapping(SetMapping),
+    BatchSetMapping(BatchSetMapping),
 }
 #[derive(Debug, Clone, Copy)]
 pub enum ETHAddrRegArgsUnionReader<'r> {
     EthToGw(EthToGwReader<'r>),
     GwToEth(GwToEthReader<'r>),
     SetMapping(SetMappingReader<'r>),
+    BatchSetMapping(BatchSetMappingReader<'r>),
 }
 impl ::core::default::Default for ETHAddrRegArgsUnion {
     fn default() -> Self {
@@ -16112,6 +16117,9 @@ impl ::core::fmt::Display for ETHAddrRegArgsUnion {
             ETHAddrRegArgsUnion::SetMapping(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, SetMapping::NAME, item)
             }
+            ETHAddrRegArgsUnion::BatchSetMapping(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, BatchSetMapping::NAME, item)
+            }
         }
     }
 }
@@ -16127,6 +16135,9 @@ impl<'r> ::core::fmt::Display for ETHAddrRegArgsUnionReader<'r> {
             ETHAddrRegArgsUnionReader::SetMapping(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, SetMapping::NAME, item)
             }
+            ETHAddrRegArgsUnionReader::BatchSetMapping(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, BatchSetMapping::NAME, item)
+            }
         }
     }
 }
@@ -16136,6 +16147,7 @@ impl ETHAddrRegArgsUnion {
             ETHAddrRegArgsUnion::EthToGw(ref item) => write!(f, "{}", item),
             ETHAddrRegArgsUnion::GwToEth(ref item) => write!(f, "{}", item),
             ETHAddrRegArgsUnion::SetMapping(ref item) => write!(f, "{}", item),
+            ETHAddrRegArgsUnion::BatchSetMapping(ref item) => write!(f, "{}", item),
         }
     }
 }
@@ -16145,6 +16157,7 @@ impl<'r> ETHAddrRegArgsUnionReader<'r> {
             ETHAddrRegArgsUnionReader::EthToGw(ref item) => write!(f, "{}", item),
             ETHAddrRegArgsUnionReader::GwToEth(ref item) => write!(f, "{}", item),
             ETHAddrRegArgsUnionReader::SetMapping(ref item) => write!(f, "{}", item),
+            ETHAddrRegArgsUnionReader::BatchSetMapping(ref item) => write!(f, "{}", item),
         }
     }
 }
@@ -16163,6 +16176,11 @@ impl ::core::convert::From<SetMapping> for ETHAddrRegArgsUnion {
         ETHAddrRegArgsUnion::SetMapping(item)
     }
 }
+impl ::core::convert::From<BatchSetMapping> for ETHAddrRegArgsUnion {
+    fn from(item: BatchSetMapping) -> Self {
+        ETHAddrRegArgsUnion::BatchSetMapping(item)
+    }
+}
 impl<'r> ::core::convert::From<EthToGwReader<'r>> for ETHAddrRegArgsUnionReader<'r> {
     fn from(item: EthToGwReader<'r>) -> Self {
         ETHAddrRegArgsUnionReader::EthToGw(item)
@@ -16178,6 +16196,11 @@ impl<'r> ::core::convert::From<SetMappingReader<'r>> for ETHAddrRegArgsUnionRead
         ETHAddrRegArgsUnionReader::SetMapping(item)
     }
 }
+impl<'r> ::core::convert::From<BatchSetMappingReader<'r>> for ETHAddrRegArgsUnionReader<'r> {
+    fn from(item: BatchSetMappingReader<'r>) -> Self {
+        ETHAddrRegArgsUnionReader::BatchSetMapping(item)
+    }
+}
 impl ETHAddrRegArgsUnion {
     pub const NAME: &'static str = "ETHAddrRegArgsUnion";
     pub fn as_bytes(&self) -> molecule::bytes::Bytes {
@@ -16185,6 +16208,7 @@ impl ETHAddrRegArgsUnion {
             ETHAddrRegArgsUnion::EthToGw(item) => item.as_bytes(),
             ETHAddrRegArgsUnion::GwToEth(item) => item.as_bytes(),
             ETHAddrRegArgsUnion::SetMapping(item) => item.as_bytes(),
+            ETHAddrRegArgsUnion::BatchSetMapping(item) => item.as_bytes(),
         }
     }
     pub fn as_slice(&self) -> &[u8] {
@@ -16192,6 +16216,7 @@ impl ETHAddrRegArgsUnion {
             ETHAddrRegArgsUnion::EthToGw(item) => item.as_slice(),
             ETHAddrRegArgsUnion::GwToEth(item) => item.as_slice(),
             ETHAddrRegArgsUnion::SetMapping(item) => item.as_slice(),
+            ETHAddrRegArgsUnion::BatchSetMapping(item) => item.as_slice(),
         }
     }
     pub fn item_id(&self) -> molecule::Number {
@@ -16199,6 +16224,7 @@ impl ETHAddrRegArgsUnion {
             ETHAddrRegArgsUnion::EthToGw(_) => 0,
             ETHAddrRegArgsUnion::GwToEth(_) => 1,
             ETHAddrRegArgsUnion::SetMapping(_) => 2,
+            ETHAddrRegArgsUnion::BatchSetMapping(_) => 3,
         }
     }
     pub fn item_name(&self) -> &str {
@@ -16206,6 +16232,7 @@ impl ETHAddrRegArgsUnion {
             ETHAddrRegArgsUnion::EthToGw(_) => "EthToGw",
             ETHAddrRegArgsUnion::GwToEth(_) => "GwToEth",
             ETHAddrRegArgsUnion::SetMapping(_) => "SetMapping",
+            ETHAddrRegArgsUnion::BatchSetMapping(_) => "BatchSetMapping",
         }
     }
     pub fn as_reader<'r>(&'r self) -> ETHAddrRegArgsUnionReader<'r> {
@@ -16213,6 +16240,7 @@ impl ETHAddrRegArgsUnion {
             ETHAddrRegArgsUnion::EthToGw(item) => item.as_reader().into(),
             ETHAddrRegArgsUnion::GwToEth(item) => item.as_reader().into(),
             ETHAddrRegArgsUnion::SetMapping(item) => item.as_reader().into(),
+            ETHAddrRegArgsUnion::BatchSetMapping(item) => item.as_reader().into(),
         }
     }
 }
@@ -16223,6 +16251,7 @@ impl<'r> ETHAddrRegArgsUnionReader<'r> {
             ETHAddrRegArgsUnionReader::EthToGw(item) => item.as_slice(),
             ETHAddrRegArgsUnionReader::GwToEth(item) => item.as_slice(),
             ETHAddrRegArgsUnionReader::SetMapping(item) => item.as_slice(),
+            ETHAddrRegArgsUnionReader::BatchSetMapping(item) => item.as_slice(),
         }
     }
     pub fn item_id(&self) -> molecule::Number {
@@ -16230,6 +16259,7 @@ impl<'r> ETHAddrRegArgsUnionReader<'r> {
             ETHAddrRegArgsUnionReader::EthToGw(_) => 0,
             ETHAddrRegArgsUnionReader::GwToEth(_) => 1,
             ETHAddrRegArgsUnionReader::SetMapping(_) => 2,
+            ETHAddrRegArgsUnionReader::BatchSetMapping(_) => 3,
         }
     }
     pub fn item_name(&self) -> &str {
@@ -16237,6 +16267,7 @@ impl<'r> ETHAddrRegArgsUnionReader<'r> {
             ETHAddrRegArgsUnionReader::EthToGw(_) => "EthToGw",
             ETHAddrRegArgsUnionReader::GwToEth(_) => "GwToEth",
             ETHAddrRegArgsUnionReader::SetMapping(_) => "SetMapping",
+            ETHAddrRegArgsUnionReader::BatchSetMapping(_) => "BatchSetMapping",
         }
     }
 }
@@ -16701,5 +16732,270 @@ impl molecule::prelude::Builder for SetMappingBuilder {
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
         SetMapping::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct BatchSetMapping(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for BatchSetMapping {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for BatchSetMapping {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for BatchSetMapping {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "gw_script_hashes", self.gw_script_hashes())?;
+        write!(f, ", {}: {}", "fee", self.fee())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for BatchSetMapping {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            36, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        BatchSetMapping::new_unchecked(v.into())
+    }
+}
+impl BatchSetMapping {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn gw_script_hashes(&self) -> Byte32Vec {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Byte32Vec::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn fee(&self) -> Fee {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            Fee::new_unchecked(self.0.slice(start..end))
+        } else {
+            Fee::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> BatchSetMappingReader<'r> {
+        BatchSetMappingReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for BatchSetMapping {
+    type Builder = BatchSetMappingBuilder;
+    const NAME: &'static str = "BatchSetMapping";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        BatchSetMapping(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        BatchSetMappingReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        BatchSetMappingReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .gw_script_hashes(self.gw_script_hashes())
+            .fee(self.fee())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct BatchSetMappingReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for BatchSetMappingReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for BatchSetMappingReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for BatchSetMappingReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "gw_script_hashes", self.gw_script_hashes())?;
+        write!(f, ", {}: {}", "fee", self.fee())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> BatchSetMappingReader<'r> {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn gw_script_hashes(&self) -> Byte32VecReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn fee(&self) -> FeeReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            FeeReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            FeeReader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for BatchSetMappingReader<'r> {
+    type Entity = BatchSetMapping;
+    const NAME: &'static str = "BatchSetMappingReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        BatchSetMappingReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        Byte32VecReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        FeeReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct BatchSetMappingBuilder {
+    pub(crate) gw_script_hashes: Byte32Vec,
+    pub(crate) fee: Fee,
+}
+impl BatchSetMappingBuilder {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn gw_script_hashes(mut self, v: Byte32Vec) -> Self {
+        self.gw_script_hashes = v;
+        self
+    }
+    pub fn fee(mut self, v: Fee) -> Self {
+        self.fee = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for BatchSetMappingBuilder {
+    type Entity = BatchSetMapping;
+    const NAME: &'static str = "BatchSetMappingBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.gw_script_hashes.as_slice().len()
+            + self.fee.as_slice().len()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.gw_script_hashes.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.fee.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.gw_script_hashes.as_slice())?;
+        writer.write_all(self.fee.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        BatchSetMapping::new_unchecked(inner.into())
     }
 }
