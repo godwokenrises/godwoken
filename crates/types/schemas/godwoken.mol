@@ -371,6 +371,7 @@ union ETHAddrRegArgs {
     EthToGw,
     GwToEth,
     SetMapping,
+    BatchSetMapping,
 }
 
 struct EthToGw {
@@ -385,4 +386,10 @@ struct SetMapping {
     gw_script_hash: Byte32,
     fee: Fee,
 }
+
+table BatchSetMapping {
+    gw_script_hashes: Byte32Vec,
+    fee: Fee,
+}
+
 // --- end of ETH Address Registry ---
