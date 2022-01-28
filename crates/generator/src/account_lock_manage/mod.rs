@@ -9,7 +9,7 @@ use gw_types::{
 
 #[cfg(any(debug_assertions, feature = "enable-always-success-lock"))]
 pub mod always_success;
-mod eip712;
+pub mod eip712;
 pub mod secp256k1;
 
 use crate::error::LockAlgorithmError;
