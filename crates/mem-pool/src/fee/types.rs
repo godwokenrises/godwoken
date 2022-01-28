@@ -183,10 +183,7 @@ fn parse_l2tx_fee_rate(
             };
             let cycles_limit: u64 = fee_config.meta_cycles_limit;
 
-            Ok(L2Fee {
-                fee: fee,
-                cycles_limit,
-            })
+            Ok(L2Fee { fee, cycles_limit })
         }
         BackendType::EthAddrReg => {
             let eth_addr_reg_args = ETHAddrRegArgs::from_slice(raw_l2tx_args.as_ref())?;

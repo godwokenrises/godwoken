@@ -188,7 +188,7 @@ pub fn bench(c: &mut Criterion) {
             |(mut tree, rollup_config, sudt_id, a_id, b_script_hash, block_info)| {
                 // transfer from A to B
                 let value = 4000u128;
-                let fee = 42u128;
+                let fee = 42u64;
                 let b_address = to_short_script_hash(&b_script_hash).to_vec();
                 let args = SUDTArgs::new_builder()
                     .set(
