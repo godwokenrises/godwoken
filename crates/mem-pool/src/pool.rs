@@ -16,6 +16,7 @@ use gw_common::{
 };
 use gw_config::{MemPoolConfig, NodeMode};
 use gw_dynamic_config::manager::DynamicConfigManager;
+use gw_eoa_mapping::eth_register::EthEoaMappingRegister;
 use gw_generator::{
     constants::L2TX_MAX_CYCLES, error::TransactionError, traits::StateExt, ArcSwap, Generator,
 };
@@ -48,7 +49,6 @@ use std::{
 use crate::{
     constants::{MAX_MEM_BLOCK_TXS, MAX_MEM_BLOCK_WITHDRAWALS, MAX_TX_SIZE, MAX_WITHDRAWAL_SIZE},
     custodian::AvailableCustodians,
-    eoa_mapping_register::EthEoaMappingRegister,
     mem_block::MemBlock,
     restore_manager::RestoreManager,
     sync::{mq::gw_kafka, publish::MemPoolPublishService},

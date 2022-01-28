@@ -1878,6 +1878,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "gw-eoa-mapping"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gw-common",
+ "gw-traits",
+ "gw-types",
+ "gw-utils",
+]
+
+[[package]]
 name = "gw-generator"
 version = "0.2.0"
 dependencies = [
@@ -1934,6 +1945,7 @@ dependencies = [
  "gw-common",
  "gw-config",
  "gw-dynamic-config",
+ "gw-eoa-mapping",
  "gw-generator",
  "gw-rpc-client",
  "gw-rpc-ws-server",

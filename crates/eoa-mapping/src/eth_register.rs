@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_common::state::State;
 use gw_common::H256;
+use gw_traits::CodeStore;
 use gw_types::core::ScriptHashType;
 use gw_types::packed::{
     BatchSetMapping, ETHAddrRegArgs, ETHAddrRegArgsUnion, Fee, L2Transaction, RawL2Transaction,
@@ -16,7 +17,7 @@ pub struct EthEoaMappingRegister {
     account_script_hash: H256,
     registry_account_id: u32,
     registry_script_hash: H256,
-    eth_lock_script_hash: H256,
+    eth_lock_code_hash: H256,
     wallet: Wallet,
 }
 
@@ -24,26 +25,26 @@ impl EthEoaMappingRegister {
     pub fn create(
         state: &impl State,
         rollup_script_hash: H256,
-        registry_validator_type_hash: H256,
-        eth_lock_script_hash: H256,
+        eth_registry_code_hash: H256,
+        eth_lock_code_hash: H256,
         wallet: Wallet,
     ) -> Result<Self> {
-        // NOTE: Use eth_lock_script_hash to ensure register tx can be verified on chain
+        // NOTE: Use eth_lock_code_hash to ensure register tx can be verified on chain
         let account_script_hash = {
-            let script = wallet.eth_lock_script(rollup_script_hash, eth_lock_script_hash)?;
+            let script = wallet.eth_lock_script(rollup_script_hash, eth_lock_code_hash)?;
             script.hash().into()
         };
         let account_id = state
             .get_account_id_by_script_hash(&account_script_hash)?
-            .ok_or_else(|| anyhow!("eoa mapping register account not found"))?;
+            .ok_or_else(|| anyhow!("[eoa mapping] eth register(tx builder) account not found"))?;
 
         let registry_script_hash = {
-            let script = build_registry_script(rollup_script_hash, registry_validator_type_hash);
+            let script = build_registry_script(rollup_script_hash, eth_registry_code_hash);
             script.hash().into()
         };
         let registry_account_id = state
             .get_account_id_by_script_hash(&registry_script_hash)?
-            .ok_or_else(|| anyhow!("eth eoa mapping registry not found"))?;
+            .ok_or_else(|| anyhow!("[eoa mapping] eth registry(contract) account not found"))?;
 
         let register = EthEoaMappingRegister {
             rollup_script_hash,
@@ -51,7 +52,7 @@ impl EthEoaMappingRegister {
             account_script_hash,
             registry_account_id,
             registry_script_hash,
-            eth_lock_script_hash,
+            eth_lock_code_hash,
             wallet,
         };
 
@@ -59,7 +60,30 @@ impl EthEoaMappingRegister {
     }
 
     pub fn lock_code_hash(&self) -> &H256 {
-        &self.eth_lock_script_hash
+        &self.eth_lock_code_hash
+    }
+
+    pub fn filter_accounts(
+        &self,
+        state: &(impl State + CodeStore),
+        from_id: u32,
+        to_id: u32,
+    ) -> Result<Vec<H256>> {
+        assert!(from_id <= to_id);
+
+        let eth_lock_code_hash = self.eth_lock_code_hash.pack();
+        let mut script_hashes = Vec::with_capacity(to_id.saturating_sub(from_id) as usize + 1);
+        for id in from_id..=to_id {
+            let script_hash = state.get_script_hash(id)?;
+            match state.get_script(&script_hash) {
+                Some(script) if script.code_hash() == eth_lock_code_hash => {
+                    script_hashes.push(script_hash)
+                }
+                _ => continue,
+            }
+        }
+
+        Ok(script_hashes)
     }
 
     pub fn build_register_tx(&self, script_hashes: Vec<H256>) -> Result<L2Transaction> {
@@ -99,12 +123,9 @@ impl EthEoaMappingRegister {
     }
 }
 
-pub fn build_registry_script(
-    rollup_script_hash: H256,
-    registry_validator_type_hash: H256,
-) -> Script {
+pub fn build_registry_script(rollup_script_hash: H256, eth_registry_code_hash: H256) -> Script {
     Script::new_builder()
-        .code_hash(registry_validator_type_hash.pack())
+        .code_hash(eth_registry_code_hash.pack())
         .hash_type(ScriptHashType::Type.into())
         .args(rollup_script_hash.as_slice().to_vec().pack())
         .build()
