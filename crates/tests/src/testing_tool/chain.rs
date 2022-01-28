@@ -7,7 +7,9 @@ use gw_chain::chain::{Chain, L1Action, L1ActionContext, SyncParam};
 use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BackendConfig, ChainConfig, GenesisConfig, MemPoolConfig};
 use gw_generator::{
-    account_lock_manage::{always_success::AlwaysSuccess, AccountLockManage},
+    account_lock_manage::{
+        always_success::AlwaysSuccess, secp256k1::Secp256k1Eth, AccountLockManage,
+    },
     backend_manage::BackendManage,
     genesis::init_genesis,
     Generator,
@@ -40,6 +42,7 @@ const WITHDRAWAL_LOCK_PATH: &str = "withdrawal-lock";
 const STATE_VALIDATOR_TYPE_PATH: &str = "state-validator";
 const STAKE_LOCK_PATH: &str = "stake-lock";
 const CUSTODIAN_LOCK_PATH: &str = "custodian-lock";
+const ETH_ACCOUNT_LOCK_PATH: &str = "eth-account-lock";
 
 lazy_static! {
     pub static ref ALWAYS_SUCCESS_PROGRAM: Bytes = {
@@ -125,6 +128,39 @@ lazy_static! {
         hasher.finalize(&mut buf);
         buf
     };
+    pub static ref ETH_ACCOUNT_LOCK_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut path = PathBuf::new();
+        path.push(&SCRIPT_DIR);
+        path.push(&ETH_ACCOUNT_LOCK_PATH);
+        let mut f = fs::File::open(&path).expect("load eth account lock program");
+        f.read_to_end(&mut buf)
+            .expect("read eth account lock program");
+        Bytes::from(buf.to_vec())
+    };
+    pub static ref ETH_ACCOUNT_LOCK_CODE_HASH: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&ETH_ACCOUNT_LOCK_PROGRAM);
+        hasher.finalize(&mut buf);
+        buf
+    };
+    pub static ref ETH_EOA_MAPPING_REGISTRY_VALIDATOR_PROGRAM: Bytes = {
+        let mut buf = Vec::new();
+        let mut path = PathBuf::new();
+        path.push(&ETH_EOA_MAPPING_REGISTRY_VALIDATOR_PATH);
+        let mut f = fs::File::open(&path).expect("load eth eoa mapping registry program");
+        f.read_to_end(&mut buf)
+            .expect("read eth eoa mapping registry program");
+        Bytes::from(buf.to_vec())
+    };
+    pub static ref ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let mut hasher = new_blake2b();
+        hasher.update(&ETH_EOA_MAPPING_REGISTRY_VALIDATOR_PROGRAM);
+        hasher.finalize(&mut buf);
+        buf
+    };
 }
 
 // meta contract
@@ -137,6 +173,12 @@ pub const META_VALIDATOR_SCRIPT_TYPE_HASH: [u8; 32] = [1u8; 32];
 // simple UDT
 pub const SUDT_VALIDATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-validator";
 pub const SUDT_GENERATOR_PATH: &str = "../../.tmp/binaries/godwoken-scripts/sudt-generator";
+
+// eth eoa mapping registry
+pub const ETH_EOA_MAPPING_REGISTRY_VALIDATOR_PATH: &str =
+    "../../.tmp/binaries/godwoken-polyjuice/eth_addr_reg_validator";
+pub const ETH_EOA_MAPPING_REGISTRY_GENERATOR_PATH: &str =
+    "../../.tmp/binaries/godwoken-polyjuice/eth_addr_reg_generator";
 
 pub const DEFAULT_FINALITY_BLOCKS: u64 = 6;
 
@@ -156,6 +198,12 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
             validator_script_type_hash: sudt_validator_script_type_hash.into(),
             backend_type: gw_config::BackendType::Sudt,
         },
+        BackendConfig {
+            validator_path: ETH_EOA_MAPPING_REGISTRY_VALIDATOR_PATH.into(),
+            generator_path: ETH_EOA_MAPPING_REGISTRY_GENERATOR_PATH.into(),
+            validator_script_type_hash: (*ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH).into(),
+            backend_type: gw_config::BackendType::EthAddrReg,
+        },
     ];
     BackendManage::from_config(configs).expect("default backend")
 }
@@ -163,11 +211,18 @@ pub fn build_backend_manage(rollup_config: &RollupConfig) -> BackendManage {
 pub async fn setup_chain(rollup_type_script: Script) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
     let rollup_config = RollupConfig::new_builder()
-        .allowed_eoa_type_hashes(vec![*ALWAYS_SUCCESS_CODE_HASH].pack())
+        .allowed_eoa_type_hashes(
+            vec![*ETH_ACCOUNT_LOCK_CODE_HASH, *ALWAYS_SUCCESS_CODE_HASH].pack(),
+        )
+        .allowed_contract_type_hashes(vec![*ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH].pack())
         .finality_blocks(DEFAULT_FINALITY_BLOCKS.pack())
         .build();
     account_lock_manage
         .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+    account_lock_manage.register_lock_algorithm(
+        (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+        Box::new(Secp256k1Eth::default()),
+    );
     let mut chain = setup_chain_with_account_lock_manage(
         rollup_type_script,
         rollup_config,
@@ -188,6 +243,10 @@ pub async fn setup_chain_with_config(
     let mut account_lock_manage = AccountLockManage::default();
     account_lock_manage
         .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+    account_lock_manage.register_lock_algorithm(
+        (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+        Box::new(Secp256k1Eth::default()),
+    );
     let mut chain = setup_chain_with_account_lock_manage(
         rollup_type_script,
         rollup_config,
@@ -211,6 +270,10 @@ pub async fn restart_chain(
     let rollup_config = chain.generator().rollup_context().rollup_config.to_owned();
     account_lock_manage
         .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+    account_lock_manage.register_lock_algorithm(
+        (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+        Box::new(Secp256k1Eth::default()),
+    );
     let restore_path = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mem_pool = mem_pool.lock().await;
@@ -238,6 +301,10 @@ pub fn chain_generator(chain: &Chain, rollup_type_script: Script) -> Arc<Generat
     let mut account_lock_manage = AccountLockManage::default();
     account_lock_manage
         .register_lock_algorithm((*ALWAYS_SUCCESS_CODE_HASH).into(), Box::new(AlwaysSuccess));
+    account_lock_manage.register_lock_algorithm(
+        (*ETH_ACCOUNT_LOCK_CODE_HASH).into(),
+        Box::new(Secp256k1Eth::default()),
+    );
     let backend_manage = build_backend_manage(&rollup_config);
     let rollup_context = RollupContext {
         rollup_script_hash: rollup_type_script.hash().into(),

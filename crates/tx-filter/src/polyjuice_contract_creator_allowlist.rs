@@ -205,7 +205,7 @@ mod tests {
         let deployment_script = Script::new_builder()
             .code_hash(TEST_POLYJUICE_SCRIPT_CODE_HASH.pack())
             .hash_type(ScriptHashType::Type.into())
-            .args([0u8; 20].pack())
+            .args([0u8; 20].to_vec().pack())
             .build();
 
         let mut dummy_state = DummyState::default();

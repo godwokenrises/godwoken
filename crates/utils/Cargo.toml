@@ -12,6 +12,6 @@ gw-common = { path = "../common" }
 gw-rpc-client = { path = "../rpc-client" }
 anyhow = "1.0"
 faster-hex = "0.4"
-ckb-crypto = "0.38.0"
+ckb-crypto = "0.100.0"
 sha3 = "0.9.1"
 secp256k1 = "0.21"

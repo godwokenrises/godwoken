@@ -464,7 +464,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc92a4d0bdfb77f0f086d608b00a28cecca5bf61e223f7eee449ee90644ca602"
 dependencies = [
  "ckb-constant",
- "ckb-crypto 0.100.0",
+ "ckb-crypto",
  "ckb-dao-utils",
  "ckb-error",
  "ckb-hash",
@@ -495,25 +495,11 @@ checksum = "83f76e9b4af7840e31f786e13ac4e37848e92489c8f433e714b0e7af1aa2b94b"
 
 [[package]]
 name = "ckb-crypto"
-version = "0.38.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43ad3faacf9c88c40a58c43e0b16311a46ba0f611d3528e5946a5d36ede2c68f"
-dependencies = [
- "ckb-fixed-hash 0.38.0",
- "failure",
- "faster-hex 0.4.1",
- "lazy_static",
- "rand 0.6.5",
- "secp256k1 0.17.2",
-]
-
-[[package]]
-name = "ckb-crypto"
 version = "0.100.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f37962d1d4afd8ea29caa07cee90fde9866f0e854aafecbe705ffe0e2f858aec"
 dependencies = [
- "ckb-fixed-hash 0.100.0",
+ "ckb-fixed-hash",
  "faster-hex 0.6.1",
  "lazy_static",
  "rand 0.7.3",
@@ -546,33 +532,12 @@ dependencies = [
 
 [[package]]
 name = "ckb-fixed-hash"
-version = "0.38.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "815e47dc312b1fea6400a7242522caaba3e8ce763c69c2a005d2783925db2480"
-dependencies = [
- "ckb-fixed-hash-core 0.38.0",
- "ckb-fixed-hash-macros 0.38.0",
-]
-
-[[package]]
-name = "ckb-fixed-hash"
 version = "0.100.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ba28c5410970e02831bb78de4858d222e050bfdb2d1c3c1e6ea0bb98432f153"
 dependencies = [
- "ckb-fixed-hash-core 0.100.0",
- "ckb-fixed-hash-macros 0.100.0",
-]
-
-[[package]]
-name = "ckb-fixed-hash-core"
-version = "0.38.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d70f4d93b9d621f5594dd6b5b8127c48348656ee2145f13bdb38b6209fbbed3"
-dependencies = [
- "failure",
- "faster-hex 0.4.1",
- "serde",
+ "ckb-fixed-hash-core",
+ "ckb-fixed-hash-macros",
 ]
 
 [[package]]
@@ -588,23 +553,11 @@ dependencies = [
 
 [[package]]
 name = "ckb-fixed-hash-macros"
-version = "0.38.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3320df6adf6d6f4190a176c9a49be64ddea504f78e7620d0c6960df464f8316"
-dependencies = [
- "ckb-fixed-hash-core 0.38.0",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "ckb-fixed-hash-macros"
 version = "0.100.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a08ca951545bf611d6ef7496464d0d06909f48f6c26ac2e52362f7a2891af857"
 dependencies = [
- "ckb-fixed-hash-core 0.100.0",
+ "ckb-fixed-hash-core",
  "proc-macro2",
  "quote",
  "syn",
@@ -766,7 +719,7 @@ dependencies = [
  "bytes 1.1.0",
  "chrono",
  "ckb-chain-spec",
- "ckb-crypto 0.100.0",
+ "ckb-crypto",
  "ckb-error",
  "ckb-hash",
  "ckb-jsonrpc-types",
@@ -841,7 +794,7 @@ dependencies = [
  "bytes 1.1.0",
  "ckb-channel",
  "ckb-error",
- "ckb-fixed-hash 0.100.0",
+ "ckb-fixed-hash",
  "ckb-hash",
  "ckb-occupied-capacity",
  "ckb-rational",
@@ -1720,8 +1673,8 @@ dependencies = [
  "async-jsonrpc-client",
  "async-trait",
  "ckb-chain-spec",
- "ckb-crypto 0.100.0",
- "ckb-fixed-hash 0.100.0",
+ "ckb-crypto",
+ "ckb-fixed-hash",
  "ckb-types",
  "clap",
  "ctrlc",
@@ -1766,7 +1719,7 @@ name = "gw-chain"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ckb-fixed-hash 0.100.0",
+ "ckb-fixed-hash",
  "crossbeam-channel",
  "gw-challenge",
  "gw-common",
@@ -1793,7 +1746,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "ckb-chain-spec",
- "ckb-fixed-hash 0.100.0",
+ "ckb-fixed-hash",
  "ckb-script",
  "ckb-traits",
  "ckb-types",
@@ -1843,7 +1796,7 @@ dependencies = [
 name = "gw-config"
 version = "0.1.0"
 dependencies = [
- "ckb-fixed-hash 0.100.0",
+ "ckb-fixed-hash",
  "gw-jsonrpc-types",
  "reqwest",
  "serde",
@@ -1868,7 +1821,7 @@ name = "gw-dynamic-config"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ckb-fixed-hash 0.100.0",
+ "ckb-fixed-hash",
  "gw-config",
  "gw-jsonrpc-types",
  "gw-tx-filter",
@@ -1886,6 +1839,7 @@ dependencies = [
  "gw-traits",
  "gw-types",
  "gw-utils",
+ "sha3",
 ]
 
 [[package]]
@@ -1927,7 +1881,7 @@ name = "gw-jsonrpc-types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ckb-fixed-hash 0.100.0",
+ "ckb-fixed-hash",
  "ckb-jsonrpc-types",
  "faster-hex 0.4.1",
  "gw-common",
@@ -1967,7 +1921,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-jsonrpc-client",
- "ckb-fixed-hash 0.100.0",
+ "ckb-fixed-hash",
  "ckb-types",
  "clap",
  "crossbeam-channel",
@@ -2001,8 +1955,8 @@ dependencies = [
  "async-channel",
  "async-jsonrpc-client",
  "async-trait",
- "ckb-crypto 0.100.0",
- "ckb-fixed-hash 0.100.0",
+ "ckb-crypto",
+ "ckb-fixed-hash",
  "ckb-types",
  "env_logger",
  "faster-hex 0.4.1",
@@ -2032,8 +1986,8 @@ dependencies = [
  "async-jsonrpc-client",
  "async-trait",
  "bytes 1.1.0",
- "ckb-crypto 0.100.0",
- "ckb-fixed-hash 0.100.0",
+ "ckb-crypto",
+ "ckb-fixed-hash",
  "ckb-types",
  "clap",
  "env_logger",
@@ -2116,9 +2070,9 @@ dependencies = [
  "async-trait",
  "blake2b-rs 0.2.0",
  "ckb-chain-spec",
- "ckb-crypto 0.100.0",
+ "ckb-crypto",
  "ckb-error",
- "ckb-fixed-hash 0.100.0",
+ "ckb-fixed-hash",
  "ckb-hash",
  "ckb-script",
  "ckb-traits",
@@ -2133,6 +2087,7 @@ dependencies = [
  "gw-config",
  "gw-db",
  "gw-dynamic-config",
+ "gw-eoa-mapping",
  "gw-generator",
  "gw-mem-pool",
  "gw-rpc-client",
@@ -2144,7 +2099,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "rand 0.8.4",
- "secp256k1 0.20.3",
+ "secp256k1 0.21.2",
  "serde",
  "serde_json",
  "sha3",
@@ -2160,8 +2115,8 @@ dependencies = [
  "anyhow",
  "async-jsonrpc-client",
  "bech32",
- "ckb-crypto 0.100.0",
- "ckb-fixed-hash 0.100.0",
+ "ckb-crypto",
+ "ckb-fixed-hash",
  "ckb-hash",
  "ckb-jsonrpc-types",
  "ckb-resource",
@@ -2221,7 +2176,7 @@ name = "gw-types"
 version = "0.1.0"
 dependencies = [
  "cfg-if 0.1.10",
- "ckb-fixed-hash 0.100.0",
+ "ckb-fixed-hash",
  "ckb-types",
  "gw-hash",
  "molecule",
@@ -2233,7 +2188,7 @@ name = "gw-utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ckb-crypto 0.38.0",
+ "ckb-crypto",
  "faster-hex 0.4.1",
  "gw-common",
  "gw-config",
@@ -4095,15 +4050,6 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.17.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
-dependencies = [
- "secp256k1-sys 0.1.2",
-]
-
-[[package]]
-name = "secp256k1"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
@@ -4126,16 +4072,8 @@ version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab7883017d5b21f011ef8040ea9c6c7ac90834c0df26a69e4c0b06276151f125"
 dependencies = [
+ "rand 0.6.5",
  "secp256k1-sys 0.4.2",
-]
-
-[[package]]
-name = "secp256k1-sys"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ab2c26f0d3552a0f12e639ae8a64afc2e3db9c52fe32f5fc6c289d38519f220"
-dependencies = [
- "cc",
 ]
 
 [[package]]

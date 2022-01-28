@@ -12,3 +12,4 @@ gw-common = { path = "../common" }
 gw-utils = { path = "../utils" }
 gw-traits = { path = "../traits" }
 anyhow = "1.0"
+sha3 = "0.9.1"
