@@ -325,6 +325,12 @@ async fn run_cli() -> Result<()> {
                         .help("Withdrawal fee, default to 0.0001 CKB"),
                 )
                 .arg(
+                    Arg::with_name("chain-id")
+                        .long("chain-id")
+                        .takes_value(true)
+                        .help("Withdrawal chain-id"),
+                )
+                .arg(
                     Arg::with_name("owner-ckb-address")
                         .short("a")
                         .long("owner-ckb-address")
@@ -1004,6 +1010,7 @@ async fn run_cli() -> Result<()> {
             let capacity = m.value_of("capacity").unwrap();
             let amount = m.value_of("amount").unwrap();
             let fee = m.value_of("fee").unwrap();
+            let chain_id = m.value_of("chain_id").unwrap();
             let scripts_deployment_path = Path::new(m.value_of("scripts-deployment-path").unwrap());
             let config_path = Path::new(m.value_of("config-path").unwrap());
             let godwoken_rpc_url = m.value_of("godwoken-rpc-url").unwrap();
@@ -1016,6 +1023,7 @@ async fn run_cli() -> Result<()> {
                 capacity,
                 amount,
                 fee,
+                chain_id,
                 sudt_script_hash,
                 owner_ckb_address,
                 config_path,
@@ -1145,7 +1153,7 @@ async fn run_cli() -> Result<()> {
             let mut rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
             let config = read_config(config_path)?;
             let pk = read_privkey(privkey_path)?;
-            let fee: u128 = fee.parse().expect("fee format error");
+            let fee: u64 = fee.parse().expect("fee format error");
 
             let account_id = match sudt::account::create_sudt_account(
                 &mut rpc_client,

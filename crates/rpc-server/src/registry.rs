@@ -11,7 +11,7 @@ use gw_jsonrpc_types::{
     godwoken::{
         BackendInfo, ErrorTxReceipt, GlobalState, L2BlockCommittedInfo, L2BlockStatus, L2BlockView,
         L2BlockWithStatus, L2TransactionStatus, L2TransactionWithStatus, LastL2BlockCommittedInfo,
-        NodeInfo, RunResult, SUDTFeeConfig, TxReceipt, WithdrawalStatus, WithdrawalWithStatus,
+        NodeInfo, RunResult, TxReceipt, WithdrawalStatus, WithdrawalWithStatus,
     },
     test_mode::TestModePayload,
 };
@@ -1342,14 +1342,6 @@ async fn get_fee_config(
         meta_cycles_limit: fee.meta_cycles_limit.into(),
         sudt_cycles_limit: fee.sudt_cycles_limit.into(),
         withdraw_cycles_limit: fee.withdraw_cycles_limit.into(),
-        sudt_fee_rate_weight: fee
-            .sudt_fee_rate_weight
-            .iter()
-            .map(|(&sudt_id, &fee_rate_weight)| SUDTFeeConfig {
-                sudt_id,
-                fee_rate_weight: fee_rate_weight.into(),
-            })
-            .collect(),
     };
     Ok(fee_config)
 }

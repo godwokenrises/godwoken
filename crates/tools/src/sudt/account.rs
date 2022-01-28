@@ -5,7 +5,7 @@ use ckb_types::prelude::{Builder, Entity};
 use gw_config::Config;
 use gw_types::{
     core::ScriptHashType,
-    packed::{CreateAccount, Fee, L2Transaction, MetaContractArgs, RawL2Transaction, Script},
+    packed::{CreateAccount, L2Transaction, MetaContractArgs, RawL2Transaction, Script},
 };
 
 use crate::{
@@ -62,7 +62,7 @@ pub fn create_sudt_account(
     rpc_client: &mut GodwokenRpcClient,
     pk: &H256,
     sudt_type_hash: H256,
-    fee: u128,
+    fee: u64,
     config: &Config,
     deployment: &ScriptsDeploymentResult,
     quiet: bool,
@@ -94,14 +94,9 @@ pub fn create_sudt_account(
         return Ok(id);
     }
 
-    let fee = Fee::new_builder()
-        .sudt_id(1u32.pack())
-        .amount(fee.pack())
-        .build();
-
     let create_account = CreateAccount::new_builder()
         .script(l2_script)
-        .fee(fee)
+        .fee(fee.pack())
         .build();
 
     let args = MetaContractArgs::new_builder().set(create_account).build();

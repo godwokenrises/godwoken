@@ -26,7 +26,7 @@ pub fn transfer(
     scripts_deployment_path: &Path,
 ) -> Result<()> {
     let amount: u128 = amount.parse().expect("sUDT amount format error");
-    let fee: u128 = fee.parse().expect("fee format error");
+    let fee: u64 = fee.parse().expect("fee format error");
 
     let scripts_deployment_content = std::fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =

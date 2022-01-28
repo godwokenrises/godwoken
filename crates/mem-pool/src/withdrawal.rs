@@ -299,7 +299,7 @@ mod test {
     use gw_common::H256;
     use gw_types::offchain::RollupContext;
     use gw_types::packed::{
-        Fee, L2Block, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest,
+        L2Block, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest,
         WithdrawalRequestExtra,
     };
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
@@ -334,10 +334,7 @@ mod test {
             .build();
 
         let req = {
-            let fee = Fee::new_builder()
-                .sudt_id(20u32.pack())
-                .amount(50u128.pack())
-                .build();
+            let fee = 50u64;
             let raw = RawWithdrawalRequest::new_builder()
                 .nonce(1u32.pack())
                 .capacity((500 * 10u64.pow(8)).pack())
@@ -345,7 +342,7 @@ mod test {
                 .sudt_script_hash(sudt_script.hash().pack())
                 .account_script_hash(H256::from_u32(10).pack())
                 .owner_lock_hash(owner_lock.hash().pack())
-                .fee(fee)
+                .fee(fee.pack())
                 .build();
             WithdrawalRequest::new_builder()
                 .raw(raw)

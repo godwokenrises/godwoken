@@ -449,12 +449,12 @@ impl Web3Indexer {
                         to_address.copy_from_slice(to_address_data.as_ref());
 
                         let amount: u128 = sudt_transfer.amount().unpack();
-                        let fee: u128 = sudt_transfer.fee().unpack();
+                        let fee: u64 = sudt_transfer.fee().unpack();
                         let value = amount;
 
                         // Represent SUDTTransfer fee in web3 style, set gas_price as 1 temporary.
                         let gas_price = 1;
-                        let gas_limit = fee;
+                        let gas_limit = fee.into();
                         cumulative_gas_used += gas_limit;
 
                         let nonce: u32 = l2_transaction.raw().nonce().unpack();

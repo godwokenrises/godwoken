@@ -195,9 +195,7 @@ impl Generator {
         let sudt_script_hash: H256 = raw.sudt_script_hash().unpack();
         let amount: u128 = raw.amount().unpack();
         let capacity: u64 = raw.capacity().unpack();
-        let fee = raw.fee();
-        let fee_sudt_id: u32 = fee.sudt_id().unpack();
-        let fee_amount: u128 = fee.amount().unpack();
+        let fee: u64 = raw.fee().unpack();
         let account_short_script_hash = to_short_script_hash(&account_script_hash);
 
         // check capacity (use dummy block hash and number)
@@ -228,14 +226,7 @@ impl Generator {
 
         // check CKB balance
         let ckb_balance = state.get_sudt_balance(CKB_SUDT_ACCOUNT_ID, account_short_script_hash)?;
-        let required_ckb_capacity = {
-            let mut required_capacity = capacity as u128;
-            // Count withdrawal fee
-            if fee_sudt_id == CKB_SUDT_ACCOUNT_ID {
-                required_capacity = required_capacity.saturating_add(fee_amount);
-            }
-            required_capacity
-        };
+        let required_ckb_capacity: u128 = capacity.saturating_add(fee).into();
         if required_ckb_capacity > ckb_balance {
             return Err(WithdrawalError::Overdraft.into());
         }
@@ -251,25 +242,13 @@ impl Generator {
             if amount == 0 {
                 return Err(WithdrawalError::NonPositiveSUDTAmount.into());
             }
-            let mut required_amount = amount;
-            if sudt_id == fee_sudt_id {
-                required_amount = required_amount.saturating_add(fee_amount);
-            }
             let balance = state.get_sudt_balance(sudt_id, account_short_script_hash)?;
-            if required_amount > balance {
+            if amount > balance {
                 return Err(WithdrawalError::Overdraft.into());
             }
         } else if amount != 0 {
             // user can't withdrawal CKB token via SUDT fields
             return Err(WithdrawalError::WithdrawFakedCKB.into());
-        }
-
-        // check fees if it isn't been checked yet
-        if fee_sudt_id != CKB_SUDT_ACCOUNT_ID && fee_sudt_id != sudt_id && fee_amount > 0 {
-            let balance = state.get_sudt_balance(fee_sudt_id, account_short_script_hash)?;
-            if fee_amount > balance {
-                return Err(WithdrawalError::Overdraft.into());
-            }
         }
 
         Ok(())
@@ -890,7 +869,7 @@ mod test {
     use gw_types::core::ScriptHashType;
     use gw_types::offchain::RollupContext;
     use gw_types::packed::{
-        Fee, RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
+        RawWithdrawalRequest, RollupConfig, Script, WithdrawalRequest, WithdrawalRequestExtra,
     };
     use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
@@ -916,10 +895,7 @@ mod test {
 
         // ## Fulfill withdrawal request
         let req = {
-            let fee = Fee::new_builder()
-                .sudt_id(20u32.pack())
-                .amount(50u128.pack())
-                .build();
+            let fee = 50u64;
             let raw = RawWithdrawalRequest::new_builder()
                 .nonce(1u32.pack())
                 .capacity((500 * 10u64.pow(8)).pack())
@@ -927,7 +903,7 @@ mod test {
                 .sudt_script_hash(sudt_script.hash().pack())
                 .account_script_hash(H256::from_u32(10).pack())
                 .owner_lock_hash(owner_lock.hash().pack())
-                .fee(fee)
+                .fee(fee.pack())
                 .build();
             WithdrawalRequest::new_builder()
                 .raw(raw)

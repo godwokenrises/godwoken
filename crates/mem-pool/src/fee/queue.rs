@@ -185,7 +185,7 @@ mod tests {
 
         let entry1 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
-            fee_rate: 100,
+            fee: 100 * 1000,
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -193,7 +193,7 @@ mod tests {
 
         let entry2 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
-            fee_rate: 101,
+            fee: 101 * 1000,
             cycles_limit: 1000,
             sender: 3,
             order: queue.len(),
@@ -201,7 +201,7 @@ mod tests {
 
         let entry3 = FeeEntry {
             item: FeeItem::Tx(Default::default()),
-            fee_rate: 100,
+            fee: 100 * 1001,
             cycles_limit: 1001,
             sender: 4,
             order: queue.len(),
@@ -209,7 +209,7 @@ mod tests {
 
         let entry4 = FeeEntry {
             item: FeeItem::Withdrawal(Default::default()),
-            fee_rate: 101,
+            fee: 101 * 1001,
             cycles_limit: 1001,
             sender: 5,
             order: queue.len(),
@@ -270,7 +270,7 @@ mod tests {
                     .raw(RawL2Transaction::new_builder().nonce(1u32.pack()).build())
                     .build(),
             ),
-            fee_rate: 100,
+            fee: 100 * 1000,
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -282,7 +282,7 @@ mod tests {
                     .raw(RawL2Transaction::new_builder().nonce(0u32.pack()).build())
                     .build(),
             ),
-            fee_rate: 100,
+            fee: 100 * 1000,
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -329,7 +329,7 @@ mod tests {
                     .raw(RawL2Transaction::new_builder().nonce(0u32.pack()).build())
                     .build(),
             ),
-            fee_rate: 100,
+            fee: 100 * 1000,
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -341,7 +341,7 @@ mod tests {
                     .raw(RawL2Transaction::new_builder().nonce(0u32.pack()).build())
                     .build(),
             ),
-            fee_rate: 101,
+            fee: 101 * 1000,
             cycles_limit: 1000,
             sender: 2,
             order: queue.len(),
@@ -358,7 +358,7 @@ mod tests {
         {
             let items = queue.fetch(&tree, 3).expect("fetch");
             assert_eq!(items.len(), 1);
-            assert_eq!(items[0].fee_rate, 101);
+            assert_eq!(items[0].fee, 101 * 1000);
             // try fetch remain items
             let items = queue.fetch(&tree, 1).expect("fetch");
             assert_eq!(items.len(), 0);
@@ -392,7 +392,7 @@ mod tests {
                         .raw(RawL2Transaction::new_builder().nonce(i.pack()).build())
                         .build(),
                 ),
-                fee_rate: 100,
+                fee: 100 * 1000,
                 cycles_limit: 1000,
                 sender: 2,
                 order: queue.len(),
@@ -414,7 +414,7 @@ mod tests {
                         )
                         .build(),
                 ),
-                fee_rate: 100,
+                fee: 100 * 1000,
                 cycles_limit: 1000,
                 sender: 2,
                 order: queue.len(),
