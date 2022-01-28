@@ -1,7 +1,7 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::testing_tool::{
-    chain::{setup_chain, ALWAYS_SUCCESS_CODE_HASH},
+    chain::setup_chain, common::random_always_success_script,
     mem_pool_provider::DummyMemPoolProvider,
 };
 
@@ -100,19 +100,6 @@ async fn test_repackage_mem_block() {
         deposit_requests.as_slice(),
     )
     .unwrap()
-}
-
-fn random_always_success_script(rollup_script_hash: &H256) -> Script {
-    let random_bytes: [u8; 32] = rand::random();
-    Script::new_builder()
-        .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
-        .hash_type(ScriptHashType::Type.into())
-        .args({
-            let mut args = rollup_script_hash.as_slice().to_vec();
-            args.extend_from_slice(&random_bytes);
-            args.pack()
-        })
-        .build()
 }
 
 fn into_deposit_info_cell(rollup_context: &RollupContext, request: DepositRequest) -> DepositInfo {

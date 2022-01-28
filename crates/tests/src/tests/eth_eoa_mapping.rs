@@ -20,9 +20,12 @@ use gw_utils::wallet::{privkey_to_eth_account_script, Wallet};
 use secp256k1::{rand::rngs::OsRng, Secp256k1};
 use sha3::{Digest, Keccak256};
 
-use crate::testing_tool::chain::{
-    build_sync_tx, construct_block, setup_chain, ALWAYS_SUCCESS_CODE_HASH,
-    ETH_ACCOUNT_LOCK_CODE_HASH, ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH,
+use crate::testing_tool::{
+    chain::{
+        build_sync_tx, construct_block, setup_chain, ETH_ACCOUNT_LOCK_CODE_HASH,
+        ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH,
+    },
+    common::random_always_success_script,
 };
 
 #[tokio::test]
@@ -479,17 +482,4 @@ async fn test_mem_pool_eth_eoa_mapping_deposit_scan_and_register() -> Result<()>
     }
 
     Ok(())
-}
-
-fn random_always_success_script(rollup_script_hash: &H256) -> Script {
-    let random_bytes: [u8; 32] = rand::random();
-    Script::new_builder()
-        .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
-        .hash_type(ScriptHashType::Type.into())
-        .args({
-            let mut args = rollup_script_hash.as_slice().to_vec();
-            args.extend_from_slice(&random_bytes);
-            args.pack()
-        })
-        .build()
 }
