@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use crate::testing_tool::chain::{
     build_sync_tx, chain_generator, construct_block, restart_chain, setup_chain,
-    ALWAYS_SUCCESS_CODE_HASH,
 };
+use crate::testing_tool::common::random_always_success_script;
 use crate::testing_tool::mem_pool_provider::DummyMemPoolProvider;
 
 use ckb_types::prelude::{Builder, Entity};
@@ -278,19 +278,6 @@ async fn test_restore_mem_block() {
             assert_eq!(reinjected_tx_hash.pack(), tx.hash().pack());
         }
     }
-}
-
-fn random_always_success_script(rollup_script_hash: &H256) -> Script {
-    let random_bytes: [u8; 32] = rand::random();
-    Script::new_builder()
-        .code_hash(ALWAYS_SUCCESS_CODE_HASH.clone().pack())
-        .hash_type(ScriptHashType::Type.into())
-        .args({
-            let mut args = rollup_script_hash.as_slice().to_vec();
-            args.extend_from_slice(&random_bytes);
-            args.pack()
-        })
-        .build()
 }
 
 fn into_deposit_info_cell(rollup_context: &RollupContext, request: DepositRequest) -> DepositInfo {
