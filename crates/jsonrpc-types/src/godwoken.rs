@@ -826,7 +826,8 @@ pub struct RawWithdrawalRequest {
     pub account_script_hash: H256,
     // layer1 lock to withdraw after challenge period
     pub owner_lock_hash: H256,
-    pub fee: Fee,
+    pub chain_id: Uint64,
+    pub fee: Uint64,
 }
 
 impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
@@ -839,6 +840,7 @@ impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
             account_script_hash,
             owner_lock_hash,
             fee,
+            chain_id,
         } = json;
         packed::RawWithdrawalRequest::new_builder()
             .nonce(u32::from(nonce).pack())
@@ -847,7 +849,8 @@ impl From<RawWithdrawalRequest> for packed::RawWithdrawalRequest {
             .sudt_script_hash(sudt_script_hash.pack())
             .account_script_hash(account_script_hash.pack())
             .owner_lock_hash(owner_lock_hash.pack())
-            .fee(fee.into())
+            .chain_id(chain_id.value().pack())
+            .fee(fee.value().pack())
             .build()
     }
 }
@@ -857,6 +860,8 @@ impl From<packed::RawWithdrawalRequest> for RawWithdrawalRequest {
         let nonce: u32 = raw_withdrawal_request.nonce().unpack();
         let capacity: u64 = raw_withdrawal_request.capacity().unpack();
         let amount: u128 = raw_withdrawal_request.amount().unpack();
+        let fee: u64 = raw_withdrawal_request.fee().unpack();
+        let chain_id: u64 = raw_withdrawal_request.chain_id().unpack();
         Self {
             nonce: nonce.into(),
             capacity: capacity.into(),
@@ -864,35 +869,8 @@ impl From<packed::RawWithdrawalRequest> for RawWithdrawalRequest {
             sudt_script_hash: raw_withdrawal_request.sudt_script_hash().unpack(),
             account_script_hash: raw_withdrawal_request.account_script_hash().unpack(),
             owner_lock_hash: raw_withdrawal_request.owner_lock_hash().unpack(),
-            fee: raw_withdrawal_request.fee().into(),
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct Fee {
-    pub sudt_id: Uint32,
-    pub amount: Uint128,
-}
-
-impl From<Fee> for packed::Fee {
-    fn from(json: Fee) -> packed::Fee {
-        let Fee { sudt_id, amount } = json;
-        packed::Fee::new_builder()
-            .sudt_id(u32::from(sudt_id).pack())
-            .amount(u128::from(amount).pack())
-            .build()
-    }
-}
-
-impl From<packed::Fee> for Fee {
-    fn from(fee: packed::Fee) -> Fee {
-        let sudt_id: u32 = fee.sudt_id().unpack();
-        let amount: u128 = fee.amount().unpack();
-        Self {
-            sudt_id: sudt_id.into(),
-            amount: amount.into(),
+            fee: fee.into(),
+            chain_id: chain_id.into(),
         }
     }
 }
@@ -1111,7 +1089,6 @@ pub struct FeeConfig {
     pub meta_cycles_limit: Uint64,
     pub sudt_cycles_limit: Uint64,
     pub withdraw_cycles_limit: Uint64,
-    pub sudt_fee_rate_weight: Vec<SUDTFeeConfig>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]

@@ -209,16 +209,15 @@ impl<S: State + CodeStore> StateExt for S {
         let capacity: u64 = raw.capacity().unpack();
         // pay fee to block producer
         {
-            let sudt_id: u32 = raw.fee().sudt_id().unpack();
-            let amount: u128 = raw.fee().amount().unpack();
+            let fee: u64 = raw.fee().unpack();
             let block_producer_script_hash = self.get_script_hash(block_producer_id)?;
             let block_producer_short_script_hash =
                 to_short_script_hash(&block_producer_script_hash);
             self.pay_fee(
                 withdrawal_short_script_hash,
                 block_producer_short_script_hash,
-                sudt_id,
-                amount,
+                CKB_SUDT_ACCOUNT_ID,
+                fee.into(),
             )?;
         }
         // burn CKB

@@ -1,17 +1,14 @@
 use anyhow::{anyhow, Result};
-use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, H256};
+use gw_common::H256;
 use gw_config::{BackendType, FeeConfig};
 use gw_types::{
     packed::{
-        ETHAddrRegArgs, ETHAddrRegArgsUnion, Fee, L2Transaction, MetaContractArgs,
+        ETHAddrRegArgs, ETHAddrRegArgsUnion, L2Transaction, MetaContractArgs,
         MetaContractArgsUnion, SUDTArgs, SUDTArgsUnion, WithdrawalRequestExtra,
     },
-    prelude::{Builder, Entity, Pack, Unpack},
+    prelude::{Entity, Unpack},
 };
 use std::{cmp::Ordering, convert::TryInto};
-
-const FEE_RATE_WEIGHT_BASE: u64 = 1000;
-const DEFAULT_SUDT_FEE_RATE: u64 = 0;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum FeeItemKind {
@@ -78,8 +75,8 @@ pub struct FeeEntry {
     pub order: usize,
     /// sender
     pub sender: u32,
-    /// fee rate
-    pub fee_rate: u64,
+    /// fee
+    pub fee: u64,
     /// estimate cycles limit
     pub cycles_limit: u64,
 }
@@ -92,8 +89,11 @@ impl PartialOrd for FeeEntry {
 
 impl Ord for FeeEntry {
     fn cmp(&self, other: &Self) -> Ordering {
+        // A / B > C / D => A * D > C * B
         // higher fee rate is priority
-        let ord = self.fee_rate.cmp(&other.fee_rate);
+        let ord = (self.fee as u128)
+            .saturating_mul(other.cycles_limit.into())
+            .cmp(&(other.fee as u128).saturating_mul(self.cycles_limit.into()));
         if ord != Ordering::Equal {
             return ord;
         }
@@ -125,7 +125,7 @@ impl FeeEntry {
         let entry = FeeEntry {
             item: FeeItem::Tx(tx),
             sender,
-            fee_rate: fee.fee_rate,
+            fee: fee.fee,
             cycles_limit: fee.cycles_limit,
             order,
         };
@@ -143,7 +143,7 @@ impl FeeEntry {
         let entry = FeeEntry {
             item: FeeItem::Withdrawal(withdrawal),
             sender,
-            fee_rate: fee.fee_rate,
+            fee: fee.fee,
             cycles_limit: fee.cycles_limit,
             order,
         };
@@ -152,7 +152,7 @@ impl FeeEntry {
 }
 
 struct L2Fee {
-    fee_rate: u64,
+    fee: u64,
     cycles_limit: u64,
 }
 
@@ -161,20 +161,9 @@ fn parse_withdraw_fee_rate(
     raw_withdraw: &gw_types::packed::RawWithdrawalRequest,
 ) -> Result<L2Fee> {
     let fee = raw_withdraw.fee();
-    let sudt_id: u32 = fee.sudt_id().unpack();
     let cycles_limit: u64 = fee_config.withdraw_cycles_limit;
-    let fee_rate_weight = fee_config
-        .sudt_fee_rate_weight
-        .get(&sudt_id.into())
-        .cloned()
-        .unwrap_or(DEFAULT_SUDT_FEE_RATE);
-    let fee_amount: u128 = fee.amount().unpack();
-    let fee_rate = fee_amount
-        .saturating_mul(fee_rate_weight.into())
-        .checked_div(cycles_limit.saturating_mul(FEE_RATE_WEIGHT_BASE).into())
-        .ok_or(anyhow!("can't calculate fee"))?;
     Ok(L2Fee {
-        fee_rate: fee_rate.try_into()?,
+        fee: fee.unpack(),
         cycles_limit,
     })
 }
@@ -189,89 +178,40 @@ fn parse_l2tx_fee_rate(
     match backend_type {
         BackendType::Meta => {
             let meta_args = MetaContractArgs::from_slice(raw_l2tx_args.as_ref())?;
-            let fee = match meta_args.to_enum() {
-                MetaContractArgsUnion::CreateAccount(args) => args.fee(),
+            let fee: u64 = match meta_args.to_enum() {
+                MetaContractArgsUnion::CreateAccount(args) => args.fee().unpack(),
             };
-            let sudt_id: u32 = fee.sudt_id().unpack();
             let cycles_limit: u64 = fee_config.meta_cycles_limit;
-            let fee_amount: u128 = fee.amount().unpack();
-            let fee_rate_weight = fee_config
-                .sudt_fee_rate_weight
-                .get(&sudt_id.into())
-                .cloned()
-                .unwrap_or(DEFAULT_SUDT_FEE_RATE);
-
-            // fee rate = fee / cycles_limit * (weight / FEE_RATE_WEIGHT_BASE)
-            let fee_rate = fee_amount
-                .saturating_mul(fee_rate_weight.into())
-                .checked_div(cycles_limit.saturating_mul(FEE_RATE_WEIGHT_BASE).into())
-                .ok_or(anyhow!("can't calculate fee"))?;
 
             Ok(L2Fee {
-                fee_rate: fee_rate.try_into()?,
+                fee: fee,
                 cycles_limit,
             })
         }
         BackendType::EthAddrReg => {
             let eth_addr_reg_args = ETHAddrRegArgs::from_slice(raw_l2tx_args.as_ref())?;
-            let calc_fee_rate = |fee: Fee| -> Result<u128> {
-                let sudt_id: u32 = fee.sudt_id().unpack();
-                let fee_amount: u128 = fee.amount().unpack();
-                let cycles_limit: u64 = fee_config.eth_addr_reg_cycles_limit;
-                let fee_rate_weight = fee_config
-                    .sudt_fee_rate_weight
-                    .get(&sudt_id.into())
-                    .cloned()
-                    .unwrap_or(DEFAULT_SUDT_FEE_RATE);
-                // fee rate = fee / cycles_limit * (weight / FEE_RATE_WEIGHT_BASE)
-                let rate = fee_amount
-                    .saturating_mul(fee_rate_weight.into())
-                    .checked_div(cycles_limit.saturating_mul(FEE_RATE_WEIGHT_BASE).into())
-                    .ok_or(anyhow!("can't calculate fee"))?;
-
-                Ok(rate)
-            };
-            let fee = Fee::new_builder().sudt_id(CKB_SUDT_ACCOUNT_ID.pack());
-            let fee_rate: u128 = match eth_addr_reg_args.to_enum() {
+            let fee: u64 = match eth_addr_reg_args.to_enum() {
                 ETHAddrRegArgsUnion::EthToGw(_) | ETHAddrRegArgsUnion::GwToEth(_) => 0,
-                ETHAddrRegArgsUnion::SetMapping(args) => {
-                    calc_fee_rate(fee.amount((args.fee().unpack() as u128).pack()).build())?
-                }
-                ETHAddrRegArgsUnion::BatchSetMapping(args) => {
-                    calc_fee_rate(fee.amount((args.fee().unpack() as u128).pack()).build())?
-                }
+                ETHAddrRegArgsUnion::SetMapping(args) => args.fee().unpack(),
+                ETHAddrRegArgsUnion::BatchSetMapping(args) => args.fee().unpack(),
             };
             Ok(L2Fee {
-                fee_rate: fee_rate.try_into()?,
+                fee,
                 cycles_limit: fee_config.eth_addr_reg_cycles_limit,
             })
         }
         BackendType::Sudt => {
             let sudt_args = SUDTArgs::from_slice(raw_l2tx_args.as_ref())?;
-            let fee_amount: u128 = match sudt_args.to_enum() {
+            let fee: u64 = match sudt_args.to_enum() {
                 SUDTArgsUnion::SUDTQuery(_) => {
                     // SUDTQuery fee rate is 0
                     0
                 }
                 SUDTArgsUnion::SUDTTransfer(args) => args.fee().unpack(),
             };
-            let sudt_id: u32 = raw_l2tx.to_id().unpack();
             let cycles_limit: u64 = fee_config.sudt_cycles_limit;
-            let fee_rate_weight = fee_config
-                .sudt_fee_rate_weight
-                .get(&sudt_id.into())
-                .cloned()
-                .unwrap_or(DEFAULT_SUDT_FEE_RATE);
 
-            // fee rate = fee / cycles_limit * (weight / FEE_RATE_WEIGHT_BASE)
-            let fee_rate = fee_amount
-                .saturating_mul(fee_rate_weight.into())
-                .checked_div(cycles_limit.saturating_mul(FEE_RATE_WEIGHT_BASE).into())
-                .ok_or(anyhow!("can't calculate fee"))?;
-            Ok(L2Fee {
-                fee_rate: fee_rate.try_into()?,
-                cycles_limit,
-            })
+            Ok(L2Fee { fee, cycles_limit })
         }
         BackendType::Polyjuice => {
             // verify the args of a polyjuice L2TX
@@ -284,7 +224,7 @@ fn parse_l2tx_fee_rate(
             let gas_limit = u64::from_le_bytes(poly_args[8..16].try_into()?);
             let gas_price = u128::from_le_bytes(poly_args[16..32].try_into()?);
             Ok(L2Fee {
-                fee_rate: gas_price.try_into()?,
+                fee: gas_price.saturating_mul(gas_limit.into()).try_into()?,
                 cycles_limit: gas_limit,
             })
         }

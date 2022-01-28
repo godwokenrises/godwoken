@@ -130,7 +130,7 @@ struct RawWithdrawalRequest {
     // layer1 lock to withdraw after challenge period
     owner_lock_hash: Byte32,
     // withdrawal fee, paid to block producer
-    fee: Fee,
+    fee: Uint64,
 }
 
 vector WithdrawalRequestVec <WithdrawalRequest>;
@@ -213,14 +213,9 @@ union MetaContractArgs {
     CreateAccount,
 }
 
-struct Fee {
-    sudt_id: Uint32,
-    amount: Uint128,
-}
-
 table CreateAccount {
     script: Script,
-    fee: Fee,
+    fee: Uint64,
 }
 // --- end of Meta contract
 
@@ -239,7 +234,8 @@ table SUDTTransfer {
     // godwoken short script hash (script_hash[0..n])
     to: Bytes,
     amount: Uint128,
-    fee: Uint128,
+    // paid fee(ckb)
+    fee: Uint64,
 }
 // --- end of layer2 SUDT ---
 

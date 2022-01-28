@@ -3,7 +3,7 @@ use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::prelude::{Builder, Entity};
 use gw_types::{
     core::ScriptHashType,
-    packed::{CreateAccount, Fee, L2Transaction, MetaContractArgs, RawL2Transaction, Script},
+    packed::{CreateAccount, L2Transaction, MetaContractArgs, RawL2Transaction, Script},
 };
 use std::path::Path;
 
@@ -28,7 +28,7 @@ pub fn create_creator_account(
     config_path: &Path,
     scripts_deployment_path: &Path,
 ) -> Result<()> {
-    let fee: u128 = fee_amount.parse().expect("fee format error");
+    let fee: u64 = fee_amount.parse().expect("fee format error");
 
     let scripts_deployment_content = std::fs::read_to_string(scripts_deployment_path)?;
     let scripts_deployment: ScriptsDeploymentResult =
@@ -67,14 +67,9 @@ pub fn create_creator_account(
         return Ok(());
     }
 
-    let fee = Fee::new_builder()
-        .sudt_id(sudt_id.pack())
-        .amount(fee.pack())
-        .build();
-
     let create_account = CreateAccount::new_builder()
         .script(l2_script)
-        .fee(fee)
+        .fee(fee.pack())
         .build();
 
     let args = MetaContractArgs::new_builder().set(create_account).build();

@@ -29,6 +29,7 @@ pub fn withdraw(
     capacity: &str,
     amount: &str,
     fee: &str,
+    chain_id: &str,
     sudt_script_hash: &str,
     owner_ckb_address: &str,
     config_path: &Path,
@@ -37,6 +38,7 @@ pub fn withdraw(
     let sudt_script_hash = H256::from_str(sudt_script_hash.trim().trim_start_matches("0x"))?;
     let capacity = parse_capacity(capacity)?;
     let amount: u128 = amount.parse().expect("sUDT amount format error");
+    let chain_id: u64 = chain_id.parse().expect("chain_id format error");
     let fee = parse_capacity(fee)?;
 
     let scripts_deployment_content = fs::read_to_string(scripts_deployment_path)?;
@@ -83,10 +85,11 @@ pub fn withdraw(
     let account_script_hash = godwoken_rpc_client.get_script_hash(from_id)?;
 
     let raw_request = create_raw_withdrawal_request(
-        &nonce,
-        &capacity,
-        &amount,
-        &fee,
+        nonce,
+        capacity,
+        amount,
+        fee,
+        chain_id,
         &sudt_script_hash,
         &account_script_hash,
         &owner_lock_hash,
@@ -121,27 +124,24 @@ pub fn withdraw(
 
 #[allow(clippy::too_many_arguments)]
 fn create_raw_withdrawal_request(
-    nonce: &u32,
-    capacity: &u64,
-    amount: &u128,
-    fee: &u64,
+    nonce: u32,
+    capacity: u64,
+    amount: u128,
+    fee: u64,
+    chain_id: u64,
     sudt_script_hash: &H256,
     account_script_hash: &H256,
     owner_lock_hash: &H256,
 ) -> Result<RawWithdrawalRequest> {
-    let fee = gw_types::packed::Fee::new_builder()
-        .amount(GwPack::pack(&(*fee as u128)))
-        .sudt_id(GwPack::pack(&1u32)) // default fee type: CKB
-        .build();
-
     let raw = RawWithdrawalRequest::new_builder()
-        .nonce(GwPack::pack(nonce))
-        .capacity(GwPack::pack(capacity))
-        .amount(GwPack::pack(amount))
+        .nonce(GwPack::pack(&nonce))
+        .capacity(GwPack::pack(&capacity))
+        .amount(GwPack::pack(&amount))
         .sudt_script_hash(h256_to_byte32(sudt_script_hash)?)
         .account_script_hash(h256_to_byte32(account_script_hash)?)
         .owner_lock_hash(h256_to_byte32(owner_lock_hash)?)
-        .fee(fee)
+        .fee(fee.pack())
+        .chain_id(chain_id.pack())
         .build();
 
     Ok(raw)

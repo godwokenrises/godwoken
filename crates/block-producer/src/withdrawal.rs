@@ -308,7 +308,7 @@ mod test {
     use gw_types::core::{DepType, ScriptHashType};
     use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo};
     use gw_types::packed::{
-        CellDep, CellInput, CellOutput, Fee, GlobalState, L2Block, OutPoint, RawL2Block,
+        CellDep, CellInput, CellOutput, GlobalState, L2Block, OutPoint, RawL2Block,
         RawWithdrawalRequest, Script, UnlockWithdrawalViaFinalize, UnlockWithdrawalWitness,
         UnlockWithdrawalWitnessUnion, WithdrawalLockArgs, WithdrawalRequest,
         WithdrawalRequestExtra, WitnessArgs,
@@ -348,10 +348,7 @@ mod test {
             .build();
 
         let withdrawal = {
-            let fee = Fee::new_builder()
-                .sudt_id(20u32.pack())
-                .amount(50u128.pack())
-                .build();
+            let fee = 50u64;
             let raw = RawWithdrawalRequest::new_builder()
                 .nonce(1u32.pack())
                 .capacity((500 * 10u64.pow(8)).pack())
@@ -359,7 +356,7 @@ mod test {
                 .sudt_script_hash(sudt_script.hash().pack())
                 .account_script_hash(H256::from_u32(10).pack())
                 .owner_lock_hash(owner_lock.hash().pack())
-                .fee(fee)
+                .fee(fee.pack())
                 .build();
             WithdrawalRequest::new_builder()
                 .raw(raw)

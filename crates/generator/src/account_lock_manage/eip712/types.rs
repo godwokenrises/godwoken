@@ -64,37 +64,17 @@ impl EIP712Encode for WithdrawalAsset {
     }
 }
 
-pub struct Fee {
-    udt_id: u32,
-    udt_amount: u128,
-}
-
-impl EIP712Encode for Fee {
-    fn type_name() -> String {
-        "Fee".to_string()
-    }
-
-    fn encode_type(&self, buf: &mut Vec<u8>) {
-        buf.extend(b"Fee(uint256 UDTId,uint256 UDTAmount)");
-    }
-
-    fn encode_data(&self, buf: &mut Vec<u8>) {
-        use ethabi::Token;
-        buf.extend(ethabi::encode(&[Token::Uint(self.udt_id.into())]));
-        buf.extend(ethabi::encode(&[Token::Uint(self.udt_amount.into())]));
-    }
-}
-
 // RawWithdrawalRequest
 pub struct Withdrawal {
     account_script_hash: [u8; 32],
     nonce: u32,
+    chain_id: u64,
+    // withdrawal fee, paid to block producer
+    fee: u64,
     // layer1 lock to withdraw after challenge period
     layer1_owner_lock: Script,
     // CKB amount
     withdraw: WithdrawalAsset,
-    // withdrawal fee, paid to block producer
-    fee: Fee,
 }
 
 impl EIP712Encode for Withdrawal {
@@ -103,8 +83,7 @@ impl EIP712Encode for Withdrawal {
     }
 
     fn encode_type(&self, buf: &mut Vec<u8>) {
-        buf.extend(b"Withdrawal(bytes32 accountScriptHash,uint256 nonce,Script layer1OwnerLock,WithdrawalAsset withdraw,Fee fee)");
-        self.fee.encode_type(buf);
+        buf.extend(b"Withdrawal(bytes32 accountScriptHash,uint256 nonce,uint256 chainId,uint256 fee,Script layer1OwnerLock,WithdrawalAsset withdraw)");
         self.layer1_owner_lock.encode_type(buf);
         self.withdraw.encode_type(buf);
     }
@@ -115,14 +94,13 @@ impl EIP712Encode for Withdrawal {
             self.account_script_hash.into(),
         )]));
         buf.extend(ethabi::encode(&[Token::Uint(self.nonce.into())]));
+        buf.extend(ethabi::encode(&[Token::Uint(self.chain_id.into())]));
+        buf.extend(ethabi::encode(&[Token::Uint(self.fee.into())]));
         buf.extend(ethabi::encode(&[Token::Uint(
             self.layer1_owner_lock.hash_struct().into(),
         )]));
         buf.extend(ethabi::encode(&[Token::Uint(
             self.withdraw.hash_struct().into(),
-        )]));
-        buf.extend(ethabi::encode(&[Token::Uint(
-            self.fee.hash_struct().into(),
         )]));
     }
 }
@@ -151,10 +129,8 @@ impl Withdrawal {
                 hash_type: hash_type.to_string(),
                 args: owner_lock.args().unpack(),
             },
-            fee: Fee {
-                udt_id: data.fee().sudt_id().unpack(),
-                udt_amount: data.fee().amount().unpack(),
-            },
+            fee: data.fee().unpack(),
+            chain_id: data.chain_id().unpack(),
         };
         Ok(withdrawal)
     }
@@ -219,7 +195,7 @@ mod tests {
     use crate::account_lock_manage::{
         eip712::{
             traits::EIP712Encode,
-            types::{Fee, Script, Withdrawal, WithdrawalAsset},
+            types::{Script, Withdrawal, WithdrawalAsset},
         },
         secp256k1::Secp256k1Eth,
         LockAlgorithm,
@@ -372,6 +348,8 @@ mod tests {
             .try_into()
             .unwrap(),
             nonce: 1,
+            chain_id: 1,
+            fee: 1000,
             layer1_owner_lock: Script {
                 code_hash: hex::decode(
                     "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
@@ -392,10 +370,6 @@ mod tests {
                 .try_into()
                 .unwrap(),
             },
-            fee: Fee {
-                udt_id: 1,
-                udt_amount: 100,
-            },
         };
 
         // verify EIP 712 signature
@@ -407,7 +381,7 @@ mod tests {
             salt: None,
         };
         let message = withdrawal.eip712_message(domain_seperator.hash_struct());
-        let signature: [u8; 65] = hex::decode("05843fcef82e3f584fdaa413d35913f6cdc9cd44724b41e0f84421ad3475fef90610961d6aee8473b4fc59fe8d00dbf037ce209d6bd66f74f18dc97227e8a4991b").unwrap().try_into().unwrap();
+        let signature: [u8; 65] = hex::decode("233f0a5e17b60d71d2bb45fde96b785b77db3e17fd388cfd44e3d7b1d75c5b101c34c8d28a1c265d0dccb772bc738309c95cdc49481a8715777af5f54ac049731c").unwrap().try_into().unwrap();
         let pubkey_hash = Secp256k1Eth::default()
             .recover(message.into(), &signature)
             .unwrap();
