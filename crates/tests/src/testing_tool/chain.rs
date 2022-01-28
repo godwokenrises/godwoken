@@ -333,7 +333,7 @@ pub async fn setup_chain_with_account_lock_manage(
     let rollup_script_hash = rollup_type_script.hash();
     let genesis_config = GenesisConfig {
         timestamp: 0,
-        meta_contract_validator_type_hash: Default::default(),
+        meta_contract_validator_type_hash: META_VALIDATOR_SCRIPT_TYPE_HASH.into(),
         rollup_config: rollup_config.clone().into(),
         rollup_type_hash: rollup_script_hash.into(),
         secp_data_dep: Default::default(),
