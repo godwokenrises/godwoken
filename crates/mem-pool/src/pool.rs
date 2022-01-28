@@ -35,7 +35,7 @@ use gw_types::{
         AccountMerkleState, BlockInfo, L2Block, L2Transaction, Script, TxReceipt,
         WithdrawalRequest, WithdrawalRequestExtra,
     },
-    prelude::{Entity, Pack, Unpack},
+    prelude::{Entity, Unpack},
 };
 use std::{
     cmp::{max, min},
@@ -705,7 +705,9 @@ impl MemPool {
         // deposits
         let deposit_cells = self.pending_deposits.clone();
         self.finalize_deposits(deposit_cells.clone()).await?;
+        self.scan_and_register_eth_mapping(db).await?;
 
+        // Register eth eoa mapping
         // Fan-out next mem block to readonly node
         if let Some(handler) = &self.mem_pool_publish_service {
             let withdrawals = withdrawals.into_iter().map(|w| w.request()).collect();
@@ -837,23 +839,8 @@ impl MemPool {
     async fn finalize_deposits(&mut self, deposit_cells: Vec<DepositInfo>) -> Result<()> {
         let snap = self.mem_pool_state.load();
         let mut state = snap.state()?;
-
-        let mut new_eth_account_hashes: Vec<H256> = Vec::with_capacity(deposit_cells.len());
-        if let Some(eth_eoa_mapping_register) = self.eth_eoa_mapping_register.as_ref() {
-            for cell in deposit_cells.iter() {
-                let lock_script = cell.request.script();
-                let lock_script_hash = lock_script.hash().into();
-                let opt_id = state.get_account_id_by_script_hash(&lock_script_hash)?;
-                if opt_id.is_none()
-                    && lock_script.code_hash() == eth_eoa_mapping_register.lock_code_hash().pack()
-                {
-                    new_eth_account_hashes.push(lock_script_hash);
-                }
-            }
-        }
-
-        // update deposits
         state.tracker_mut().enable();
+        // update deposits
         let deposits: Vec<_> = deposit_cells.iter().map(|c| [c.request.clone()]).collect();
         let mut post_states = Vec::with_capacity(deposits.len());
         let mut touched_keys_vec = Vec::with_capacity(deposits.len());
@@ -875,22 +862,6 @@ impl MemPool {
             touched_keys_vec,
             prev_state_checkpoint,
         );
-
-        if let Some(eth_eoa_mapping_register) = self.eth_eoa_mapping_register.as_ref() {
-            if !new_eth_account_hashes.is_empty() {
-                log::debug!(
-                    "[finalize deposits] batch register {} eth account(s)",
-                    new_eth_account_hashes.len()
-                );
-
-                let tx =
-                    eth_eoa_mapping_register.build_register_tx(&state, new_eth_account_hashes)?;
-                let db = self.store.begin_transaction();
-
-                self.finalize_tx(&db, tx).await?;
-            }
-        }
-
         state.submit_tree_to_mem_block();
 
         Ok(())
@@ -1108,6 +1079,75 @@ impl MemPool {
         }
 
         Ok(tx_receipt)
+    }
+
+    async fn scan_and_register_eth_mapping(&mut self, db: &StoreTransaction) -> Result<()> {
+        let eth_eoa_mapping_register = match self.eth_eoa_mapping_register.as_ref() {
+            Some(register) => register,
+            None => return Ok(()),
+        };
+
+        let mut from_id = None;
+        let mut to_id = None;
+
+        // Scan new eth accounts
+        let mem_block_prev_account_count: u32 =
+            self.mem_block().prev_merkle_state().count().unpack();
+        let mem_block_account_count =
+            { self.mem_pool_state().load().get_mem_block_account_count()? }
+                .ok_or_else(|| anyhow!("none mem block accouont count"))?;
+        if mem_block_account_count != mem_block_prev_account_count {
+            from_id = Some(mem_block_prev_account_count);
+            to_id = Some(mem_block_account_count.saturating_sub(1));
+        }
+
+        // Check parent block new accounts
+        const MAX_PARENT_BLOCKS: u64 = 5;
+        let last_valid_tip_block_hash = db.get_last_valid_tip_block_hash()?;
+        if last_valid_tip_block_hash == self.current_tip.0 {
+            let max_parent_block_number = self.current_tip.1.saturating_sub(MAX_PARENT_BLOCKS);
+            let mut parent_block_number = self.current_tip.1.saturating_sub(1);
+
+            while parent_block_number >= max_parent_block_number && parent_block_number != 0 {
+                let parent_block_hash = { db.get_block_hash_by_number(parent_block_number)? }
+                    .ok_or_else(|| anyhow!("{} block hash not found", parent_block_number))?;
+                let parent_block = { db.get_block(&parent_block_hash)? }
+                    .ok_or_else(|| anyhow!("{} block not found", parent_block_number))?;
+
+                let txs_count: u32 = parent_block.raw().submit_transactions().tx_count().unpack();
+                if txs_count != 0 {
+                    // Since register tx is always first one, all new eth accounts should be
+                    // registered
+                    break;
+                }
+
+                let prev_account_count: u32 = parent_block.raw().prev_account().count().unpack();
+                let post_account_count: u32 = parent_block.raw().post_account().count().unpack();
+                if prev_account_count == post_account_count {
+                    // No new accounts
+                    break;
+                }
+
+                from_id = Some(prev_account_count);
+                if to_id.is_none() {
+                    to_id = Some(post_account_count.saturating_sub(1));
+                }
+
+                parent_block_number = parent_block_number.saturating_sub(1);
+            }
+        }
+
+        if let (Some(from_id), Some(to_id)) = (from_id, to_id) {
+            let snap = self.mem_pool_state.load();
+            let state = snap.state()?;
+            let unregistered_account_hashes =
+                eth_eoa_mapping_register.filter_accounts(&state, from_id, to_id)?;
+            let tx =
+                eth_eoa_mapping_register.build_register_tx(&state, unregistered_account_hashes)?;
+            self.push_transaction(tx).await?;
+        }
+
+        Ok(())
     }
 
     // Only **ReadOnly** node needs this.
