@@ -1687,6 +1687,7 @@ dependencies = [
  "gw-config",
  "gw-db",
  "gw-dynamic-config",
+ "gw-eoa-mapping",
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
