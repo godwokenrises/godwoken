@@ -10,6 +10,7 @@ use gw_types::packed::{
 };
 use gw_types::prelude::{Builder, Entity, Pack};
 use gw_utils::wallet::Wallet;
+use sha3::{Digest, Keccak256};
 
 pub struct EthEoaMappingRegister {
     rollup_script_hash: H256,
@@ -31,7 +32,7 @@ impl EthEoaMappingRegister {
     ) -> Result<Self> {
         // NOTE: Use eth_lock_code_hash to ensure register tx can be verified on chain
         let account_script_hash = {
-            let script = wallet.eth_lock_script(rollup_script_hash, eth_lock_code_hash)?;
+            let script = wallet.eth_lock_script(&rollup_script_hash, &eth_lock_code_hash)?;
             script.hash().into()
         };
         let account_id = state
@@ -57,6 +58,10 @@ impl EthEoaMappingRegister {
         };
 
         Ok(register)
+    }
+
+    pub fn registry_account_id(&self) -> u32 {
+        self.registry_account_id
     }
 
     pub fn lock_code_hash(&self) -> &H256 {
@@ -86,7 +91,13 @@ impl EthEoaMappingRegister {
         Ok(script_hashes)
     }
 
-    pub fn build_register_tx(&self, script_hashes: Vec<H256>) -> Result<L2Transaction> {
+    pub fn build_register_tx(
+        &self,
+        state: &impl State,
+        script_hashes: Vec<H256>,
+    ) -> Result<L2Transaction> {
+        let nonce = state.get_nonce(self.account_id)?;
+
         let fee = Fee::new_builder()
             .amount(0.pack())
             .sudt_id(CKB_SUDT_ACCOUNT_ID.pack())
@@ -104,6 +115,7 @@ impl EthEoaMappingRegister {
         let raw_l2tx = RawL2Transaction::new_builder()
             .from_id(self.account_id.pack())
             .to_id(self.registry_account_id.pack())
+            .nonce(nonce.pack())
             .args(args.as_bytes().pack())
             .build();
 
@@ -112,8 +124,17 @@ impl EthEoaMappingRegister {
             &self.account_script_hash,
             &self.registry_script_hash,
         );
+        let signing_message = {
+            let mut hasher = Keccak256::new();
+            hasher.update("\x19Ethereum Signed Message:\n32");
+            hasher.update(message.as_slice());
+            let buf = hasher.finalize();
+            let mut signing_message = [0u8; 32];
+            signing_message.copy_from_slice(&buf[..]);
+            signing_message
+        };
 
-        let sign = self.wallet.sign_message(message.into())?;
+        let sign = self.wallet.sign_message(signing_message)?;
         let tx = L2Transaction::new_builder()
             .raw(raw_l2tx)
             .signature(sign.pack())

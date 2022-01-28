@@ -883,7 +883,8 @@ impl MemPool {
                     new_eth_account_hashes.len()
                 );
 
-                let tx = eth_eoa_mapping_register.build_register_tx(new_eth_account_hashes)?;
+                let tx =
+                    eth_eoa_mapping_register.build_register_tx(&state, new_eth_account_hashes)?;
                 let db = self.store.begin_transaction();
 
                 self.finalize_tx(&db, tx).await?;

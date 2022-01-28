@@ -17,6 +17,20 @@ impl<'r> Unpack<(H256, H256)> for packed::KVPairReader<'r> {
     }
 }
 
+impl Pack<packed::Byte20> for [u8; 20] {
+    fn pack(&self) -> packed::Byte20 {
+        packed::Byte20::from_slice(self).expect("impossible: fail to pack [u8; 20]")
+    }
+}
+
+impl<'r> Unpack<[u8; 20]> for packed::Byte20Reader<'r> {
+    fn unpack(&self) -> [u8; 20] {
+        let ptr = self.as_slice().as_ptr() as *const [u8; 20];
+        unsafe { *ptr }
+    }
+}
+impl_conversion_for_entity_unpack!([u8; 20], Byte20);
+
 impl_conversion_for_vector!(u32, Uint32Vec, Uint32VecReader);
 impl_conversion_for_vector!((H256, H256), KVPairVec, KVPairVecReader);
 impl_conversion_for_packed_iterator_pack!(KVPair, KVPairVec);

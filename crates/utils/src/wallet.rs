@@ -44,34 +44,14 @@ impl Wallet {
 
     pub fn eth_lock_script(
         &self,
-        rollup_script_hash: H256,
-        eth_account_lock_code_hash: H256,
+        rollup_script_hash: &H256,
+        eth_account_lock_code_hash: &H256,
     ) -> Result<Script> {
-        let pubkey = {
-            let maybe_key = self.privkey.pubkey();
-            let key = maybe_key.map_err(|err| anyhow!("invalid privkey {}", err))?;
-            secp256k1::PublicKey::from_slice(&key.serialize())?
-        };
-        let pubkey_hash = {
-            let mut hasher = Keccak256::new();
-            hasher.update(&pubkey.serialize_uncompressed()[1..]);
-            let buf = hasher.finalize();
-            let mut pubkey_hash = [0u8; 20];
-            pubkey_hash.copy_from_slice(&buf[12..]);
-            pubkey_hash
-        };
-
-        let mut args = Vec::with_capacity(32 + 20);
-        args.extend(rollup_script_hash.as_slice());
-        args.extend(&pubkey_hash);
-
-        let script = Script::new_builder()
-            .code_hash(eth_account_lock_code_hash.pack())
-            .hash_type(ScriptHashType::Type.into())
-            .args(args.pack())
-            .build();
-
-        Ok(script)
+        privkey_to_eth_account_script(
+            &self.privkey,
+            rollup_script_hash,
+            eth_account_lock_code_hash,
+        )
     }
 
     // sign message
@@ -140,4 +120,29 @@ impl Wallet {
         sealed_tx.check_fee_rate()?;
         Ok(sealed_tx.transaction)
     }
+}
+
+pub fn privkey_to_eth_account_script(
+    privkey: &Privkey,
+    rollup_script_hash: &H256,
+    eth_account_lock_code_hash: &H256,
+) -> Result<Script> {
+    let pubkey = secp256k1::PublicKey::from_slice(&privkey.pubkey()?.serialize())?;
+    let pubkey_hash = {
+        let mut hasher = Keccak256::new();
+        hasher.update(&pubkey.serialize_uncompressed()[1..]);
+        hasher.finalize()
+    };
+
+    let mut args = Vec::with_capacity(32 + 20);
+    args.extend(rollup_script_hash.as_slice());
+    args.extend(&pubkey_hash[12..]);
+
+    let script = Script::new_builder()
+        .code_hash(eth_account_lock_code_hash.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args(args.pack())
+        .build();
+
+    Ok(script)
 }
