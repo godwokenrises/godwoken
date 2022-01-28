@@ -13,7 +13,7 @@ use gw_chain::chain::Chain;
 use gw_challenge::offchain::{OffChainMockContext, OffChainMockContextBuildArgs};
 use gw_ckb_hardfork::{GLOBAL_CURRENT_EPOCH_NUMBER, GLOBAL_HARDFORK_SWITCH, GLOBAL_VM_VERSION};
 use gw_common::{blake2b::new_blake2b, H256};
-use gw_config::{BlockProducerConfig, Config, NodeMode};
+use gw_config::{BackendType, BlockProducerConfig, Config, NodeMode};
 use gw_db::migrate::open_or_create_db;
 use gw_dynamic_config::manager::DynamicConfigManager;
 use gw_eoa_mapping::eth_register::EthEoaMappingRegister;
@@ -534,10 +534,22 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                             { base.rollup_config.allowed_eoa_type_hashes().get(0) }.ok_or_else(
                                 || anyhow!("eth eoa mapping eth lock account hash not found"),
                             )?;
+                        // Search eth registry from backend
+                        let eth_registry_code_hash = {
+                            let opt_backend = base.generator.get_backends().iter().find(
+                                |(_code_hash, backend)| {
+                                    backend.backend_type == BackendType::EthAddrReg
+                                },
+                            );
+                            match opt_backend {
+                                Some((code_hash, _)) => code_hash,
+                                None => bail!("eth eoa mapping registry backend not found"),
+                            }
+                        };
                         let eth_eoa_mapping_register = EthEoaMappingRegister::create(
                             &state,
                             base.rollup_context.rollup_script_hash,
-                            eth_mapping_config.eth_registry_code_hash.0.into(),
+                            *eth_registry_code_hash,
                             eth_lock_code_hash.unpack(),
                             wallet,
                         )?;
