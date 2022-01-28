@@ -259,6 +259,10 @@ impl MemPool {
         self.provider = provider;
     }
 
+    pub fn set_eth_eoa_mapping_register(&mut self, register: EthEoaMappingRegister) {
+        self.eth_eoa_mapping_register = Some(register);
+    }
+
     pub fn is_mem_txs_full(&self, expect_slots: usize) -> bool {
         self.mem_block.txs().len().saturating_add(expect_slots) > MAX_MEM_BLOCK_TXS
     }
