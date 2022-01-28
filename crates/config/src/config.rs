@@ -36,6 +36,8 @@ pub struct Config {
     pub reload_config_github_url: Option<GithubConfigUrl>,
     #[serde(default)]
     pub dynamic_config: DynamicConfig,
+    #[serde(default)]
+    pub eth_eoa_mapping_config: Option<EthEoaMappingConfig>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -399,6 +401,12 @@ impl Default for FeeConfig {
             sudt_fee_rate_weight,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EthEoaMappingConfig {
+    pub eth_registry_code_hash: H256,
+    pub register_wallet_config: WalletConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

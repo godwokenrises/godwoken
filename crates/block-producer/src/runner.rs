@@ -16,6 +16,7 @@ use gw_common::{blake2b::new_blake2b, H256};
 use gw_config::{BlockProducerConfig, Config, NodeMode};
 use gw_db::migrate::open_or_create_db;
 use gw_dynamic_config::manager::DynamicConfigManager;
+use gw_eoa_mapping::eth_register::EthEoaMappingRegister;
 use gw_generator::{
     account_lock_manage::{
         secp256k1::{Secp256k1Eth, Secp256k1Tron},
@@ -40,7 +41,7 @@ use gw_rpc_server::{
     server::start_jsonrpc_server,
 };
 use gw_rpc_ws_server::{notify_controller::NotifyService, server::start_jsonrpc_ws_server};
-use gw_store::Store;
+use gw_store::{mem_pool_state::MemStore, Store};
 use gw_types::{
     bytes::Bytes,
     offchain::RollupContext,
@@ -519,6 +520,32 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                     let opt_ws_listen = config.rpc_server.err_receipt_ws_listen.as_ref();
                     opt_ws_listen.map(|_| NotifyService::new().start())
                 };
+                let eth_eoa_mapping_register = match config.eth_eoa_mapping_config.as_ref() {
+                    Some(eth_mapping_config) => {
+                        let mem_store = {
+                            let snap = base.store.get_snapshot();
+                            MemStore::new(snap)
+                        };
+                        let state = mem_store.state()?;
+                        let wallet =
+                            Wallet::from_config(&eth_mapping_config.register_wallet_config)
+                                .with_context(|| "eoa mapping register")?;
+                        let eth_lock_code_hash =
+                            { base.rollup_config.allowed_eoa_type_hashes().get(0) }.ok_or_else(
+                                || anyhow!("eth eoa mapping eth lock account hash not found"),
+                            )?;
+                        let eth_eoa_mapping_register = EthEoaMappingRegister::create(
+                            &state,
+                            base.rollup_context.rollup_script_hash,
+                            eth_mapping_config.eth_registry_code_hash.0.into(),
+                            eth_lock_code_hash.unpack(),
+                            wallet,
+                        )?;
+
+                        Some(eth_eoa_mapping_register)
+                    }
+                    None => None,
+                };
                 let mem_pool = {
                     let args = MemPoolCreateArgs {
                         block_producer_id: block_producer_config.account_id,
@@ -530,7 +557,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         config: config.mem_pool.clone(),
                         node_mode: config.node_mode,
                         dynamic_config_manager: base.dynamic_config_manager.clone(),
-                        eth_eoa_mapping_register: None,
+                        eth_eoa_mapping_register,
                     };
                     Arc::new(Mutex::new(
                         MemPool::create(args)
