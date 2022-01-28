@@ -405,7 +405,6 @@ impl Default for FeeConfig {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct EthEoaMappingConfig {
-    pub eth_registry_code_hash: H256,
     pub register_wallet_config: WalletConfig,
 }
 
