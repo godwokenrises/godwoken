@@ -7318,12 +7318,6 @@ impl ::core::fmt::Display for WithdrawalLockArgs {
         write!(
             f,
             "{}: {}",
-            "account_script_hash",
-            self.account_script_hash()
-        )?;
-        write!(
-            f,
-            ", {}: {}",
             "withdrawal_block_hash",
             self.withdrawal_block_hash()
         )?;
@@ -7332,6 +7326,12 @@ impl ::core::fmt::Display for WithdrawalLockArgs {
             ", {}: {}",
             "withdrawal_block_number",
             self.withdrawal_block_number()
+        )?;
+        write!(
+            f,
+            ", {}: {}",
+            "account_script_hash",
+            self.account_script_hash()
         )?;
         write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
         write!(f, " }}")
@@ -7350,16 +7350,16 @@ impl ::core::default::Default for WithdrawalLockArgs {
 }
 impl WithdrawalLockArgs {
     pub const TOTAL_SIZE: usize = 104;
-    pub const FIELD_SIZES: [usize; 4] = [32, 32, 8, 32];
+    pub const FIELD_SIZES: [usize; 4] = [32, 8, 32, 32];
     pub const FIELD_COUNT: usize = 4;
-    pub fn account_script_hash(&self) -> Byte32 {
+    pub fn withdrawal_block_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
-    pub fn withdrawal_block_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(32..64))
-    }
     pub fn withdrawal_block_number(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(64..72))
+        Uint64::new_unchecked(self.0.slice(32..40))
+    }
+    pub fn account_script_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(40..72))
     }
     pub fn owner_lock_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(72..104))
@@ -7391,9 +7391,9 @@ impl molecule::prelude::Entity for WithdrawalLockArgs {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .account_script_hash(self.account_script_hash())
             .withdrawal_block_hash(self.withdrawal_block_hash())
             .withdrawal_block_number(self.withdrawal_block_number())
+            .account_script_hash(self.account_script_hash())
             .owner_lock_hash(self.owner_lock_hash())
     }
 }
@@ -7419,12 +7419,6 @@ impl<'r> ::core::fmt::Display for WithdrawalLockArgsReader<'r> {
         write!(
             f,
             "{}: {}",
-            "account_script_hash",
-            self.account_script_hash()
-        )?;
-        write!(
-            f,
-            ", {}: {}",
             "withdrawal_block_hash",
             self.withdrawal_block_hash()
         )?;
@@ -7434,22 +7428,28 @@ impl<'r> ::core::fmt::Display for WithdrawalLockArgsReader<'r> {
             "withdrawal_block_number",
             self.withdrawal_block_number()
         )?;
+        write!(
+            f,
+            ", {}: {}",
+            "account_script_hash",
+            self.account_script_hash()
+        )?;
         write!(f, ", {}: {}", "owner_lock_hash", self.owner_lock_hash())?;
         write!(f, " }}")
     }
 }
 impl<'r> WithdrawalLockArgsReader<'r> {
     pub const TOTAL_SIZE: usize = 104;
-    pub const FIELD_SIZES: [usize; 4] = [32, 32, 8, 32];
+    pub const FIELD_SIZES: [usize; 4] = [32, 8, 32, 32];
     pub const FIELD_COUNT: usize = 4;
-    pub fn account_script_hash(&self) -> Byte32Reader<'r> {
+    pub fn withdrawal_block_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
-    pub fn withdrawal_block_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[32..64])
-    }
     pub fn withdrawal_block_number(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[64..72])
+        Uint64Reader::new_unchecked(&self.as_slice()[32..40])
+    }
+    pub fn account_script_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[40..72])
     }
     pub fn owner_lock_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[72..104])
@@ -7478,25 +7478,25 @@ impl<'r> molecule::prelude::Reader<'r> for WithdrawalLockArgsReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct WithdrawalLockArgsBuilder {
-    pub(crate) account_script_hash: Byte32,
     pub(crate) withdrawal_block_hash: Byte32,
     pub(crate) withdrawal_block_number: Uint64,
+    pub(crate) account_script_hash: Byte32,
     pub(crate) owner_lock_hash: Byte32,
 }
 impl WithdrawalLockArgsBuilder {
     pub const TOTAL_SIZE: usize = 104;
-    pub const FIELD_SIZES: [usize; 4] = [32, 32, 8, 32];
+    pub const FIELD_SIZES: [usize; 4] = [32, 8, 32, 32];
     pub const FIELD_COUNT: usize = 4;
-    pub fn account_script_hash(mut self, v: Byte32) -> Self {
-        self.account_script_hash = v;
-        self
-    }
     pub fn withdrawal_block_hash(mut self, v: Byte32) -> Self {
         self.withdrawal_block_hash = v;
         self
     }
     pub fn withdrawal_block_number(mut self, v: Uint64) -> Self {
         self.withdrawal_block_number = v;
+        self
+    }
+    pub fn account_script_hash(mut self, v: Byte32) -> Self {
+        self.account_script_hash = v;
         self
     }
     pub fn owner_lock_hash(mut self, v: Byte32) -> Self {
@@ -7511,9 +7511,9 @@ impl molecule::prelude::Builder for WithdrawalLockArgsBuilder {
         Self::TOTAL_SIZE
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        writer.write_all(self.account_script_hash.as_slice())?;
         writer.write_all(self.withdrawal_block_hash.as_slice())?;
         writer.write_all(self.withdrawal_block_number.as_slice())?;
+        writer.write_all(self.account_script_hash.as_slice())?;
         writer.write_all(self.owner_lock_hash.as_slice())?;
         Ok(())
     }
