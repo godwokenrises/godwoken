@@ -3,7 +3,7 @@ use crate::cancel_challenge::{
     RecoverAccounts, RecoverAccountsContext,
 };
 use crate::enter_challenge::EnterChallenge;
-use crate::offchain::{mock_poa::MockPoA, CKBGenesisInfo};
+use crate::offchain::CKBGenesisInfo;
 use crate::types::VerifyContext;
 use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_utils::transaction_skeleton::TransactionSkeleton;
@@ -24,11 +24,12 @@ use gw_types::packed::{
 use gw_types::prelude::{Builder, Entity, Pack, Unpack};
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 pub struct MockRollup {
     pub rollup_type_script: ScriptOpt,
     pub rollup_context: RollupContext,
+    pub median_time: Duration,
     pub wallet: Wallet,
     pub config: BlockProducerConfig,
     pub ckb_genesis_info: CKBGenesisInfo,
@@ -46,7 +47,6 @@ pub struct MockOutput {
 
 pub fn mock_cancel_challenge_tx(
     mock_rollup: &MockRollup,
-    mock_poa: &MockPoA,
     global_state: GlobalState,
     challenge_target: ChallengeTarget,
     context: VerifyContext,
@@ -79,10 +79,11 @@ pub fn mock_cancel_challenge_tx(
     let mut inputs = Vec::new();
 
     // Rollup
-    let mut rollup_input = mock_rollup.mock_rollup_cell(global_state, mock_poa.lock.clone());
+    let mut rollup_input =
+        mock_rollup.mock_rollup_cell(global_state, mock_rollup.wallet.lock_script().to_owned());
     rollup_input.input = {
         let builder = rollup_input.input.as_builder();
-        builder.since(mock_poa.input_since.pack()).build()
+        builder.since(mock_rollup.mock_input_since().pack()).build()
     };
     inputs.push(rollup_input.clone());
 
@@ -162,14 +163,6 @@ pub fn mock_cancel_challenge_tx(
     let owner_cell = mock_rollup.mock_owner_cell();
     inputs.push(owner_cell.clone());
 
-    // Poa
-    inputs.extend(mock_poa.inputs.clone());
-
-    let poa_cell_deps = mock_poa.cell_deps.clone();
-    tx_skeleton.cell_deps_mut().extend(poa_cell_deps);
-    tx_skeleton.inputs_mut().extend(mock_poa.inputs.clone());
-    tx_skeleton.outputs_mut().extend(mock_poa.outputs.clone());
-
     let owner_dep = mock_rollup.ckb_genesis_info.sighash_dep.clone();
     tx_skeleton.cell_deps_mut().push(owner_dep);
     tx_skeleton.inputs_mut().push(owner_cell);
@@ -191,19 +184,34 @@ pub fn mock_cancel_challenge_tx(
     })
 }
 
+pub struct NewMockRollupArgs {
+    pub rollup_type_script: ScriptOpt,
+    pub rollup_context: RollupContext,
+    pub median_time: Duration,
+    pub wallet: Wallet,
+    pub ckb_genesis_info: CKBGenesisInfo,
+    pub config: BlockProducerConfig,
+    pub builtin_load_data: HashMap<H256, CellDep>,
+    pub contracts_dep_manager: ContractsCellDepManager,
+}
+
 impl MockRollup {
-    pub fn new(
-        rollup_type_script: ScriptOpt,
-        rollup_context: RollupContext,
-        wallet: Wallet,
-        ckb_genesis_info: CKBGenesisInfo,
-        config: BlockProducerConfig,
-        builtin_load_data: HashMap<H256, CellDep>,
-        contracts_dep_manager: ContractsCellDepManager,
-    ) -> Self {
+    pub fn new(args: NewMockRollupArgs) -> Self {
+        let NewMockRollupArgs {
+            rollup_type_script,
+            rollup_context,
+            median_time,
+            wallet,
+            ckb_genesis_info,
+            config,
+            builtin_load_data,
+            contracts_dep_manager,
+        } = args;
+
         MockRollup {
             rollup_type_script,
             rollup_context,
+            median_time,
             wallet,
             config,
             ckb_genesis_info,
@@ -214,6 +222,12 @@ impl MockRollup {
 
     pub fn cell_deps(&self) -> Guard<Arc<ContractsCellDep>> {
         self.contracts_dep_manager.load()
+    }
+
+    fn mock_input_since(&self) -> u64 {
+        /// Transaction since flag
+        const SINCE_BLOCK_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
+        SINCE_BLOCK_TIMESTAMP_FLAG | self.median_time.as_secs()
     }
 
     fn mock_owner_cell(&self) -> InputCellInfo {

@@ -20,7 +20,6 @@ use gw_common::H256;
 use gw_config::{BlockProducerConfig, DebugConfig};
 use gw_generator::ChallengeContext;
 use gw_jsonrpc_types::test_mode::TestModePayload;
-use gw_poa::{PoA, ShouldIssueBlock};
 use gw_rpc_client::contract::ContractsCellDepManager;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_types::bytes::Bytes;
@@ -56,7 +55,6 @@ pub struct Challenger {
     ckb_genesis_info: CKBGenesisInfo,
     builtin_load_data: HashMap<H256, CellDep>,
     chain: Arc<Mutex<Chain>>,
-    poa: Arc<Mutex<PoA>>,
     tests_control: Option<TestModeControl>,
     cleaner: Arc<Cleaner>,
     debug_config: DebugConfig,
@@ -73,7 +71,6 @@ pub struct ChallengerNewArgs {
     pub builtin_load_data: HashMap<H256, CellDep>,
     pub ckb_genesis_info: CKBGenesisInfo,
     pub chain: Arc<Mutex<Chain>>,
-    pub poa: Arc<Mutex<PoA>>,
     pub tests_control: Option<TestModeControl>,
     pub cleaner: Arc<Cleaner>,
     pub offchain_mock_context: OffChainMockContext,
@@ -91,7 +88,6 @@ impl Challenger {
             builtin_load_data,
             ckb_genesis_info,
             chain,
-            poa,
             tests_control,
             cleaner,
             offchain_mock_context,
@@ -106,7 +102,6 @@ impl Challenger {
             debug_config,
             ckb_genesis_info,
             builtin_load_data,
-            poa,
             chain,
             tests_control,
             cleaner,
@@ -126,29 +121,14 @@ impl Challenger {
             }
         }
 
-        let tip_hash = to_tip_hash(&event);
-        let median_time = match self.rpc_client.get_block_median_time(tip_hash).await? {
-            Some(time) => time,
-            None => return Ok(()),
-        };
         let rollup = RollupState::query(&self.rpc_client).await?;
-
-        {
-            let mut poa = self.poa.lock().await;
-            let rollup_input = rollup.rollup_input();
-            let check_lock = poa.should_issue_next_block(median_time, &rollup_input);
-            if ShouldIssueBlock::Yes != check_lock.await? {
-                return Ok(());
-            }
-        }
-
         if let Some(ref tests_control) = self.tests_control {
             if let Some(TestModePayload::Challenge { .. }) = tests_control.payload().await {
                 match rollup.status()? {
                     Status::Halting => return Ok(()), // Already halting, do nothing, we can't challenge block when rollup is halted
                     Status::Running => {
                         let context = tests_control.challenge().await?;
-                        return self.challenge_block(rollup, context, median_time).await;
+                        return self.challenge_block(rollup, context).await;
                     }
                 };
             }
@@ -174,7 +154,7 @@ impl Challenger {
                         .map_err(|_| anyhow!("invalid challenge type"))?;
                     log::info!("challenge block 0x{} target {} type {:?}", hash, idx, type_);
                 }
-                self.challenge_block(rollup, context, median_time).await
+                self.challenge_block(rollup, context).await
             }
             SyncEvent::BadChallenge { cell, context } => {
                 if let Some(ref tests_control) = self.tests_control {
@@ -184,8 +164,7 @@ impl Challenger {
                         _ => unreachable!(),
                     }
                 }
-                self.cancel_challenge(rollup, cell, *context, median_time)
-                    .await
+                self.cancel_challenge(rollup, cell, *context).await
             }
             SyncEvent::WaitChallenge { cell, context } => {
                 if let Some(ref tests_control) = self.tests_control {
@@ -200,8 +179,7 @@ impl Challenger {
                     }
                 }
                 let tip_number = to_tip_number(&event);
-                self.revert(rollup, cell, context, tip_number, median_time)
-                    .await
+                self.revert(rollup, cell, context, tip_number).await
             }
         }
     }
@@ -210,7 +188,6 @@ impl Challenger {
         &self,
         rollup_state: RollupState,
         context: ChallengeContext,
-        median_time: Duration,
     ) -> Result<()> {
         if Status::Halting == rollup_state.status()? {
             // Already entered challenge
@@ -247,15 +224,6 @@ impl Challenger {
         tx_skeleton.outputs_mut().push(rollup_output);
         tx_skeleton.witnesses_mut().push(rollup_witness);
 
-        // Poa
-        {
-            let poa = self.poa.lock().await;
-            let generated_poa = poa
-                .generate(&tx_skeleton.inputs()[0], tx_skeleton.inputs(), median_time)
-                .await?;
-            tx_skeleton.fill_poa(generated_poa, 0)?;
-        }
-
         // Challenge
         let challenge_cell = challenge_output.challenge_cell;
         tx_skeleton.outputs_mut().push(challenge_cell);
@@ -280,7 +248,6 @@ impl Challenger {
         rollup_state: RollupState,
         challenge_cell: ChallengeCell,
         context: VerifyContext,
-        media_time: Duration,
     ) -> Result<()> {
         if Status::Running == rollup_state.status()? {
             // Already cancelled
@@ -356,7 +323,6 @@ impl Challenger {
                 cancel_output,
                 challenge_input,
                 verifier_context.clone(),
-                media_time,
             )
             .await?;
 
@@ -391,7 +357,6 @@ impl Challenger {
         challenge_cell: ChallengeCell,
         context: RevertContext,
         tip_block_number: u64,
-        median_time: Duration,
     ) -> Result<()> {
         if Status::Running == rollup_state.status()? {
             // Already reverted
@@ -474,15 +439,6 @@ impl Challenger {
         tx_skeleton.outputs_mut().push(rollup_output);
         tx_skeleton.witnesses_mut().push(rollup_witness);
 
-        // Poa
-        {
-            let poa = self.poa.lock().await;
-            let generated_poa = poa
-                .generate(&tx_skeleton.inputs()[0], tx_skeleton.inputs(), median_time)
-                .await?;
-            tx_skeleton.fill_poa(generated_poa, 0)?;
-        }
-
         // Challenge
         let challenge_input = to_input_cell_info_with_since(challenge_cell, since);
         let challenge_dep = contracts_dep.challenge_cell_lock.clone().into();
@@ -548,7 +504,6 @@ impl Challenger {
         cancel_output: CancelChallengeOutput,
         challenge_input: InputCellInfo,
         verifier_context: VerifierContext,
-        median_time: Duration,
     ) -> Result<Transaction> {
         let mut tx_skeleton = TransactionSkeleton::default();
         let contracts_dep = self.contracts_dep_manager.load();
@@ -630,15 +585,6 @@ impl Challenger {
             let owner_lock_dep = self.ckb_genesis_info.sighash_dep();
             tx_skeleton.cell_deps_mut().push(owner_lock_dep);
             tx_skeleton.inputs_mut().push(owner_input);
-        }
-
-        // Poa
-        {
-            let poa = self.poa.lock().await;
-            let generated_poa = poa
-                .generate(&tx_skeleton.inputs()[0], tx_skeleton.inputs(), median_time)
-                .await?;
-            tx_skeleton.fill_poa(generated_poa, 0)?;
         }
 
         // ensure no cell dep duplicate
@@ -813,17 +759,6 @@ fn has_lock_cell(tx_skeleton: &TransactionSkeleton, lock: &Script) -> bool {
     inputs.any(|input| input.cell.output.lock().hash() == lock_hash)
 }
 
-fn to_tip_hash(event: &ChainEvent) -> H256 {
-    let tip_block = match event {
-        ChainEvent::Reverted {
-            old_tip: _,
-            new_block,
-        } => new_block,
-        ChainEvent::NewBlock { block } => block,
-    };
-    tip_block.header().hash().into()
-}
-
 fn to_tip_number(event: &ChainEvent) -> u64 {
     let tip_block = match event {
         ChainEvent::Reverted {
@@ -896,7 +831,6 @@ fn validate_load_data_strategy_offchain(
 
         let mock_output = mock_cancel_challenge_tx(
             &mock_context.mock_rollup,
-            &mock_context.mock_poa,
             global_state.clone(),
             challenge_target.clone(),
             context.clone(),

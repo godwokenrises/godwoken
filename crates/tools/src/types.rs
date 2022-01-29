@@ -1,5 +1,5 @@
 use ckb_fixed_hash::H256;
-use ckb_jsonrpc_types::{CellDep, JsonBytes, Script};
+use ckb_jsonrpc_types::{CellDep, Script};
 use gw_config::GenesisConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -13,6 +13,8 @@ pub struct SetupConfig {
     pub cells_lock: Script,
     pub burn_lock: Script,
     pub reward_lock: Script,
+    #[serde(default)]
+    pub rollup_cell_address: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
@@ -25,21 +27,6 @@ pub struct RollupDeploymentResult {
     pub rollup_config_cell_dep: ckb_jsonrpc_types::CellDep,
     pub layer2_genesis_hash: H256,
     pub genesis_config: GenesisConfig,
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-pub struct PoAConfig {
-    pub poa_setup: PoASetup,
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
-pub struct PoASetup {
-    pub identity_size: u8,
-    pub round_interval_uses_seconds: bool,
-    pub identities: Vec<JsonBytes>,
-    pub aggregator_change_threshold: u8,
-    pub round_intervals: u32,
-    pub subblocks_per_round: u32,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
@@ -75,8 +62,6 @@ pub struct ScriptsDeploymentResult {
     pub eth_account_lock: DeployItem,
     pub tron_account_lock: DeployItem,
     pub polyjuice_validator: DeployItem,
-    pub state_validator_lock: DeployItem,
-    pub poa_state: DeployItem,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
@@ -112,9 +97,4 @@ pub struct Programs {
     pub meta_contract_validator: PathBuf,
     // path: godwoken-polyjuice/build/validator
     pub polyjuice_validator: PathBuf,
-
-    // path: clerkb/build/debug/poa.strip
-    pub state_validator_lock: PathBuf,
-    // path: clerkb/build/debug/state.strip
-    pub poa_state: PathBuf,
 }

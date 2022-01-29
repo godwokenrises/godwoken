@@ -164,8 +164,6 @@ pub struct BlockProducerConfig {
     #[serde(skip_serializing)]
     #[serde(default)]
     pub stake_cell_lock_dep: CellDep,
-    pub poa_lock_dep: CellDep,
-    pub poa_state_dep: CellDep,
     #[deprecated]
     #[serde(skip_serializing)]
     #[serde(default)]
@@ -433,8 +431,6 @@ mod test {
         pub rollup_config_cell_dep: CellDep,
         pub deposit_cell_lock_dep: CellDep,
         pub stake_cell_lock_dep: CellDep,
-        pub poa_lock_dep: CellDep,
-        pub poa_state_dep: CellDep,
         pub custodian_cell_lock_dep: CellDep,
         pub withdrawal_cell_lock_dep: CellDep,
         pub challenge_cell_lock_dep: CellDep,

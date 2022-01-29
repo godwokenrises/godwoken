@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -15,7 +14,7 @@ use ckb_sdk::{
     Address, AddressPayload, GenesisInfo, HttpRpcClient, HumanCapacity, SECP256K1,
 };
 use ckb_types::{
-    bytes::{Bytes, BytesMut},
+    bytes::Bytes,
     core::{
         BlockView, Capacity, DepType, EpochNumberWithFraction, ScriptHashType, TransactionBuilder,
         TransactionView,
@@ -32,54 +31,10 @@ use gw_types::{
     prelude::Pack as GwPack, prelude::PackVec as GwPackVec,
 };
 
-use crate::types::{
-    PoAConfig, PoASetup, RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig,
-};
-use crate::utils::transaction::{get_network_type, run_cmd, wait_for_tx, TYPE_ID_CODE_HASH};
+use crate::types::{RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig};
+use crate::utils::transaction::{get_network_type, run_cmd, wait_for_tx};
 
 use std::time::{SystemTime, UNIX_EPOCH};
-
-pub fn serialize_poa_setup(setup: &PoASetup) -> Bytes {
-    let mut buffer = BytesMut::new();
-    if setup.round_interval_uses_seconds {
-        buffer.extend_from_slice(&[1]);
-    } else {
-        buffer.extend_from_slice(&[0]);
-    }
-    if setup.identities.len() > 255 {
-        panic!("Too many identities!");
-    }
-    buffer.extend_from_slice(&[
-        setup.identity_size,
-        setup.identities.len() as u8,
-        setup.aggregator_change_threshold,
-    ]);
-    buffer.extend_from_slice(&setup.round_intervals.to_le_bytes()[..]);
-    buffer.extend_from_slice(&setup.subblocks_per_round.to_le_bytes()[..]);
-    for identity in &setup.identities {
-        if identity.len() < setup.identity_size as usize {
-            panic!("Invalid identity!");
-        }
-        buffer.extend_from_slice(&identity.as_bytes()[..setup.identity_size as usize]);
-    }
-    buffer.freeze()
-}
-
-pub struct PoAData {
-    pub round_initial_subtime: u64,
-    pub subblock_subtime: u64,
-    pub subblock_index: u32,
-    pub aggregator_index: u16,
-}
-
-pub fn serialize_poa_data(data: &PoAData) -> Bytes {
-    let mut buffer = BytesMut::new();
-    buffer.extend_from_slice(&data.round_initial_subtime.to_le_bytes()[..]);
-    buffer.extend_from_slice(&data.subblock_subtime.to_le_bytes()[..]);
-    buffer.extend_from_slice(&data.subblock_index.to_le_bytes()[..]);
-    buffer.extend_from_slice(&data.aggregator_index.to_le_bytes()[..]);
-    buffer.freeze()
-}
 
 struct DeployContext<'a> {
     privkey_path: &'a Path,
@@ -211,7 +166,7 @@ pub struct DeployRollupCellArgs<'a> {
     pub ckb_rpc_url: &'a str,
     pub scripts_result: &'a ScriptsDeploymentResult,
     pub user_rollup_config: &'a UserRollupConfig,
-    pub poa_config: &'a PoAConfig,
+    pub rollup_cell_address: Option<&'a str>,
     pub timestamp: Option<u64>,
     pub skip_config_check: bool,
 }
@@ -222,12 +177,10 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         ckb_rpc_url,
         scripts_result,
         user_rollup_config,
-        poa_config,
+        rollup_cell_address,
         timestamp,
         skip_config_check,
     } = args;
-
-    let poa_setup = poa_config.poa_setup.clone();
 
     let burn_lock_hash: [u8; 32] = {
         let lock: ckb_types::packed::Script = user_rollup_config.burn_lock.clone().into();
@@ -248,9 +201,6 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
                 hex::encode(&burn_lock_hash),
                 hex::encode(expected_burn_lock_hash)
             ));
-        }
-        if poa_setup.round_intervals == 0 {
-            return Err(anyhow!("round intervals value must be greater than 0"));
         }
     }
 
@@ -380,8 +330,6 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     .ok_or_else(|| anyhow!("No live cell found for address: {}", owner_address_string))?;
 
     let rollup_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 0);
-    let poa_setup_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 1);
-    let poa_data_cell_type_id: Bytes = calculate_type_id(&first_cell_input, 2);
     // calculate by: blake2b_hash(firstInput + rullupCell.outputIndex)
     let rollup_type_script = ckb_packed::Script::new_builder()
         .code_hash(CKBPack::pack(
@@ -409,21 +357,12 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     // 2. build rollup cell (with type id)
     let (rollup_output, rollup_data): (ckb_packed::CellOutput, Bytes) = {
         let data = genesis_with_global_state.global_state.as_bytes();
-        let lock_args = Bytes::from(
-            [
-                poa_setup_cell_type_id.deref(),
-                poa_data_cell_type_id.deref(),
-            ]
-            .concat()
-            .to_vec(),
-        );
-        let lock_script = ckb_packed::Script::new_builder()
-            .code_hash(CKBPack::pack(
-                &scripts_result.state_validator_lock.script_type_hash,
-            ))
-            .hash_type(ScriptHashType::Type.into())
-            .args(CKBPack::pack(&lock_args))
-            .build();
+        let lock_script = {
+            let rollup_cell_address = rollup_cell_address.unwrap_or(&owner_address_string);
+            let address = Address::from_str(rollup_cell_address).map_err(|err| anyhow!(err))?;
+            let payload = address.payload();
+            ckb_types::packed::Script::from(payload)
+        };
         let output = ckb_packed::CellOutput::new_builder()
             .lock(lock_script)
             .type_(CKBPack::pack(&Some(rollup_type_script.clone())))
@@ -432,64 +371,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         (output, data)
     };
 
-    // 3. build PoA setup cell (with type id)
-    let (poa_setup_output, poa_setup_data): (ckb_packed::CellOutput, Bytes) = {
-        let data = serialize_poa_setup(&poa_setup);
-        let lock_script = ckb_packed::Script::new_builder()
-            .code_hash(CKBPack::pack(&scripts_result.poa_state.script_type_hash))
-            .hash_type(ScriptHashType::Type.into())
-            .args(CKBPack::pack(
-                &rollup_output.lock().calc_script_hash().as_bytes(),
-            ))
-            .build();
-        let type_script = ckb_packed::Script::new_builder()
-            .code_hash(CKBPack::pack(&TYPE_ID_CODE_HASH))
-            .hash_type(ScriptHashType::Type.into())
-            .args(CKBPack::pack(&poa_setup_cell_type_id))
-            .build();
-        let output = ckb_packed::CellOutput::new_builder()
-            .lock(lock_script)
-            .type_(CKBPack::pack(&Some(type_script)))
-            .build();
-        let output = fit_output_capacity(output, data.len());
-        (output, data)
-    };
-    // 4. build PoA data cell (with type id)
-    let (poa_data_output, poa_data_data): (ckb_packed::CellOutput, Bytes) = {
-        let median_time = rpc_client
-            .get_blockchain_info()
-            .map_err(|err| anyhow!(err))?
-            .median_time
-            .0
-            / 1000;
-        let poa_data = PoAData {
-            round_initial_subtime: median_time,
-            subblock_subtime: median_time,
-            subblock_index: 0,
-            aggregator_index: 0,
-        };
-        let data = serialize_poa_data(&poa_data);
-        let lock_script = ckb_packed::Script::new_builder()
-            .code_hash(CKBPack::pack(&scripts_result.poa_state.script_type_hash))
-            .hash_type(ScriptHashType::Type.into())
-            .args(CKBPack::pack(
-                &rollup_output.lock().calc_script_hash().as_bytes(),
-            ))
-            .build();
-        let type_script = ckb_packed::Script::new_builder()
-            .code_hash(CKBPack::pack(&TYPE_ID_CODE_HASH))
-            .hash_type(ScriptHashType::Type.into())
-            .args(CKBPack::pack(&poa_data_cell_type_id))
-            .build();
-        let output = ckb_packed::CellOutput::new_builder()
-            .lock(lock_script)
-            .type_(CKBPack::pack(&Some(type_script)))
-            .build();
-        let output = fit_output_capacity(output, data.len());
-        (output, data)
-    };
-
-    // 5. put genesis block in rollup cell witness
+    // 3. put genesis block in rollup cell witness
     let witness_0: ckb_packed::WitnessArgs = {
         let output_type = genesis_with_global_state.genesis.as_bytes();
         ckb_packed::WitnessArgs::new_builder()
@@ -497,9 +379,9 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
             .build()
     };
 
-    // 6. deploy genesis rollup cell
-    let outputs_data = vec![rollup_data, poa_setup_data, poa_data_data];
-    let outputs = vec![rollup_output, poa_setup_output, poa_data_output];
+    // 4. deploy genesis rollup cell
+    let outputs_data = vec![rollup_data];
+    let outputs = vec![rollup_output];
     let tx_hash = deploy_context.deploy(
         &mut rpc_client,
         outputs,
@@ -509,7 +391,7 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
         witness_0,
     )?;
 
-    // 7. write genesis deployment result
+    // 5. write genesis deployment result
     let rollup_result = RollupDeploymentResult {
         tx_hash,
         timestamp,

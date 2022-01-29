@@ -103,8 +103,6 @@ impl Default for ScriptsBuildConfig {
                 ),
                 ("polyjuice_generator", "godwoken-polyjuice/build/generator"),
                 ("polyjuice_validator", "godwoken-polyjuice/build/validator"),
-                ("state_validator_lock", "clerkb/build/debug/poa"),
-                ("poa_state", "clerkb/build/debug/state"),
             ]
             .iter()
             .map(|(k, v)| {
@@ -309,8 +307,6 @@ fn generate_script_deploy_config(
         tron_account_lock: get_path("tron_account_lock"),
         meta_contract_validator: get_path("meta_contract_validator"),
         polyjuice_validator: get_path("polyjuice_validator"),
-        state_validator_lock: get_path("state_validator_lock"),
-        poa_state: get_path("poa_state"),
     };
     let build_scripts_result = BuildScriptsResult {
         programs,

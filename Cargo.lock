@@ -1737,7 +1737,6 @@ dependencies = [
  "gw-generator",
  "gw-jsonrpc-types",
  "gw-mem-pool",
- "gw-poa",
  "gw-rpc-client",
  "gw-rpc-server",
  "gw-rpc-ws-server",
@@ -1804,7 +1803,6 @@ dependencies = [
  "gw-db",
  "gw-generator",
  "gw-jsonrpc-types",
- "gw-poa",
  "gw-rpc-client",
  "gw-store",
  "gw-traits",
@@ -1937,7 +1935,6 @@ dependencies = [
  "gw-config",
  "gw-dynamic-config",
  "gw-generator",
- "gw-poa",
  "gw-rpc-client",
  "gw-rpc-ws-server",
  "gw-store",
@@ -1949,21 +1946,6 @@ dependencies = [
  "rand 0.8.4",
  "rdkafka",
  "tempfile",
- "tokio",
-]
-
-[[package]]
-name = "gw-poa"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "gw-common",
- "gw-generator",
- "gw-rpc-client",
- "gw-traits",
- "gw-types",
- "hex",
- "log",
  "tokio",
 ]
 
@@ -2243,7 +2225,6 @@ dependencies = [
  "faster-hex 0.4.1",
  "gw-common",
  "gw-config",
- "gw-poa",
  "gw-rpc-client",
  "gw-types",
 ]

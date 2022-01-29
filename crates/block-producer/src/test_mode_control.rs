@@ -7,23 +7,19 @@ use gw_common::smt::Blake2bHasher;
 use gw_common::H256;
 use gw_generator::ChallengeContext;
 use gw_jsonrpc_types::test_mode::ChallengeType;
-use gw_jsonrpc_types::{
-    godwoken::GlobalState as JsonGlobalState,
-    test_mode::{ShouldProduceBlock, TestModePayload},
-};
-use gw_poa::{PoA, ShouldIssueBlock};
+use gw_jsonrpc_types::{godwoken::GlobalState as JsonGlobalState, test_mode::TestModePayload};
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_rpc_server::registry::TestModeRPC;
 use gw_store::traits::chain_store::ChainStore;
 use gw_store::Store;
 use gw_types::core::{ChallengeTargetType, Status};
-use gw_types::offchain::{global_state_from_slice, InputCellInfo};
+use gw_types::offchain::global_state_from_slice;
 use gw_types::packed::{
     BlockMerkleState, ChallengeTarget, ChallengeWitness, GlobalState, L2Block, L2Transaction,
     SubmitWithdrawals, WithdrawalRequest,
 };
 use gw_types::prelude::{Pack, PackVec};
-use gw_types::{bytes::Bytes, packed::CellInput, prelude::Unpack};
+use gw_types::{bytes::Bytes, prelude::Unpack};
 use tokio::sync::Mutex;
 
 use std::sync::Arc;
@@ -32,16 +28,14 @@ use std::sync::Arc;
 pub struct TestModeControl {
     payload: Arc<Mutex<Option<TestModePayload>>>,
     rpc_client: RPCClient,
-    poa: Arc<Mutex<PoA>>,
     store: Store,
 }
 
 impl TestModeControl {
-    pub fn new(rpc_client: RPCClient, poa: Arc<Mutex<PoA>>, store: Store) -> Self {
+    pub fn new(rpc_client: RPCClient, store: Store) -> Self {
         TestModeControl {
             payload: Arc::new(Mutex::new(None)),
             rpc_client,
-            poa,
             store,
         }
     }
@@ -331,41 +325,5 @@ impl TestModeRPC for TestModeControl {
         *self.payload.lock().await = Some(payload);
 
         Ok(())
-    }
-
-    async fn should_produce_block(&self) -> Result<ShouldProduceBlock> {
-        let rollup_cell = {
-            let opt = self.rpc_client.query_rollup_cell().await?;
-            opt.ok_or_else(|| anyhow!("rollup cell not found"))?
-        };
-
-        let tip_hash: H256 = {
-            let l1_tip_hash_number = self.rpc_client.get_tip().await?;
-            let tip_hash: [u8; 32] = l1_tip_hash_number.block_hash().unpack();
-            tip_hash.into()
-        };
-
-        let ret = {
-            let median_time = match self.rpc_client.get_block_median_time(tip_hash).await? {
-                Some(median_time) => median_time,
-                None => return Ok(ShouldProduceBlock::No),
-            };
-            let poa_cell_input = InputCellInfo {
-                input: CellInput::new_builder()
-                    .previous_output(rollup_cell.out_point.clone())
-                    .build(),
-                cell: rollup_cell.clone(),
-            };
-
-            let mut poa = self.poa.lock().await;
-            poa.should_issue_next_block(median_time, &poa_cell_input)
-                .await?
-        };
-
-        Ok(match ret {
-            ShouldIssueBlock::Yes => ShouldProduceBlock::Yes,
-            ShouldIssueBlock::YesIfFull => ShouldProduceBlock::YesIfFull,
-            ShouldIssueBlock::No => ShouldProduceBlock::No,
-        })
     }
 }

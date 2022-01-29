@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Result};
 use gw_challenge::{
     cancel_challenge::LoadDataStrategy,
     context::build_verify_context,
@@ -18,7 +18,6 @@ use gw_types::{
     packed::{ChallengeTarget, GlobalState, L2Block},
     prelude::{Builder, Entity, Pack, Unpack},
 };
-use gw_utils::wallet::Wallet;
 use rayon::prelude::*;
 
 use std::{
@@ -47,14 +46,9 @@ async fn build_validator(config: Config) -> Result<DBBlockCancelChallengeValidat
     let base = BaseInitComponents::init(&config, true).await?;
     let block_producer_config = config.block_producer.expect("block producer config");
 
-    let wallet =
-        Wallet::from_config(&block_producer_config.wallet_config).with_context(|| "init wallet")?;
-    let poa = base.init_poa(&wallet, &block_producer_config);
-    let mut offchain_mock_context = {
-        let poa = poa.lock().await;
-        base.init_offchain_mock_context(&poa, &block_producer_config)
-            .await?
-    };
+    let mut offchain_mock_context = base
+        .init_offchain_mock_context(&block_producer_config)
+        .await?;
 
     let validator_config = config.db_block_validator.as_ref();
     if let Some(Some(scripts)) = validator_config.map(|c| c.replace_scripts.as_ref()) {
@@ -254,7 +248,6 @@ impl DBBlockCancelChallengeValidator {
         let verify_with_strategy = |load_data_strategy: LoadDataStrategy| -> Result<()> {
             let mock_output = mock_cancel_challenge_tx(
                 &self.mock_ctx.mock_rollup,
-                &self.mock_ctx.mock_poa,
                 global_state.clone(),
                 challenge_target.clone(),
                 verify_context.clone(),

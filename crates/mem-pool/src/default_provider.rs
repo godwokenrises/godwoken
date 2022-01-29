@@ -1,18 +1,14 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use gw_poa::PoA;
 use gw_rpc_client::rpc_client::RPCClient;
 use gw_store::Store;
 use gw_types::{
-    offchain::{
-        CellWithStatus, CollectedCustodianCells, DepositInfo, InputCellInfo, RollupContext,
-    },
-    packed::{CellInput, OutPoint, WithdrawalRequest},
+    offchain::{CellWithStatus, CollectedCustodianCells, DepositInfo, RollupContext},
+    packed::{OutPoint, WithdrawalRequest},
     prelude::*,
 };
-use tokio::sync::Mutex;
 
 use crate::{
     constants::{MAX_MEM_BLOCK_DEPOSITS, MIN_CKB_DEPOSIT_CAPACITY, MIN_SUDT_DEPOSIT_CAPACITY},
@@ -23,18 +19,12 @@ use crate::{
 pub struct DefaultMemPoolProvider {
     /// RPC client
     rpc_client: RPCClient,
-    /// POA Context
-    poa: Arc<Mutex<PoA>>,
     store: Store,
 }
 
 impl DefaultMemPoolProvider {
-    pub fn new(rpc_client: RPCClient, poa: Arc<Mutex<PoA>>, store: Store) -> Self {
-        DefaultMemPoolProvider {
-            rpc_client,
-            poa,
-            store,
-        }
+    pub fn new(rpc_client: RPCClient, store: Store) -> Self {
+        DefaultMemPoolProvider { rpc_client, store }
     }
 }
 
@@ -42,22 +32,13 @@ impl DefaultMemPoolProvider {
 impl MemPoolProvider for DefaultMemPoolProvider {
     async fn estimate_next_blocktime(&self) -> Result<Duration> {
         // estimate next l2block timestamp
-        let poa = self.poa.lock().await;
-        let rollup_cell = self
-            .rpc_client
-            .query_rollup_cell()
-            .await?
-            .ok_or_else(|| anyhow!("can't find rollup cell"))?;
-        let input_cell = InputCellInfo {
-            input: CellInput::new_builder()
-                .previous_output(rollup_cell.out_point.clone())
-                .build(),
-            cell: rollup_cell,
-        };
-        let ctx = poa.query_poa_context(&input_cell).await?;
-        // TODO how to estimate a more accurate timestamp?
-        let timestamp = poa.estimate_next_round_start_time(ctx);
-        Ok(timestamp)
+        const ONE_SECOND: Duration = Duration::from_secs(1);
+        let rpc_client = &self.rpc_client;
+        let tip_block_hash = rpc_client.get_tip().await?.block_hash().unpack();
+        let opt_time = rpc_client.get_block_median_time(tip_block_hash).await?;
+        // Minus one second for first empty block
+        let minus_one_second = opt_time.map(|d| d - ONE_SECOND);
+        minus_one_second.ok_or_else(|| anyhow!("tip block median time not found"))
     }
 
     async fn collect_deposit_cells(&self) -> Result<Vec<DepositInfo>> {
