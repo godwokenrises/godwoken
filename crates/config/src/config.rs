@@ -392,13 +392,12 @@ impl Default for FeeConfig {
         // CKB default weight is 1000 / 1000
         sudt_fee_rate_weight.insert(1u32.into(), 1000u64);
         Self {
-            meta_cycles_limit: 20000, // 20K cycles
-            sudt_cycles_limit: 20000, // 20K cycles
+            // 20K cycles unified for simple Godwoken native contracts
+            meta_cycles_limit: 20000,
+            sudt_cycles_limit: 20000,
+            withdraw_cycles_limit: 20000,
+            eth_addr_reg_cycles_limit: 20000, // 1176198 cycles used
 
-            /// 1176198 cycles in Polyjuice test case
-            eth_addr_reg_cycles_limit: 1_200_000,
-
-            withdraw_cycles_limit: 20000, // 20K cycles
             sudt_fee_rate_weight,
         }
     }
