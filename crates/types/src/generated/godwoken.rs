@@ -16596,20 +16596,20 @@ impl ::core::default::Default for SetMapping {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         SetMapping::new_unchecked(v.into())
     }
 }
 impl SetMapping {
-    pub const TOTAL_SIZE: usize = 52;
-    pub const FIELD_SIZES: [usize; 2] = [32, 20];
+    pub const TOTAL_SIZE: usize = 40;
+    pub const FIELD_SIZES: [usize; 2] = [32, 8];
     pub const FIELD_COUNT: usize = 2;
     pub fn gw_script_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
-    pub fn fee(&self) -> Fee {
-        Fee::new_unchecked(self.0.slice(32..52))
+    pub fn fee(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(32..40))
     }
     pub fn as_reader<'r>(&'r self) -> SetMappingReader<'r> {
         SetMappingReader::new_unchecked(self.as_slice())
@@ -16667,14 +16667,14 @@ impl<'r> ::core::fmt::Display for SetMappingReader<'r> {
     }
 }
 impl<'r> SetMappingReader<'r> {
-    pub const TOTAL_SIZE: usize = 52;
-    pub const FIELD_SIZES: [usize; 2] = [32, 20];
+    pub const TOTAL_SIZE: usize = 40;
+    pub const FIELD_SIZES: [usize; 2] = [32, 8];
     pub const FIELD_COUNT: usize = 2;
     pub fn gw_script_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
-    pub fn fee(&self) -> FeeReader<'r> {
-        FeeReader::new_unchecked(&self.as_slice()[32..52])
+    pub fn fee(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[32..40])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for SetMappingReader<'r> {
@@ -16701,17 +16701,17 @@ impl<'r> molecule::prelude::Reader<'r> for SetMappingReader<'r> {
 #[derive(Debug, Default)]
 pub struct SetMappingBuilder {
     pub(crate) gw_script_hash: Byte32,
-    pub(crate) fee: Fee,
+    pub(crate) fee: Uint64,
 }
 impl SetMappingBuilder {
-    pub const TOTAL_SIZE: usize = 52;
-    pub const FIELD_SIZES: [usize; 2] = [32, 20];
+    pub const TOTAL_SIZE: usize = 40;
+    pub const FIELD_SIZES: [usize; 2] = [32, 8];
     pub const FIELD_COUNT: usize = 2;
     pub fn gw_script_hash(mut self, v: Byte32) -> Self {
         self.gw_script_hash = v;
         self
     }
-    pub fn fee(mut self, v: Fee) -> Self {
+    pub fn fee(mut self, v: Uint64) -> Self {
         self.fee = v;
         self
     }
@@ -16765,8 +16765,7 @@ impl ::core::fmt::Display for BatchSetMapping {
 impl ::core::default::Default for BatchSetMapping {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            36, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0,
+            24, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         BatchSetMapping::new_unchecked(v.into())
     }
@@ -16795,14 +16794,14 @@ impl BatchSetMapping {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         Byte32Vec::new_unchecked(self.0.slice(start..end))
     }
-    pub fn fee(&self) -> Fee {
+    pub fn fee(&self) -> Uint64 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[12..]) as usize;
-            Fee::new_unchecked(self.0.slice(start..end))
+            Uint64::new_unchecked(self.0.slice(start..end))
         } else {
-            Fee::new_unchecked(self.0.slice(start..))
+            Uint64::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> BatchSetMappingReader<'r> {
@@ -16888,14 +16887,14 @@ impl<'r> BatchSetMappingReader<'r> {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn fee(&self) -> FeeReader<'r> {
+    pub fn fee(&self) -> Uint64Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[12..]) as usize;
-            FeeReader::new_unchecked(&self.as_slice()[start..end])
+            Uint64Reader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            FeeReader::new_unchecked(&self.as_slice()[start..])
+            Uint64Reader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -16949,14 +16948,14 @@ impl<'r> molecule::prelude::Reader<'r> for BatchSetMappingReader<'r> {
             return ve!(Self, OffsetsNotMatch);
         }
         Byte32VecReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        FeeReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Uint64Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct BatchSetMappingBuilder {
     pub(crate) gw_script_hashes: Byte32Vec,
-    pub(crate) fee: Fee,
+    pub(crate) fee: Uint64,
 }
 impl BatchSetMappingBuilder {
     pub const FIELD_COUNT: usize = 2;
@@ -16964,7 +16963,7 @@ impl BatchSetMappingBuilder {
         self.gw_script_hashes = v;
         self
     }
-    pub fn fee(mut self, v: Fee) -> Self {
+    pub fn fee(mut self, v: Uint64) -> Self {
         self.fee = v;
         self
     }

@@ -384,12 +384,12 @@ struct GwToEth {
 
 struct SetMapping {
     gw_script_hash: Byte32,
-    fee: Fee,
+    fee: Uint64,
 }
 
 table BatchSetMapping {
     gw_script_hashes: Byte32Vec,
-    fee: Fee,
+    fee: Uint64,
 }
 
 // --- end of ETH Address Registry ---

@@ -1,12 +1,12 @@
 use anyhow::{anyhow, Result};
-use gw_common::H256;
+use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, H256};
 use gw_config::{BackendType, FeeConfig};
 use gw_types::{
     packed::{
         ETHAddrRegArgs, ETHAddrRegArgsUnion, Fee, L2Transaction, MetaContractArgs,
         MetaContractArgsUnion, SUDTArgs, SUDTArgsUnion, WithdrawalRequestExtra,
     },
-    prelude::{Entity, Unpack},
+    prelude::{Builder, Entity, Pack, Unpack},
 };
 use std::{cmp::Ordering, convert::TryInto};
 
@@ -231,10 +231,15 @@ fn parse_l2tx_fee_rate(
 
                 Ok(rate)
             };
+            let fee = Fee::new_builder().sudt_id(CKB_SUDT_ACCOUNT_ID.pack());
             let fee_rate: u128 = match eth_addr_reg_args.to_enum() {
                 ETHAddrRegArgsUnion::EthToGw(_) | ETHAddrRegArgsUnion::GwToEth(_) => 0,
-                ETHAddrRegArgsUnion::SetMapping(args) => calc_fee_rate(args.fee())?,
-                ETHAddrRegArgsUnion::BatchSetMapping(args) => calc_fee_rate(args.fee())?,
+                ETHAddrRegArgsUnion::SetMapping(args) => {
+                    calc_fee_rate(fee.amount((args.fee().unpack() as u128).pack()).build())?
+                }
+                ETHAddrRegArgsUnion::BatchSetMapping(args) => {
+                    calc_fee_rate(fee.amount((args.fee().unpack() as u128).pack()).build())?
+                }
             };
             Ok(L2Fee {
                 fee_rate: fee_rate.try_into()?,

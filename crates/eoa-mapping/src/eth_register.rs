@@ -1,12 +1,10 @@
 use anyhow::{anyhow, Result};
-use gw_common::builtins::CKB_SUDT_ACCOUNT_ID;
 use gw_common::state::State;
 use gw_common::H256;
 use gw_traits::CodeStore;
 use gw_types::core::ScriptHashType;
 use gw_types::packed::{
-    BatchSetMapping, ETHAddrRegArgs, ETHAddrRegArgsUnion, Fee, L2Transaction, RawL2Transaction,
-    Script,
+    BatchSetMapping, ETHAddrRegArgs, ETHAddrRegArgsUnion, L2Transaction, RawL2Transaction, Script,
 };
 use gw_types::prelude::{Builder, Entity, Pack};
 use gw_utils::wallet::Wallet;
@@ -98,13 +96,8 @@ impl EthEoaMappingRegister {
     ) -> Result<L2Transaction> {
         let nonce = state.get_nonce(self.account_id)?;
 
-        let fee = Fee::new_builder()
-            .amount(0.pack())
-            .sudt_id(CKB_SUDT_ACCOUNT_ID.pack())
-            .build();
-
         let batch_set_mapping = BatchSetMapping::new_builder()
-            .fee(fee)
+            .fee(0u64.pack())
             .gw_script_hashes(script_hashes.pack())
             .build();
 
