@@ -2,7 +2,7 @@ use anyhow::Result;
 use ckb_crypto::secp::Privkey;
 use ckb_types::prelude::{Builder, Entity};
 use gw_chain::chain::{L1Action, L1ActionContext, SyncParam};
-use gw_common::{builtins::CKB_SUDT_ACCOUNT_ID, state::State, H256};
+use gw_common::{state::State, H256};
 use gw_eoa_mapping::eth_register::EthEoaMappingRegister;
 use gw_generator::{constants::L2TX_MAX_CYCLES, traits::StateExt};
 use gw_store::{chain_view::ChainView, traits::chain_store::ChainStore};
@@ -11,8 +11,8 @@ use gw_types::{
     core::ScriptHashType,
     packed::{
         BlockInfo, CellOutput, CreateAccount, DepositRequest, ETHAddrRegArgs, ETHAddrRegArgsUnion,
-        EthToGw, Fee, GwToEth, L2BlockCommittedInfo, L2Transaction, MetaContractArgs,
-        RawL2Transaction, Script,
+        EthToGw, GwToEth, L2BlockCommittedInfo, L2Transaction, MetaContractArgs, RawL2Transaction,
+        Script,
     },
     prelude::{Pack, Unpack},
 };
@@ -229,6 +229,7 @@ async fn test_mem_pool_eth_eoa_mapping_deposit_scan_and_register() -> Result<()>
             l2block: deposit_block_result.block.clone(),
             deposit_requests: deposits,
             deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), deposit_block_result.clone()),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -259,13 +260,10 @@ async fn test_mem_pool_eth_eoa_mapping_deposit_scan_and_register() -> Result<()>
         .args(Bytes::copy_from_slice(rollup_script_hash.as_slice()).pack())
         .build();
     let meta_create_args = {
-        let fee = Fee::new_builder()
-            .amount(0.pack())
-            .sudt_id(CKB_SUDT_ACCOUNT_ID.pack())
-            .build();
+        let fee = 0u64;
         let create_account = CreateAccount::new_builder()
             .script(eth_mapping_script.clone())
-            .fee(fee)
+            .fee(fee.pack())
             .build();
         MetaContractArgs::new_builder().set(create_account).build()
     };
@@ -313,6 +311,7 @@ async fn test_mem_pool_eth_eoa_mapping_deposit_scan_and_register() -> Result<()>
             l2block: deploy_result.block.clone(),
             deposit_requests: vec![],
             deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell.clone(), deploy_result),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
@@ -392,6 +391,7 @@ async fn test_mem_pool_eth_eoa_mapping_deposit_scan_and_register() -> Result<()>
             l2block: deposit_block_result.block.clone(),
             deposit_requests: deposits.collect(),
             deposit_asset_scripts: Default::default(),
+            withdrawals: Default::default(),
         },
         transaction: build_sync_tx(rollup_cell, deposit_block_result.clone()),
         l2block_committed_info: L2BlockCommittedInfo::new_builder()
