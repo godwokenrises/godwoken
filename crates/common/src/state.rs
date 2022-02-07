@@ -185,7 +185,7 @@ pub trait State {
 
     fn get_sudt_balance(&self, sudt_id: u32, short_script_hash: &[u8]) -> Result<u128, Error> {
         if short_script_hash.len() != 20 {
-            return Err(Error::InvalidShortAddress);
+            return Err(Error::InvalidShortScriptHash);
         }
         // get balance
         let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_script_hash);
@@ -220,7 +220,7 @@ pub trait State {
         amount: u128,
     ) -> Result<(), Error> {
         if short_script_hash.len() != 20 {
-            return Err(Error::InvalidShortAddress);
+            return Err(Error::InvalidShortScriptHash);
         }
         let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_script_hash);
         let raw_key = build_account_key(sudt_id, &sudt_key);
@@ -250,7 +250,7 @@ pub trait State {
         amount: u128,
     ) -> Result<(), Error> {
         if short_script_hash.len() != 20 {
-            return Err(Error::InvalidShortAddress);
+            return Err(Error::InvalidShortScriptHash);
         }
         let sudt_key = build_sudt_key(SUDT_KEY_FLAG_BALANCE, short_script_hash);
         let raw_key = build_account_key(sudt_id, &sudt_key);
