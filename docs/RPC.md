@@ -284,7 +284,7 @@ Get balance.
 
 #### Params
 
-* Short address
+* Short script hash
 * Simple UDT account ID
 * (Optional) block number, default is tip
 #### Examples
@@ -474,11 +474,11 @@ Response
 
 ### Method `gw_get_script_hash_by_short_script_hash`
 
-Get script hash by short address.
+Get script hash by short script hash.
 
 #### Params
 
-* Short address
+* Short script hash
 
 #### Examples
 

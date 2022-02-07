@@ -56,7 +56,7 @@ pub fn to_godwoken_short_script_hash(
 
 pub fn to_eth_eoa_address(godwoken_rpc_url: &str, godwoken_short_script_hash: &str) -> Result<()> {
     if godwoken_short_script_hash.len() != 42 || !godwoken_short_script_hash.starts_with("0x") {
-        return Err(anyhow!("godwoken short address format error!"));
+        return Err(anyhow!("godwoken short script hash format error!"));
     }
 
     let mut godwoken_rpc_client = GodwokenRpcClient::new(godwoken_rpc_url);
