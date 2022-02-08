@@ -11,7 +11,7 @@ use gw_config::{
     ContractTypeScriptConfig, GenesisConfig, NodeMode, RPCClientConfig, RPCServerConfig,
     StoreConfig, WalletConfig, Web3IndexerConfig,
 };
-use gw_jsonrpc_types::godwoken::L2BlockCommittedInfo;
+use gw_jsonrpc_types::godwoken::{AllowedEoaType, L2BlockCommittedInfo};
 use gw_rpc_client::ckb_client::CKBClient;
 use gw_types::{core::ScriptHashType, packed::Script, prelude::*};
 use std::collections::HashMap;
@@ -200,13 +200,14 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
         rollup_config,
         secp_data_dep,
     };
-    let eth_account_lock_hash = genesis
-        .rollup_config
-        .allowed_eoa_type_hashes
-        .get(0)
+    let allowed_eoa_type_hashes = &genesis.rollup_config.allowed_eoa_type_hashes;
+    let eth_account_lock_type_hash = allowed_eoa_type_hashes
+        .iter()
+        .find(|th| th.type_ == AllowedEoaType::Eth)
         .ok_or_else(|| anyhow!("No allowed EoA type hashes in the rollup config"))?;
-    let tron_allowed_eoa_hash = genesis.rollup_config.allowed_eoa_type_hashes.get(1);
-    let tron_account_lock_hash = tron_allowed_eoa_hash.map(ToOwned::to_owned);
+    let tron_account_lock_type_hash = allowed_eoa_type_hashes
+        .iter()
+        .find(|th| th.type_ == AllowedEoaType::Tron);
 
     let web3_indexer = database_url.map(|database_url| Web3IndexerConfig {
         database_url: database_url.to_owned(),
@@ -214,8 +215,8 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
             .polyjuice_validator
             .script_type_hash
             .clone(),
-        eth_account_lock_hash: eth_account_lock_hash.to_owned(),
-        tron_account_lock_hash,
+        eth_account_lock_hash: eth_account_lock_type_hash.hash.to_owned(),
+        tron_account_lock_hash: tron_account_lock_type_hash.map(|th| th.hash.to_owned()),
     });
 
     let config: Config = Config {

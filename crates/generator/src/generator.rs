@@ -948,7 +948,7 @@ mod test {
         );
         assert_eq!(parsed_args.owner_lock.hash(), owner_lock.hash());
 
-        let lock_args = parsed_args.lock_args.clone();
+        let lock_args = parsed_args.lock_args;
         assert_eq!(
             lock_args.account_script_hash(),
             req.raw().account_script_hash()

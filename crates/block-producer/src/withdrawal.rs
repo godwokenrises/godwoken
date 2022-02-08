@@ -375,7 +375,7 @@ mod test {
         // ## With owner lock
         let withdrawal_extra = WithdrawalRequestExtra::new_builder()
             .request(withdrawal.clone())
-            .owner_lock(owner_lock.clone())
+            .owner_lock(owner_lock)
             .build();
         let withdrawal_extras =
             HashMap::from_iter([(withdrawal.hash().into(), withdrawal_extra.clone())]);

@@ -1,7 +1,6 @@
 use molecule::prelude::Byte;
 
-use crate::packed;
-use crate::packed::{GlobalState, GlobalStateV0};
+use crate::packed::{self, GlobalState, GlobalStateV0};
 use crate::prelude::{Builder, Entity, Pack};
 use core::convert::TryFrom;
 use core::convert::TryInto;
@@ -193,6 +192,96 @@ impl From<GlobalStateV0> for GlobalState {
             .status(global_state_v0.status())
             .tip_block_timestamp(0u64.pack())
             .version(0.into())
+            .build()
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[repr(u8)]
+pub enum AllowedEoaType {
+    Unknown,
+    Eth,
+    Tron,
+}
+
+impl From<AllowedEoaType> for u8 {
+    #[inline]
+    fn from(type_: AllowedEoaType) -> u8 {
+        type_ as u8
+    }
+}
+
+impl TryFrom<u8> for AllowedEoaType {
+    type Error = u8;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(AllowedEoaType::Unknown),
+            1 => Ok(AllowedEoaType::Eth),
+            2 => Ok(AllowedEoaType::Tron),
+            n => Err(n),
+        }
+    }
+}
+
+impl From<AllowedEoaType> for packed::Byte {
+    #[inline]
+    fn from(type_: AllowedEoaType) -> packed::Byte {
+        (type_ as u8).into()
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[repr(u8)]
+pub enum AllowedContractType {
+    Unknown,
+    Meta,
+    Sudt,
+    Polyjuice,
+    EthAddrReg,
+}
+
+impl From<AllowedContractType> for u8 {
+    #[inline]
+    fn from(type_: AllowedContractType) -> u8 {
+        type_ as u8
+    }
+}
+
+impl TryFrom<u8> for AllowedContractType {
+    type Error = u8;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(AllowedContractType::Unknown),
+            1 => Ok(AllowedContractType::Meta),
+            2 => Ok(AllowedContractType::Sudt),
+            3 => Ok(AllowedContractType::Polyjuice),
+            4 => Ok(AllowedContractType::EthAddrReg),
+            n => Err(n),
+        }
+    }
+}
+
+impl From<AllowedContractType> for packed::Byte {
+    #[inline]
+    fn from(type_: AllowedContractType) -> packed::Byte {
+        (type_ as u8).into()
+    }
+}
+
+impl packed::AllowedTypeHash {
+    pub fn new(type_: impl Into<packed::Byte>, hash: impl Pack<packed::Byte32>) -> Self {
+        packed::AllowedTypeHash::new_builder()
+            .type_(type_.into())
+            .hash(hash.pack())
+            .build()
+    }
+
+    pub fn from_unknown(hash: impl Pack<packed::Byte32>) -> Self {
+        packed::AllowedTypeHash::new_builder()
+            .type_(packed::Byte::new(0))
+            .hash(hash.pack())
             .build()
     }
 }

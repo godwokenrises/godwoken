@@ -915,6 +915,128 @@ impl From<packed::L2BlockCommittedInfo> for L2BlockCommittedInfo {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum AllowedEoaType {
+    Unknown,
+    Eth,
+    Tron,
+}
+
+impl From<AllowedEoaType> for packed::Byte {
+    fn from(json: AllowedEoaType) -> packed::Byte {
+        match json {
+            AllowedEoaType::Unknown => packed::Byte::new(0),
+            AllowedEoaType::Eth => packed::Byte::new(1),
+            AllowedEoaType::Tron => packed::Byte::new(2),
+        }
+    }
+}
+
+impl TryFrom<packed::Byte> for AllowedEoaType {
+    type Error = JsonError;
+
+    fn try_from(v: packed::Byte) -> Result<Self, Self::Error> {
+        match u8::from(v) {
+            0 => Ok(AllowedEoaType::Unknown),
+            1 => Ok(AllowedEoaType::Eth),
+            2 => Ok(AllowedEoaType::Tron),
+            _ => Err(anyhow!("invalid allowed eoa type {}", v)),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum AllowedContractType {
+    Unknown,
+    Meta,
+    Sudt,
+    Polyjuice,
+    EthAddrReg,
+}
+
+impl From<AllowedContractType> for packed::Byte {
+    fn from(json: AllowedContractType) -> packed::Byte {
+        match json {
+            AllowedContractType::Unknown => packed::Byte::new(0),
+            AllowedContractType::Meta => packed::Byte::new(1),
+            AllowedContractType::Sudt => packed::Byte::new(2),
+            AllowedContractType::Polyjuice => packed::Byte::new(3),
+            AllowedContractType::EthAddrReg => packed::Byte::new(4),
+        }
+    }
+}
+
+impl TryFrom<packed::Byte> for AllowedContractType {
+    type Error = JsonError;
+
+    fn try_from(v: packed::Byte) -> Result<Self, Self::Error> {
+        match u8::from(v) {
+            0 => Ok(AllowedContractType::Unknown),
+            1 => Ok(AllowedContractType::Meta),
+            2 => Ok(AllowedContractType::Sudt),
+            3 => Ok(AllowedContractType::Polyjuice),
+            4 => Ok(AllowedContractType::EthAddrReg),
+            _ => Err(anyhow!("invalid allowed contract type {}", v)),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct AllowedEoaTypeHash {
+    pub type_: AllowedEoaType,
+    pub hash: H256,
+}
+
+impl From<AllowedEoaTypeHash> for packed::AllowedTypeHash {
+    fn from(type_hash: AllowedEoaTypeHash) -> Self {
+        packed::AllowedTypeHash::new_builder()
+            .type_(type_hash.type_.into())
+            .hash(type_hash.hash.pack())
+            .build()
+    }
+}
+
+impl From<packed::AllowedTypeHash> for AllowedEoaTypeHash {
+    fn from(type_hash: packed::AllowedTypeHash) -> Self {
+        let maybe_type_ = type_hash.type_().try_into();
+
+        Self {
+            type_: maybe_type_.unwrap_or(AllowedEoaType::Unknown),
+            hash: type_hash.hash().unpack(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct AllowedContractTypeHash {
+    pub type_: AllowedContractType,
+    pub hash: H256,
+}
+
+impl From<AllowedContractTypeHash> for packed::AllowedTypeHash {
+    fn from(type_hash: AllowedContractTypeHash) -> Self {
+        packed::AllowedTypeHash::new_builder()
+            .type_(type_hash.type_.into())
+            .hash(type_hash.hash.pack())
+            .build()
+    }
+}
+
+impl From<packed::AllowedTypeHash> for AllowedContractTypeHash {
+    fn from(type_hash: packed::AllowedTypeHash) -> Self {
+        let maybe_type_ = type_hash.type_().try_into();
+
+        Self {
+            type_: maybe_type_.unwrap_or(AllowedContractType::Unknown),
+            hash: type_hash.hash().unpack(),
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct RollupConfig {
@@ -929,9 +1051,9 @@ pub struct RollupConfig {
     pub required_staking_capacity: Uint64,
     pub challenge_maturity_blocks: Uint64,
     pub finality_blocks: Uint64,
-    pub reward_burn_rate: Uint32,           // * reward_burn_rate / 100
-    pub allowed_eoa_type_hashes: Vec<H256>, // list of script code_hash allowed an EOA(external owned account) to use
-    pub allowed_contract_type_hashes: Vec<H256>, // list of script code_hash allowed a contract account to use
+    pub reward_burn_rate: Uint32, // * reward_burn_rate / 100
+    pub allowed_eoa_type_hashes: Vec<AllowedEoaTypeHash>, // list of script code_hash allowed an EOA(external owned account) to use
+    pub allowed_contract_type_hashes: Vec<AllowedContractTypeHash>, // list of script code_hash allowed a contract account to use
 }
 
 impl From<RollupConfig> for packed::RollupConfig {
@@ -970,16 +1092,11 @@ impl From<RollupConfig> for packed::RollupConfig {
             .challenge_maturity_blocks(challenge_maturity_blocks.pack())
             .finality_blocks(finality_blocks.pack())
             .reward_burn_rate(reward_burn_rate.into())
-            .allowed_eoa_type_hashes(
-                allowed_eoa_type_hashes
-                    .into_iter()
-                    .map(|hash| hash.pack())
-                    .pack(),
-            )
+            .allowed_eoa_type_hashes(allowed_eoa_type_hashes.into_iter().map(From::from).pack())
             .allowed_contract_type_hashes(
                 allowed_contract_type_hashes
                     .into_iter()
-                    .map(|hash| hash.pack())
+                    .map(From::from)
                     .pack(),
             )
             .build()
@@ -1008,12 +1125,12 @@ impl From<packed::RollupConfig> for RollupConfig {
             allowed_eoa_type_hashes: data
                 .allowed_eoa_type_hashes()
                 .into_iter()
-                .map(|hash| hash.unpack())
+                .map(From::from)
                 .collect(),
             allowed_contract_type_hashes: data
                 .allowed_contract_type_hashes()
                 .into_iter()
-                .map(|hash| hash.unpack())
+                .map(From::from)
                 .collect(),
         }
     }

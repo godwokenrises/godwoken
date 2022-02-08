@@ -148,7 +148,7 @@ fn check_deposit_cell(ctx: &RollupContext, cell: &DepositInfo) -> Result<()> {
             .rollup_config
             .allowed_eoa_type_hashes()
             .into_iter()
-            .all(|type_hash| script.code_hash() != type_hash)
+            .all(|type_hash| script.code_hash() != type_hash.hash())
         {
             return Err(anyhow!(
                 "Invalid deposit account script: unknown code_hash: {:?}",

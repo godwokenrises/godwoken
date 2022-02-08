@@ -359,10 +359,7 @@ mod test {
         let _err = generator.verified_output(&req_extra, &block).unwrap_err();
 
         // ## With owner lock
-        let req_extra = req_extra
-            .as_builder()
-            .owner_lock(owner_lock.clone())
-            .build();
+        let req_extra = req_extra.as_builder().owner_lock(owner_lock).build();
         let (output, data) = generator.verified_output(&req_extra, &block).unwrap();
         let (expected_output, expected_data) =
             gw_generator::Generator::build_withdrawal_cell_output(

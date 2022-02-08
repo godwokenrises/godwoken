@@ -19,12 +19,12 @@ use gw_mem_pool::pool::{MemPool, MemPoolCreateArgs, OutputParam};
 use gw_store::{traits::chain_store::ChainStore, Store};
 use gw_types::{
     bytes::Bytes,
-    core::ScriptHashType,
+    core::{AllowedContractType, AllowedEoaType, ScriptHashType},
     offchain::{CellInfo, CollectedCustodianCells, DepositInfo, RollupContext},
     packed::{
-        CellOutput, DepositLockArgs, DepositRequest, L2BlockCommittedInfo, RawTransaction,
-        RollupAction, RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, Transaction,
-        WitnessArgs,
+        AllowedTypeHash, CellOutput, DepositLockArgs, DepositRequest, L2BlockCommittedInfo,
+        RawTransaction, RollupAction, RollupActionUnion, RollupConfig, RollupSubmitBlock, Script,
+        Transaction, WitnessArgs,
     },
     prelude::*,
 };
@@ -212,9 +212,19 @@ pub async fn setup_chain(rollup_type_script: Script) -> Chain {
     let mut account_lock_manage = AccountLockManage::default();
     let rollup_config = RollupConfig::new_builder()
         .allowed_eoa_type_hashes(
-            vec![*ETH_ACCOUNT_LOCK_CODE_HASH, *ALWAYS_SUCCESS_CODE_HASH].pack(),
+            vec![
+                AllowedTypeHash::new(AllowedEoaType::Eth, *ETH_ACCOUNT_LOCK_CODE_HASH),
+                AllowedTypeHash::new(AllowedEoaType::Unknown, *ALWAYS_SUCCESS_CODE_HASH),
+            ]
+            .pack(),
         )
-        .allowed_contract_type_hashes(vec![*ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH].pack())
+        .allowed_contract_type_hashes(
+            vec![AllowedTypeHash::new(
+                AllowedContractType::EthAddrReg,
+                *ETH_EOA_MAPPING_REGISTRY_VALIDATOR_CODE_HASH,
+            )]
+            .pack(),
+        )
         .finality_blocks(DEFAULT_FINALITY_BLOCKS.pack())
         .build();
     account_lock_manage

@@ -205,13 +205,13 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                         .rollup_config
                         .allowed_eoa_type_hashes()
                         .into_iter()
-                        .any(|type_hash| type_hash == script.code_hash());
+                        .any(|type_hash| type_hash.hash() == script.code_hash());
                     let is_contract_account = self
                         .rollup_context
                         .rollup_config
                         .allowed_contract_type_hashes()
                         .into_iter()
-                        .any(|type_hash| type_hash == script.code_hash());
+                        .any(|type_hash| type_hash.hash() == script.code_hash());
                     if !is_eoa_account && !is_contract_account {
                         log::debug!(
                             "Invalid deposit account script: unknown code_hash: {:?}",

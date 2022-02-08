@@ -83,7 +83,7 @@ pub fn check_script(
             type_hashes.into_iter().collect()
         };
         if eoa_hash.pack() != eoa_script.hash().pack()
-            || !type_hashes.iter().any(|h| h == &eoa_hash.pack())
+            || !type_hashes.iter().any(|h| h.hash() == eoa_hash.pack())
         {
             bail!("unknown eoa script {}", eoa_hash);
         }
@@ -95,7 +95,7 @@ pub fn check_script(
             type_hashes.into_iter().collect()
         };
         if contract_hash.pack() != contract_script.hash().pack()
-            || !type_hashes.iter().any(|h| h == &contract_hash.pack())
+            || !type_hashes.iter().any(|h| h.hash() == contract_hash.pack())
         {
             bail!("unknown contract script {}", contract_hash);
         }

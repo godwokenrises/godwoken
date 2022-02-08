@@ -166,10 +166,7 @@ async fn test_restore_mem_block() {
         };
         mem_pool.set_provider(Box::new(provider));
         for withdrawal in random_withdrawals.clone() {
-            mem_pool
-                .push_withdrawal_request(withdrawal.into())
-                .await
-                .unwrap();
+            mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
         }
         mem_pool.reset_mem_block().await.unwrap();
         for tx in random_txs.clone() {

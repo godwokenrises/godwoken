@@ -44,6 +44,7 @@ use gw_rpc_ws_server::{notify_controller::NotifyService, server::start_jsonrpc_w
 use gw_store::{mem_pool_state::MemStore, Store};
 use gw_types::{
     bytes::Bytes,
+    core::AllowedEoaType,
     offchain::RollupContext,
     packed::{Byte32, CellDep, NumberHash, RollupConfig, Script},
     prelude::*,
@@ -372,18 +373,23 @@ impl BaseInitComponents {
             let backend_manage = BackendManage::from_config(config.backends.clone())
                 .with_context(|| "config backends")?;
             let mut account_lock_manage = AccountLockManage::default();
-            let eth_lock_script_type_hash = rollup_config
-                .allowed_eoa_type_hashes()
-                .get(0)
+            let allowed_eoa_type_hashes = rollup_config.as_reader().allowed_eoa_type_hashes();
+            let eth_lock_script_type_hash = allowed_eoa_type_hashes
+                .iter()
+                .find(|th| th.type_().to_entity() == AllowedEoaType::Eth.into())
                 .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
             account_lock_manage.register_lock_algorithm(
-                eth_lock_script_type_hash.unpack(),
+                eth_lock_script_type_hash.hash().unpack(),
                 Box::new(Secp256k1Eth::default()),
             );
-            let tron_lock_script_type_hash = rollup_config.allowed_eoa_type_hashes().get(1);
-            if let Some(code_hash) = tron_lock_script_type_hash {
-                account_lock_manage
-                    .register_lock_algorithm(code_hash.unpack(), Box::new(Secp256k1Tron::default()))
+            let tron_lock_script_type_hash = allowed_eoa_type_hashes
+                .iter()
+                .find(|th| th.type_().to_entity() == AllowedEoaType::Tron.into());
+            if let Some(type_hash) = tron_lock_script_type_hash {
+                account_lock_manage.register_lock_algorithm(
+                    type_hash.hash().unpack(),
+                    Box::new(Secp256k1Tron::default()),
+                )
             }
             Arc::new(Generator::new(
                 backend_manage,
@@ -530,10 +536,16 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                         let wallet =
                             Wallet::from_config(&eth_mapping_config.register_wallet_config)
                                 .with_context(|| "eoa mapping register")?;
-                        let eth_lock_code_hash =
-                            { base.rollup_config.allowed_eoa_type_hashes().get(0) }.ok_or_else(
-                                || anyhow!("eth eoa mapping eth lock account hash not found"),
-                            )?;
+                        let eth_lock_code_hash = {
+                            let mut type_hashes =
+                                base.rollup_config.allowed_eoa_type_hashes().into_iter();
+                            let eth_type_hash = type_hashes
+                                .find(|th| th.type_() == AllowedEoaType::Eth.into())
+                                .ok_or_else(|| {
+                                    anyhow!("eth eoa mapping eth lock account hash not found")
+                                })?;
+                            eth_type_hash.hash().unpack()
+                        };
                         // Search eth registry from backend
                         let eth_registry_code_hash = {
                             let opt_backend = base.generator.get_backends().iter().find(
@@ -550,7 +562,7 @@ pub async fn run(config: Config, skip_config_check: bool) -> Result<()> {
                             &state,
                             base.rollup_context.rollup_script_hash,
                             *eth_registry_code_hash,
-                            eth_lock_code_hash.unpack(),
+                            eth_lock_code_hash,
                             wallet,
                         )?;
 
@@ -920,19 +932,23 @@ async fn check_rollup_config_cell(
     let eoa_set = rollup_config
         .allowed_eoa_type_hashes()
         .into_iter()
+        .map(|th| th.hash())
         .collect::<Vec<_>>();
     let contract_set = rollup_config
         .allowed_contract_type_hashes()
         .into_iter()
+        .map(|th| th.hash())
         .collect::<Vec<_>>();
     let unregistered_eoas = cell_data
         .allowed_eoa_type_hashes()
         .into_iter()
+        .map(|th| th.hash())
         .filter(|item| !eoa_set.contains(item))
         .collect::<Vec<_>>();
     let unregistered_contracts = cell_data
         .allowed_contract_type_hashes()
         .into_iter()
+        .map(|th| th.hash())
         .filter(|item| !contract_set.contains(item))
         .collect::<Vec<_>>();
     if !unregistered_eoas.is_empty() || !unregistered_contracts.is_empty() {

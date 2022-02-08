@@ -27,9 +27,9 @@ use gw_types::bytes::Bytes;
 use gw_types::core::{DepType, ScriptHashType};
 use gw_types::offchain::{CellInfo, CollectedCustodianCells, InputCellInfo, RollupContext};
 use gw_types::packed::{
-    CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest, GlobalState,
-    L2BlockCommittedInfo, OutPoint, RawWithdrawalRequest, RollupAction, RollupActionUnion,
-    RollupConfig, RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest,
+    AllowedTypeHash, CellDep, CellInput, CellOutput, CustodianLockArgs, DepositRequest,
+    GlobalState, L2BlockCommittedInfo, OutPoint, RawWithdrawalRequest, RollupAction,
+    RollupActionUnion, RollupConfig, RollupSubmitBlock, Script, StakeLockArgs, WithdrawalRequest,
     WithdrawalRequestExtra, WitnessArgs,
 };
 use gw_types::prelude::{Pack, PackVec, Unpack};
@@ -105,7 +105,9 @@ async fn test_build_unlock_to_owner_tx() {
         .withdrawal_script_type_hash(withdrawal_lock_type.hash().pack())
         .deposit_script_type_hash(deposit_lock_type.hash().pack())
         .l1_sudt_script_type_hash(always_type.hash().pack())
-        .allowed_eoa_type_hashes(vec![ALWAYS_SUCCESS_CODE_HASH.pack()].pack())
+        .allowed_eoa_type_hashes(
+            vec![AllowedTypeHash::from_unknown(*ALWAYS_SUCCESS_CODE_HASH)].pack(),
+        )
         .finality_blocks(1u64.pack())
         .build();
     let rollup_config_type = random_always_success_script(None);
