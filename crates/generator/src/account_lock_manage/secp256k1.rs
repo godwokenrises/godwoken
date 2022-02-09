@@ -180,6 +180,15 @@ impl Secp256k1Eth {
     }
 }
 
+// extract rec_id
+fn extract_rec_id(rec_id: u8) -> u8 {
+    match rec_id {
+        r if r == 27 => 0,
+        r if r == 28 => 1,
+        r => r,
+    }
+}
+
 /// Usage
 /// register AlwaysSuccess to AccountLockManage
 ///
@@ -189,11 +198,8 @@ impl LockAlgorithm for Secp256k1Eth {
         let signature: RecoverableSignature = {
             let signature = convert_signature_to_byte65(signature)?;
             let recid = {
-                let rec_param: i32 = match signature[64] {
-                    28 => 1,
-                    _ => 0,
-                };
-                RecoveryId::from_i32(rec_param)
+                let rec_param = extract_rec_id(signature[64]);
+                RecoveryId::from_i32(rec_param.into())
                     .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?
             };
             let data = &signature[..64];
@@ -320,11 +326,8 @@ impl LockAlgorithm for Secp256k1Tron {
         let signature: RecoverableSignature = {
             let signature: [u8; 65] = convert_signature_to_byte65(signature)?;
             let recid = {
-                let rec_param: i32 = match signature[64] {
-                    28 => 1,
-                    _ => 0,
-                };
-                RecoveryId::from_i32(rec_param)
+                let rec_param = extract_rec_id(signature[64]);
+                RecoveryId::from_i32(rec_param.into())
                     .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?
             };
             let data = &signature[..64];
