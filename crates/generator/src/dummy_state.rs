@@ -133,7 +133,7 @@ mod tests {
             .args([0u8; 42].pack())
             .hash_type(gw_types::core::ScriptHashType::Type.into())
             .build();
-        let id = tree.create_account_from_script(script.to_owned()).unwrap();
+        let id = tree.create_account_from_script(script).unwrap();
         assert_eq!(id, 0);
         // query account info
         for i in 1..15 {
@@ -149,7 +149,7 @@ mod tests {
             .args([0u8; 42].pack())
             .hash_type(gw_types::core::ScriptHashType::Type.into())
             .build();
-        let id = tree.create_account_from_script(script.to_owned()).unwrap();
+        let id = tree.create_account_from_script(script).unwrap();
         assert_eq!(id, 0);
         // query account info
         for i in 1..15 {
@@ -167,13 +167,13 @@ mod tests {
             .args([0u8; 42].pack())
             .hash_type(gw_types::core::ScriptHashType::Type.into())
             .build();
-        let id = tree.create_account_from_script(script.to_owned()).unwrap();
+        let id = tree.create_account_from_script(script).unwrap();
         assert_eq!(id, 0);
         let script = Script::new_builder()
             .args([1u8; 42].pack())
             .hash_type(gw_types::core::ScriptHashType::Type.into())
             .build();
-        let sudt_id = tree.create_account_from_script(script.to_owned()).unwrap();
+        let sudt_id = tree.create_account_from_script(script).unwrap();
         assert_eq!(sudt_id, 1);
         // mint sudt
         let user_a = [1u8; 20];
