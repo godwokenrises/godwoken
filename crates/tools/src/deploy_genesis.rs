@@ -1,5 +1,6 @@
-use std::path::Path;
+use std::iter::FromIterator;
 use std::str::FromStr;
+use std::{collections::HashSet, path::Path};
 
 use anyhow::{anyhow, Result};
 use tempfile::NamedTempFile;
@@ -27,8 +28,12 @@ use ckb_types::{
 use gw_config::GenesisConfig;
 use gw_generator::genesis::build_genesis;
 use gw_types::{
-    packed as gw_packed, packed::RollupConfig, prelude::Entity as GwEntity,
-    prelude::Pack as GwPack, prelude::PackVec as GwPackVec,
+    core::{AllowedContractType, AllowedEoaType},
+    packed as gw_packed,
+    packed::RollupConfig,
+    prelude::Entity as GwEntity,
+    prelude::Pack as GwPack,
+    prelude::PackVec as GwPackVec,
 };
 
 use crate::types::{RollupDeploymentResult, ScriptsDeploymentResult, UserRollupConfig};
@@ -227,25 +232,59 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
     let genesis_info = GenesisInfo::from_block(&genesis_block).map_err(|err| anyhow!(err))?;
 
     // deploy rollup config cell
-    let allowed_contract_type_hashes: Vec<gw_packed::Byte32> = vec![
-        GwPack::pack(&scripts_result.meta_contract_validator.script_type_hash),
-        GwPack::pack(&scripts_result.l2_sudt_validator.script_type_hash),
-        GwPack::pack(&scripts_result.polyjuice_validator.script_type_hash),
-    ];
+    let allowed_contract_type_hashes: Vec<gw_packed::AllowedTypeHash> = {
+        let meta_hash = GwPack::pack(&scripts_result.meta_contract_validator.script_type_hash);
+        let meta = gw_packed::AllowedTypeHash::new_builder()
+            .type_(AllowedContractType::Meta.into())
+            .hash(meta_hash)
+            .build();
+
+        let sudt_hash = GwPack::pack(&scripts_result.l2_sudt_validator.script_type_hash);
+        let sudt = gw_packed::AllowedTypeHash::new_builder()
+            .type_(AllowedContractType::Sudt.into())
+            .hash(sudt_hash)
+            .build();
+
+        let polyjuice_hash = GwPack::pack(&scripts_result.polyjuice_validator.script_type_hash);
+        let polyjuice = gw_packed::AllowedTypeHash::new_builder()
+            .type_(AllowedContractType::Polyjuice.into())
+            .hash(polyjuice_hash)
+            .build();
+
+        vec![meta, sudt, polyjuice]
+    };
 
     // EOA scripts
-    let mut allowed_eoa_type_hashes: Vec<gw_packed::Byte32> = vec![
-        GwPack::pack(&scripts_result.eth_account_lock.script_type_hash),
-        GwPack::pack(&scripts_result.tron_account_lock.script_type_hash),
-    ];
-    allowed_eoa_type_hashes.extend(
-        user_rollup_config
-            .allowed_eoa_type_hashes
-            .clone()
-            .into_iter()
-            .map(|hash| GwPack::pack(&hash)),
-    );
-    allowed_eoa_type_hashes.dedup();
+    let allowed_eoa_type_hashes: Vec<gw_packed::AllowedTypeHash> = {
+        let eth_hash = GwPack::pack(&scripts_result.eth_account_lock.script_type_hash);
+        let eth = gw_packed::AllowedTypeHash::new_builder()
+            .type_(AllowedEoaType::Eth.into())
+            .hash(eth_hash)
+            .build();
+
+        let tron_hash = GwPack::pack(&scripts_result.tron_account_lock.script_type_hash);
+        let tron = gw_packed::AllowedTypeHash::new_builder()
+            .type_(AllowedEoaType::Tron.into())
+            .hash(tron_hash)
+            .build();
+
+        let mut type_hashes = vec![eth, tron];
+        let builtin_hashes = vec![
+            &scripts_result.eth_account_lock.script_type_hash,
+            &scripts_result.tron_account_lock.script_type_hash,
+        ];
+
+        let user_hashes: HashSet<_> =
+            HashSet::from_iter(&user_rollup_config.allowed_eoa_type_hashes);
+        for user_hash in user_hashes {
+            if builtin_hashes.contains(&user_hash) {
+                continue;
+            }
+
+            type_hashes.push(gw_packed::AllowedTypeHash::from_unknown(user_hash.0));
+        }
+        type_hashes
+    };
 
     // composite rollup config
     let rollup_config = RollupConfig::new_builder()

@@ -18,7 +18,9 @@ use gw_rpc_client::{
     ckb_client::CKBClient, indexer_client::CKBIndexerClient, rpc_client::RPCClient,
 };
 use gw_store::Store;
-use gw_types::{offchain::RollupContext, packed::RollupConfig, prelude::Unpack};
+use gw_types::{
+    core::AllowedEoaType, offchain::RollupContext, packed::RollupConfig, prelude::Unpack,
+};
 
 pub struct SetupArgs {
     pub from_db_store: PathBuf,
@@ -96,18 +98,23 @@ pub async fn setup(args: SetupArgs) -> Result<Context> {
         let backend_manage = BackendManage::from_config(config.backends.clone())
             .with_context(|| "config backends")?;
         let mut account_lock_manage = AccountLockManage::default();
-        let eth_lock_script_type_hash = rollup_config
-            .allowed_eoa_type_hashes()
-            .get(0)
+        let allowed_eoa_type_hashes = rollup_config.as_reader().allowed_eoa_type_hashes();
+        let eth_lock_script_type_hash = allowed_eoa_type_hashes
+            .iter()
+            .find(|th| th.type_().to_entity() == AllowedEoaType::Eth.into())
             .ok_or_else(|| anyhow!("Eth: No allowed EoA type hashes in the rollup config"))?;
         account_lock_manage.register_lock_algorithm(
-            eth_lock_script_type_hash.unpack(),
+            eth_lock_script_type_hash.hash().unpack(),
             Box::new(Secp256k1Eth::default()),
         );
-        let tron_lock_script_type_hash = rollup_config.allowed_eoa_type_hashes().get(1);
-        if let Some(code_hash) = tron_lock_script_type_hash {
-            account_lock_manage
-                .register_lock_algorithm(code_hash.unpack(), Box::new(Secp256k1Tron::default()))
+        let tron_lock_script_type_hash = allowed_eoa_type_hashes
+            .iter()
+            .find(|th| th.type_().to_entity() == AllowedEoaType::Tron.into());
+        if let Some(type_hash) = tron_lock_script_type_hash {
+            account_lock_manage.register_lock_algorithm(
+                type_hash.hash().unpack(),
+                Box::new(Secp256k1Tron::default()),
+            )
         }
         Arc::new(Generator::new(
             backend_manage,

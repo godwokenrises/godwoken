@@ -151,8 +151,10 @@ mod tests {
     };
     use gw_types::{
         bytes::Bytes,
-        packed::{L2BlockCommittedInfo, L2Transaction, RawL2Transaction, RollupConfig},
-        prelude::{Builder, Entity, Pack, Unpack},
+        packed::{
+            AllowedTypeHash, L2BlockCommittedInfo, L2Transaction, RawL2Transaction, RollupConfig,
+        },
+        prelude::{Builder, Entity, Pack, PackVec, Unpack},
     };
 
     use crate::fee::{
@@ -431,7 +433,9 @@ mod tests {
     fn setup_genesis(store: &Store) {
         let rollup_type_hash = H256::from_u32(42);
         let rollup_config = RollupConfig::new_builder()
-            .allowed_eoa_type_hashes(vec![ALWAYS_SUCCESS_CODE_HASH].pack())
+            .allowed_eoa_type_hashes(
+                vec![AllowedTypeHash::from_unknown(ALWAYS_SUCCESS_CODE_HASH)].pack(),
+            )
             .finality_blocks(0.pack())
             .build();
         let genesis_config = GenesisConfig {

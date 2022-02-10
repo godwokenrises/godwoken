@@ -36,6 +36,18 @@ struct GlobalState {
     version: byte,
 }
 
+struct AllowedTypeHash {
+    type_: byte,
+    hash: Byte32,
+}
+
+vector AllowedTypeHashVec <AllowedTypeHash>;
+
+// allowed eoa:
+// 0: unknown, 1: eth, 2: tron
+//
+// allowed contract:
+// 0: unknown, 1: meta, 2: sudt, 3: polyjuice, 4: eth addr reg
 table RollupConfig {
     l1_sudt_script_type_hash: Byte32,
     custodian_script_type_hash: Byte32,
@@ -50,8 +62,8 @@ table RollupConfig {
     finality_blocks: Uint64,
     reward_burn_rate: byte, // * reward_burn_rate / 100
     compatible_chain_id: Uint32, // compatible chain id
-    allowed_eoa_type_hashes: Byte32Vec, // list of script code_hash allowed an EOA(external owned account) to use
-    allowed_contract_type_hashes: Byte32Vec, // list of script code_hash allowed a contract account to use
+    allowed_eoa_type_hashes: AllowedTypeHashVec, // list of script code_hash allowed an EOA(external owned account) to use
+    allowed_contract_type_hashes: AllowedTypeHashVec, // list of script code_hash allowed a contract account to use
 }
 
 table RawL2Transaction {

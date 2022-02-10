@@ -1173,6 +1173,439 @@ impl molecule::prelude::Builder for GlobalStateBuilder {
     }
 }
 #[derive(Clone)]
+pub struct AllowedTypeHash(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for AllowedTypeHash {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for AllowedTypeHash {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for AllowedTypeHash {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "type_", self.type_())?;
+        write!(f, ", {}: {}", "hash", self.hash())?;
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for AllowedTypeHash {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0,
+        ];
+        AllowedTypeHash::new_unchecked(v.into())
+    }
+}
+impl AllowedTypeHash {
+    pub const TOTAL_SIZE: usize = 33;
+    pub const FIELD_SIZES: [usize; 2] = [1, 32];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn type_(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(0..1))
+    }
+    pub fn hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(1..33))
+    }
+    pub fn as_reader<'r>(&'r self) -> AllowedTypeHashReader<'r> {
+        AllowedTypeHashReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for AllowedTypeHash {
+    type Builder = AllowedTypeHashBuilder;
+    const NAME: &'static str = "AllowedTypeHash";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        AllowedTypeHash(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        AllowedTypeHashReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        AllowedTypeHashReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().type_(self.type_()).hash(self.hash())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct AllowedTypeHashReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for AllowedTypeHashReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for AllowedTypeHashReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for AllowedTypeHashReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "type_", self.type_())?;
+        write!(f, ", {}: {}", "hash", self.hash())?;
+        write!(f, " }}")
+    }
+}
+impl<'r> AllowedTypeHashReader<'r> {
+    pub const TOTAL_SIZE: usize = 33;
+    pub const FIELD_SIZES: [usize; 2] = [1, 32];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn type_(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[0..1])
+    }
+    pub fn hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[1..33])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for AllowedTypeHashReader<'r> {
+    type Entity = AllowedTypeHash;
+    const NAME: &'static str = "AllowedTypeHashReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        AllowedTypeHashReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct AllowedTypeHashBuilder {
+    pub(crate) type_: Byte,
+    pub(crate) hash: Byte32,
+}
+impl AllowedTypeHashBuilder {
+    pub const TOTAL_SIZE: usize = 33;
+    pub const FIELD_SIZES: [usize; 2] = [1, 32];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn type_(mut self, v: Byte) -> Self {
+        self.type_ = v;
+        self
+    }
+    pub fn hash(mut self, v: Byte32) -> Self {
+        self.hash = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for AllowedTypeHashBuilder {
+    type Entity = AllowedTypeHash;
+    const NAME: &'static str = "AllowedTypeHashBuilder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        writer.write_all(self.type_.as_slice())?;
+        writer.write_all(self.hash.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        AllowedTypeHash::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct AllowedTypeHashVec(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for AllowedTypeHashVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for AllowedTypeHashVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for AllowedTypeHashVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl ::core::default::Default for AllowedTypeHashVec {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![0, 0, 0, 0];
+        AllowedTypeHashVec::new_unchecked(v.into())
+    }
+}
+impl AllowedTypeHashVec {
+    pub const ITEM_SIZE: usize = 33;
+    pub fn total_size(&self) -> usize {
+        molecule::NUMBER_SIZE + Self::ITEM_SIZE * self.item_count()
+    }
+    pub fn item_count(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<AllowedTypeHash> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> AllowedTypeHash {
+        let start = molecule::NUMBER_SIZE + Self::ITEM_SIZE * idx;
+        let end = start + Self::ITEM_SIZE;
+        AllowedTypeHash::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn as_reader<'r>(&'r self) -> AllowedTypeHashVecReader<'r> {
+        AllowedTypeHashVecReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for AllowedTypeHashVec {
+    type Builder = AllowedTypeHashVecBuilder;
+    const NAME: &'static str = "AllowedTypeHashVec";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        AllowedTypeHashVec(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        AllowedTypeHashVecReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        AllowedTypeHashVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().extend(self.into_iter())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct AllowedTypeHashVecReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for AllowedTypeHashVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for AllowedTypeHashVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for AllowedTypeHashVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl<'r> AllowedTypeHashVecReader<'r> {
+    pub const ITEM_SIZE: usize = 33;
+    pub fn total_size(&self) -> usize {
+        molecule::NUMBER_SIZE + Self::ITEM_SIZE * self.item_count()
+    }
+    pub fn item_count(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<AllowedTypeHashReader<'r>> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> AllowedTypeHashReader<'r> {
+        let start = molecule::NUMBER_SIZE + Self::ITEM_SIZE * idx;
+        let end = start + Self::ITEM_SIZE;
+        AllowedTypeHashReader::new_unchecked(&self.as_slice()[start..end])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for AllowedTypeHashVecReader<'r> {
+    type Entity = AllowedTypeHashVec;
+    const NAME: &'static str = "AllowedTypeHashVecReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        AllowedTypeHashVecReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let item_count = molecule::unpack_number(slice) as usize;
+        if item_count == 0 {
+            if slice_len != molecule::NUMBER_SIZE {
+                return ve!(Self, TotalSizeNotMatch, molecule::NUMBER_SIZE, slice_len);
+            }
+            return Ok(());
+        }
+        let total_size = molecule::NUMBER_SIZE + Self::ITEM_SIZE * item_count;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct AllowedTypeHashVecBuilder(pub(crate) Vec<AllowedTypeHash>);
+impl AllowedTypeHashVecBuilder {
+    pub const ITEM_SIZE: usize = 33;
+    pub fn set(mut self, v: Vec<AllowedTypeHash>) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn push(mut self, v: AllowedTypeHash) -> Self {
+        self.0.push(v);
+        self
+    }
+    pub fn extend<T: ::core::iter::IntoIterator<Item = AllowedTypeHash>>(
+        mut self,
+        iter: T,
+    ) -> Self {
+        for elem in iter {
+            self.0.push(elem);
+        }
+        self
+    }
+}
+impl molecule::prelude::Builder for AllowedTypeHashVecBuilder {
+    type Entity = AllowedTypeHashVec;
+    const NAME: &'static str = "AllowedTypeHashVecBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE + Self::ITEM_SIZE * self.0.len()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        writer.write_all(&molecule::pack_number(self.0.len() as molecule::Number))?;
+        for inner in &self.0[..] {
+            writer.write_all(inner.as_slice())?;
+        }
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        AllowedTypeHashVec::new_unchecked(inner.into())
+    }
+}
+pub struct AllowedTypeHashVecIterator(AllowedTypeHashVec, usize, usize);
+impl ::core::iter::Iterator for AllowedTypeHashVecIterator {
+    type Item = AllowedTypeHash;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl ::core::iter::ExactSizeIterator for AllowedTypeHashVecIterator {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+impl ::core::iter::IntoIterator for AllowedTypeHashVec {
+    type Item = AllowedTypeHash;
+    type IntoIter = AllowedTypeHashVecIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        let len = self.len();
+        AllowedTypeHashVecIterator(self, 0, len)
+    }
+}
+impl<'r> AllowedTypeHashVecReader<'r> {
+    pub fn iter<'t>(&'t self) -> AllowedTypeHashVecReaderIterator<'t, 'r> {
+        AllowedTypeHashVecReaderIterator(&self, 0, self.len())
+    }
+}
+pub struct AllowedTypeHashVecReaderIterator<'t, 'r>(&'t AllowedTypeHashVecReader<'r>, usize, usize);
+impl<'t: 'r, 'r> ::core::iter::Iterator for AllowedTypeHashVecReaderIterator<'t, 'r> {
+    type Item = AllowedTypeHashReader<'t>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for AllowedTypeHashVecReaderIterator<'t, 'r> {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+#[derive(Clone)]
 pub struct RollupConfig(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for RollupConfig {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -1389,20 +1822,20 @@ impl RollupConfig {
         let end = molecule::unpack_number(&slice[56..]) as usize;
         Uint32::new_unchecked(self.0.slice(start..end))
     }
-    pub fn allowed_eoa_type_hashes(&self) -> Byte32Vec {
+    pub fn allowed_eoa_type_hashes(&self) -> AllowedTypeHashVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[56..]) as usize;
         let end = molecule::unpack_number(&slice[60..]) as usize;
-        Byte32Vec::new_unchecked(self.0.slice(start..end))
+        AllowedTypeHashVec::new_unchecked(self.0.slice(start..end))
     }
-    pub fn allowed_contract_type_hashes(&self) -> Byte32Vec {
+    pub fn allowed_contract_type_hashes(&self) -> AllowedTypeHashVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[60..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[64..]) as usize;
-            Byte32Vec::new_unchecked(self.0.slice(start..end))
+            AllowedTypeHashVec::new_unchecked(self.0.slice(start..end))
         } else {
-            Byte32Vec::new_unchecked(self.0.slice(start..))
+            AllowedTypeHashVec::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> RollupConfigReader<'r> {
@@ -1646,20 +2079,20 @@ impl<'r> RollupConfigReader<'r> {
         let end = molecule::unpack_number(&slice[56..]) as usize;
         Uint32Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn allowed_eoa_type_hashes(&self) -> Byte32VecReader<'r> {
+    pub fn allowed_eoa_type_hashes(&self) -> AllowedTypeHashVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[56..]) as usize;
         let end = molecule::unpack_number(&slice[60..]) as usize;
-        Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
+        AllowedTypeHashVecReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn allowed_contract_type_hashes(&self) -> Byte32VecReader<'r> {
+    pub fn allowed_contract_type_hashes(&self) -> AllowedTypeHashVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[60..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[64..]) as usize;
-            Byte32VecReader::new_unchecked(&self.as_slice()[start..end])
+            AllowedTypeHashVecReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            Byte32VecReader::new_unchecked(&self.as_slice()[start..])
+            AllowedTypeHashVecReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -1725,8 +2158,8 @@ impl<'r> molecule::prelude::Reader<'r> for RollupConfigReader<'r> {
         Uint64Reader::verify(&slice[offsets[10]..offsets[11]], compatible)?;
         ByteReader::verify(&slice[offsets[11]..offsets[12]], compatible)?;
         Uint32Reader::verify(&slice[offsets[12]..offsets[13]], compatible)?;
-        Byte32VecReader::verify(&slice[offsets[13]..offsets[14]], compatible)?;
-        Byte32VecReader::verify(&slice[offsets[14]..offsets[15]], compatible)?;
+        AllowedTypeHashVecReader::verify(&slice[offsets[13]..offsets[14]], compatible)?;
+        AllowedTypeHashVecReader::verify(&slice[offsets[14]..offsets[15]], compatible)?;
         Ok(())
     }
 }
@@ -1745,8 +2178,8 @@ pub struct RollupConfigBuilder {
     pub(crate) finality_blocks: Uint64,
     pub(crate) reward_burn_rate: Byte,
     pub(crate) compatible_chain_id: Uint32,
-    pub(crate) allowed_eoa_type_hashes: Byte32Vec,
-    pub(crate) allowed_contract_type_hashes: Byte32Vec,
+    pub(crate) allowed_eoa_type_hashes: AllowedTypeHashVec,
+    pub(crate) allowed_contract_type_hashes: AllowedTypeHashVec,
 }
 impl RollupConfigBuilder {
     pub const FIELD_COUNT: usize = 15;
@@ -1802,11 +2235,11 @@ impl RollupConfigBuilder {
         self.compatible_chain_id = v;
         self
     }
-    pub fn allowed_eoa_type_hashes(mut self, v: Byte32Vec) -> Self {
+    pub fn allowed_eoa_type_hashes(mut self, v: AllowedTypeHashVec) -> Self {
         self.allowed_eoa_type_hashes = v;
         self
     }
-    pub fn allowed_contract_type_hashes(mut self, v: Byte32Vec) -> Self {
+    pub fn allowed_contract_type_hashes(mut self, v: AllowedTypeHashVec) -> Self {
         self.allowed_contract_type_hashes = v;
         self
     }

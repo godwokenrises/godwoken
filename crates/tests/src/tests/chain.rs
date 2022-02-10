@@ -368,7 +368,8 @@ async fn test_layer1_revert() {
         .rollup_config
         .allowed_eoa_type_hashes()
         .get(0)
-        .expect("get default EoA hash");
+        .expect("get default EoA hash")
+        .hash();
 
     // update block 1
     let alice_script = Script::new_builder()
@@ -746,10 +747,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
     let block_result = {
         let mem_pool = chain.mem_pool().as_ref().unwrap();
         let mut mem_pool = mem_pool.lock().await;
-        mem_pool
-            .push_withdrawal_request(withdrawal.into())
-            .await
-            .unwrap();
+        mem_pool.push_withdrawal_request(withdrawal).await.unwrap();
         construct_block(&chain, &mut mem_pool, Vec::default())
             .await
             .unwrap()
@@ -760,7 +758,7 @@ async fn test_rewind_to_last_valid_tip_just_after_bad_block_reverted() {
             global_state,
             withdrawal_extras,
         } = block_result.clone();
-        let (bad_block, bad_global_state) = generate_bad_block(&chain, block.clone(), global_state);
+        let (bad_block, bad_global_state) = generate_bad_block(&chain, block, global_state);
         let withdrawal_extras = withdrawal_extras
             .into_iter()
             .enumerate()
