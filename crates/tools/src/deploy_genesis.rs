@@ -250,8 +250,14 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
             .type_(AllowedContractType::Polyjuice.into())
             .hash(polyjuice_hash)
             .build();
+        let eth_addr_reg_validator_hash =
+            GwPack::pack(&scripts_result.eth_addr_reg_validator.script_type_hash);
+        let eth_addr_reg_validator = gw_packed::AllowedTypeHash::new_builder()
+            .type_(AllowedContractType::EthAddrReg.into())
+            .hash(eth_addr_reg_validator_hash)
+            .build();
 
-        vec![meta, sudt, polyjuice]
+        vec![meta, sudt, polyjuice, eth_addr_reg_validator]
     };
 
     // EOA scripts

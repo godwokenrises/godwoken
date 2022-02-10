@@ -62,6 +62,7 @@ pub struct ScriptsDeploymentResult {
     pub eth_account_lock: DeployItem,
     pub tron_account_lock: DeployItem,
     pub polyjuice_validator: DeployItem,
+    pub eth_addr_reg_validator: DeployItem,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
@@ -97,4 +98,6 @@ pub struct Programs {
     pub meta_contract_validator: PathBuf,
     // path: godwoken-polyjuice/build/validator
     pub polyjuice_validator: PathBuf,
+    // path: godwoken-polyjuice/build/eth_addr_reg_validator
+    pub eth_addr_reg_validator: PathBuf,
 }
