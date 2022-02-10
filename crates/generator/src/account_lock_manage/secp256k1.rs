@@ -330,7 +330,7 @@ impl LockAlgorithm for Secp256k1Tron {
                     28 => 1,
                     _ => 0,
                 };
-                RecoveryId::from_i32(rec_param.into())
+                RecoveryId::from_i32(rec_param)
                     .map_err(|err| LockAlgorithmError::InvalidSignature(err.to_string()))?
             };
             let data = &signature[..64];

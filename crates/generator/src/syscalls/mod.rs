@@ -257,9 +257,15 @@ impl<'a, S: State, C: ChainView, Mac: SupportMachine> Syscalls<Mac> for L2Syscal
                     script_hash.into(),
                 );
                 // script hash to id
+                let script_hash_to_id_value: H256 = {
+                    let mut buf: [u8; 32] = H256::from_u32(id).into();
+                    // the first 4 bytes is id, set exists flag(fifth byte) to 1
+                    buf[4] = 1;
+                    buf.into()
+                };
                 self.result.write_values.insert(
                     build_script_hash_to_account_id_key(&script_hash[..]),
-                    H256::from_u32(id),
+                    script_hash_to_id_value,
                 );
                 // short script hash to script_hash
                 self.result.write_values.insert(

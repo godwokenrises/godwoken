@@ -68,6 +68,10 @@ pub fn build_account_field_key(id: u32, type_: u8) -> H256 {
     key.into()
 }
 
+/// build_script_hash_to_account_id_key
+/// value format:
+/// id(4 bytes) | exists flag(1 byte) | zeros bytes
+/// if script_hash is exists the exists flag turn into 1, otherwise it is 0.
 pub fn build_script_hash_to_account_id_key(script_hash: &[u8]) -> H256 {
     let mut key: [u8; 32] = H256::zero().into();
     let mut hasher = new_blake2b();
@@ -131,6 +135,10 @@ pub trait State {
     }
     /// Create a new account
     fn create_account(&mut self, script_hash: H256) -> Result<u32, Error> {
+        // check duplication
+        if self.get_account_id_by_script_hash(&script_hash)?.is_some() {
+            return Err(Error::DuplicatedScriptHash);
+        }
         let id = self.get_account_count()?;
         // nonce
         self.set_nonce(id, 0)?;
@@ -140,9 +148,15 @@ pub trait State {
             script_hash,
         )?;
         // script hash to id
+        let script_hash_to_id_value: H256 = {
+            let mut buf: [u8; 32] = H256::from_u32(id).into();
+            // the first 4 bytes is id, set exists flag(fifth byte) to 1
+            buf[4] = 1;
+            buf.into()
+        };
         self.update_raw(
             build_script_hash_to_account_id_key(script_hash.as_slice()),
-            H256::from_u32(id),
+            script_hash_to_id_value,
         )?;
         // short script hash to script hash
         self.update_raw(

@@ -92,6 +92,18 @@ pub fn build_genesis_from_store(
         "ckb simple UDT account id"
     );
 
+    // insert secp256k1 data
+    let secp_data_hash = {
+        let mut hasher = new_blake2b();
+        hasher.update(secp_data.as_ref());
+        let mut hash = [0u8; 32];
+        hasher.finalize(&mut hash);
+        hash
+    };
+    tree.insert_data(secp_data_hash.into(), secp_data);
+    // insert data_hash into tree
+    tree.store_data_hash(secp_data_hash.into())?;
+
     let prev_state_checkpoint: [u8; 32] = tree.calculate_state_checkpoint()?.into();
     let submit_txs = SubmitTransactions::new_builder()
         .prev_state_checkpoint(prev_state_checkpoint.pack())
@@ -157,16 +169,6 @@ pub fn build_genesis_from_store(
             .tip_block_hash(genesis.hash().pack())
             .build()
     };
-
-    // insert secp256k1 data
-    let secp_data_hash = {
-        let mut hasher = new_blake2b();
-        hasher.update(secp_data.as_ref());
-        let mut hash = [0u8; 32];
-        hasher.finalize(&mut hash);
-        hash
-    };
-    tree.insert_data(secp_data_hash.into(), secp_data);
 
     db.set_block_smt_root(global_state.block().merkle_root().unpack())?;
     let genesis_with_global_state = GenesisWithGlobalState {
