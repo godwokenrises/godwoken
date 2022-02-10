@@ -142,7 +142,7 @@ pub fn bench(c: &mut Criterion) {
                     .create_account_from_script(
                         Script::new_builder()
                             .code_hash(DUMMY_SUDT_VALIDATOR_SCRIPT_TYPE_HASH.clone().pack())
-                            .args([0u8; 64].to_vec().pack())
+                            .args([1u8; 64].to_vec().pack())
                             .hash_type(ScriptHashType::Type.into())
                             .build(),
                     )

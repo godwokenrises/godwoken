@@ -17,6 +17,8 @@ cfg_if::cfg_if! {
             Store,
             #[error("Invalid short script hash error")]
             InvalidShortScriptHash,
+            #[error("Duplicated script hash")]
+            DuplicatedScriptHash,
         }
     } else {
         #[derive(Debug, Eq, PartialEq, Clone)]
@@ -27,6 +29,7 @@ cfg_if::cfg_if! {
             MissingKey,
             Store,
             InvalidShortScriptHash,
+            DuplicatedScriptHash,
         }
     }
 }
