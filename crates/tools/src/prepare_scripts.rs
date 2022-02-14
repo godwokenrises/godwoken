@@ -104,7 +104,7 @@ impl Default for ScriptsBuildConfig {
                 ("polyjuice_generator", "godwoken-polyjuice/build/generator"),
                 ("polyjuice_validator", "godwoken-polyjuice/build/validator"),
                 (
-                    "eth_addr_reg_validator",
+                    "eth_addr_reg_generator",
                     "godwoken-polyjuice/build/eth_addr_reg_generator",
                 ),
                 (
