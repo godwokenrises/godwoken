@@ -27,7 +27,7 @@ pub fn init(trace: Option<Trace>) -> Result<ShutdownGuard> {
     });
 
     let registry = tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().with_ansi(false))
         .with(env_filter_layer)
         .with(sentry_layer);
 
