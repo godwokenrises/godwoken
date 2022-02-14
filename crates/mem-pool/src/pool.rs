@@ -585,15 +585,13 @@ impl MemPool {
         // estimate next l2block timestamp
         let estimated_timestamp = self.provider.estimate_next_blocktime().await?;
         // reset mem block state
-        {
-            let snapshot = self.store.get_snapshot();
-            assert_eq!(snapshot.get_tip_block_hash()?, new_tip, "set new snapshot");
-            let mem_store = MemStore::new(snapshot);
-            self.mem_pool_state.store(Arc::new(mem_store));
-        }
+        // Fix execute_raw_l2transaction panic by updating mem_store first and storing it to mem_pool_state after.
+        let snapshot = self.store.get_snapshot();
+        assert_eq!(snapshot.get_tip_block_hash()?, new_tip, "set new snapshot");
+        let mem_store = MemStore::new(snapshot);
+        mem_store.update_mem_pool_block_info(self.mem_block.block_info())?;
         let mem_block_content = self.mem_block.reset(&new_tip_block, estimated_timestamp);
-        let snap = self.mem_pool_state.load();
-        snap.update_mem_pool_block_info(self.mem_block.block_info())?;
+        self.mem_pool_state.store(Arc::new(mem_store));
 
         // set tip
         self.current_tip = (new_tip, new_tip_block.raw().number().unpack());
