@@ -135,6 +135,7 @@ pub fn deploy_scripts(
         &scripts_result.programs.tron_account_lock,
         &scripts_result.programs.meta_contract_validator,
         &scripts_result.programs.polyjuice_validator,
+        &scripts_result.programs.eth_addr_reg_validator,
     ] {
         match fs::metadata(path).map_err(|err| err.to_string()) {
             Ok(metadata) => {
@@ -229,6 +230,13 @@ pub fn deploy_scripts(
         &target_lock,
         &target_address,
     )?;
+    let eth_addr_reg_validator = deploy_program(
+        privkey_path,
+        &mut rpc_client,
+        &scripts_result.programs.eth_addr_reg_validator,
+        &target_lock,
+        &target_address,
+    )?;
     let deployment_result = ScriptsDeploymentResult {
         custodian_lock,
         deposit_lock,
@@ -241,6 +249,7 @@ pub fn deploy_scripts(
         eth_account_lock,
         tron_account_lock,
         polyjuice_validator,
+        eth_addr_reg_validator,
     };
     Ok(deployment_result)
 }

@@ -154,6 +154,15 @@ pub async fn generate_node_config(args: GenerateNodeConfigArgs<'_>) -> Result<Co
                 .clone(),
             backend_type: gw_config::BackendType::Polyjuice,
         },
+        BackendConfig {
+            validator_path: build_scripts_result.built_scripts["eth_addr_reg_validator"].clone(),
+            generator_path: build_scripts_result.built_scripts["eth_addr_reg_generator"].clone(),
+            validator_script_type_hash: scripts_deployment
+                .eth_addr_reg_validator
+                .script_type_hash
+                .clone(),
+            backend_type: gw_config::BackendType::EthAddrReg,
+        },
     ];
 
     let store = StoreConfig {
@@ -331,6 +340,16 @@ async fn query_contracts_script(
         deployment.polyjuice_validator.script_type_hash
     );
 
+    let eth_addr_reg_validator = query(
+        "eth_addr_reg_validator",
+        deployment.eth_addr_reg_validator.cell_dep.clone(),
+    )
+    .await?;
+    assert_eq!(
+        eth_addr_reg_validator.hash(),
+        deployment.eth_addr_reg_validator.script_type_hash
+    );
+
     let allowed_eoa_scripts: HashMap<_, _> = HashMap::from_iter([
         (eth_account_lock.hash(), eth_account_lock),
         (tron_account_lock.hash(), tron_account_lock),
@@ -340,6 +359,7 @@ async fn query_contracts_script(
         (meta_validator.hash(), meta_validator),
         (l2_sudt_validator.hash(), l2_sudt_validator),
         (polyjuice_validator.hash(), polyjuice_validator),
+        (eth_addr_reg_validator.hash(), eth_addr_reg_validator),
     ]);
 
     Ok(ContractTypeScriptConfig {
