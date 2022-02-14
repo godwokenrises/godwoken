@@ -1,6 +1,7 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use ckb_jsonrpc_types::JsonBytes;
 use ckb_types::prelude::{Builder, Entity};
+use gw_config::BackendType;
 use gw_types::{
     core::ScriptHashType,
     packed::{CreateAccount, L2Transaction, MetaContractArgs, RawL2Transaction, Script},
@@ -24,6 +25,7 @@ pub fn create_creator_account(
     godwoken_rpc_url: &str,
     privkey_path: &Path,
     sudt_id: u32,
+    eth_registry_id: u32,
     fee_amount: &str,
     config_path: &Path,
     scripts_deployment_path: &Path,
@@ -48,10 +50,17 @@ pub fn create_creator_account(
 
     let nonce = godwoken_rpc_client.get_nonce(from_id)?;
 
-    let validator_script_hash = &config.backends[2].validator_script_type_hash;
+    let validator_script_hash = {
+        let mut backends = config.backends.iter();
+        let polyjuice_backend = backends
+            .find(|backend| backend.backend_type == BackendType::Polyjuice)
+            .ok_or_else(|| anyhow!("polyjuice backend not found in config"))?;
+        &polyjuice_backend.validator_script_type_hash
+    };
 
     let mut l2_args_vec = rollup_type_hash.as_bytes().to_vec();
     l2_args_vec.append(&mut sudt_id.to_le_bytes().to_vec());
+    l2_args_vec.append(&mut eth_registry_id.to_le_bytes().to_vec());
     let l2_script_args = GwPack::pack(&GwBytes::from(l2_args_vec));
     let l2_script = Script::new_builder()
         .code_hash(validator_script_hash.pack())

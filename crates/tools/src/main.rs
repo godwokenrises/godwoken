@@ -479,6 +479,14 @@ async fn run_cli() -> Result<()> {
                         .required(false)
                         .default_value("1")
                         .help("sudt id"),
+                )
+                .arg(
+                    Arg::with_name("eth-registry-id")
+                    .short("e")
+                    .long("eth-registry-id")
+                    .takes_value(true)
+                    .required(true)
+                    .help("eth registry id")
                 ),
         )
         .subcommand(
@@ -1100,11 +1108,13 @@ async fn run_cli() -> Result<()> {
                 .unwrap()
                 .parse()
                 .expect("sudt id format error");
+            let eth_registry_id = u32::from_str(m.value_of("eth-registry-id").unwrap()).unwrap();
 
             if let Err(err) = create_creator_account::create_creator_account(
                 godwoken_rpc_url,
                 privkey_path,
                 sudt_id,
+                eth_registry_id,
                 fee,
                 config_path,
                 scripts_deployment_path,
