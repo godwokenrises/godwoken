@@ -557,6 +557,17 @@ impl BlockProducer {
                     log::info!("Skip submitting l2 block since CKB can't resolve tx, previous block may haven't been processed by CKB");
                     return Ok(SubmitResult::Skip);
                 } else {
+                    if err_str.contains(TRANSACTION_SCRIPT_ERROR)
+                        || err_str.contains(TRANSACTION_EXCEEDED_MAXIMUM_BLOCK_BYTES_ERROR)
+                    {
+                        utils::dump_transaction(
+                            &self.debug_config.debug_tx_dump_path,
+                            &self.rpc_client,
+                            &tx,
+                        )
+                        .await;
+                    }
+
                     return Err(anyhow!(
                         "Fail to dry run transaction {}, error: {}",
                         hex::encode(tx.hash()),
