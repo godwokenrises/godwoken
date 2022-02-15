@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use anyhow::Result;
 use async_trait::async_trait;
 use gw_types::{
@@ -120,6 +122,9 @@ impl Consume for Consumer {
                     let partition = msg.partition();
                     let offset = msg.offset();
                     let payload = msg.payload();
+                    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as i64;
+                    let msg_age = msg.timestamp().to_millis().map(|then| now - then);
+                    log::info!("MSG AGE: {:?}", msg_age);
                     log::trace!(
                         "Recv kafka msg: {}:{}@{}: {:?}",
                         topic,
