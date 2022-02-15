@@ -1,4 +1,5 @@
-use std::time::Duration;
+use futures::StreamExt;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -44,7 +45,11 @@ impl Produce for Producer {
         log::trace!("Producer send msg: {:?}", &bytes.to_vec());
         let message = RefreshMemBlockMessageFacade(bytes);
 
-        let record = FutureRecord::to(&self.topic).key("").payload(&message);
+        let ts = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as i64;
+        let record = FutureRecord::to(&self.topic)
+            .key("")
+            .payload(&message)
+            .timestamp(ts);
         if let Err((err, _)) = self.producer.send(record, Duration::from_millis(0)).await {
             log::error!("[kafka] send message failed: {:?}", &err);
         }
@@ -85,25 +90,28 @@ impl Consumer {
 impl Consume for Consumer {
     async fn poll(&mut self) -> Result<()> {
         self.consumer.subscribe(&[&self.topic])?;
-        let msg = self.consumer.recv().await;
-        match msg {
-            Ok(msg) => {
-                let topic = msg.topic();
-                let partition = msg.partition();
-                let offset = msg.offset();
-                let payload = msg.payload();
-                log::trace!(
-                    "Recv kafka msg: {}:{}@{}: {:?}",
-                    topic,
-                    partition,
-                    offset,
-                    &payload
-                );
-                if let Some(payload) = payload {
-                    let refresh_msg = RefreshMemBlockMessage::from_slice(payload)?;
-                    let reader = refresh_msg.as_reader();
-                    let refresh_msg = reader.to_enum();
-                    match &refresh_msg {
+        while let Some(msg) = self.consumer.stream().next().await {
+            match msg {
+                Ok(msg) => {
+                    let topic = msg.topic();
+                    let partition = msg.partition();
+                    let offset = msg.offset();
+                    let payload = msg.payload();
+                    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as i64;
+                    let msg_age = msg.timestamp().to_millis().map(|then| now - then);
+                    log::debug!("kafka msg age: {:?}", msg_age);
+                    log::trace!(
+                        "Recv kafka msg: {}:{}@{}: {:?}",
+                        topic,
+                        partition,
+                        offset,
+                        &payload
+                    );
+                    if let Some(payload) = payload {
+                        let refresh_msg = RefreshMemBlockMessage::from_slice(payload)?;
+                        let reader = refresh_msg.as_reader();
+                        let refresh_msg = reader.to_enum();
+                        match &refresh_msg {
                         gw_types::packed::RefreshMemBlockMessageUnionReader::NextL2Transaction(
                             next,
                         ) => {
@@ -127,12 +135,13 @@ impl Consume for Consumer {
                             };
                         }
                     };
-                    self.consumer.commit_message(&msg, CommitMode::Async)?;
-                    log::trace!("Kafka commit offset: {}", offset);
-                };
-            }
-            Err(err) => {
-                log::error!("Receive error from kafka: {:?}", err);
+                        self.consumer.commit_message(&msg, CommitMode::Async)?;
+                        log::trace!("Kafka commit offset: {}", offset);
+                    };
+                }
+                Err(err) => {
+                    log::error!("Receive error from kafka: {:?}", err);
+                }
             }
         }
         Ok(())
