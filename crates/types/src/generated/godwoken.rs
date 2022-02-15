@@ -7283,19 +7283,14 @@ impl ::core::fmt::Debug for CustodianLockArgs {
 impl ::core::fmt::Display for CustodianLockArgs {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "deposit_lock_args", self.deposit_lock_args())?;
-        write!(
-            f,
-            ", {}: {}",
-            "deposit_block_hash",
-            self.deposit_block_hash()
-        )?;
+        write!(f, "{}: {}", "deposit_block_hash", self.deposit_block_hash())?;
         write!(
             f,
             ", {}: {}",
             "deposit_block_number",
             self.deposit_block_number()
         )?;
+        write!(f, ", {}: {}", "deposit_lock_args", self.deposit_lock_args())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -7306,11 +7301,11 @@ impl ::core::fmt::Display for CustodianLockArgs {
 impl ::core::default::Default for CustodianLockArgs {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            165, 0, 0, 0, 16, 0, 0, 0, 125, 0, 0, 0, 157, 0, 0, 0, 109, 0, 0, 0, 16, 0, 0, 0, 48,
-            0, 0, 0, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0,
+            165, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 56, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            109, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0,
+            0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         CustodianLockArgs::new_unchecked(v.into())
@@ -7334,26 +7329,26 @@ impl CustodianLockArgs {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn deposit_lock_args(&self) -> DepositLockArgs {
+    pub fn deposit_block_hash(&self) -> Byte32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        DepositLockArgs::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn deposit_block_hash(&self) -> Byte32 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
         Byte32::new_unchecked(self.0.slice(start..end))
     }
     pub fn deposit_block_number(&self) -> Uint64 {
         let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Uint64::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn deposit_lock_args(&self) -> DepositLockArgs {
+        let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[16..]) as usize;
-            Uint64::new_unchecked(self.0.slice(start..end))
+            DepositLockArgs::new_unchecked(self.0.slice(start..end))
         } else {
-            Uint64::new_unchecked(self.0.slice(start..))
+            DepositLockArgs::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> CustodianLockArgsReader<'r> {
@@ -7383,9 +7378,9 @@ impl molecule::prelude::Entity for CustodianLockArgs {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .deposit_lock_args(self.deposit_lock_args())
             .deposit_block_hash(self.deposit_block_hash())
             .deposit_block_number(self.deposit_block_number())
+            .deposit_lock_args(self.deposit_lock_args())
     }
 }
 #[derive(Clone, Copy)]
@@ -7407,19 +7402,14 @@ impl<'r> ::core::fmt::Debug for CustodianLockArgsReader<'r> {
 impl<'r> ::core::fmt::Display for CustodianLockArgsReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "deposit_lock_args", self.deposit_lock_args())?;
-        write!(
-            f,
-            ", {}: {}",
-            "deposit_block_hash",
-            self.deposit_block_hash()
-        )?;
+        write!(f, "{}: {}", "deposit_block_hash", self.deposit_block_hash())?;
         write!(
             f,
             ", {}: {}",
             "deposit_block_number",
             self.deposit_block_number()
         )?;
+        write!(f, ", {}: {}", "deposit_lock_args", self.deposit_lock_args())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -7445,26 +7435,26 @@ impl<'r> CustodianLockArgsReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn deposit_lock_args(&self) -> DepositLockArgsReader<'r> {
+    pub fn deposit_block_hash(&self) -> Byte32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        DepositLockArgsReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn deposit_block_hash(&self) -> Byte32Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
         Byte32Reader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn deposit_block_number(&self) -> Uint64Reader<'r> {
         let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn deposit_lock_args(&self) -> DepositLockArgsReader<'r> {
+        let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[16..]) as usize;
-            Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+            DepositLockArgsReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            Uint64Reader::new_unchecked(&self.as_slice()[start..])
+            DepositLockArgsReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -7517,24 +7507,20 @@ impl<'r> molecule::prelude::Reader<'r> for CustodianLockArgsReader<'r> {
         if offsets.windows(2).any(|i| i[0] > i[1]) {
             return ve!(Self, OffsetsNotMatch);
         }
-        DepositLockArgsReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        Byte32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        Uint64Reader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        Uint64Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        DepositLockArgsReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct CustodianLockArgsBuilder {
-    pub(crate) deposit_lock_args: DepositLockArgs,
     pub(crate) deposit_block_hash: Byte32,
     pub(crate) deposit_block_number: Uint64,
+    pub(crate) deposit_lock_args: DepositLockArgs,
 }
 impl CustodianLockArgsBuilder {
     pub const FIELD_COUNT: usize = 3;
-    pub fn deposit_lock_args(mut self, v: DepositLockArgs) -> Self {
-        self.deposit_lock_args = v;
-        self
-    }
     pub fn deposit_block_hash(mut self, v: Byte32) -> Self {
         self.deposit_block_hash = v;
         self
@@ -7543,32 +7529,36 @@ impl CustodianLockArgsBuilder {
         self.deposit_block_number = v;
         self
     }
+    pub fn deposit_lock_args(mut self, v: DepositLockArgs) -> Self {
+        self.deposit_lock_args = v;
+        self
+    }
 }
 impl molecule::prelude::Builder for CustodianLockArgsBuilder {
     type Entity = CustodianLockArgs;
     const NAME: &'static str = "CustodianLockArgsBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.deposit_lock_args.as_slice().len()
             + self.deposit_block_hash.as_slice().len()
             + self.deposit_block_number.as_slice().len()
+            + self.deposit_lock_args.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
-        total_size += self.deposit_lock_args.as_slice().len();
-        offsets.push(total_size);
         total_size += self.deposit_block_hash.as_slice().len();
         offsets.push(total_size);
         total_size += self.deposit_block_number.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.deposit_lock_args.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.deposit_lock_args.as_slice())?;
         writer.write_all(self.deposit_block_hash.as_slice())?;
         writer.write_all(self.deposit_block_number.as_slice())?;
+        writer.write_all(self.deposit_lock_args.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
