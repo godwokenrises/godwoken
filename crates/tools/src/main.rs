@@ -87,8 +87,10 @@ async fn run_cli() -> Result<()> {
         .default_value("http://127.0.0.1:8119")
         .help("Godwoken jsonrpc rpc sever URL");
 
+    let version = gw_version::Version::current().to_string();
     let mut app = App::new("godwoken tools")
         .about("Godwoken cli tools")
+        .version(version.as_ref())
         .subcommand(
             SubCommand::with_name("deploy-scripts")
                 .about("Deploy scripts used by godwoken")
