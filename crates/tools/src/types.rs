@@ -41,6 +41,7 @@ pub struct UserRollupConfig {
     pub finality_blocks: u64,
     pub reward_burn_rate: u8, // * reward_burn_rate / 100
     pub allowed_eoa_type_hashes: Vec<H256>,
+    pub allowed_contract_type_hashes: Vec<H256>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Default)]
