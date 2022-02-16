@@ -257,7 +257,24 @@ pub fn deploy_rollup_cell(args: DeployRollupCellArgs) -> Result<RollupDeployment
             .hash(eth_addr_reg_validator_hash)
             .build();
 
-        vec![meta, sudt, polyjuice, eth_addr_reg_validator]
+        let mut type_hashes = vec![meta, sudt, polyjuice, eth_addr_reg_validator];
+        let builtin_hashes = vec![
+            &scripts_result.meta_contract_validator.script_type_hash,
+            &scripts_result.l2_sudt_validator.script_type_hash,
+            &scripts_result.polyjuice_validator.script_type_hash,
+            &scripts_result.eth_addr_reg_validator.script_type_hash,
+        ];
+
+        let user_hashes: HashSet<_> =
+            HashSet::from_iter(&user_rollup_config.allowed_contract_type_hashes);
+        for user_hash in user_hashes {
+            if builtin_hashes.contains(&user_hash) {
+                continue;
+            }
+
+            type_hashes.push(gw_packed::AllowedTypeHash::from_unknown(user_hash.0));
+        }
+        type_hashes
     };
 
     // EOA scripts

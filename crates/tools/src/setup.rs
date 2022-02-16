@@ -241,6 +241,7 @@ fn generate_rollup_config(setup_config: &SetupConfig) -> Result<UserRollupConfig
         finality_blocks: 3600,
         reward_burn_rate: 50,
         allowed_eoa_type_hashes: Vec::new(),
+        allowed_contract_type_hashes: Vec::new(),
         cells_lock: setup_config.cells_lock.clone(),
     };
     Ok(rollup_config)
