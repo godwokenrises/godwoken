@@ -2203,6 +2203,7 @@ dependencies = [
  "gw-rpc-client",
  "gw-types",
  "gw-utils",
+ "gw-version",
  "hex",
  "jsonrpc-core 17.1.0",
  "lazy_static",
