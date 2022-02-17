@@ -43,9 +43,12 @@ fn create_eth_addr_reg_account(
             .ok_or_else(|| anyhow!("EthAddrReg backend not found in config"))?;
         &eth_addr_reg_backend.validator_script_type_hash
     };
+    let l2_args_vec = rollup_type_hash.as_bytes().to_vec();
+    let l2_script_args = GwPack::pack(&GwBytes::from(l2_args_vec));
     let eth_addr_reg_script = Script::new_builder()
         .code_hash(eth_addr_reg_validator_script_hash.pack())
         .hash_type(ScriptHashType::Type.into())
+        .args(l2_script_args)
         .build();
     let eth_addr_reg_script_hash = eth_addr_reg_script.hash();
     log::info!(
